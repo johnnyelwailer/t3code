@@ -30,10 +30,32 @@ export interface BackendApi {
   readonly disconnect: () => Promise<void>;
   readonly dispatchCommand: (command: ClientOrchestrationCommand) => Promise<void>;
   readonly atlassian: AtlassianBackendApi;
+  readonly projectWorkspace: ProjectWorkspaceBackendApi;
   readonly subscribeConfig: (listener: (event: ServerConfigStreamEvent) => void) => () => void;
   readonly subscribeLifecycle: (listener: (event: unknown) => void) => () => void;
   readonly subscribeShell: (listener: (event: unknown) => void) => () => void;
   readonly subscribeThread: (threadId: string, listener: (event: unknown) => void) => () => void;
+}
+
+export type LinkedRepositorySyncResult = {
+  readonly url: string;
+  readonly localPath: string;
+  readonly status: "cloned" | "updated" | "failed";
+  readonly error?: string;
+};
+
+export type ProjectWorkspaceBootstrapResult = {
+  readonly workspaceRoot: string;
+  readonly workspaceRepositoryInitialized: boolean;
+  readonly referencesRoot: string;
+  readonly linkedRepositories: ReadonlyArray<LinkedRepositorySyncResult>;
+};
+
+export interface ProjectWorkspaceBackendApi {
+  readonly bootstrapWorkspace: (input: {
+    readonly workspaceRoot: string;
+    readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+  }) => Promise<ProjectWorkspaceBootstrapResult>;
 }
 
 export type AtlassianBasicConnectInput = {
