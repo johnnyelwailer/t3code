@@ -25,9 +25,6 @@ type ProjectSidebarLayoutProps = {
   showProjectThreads: boolean;
   showJiraItems: boolean;
   showGitHubActivity: boolean;
-  onShowProjectThreadsChange: (show: boolean) => void;
-  onShowJiraItemsChange: (show: boolean) => void;
-  onShowGitHubActivityChange: (show: boolean) => void;
   onOpenSettings: (() => void) | undefined;
 } & ProjectSidebarProps;
 
@@ -46,9 +43,6 @@ export function ProjectSidebarLayout({
   showProjectThreads,
   showJiraItems,
   showGitHubActivity,
-  onShowProjectThreadsChange,
-  onShowJiraItemsChange,
-  onShowGitHubActivityChange,
   onSelectProject,
   onSelectTicket,
   onSelectThread,
@@ -149,9 +143,6 @@ export function ProjectSidebarLayout({
                     showProjectThreads={showProjectThreads}
                     showJiraItems={showJiraItems}
                     showGitHubActivity={showGitHubActivity}
-                    onShowProjectThreadsChange={onShowProjectThreadsChange}
-                    onShowJiraItemsChange={onShowJiraItemsChange}
-                    onShowGitHubActivityChange={onShowGitHubActivityChange}
                     onSelectProject={onSelectProject}
                     onToggleExpand={onToggleExpand}
                     onSelectThread={onSelectThread}

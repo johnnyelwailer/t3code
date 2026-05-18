@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef, useState } from "react";
-import { MessageSquareIcon } from "lucide-react";
+import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
 import type { ProjectThread } from "~/t3work/t3work-types";
 import { SidebarMenuSubButton, SidebarMenuSubItem } from "~/t3work/components/ui/t3work-sidebar";
 import { readLocalApi } from "~/localApi";
@@ -21,10 +21,8 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const statusPill = resolveThreadStatusPill(thread);
 
-  const handleContextMenu = useCallback(
-    async (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+  const openThreadMenu = useCallback(
+    async (x: number, y: number) => {
       const api = readLocalApi();
       if (!api) return;
 
@@ -34,7 +32,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
           { id: "copy-thread-id", label: "Copy Thread ID" },
           { id: "delete", label: "Delete", destructive: true },
         ],
-        { x: e.clientX, y: e.clientY },
+        { x, y },
       );
 
       if (action === "rename") {
@@ -54,6 +52,25 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     [onDelete, thread],
   );
 
+  const handleContextMenu = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await openThreadMenu(e.clientX, e.clientY);
+    },
+    [openThreadMenu],
+  );
+
+  const handleOpenMenu = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = e.currentTarget.getBoundingClientRect();
+      await openThreadMenu(Math.round(rect.left + rect.width / 2), Math.round(rect.bottom));
+    },
+    [openThreadMenu],
+  );
+
   const handleRenameSubmit = useCallback(() => {
     const trimmed = renameTitle.trim();
     if (trimmed && trimmed !== thread.title) onRename(trimmed);
@@ -66,7 +83,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
       <SidebarMenuSubButton
         size="sm"
         isActive={isActive}
-        className={`h-7 w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none ${
+        className={`group/thread h-7 w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none ${
           variant === "issue" ? "rounded-md bg-muted/25 hover:bg-accent/70" : ""
         }`}
         onClick={onSelect}
@@ -102,6 +119,14 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
           )}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            aria-label={`Thread actions for ${thread.title}`}
+            className="inline-flex size-4 cursor-pointer items-center justify-center rounded text-muted-foreground/55 opacity-0 transition-opacity duration-150 hover:bg-accent hover:text-foreground group-hover/thread:opacity-100"
+            onClick={handleOpenMenu}
+          >
+            <EllipsisIcon className="size-3" />
+          </button>
           <span className="text-[10px] text-muted-foreground/40">
             {formatRelativeTime(thread.lastMessageAt)}
           </span>

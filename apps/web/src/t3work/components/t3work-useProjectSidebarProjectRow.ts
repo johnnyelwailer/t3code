@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { buildProjectTicketHierarchy } from "~/t3work/t3work-ticketHierarchy";
-import type { ProjectThread, ProjectTicket } from "~/t3work/t3work-types";
+import type { ProjectThread } from "~/t3work/t3work-types";
 import { sortThreads } from "./t3work-projectSidebarShared";
 import type { ProjectRowProps } from "./t3work-projectSidebarProjectRowTypes";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
@@ -19,12 +19,6 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
     threadPreviewCount,
     ticketViewMode,
     expanded,
-    showProjectThreads,
-    showJiraItems,
-    showGitHubActivity,
-    onShowProjectThreadsChange,
-    onShowJiraItemsChange,
-    onShowGitHubActivityChange,
     onSelectProject,
     onToggleExpand,
     onManageProjectRepositories,
@@ -115,15 +109,9 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
       await showProjectContextMenu({
         clientX: e.clientX,
         clientY: e.clientY,
-        showProjectThreads,
-        showJiraItems,
-        showGitHubActivity,
         projectId: project.id,
         projectTitle: project.title,
         onManageProjectRepositories,
-        onShowProjectThreadsChange,
-        onShowJiraItemsChange,
-        onShowGitHubActivityChange,
         onDeleteProject,
         onBeginRename: () => {
           setRenameTitle(project.title);
@@ -135,17 +123,32 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
         },
       });
     },
-    [
-      onDeleteProject,
-      onManageProjectRepositories,
-      onShowGitHubActivityChange,
-      onShowJiraItemsChange,
-      onShowProjectThreadsChange,
-      project,
-      showGitHubActivity,
-      showJiraItems,
-      showProjectThreads,
-    ],
+    [onDeleteProject, onManageProjectRepositories, project],
+  );
+
+  const handleOpenMenu = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = e.currentTarget.getBoundingClientRect();
+      await showProjectContextMenu({
+        clientX: Math.round(rect.left + rect.width / 2),
+        clientY: Math.round(rect.bottom),
+        projectId: project.id,
+        projectTitle: project.title,
+        onManageProjectRepositories,
+        onDeleteProject,
+        onBeginRename: () => {
+          setRenameTitle(project.title);
+          setIsRenaming(true);
+          requestAnimationFrame(() => {
+            renameInputRef.current?.focus();
+            renameInputRef.current?.select();
+          });
+        },
+      });
+    },
+    [onDeleteProject, onManageProjectRepositories, project],
   );
 
   const handleRenameSubmit = useCallback(() => {
@@ -189,6 +192,7 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
     handleToggleExpand,
     handleNewThread,
     handleContextMenu,
+    handleOpenMenu,
     handleRenameSubmit,
     handleRenameKeyDown,
   };

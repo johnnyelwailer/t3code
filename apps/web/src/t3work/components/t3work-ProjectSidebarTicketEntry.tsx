@@ -1,9 +1,8 @@
-import { SquarePenIcon } from "lucide-react";
+import { EllipsisIcon, SquarePenIcon } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { MouseEvent } from "react";
 
 import { SidebarMenuSubButton } from "~/t3work/components/ui/t3work-sidebar";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
 import { JiraIssueTypeIcon } from "~/t3work/components/ticket/t3work-JiraIssueType";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { buildComprehensiveTicketPayload } from "~/t3work/t3work-addToChatPayloadBuilders";
@@ -16,6 +15,7 @@ import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
 import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
 import { ThreadRow } from "./t3work-ProjectSidebarThreadRow";
 import type { ProjectThread, ProjectTicket, ViewState } from "~/t3work/t3work-types";
+import { readLocalApi } from "~/localApi";
 
 export interface TicketSidebarEntryProps {
   project: ProjectShellProject;
@@ -53,26 +53,46 @@ export function TicketSidebarEntry({
   onRenameThread,
 }: TicketSidebarEntryProps) {
   const backend = useBackend();
-  const { showAddToChatContextMenu } = useAddToChat();
+  const { addToChatFromRequest, showAddToChatContextMenu } = useAddToChat();
+
+  const buildAddToChatRequest = (backendApi: NonNullable<typeof backend>) => ({
+    projectId,
+    projectTitle: project.title,
+    projectWorkspaceRoot: project.workspace?.rootPath,
+    targetLabel: `${ticket.ref.displayId} ${ticket.ref.title}`,
+    targetType: "work-item" as const,
+    summaryItems: [{ label: "Status", value: ticket.status }],
+    payload: () =>
+      buildComprehensiveTicketPayload({
+        backend: backendApi,
+        project,
+        ticket,
+        projectTickets,
+        githubActivityItems,
+      }),
+  });
+
+  const openTicketMenuAt = async (x: number, y: number) => {
+    const localApi = readLocalApi();
+    if (!localApi || !backend) return;
+    const action = await localApi.contextMenu.show([{ id: "add-to-chat", label: "Add to chat" }], {
+      x,
+      y,
+    });
+    if (action !== "add-to-chat") return;
+    await addToChatFromRequest(buildAddToChatRequest(backend));
+  };
 
   const handleContextMenu = (event: MouseEvent) => {
     if (!backend) return;
-    void showAddToChatContextMenu(event, {
-      projectId,
-      projectTitle: project.title,
-      projectWorkspaceRoot: project.workspace?.rootPath,
-      targetLabel: `${ticket.ref.displayId} ${ticket.ref.title}`,
-      targetType: "work-item",
-      summaryItems: [{ label: "Status", value: ticket.status }],
-      payload: () =>
-        buildComprehensiveTicketPayload({
-          backend,
-          project,
-          ticket,
-          projectTickets,
-          githubActivityItems,
-        }),
-    });
+    void showAddToChatContextMenu(event, buildAddToChatRequest(backend));
+  };
+
+  const handleOpenMenu = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    void openTicketMenuAt(Math.round(rect.left + rect.width / 2), Math.round(rect.bottom));
   };
 
   return (
@@ -97,28 +117,31 @@ export function TicketSidebarEntry({
           </div>
         </SidebarMenuSubButton>
 
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                aria-label={`Create new thread for ${ticket.ref.displayId}`}
-                className="mt-0.5 inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-colors transition-opacity duration-150 pointer-events-none group-hover/ticket:pointer-events-auto group-hover/ticket:opacity-100 hover:bg-accent hover:text-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCreateTicketThread({
-                    projectId,
-                    ticketId: ticket.id,
-                    ticketDisplayId: ticket.ref.displayId,
-                  });
-                }}
-              />
-            }
+        <div className="mt-0.5 flex shrink-0 items-center gap-1 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/ticket:opacity-100 group-hover/ticket:pointer-events-auto">
+          <button
+            type="button"
+            aria-label={`Create new thread for ${ticket.ref.displayId}`}
+            className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCreateTicketThread({
+                projectId,
+                ticketId: ticket.id,
+                ticketDisplayId: ticket.ref.displayId,
+              });
+            }}
           >
             <SquarePenIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipPopup side="right">New thread for this issue</TooltipPopup>
-        </Tooltip>
+          </button>
+          <button
+            type="button"
+            aria-label={`Issue actions for ${ticket.ref.displayId}`}
+            className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+            onClick={handleOpenMenu}
+          >
+            <EllipsisIcon className="size-3.5" />
+          </button>
+        </div>
       </div>
 
       {ticketThreads.length > 0 ? (

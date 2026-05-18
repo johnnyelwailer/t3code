@@ -11,39 +11,17 @@ type TicketHierarchyLike = {
 type ProjectContextMenuInput = {
   clientX: number;
   clientY: number;
-  showProjectThreads: boolean;
-  showJiraItems: boolean;
-  showGitHubActivity: boolean;
   projectId: string;
   projectTitle: string;
   onManageProjectRepositories: (projectId: string) => void;
-  onShowProjectThreadsChange: (show: boolean) => void;
-  onShowJiraItemsChange: (show: boolean) => void;
-  onShowGitHubActivityChange: (show: boolean) => void;
   onDeleteProject: (projectId: string) => void;
   onBeginRename: () => void;
 };
 
-export function buildProjectContextMenuItems(input: {
-  showProjectThreads: boolean;
-  showJiraItems: boolean;
-  showGitHubActivity: boolean;
-}) {
+export function buildProjectContextMenuItems() {
   return [
     { id: "rename", label: "Rename project" },
     { id: "manage-repositories", label: "Manage linked repositories" },
-    {
-      id: "toggle-project-threads",
-      label: input.showProjectThreads ? "Hide project threads" : "Show project threads",
-    },
-    {
-      id: "toggle-jira-items",
-      label: input.showJiraItems ? "Hide Jira items" : "Show Jira items",
-    },
-    {
-      id: "toggle-github-activity",
-      label: input.showGitHubActivity ? "Hide GitHub activity" : "Show GitHub activity",
-    },
     { id: "delete", label: "Delete project", destructive: true },
   ] as const;
 }
@@ -85,14 +63,10 @@ export async function showProjectContextMenu(input: ProjectContextMenuInput): Pr
   const api = readLocalApi();
   if (!api) return;
 
-  const action = await api.contextMenu.show(
-    buildProjectContextMenuItems({
-      showProjectThreads: input.showProjectThreads,
-      showJiraItems: input.showJiraItems,
-      showGitHubActivity: input.showGitHubActivity,
-    }),
-    { x: input.clientX, y: input.clientY },
-  );
+  const action = await api.contextMenu.show(buildProjectContextMenuItems(), {
+    x: input.clientX,
+    y: input.clientY,
+  });
 
   if (action === "rename") {
     input.onBeginRename();
@@ -100,18 +74,6 @@ export async function showProjectContextMenu(input: ProjectContextMenuInput): Pr
   }
   if (action === "manage-repositories") {
     input.onManageProjectRepositories(input.projectId);
-    return;
-  }
-  if (action === "toggle-project-threads") {
-    input.onShowProjectThreadsChange(!input.showProjectThreads);
-    return;
-  }
-  if (action === "toggle-jira-items") {
-    input.onShowJiraItemsChange(!input.showJiraItems);
-    return;
-  }
-  if (action === "toggle-github-activity") {
-    input.onShowGitHubActivityChange(!input.showGitHubActivity);
     return;
   }
   if (action !== "delete") {

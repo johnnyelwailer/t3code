@@ -44,6 +44,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
         onRenameKeyDown={state.handleRenameKeyDown}
         onRenameSubmit={state.handleRenameSubmit}
         onNewThread={state.handleNewThread}
+        onOpenMenu={state.handleOpenMenu}
       />
 
       {expanded && showProjectThreads && (

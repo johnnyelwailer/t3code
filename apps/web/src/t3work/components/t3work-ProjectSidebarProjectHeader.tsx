@@ -1,4 +1,4 @@
-import { ChevronRightIcon, SquarePenIcon } from "lucide-react";
+import { ChevronRightIcon, EllipsisIcon, SquarePenIcon } from "lucide-react";
 import type { KeyboardEvent, MouseEvent, RefObject } from "react";
 import { SidebarMenuButton } from "~/t3work/components/ui/t3work-sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
@@ -26,6 +26,7 @@ type ProjectSidebarProjectHeaderProps = {
   onRenameKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onRenameSubmit: () => void;
   onNewThread: (event: MouseEvent) => void;
+  onOpenMenu: (event: MouseEvent) => void;
 };
 
 export function ProjectSidebarProjectHeader({
@@ -42,6 +43,7 @@ export function ProjectSidebarProjectHeader({
   onRenameKeyDown,
   onRenameSubmit,
   onNewThread,
+  onOpenMenu,
 }: ProjectSidebarProjectHeaderProps) {
   return (
     <div className="group/project-header relative mb-1">
@@ -101,10 +103,10 @@ export function ProjectSidebarProjectHeader({
         </span>
       </SidebarMenuButton>
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <div className="pointer-events-none absolute top-1 right-1.5 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100">
+      <div className="pointer-events-none absolute top-1 right-1.5 flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100">
+        <Tooltip>
+          <TooltipTrigger
+            render={
               <button
                 type="button"
                 aria-label={`Create new thread in ${project.title}`}
@@ -113,11 +115,27 @@ export function ProjectSidebarProjectHeader({
               >
                 <SquarePenIcon className="size-3.5" />
               </button>
-            </div>
-          }
-        />
-        <TooltipPopup side="top">New thread</TooltipPopup>
-      </Tooltip>
+            }
+          />
+          <TooltipPopup side="top">New thread</TooltipPopup>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label={`Project actions for ${project.title}`}
+                className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 hover:bg-secondary hover:text-foreground"
+                onClick={onOpenMenu}
+              >
+                <EllipsisIcon className="size-3.5" />
+              </button>
+            }
+          />
+          <TooltipPopup side="top">Project actions</TooltipPopup>
+        </Tooltip>
+      </div>
     </div>
   );
 }
