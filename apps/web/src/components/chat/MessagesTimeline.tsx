@@ -67,6 +67,8 @@ import {
 } from "./userMessageTerminalContexts";
 import { SkillInlineText } from "./SkillInlineText";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
+import { ContextAttachmentStrip } from "~/t3work/components/t3work-ContextAttachmentChip";
+import { extractContextAttachmentsFromMessageText } from "~/t3work/t3work-contextAttachmentText";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -326,12 +328,20 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const ctx = use(TimelineRowCtx);
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
+  const parsedContextAttachments = extractContextAttachmentsFromMessageText(
+    displayedUserMessage.visibleText,
+  );
   const terminalContexts = displayedUserMessage.contexts;
   const canRevertAgentWork = typeof row.revertTurnCount === "number";
 
   return (
     <div className="flex justify-end">
       <div className="group relative max-w-[80%] rounded-2xl rounded-br-sm border border-border bg-secondary px-4 py-3">
+        {parsedContextAttachments.attachments.length > 0 && (
+          <div className="mb-2">
+            <ContextAttachmentStrip attachments={parsedContextAttachments.attachments} />
+          </div>
+        )}
         {userImages.length > 0 && (
           <div className="mb-2 grid max-w-[420px] grid-cols-2 gap-2">
             {userImages.map((image: NonNullable<TimelineMessage["attachments"]>[number]) => (
@@ -366,7 +376,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           </div>
         )}
         <CollapsibleUserMessageBody
-          text={displayedUserMessage.visibleText}
+          text={parsedContextAttachments.visibleText}
           terminalContexts={terminalContexts}
           skills={ctx.skills}
           footer={

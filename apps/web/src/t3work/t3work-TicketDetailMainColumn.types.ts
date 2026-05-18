@@ -1,0 +1,33 @@
+import type { ResourceSnapshot } from "@t3tools/project-context";
+import type { ProjectShellProject } from "@t3tools/project-context";
+import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
+import type { ProjectTicket } from "~/t3work/t3work-types";
+
+export type TicketDetailMainColumnProps = {
+  snapshot: ResourceSnapshot | null;
+  displayId: string;
+  title: string;
+  status: string;
+  priority: string | undefined;
+  assignee: string | undefined;
+  projectId: string;
+  project: ProjectShellProject;
+  projectTickets: ProjectTicket[];
+  ticketId: string;
+  ticketParentId: string | undefined;
+  snapshotParentId: string | undefined;
+  snapshotRaw: unknown;
+  onOpenTicket: (projectId: string, ticketId: string) => void;
+  loading: boolean;
+  error: string | null;
+  descriptionMarkdown: string | undefined;
+  descriptionHtml: string | undefined;
+  htmlBaseUrl: string | undefined;
+  attachments: Array<Record<string, unknown>>;
+  sortedComments: Array<Record<string, unknown>>;
+  githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
+  githubActivityLoading?: boolean;
+  githubActivityWarning?: string;
+  githubHost?: string;
+  githubAccount?: string;
+};

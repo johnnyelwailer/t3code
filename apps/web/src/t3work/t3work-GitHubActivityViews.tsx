@@ -14,10 +14,12 @@ export function GitHubActivityInlineList({
   items,
   limit = 3,
   compact,
+  onItemContextMenu,
 }: {
   items: ReadonlyArray<GitHubWorkActivityItem>;
   limit?: number;
   compact?: boolean;
+  onItemContextMenu?: (event: React.MouseEvent, item: GitHubWorkActivityItem) => void;
 }) {
   if (items.length === 0) return null;
   const [expanded, setExpanded] = useState(false);
@@ -94,11 +96,17 @@ export function GitHubActivityInlineList({
                   className="relative z-10 flex cursor-pointer items-start gap-1.5 rounded px-1 py-0.5 transition-colors hover:bg-accent/35"
                   onClick={(event) => event.stopPropagation()}
                   onMouseDown={(event) => event.stopPropagation()}
+                  onContextMenu={(event) => onItemContextMenu?.(event, item)}
                 >
                   {rowContent}
                 </a>
               ) : (
-                <div className="flex items-start gap-1.5 rounded px-1 py-0.5">{rowContent}</div>
+                <div
+                  className="flex items-start gap-1.5 rounded px-1 py-0.5"
+                  onContextMenu={(event) => onItemContextMenu?.(event, item)}
+                >
+                  {rowContent}
+                </div>
               )}
             </div>
           );

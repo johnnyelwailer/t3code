@@ -20,6 +20,7 @@ export function GitHubActivitySection({
   host,
   account,
   loading,
+  onItemContextMenu,
 }: {
   title: string;
   items: ReadonlyArray<GitHubWorkActivityItem>;
@@ -28,6 +29,7 @@ export function GitHubActivitySection({
   host?: string;
   account?: string;
   loading?: boolean;
+  onItemContextMenu?: (event: React.MouseEvent, item: GitHubWorkActivityItem) => void;
 }) {
   return (
     <T3SurfacePanel tone="muted" className="p-3">
@@ -114,11 +116,17 @@ export function GitHubActivitySection({
                     className="relative z-10 flex cursor-pointer items-start gap-2 px-2 py-1.5 transition-colors hover:bg-accent/35"
                     onClick={(event) => event.stopPropagation()}
                     onMouseDown={(event) => event.stopPropagation()}
+                    onContextMenu={(event) => onItemContextMenu?.(event, item)}
                   >
                     {rowContent}
                   </a>
                 ) : (
-                  <div className="flex items-start gap-2 px-2 py-1.5">{rowContent}</div>
+                  <div
+                    className="flex items-start gap-2 px-2 py-1.5"
+                    onContextMenu={(event) => onItemContextMenu?.(event, item)}
+                  >
+                    {rowContent}
+                  </div>
                 )}
               </div>
             );

@@ -1,13 +1,18 @@
 import { Loader2 } from "lucide-react";
-import type { ResourceSnapshot } from "@t3tools/project-context";
 import { T3SurfaceCard, T3SurfaceCardContent } from "~/t3work/components/ui/t3work-surface";
 import { TicketMetadata } from "~/t3work/components/ticket/t3work-TicketMetadata";
 import { TicketRichContent } from "~/t3work/components/ticket/t3work-TicketRichContent";
-import { GitHubActivitySection } from "~/t3work/t3work-GitHubActivitySection";
 import { buildTicketRelationships } from "~/t3work/t3work-ticketRelationships-helpers";
 import { TicketParentSummary, TicketRelatedLinks } from "~/t3work/t3work-TicketRelationships";
-import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
-import type { ProjectTicket } from "~/t3work/t3work-types";
+import { useBackend } from "~/t3work/backend/t3work-index";
+import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
+import { TicketDetailGitHubSection } from "~/t3work/t3work-TicketDetailGitHubSection";
+import type { TicketDetailMainColumnProps } from "~/t3work/t3work-TicketDetailMainColumn.types";
+import {
+  createSectionContextMenuHandler,
+  normalizeTicketAttachments,
+  normalizeTicketComments,
+} from "~/t3work/t3work-ticketDetailMainColumn.helpers";
 
 export function TicketDetailMainColumn({
   snapshot,
@@ -17,6 +22,7 @@ export function TicketDetailMainColumn({
   priority,
   assignee,
   projectId,
+  project,
   projectTickets,
   ticketId,
   ticketParentId,
@@ -35,33 +41,10 @@ export function TicketDetailMainColumn({
   githubActivityWarning,
   githubHost,
   githubAccount,
-}: {
-  snapshot: ResourceSnapshot | null;
-  displayId: string;
-  title: string;
-  status: string;
-  priority: string | undefined;
-  assignee: string | undefined;
-  projectId: string;
-  projectTickets: ProjectTicket[];
-  ticketId: string;
-  ticketParentId: string | undefined;
-  snapshotParentId: string | undefined;
-  snapshotRaw: unknown;
-  onOpenTicket: (projectId: string, ticketId: string) => void;
-  loading: boolean;
-  error: string | null;
-  descriptionMarkdown: string | undefined;
-  descriptionHtml: string | undefined;
-  htmlBaseUrl: string | undefined;
-  attachments: Array<Record<string, unknown>>;
-  sortedComments: Array<Record<string, unknown>>;
-  githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
-  githubActivityLoading?: boolean;
-  githubActivityWarning?: string;
-  githubHost?: string;
-  githubAccount?: string;
-}) {
+}: TicketDetailMainColumnProps) {
+  const backend = useBackend();
+  const { showAddToChatContextMenu } = useAddToChat();
+  const ticket = projectTickets.find((candidate) => candidate.id === ticketId);
   const relationshipData = buildTicketRelationships({
     projectTickets,
     ticketId,
@@ -70,24 +53,65 @@ export function TicketDetailMainColumn({
     snapshotParentId,
     snapshotRaw,
   });
+  const handleSectionContextMenu = createSectionContextMenuHandler({
+    backend: backend ?? undefined,
+    ticket,
+    projectId,
+    project,
+    projectTickets,
+    githubActivityItems,
+    snapshot,
+    showAddToChatContextMenu,
+  });
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 px-3 py-4 sm:px-5">
-      <TicketMetadata snapshot={snapshot} priority={priority} assignee={assignee} />
+      <div
+        onContextMenu={(event) =>
+          handleSectionContextMenu(event, "metadata", `${displayId} metadata`, [
+            { label: "Status", value: status },
+            ...(priority ? [{ label: "Priority", value: priority }] : []),
+            ...(assignee ? [{ label: "Assignee", value: assignee }] : []),
+          ])
+        }
+      >
+        <TicketMetadata snapshot={snapshot} priority={priority} assignee={assignee} />
+      </div>
 
-      <TicketParentSummary
+      <div
+        onContextMenu={(event) =>
+          handleSectionContextMenu(event, "parent", `${displayId} parent`, [
+            {
+              label: "Has parent",
+              value: relationshipData.parentEntry ? "Yes" : "No",
+            },
+          ])
+        }
+      >
+        <TicketParentSummary
+          projectId={projectId}
+          onOpenTicket={onOpenTicket}
+          parentEntry={relationshipData.parentEntry}
+        />
+      </div>
+
+      <TicketDetailGitHubSection
         projectId={projectId}
-        onOpenTicket={onOpenTicket}
-        parentEntry={relationshipData.parentEntry}
-      />
-
-      <GitHubActivitySection
-        title="Related GitHub activity"
-        items={githubActivityItems}
-        {...(githubActivityLoading ? { loading: githubActivityLoading } : {})}
-        {...(githubActivityWarning ? { warning: githubActivityWarning } : {})}
-        {...(githubHost ? { host: githubHost } : {})}
-        {...(githubAccount ? { account: githubAccount } : {})}
+        projectTitle={project.title}
+        {...(project.workspace?.rootPath
+          ? { projectWorkspaceRoot: project.workspace.rootPath }
+          : {})}
+        {...(backend ? { backend } : {})}
+        project={project}
+        {...(ticket ? { ticket } : {})}
+        projectTickets={projectTickets}
+        displayId={displayId}
+        githubActivityItems={githubActivityItems}
+        showAddToChatContextMenu={showAddToChatContextMenu}
+        {...(githubActivityLoading ? { githubActivityLoading } : {})}
+        {...(githubActivityWarning ? { githubActivityWarning } : {})}
+        {...(githubHost ? { githubHost } : {})}
+        {...(githubAccount ? { githubAccount } : {})}
       />
 
       {loading ? (
@@ -109,30 +133,46 @@ export function TicketDetailMainColumn({
         {...(descriptionMarkdown ? { descriptionMarkdown } : {})}
         {...(descriptionHtml ? { descriptionHtml } : {})}
         {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
-        afterDescription={
-          <TicketRelatedLinks
-            projectId={projectId}
-            onOpenTicket={onOpenTicket}
-            childEntries={relationshipData.childEntries}
-            referencedEntries={relationshipData.referencedEntries}
-          />
+        onDescriptionContextMenu={(event) =>
+          handleSectionContextMenu(event, "description", `${displayId} description`, [
+            {
+              label: "Description source",
+              value: descriptionHtml ? "HTML" : "Markdown",
+            },
+          ])
         }
-        attachments={attachments.map((attachment) => ({
-          id: typeof attachment.id === "string" ? attachment.id : undefined,
-          filename: typeof attachment.filename === "string" ? attachment.filename : undefined,
-          mimeType: typeof attachment.mimeType === "string" ? attachment.mimeType : undefined,
-          content: typeof attachment.content === "string" ? attachment.content : undefined,
-          thumbnail: typeof attachment.thumbnail === "string" ? attachment.thumbnail : undefined,
-          size: typeof attachment.size === "number" ? attachment.size : undefined,
-        }))}
-        comments={sortedComments.map((comment) => ({
-          id: typeof comment.id === "string" ? comment.id : undefined,
-          author: typeof comment.author === "string" ? comment.author : undefined,
-          created: typeof comment.created === "string" ? comment.created : undefined,
-          updated: typeof comment.updated === "string" ? comment.updated : undefined,
-          bodyMarkdown: typeof comment.bodyMarkdown === "string" ? comment.bodyMarkdown : undefined,
-          bodyHtml: typeof comment.bodyHtml === "string" ? comment.bodyHtml : undefined,
-        }))}
+        onAttachmentsContextMenu={(event) =>
+          handleSectionContextMenu(event, "attachments", `${displayId} attachments`, [
+            { label: "Attachment count", value: String(attachments.length) },
+          ])
+        }
+        onCommentsContextMenu={(event) =>
+          handleSectionContextMenu(event, "comments", `${displayId} comments`, [
+            { label: "Comment count", value: String(sortedComments.length) },
+          ])
+        }
+        afterDescription={
+          <div
+            onContextMenu={(event) =>
+              handleSectionContextMenu(event, "relationships", `${displayId} relationships`, [
+                { label: "Child links", value: String(relationshipData.childEntries.length) },
+                {
+                  label: "Reference links",
+                  value: String(relationshipData.referencedEntries.length),
+                },
+              ])
+            }
+          >
+            <TicketRelatedLinks
+              projectId={projectId}
+              onOpenTicket={onOpenTicket}
+              childEntries={relationshipData.childEntries}
+              referencedEntries={relationshipData.referencedEntries}
+            />
+          </div>
+        }
+        attachments={normalizeTicketAttachments(attachments)}
+        comments={normalizeTicketComments(sortedComments)}
       />
     </div>
   );

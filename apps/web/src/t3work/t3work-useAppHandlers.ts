@@ -68,6 +68,27 @@ export function useAppHandlers({
     [onOpenThread, store],
   );
 
+  const handleCreateProjectKickoffThread = useCallback(
+    (input: {
+      projectId: string;
+      kickoffMessage: string;
+      kickoffModelSelection: ModelSelection;
+      kickoffRuntimeMode: RuntimeMode;
+      kickoffInteractionMode: ProviderInteractionMode;
+    }) => {
+      const thread = store.createThread(input.projectId, {
+        title: "Project kickoff",
+        kickoffMessage: input.kickoffMessage,
+        kickoffPending: true,
+        kickoffModelSelection: input.kickoffModelSelection,
+        kickoffRuntimeMode: input.kickoffRuntimeMode,
+        kickoffInteractionMode: input.kickoffInteractionMode,
+      });
+      onOpenThread?.(input.projectId, thread.id);
+    },
+    [onOpenThread, store],
+  );
+
   const handleCreateTicketThreadFromSidebar = useCallback(
     (input: { projectId: string; ticketId: string; ticketDisplayId: string }) => {
       const matching = store
@@ -114,6 +135,7 @@ export function useAppHandlers({
     handleSelectTicket,
     handleSelectThread,
     handleCreateThread,
+    handleCreateProjectKickoffThread,
     handleCreateTicketKickoffThread,
     handleCreateTicketThreadFromSidebar,
     handleThreadKickoffConsumed,

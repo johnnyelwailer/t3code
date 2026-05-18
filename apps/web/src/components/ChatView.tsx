@@ -343,6 +343,12 @@ type ChatViewProps =
       reserveTitleBarControlInset?: boolean;
       routeKind: "server";
       draftId?: never;
+      /** Optional slot rendered above the image chip strip inside the composer. */
+      composerContextAttachmentSlot?: React.ReactNode;
+      /** Optional ephemeral context attachments prepended on send by host surfaces. */
+      composerContextAttachments?: ReadonlyArray<{ contextText: string }>;
+      /** Optional callback fired after a send consumes composer context attachments. */
+      onComposerContextAttachmentsConsumed?: (() => void) | undefined;
     }
   | {
       environmentId: EnvironmentId;
@@ -351,6 +357,12 @@ type ChatViewProps =
       reserveTitleBarControlInset?: boolean;
       routeKind: "draft";
       draftId: DraftId;
+      /** Optional slot rendered above the image chip strip inside the composer. */
+      composerContextAttachmentSlot?: React.ReactNode;
+      /** Optional ephemeral context attachments prepended on send by host surfaces. */
+      composerContextAttachments?: ReadonlyArray<{ contextText: string }>;
+      /** Optional callback fired after a send consumes composer context attachments. */
+      onComposerContextAttachmentsConsumed?: (() => void) | undefined;
     };
 
 interface TerminalLaunchContext {
@@ -611,6 +623,9 @@ export default function ChatView(props: ChatViewProps) {
     routeKind,
     onDiffPanelOpen,
     reserveTitleBarControlInset = true,
+    composerContextAttachmentSlot,
+    composerContextAttachments = [],
+    onComposerContextAttachmentsConsumed,
   } = props;
   const draftId = routeKind === "draft" ? props.draftId : null;
   const routeThreadRef = useMemo(
@@ -2643,7 +2658,7 @@ export default function ChatView(props: ChatViewProps) {
       hasSendableContent,
     } = deriveComposerSendState({
       prompt: promptForSend,
-      imageCount: composerImages.length,
+      imageCount: composerImages.length + composerContextAttachments.length,
       terminalContexts: composerTerminalContexts,
     });
     if (showPlanFollowUpPrompt && activeProposedPlan) {
@@ -2661,7 +2676,9 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     const standaloneSlashCommand =
-      composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
+      composerImages.length === 0 &&
+      sendableComposerTerminalContexts.length === 0 &&
+      composerContextAttachments.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
     if (standaloneSlashCommand) {
@@ -2709,8 +2726,15 @@ export default function ChatView(props: ChatViewProps) {
 
     const composerImagesSnapshot = [...composerImages];
     const composerTerminalContextsSnapshot = [...sendableComposerTerminalContexts];
+    const contextAttachmentPrefix =
+      composerContextAttachments.length > 0
+        ? composerContextAttachments.map((a) => a.contextText).join("\n\n")
+        : "";
+    const promptWithContext = contextAttachmentPrefix
+      ? `${contextAttachmentPrefix}\n\n${promptForSend}`
+      : promptForSend;
     const messageTextForSend = appendTerminalContextsToPrompt(
-      promptForSend,
+      promptWithContext,
       composerTerminalContextsSnapshot,
     );
     const messageIdForSend = newMessageId();
@@ -2758,6 +2782,9 @@ export default function ChatView(props: ChatViewProps) {
         streaming: false,
       },
     ]);
+    if (composerContextAttachments.length > 0) {
+      onComposerContextAttachmentsConsumed?.();
+    }
 
     setThreadError(threadIdForSend, null);
     if (expiredTerminalContextCount > 0) {
@@ -3606,6 +3633,9 @@ export default function ChatView(props: ChatViewProps) {
             <div className="relative isolate">
               <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
               <div className="relative z-10">
+                {composerContextAttachmentSlot != null && (
+                  <div className="mb-2">{composerContextAttachmentSlot}</div>
+                )}
                 <ChatComposer
                   composerRef={composerRef}
                   composerDraftTarget={composerDraftTarget}

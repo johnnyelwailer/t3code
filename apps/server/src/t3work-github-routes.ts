@@ -15,8 +15,6 @@ import {
   ACCOUNT_CACHE_TTL_MS,
   accountCache,
   EMPTY_RESPONSE,
-  GitHubInboxDiscoverRequest,
-  GitHubInboxDiscoverResponse,
   inboxCache,
   INBOX_CACHE_TTL_MS,
   makeResponseCacheKey,
@@ -28,6 +26,10 @@ import {
   RESPONSE_CACHE_TTL_MS,
   UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS,
   writeCached,
+} from "./t3work-github-routes-shared.ts";
+import type {
+  GitHubInboxDiscoverRequest,
+  GitHubInboxDiscoverResponse,
 } from "./t3work-github-routes-shared.ts";
 import { toT3workError } from "./t3work-project-repository-utils.ts";
 

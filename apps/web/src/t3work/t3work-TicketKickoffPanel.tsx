@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "~/t3work/components/ui/t3work-card";
 import { ScrollArea } from "~/t3work/components/ui/t3work-scroll-area";
 import type { ProjectThread } from "~/t3work/t3work-types";
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
 import { formatRelativeTime } from "./t3work-AppTicketHelpers";
+import { ContextAttachmentChip } from "~/t3work/components/t3work-ContextAttachmentChip";
 
 type TicketKickoffPanelProps = {
   displayId: string;
   issueThreads: ProjectThread[];
+  injectedContextAttachments?: ReadonlyArray<T3WorkContextAttachment>;
   onOpenThread: (threadId: string) => void;
   onKickoff: (
     instruction: string,
@@ -29,11 +32,30 @@ type TicketKickoffPanelProps = {
 export function TicketKickoffPanel({
   displayId,
   issueThreads,
+  injectedContextAttachments,
   onOpenThread,
   onKickoff,
   renderComposer,
 }: TicketKickoffPanelProps) {
   const [prefill, setPrefill] = useState<string | undefined>(undefined);
+  const [localContextAttachments, setLocalContextAttachments] = useState<
+    ReadonlyArray<T3WorkContextAttachment>
+  >([]);
+
+  useEffect(() => {
+    if (!injectedContextAttachments || injectedContextAttachments.length === 0) {
+      return;
+    }
+    setLocalContextAttachments((current) => {
+      const existingIds = new Set(current.map((a) => a.id));
+      const incoming = injectedContextAttachments.filter((a) => !existingIds.has(a.id));
+      return incoming.length > 0 ? [...current, ...incoming] : current;
+    });
+  }, [injectedContextAttachments]);
+
+  const removeLocalContextAttachment = (id: string) => {
+    setLocalContextAttachments((current) => current.filter((a) => a.id !== id));
+  };
 
   const recipeButtons = [
     {
@@ -125,11 +147,28 @@ export function TicketKickoffPanel({
       </ScrollArea>
 
       <div className="shrink-0 border-t border-border bg-background/75 p-3 sm:p-4">
+        {localContextAttachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {localContextAttachments.map((a) => (
+              <ContextAttachmentChip
+                key={a.id}
+                attachment={a}
+                onRemove={removeLocalContextAttachment}
+              />
+            ))}
+          </div>
+        )}
         {renderComposer({
           ...(prefill ? { prefillText: prefill } : {}),
           onSubmit: (text, selection, runtimeMode, interactionMode) => {
-            onKickoff(text, selection, runtimeMode, interactionMode);
+            const contextPrefix =
+              localContextAttachments.length > 0
+                ? localContextAttachments.map((a) => a.contextText).join("\n\n")
+                : "";
+            const fullText = contextPrefix ? `${contextPrefix}\n\n${text}` : text;
+            onKickoff(fullText, selection, runtimeMode, interactionMode);
             setPrefill(undefined);
+            setLocalContextAttachments([]);
           },
         })}
       </div>
