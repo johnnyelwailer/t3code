@@ -7,61 +7,24 @@ import type {
   ViewState,
   ProjectThread,
 } from "~/t3work/t3work-types";
-import { MOCK_THREADS, MOCK_TICKETS } from "~/t3work/data/t3work-mockThreads";
-
-let projectIdCounter = 0;
-let threadIdCounter = 0;
-
-function generateProjectId(): string {
-  projectIdCounter += 1;
-  return `proj-${projectIdCounter}`;
-}
-
-function generateThreadId(): string {
-  threadIdCounter += 1;
-  return `thread-${Date.now()}-${threadIdCounter}`;
-}
-
-const STORAGE_KEY = "t3work:projects";
-
-function loadProjects(): ProjectShellProject[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return dedupeProjects(JSON.parse(raw) as ProjectShellProject[]);
-  } catch {
-    return [];
-  }
-}
-
-function saveProjects(projects: ProjectShellProject[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-}
-
-function projectSourceKey(project: ProjectShellProject): string {
-  return [
-    project.source.provider,
-    project.source.accountId ?? "",
-    project.source.externalProjectId ?? project.id,
-  ].join(":");
-}
-
-function dedupeProjects(projects: ProjectShellProject[]): ProjectShellProject[] {
-  const bySourceKey = new Map<string, ProjectShellProject>();
-  for (const project of projects) {
-    bySourceKey.set(projectSourceKey(project), project);
-  }
-  return [...bySourceKey.values()];
-}
+import { MOCK_THREADS } from "~/t3work/data/t3work-mockThreads";
+import {
+  buildThreadForProject,
+  generateProjectId,
+  getMockTicketsForProject,
+  loadStoredProjects,
+  saveStoredProjects,
+  upsertProjectBySource,
+} from "./t3work-projectStoreUtils";
 
 export function useProjectStore() {
-  const [projects, setProjects] = useState<ProjectShellProject[]>(loadProjects);
+  const [projects, setProjects] = useState<ProjectShellProject[]>(loadStoredProjects);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    () => loadProjects()[0]?.id ?? null,
+    () => loadStoredProjects()[0]?.id ?? null,
   );
   const [view, setView] = useState<ViewState | null>(null);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(
-    () => new Set(loadProjects().map((p) => p.id)),
+    () => new Set(loadStoredProjects().map((p) => p.id)),
   );
   const [threads, setThreads] = useState<ProjectThread[]>(MOCK_THREADS);
   const [projectSortOrder, setProjectSortOrder] = useState<ProjectSortOrder>("updated_at");
@@ -69,37 +32,22 @@ export function useProjectStore() {
   const [threadPreviewCount, setThreadPreviewCount] = useState(5);
 
   const getThreadsForProject = useCallback(
-    (projectId: string) => {
-      return threads.filter((t) => t.projectId === projectId);
-    },
+    (projectId: string) => threads.filter((t) => t.projectId === projectId),
     [threads],
   );
 
   const getTicketsForProject = useCallback(
     (projectId: string) => {
       const project = projects.find((p) => p.id === projectId);
-      if (!project) return [];
-      const extId = project.source.externalProjectId;
-      return MOCK_TICKETS.filter((t) => {
-        if (extId === "jira-proj-einb") return t.projectId === "proj-einb";
-        if (extId === "jira-proj-checkout") return t.projectId === "proj-ac";
-        if (extId === "jira-proj-support") return t.projectId === "proj-csp";
-        return false;
-      });
+      return project ? getMockTicketsForProject(project) : [];
     },
     [projects],
   );
 
   const addProject = useCallback((project: ProjectShellProject) => {
     setProjects((prev) => {
-      const existingIndex = prev.findIndex(
-        (candidate) => projectSourceKey(candidate) === projectSourceKey(project),
-      );
-      const next =
-        existingIndex >= 0
-          ? prev.map((candidate, index) => (index === existingIndex ? project : candidate))
-          : [...prev, project];
-      saveProjects(next);
+      const next = upsertProjectBySource(prev, project);
+      saveStoredProjects(next);
       return next;
     });
     setSelectedProjectId(project.id);
@@ -110,7 +58,7 @@ export function useProjectStore() {
   const deleteProject = useCallback((id: string) => {
     setProjects((prev) => {
       const next = prev.filter((p) => p.id !== id);
-      saveProjects(next);
+      saveStoredProjects(next);
       return next;
     });
     setThreads((prev) => prev.filter((t) => t.projectId !== id));
@@ -126,7 +74,15 @@ export function useProjectStore() {
   const renameProject = useCallback((id: string, newTitle: string) => {
     setProjects((prev) => {
       const next = prev.map((p) => (p.id === id ? { ...p, title: newTitle } : p));
-      saveProjects(next);
+      saveStoredProjects(next);
+      return next;
+    });
+  }, []);
+
+  const updateProject = useCallback((id: string, nextProject: ProjectShellProject) => {
+    setProjects((prev) => {
+      const next = prev.map((candidate) => (candidate.id === id ? nextProject : candidate));
+      saveStoredProjects(next);
       return next;
     });
   }, []);
@@ -171,28 +127,7 @@ export function useProjectStore() {
         kickoffInteractionMode?: ProviderInteractionMode;
       },
     ) => {
-      const now = new Date().toISOString();
-      const newThread: ProjectThread = {
-        id: generateThreadId(),
-        projectId,
-        ...(options?.ticketId ? { ticketId: options.ticketId } : {}),
-        title: options?.title ?? "New thread",
-        status: "idle",
-        lastMessageAt: now,
-        messageCount: 0,
-        createdAt: now,
-        ...(options?.kickoffMessage ? { kickoffMessage: options.kickoffMessage } : {}),
-        ...(options?.kickoffPending !== undefined
-          ? { kickoffPending: options.kickoffPending }
-          : {}),
-        ...(options?.kickoffModelSelection
-          ? { kickoffModelSelection: options.kickoffModelSelection }
-          : {}),
-        ...(options?.kickoffRuntimeMode ? { kickoffRuntimeMode: options.kickoffRuntimeMode } : {}),
-        ...(options?.kickoffInteractionMode
-          ? { kickoffInteractionMode: options.kickoffInteractionMode }
-          : {}),
-      };
+      const newThread = buildThreadForProject(projectId, options);
       setThreads((prev) => [...prev, newThread]);
       setSelectedProjectId(projectId);
       setExpandedProjectIds((prev) => new Set(prev).add(projectId));
@@ -263,6 +198,7 @@ export function useProjectStore() {
     addProject,
     deleteProject,
     renameProject,
+    updateProject,
     toggleProjectExpanded,
     selectProject,
     selectTicket,

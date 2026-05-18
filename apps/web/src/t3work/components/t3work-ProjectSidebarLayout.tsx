@@ -1,5 +1,4 @@
 import { FolderPlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
-import { Button } from "~/t3work/components/ui/t3work-button";
 import {
   SidebarContent,
   SidebarFooter,
@@ -13,7 +12,6 @@ import {
 } from "~/t3work/components/ui/t3work-sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import type { ProjectThread, ThreadSortOrder, ViewState } from "~/t3work/t3work-types";
 import { ProjectSortMenu } from "./t3work-ProjectSortMenu";
 import { ProjectRowWithTickets } from "./t3work-ProjectSidebarProjectRow";
 import { resolveProjectStatusIndicator, type TicketViewMode } from "./t3work-projectSidebarShared";
@@ -23,12 +21,14 @@ type ProjectSidebarLayoutProps = {
   sortedProjects: ProjectShellProject[];
   ticketViewMode: TicketViewMode;
   setTicketViewMode: (mode: TicketViewMode) => void;
+  onOpenSettings: (() => void) | undefined;
 } & ProjectSidebarProps;
 
 export function ProjectSidebarLayout({
   sortedProjects,
   ticketViewMode,
   setTicketViewMode,
+  onOpenSettings,
   projects,
   expandedIds,
   getThreadsForProject,
@@ -41,6 +41,7 @@ export function ProjectSidebarLayout({
   onSelectThread,
   onToggleExpand,
   onCreateProject,
+  onManageProjectRepositories,
   onDeleteProject,
   onRenameProject,
   onCreateThread,
@@ -132,6 +133,7 @@ export function ProjectSidebarLayout({
                     onToggleExpand={onToggleExpand}
                     onSelectThread={onSelectThread}
                     onSelectTicket={onSelectTicket}
+                    onManageProjectRepositories={onManageProjectRepositories}
                     onDeleteProject={onDeleteProject}
                     onRenameProject={onRenameProject}
                     onCreateThread={onCreateThread}
@@ -159,6 +161,7 @@ export function ProjectSidebarLayout({
             <SidebarMenuButton
               size="sm"
               className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+              onClick={onOpenSettings}
             >
               <SettingsIcon className="size-3.5" />
               <span className="text-xs">Settings</span>

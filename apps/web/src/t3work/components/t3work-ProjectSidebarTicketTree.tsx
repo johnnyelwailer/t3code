@@ -3,6 +3,8 @@ import type { ProjectThread, ProjectTicket, ViewState } from "~/t3work/t3work-ty
 import { SidebarMenuSubButton } from "~/t3work/components/ui/t3work-sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
 import { JiraIssueTypeIcon } from "~/t3work/components/ticket/t3work-JiraIssueType";
+import { GitHubActivityInlineList } from "~/t3work/t3work-GitHubActivityViews";
+import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
 import { ThreadRow } from "./t3work-ProjectSidebarThreadRow";
 
 interface TicketSidebarEntryProps {
@@ -10,6 +12,7 @@ interface TicketSidebarEntryProps {
   projectId: string;
   view: ViewState | null;
   ticketThreads: readonly ProjectThread[];
+  githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
   onSelectTicket: (projectId: string, ticketId: string) => void;
   onCreateTicketThread: (input: {
     projectId: string;
@@ -26,6 +29,7 @@ export function TicketSidebarEntry({
   projectId,
   view,
   ticketThreads,
+  githubActivityItems,
   onSelectTicket,
   onCreateTicketThread,
   onSelectThread,
@@ -33,7 +37,7 @@ export function TicketSidebarEntry({
   onRenameThread,
 }: TicketSidebarEntryProps) {
   return (
-    <div className="group/ticket rounded-md border border-border/60 bg-background/45 p-1">
+    <div className="group/ticket rounded-md bg-background/25 p-1">
       <div className="flex items-start gap-1">
         <SidebarMenuSubButton
           size="sm"
@@ -79,7 +83,7 @@ export function TicketSidebarEntry({
       </div>
 
       {ticketThreads.length > 0 ? (
-        <div className="mt-1.5 ml-2 space-y-1 border-l border-border/70 pl-2">
+        <div className="mt-1.5 ml-2 space-y-1 pl-2">
           {ticketThreads.map((thread) => (
             <ThreadRow
               key={thread.id}
@@ -93,14 +97,24 @@ export function TicketSidebarEntry({
           ))}
         </div>
       ) : null}
+
+      {githubActivityItems.length > 0 ? (
+        <div className="mt-1">
+          <GitHubActivityInlineList items={githubActivityItems} limit={2} compact />
+        </div>
+      ) : null}
     </div>
   );
 }
 
-interface TicketTreeNodeProps extends Omit<TicketSidebarEntryProps, "ticketThreads"> {
+interface TicketTreeNodeProps extends Omit<
+  TicketSidebarEntryProps,
+  "ticketThreads" | "githubActivityItems"
+> {
   ticket: ProjectTicket;
   childrenByParentId: ReadonlyMap<string, readonly ProjectTicket[]>;
   ticketThreadsById: ReadonlyMap<string, readonly ProjectThread[]>;
+  githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
   depth?: number;
 }
 
@@ -110,6 +124,7 @@ export function TicketTreeNode({
   view,
   childrenByParentId,
   ticketThreadsById,
+  githubActivityByWorkItem,
   onSelectTicket,
   onCreateTicketThread,
   onSelectThread,
@@ -125,6 +140,7 @@ export function TicketTreeNode({
         projectId={projectId}
         view={view}
         ticketThreads={ticketThreadsById.get(ticket.id) ?? []}
+        githubActivityItems={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
         onSelectTicket={onSelectTicket}
         onCreateTicketThread={onCreateTicketThread}
         onSelectThread={onSelectThread}
@@ -141,6 +157,7 @@ export function TicketTreeNode({
               view={view}
               childrenByParentId={childrenByParentId}
               ticketThreadsById={ticketThreadsById}
+              githubActivityByWorkItem={githubActivityByWorkItem}
               onSelectTicket={onSelectTicket}
               onCreateTicketThread={onCreateTicketThread}
               onSelectThread={onSelectThread}

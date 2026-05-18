@@ -16,7 +16,7 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/bin.ts",
+    "dev": "node scripts/t3work-dev-entry.mjs",
     "dev:t3work": "node --watch src/t3work-bin.ts",
     "build": "node scripts/cli.ts build",
     "build:bundle": "tsdown",

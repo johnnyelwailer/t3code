@@ -3,8 +3,19 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { HttpRouter } from "effect/unstable/http";
-import { errorResponse, okJson, readJsonBody, T3workAtlassianError, toAtlassianError } from "./t3work-atlassian-http.ts";
-import { ensureWorkspaceGitRepository, ensureWorkspaceGitignore, syncLinkedRepository, writeReferenceManifest } from "./t3work-project-repository-services.ts";
+import {
+  errorResponse,
+  okJson,
+  readJsonBody,
+  T3workAtlassianError,
+  toAtlassianError,
+} from "./t3work-atlassian-http.ts";
+import {
+  ensureWorkspaceGitRepository,
+  ensureWorkspaceGitignore,
+  syncLinkedRepository,
+  writeReferenceManifest,
+} from "./t3work-project-repository-services.ts";
 import {
   deriveReferenceDirectoryName,
   HIDDEN_T3WORK_DIR,
@@ -27,25 +38,41 @@ export const t3workProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
     const path = yield* Path.Path;
     const input = yield* readJsonBody<BootstrapWorkspaceRequest>();
     const workspaceRoot = input.workspaceRoot?.trim() ?? "";
-    if (workspaceRoot.length === 0) return yield* new T3workAtlassianError({ message: "workspaceRoot is required." });
+    if (workspaceRoot.length === 0)
+      return yield* new T3workAtlassianError({ message: "workspaceRoot is required." });
 
-    yield* fileSystem.makeDirectory(workspaceRoot, { recursive: true }).pipe(Effect.mapError(toAtlassianError("Failed to ensure workspace directory exists.")));
+    yield* fileSystem
+      .makeDirectory(workspaceRoot, { recursive: true })
+      .pipe(Effect.mapError(toAtlassianError("Failed to ensure workspace directory exists.")));
     const workspaceRepositoryInitialized = yield* ensureWorkspaceGitRepository(workspaceRoot);
     yield* ensureWorkspaceGitignore(workspaceRoot);
 
     const referencesRoot = path.join(workspaceRoot, HIDDEN_T3WORK_DIR, REFERENCES_DIR_NAME);
-    yield* fileSystem.makeDirectory(referencesRoot, { recursive: true }).pipe(Effect.mapError(toAtlassianError("Failed to create repository references directory.")));
+    yield* fileSystem
+      .makeDirectory(referencesRoot, { recursive: true })
+      .pipe(Effect.mapError(toAtlassianError("Failed to create repository references directory.")));
 
     const linkedRepositoryUrls = normalizeRepositoryUrls(input.linkedRepositoryUrls);
     const linkedRepositories: LinkedRepositoryBootstrapResult[] = [];
     for (const [index, url] of linkedRepositoryUrls.entries()) {
-      const result = yield* syncLinkedRepository({ workspaceRoot, referencesRoot, url, index }).pipe(
+      const result = yield* syncLinkedRepository({
+        workspaceRoot,
+        referencesRoot,
+        url,
+        index,
+      }).pipe(
         Effect.catch((error) =>
           Effect.succeed({
             url,
-            localPath: path.join(referencesRoot, `${String(index + 1).padStart(2, "0")}-${deriveReferenceDirectoryName(url)}`),
+            localPath: path.join(
+              referencesRoot,
+              `${String(index + 1).padStart(2, "0")}-${deriveReferenceDirectoryName(url)}`,
+            ),
             status: "failed",
-            error: error instanceof T3workAtlassianError ? error.message : "Failed to sync linked repository reference.",
+            error:
+              error instanceof T3workAtlassianError
+                ? error.message
+                : "Failed to sync linked repository reference.",
           } satisfies LinkedRepositoryBootstrapResult),
         ),
       );

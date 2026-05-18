@@ -14,68 +14,10 @@ import type {
   AtlassianOAuthConnectInput,
   BackendApi,
   BackendState,
+  GitHubInboxDiscoverResponse,
+  ProjectWorkspaceBootstrapResult,
 } from "./t3work-types";
-
-function resolveWsUrl(rawUrl: string): string {
-  const resolved = new URL(rawUrl);
-  if (resolved.protocol === "http:") resolved.protocol = "ws:";
-  else if (resolved.protocol === "https:") resolved.protocol = "wss:";
-  resolved.pathname = "/ws";
-  return resolved.toString();
-}
-
-function resolveHttpBaseUrl(rawUrl: string): string {
-  const resolved = new URL(rawUrl);
-  if (resolved.protocol === "ws:") resolved.protocol = "http:";
-  else if (resolved.protocol === "wss:") resolved.protocol = "https:";
-
-  if (resolved.pathname === "/ws") {
-    resolved.pathname = "/";
-  }
-
-  if (!resolved.pathname.endsWith("/")) {
-    resolved.pathname = `${resolved.pathname}/`;
-  }
-
-  return resolved.toString();
-}
-
-async function postJson<TInput extends object, TResponse>(
-  httpBaseUrl: string,
-  path: string,
-  body: TInput,
-): Promise<TResponse> {
-  const url = new URL(path, httpBaseUrl);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  const payload = (await response.json().catch(() => null)) as
-    | { error?: string }
-    | TResponse
-    | null;
-
-  if (!response.ok) {
-    const errorMessage =
-      payload &&
-      typeof payload === "object" &&
-      "error" in payload &&
-      typeof payload.error === "string"
-        ? payload.error
-        : `Request failed with ${response.status}`;
-    throw new Error(errorMessage);
-  }
-
-  if (!payload) {
-    throw new Error("Empty response from backend.");
-  }
-
-  return payload as TResponse;
-}
+import { postJson, resolveHttpBaseUrl, resolveWsUrl } from "./t3work-t3BackendHttp";
 
 export function createT3Backend(wsBaseUrl: string): BackendApi {
   const httpBaseUrl = resolveHttpBaseUrl(wsBaseUrl);
@@ -211,6 +153,34 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     },
   };
 
+  const github = {
+    async discoverInbox(input: {
+      readonly host: string;
+      readonly projectKey?: string;
+      readonly projectTitle?: string;
+      readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+    }) {
+      return postJson<typeof input, GitHubInboxDiscoverResponse>(
+        httpBaseUrl,
+        "/api/t3work/github/inbox",
+        input,
+      );
+    },
+  };
+
+  const projectWorkspace = {
+    async bootstrapWorkspace(input: {
+      readonly workspaceRoot: string;
+      readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+    }): Promise<ProjectWorkspaceBootstrapResult> {
+      return postJson<typeof input, ProjectWorkspaceBootstrapResult>(
+        httpBaseUrl,
+        "/api/t3work/project/workspace/bootstrap",
+        input,
+      );
+    },
+  };
+
   return {
     get state() {
       return state;
@@ -219,6 +189,8 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     disconnect,
     dispatchCommand: dispatch,
     atlassian,
+    github,
+    projectWorkspace,
     subscribeConfig(listener: (event: ServerConfigStreamEvent) => void) {
       return getPrimaryEnvironmentConnection().client.server.subscribeConfig(listener);
     },

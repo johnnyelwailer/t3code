@@ -6,34 +6,7 @@ import type {
 } from "@t3tools/project-context";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 import { useBackend } from "~/t3work/backend/t3work-index";
-
-function resourceToTicket(projectId: string, ref: ExternalResourceRef): ProjectTicket {
-  const resourceWithParent = ref as ExternalResourceRef & { parentId?: unknown };
-
-  return {
-    id: ref.id,
-    projectId,
-    ...(typeof resourceWithParent.parentId === "string"
-      ? { parentId: resourceWithParent.parentId }
-      : {}),
-    ref: {
-      provider: ref.provider,
-      kind: ref.kind,
-      id: ref.id,
-      displayId: ref.displayId ?? ref.id,
-      title: ref.title,
-      url: ref.url ?? "",
-      projectId: ref.projectId ?? "",
-      ...(ref.type !== undefined ? { type: ref.type } : {}),
-    },
-    ...(ref.type !== undefined ? { issueType: ref.type } : {}),
-    ...(ref.issueTypeIconUrl !== undefined ? { issueTypeIconUrl: ref.issueTypeIconUrl } : {}),
-    status: ref.status ?? "Unknown",
-    ...(ref.assignee !== undefined ? { assignee: ref.assignee } : {}),
-    ...(ref.priority !== undefined ? { priority: ref.priority } : {}),
-    updatedAt: ref.updatedAt ?? new Date().toISOString(),
-  };
-}
+import { resourceRefToProjectTicket } from "~/t3work/t3work-ticketMappers";
 
 export function useProjectResources(project: ProjectShellProject) {
   const backend = useBackend();
@@ -79,7 +52,7 @@ export function useProjectResources(project: ProjectShellProject) {
 
   const tickets = useMemo(() => {
     if (!resources) return [];
-    return resources.items.map((ref) => resourceToTicket(project.id, ref));
+    return resources.items.map((ref) => resourceRefToProjectTicket(project.id, ref));
   }, [resources, project.id]);
 
   return { resources, tickets, loading, error, reload: load };

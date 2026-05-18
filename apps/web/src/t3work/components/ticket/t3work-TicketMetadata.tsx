@@ -1,73 +1,83 @@
-import { Card, CardContent } from "~/t3work/components/ui/t3work-card";
 import { Badge } from "~/t3work/components/ui/t3work-badge";
-import { JiraIssueTypeIcon } from "~/t3work/components/ticket/t3work-JiraIssueType";
+import {
+  T3SurfaceCard,
+  T3SurfaceCardContent,
+  T3SurfacePanel,
+} from "~/t3work/components/ui/t3work-surface";
 import type { ResourceSnapshot } from "@t3tools/project-context";
 
 interface TicketMetadataProps {
   snapshot: ResourceSnapshot | null;
-  displayId: string | undefined;
-  title: string;
-  issueType?: string | undefined;
-  issueTypeIconUrl?: string | undefined;
-  status: string;
   priority?: string | undefined;
   assignee?: string | undefined;
 }
 
-export function TicketMetadata({
-  snapshot,
-  displayId,
-  title,
-  issueType,
-  issueTypeIconUrl,
-  status,
-  priority,
-  assignee,
-}: TicketMetadataProps) {
+function readDisplayName(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = (value as Record<string, unknown>).displayName;
+  return typeof candidate === "string" && candidate.trim().length > 0 ? candidate : undefined;
+}
+
+function readStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function toRelativeDate(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return undefined;
+  return new Date(timestamp).toLocaleDateString();
+}
+
+export function TicketMetadata({ snapshot, priority, assignee }: TicketMetadataProps) {
   const fields = snapshot?.fields as Record<string, unknown> | undefined;
-  const reporter = fields?.reporter as string | undefined;
-  const labels = fields?.labels as string[] | undefined;
-  const createdAt = snapshot?.fetchedAt;
+  const reporter = readDisplayName(fields?.reporter);
+  const labels = readStringList(fields?.labels);
+  const updatedOn =
+    toRelativeDate(typeof fields?.updated === "string" ? fields.updated : undefined) ??
+    toRelativeDate(snapshot?.fetchedAt);
 
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <JiraIssueTypeIcon
-            issueType={issueType}
-            issueTypeIconUrl={issueTypeIconUrl}
-            className="size-5"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-mono text-muted-foreground">{displayId}</span>
-              <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {status}
-              </span>
-              {priority && (
-                <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {priority}
-                </span>
-              )}
-            </div>
-            <h1 className="mt-1 text-base font-semibold leading-snug">{title}</h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              {assignee && <span>Assigned to {assignee}</span>}
-              {reporter && <span>Reported by {reporter}</span>}
-              {createdAt && <span>Updated {new Date(createdAt).toLocaleDateString()}</span>}
-            </div>
-            {labels && labels.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {labels.map((label) => (
-                  <Badge key={label} variant="secondary" className="text-[10px]">
-                    {label}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
+    <T3SurfaceCard>
+      <T3SurfaceCardContent>
+        <div className="grid gap-2 text-xs sm:grid-cols-2">
+          <T3SurfacePanel tone="default" className="rounded-md bg-background/85 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">Assignee</p>
+            <p className="mt-1 truncate font-medium text-foreground">{assignee ?? "Unassigned"}</p>
+          </T3SurfacePanel>
+          <T3SurfacePanel tone="default" className="rounded-md bg-background/85 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">Reporter</p>
+            <p className="mt-1 truncate font-medium text-foreground">{reporter ?? "Unknown"}</p>
+          </T3SurfacePanel>
+          <T3SurfacePanel tone="default" className="rounded-md bg-background/85 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">Priority</p>
+            <p className="mt-1 truncate font-medium text-foreground">{priority ?? "Unspecified"}</p>
+          </T3SurfacePanel>
+          <T3SurfacePanel tone="default" className="rounded-md bg-background/85 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">Updated</p>
+            <p className="mt-1 truncate font-medium text-foreground">{updatedOn ?? "Unknown"}</p>
+          </T3SurfacePanel>
         </div>
-      </CardContent>
-    </Card>
+
+        {labels.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {labels.map((label) => (
+              <Badge key={label} variant="secondary" className="text-[10px]">
+                {label}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+
+        {labels.length === 0 ? (
+          <p className="mt-3 text-[11px] text-muted-foreground">No labels</p>
+        ) : null}
+      </T3SurfaceCardContent>
+    </T3SurfaceCard>
   );
 }

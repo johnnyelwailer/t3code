@@ -1,5 +1,9 @@
 import { MessageSquare } from "lucide-react";
-import { Card, CardContent } from "~/t3work/components/ui/t3work-card";
+import {
+  T3SurfaceCard,
+  T3SurfaceCardContent,
+  T3SurfacePanel,
+} from "~/t3work/components/ui/t3work-surface";
 import { HtmlBlock, MarkdownBlock } from "./t3work-ticketRichContentBlocks";
 import type { JiraCommentItem } from "./t3work-ticketRichContentTypes";
 import { formatTimestamp } from "./t3work-ticketRichContentUtils";
@@ -14,9 +18,9 @@ export function TicketComments({
   if (comments.length === 0) return null;
 
   return (
-    <Card>
-      <CardContent className="space-y-4 p-4">
-        <h3 className="text-sm font-semibold">Comments</h3>
+    <T3SurfaceCard>
+      <T3SurfaceCardContent className="space-y-4">
+        <h3 className="text-sm font-semibold">Comments (newest first)</h3>
         <div className="space-y-4">
           {comments.map((comment, index) => {
             const commentBody = comment.bodyMarkdown?.trim() ?? "";
@@ -24,9 +28,10 @@ export function TicketComments({
             const timestamp = formatTimestamp(comment.updated || comment.created);
 
             return (
-              <article
+              <T3SurfacePanel
                 key={`${comment.id ?? "comment"}-${index}`}
-                className="rounded-lg border border-border bg-background/70 p-3"
+                tone="default"
+                className="rounded-lg bg-background/88 p-3"
               >
                 <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <MessageSquare className="size-3.5" />
@@ -48,11 +53,11 @@ export function TicketComments({
                 ) : (
                   <p className="text-sm text-muted-foreground">No comment body.</p>
                 )}
-              </article>
+              </T3SurfacePanel>
             );
           })}
         </div>
-      </CardContent>
-    </Card>
+      </T3SurfaceCardContent>
+    </T3SurfaceCard>
   );
 }

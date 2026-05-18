@@ -98,6 +98,7 @@
         "@legendapp/list": "3.0.0-beta.44",
         "@lexical/react": "^0.41.0",
         "@pierre/diffs": "catalog:",
+        "@primer/octicons-react": "^19.25.0",
         "@t3tools/client-runtime": "workspace:*",
         "@t3tools/contracts": "workspace:*",
         "@t3tools/integrations-atlassian": "workspace:*",
@@ -787,6 +788,8 @@
     "@polka/url": ["@polka/url@1.0.0-next.29", "", {}, "sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww=="],
 
     "@preact/signals-core": ["@preact/signals-core@1.14.0", "", {}, "sha512-AowtCcCU/33lFlh1zRFf/u+12rfrhtNakj7UpaGEsmMwUKpKWMVvcktOGcwBBNiB4lWrZWc01LhiyyzVklJyaQ=="],
+
+    "@primer/octicons-react": ["@primer/octicons-react@19.25.0", "", { "peerDependencies": { "react": ">=16.3" } }, "sha512-Cv7l7Mk4ahe6pOJ4A59viOQ22q5QkJ3jtkMyrQ2lpOofcKpVzvVg4CpYiq76Lj0RRlYC4qk1Tp9FpfzQnf4AuQ=="],
 
     "@quansync/fs": ["@quansync/fs@1.0.0", "", { "dependencies": { "quansync": "^1.0.0" } }, "sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ=="],
 

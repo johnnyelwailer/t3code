@@ -1,192 +1,149 @@
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import * as Effect from "effect/Effect";
 import { DEFAULT_MODEL, ProviderInstanceId } from "@t3tools/contracts";
-import {
-  type AtlassianAccessibleResource,
-  type TokenExchangeResult,
+import type {
+  AtlassianAccessibleResource,
+  TokenExchangeResult,
 } from "@t3tools/integrations-atlassian";
-import type { ProjectShellProject } from "@t3tools/project-context";
 import type { ExternalProject, IntegrationAccount } from "@t3tools/integrations-core";
+import type { ProjectShellProject } from "@t3tools/project-context";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { t3workCreateProject } from "~/t3work/t3work-mock-adapter";
-
-const LAST_ACCOUNT_ID_STORAGE_KEY = "t3work:last-atlassian-account-id";
+import {
+  applyWorkspaceBootstrapToProject,
+  buildInitialRaw,
+  normalizeRepositoryUrls,
+} from "./t3work-createProjectBootstrap";
+import {
+  isValidAtlassianUrl,
+  normalizeAtlassianUrl,
+  persistLastAccountId,
+} from "./t3work-createProjectUtils";
+import { applyLoadedAccounts, failWithStep } from "./t3work-useCreateProjectHelpers";
+import { loadPersistedAccountsStep } from "./t3work-useCreateProjectLoadPersisted";
 
 export type CreateProjectStep = "source" | "account" | "project" | "confirm" | "creating";
-
-export type AtlassianBasicCredentials = {
-  siteUrl: string;
-  email: string;
-  apiToken: string;
-};
-
-export type OAuthAccount = {
-  resource: AtlassianAccessibleResource;
-  token: TokenExchangeResult;
-};
-
-function isValidUrl(value: string): boolean {
-  try {
-    const url = new URL(normalizeAtlassianUrl(value));
-    return url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function normalizeAtlassianUrl(value: string): string {
-  const trimmed = value.trim();
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
-function readLastAccountId(): string | null {
-  try {
-    return localStorage.getItem(LAST_ACCOUNT_ID_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function persistLastAccountId(accountId: string): void {
-  try {
-    localStorage.setItem(LAST_ACCOUNT_ID_STORAGE_KEY, accountId);
-  } catch {
-    // Ignore storage failures in private mode or blocked environments.
-  }
-}
-
-function pickPreferredAccount(
-  loadedAccounts: ReadonlyArray<IntegrationAccount>,
-): IntegrationAccount | null {
-  const lastAccountId = readLastAccountId();
-  if (!lastAccountId) return loadedAccounts[0] ?? null;
-  return (
-    loadedAccounts.find((account) => account.id === lastAccountId) ?? loadedAccounts[0] ?? null
-  );
-}
+export type AtlassianBasicCredentials = { siteUrl: string; email: string; apiToken: string };
+type CreateProjectOptions = { readonly linkedRepositoryUrls?: ReadonlyArray<string> };
 
 export function useCreateProject() {
   const backend = useBackend();
   const [step, setStep] = useState<CreateProjectStep>("source");
+  const [bootstrapping, setBootstrapping] = useState(true);
   const [accounts, setAccounts] = useState<ReadonlyArray<IntegrationAccount>>([]);
   const [selectedAccount, setSelectedAccount] = useState<IntegrationAccount | null>(null);
   const [projects, setProjects] = useState<ReadonlyArray<ExternalProject>>([]);
   const [selectedProject, setSelectedProject] = useState<ExternalProject | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+
+  const fail = useCallback(
+    (value: unknown, fallback: string, nextStep: CreateProjectStep = "source") =>
+      failWithStep(setError, setStep, value, fallback, nextStep),
+    [],
+  );
+
+  const applyAccounts = useCallback(
+    (loadedAccounts: ReadonlyArray<IntegrationAccount>) =>
+      applyLoadedAccounts({
+        loadedAccounts,
+        setAccounts,
+        setSelectedProject,
+        setError,
+        setStep,
+        setSelectedAccount,
+      }),
+    [],
+  );
 
   const loadPersistedAccounts = useCallback(async () => {
-    setError(null);
-    try {
-      if (!backend) throw new Error("Backend not available");
-      const loadedAccounts = await backend.atlassian.listAccounts();
-      if (loadedAccounts.length === 0) return;
-      setAccounts(loadedAccounts);
-      const preferredAccount = pickPreferredAccount(loadedAccounts);
-      setSelectedAccount(preferredAccount);
-      setStep("account");
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Failed to load saved Atlassian settings";
-      setError(message);
-      setStep("source");
-    }
-  }, [backend]);
+    await loadPersistedAccountsStep({
+      backend,
+      setAccounts,
+      setSelectedAccount,
+      setSelectedProject,
+      setProjects,
+      setStep,
+      setBootstrapping,
+      setLoadingAccounts,
+      setLoadingProjects,
+      setError,
+      fail,
+    });
+  }, [backend, fail]);
 
   const loadAccountsWithOAuth = useCallback(
     async (sites: ReadonlyArray<AtlassianAccessibleResource>, token: TokenExchangeResult) => {
-      setStep("account");
       setError(null);
-
+      setLoadingAccounts(true);
       try {
         if (!backend) throw new Error("Backend not available");
-        const loadedAccounts = await backend.atlassian.connectOAuth({ sites, token });
-        setAccounts(loadedAccounts);
-        setSelectedProject(null);
-        if (loadedAccounts.length === 0) {
-          setError("No Atlassian sites found.");
-          setStep("source");
-          return;
-        }
-        const preferredAccount = pickPreferredAccount(loadedAccounts);
-        setSelectedAccount(preferredAccount);
+        applyAccounts(await backend.atlassian.connectOAuth({ sites, token }));
       } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to connect Atlassian";
-        setError(message);
-        setStep("source");
+        fail(e, "Failed to connect Atlassian");
+      } finally {
+        setLoadingAccounts(false);
       }
     },
-    [backend],
+    [applyAccounts, backend, fail],
   );
 
   const loadAccountsWithBasic = useCallback(
     async (credentials: AtlassianBasicCredentials) => {
-      setStep("account");
       setError(null);
-
+      setLoadingAccounts(true);
       try {
         if (!backend) throw new Error("Backend not available");
-        const loadedAccounts = await backend.atlassian.connectBasic({
-          ...credentials,
-          siteUrl: normalizeAtlassianUrl(credentials.siteUrl),
-        });
-        setAccounts(loadedAccounts);
-        setSelectedProject(null);
-        if (loadedAccounts.length === 0) {
-          setError("No Atlassian sites found.");
-          setStep("source");
-          return;
-        }
-        const preferredAccount = pickPreferredAccount(loadedAccounts);
-        setSelectedAccount(preferredAccount);
+        applyAccounts(
+          await backend.atlassian.connectBasic({
+            ...credentials,
+            siteUrl: normalizeAtlassianUrl(credentials.siteUrl),
+          }),
+        );
       } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to connect Atlassian";
-        setError(message);
-        setStep("source");
+        fail(e, "Failed to connect Atlassian");
+      } finally {
+        setLoadingAccounts(false);
       }
     },
-    [backend],
+    [applyAccounts, backend, fail],
   );
 
-  const loadProjectsWithProvider = useCallback(
+  const loadProjects = useCallback(
     async (account: IntegrationAccount) => {
       setError(null);
+      setLoadingProjects(true);
       try {
         if (!backend) throw new Error("Backend not available");
         setSelectedAccount(account);
         persistLastAccountId(account.id);
         setSelectedProject(null);
-        const projs = await backend.atlassian.listProjects({
-          id: account.id,
-          provider: account.provider,
-        });
-        setProjects(projs);
+        setProjects(
+          await backend.atlassian.listProjects({ id: account.id, provider: account.provider }),
+        );
         setStep("project");
       } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to load Jira projects";
-        setError(message);
-        setStep("account");
+        fail(e, "Failed to load Jira projects", "account");
+      } finally {
+        setLoadingProjects(false);
       }
     },
-    [backend],
-  );
-
-  const loadProjects = useCallback(
-    async (account: IntegrationAccount) => {
-      await loadProjectsWithProvider(account);
-    },
-    [loadProjectsWithProvider],
+    [backend, fail],
   );
 
   const createProject = useCallback(
-    async (externalProject: ExternalProject): Promise<ProjectShellProject> => {
+    async (
+      externalProject: ExternalProject,
+      options?: CreateProjectOptions,
+    ): Promise<ProjectShellProject> => {
       setStep("creating");
       setError(null);
       try {
-        if (!backend) {
-          throw new Error("Backend not available");
-        }
-        if (!selectedAccount) {
+        if (!backend) throw new Error("Backend not available");
+        if (!selectedAccount)
           throw new Error("Select an Atlassian site before creating a project.");
-        }
+        const linkedRepositoryUrls = normalizeRepositoryUrls(options?.linkedRepositoryUrls);
         const project = await Effect.runPromise(
           t3workCreateProject({
             title: externalProject.title,
@@ -195,12 +152,11 @@ export function useCreateProject() {
             externalProjectId: externalProject.id,
             ...(externalProject.key ? { externalProjectKey: externalProject.key } : {}),
             ...(externalProject.url ? { externalProjectUrl: externalProject.url } : {}),
-            raw: externalProject.raw,
+            raw: buildInitialRaw(externalProject.raw, linkedRepositoryUrls),
           }),
         );
-        if (!project.workspace?.rootPath) {
+        if (!project.workspace?.rootPath)
           throw new Error("Created project is missing a managed workspace root.");
-        }
         await backend.dispatchCommand({
           type: "project.create",
           commandId: crypto.randomUUID() as any,
@@ -214,14 +170,21 @@ export function useCreateProject() {
           },
           createdAt: new Date().toISOString(),
         });
-        return project;
+        try {
+          const bootstrap = await backend.projectWorkspace.bootstrapWorkspace({
+            workspaceRoot: project.workspace.rootPath,
+            linkedRepositoryUrls,
+          });
+          return applyWorkspaceBootstrapToProject(project, bootstrap);
+        } catch {
+          return project;
+        }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to create project");
-        setStep("project");
+        fail(e, "Failed to create project", "project");
         throw e;
       }
     },
-    [backend, selectedAccount],
+    [backend, fail, selectedAccount],
   );
 
   return {
@@ -231,6 +194,9 @@ export function useCreateProject() {
     projects,
     selectedProject,
     error,
+    bootstrapping,
+    loadingAccounts,
+    loadingProjects,
     setStep,
     setSelectedAccount,
     setSelectedProject,
@@ -239,6 +205,6 @@ export function useCreateProject() {
     loadPersistedAccounts,
     loadProjects,
     createProject,
-    isValidUrl,
+    isValidUrl: isValidAtlassianUrl,
   };
 }

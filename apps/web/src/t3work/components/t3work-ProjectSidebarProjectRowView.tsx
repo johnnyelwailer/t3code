@@ -130,6 +130,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
                     view={view}
                     childrenByParentId={state.ticketHierarchy.childrenByParentId}
                     ticketThreadsById={state.ticketThreadsById}
+                    githubActivityByWorkItem={state.githubActivityByWorkItem}
                     onSelectTicket={onSelectTicket}
                     onCreateTicketThread={onCreateTicketThread}
                     onSelectThread={onSelectThread}
@@ -145,6 +146,9 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
                     projectId={project.id}
                     view={view}
                     ticketThreads={state.ticketThreadsById.get(ticket.id) ?? []}
+                    githubActivityItems={
+                      state.githubActivityByWorkItem.get(ticket.ref.displayId) ?? []
+                    }
                     onSelectTicket={onSelectTicket}
                     onCreateTicketThread={onCreateTicketThread}
                     onSelectThread={onSelectThread}
@@ -166,6 +170,9 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
                     projectId={project.id}
                     view={view}
                     ticketThreads={state.ticketThreadsById.get(ticket.id) ?? []}
+                    githubActivityItems={
+                      state.githubActivityByWorkItem.get(ticket.ref.displayId) ?? []
+                    }
                     onSelectTicket={onSelectTicket}
                     onCreateTicketThread={onCreateTicketThread}
                     onSelectThread={onSelectThread}

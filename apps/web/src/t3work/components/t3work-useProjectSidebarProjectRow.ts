@@ -4,6 +4,8 @@ import { readLocalApi } from "~/localApi";
 import type { ProjectThread, ProjectTicket } from "~/t3work/t3work-types";
 import { sortThreads } from "./t3work-projectSidebarShared";
 import type { ProjectRowProps } from "./t3work-projectSidebarProjectRowTypes";
+import { readLinkedRepositoryUrlsFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
+import { useProjectGitHubActivity } from "~/t3work/hooks/t3work-useProjectGitHubActivity";
 
 export function useProjectSidebarProjectRow(props: ProjectRowProps) {
   const {
@@ -13,7 +15,9 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
     threadSortOrder,
     threadPreviewCount,
     ticketViewMode,
+    expanded,
     onSelectProject,
+    onManageProjectRepositories,
     onDeleteProject,
     onRenameProject,
     onCreateThread,
@@ -23,6 +27,15 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
   const [renameTitle, setRenameTitle] = useState(project.title);
   const [expandedThreadList, setExpandedThreadList] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const linkedRepositoryUrls = useMemo(
+    () => readLinkedRepositoryUrlsFromProject(project),
+    [project],
+  );
+  const githubActivity = useProjectGitHubActivity({
+    project,
+    linkedRepositoryUrls,
+    enabled: expanded,
+  });
 
   const sortedThreads = useMemo(
     () => sortThreads(projectThreads, threadSortOrder),
@@ -111,6 +124,7 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
       const action = await api.contextMenu.show(
         [
           { id: "rename", label: "Rename project" },
+          { id: "manage-repositories", label: "Manage linked repositories" },
           { id: "delete", label: "Delete project", destructive: true },
         ],
         { x: e.clientX, y: e.clientY },
@@ -123,12 +137,14 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
           renameInputRef.current?.focus();
           renameInputRef.current?.select();
         });
+      } else if (action === "manage-repositories") {
+        onManageProjectRepositories(project.id);
       } else if (action === "delete") {
         const confirmed = await api.dialogs.confirm(`Delete project "${project.title}"?`);
         if (confirmed) onDeleteProject(project.id);
       }
     },
-    [onDeleteProject, project],
+    [onDeleteProject, onManageProjectRepositories, project],
   );
 
   const handleRenameSubmit = useCallback(() => {
@@ -167,6 +183,7 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
     visibleTreeRoots,
     visibleTreeUnresolvedChildren,
     hiddenTicketCount,
+    githubActivityByWorkItem: githubActivity.activityByWorkItem,
     handleProjectClick,
     handleNewThread,
     handleContextMenu,

@@ -30,6 +30,7 @@ export interface BackendApi {
   readonly disconnect: () => Promise<void>;
   readonly dispatchCommand: (command: ClientOrchestrationCommand) => Promise<void>;
   readonly atlassian: AtlassianBackendApi;
+  readonly github: GitHubBackendApi;
   readonly projectWorkspace: ProjectWorkspaceBackendApi;
   readonly subscribeConfig: (listener: (event: ServerConfigStreamEvent) => void) => () => void;
   readonly subscribeLifecycle: (listener: (event: unknown) => void) => () => void;
@@ -56,6 +57,49 @@ export interface ProjectWorkspaceBackendApi {
     readonly workspaceRoot: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
   }) => Promise<ProjectWorkspaceBootstrapResult>;
+}
+
+export type GitHubRepositoryCandidate = {
+  readonly id: string;
+  readonly nameWithOwner: string;
+  readonly url: string;
+  readonly host: string;
+  readonly updatedAt?: string;
+  readonly description?: string;
+  readonly isPrivate?: boolean;
+};
+
+export type GitHubInboxItem = {
+  readonly id: string;
+  readonly repository: string;
+  readonly repositoryUrl?: string;
+  readonly reason: string;
+  readonly authorLogin?: string;
+  readonly reviewRequested?: boolean;
+  readonly subjectType?: string;
+  readonly subjectTitle?: string;
+  readonly subjectUrl?: string;
+  readonly subjectBranch?: string;
+  readonly subjectState?: "open" | "closed" | "merged" | "draft";
+  readonly updatedAt?: string;
+};
+
+export type GitHubInboxDiscoverResponse = {
+  readonly host: string;
+  readonly account?: string;
+  readonly repositories: ReadonlyArray<GitHubRepositoryCandidate>;
+  readonly inboxItems: ReadonlyArray<GitHubInboxItem>;
+  readonly suggestedRepositoryUrls: ReadonlyArray<string>;
+  readonly inboxWarning?: string;
+};
+
+export interface GitHubBackendApi {
+  readonly discoverInbox: (input: {
+    readonly host: string;
+    readonly projectKey?: string;
+    readonly projectTitle?: string;
+    readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+  }) => Promise<GitHubInboxDiscoverResponse>;
 }
 
 export type AtlassianBasicConnectInput = {

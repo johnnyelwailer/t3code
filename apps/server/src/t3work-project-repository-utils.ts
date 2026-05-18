@@ -1,4 +1,3 @@
-import * as DateTime from "effect/DateTime";
 import { T3workAtlassianError } from "./t3work-atlassian-http.ts";
 
 export type BootstrapWorkspaceRequest = {
@@ -33,7 +32,9 @@ export type ReferenceManifestFile = {
   readonly updatedAt: string;
 };
 
-export function normalizeRepositoryUrls(urls: ReadonlyArray<string> | undefined): ReadonlyArray<string> {
+export function normalizeRepositoryUrls(
+  urls: ReadonlyArray<string> | undefined,
+): ReadonlyArray<string> {
   const deduped = new Set<string>();
   for (const candidate of urls ?? []) {
     const trimmed = candidate.trim();
@@ -43,7 +44,10 @@ export function normalizeRepositoryUrls(urls: ReadonlyArray<string> | undefined)
 }
 
 function sanitizeSlugSegment(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 export function deriveReferenceDirectoryName(url: string): string {
@@ -65,7 +69,9 @@ export function deriveReferenceDirectoryName(url: string): string {
   try {
     const parsed = new URL(trimmed);
     const host = sanitizeSlugSegment(parsed.host);
-    const pathname = sanitizeSlugSegment(parsed.pathname.replace(/^\/+/, "").replace(/\.git$/i, ""));
+    const pathname = sanitizeSlugSegment(
+      parsed.pathname.replace(/^\/+/, "").replace(/\.git$/i, ""),
+    );
     return `${host}-${pathname}` || "repo";
   } catch {
     const fallback = sanitizeSlugSegment(trimmed.replace(/\.git$/i, ""));
@@ -84,8 +90,4 @@ export function toT3workError(cause: unknown, fallback: string): T3workAtlassian
         message: cause instanceof Error ? cause.message : fallback,
         cause,
       });
-}
-
-export function nowIsoString() {
-  return DateTime.formatIso(DateTime.unsafeNow());
 }

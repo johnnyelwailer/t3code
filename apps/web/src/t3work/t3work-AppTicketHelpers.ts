@@ -7,6 +7,7 @@ export function buildTicketContextPrompt(input: {
   assignee?: string;
   ticketUrl?: string;
   description: string;
+  githubActivitySummary?: string;
 }): string {
   const lines = [
     "You are helping with a Jira ticket. Use this context in your responses.",
@@ -20,6 +21,8 @@ export function buildTicketContextPrompt(input: {
     "",
     "Description:",
     input.description || "(No description available)",
+    input.githubActivitySummary ? "Related GitHub activity:" : "",
+    input.githubActivitySummary ?? "",
     "",
     "Please summarize this ticket, identify risks, and propose a concrete implementation plan.",
   ];

@@ -144,6 +144,9 @@ export function T3workRouteSurface() {
         onOpenHome={() => {
           void navigate({ to: "/t3work" });
         }}
+        onOpenSettings={() => {
+          void navigate({ to: "/settings" });
+        }}
         onOpenDashboard={(projectId) => {
           void navigate({ to: "/t3work/projects/$projectId", params: { projectId } });
         }}

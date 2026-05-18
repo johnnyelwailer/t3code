@@ -101,9 +101,35 @@ export const Route = createRootRouteWithContext<{
 
 function RootRouteView() {
   const pathname = useLocation({ select: (location) => location.pathname });
-  const isT3workRoute = pathname === "/t3work" || pathname.startsWith("/t3work/");
+  const navigate = useNavigate();
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
+
+  // Check work mode from localStorage
+  const workMode =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("t3code.backendMode") || "t3work"
+      : "t3work";
+
+  // Check actual route path to determine layout (t3work routes don't need sidebar)
+  const isT3workRoute = pathname === "/t3work" || pathname.startsWith("/t3work/");
+
+  // Redirect based on work mode
+  useEffect(() => {
+    // If user has "For Teams" mode but is on a chat route, redirect to t3work
+    if (
+      workMode === "t3work" &&
+      !isT3workRoute &&
+      !pathname.startsWith("/settings") &&
+      !pathname.startsWith("/pair")
+    ) {
+      void navigate({ to: "/t3work" });
+    }
+    // If user has "For Code" mode but is on t3work route, redirect to chat
+    else if (workMode === "classic" && isT3workRoute) {
+      void navigate({ to: "/" });
+    }
+  }, [workMode, pathname, isT3workRoute, navigate]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {

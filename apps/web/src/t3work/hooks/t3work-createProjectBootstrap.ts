@@ -1,5 +1,8 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
-import type { LinkedRepositorySyncResult, ProjectWorkspaceBootstrapResult } from "~/t3work/backend/t3work-types";
+import type {
+  LinkedRepositorySyncResult,
+  ProjectWorkspaceBootstrapResult,
+} from "~/t3work/backend/t3work-types";
 
 export type LinkedRepositoryReference = {
   readonly url: string;
@@ -14,7 +17,9 @@ export type ProjectAgentReferences = {
   readonly workspaceRepositoryInitialized?: boolean;
 };
 
-export function normalizeRepositoryUrls(urls: ReadonlyArray<string> | undefined): ReadonlyArray<string> {
+export function normalizeRepositoryUrls(
+  urls: ReadonlyArray<string> | undefined,
+): ReadonlyArray<string> {
   const deduped = new Set<string>();
   for (const value of urls ?? []) {
     const trimmed = value.trim();
@@ -34,7 +39,9 @@ export function buildInitialRaw(
   linkedRepositoryUrls: ReadonlyArray<string>,
 ): Record<string, unknown> {
   const base = readObjectRecord(externalProjectRaw);
-  const references: ProjectAgentReferences = { linkedRepositories: linkedRepositoryUrls.map((url) => ({ url })) };
+  const references: ProjectAgentReferences = {
+    linkedRepositories: linkedRepositoryUrls.map((url) => ({ url })),
+  };
   return { ...base, agentReferences: references };
 }
 
@@ -68,6 +75,47 @@ export function applyWorkspaceBootstrapToProject(
         : existingLinked,
   };
 
+  return {
+    ...project,
+    source: {
+      ...project.source,
+      raw: {
+        ...currentRaw,
+        agentReferences: nextReferences,
+      },
+    },
+  };
+}
+
+export function readLinkedRepositoryUrlsFromProject(
+  project: ProjectShellProject,
+): ReadonlyArray<string> {
+  const currentRaw = readObjectRecord(project.source.raw);
+  const currentReferences = readObjectRecord(currentRaw.agentReferences);
+  const linked = Array.isArray(currentReferences.linkedRepositories)
+    ? (currentReferences.linkedRepositories as ReadonlyArray<LinkedRepositoryReference>)
+    : [];
+  return normalizeRepositoryUrls(
+    linked.map((entry) => entry?.url).filter((value): value is string => typeof value === "string"),
+  );
+}
+
+export function replaceLinkedRepositoryUrlsInProject(
+  project: ProjectShellProject,
+  linkedRepositoryUrls: ReadonlyArray<string>,
+): ProjectShellProject {
+  const currentRaw = readObjectRecord(project.source.raw);
+  const currentReferences = readObjectRecord(currentRaw.agentReferences);
+  const normalized = normalizeRepositoryUrls(linkedRepositoryUrls);
+  const nextReferences: ProjectAgentReferences = {
+    ...(typeof currentReferences.referencesRoot === "string"
+      ? { referencesRoot: currentReferences.referencesRoot }
+      : {}),
+    ...(typeof currentReferences.workspaceRepositoryInitialized === "boolean"
+      ? { workspaceRepositoryInitialized: currentReferences.workspaceRepositoryInitialized }
+      : {}),
+    linkedRepositories: normalized.map((url) => ({ url })),
+  };
   return {
     ...project,
     source: {

@@ -97,6 +97,7 @@ import {
   t3workAtlassianResourcesRouteLayer,
 } from "./t3work-atlassian-routes.ts";
 import { t3workProjectWorkspaceBootstrapRouteLayer } from "./t3work-project-repository-routes.ts";
+import { t3workGitHubInboxRouteLayer } from "./t3work-github-routes.ts";
 import * as NetService from "@t3tools/shared/Net";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
 
@@ -322,6 +323,7 @@ export const makeT3workRoutesLayer = Layer.mergeAll(
   t3workAtlassianProjectsRouteLayer,
   t3workAtlassianResourceRouteLayer,
   t3workAtlassianResourcesRouteLayer,
+  t3workGitHubInboxRouteLayer,
   t3workProjectWorkspaceBootstrapRouteLayer,
   otlpTracesProxyRouteLayer,
   projectFaviconRouteLayer,

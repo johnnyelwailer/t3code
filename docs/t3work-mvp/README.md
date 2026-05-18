@@ -57,6 +57,13 @@ The user should be able to:
 - [Epic 11: Atlassian Setup UI](./11-atlassian-setup-ui.md)
 - [Epic 12: Profiles And Skill Packs](./12-profiles-and-skill-packs.md)
 - [Epic 13: Resource References](./13-resource-references.md)
+- [Epic 14: Native Provider Tool Injection](./14-native-provider-tool-injection.md)
+
+## Supporting Docs
+
+- [Concrete Example Flows](./supporting/concrete-example-flows.md)
+- [Plan Recipes Skills Tools](./supporting/plan-recipes-skills-tools.md)
+- [Provider Agnostic Features](./supporting/provider-agnostic-features.md)
 
 ## Non-Goals
 

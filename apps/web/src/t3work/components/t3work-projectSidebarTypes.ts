@@ -21,6 +21,8 @@ export interface ProjectSidebarProps {
   onSelectThread: (projectId: string, threadId: string) => void;
   onToggleExpand: (id: string) => void;
   onCreateProject: () => void;
+  onOpenSettings: (() => void) | undefined;
+  onManageProjectRepositories: (id: string) => void;
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, newTitle: string) => void;
   onCreateThread: (projectId: string) => void;

@@ -4,7 +4,7 @@
 
 - All of `bun fmt`, `bun lint`, and `bun typecheck` must pass before considering tasks completed.
 - NEVER run `bun test`. Always use `bun run test` (runs Vitest).
-- For t3work additive/prefix-constrained tasks, agents MUST run `node t3work-additive-guard.mjs` after finishing code changes and before reporting completion.
+- For t3work additive/prefix-constrained tasks, agents MUST run `node t3work-additive-guard.mjs` after finishing code changes and before reporting completion. DO NOT CHANGE THE WHITELIST WITHOUT APPROVAL.
 - The additive prefix guard is a blocking completion gate for those tasks: if it fails, the task is not complete.
 
 ## Project Snapshot
