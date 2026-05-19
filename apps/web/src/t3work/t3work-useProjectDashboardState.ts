@@ -53,6 +53,8 @@ export function useProjectDashboardState({
   const [selectedPriority, setSelectedPriority] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "kanban">("grid");
   const [groupMode, setGroupMode] = useState<"flat" | "parent-child">("parent-child");
+  const [showJiraItems, setShowJiraItems] = useState(true);
+  const [showGitHubActivity, setShowGitHubActivity] = useState(true);
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
 
   const typeOptions = useMemo(() => {
@@ -174,6 +176,10 @@ export function useProjectDashboardState({
     setViewMode,
     groupMode,
     setGroupMode,
+    showJiraItems,
+    setShowJiraItems,
+    showGitHubActivity,
+    setShowGitHubActivity,
     statusCategory,
     setStatusCategory,
     advancedFiltersOpen,

@@ -86,8 +86,13 @@ export function pullRequestStateClass(
 
 export function reviewRequestedClass(item: GitHubWorkActivityItem): string | undefined {
   const isPullRequest = (item.subjectType ?? "").toLowerCase() === "pullrequest";
-  if (!isPullRequest || !item.reviewRequested) return undefined;
+  if (!isPullRequest || !isActiveReviewRequested(item)) return undefined;
   return "bg-sky-500/12 text-sky-300 border-sky-500/30";
+}
+
+export function isActiveReviewRequested(item: GitHubWorkActivityItem): boolean {
+  if (!item.reviewRequested) return false;
+  return item.subjectState !== "merged";
 }
 
 export function isRedundantPullRequestReason(item: GitHubWorkActivityItem): boolean {

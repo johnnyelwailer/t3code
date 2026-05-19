@@ -1,16 +1,20 @@
-import { DotFillIcon, LinkExternalIcon } from "@primer/octicons-react";
+import { LinkExternalIcon } from "@primer/octicons-react";
 import { ExternalLink } from "lucide-react";
 import { Skeleton } from "~/t3work/components/ui/t3work-skeleton";
 import { T3SurfacePanel } from "~/t3work/components/ui/t3work-surface";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
+import { GitHubActivityTooltipContent } from "~/t3work/t3work-GitHubActivityTooltipContent";
 import {
-  formatPullRequestState,
   getGitHubActivityVisual,
+  isActiveReviewRequested,
   isRedundantPullRequestReason,
-  pullRequestStateClass,
   renderRelativeUpdatedAt,
-  reviewRequestedClass,
 } from "~/t3work/t3work-githubActivityViewUtils";
+
+function formatReason(reason: string): string {
+  return reason.replaceAll("_", " ");
+}
 
 export function GitHubActivitySection({
   title,
@@ -45,25 +49,17 @@ export function GitHubActivitySection({
           {warning}
         </div>
       ) : null}
-      {loading ? (
-        <div className="space-y-1.5">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-4/5" />
-        </div>
-      ) : items.length === 0 ? (
-        <div className="rounded border border-dashed border-border/70 bg-background/60 px-3 py-4 text-xs text-muted-foreground">
-          No GitHub activity matched yet.
-        </div>
-      ) : (
+      {items.length > 0 ? (
         <div className="space-y-1.5">
           {items.map((item) => {
             const visual = getGitHubActivityVisual(item);
             const updatedAt = renderRelativeUpdatedAt(item.updatedAt);
             const linkTarget = item.subjectUrl ?? item.repositoryUrl;
-            const stateLabel = formatPullRequestState(item.subjectState);
-            const stateClass = pullRequestStateClass(item.subjectState);
-            const reviewRequested = reviewRequestedClass(item);
+            const summaryLabel = isActiveReviewRequested(item)
+              ? "Review requested"
+              : !isRedundantPullRequestReason(item)
+                ? formatReason(item.reason)
+                : undefined;
             const rowContent = (
               <>
                 <visual.Icon className={`mt-0.5 size-3.5 shrink-0 ${visual.iconClassName}`} />
@@ -72,32 +68,7 @@ export function GitHubActivitySection({
                     {item.subjectTitle ?? item.repository}
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <span>{item.repository}</span>
-                    {!isRedundantPullRequestReason(item) ? (
-                      <span>{item.reason.replaceAll("_", " ")}</span>
-                    ) : null}
-                    {item.authorLogin ? <span>by @{item.authorLogin}</span> : null}
-                    {reviewRequested ? (
-                      <span
-                        className={`inline-flex items-center gap-1 rounded border px-1 py-0.5 text-[10px] ${reviewRequested}`}
-                      >
-                        <DotFillIcon className="size-2" />
-                        Review requested
-                      </span>
-                    ) : null}
-                    {item.subjectBranch ? (
-                      <span className="truncate" title={item.subjectBranch}>
-                        {item.subjectBranch}
-                      </span>
-                    ) : null}
-                    {stateLabel && stateClass ? (
-                      <span
-                        className={`inline-flex items-center gap-1 rounded border px-1 py-0.5 text-[10px] ${stateClass}`}
-                      >
-                        <DotFillIcon className="size-2" />
-                        {stateLabel}
-                      </span>
-                    ) : null}
+                    {summaryLabel ? <span>{summaryLabel}</span> : null}
                     {updatedAt ? <span>{updatedAt}</span> : null}
                   </div>
                 </div>
@@ -108,31 +79,48 @@ export function GitHubActivitySection({
             );
             return (
               <div key={item.id} className="rounded border border-border/70 bg-background/70">
-                {linkTarget ? (
-                  <a
-                    href={linkTarget}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="relative z-10 flex cursor-pointer items-start gap-2 px-2 py-1.5 transition-colors hover:bg-accent/35"
-                    onClick={(event) => event.stopPropagation()}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onContextMenu={(event) => onItemContextMenu?.(event, item)}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      linkTarget ? (
+                        <a
+                          href={linkTarget}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="relative z-10 flex cursor-pointer items-start gap-2 px-2 py-1.5 transition-colors hover:bg-accent/35"
+                          onClick={(event) => event.stopPropagation()}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onContextMenu={(event) => onItemContextMenu?.(event, item)}
+                        />
+                      ) : (
+                        <div
+                          className="flex items-start gap-2 px-2 py-1.5"
+                          onContextMenu={(event) => onItemContextMenu?.(event, item)}
+                        />
+                      )
+                    }
                   >
                     {rowContent}
-                  </a>
-                ) : (
-                  <div
-                    className="flex items-start gap-2 px-2 py-1.5"
-                    onContextMenu={(event) => onItemContextMenu?.(event, item)}
-                  >
-                    {rowContent}
-                  </div>
-                )}
+                  </TooltipTrigger>
+                  <TooltipPopup side="top" align="start" className="max-w-96">
+                    <GitHubActivityTooltipContent item={item} />
+                  </TooltipPopup>
+                </Tooltip>
               </div>
             );
           })}
         </div>
-      )}
+      ) : loading ? (
+        <div className="space-y-1.5">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-4/5" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded border border-dashed border-border/70 bg-background/60 px-3 py-4 text-xs text-muted-foreground">
+          No GitHub activity matched yet.
+        </div>
+      ) : null}
       {suggestedRepositoryCount && suggestedRepositoryCount > 0 ? (
         <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
           <ExternalLink className="size-3" />

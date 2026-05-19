@@ -23,12 +23,18 @@ export type GitHubInboxItem = {
   readonly repositoryUrl?: string;
   readonly reason: string;
   readonly authorLogin?: string;
+  readonly authorAvatarUrl?: string;
   readonly reviewRequested?: boolean;
   readonly subjectType?: string;
   readonly subjectTitle?: string;
   readonly subjectUrl?: string;
   readonly subjectBranch?: string;
   readonly subjectState?: "open" | "closed" | "merged" | "draft";
+  readonly commentCount?: number;
+  readonly reviewCommentCount?: number;
+  readonly additions?: number;
+  readonly deletions?: number;
+  readonly changedFiles?: number;
   readonly updatedAt?: string;
 };
 
@@ -67,9 +73,14 @@ export type RawGitHubPullRequest = {
   readonly merged_at?: string | null;
   readonly draft?: boolean;
   readonly html_url?: string;
-  readonly user?: { readonly login?: string };
+  readonly user?: { readonly login?: string; readonly avatar_url?: string };
   readonly requested_reviewers?: ReadonlyArray<{ readonly login?: string }>;
   readonly head?: { readonly ref?: string };
+  readonly comments?: number;
+  readonly review_comments?: number;
+  readonly additions?: number;
+  readonly deletions?: number;
+  readonly changed_files?: number;
 };
 
 export type GitHubRepositoriesAttempt = {
@@ -100,7 +111,17 @@ export const pullRequestStateCache = new Map<
   CacheEntry<
     Pick<
       GitHubInboxItem,
-      "subjectState" | "subjectUrl" | "subjectBranch" | "authorLogin" | "reviewRequested"
+      | "subjectState"
+      | "subjectUrl"
+      | "subjectBranch"
+      | "authorLogin"
+      | "authorAvatarUrl"
+      | "reviewRequested"
+      | "commentCount"
+      | "reviewCommentCount"
+      | "additions"
+      | "deletions"
+      | "changedFiles"
     >
   >
 >();

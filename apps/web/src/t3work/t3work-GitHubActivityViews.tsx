@@ -1,14 +1,18 @@
-import { DotFillIcon, LinkExternalIcon } from "@primer/octicons-react";
+import { LinkExternalIcon } from "@primer/octicons-react";
 import { useState } from "react";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
+import { GitHubActivityTooltipContent } from "~/t3work/t3work-GitHubActivityTooltipContent";
 import {
-  formatPullRequestState,
   getGitHubActivityVisual,
+  isActiveReviewRequested,
   isRedundantPullRequestReason,
-  pullRequestStateClass,
   renderRelativeUpdatedAt,
-  reviewRequestedClass,
 } from "~/t3work/t3work-githubActivityViewUtils";
+
+function formatReason(reason: string): string {
+  return reason.replaceAll("_", " ");
+}
 
 export function GitHubActivityInlineList({
   items,
@@ -38,9 +42,11 @@ export function GitHubActivityInlineList({
           const visual = getGitHubActivityVisual(item);
           const updatedAt = renderRelativeUpdatedAt(item.updatedAt);
           const linkTarget = item.subjectUrl ?? item.repositoryUrl;
-          const stateLabel = formatPullRequestState(item.subjectState);
-          const stateClass = pullRequestStateClass(item.subjectState);
-          const reviewRequested = reviewRequestedClass(item);
+          const summaryLabel = isActiveReviewRequested(item)
+            ? "Review requested"
+            : !isRedundantPullRequestReason(item)
+              ? formatReason(item.reason)
+              : undefined;
           const rowContent = (
             <>
               <visual.Icon className={`mt-0.5 size-3 shrink-0 ${visual.iconClassName}`} />
@@ -49,34 +55,7 @@ export function GitHubActivityInlineList({
                   {item.subjectTitle ?? item.repository}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground/80">
-                  <span className="truncate">{item.repository}</span>
-                  {!isRedundantPullRequestReason(item) ? (
-                    <span>{item.reason.replaceAll("_", " ")}</span>
-                  ) : null}
-                  {item.authorLogin ? (
-                    <span className="truncate">by @{item.authorLogin}</span>
-                  ) : null}
-                  {reviewRequested ? (
-                    <span
-                      className={`inline-flex items-center gap-1 rounded border px-1 py-0.5 text-[10px] ${reviewRequested}`}
-                    >
-                      <DotFillIcon className="size-2" />
-                      Review requested
-                    </span>
-                  ) : null}
-                  {item.subjectBranch ? (
-                    <span className="truncate" title={item.subjectBranch}>
-                      {item.subjectBranch}
-                    </span>
-                  ) : null}
-                  {stateLabel && stateClass ? (
-                    <span
-                      className={`inline-flex items-center gap-1 rounded border px-1 py-0.5 text-[10px] ${stateClass}`}
-                    >
-                      <DotFillIcon className="size-2" />
-                      {stateLabel}
-                    </span>
-                  ) : null}
+                  {summaryLabel ? <span>{summaryLabel}</span> : null}
                   {updatedAt ? <span>{updatedAt}</span> : null}
                 </div>
               </div>
@@ -88,26 +67,33 @@ export function GitHubActivityInlineList({
 
           return (
             <div key={item.id} className="text-[11px]">
-              {linkTarget ? (
-                <a
-                  href={linkTarget}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="relative z-10 flex cursor-pointer items-start gap-1.5 rounded px-1 py-0.5 transition-colors hover:bg-accent/35"
-                  onClick={(event) => event.stopPropagation()}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onContextMenu={(event) => onItemContextMenu?.(event, item)}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    linkTarget ? (
+                      <a
+                        href={linkTarget}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="relative z-10 flex cursor-pointer items-start gap-1.5 rounded px-1 py-0.5 transition-colors hover:bg-accent/35"
+                        onClick={(event) => event.stopPropagation()}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onContextMenu={(event) => onItemContextMenu?.(event, item)}
+                      />
+                    ) : (
+                      <div
+                        className="flex items-start gap-1.5 rounded px-1 py-0.5"
+                        onContextMenu={(event) => onItemContextMenu?.(event, item)}
+                      />
+                    )
+                  }
                 >
                   {rowContent}
-                </a>
-              ) : (
-                <div
-                  className="flex items-start gap-1.5 rounded px-1 py-0.5"
-                  onContextMenu={(event) => onItemContextMenu?.(event, item)}
-                >
-                  {rowContent}
-                </div>
-              )}
+                </TooltipTrigger>
+                <TooltipPopup side="top" align="start" className="max-w-96">
+                  <GitHubActivityTooltipContent item={item} />
+                </TooltipPopup>
+              </Tooltip>
             </div>
           );
         })}

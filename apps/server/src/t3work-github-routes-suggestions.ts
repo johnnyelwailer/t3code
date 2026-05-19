@@ -105,7 +105,7 @@ export function filterInboxItemsToLinkedRepositories(input: {
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
 }): ReadonlyArray<GitHubInboxItem> {
   const linkedNormalized = new Set(normalizeRepositoryUrls(input.linkedRepositoryUrls));
-  if (linkedNormalized.size === 0) return input.inboxItems;
+  if (linkedNormalized.size === 0) return [];
 
   return input.inboxItems.filter((item) => {
     const repositoryUrl = normalizeRepositoryUrls([`https://${input.host}/${item.repository}`])[0];

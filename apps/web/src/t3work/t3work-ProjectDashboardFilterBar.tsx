@@ -3,7 +3,8 @@ import { Button } from "~/t3work/components/ui/t3work-button";
 import { Input } from "~/t3work/components/ui/t3work-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/t3work/components/ui/t3work-popover";
 import { T3SurfacePanel } from "~/t3work/components/ui/t3work-surface";
-import { ToggleGroup } from "~/t3work/t3work-ProjectDashboardItemViews";
+import { ToggleGroup } from "~/t3work/t3work-ToggleGroup";
+import { ProjectDashboardItemTypeToggles } from "~/t3work/t3work-ProjectDashboardItemTypeToggles";
 
 export function ProjectDashboardFilterBar({
   query,
@@ -14,6 +15,10 @@ export function ProjectDashboardFilterBar({
   onGroupModeChange,
   statusCategory,
   onStatusCategoryChange,
+  showJiraItems,
+  onShowJiraItemsChange,
+  showGitHubActivity,
+  onShowGitHubActivityChange,
   advancedFiltersOpen,
   onAdvancedFiltersOpenChange,
   activeAdvancedFilterCount,
@@ -36,6 +41,10 @@ export function ProjectDashboardFilterBar({
   onGroupModeChange: (value: "flat" | "parent-child") => void;
   statusCategory: "all" | "active" | "review" | "done";
   onStatusCategoryChange: (value: "all" | "active" | "review" | "done") => void;
+  showJiraItems: boolean;
+  onShowJiraItemsChange: (value: boolean) => void;
+  showGitHubActivity: boolean;
+  onShowGitHubActivityChange: (value: boolean) => void;
   advancedFiltersOpen: boolean;
   onAdvancedFiltersOpenChange: (open: boolean) => void;
   activeAdvancedFilterCount: number;
@@ -133,6 +142,13 @@ export function ProjectDashboardFilterBar({
                 </div>
 
                 <div className="flex flex-wrap gap-3">
+                  <ProjectDashboardItemTypeToggles
+                    showJiraItems={showJiraItems}
+                    onShowJiraItemsChange={onShowJiraItemsChange}
+                    showGitHubActivity={showGitHubActivity}
+                    onShowGitHubActivityChange={onShowGitHubActivityChange}
+                  />
+
                   <div className="space-y-1">
                     <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                       Type

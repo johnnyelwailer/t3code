@@ -35,6 +35,7 @@ export function ProjectDashboardUnmatchedActivity({
           projectWorkspaceRoot: project.workspace?.rootPath,
           targetLabel: display.targetLabel,
           targetType: display.targetType,
+          kind: display.activityKind,
           dedupeKey: `${project.id}:github-activity:${item.id}`,
           summaryItems: display.summaryItems,
           payload: buildGitHubActivityContextBundle({

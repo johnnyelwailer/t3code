@@ -75,12 +75,18 @@ export type GitHubInboxItem = {
   readonly repositoryUrl?: string;
   readonly reason: string;
   readonly authorLogin?: string;
+  readonly authorAvatarUrl?: string;
   readonly reviewRequested?: boolean;
   readonly subjectType?: string;
   readonly subjectTitle?: string;
   readonly subjectUrl?: string;
   readonly subjectBranch?: string;
   readonly subjectState?: "open" | "closed" | "merged" | "draft";
+  readonly commentCount?: number;
+  readonly reviewCommentCount?: number;
+  readonly additions?: number;
+  readonly deletions?: number;
+  readonly changedFiles?: number;
   readonly updatedAt?: string;
 };
 

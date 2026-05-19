@@ -44,6 +44,7 @@ export function loadLinkedPullRequestsAttempt(input: {
               const subjectTitle = readTrimmedString(pullRequest.title);
               const subjectBranch = readTrimmedString(pullRequest.head?.ref);
               const authorLogin = readTrimmedString(pullRequest.user?.login);
+              const authorAvatarUrl = readTrimmedString(pullRequest.user?.avatar_url);
               const updatedAt = readTrimmedString(pullRequest.updated_at);
               const state = readTrimmedString(pullRequest.state)?.toLowerCase();
               const requestedReviewerLogins = (pullRequest.requested_reviewers ?? [])
@@ -71,11 +72,27 @@ export function loadLinkedPullRequestsAttempt(input: {
                 repositoryUrl: `https://${input.host}/${repository}`,
                 reason: "pull request",
                 ...(authorLogin ? { authorLogin } : {}),
+                ...(authorAvatarUrl ? { authorAvatarUrl } : {}),
                 ...(reviewRequested ? { reviewRequested } : {}),
                 subjectType: "PullRequest",
                 ...(subjectTitle ? { subjectTitle } : {}),
                 ...(subjectUrl ? { subjectUrl } : {}),
                 ...(subjectBranch ? { subjectBranch } : {}),
+                ...(typeof pullRequest.comments === "number"
+                  ? { commentCount: pullRequest.comments }
+                  : {}),
+                ...(typeof pullRequest.review_comments === "number"
+                  ? { reviewCommentCount: pullRequest.review_comments }
+                  : {}),
+                ...(typeof pullRequest.additions === "number"
+                  ? { additions: pullRequest.additions }
+                  : {}),
+                ...(typeof pullRequest.deletions === "number"
+                  ? { deletions: pullRequest.deletions }
+                  : {}),
+                ...(typeof pullRequest.changed_files === "number"
+                  ? { changedFiles: pullRequest.changed_files }
+                  : {}),
                 ...(updatedAt ? { updatedAt } : {}),
                 subjectState,
               } satisfies GitHubInboxItem;

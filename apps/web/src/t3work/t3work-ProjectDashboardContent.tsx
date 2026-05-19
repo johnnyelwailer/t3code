@@ -19,6 +19,8 @@ export function ProjectDashboardContent({
   filteredWorkItems,
   viewMode,
   isHierarchyMode,
+  showJiraItems,
+  showGitHubActivity,
   kanbanColumns,
   parentChildGroups,
   githubActivityByWorkItem,
@@ -29,6 +31,8 @@ export function ProjectDashboardContent({
   filteredWorkItems: readonly ProjectTicket[];
   viewMode: "grid" | "list" | "kanban";
   isHierarchyMode: boolean;
+  showJiraItems: boolean;
+  showGitHubActivity: boolean;
   kanbanColumns: {
     todo: { title: string; items: ProjectTicket[] };
     inProgress: { title: string; items: ProjectTicket[] };
@@ -48,10 +52,12 @@ export function ProjectDashboardContent({
     githubActivityByWorkItem,
   });
 
-  if (filteredWorkItems.length === 0) {
+  if (filteredWorkItems.length === 0 || !showJiraItems) {
     return (
       <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        No tickets match your current search and filters.
+        {showJiraItems
+          ? "No tickets match your current search and filters."
+          : "Jira items are hidden by the current item-type setting."}
       </T3SurfacePanel>
     );
   }
@@ -68,7 +74,7 @@ export function ProjectDashboardContent({
             ["other", kanbanColumns.other],
           ] as const
         ).map(([key, column]) => (
-          <T3SurfacePanel key={key} tone="soft" className="min-w-0 p-2">
+          <T3SurfacePanel key={key} tone="soft" className="min-w-0 p-2 @container/kanban-lane">
             <div className="mb-2 flex items-center justify-between border-b border-border/70 pb-2">
               <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {column.title}
@@ -99,13 +105,16 @@ export function ProjectDashboardContent({
                       {...(isHierarchyMode ? { childCount: children.length } : {})}
                       onContextMenu={(event) => openTicketContextMenu(event, ticket)}
                       extraChildren={
-                        <GitHubActivityInlineList
-                          items={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
-                          limit={3}
-                          onItemContextMenu={(event, item) =>
-                            openGitHubActivityContextMenu(event, ticket, item)
-                          }
-                        />
+                        showGitHubActivity ? (
+                          <GitHubActivityInlineList
+                            items={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
+                            limit={1}
+                            compact
+                            onItemContextMenu={(event, item) =>
+                              openGitHubActivityContextMenu(event, ticket, item)
+                            }
+                          />
+                        ) : null
                       }
                       onOpen={() => onOpenTicket(projectId, ticket.id)}
                     />
@@ -130,11 +139,12 @@ export function ProjectDashboardContent({
     return (
       <ProjectDashboardHierarchyContent
         viewMode={viewMode === "list" ? "list" : "grid"}
-        project={project}
         parentChildGroups={parentChildGroups}
-        filteredWorkItems={filteredWorkItems}
+        showGitHubActivity={showGitHubActivity}
         githubActivityByWorkItem={githubActivityByWorkItem}
         projectId={projectId}
+        onTicketContextMenu={openTicketContextMenu}
+        onGitHubActivityContextMenu={openGitHubActivityContextMenu}
         onOpenTicket={onOpenTicket}
       />
     );
@@ -149,13 +159,15 @@ export function ProjectDashboardContent({
               ticket={ticket}
               onContextMenu={(event) => openTicketContextMenu(event, ticket)}
               extraChildren={
-                <GitHubActivityInlineList
-                  items={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
-                  limit={2}
-                  onItemContextMenu={(event, item) =>
-                    openGitHubActivityContextMenu(event, ticket, item)
-                  }
-                />
+                showGitHubActivity ? (
+                  <GitHubActivityInlineList
+                    items={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
+                    limit={2}
+                    onItemContextMenu={(event, item) =>
+                      openGitHubActivityContextMenu(event, ticket, item)
+                    }
+                  />
+                ) : null
               }
               onOpen={() => onOpenTicket(projectId, ticket.id)}
             />
@@ -167,14 +179,14 @@ export function ProjectDashboardContent({
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {filteredWorkItems.map((ticket) => {
-        return (
-          <T3SurfacePanel key={ticket.id} tone="muted" className="px-2.5 py-2">
-            <TicketWorkItemCard
-              ticket={ticket}
-              flat
-              onContextMenu={(event) => openTicketContextMenu(event, ticket)}
-              extraChildren={
+      {filteredWorkItems.map((ticket) => (
+        <T3SurfacePanel key={ticket.id} tone="muted" className="px-2.5 py-2">
+          <TicketWorkItemCard
+            ticket={ticket}
+            flat
+            onContextMenu={(event) => openTicketContextMenu(event, ticket)}
+            extraChildren={
+              showGitHubActivity ? (
                 <GitHubActivityInlineList
                   items={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
                   limit={3}
@@ -182,12 +194,12 @@ export function ProjectDashboardContent({
                     openGitHubActivityContextMenu(event, ticket, item)
                   }
                 />
-              }
-              onOpen={() => onOpenTicket(projectId, ticket.id)}
-            />
-          </T3SurfacePanel>
-        );
-      })}
+              ) : null
+            }
+            onOpen={() => onOpenTicket(projectId, ticket.id)}
+          />
+        </T3SurfacePanel>
+      ))}
     </div>
   );
 }

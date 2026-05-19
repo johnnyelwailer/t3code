@@ -47,7 +47,17 @@ function fetchPullRequestState(
 ): Effect.Effect<
   Pick<
     GitHubInboxItem,
-    "subjectState" | "subjectUrl" | "subjectBranch" | "authorLogin" | "reviewRequested"
+    | "subjectState"
+    | "subjectUrl"
+    | "subjectBranch"
+    | "authorLogin"
+    | "authorAvatarUrl"
+    | "reviewRequested"
+    | "commentCount"
+    | "reviewCommentCount"
+    | "additions"
+    | "deletions"
+    | "changedFiles"
   >,
   never,
   never
@@ -87,6 +97,7 @@ function fetchPullRequestState(
           readTrimmedString(parsed.html_url) ?? toGitHubWebUrl(host, repository, subjectApiUrl);
         const subjectBranch = readTrimmedString(parsed.head?.ref);
         const authorLogin = readTrimmedString(parsed.user?.login);
+        const authorAvatarUrl = readTrimmedString(parsed.user?.avatar_url);
         const requestedReviewerLogins = (parsed.requested_reviewers ?? [])
           .map((reviewer) => readTrimmedString(reviewer.login)?.toLowerCase())
           .filter((value): value is string => typeof value === "string");
@@ -97,10 +108,30 @@ function fetchPullRequestState(
           ...(subjectUrl ? { subjectUrl } : {}),
           ...(subjectBranch ? { subjectBranch } : {}),
           ...(authorLogin ? { authorLogin } : {}),
+          ...(authorAvatarUrl ? { authorAvatarUrl } : {}),
           ...(reviewRequested ? { reviewRequested } : {}),
+          ...(typeof parsed.comments === "number" ? { commentCount: parsed.comments } : {}),
+          ...(typeof parsed.review_comments === "number"
+            ? { reviewCommentCount: parsed.review_comments }
+            : {}),
+          ...(typeof parsed.additions === "number" ? { additions: parsed.additions } : {}),
+          ...(typeof parsed.deletions === "number" ? { deletions: parsed.deletions } : {}),
+          ...(typeof parsed.changed_files === "number"
+            ? { changedFiles: parsed.changed_files }
+            : {}),
         } as Pick<
           GitHubInboxItem,
-          "subjectState" | "subjectUrl" | "subjectBranch" | "authorLogin" | "reviewRequested"
+          | "subjectState"
+          | "subjectUrl"
+          | "subjectBranch"
+          | "authorLogin"
+          | "authorAvatarUrl"
+          | "reviewRequested"
+          | "commentCount"
+          | "reviewCommentCount"
+          | "additions"
+          | "deletions"
+          | "changedFiles"
         >;
         writeCached(pullRequestStateCache, cacheKey, value, INBOX_CACHE_TTL_MS);
         return value;
