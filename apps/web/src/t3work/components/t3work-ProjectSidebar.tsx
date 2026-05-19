@@ -7,6 +7,7 @@ import { readLocalApi } from "~/localApi";
 
 export function ProjectSidebar({
   projects,
+  looseWorkspaceProjects,
   selectedId,
   expandedIds,
   threads,
@@ -19,6 +20,7 @@ export function ProjectSidebar({
   onSelectTicket,
   onSelectThread,
   onToggleExpand,
+  onOpenSearch,
   onCreateProject,
   onOpenSettings,
   onManageProjectRepositories,
@@ -94,9 +96,13 @@ export function ProjectSidebar({
   );
 
   return (
-    <div onContextMenu={handleGlobalSidebarContextMenu}>
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      onContextMenu={handleGlobalSidebarContextMenu}
+    >
       <ProjectSidebarLayout
         sortedProjects={sortedProjects}
+        looseWorkspaceProjects={looseWorkspaceProjects}
         ticketViewMode={ticketViewMode}
         setTicketViewMode={setTicketViewMode}
         projects={projects}
@@ -111,10 +117,14 @@ export function ProjectSidebar({
         showProjectThreads={showProjectThreads}
         showJiraItems={showJiraItems}
         showGitHubActivity={showGitHubActivity}
+        onShowProjectThreadsChange={setShowProjectThreads}
+        onShowJiraItemsChange={setShowJiraItems}
+        onShowGitHubActivityChange={setShowGitHubActivity}
         onSelectProject={onSelectProject}
         onSelectTicket={onSelectTicket}
         onSelectThread={onSelectThread}
         onToggleExpand={onToggleExpand}
+        onOpenSearch={onOpenSearch}
         onCreateProject={onCreateProject}
         onOpenSettings={onOpenSettings}
         onManageProjectRepositories={onManageProjectRepositories}

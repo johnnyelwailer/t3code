@@ -28,12 +28,12 @@ export interface ProjectRowProps {
   onManageProjectRepositories: (id: string) => void;
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, newTitle: string) => void;
-  onCreateThread: (projectId: string) => void;
+  onCreateThread: (projectId: string) => string;
   onCreateTicketThread: (input: {
     projectId: string;
     ticketId: string;
     ticketDisplayId: string;
-  }) => void;
+  }) => string;
   onDeleteThread: (threadId: string) => void;
   onRenameThread: (threadId: string, newTitle: string) => void;
 }

@@ -8,6 +8,7 @@ import {
   MenuRadioItem,
   MenuGroup,
   MenuSeparator,
+  MenuCheckboxItem,
 } from "~/t3work/components/ui/t3work-menu";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "~/t3work/components/ui/t3work-tooltip";
 import { EllipsisIcon } from "lucide-react";
@@ -23,19 +24,31 @@ export function ProjectSortMenu({
   threadSortOrder,
   threadPreviewCount,
   ticketViewMode,
+  showProjectThreads,
+  showJiraItems,
+  showGitHubActivity,
   onProjectSortOrderChange,
   onTicketViewModeChange,
   onThreadSortOrderChange,
   onThreadPreviewCountChange,
+  onShowProjectThreadsChange,
+  onShowJiraItemsChange,
+  onShowGitHubActivityChange,
 }: {
   projectSortOrder: ProjectSortOrder;
   threadSortOrder: ThreadSortOrder;
   threadPreviewCount: number;
   ticketViewMode: TicketViewMode;
+  showProjectThreads: boolean;
+  showJiraItems: boolean;
+  showGitHubActivity: boolean;
   onProjectSortOrderChange: (sortOrder: ProjectSortOrder) => void;
   onTicketViewModeChange: (viewMode: TicketViewMode) => void;
   onThreadSortOrderChange: (sortOrder: ThreadSortOrder) => void;
   onThreadPreviewCountChange: (count: number) => void;
+  onShowProjectThreadsChange: (show: boolean) => void;
+  onShowJiraItemsChange: (show: boolean) => void;
+  onShowGitHubActivityChange: (show: boolean) => void;
 }) {
   return (
     <Menu>
@@ -119,6 +132,33 @@ export function ProjectSortMenu({
               +
             </Button>
           </div>
+        </MenuGroup>
+        <MenuSeparator />
+        <MenuGroup>
+          <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
+            Visible items
+          </div>
+          <MenuCheckboxItem
+            checked={showProjectThreads}
+            onCheckedChange={(checked) => onShowProjectThreadsChange(Boolean(checked))}
+            className="min-h-7 py-1 text-xs"
+          >
+            Project threads
+          </MenuCheckboxItem>
+          <MenuCheckboxItem
+            checked={showJiraItems}
+            onCheckedChange={(checked) => onShowJiraItemsChange(Boolean(checked))}
+            className="min-h-7 py-1 text-xs"
+          >
+            Jira items
+          </MenuCheckboxItem>
+          <MenuCheckboxItem
+            checked={showGitHubActivity}
+            onCheckedChange={(checked) => onShowGitHubActivityChange(Boolean(checked))}
+            className="min-h-7 py-1 text-xs"
+          >
+            GitHub activity
+          </MenuCheckboxItem>
         </MenuGroup>
       </MenuPopup>
     </Menu>

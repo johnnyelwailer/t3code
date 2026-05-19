@@ -1,5 +1,6 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import type { Project } from "~/types";
 import { MOCK_TICKETS } from "~/t3work/data/t3work-mockThreads";
 import type { ProjectThread } from "~/t3work/t3work-types";
 
@@ -66,6 +67,82 @@ function dedupeProjects(projects: ProjectShellProject[]): ProjectShellProject[] 
     bySourceKey.set(projectSourceKey(project), project);
   }
   return [...bySourceKey.values()];
+}
+
+function readOwnedWorkspaceRoots(project: ProjectShellProject): ReadonlyArray<string> {
+  const ownedRoots = new Set<string>();
+
+  if (project.workspace?.rootPath) {
+    ownedRoots.add(project.workspace.rootPath);
+  }
+
+  const raw = project.source.raw;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return [...ownedRoots];
+  }
+
+  const agentReferences = (raw as Record<string, unknown>).agentReferences;
+  if (
+    typeof agentReferences !== "object" ||
+    agentReferences === null ||
+    Array.isArray(agentReferences)
+  ) {
+    return [...ownedRoots];
+  }
+
+  const linkedRepositories = (agentReferences as Record<string, unknown>).linkedRepositories;
+  if (!Array.isArray(linkedRepositories)) {
+    return [...ownedRoots];
+  }
+
+  for (const entry of linkedRepositories) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      continue;
+    }
+    const localPath = (entry as Record<string, unknown>).localPath;
+    if (typeof localPath === "string" && localPath.trim().length > 0) {
+      ownedRoots.add(localPath);
+    }
+  }
+
+  return [...ownedRoots];
+}
+
+function synthesizeLooseWorkspaceProject(project: Project): ProjectShellProject {
+  const createdAt = project.createdAt ?? new Date().toISOString();
+  const updatedAt = project.updatedAt ?? createdAt;
+  const title = project.name.trim() || project.cwd;
+  return {
+    id: project.id as never,
+    title,
+    source: {
+      provider: "local",
+      externalProjectId: project.id,
+      externalProjectKey: project.name,
+      raw: {
+        environmentId: project.environmentId,
+      },
+    },
+    workspace: {
+      rootPath: project.cwd,
+      createdAt,
+    },
+    createdAt,
+    updatedAt,
+  };
+}
+
+export function deriveLooseWorkspaceProjects(
+  storedProjects: ReadonlyArray<ProjectShellProject>,
+  liveProjects: ReadonlyArray<Project>,
+): ProjectShellProject[] {
+  const workspaceRoots = new Set(storedProjects.flatMap(readOwnedWorkspaceRoots));
+  return liveProjects.flatMap((project) => {
+    if (workspaceRoots.has(project.cwd)) {
+      return [];
+    }
+    return [synthesizeLooseWorkspaceProject(project)];
+  });
 }
 
 export function loadStoredProjects(): ProjectShellProject[] {

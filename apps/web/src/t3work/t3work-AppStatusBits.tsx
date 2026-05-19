@@ -2,6 +2,7 @@ import { Loader2, Wifi, WifiOff } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { Badge } from "~/t3work/components/ui/t3work-badge";
 import { useBackendState } from "~/t3work/backend/t3work-index";
+import { ProjectAvatar } from "~/t3work/components/t3work-ProjectAvatar";
 
 export function ConnectionStatusBadge() {
   const backendState = useBackendState();
@@ -59,17 +60,11 @@ export function ProviderBadges() {
 }
 
 export function AppProjectIcon({ project }: { project: ProjectShellProject }) {
-  const color =
-    (project.source.raw as { avatarColor?: string } | undefined)?.avatarColor ?? "#1868db";
-  const key = project.source.externalProjectKey ?? project.title;
-  const shortKey = key.slice(0, 2).toUpperCase();
-
   return (
-    <div
-      className="flex size-6 shrink-0 items-center justify-center rounded-md"
-      style={{ background: color }}
-    >
-      <span className="text-[10px] font-semibold text-white">{shortKey}</span>
-    </div>
+    <ProjectAvatar
+      title={project.title}
+      projectKey={project.source.externalProjectKey}
+      raw={project.source.raw}
+    />
   );
 }

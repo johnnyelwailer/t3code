@@ -8,6 +8,7 @@ import type {
 
 export interface ProjectSidebarProps {
   projects: ProjectShellProject[];
+  looseWorkspaceProjects: ProjectShellProject[];
   selectedId: string | null;
   expandedIds: Set<string>;
   threads: ProjectThread[];
@@ -20,17 +21,18 @@ export interface ProjectSidebarProps {
   onSelectTicket: (projectId: string, ticketId: string) => void;
   onSelectThread: (projectId: string, threadId: string) => void;
   onToggleExpand: (id: string) => void;
+  onOpenSearch: () => void;
   onCreateProject: () => void;
   onOpenSettings: (() => void) | undefined;
   onManageProjectRepositories: (id: string) => void;
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, newTitle: string) => void;
-  onCreateThread: (projectId: string) => void;
+  onCreateThread: (projectId: string) => string;
   onCreateTicketThread: (input: {
     projectId: string;
     ticketId: string;
     ticketDisplayId: string;
-  }) => void;
+  }) => string;
   onDeleteThread: (threadId: string) => void;
   onRenameThread: (threadId: string, newTitle: string) => void;
   onProjectSortOrderChange: (sortOrder: ProjectSortOrder) => void;

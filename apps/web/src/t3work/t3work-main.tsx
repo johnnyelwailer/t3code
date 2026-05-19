@@ -1,5 +1,7 @@
 import { StrictMode, useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { isElectron } from "~/env";
+import { syncDocumentWindowControlsOverlayClass } from "~/lib/windowControlsOverlay";
 
 import { App } from "~/t3work/t3work-App";
 import { OAuthCallbackPage } from "~/t3work/components/t3work-OAuthCallbackPage";
@@ -39,6 +41,10 @@ function Root() {
 }
 
 const isOAuthCallback = window.location.pathname.startsWith("/oauth/callback");
+
+if (isElectron) {
+  syncDocumentWindowControlsOverlayClass();
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>{isOAuthCallback ? <OAuthCallbackPage /> : <Root />}</StrictMode>,

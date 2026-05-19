@@ -43,8 +43,15 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
           renameInputRef.current?.select();
         });
       } else if (action === "delete") {
-        const confirmed = await api.dialogs.confirm(`Delete thread "${thread.title}"?`);
-        if (confirmed) onDelete();
+        const confirmed = await api.dialogs.confirm(
+          [
+            `Delete thread "${thread.title}"?`,
+            "This permanently clears conversation history for this thread.",
+          ].join("\n"),
+        );
+        if (confirmed) {
+          await onDelete();
+        }
       } else if (action === "copy-thread-id") {
         void navigator.clipboard.writeText(thread.id);
       }
@@ -83,7 +90,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
       <SidebarMenuSubButton
         size="sm"
         isActive={isActive}
-        className={`group/thread h-7 w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none ${
+        className={`h-7 w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none ${
           variant === "issue" ? "rounded-md bg-muted/25 hover:bg-accent/70" : ""
         }`}
         onClick={onSelect}
@@ -118,18 +125,20 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
             <span className="min-w-0 flex-1 truncate text-xs">{thread.title}</span>
           )}
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            aria-label={`Thread actions for ${thread.title}`}
-            className="inline-flex size-4 cursor-pointer items-center justify-center rounded text-muted-foreground/55 opacity-0 transition-opacity duration-150 hover:bg-accent hover:text-foreground group-hover/thread:opacity-100"
-            onClick={handleOpenMenu}
-          >
-            <EllipsisIcon className="size-3" />
-          </button>
-          <span className="text-[10px] text-muted-foreground/40">
-            {formatRelativeTime(thread.lastMessageAt)}
-          </span>
+        <div className="ml-auto flex shrink-0 items-center">
+          <div className="relative flex min-w-12 justify-end pr-1">
+            <button
+              type="button"
+              aria-label={`Thread actions for ${thread.title}`}
+              className="absolute top-1/2 right-0 inline-flex size-4 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-muted-foreground/55 opacity-0 transition-opacity duration-150 hover:bg-accent hover:text-foreground group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:opacity-100"
+              onClick={handleOpenMenu}
+            >
+              <EllipsisIcon className="size-3" />
+            </button>
+            <span className="pointer-events-none text-[10px] text-muted-foreground/40 transition-opacity duration-150 group-hover/menu-sub-item:opacity-0 group-focus-within/menu-sub-item:opacity-0">
+              {formatRelativeTime(thread.lastMessageAt)}
+            </span>
+          </div>
         </div>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>

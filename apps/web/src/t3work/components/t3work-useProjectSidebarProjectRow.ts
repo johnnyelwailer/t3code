@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
 import { buildProjectTicketHierarchy } from "~/t3work/t3work-ticketHierarchy";
 import type { ProjectThread } from "~/t3work/t3work-types";
 import { sortThreads } from "./t3work-projectSidebarShared";
 import type { ProjectRowProps } from "./t3work-projectSidebarProjectRowTypes";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
+import { buildProjectSidebarAddToChatRequest } from "./t3work-projectSidebarAddToChatRequests";
 import { useProjectGitHubActivity } from "~/t3work/hooks/t3work-useProjectGitHubActivity";
 import {
   deriveTicketVisibility,
@@ -31,6 +33,7 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
   const [renameTitle, setRenameTitle] = useState(project.title);
   const [expandedThreadList, setExpandedThreadList] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const { addToChatFromRequest } = useAddToChat();
   const linkedRepositoryUrls = useMemo(
     () => readLinkedRepositoryUrlsFromProject(project),
     [project],
@@ -95,11 +98,15 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
   );
 
   const handleNewThread = useCallback(
-    (e: React.MouseEvent) => {
+    async (e: React.MouseEvent) => {
       e.stopPropagation();
-      onCreateThread(project.id);
+      const threadId = onCreateThread(project.id);
+      await addToChatFromRequest(
+        buildProjectSidebarAddToChatRequest({ project, projectTickets, linkedRepositoryUrls }),
+        { type: "thread", threadId },
+      );
     },
-    [onCreateThread, project.id],
+    [addToChatFromRequest, linkedRepositoryUrls, onCreateThread, project, projectTickets],
   );
 
   const handleContextMenu = useCallback(

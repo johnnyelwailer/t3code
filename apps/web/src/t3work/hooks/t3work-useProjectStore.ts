@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -17,13 +17,14 @@ import { useProjectStoreQueries } from "./t3work-useProjectStoreQueries";
 import { useProjectThreadActions } from "./t3work-useProjectThreadActions";
 import {
   generateProjectId,
+  deriveLooseWorkspaceProjects,
   loadStoredProjects,
   saveStoredProjects,
   upsertProjectBySource,
 } from "./t3work-projectStoreUtils";
 
 export function useProjectStore() {
-  const [projects, setProjects] = useState<ProjectShellProject[]>(loadStoredProjects);
+  const [storedProjects, setStoredProjects] = useState<ProjectShellProject[]>(loadStoredProjects);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => loadStoredProjects()[0]?.id ?? null,
   );
@@ -37,16 +38,24 @@ export function useProjectStore() {
   const [threadPreviewCount, setThreadPreviewCount] = useState(5);
   const liveProjects = useStore(useShallow(selectProjectsAcrossEnvironments));
   const liveThreads = useStore(useShallow(selectThreadsAcrossEnvironments));
+  const looseWorkspaceProjects = useMemo(
+    () => deriveLooseWorkspaceProjects(storedProjects, liveProjects),
+    [liveProjects, storedProjects],
+  );
+  const allProjects = useMemo(
+    () => [...storedProjects, ...looseWorkspaceProjects],
+    [looseWorkspaceProjects, storedProjects],
+  );
 
   const { getThreadsForProject, getTicketsForProject } = useProjectStoreQueries({
-    projects,
+    projects: allProjects,
     threads,
     liveProjects,
     liveThreads,
   });
 
   const addProject = useCallback((project: ProjectShellProject) => {
-    setProjects((prev) => {
+    setStoredProjects((prev) => {
       const next = upsertProjectBySource(prev, project);
       saveStoredProjects(next);
       return next;
@@ -57,7 +66,7 @@ export function useProjectStore() {
   }, []);
 
   const deleteProject = useCallback((id: string) => {
-    setProjects((prev) => {
+    setStoredProjects((prev) => {
       const next = prev.filter((p) => p.id !== id);
       saveStoredProjects(next);
       return next;
@@ -72,17 +81,32 @@ export function useProjectStore() {
     });
   }, []);
 
-  const renameProject = useCallback((id: string, newTitle: string) => {
-    setProjects((prev) => {
-      const next = prev.map((p) => (p.id === id ? { ...p, title: newTitle } : p));
-      saveStoredProjects(next);
-      return next;
-    });
-  }, []);
+  const renameProject = useCallback(
+    (id: string, newTitle: string) => {
+      setStoredProjects((prev) => {
+        const existingProject = prev.find((candidate) => candidate.id === id);
+        const sourceProject =
+          existingProject ?? allProjects.find((candidate) => candidate.id === id);
+        if (!sourceProject) {
+          return prev;
+        }
+        const updatedProject = { ...sourceProject, title: newTitle };
+        const next = existingProject
+          ? prev.map((candidate) => (candidate.id === id ? updatedProject : candidate))
+          : [...prev, updatedProject];
+        saveStoredProjects(next);
+        return next;
+      });
+    },
+    [allProjects],
+  );
 
   const updateProject = useCallback((id: string, nextProject: ProjectShellProject) => {
-    setProjects((prev) => {
-      const next = prev.map((candidate) => (candidate.id === id ? nextProject : candidate));
+    setStoredProjects((prev) => {
+      const existingProject = prev.some((candidate) => candidate.id === id);
+      const next = existingProject
+        ? prev.map((candidate) => (candidate.id === id ? nextProject : candidate))
+        : [...prev, nextProject];
       saveStoredProjects(next);
       return next;
     });
@@ -129,10 +153,12 @@ export function useProjectStore() {
     setView,
   });
 
-  const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
+  const selectedProject = allProjects.find((project) => project.id === selectedProjectId) ?? null;
 
   return {
-    projects,
+    projects: storedProjects,
+    looseWorkspaceProjects,
+    allProjects,
     selectedProject,
     selectedProjectId,
     view,

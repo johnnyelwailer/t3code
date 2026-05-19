@@ -52,7 +52,7 @@ export function TicketTreeNode({
         onRenameThread={onRenameThread}
       />
       {children.length > 0 ? (
-        <div className="mt-1.5 space-y-1">
+        <div className="mt-1 space-y-0.5">
           {children.map((child) => (
             <TicketTreeNode
               key={child.id}

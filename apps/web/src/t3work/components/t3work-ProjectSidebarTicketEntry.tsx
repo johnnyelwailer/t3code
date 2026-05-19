@@ -14,6 +14,7 @@ import {
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
 import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
 import { ThreadRow } from "./t3work-ProjectSidebarThreadRow";
+import { buildTicketSidebarAddToChatRequest } from "./t3work-projectSidebarAddToChatRequests";
 import type { ProjectThread, ProjectTicket, ViewState } from "~/t3work/t3work-types";
 import { readLocalApi } from "~/localApi";
 
@@ -31,7 +32,7 @@ export interface TicketSidebarEntryProps {
     projectId: string;
     ticketId: string;
     ticketDisplayId: string;
-  }) => void;
+  }) => string;
   onSelectThread: (projectId: string, threadId: string) => void;
   onDeleteThread: (threadId: string) => void;
   onRenameThread: (threadId: string, newTitle: string) => void;
@@ -54,23 +55,15 @@ export function TicketSidebarEntry({
 }: TicketSidebarEntryProps) {
   const backend = useBackend();
   const { addToChatFromRequest, showAddToChatContextMenu } = useAddToChat();
-
-  const buildAddToChatRequest = (backendApi: NonNullable<typeof backend>) => ({
-    projectId,
-    projectTitle: project.title,
-    projectWorkspaceRoot: project.workspace?.rootPath,
-    targetLabel: `${ticket.ref.displayId} ${ticket.ref.title}`,
-    targetType: "work-item" as const,
-    summaryItems: [{ label: "Status", value: ticket.status }],
-    payload: () =>
-      buildComprehensiveTicketPayload({
-        backend: backendApi,
-        project,
-        ticket,
-        projectTickets,
-        githubActivityItems,
-      }),
-  });
+  const buildAddToChatRequest = (backendApi: NonNullable<typeof backend>) =>
+    buildTicketSidebarAddToChatRequest({
+      backend: backendApi,
+      project,
+      projectId,
+      projectTickets,
+      ticket,
+      githubActivityItems,
+    });
 
   const openTicketMenuAt = async (x: number, y: number) => {
     const localApi = readLocalApi();
@@ -96,12 +89,15 @@ export function TicketSidebarEntry({
   };
 
   return (
-    <div className="group/ticket rounded-md bg-background/25 p-1" onContextMenu={handleContextMenu}>
-      <div className="flex items-start gap-1">
+    <div
+      className="group/ticket rounded-md bg-background/25 px-1 py-0.5"
+      onContextMenu={handleContextMenu}
+    >
+      <div className="relative">
         <SidebarMenuSubButton
           size="sm"
           isActive={view?.type === "ticket" && view.ticketId === ticket.id}
-          className="h-auto min-h-9 flex-1 flex-col items-start py-1.5"
+          className="h-auto min-h-8 w-full flex-col items-start py-1"
           onClick={() => onSelectTicket(projectId, ticket.id)}
         >
           <div className="flex w-full items-center gap-1">
@@ -112,40 +108,48 @@ export function TicketSidebarEntry({
             <span className="truncate text-[11px] font-medium">{ticket.ref.displayId}</span>
             <span className="ml-1 text-[10px] text-muted-foreground/75">{ticket.status}</span>
           </div>
-          <div className="mt-0.5 w-full truncate text-[10px] text-muted-foreground/70">
+          <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
             {ticket.ref.title}
           </div>
         </SidebarMenuSubButton>
 
-        <div className="mt-0.5 flex shrink-0 items-center gap-1 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/ticket:opacity-100 group-hover/ticket:pointer-events-auto">
-          <button
-            type="button"
-            aria-label={`Create new thread for ${ticket.ref.displayId}`}
-            className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCreateTicketThread({
-                projectId,
-                ticketId: ticket.id,
-                ticketDisplayId: ticket.ref.displayId,
-              });
-            }}
-          >
-            <SquarePenIcon className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label={`Issue actions for ${ticket.ref.displayId}`}
-            className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground"
-            onClick={handleOpenMenu}
-          >
-            <EllipsisIcon className="size-3.5" />
-          </button>
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-start opacity-0 transition-opacity duration-150 group-hover/ticket:pointer-events-auto group-hover/ticket:opacity-100">
+          <div className="h-full w-6 bg-gradient-to-r from-transparent to-card" />
+          <div className="flex items-center gap-1 bg-card pt-1">
+            <button
+              type="button"
+              aria-label={`Create new thread for ${ticket.ref.displayId}`}
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+              onClick={async (e) => {
+                e.stopPropagation();
+                const threadId = onCreateTicketThread({
+                  projectId,
+                  ticketId: ticket.id,
+                  ticketDisplayId: ticket.ref.displayId,
+                });
+                if (!backend) return;
+                await addToChatFromRequest(buildAddToChatRequest(backend), {
+                  type: "thread",
+                  threadId,
+                });
+              }}
+            >
+              <SquarePenIcon className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Issue actions for ${ticket.ref.displayId}`}
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+              onClick={handleOpenMenu}
+            >
+              <EllipsisIcon className="size-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
       {ticketThreads.length > 0 ? (
-        <div className="mt-1.5 ml-2 space-y-1 pl-2">
+        <div className="mt-1 ml-2 space-y-1 pl-2">
           {ticketThreads.map((thread) => (
             <ThreadRow
               key={thread.id}
@@ -161,7 +165,7 @@ export function TicketSidebarEntry({
       ) : null}
 
       {showGitHubActivity && githubActivityItems.length > 0 ? (
-        <div className="mt-1">
+        <div className="mt-0.5">
           <GitHubActivityInlineList
             items={githubActivityItems}
             limit={2}
@@ -174,6 +178,7 @@ export function TicketSidebarEntry({
                 projectWorkspaceRoot: project.workspace?.rootPath,
                 targetLabel: display.targetLabel,
                 targetType: display.targetType,
+                kind: display.activityKind,
                 dedupeKey: `${projectId}:github-activity:${item.id}`,
                 summaryItems: display.summaryItems,
                 payload: async () => {
