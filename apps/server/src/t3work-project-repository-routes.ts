@@ -41,7 +41,7 @@ export const t3workProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
     const workspaceRootInput = input.workspaceRoot?.trim() ?? "";
     if (workspaceRootInput.length === 0)
       return yield* new T3workAtlassianError({ message: "workspaceRoot is required." });
-    const workspaceRoot = normalizeT3workWorkspaceRoot(workspaceRootInput);
+    const workspaceRoot = yield* normalizeT3workWorkspaceRoot(workspaceRootInput);
 
     yield* fileSystem
       .makeDirectory(workspaceRoot, { recursive: true })

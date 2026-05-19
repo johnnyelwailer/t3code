@@ -62,8 +62,8 @@ export function collectSuggestedRepositoryUrls(input: {
 }): ReadonlyArray<string> {
   const linked = new Set(normalizeRepositoryUrls(input.linkedRepositoryUrls));
   const tokens = collectProjectTokens({
-    projectKey: input.projectKey,
-    projectTitle: input.projectTitle,
+    ...(input.projectKey ? { projectKey: input.projectKey } : {}),
+    ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
   });
   if (tokens.length === 0) return [];
 

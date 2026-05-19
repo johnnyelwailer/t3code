@@ -64,7 +64,7 @@ export function loadLinkedPullRequestsAttempt(input: {
                 typeof pullRequest.number === "number"
                   ? String(pullRequest.number)
                   : readTrimmedString(pullRequest.id)?.toString();
-              return {
+              const inboxItem: GitHubInboxItem = {
                 id: number
                   ? `pr:${repository}:${number}`
                   : `pr:${repository}:${subjectTitle ?? "unknown"}`,
@@ -95,7 +95,8 @@ export function loadLinkedPullRequestsAttempt(input: {
                   : {}),
                 ...(updatedAt ? { updatedAt } : {}),
                 subjectState,
-              } satisfies GitHubInboxItem;
+              };
+              return inboxItem;
             }),
           ),
           Effect.catch(() => Effect.succeed([] as ReadonlyArray<GitHubInboxItem>)),
@@ -104,11 +105,5 @@ export function loadLinkedPullRequestsAttempt(input: {
   ).pipe(
     Effect.map((allItems) => allItems.flat()),
     Effect.map((items) => ({ items }) satisfies GitHubInboxAttempt),
-    Effect.catch(() =>
-      Effect.succeed({
-        items: [] as ReadonlyArray<GitHubInboxItem>,
-        warning: "Unable to load pull requests for linked repositories.",
-      }),
-    ),
   );
 }

@@ -5,9 +5,14 @@ import {
   recordThreadBootstrapEvent,
   type ThreadBootstrapAction,
 } from "~/t3work/chat/t3work-threadBootstrapInstrumentation";
+import {
+  appendContextAttachmentsToPrompt,
+  prepareThreadContextAttachments,
+} from "~/t3work/chat/t3work-prepareThreadContextAttachments";
 import type { ThreadBootstrapDispatchState } from "~/t3work/chat/t3work-threadBootstrapPlan";
+import { useT3WorkAddToChatStore } from "~/t3work/t3work-addToChatStore";
 
-type ThreadBootstrapBackend = Pick<BackendApi, "dispatchCommand">;
+type ThreadBootstrapBackend = BackendApi;
 
 type RunThreadBootstrapInput = {
   backend: ThreadBootstrapBackend;
@@ -87,6 +92,15 @@ export async function runThreadBootstrap({
       title,
     });
 
+    const preparedContextAttachments = await prepareThreadContextAttachments({
+      threadId,
+      backend,
+    });
+    const bootstrapMessage = appendContextAttachmentsToPrompt(
+      initialUserMessage,
+      preparedContextAttachments,
+    );
+
     await backend.dispatchCommand({
       type: "thread.turn.start",
       commandId: crypto.randomUUID() as any,
@@ -94,7 +108,7 @@ export async function runThreadBootstrap({
       message: {
         messageId: crypto.randomUUID() as any,
         role: "user",
-        text: initialUserMessage,
+        text: bootstrapMessage,
         attachments: [],
       },
       modelSelection: kickoffModelSelection,
@@ -120,6 +134,9 @@ export async function runThreadBootstrap({
       threadId,
       canonicalProjectId,
     });
+    if (preparedContextAttachments.length > 0) {
+      useT3WorkAddToChatStore.getState().clearThreadAttachments(threadId);
+    }
     onInitialUserMessageSent?.();
     return;
   }

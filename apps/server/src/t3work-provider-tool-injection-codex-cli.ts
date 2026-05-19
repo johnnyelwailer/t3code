@@ -1,10 +1,9 @@
-import { execFile } from "node:child_process";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
-
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
+import { ProcessRunner } from "./processRunner.ts";
 import { buildT3workProviderToolInjectionPlan } from "./t3work-provider-tool-injection.ts";
 import { toMcpAddCommand } from "./t3work-provider-tool-injection-codex-utils.ts";
 
@@ -47,77 +46,75 @@ export interface T3workCodexCliApplyResult {
 
 const DEFAULT_WORKSPACE_LOCAL_CODEX_HOME = ".t3work/provider-homes/codex";
 
-export function resolveWorkspaceLocalCodexHomePath(input: {
-  readonly workspaceRoot: string;
-  readonly codexHomeRelativePath?: string;
-}): string {
-  const workspaceRoot = path.resolve(input.workspaceRoot);
-  const requested = (input.codexHomeRelativePath ?? DEFAULT_WORKSPACE_LOCAL_CODEX_HOME).trim();
-  if (requested.length === 0) {
-    throw new T3workWorkspacePathError({
-      detail: "codexHomeRelativePath cannot be empty.",
+export const resolveWorkspaceLocalCodexHomePath = Effect.fn("resolveWorkspaceLocalCodexHomePath")(
+  function* (input: { readonly workspaceRoot: string; readonly codexHomeRelativePath?: string }) {
+    const path = yield* Path.Path;
+    const workspaceRoot = path.resolve(input.workspaceRoot);
+    const requested = (input.codexHomeRelativePath ?? DEFAULT_WORKSPACE_LOCAL_CODEX_HOME).trim();
+    if (requested.length === 0) {
+      return yield* new T3workWorkspacePathError({
+        detail: "codexHomeRelativePath cannot be empty.",
+      });
+    }
+    if (path.isAbsolute(requested)) {
+      return yield* new T3workWorkspacePathError({
+        detail: "codexHomeRelativePath must be workspace-relative, absolute paths are forbidden.",
+      });
+    }
+
+    const resolved = path.resolve(workspaceRoot, requested);
+    const relative = path.relative(workspaceRoot, resolved);
+    if (
+      relative === "" ||
+      relative === "." ||
+      (!relative.startsWith("..") && !path.isAbsolute(relative))
+    ) {
+      return resolved;
+    }
+
+    return yield* new T3workWorkspacePathError({
+      detail: "codexHomeRelativePath resolves outside workspaceRoot and is not allowed.",
     });
-  }
-  if (path.isAbsolute(requested)) {
-    throw new T3workWorkspacePathError({
-      detail: "codexHomeRelativePath must be workspace-relative, absolute paths are forbidden.",
-    });
-  }
+  },
+);
 
-  const resolved = path.resolve(workspaceRoot, requested);
-  const relative = path.relative(workspaceRoot, resolved);
-  if (
-    relative === "" ||
-    relative === "." ||
-    (!relative.startsWith("..") && !path.isAbsolute(relative))
-  ) {
-    return resolved;
-  }
-
-  throw new T3workWorkspacePathError({
-    detail: "codexHomeRelativePath resolves outside workspaceRoot and is not allowed.",
-  });
-}
-
-const runCodexCommand = (input: {
+const runCodexCommand = Effect.fn("runCodexCommand")(function* (input: {
   readonly binaryPath: string;
   readonly args: ReadonlyArray<string>;
   readonly codexHomePath: string;
-}) =>
-  Effect.tryPromise({
-    try: () =>
-      new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-        execFile(
-          input.binaryPath,
-          input.args,
-          {
-            env: {
-              ...process.env,
-              CODEX_HOME: input.codexHomePath,
-            },
-          },
-          (error, stdout, stderr) => {
-            if (error) {
-              reject(
-                new T3workCodexCliError({
-                  detail: `codex ${input.args.join(" ")} failed`,
-                  cause: error,
-                }),
-              );
-              return;
-            }
-            resolve({ stdout, stderr });
-          },
-        );
-      }),
-    catch: (cause) =>
-      cause instanceof T3workCodexCliError
-        ? cause
-        : new T3workCodexCliError({
+}) {
+  const processRunner = yield* ProcessRunner;
+  const result = yield* processRunner
+    .run({
+      command: input.binaryPath,
+      args: input.args,
+      env: {
+        ...process.env,
+        CODEX_HOME: input.codexHomePath,
+      },
+    })
+    .pipe(
+      Effect.mapError(
+        (cause) =>
+          new T3workCodexCliError({
             detail: "Failed to execute codex command.",
             cause,
           }),
-  });
+      ),
+    );
+
+  if (result.code !== 0) {
+    return yield* new T3workCodexCliError({
+      detail: `codex ${input.args.join(" ")} failed`,
+      cause: result.stderr.trim() || result.stdout.trim() || result.code,
+    });
+  }
+
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
+});
 
 const listCodexMcpServers = (input: {
   readonly binaryPath: string;
@@ -143,28 +140,21 @@ const listCodexMcpServers = (input: {
 export const applyT3workCodexMcpServers = Effect.fn("applyT3workCodexMcpServers")(function* (
   input: T3workCodexCliApplyInput,
 ) {
+  const fileSystem = yield* FileSystem.FileSystem;
   const binaryPath = input.codexBinaryPath?.trim() || "codex";
-  const codexHomePath = yield* Effect.try({
-    try: () =>
-      resolveWorkspaceLocalCodexHomePath({
-        workspaceRoot: input.workspaceRoot,
-        codexHomeRelativePath: input.codexHomeRelativePath,
-      }),
-    catch: (cause) =>
-      cause instanceof T3workWorkspacePathError
-        ? cause
-        : new T3workWorkspacePathError({
-            detail: "Failed to resolve workspace-local Codex home path.",
-          }),
+  const codexHomePath = yield* resolveWorkspaceLocalCodexHomePath({
+    workspaceRoot: input.workspaceRoot,
+    ...(input.codexHomeRelativePath ? { codexHomeRelativePath: input.codexHomeRelativePath } : {}),
   });
-  yield* Effect.try({
-    try: () => mkdirSync(codexHomePath, { recursive: true }),
-    catch: (cause) =>
-      new T3workCodexCliError({
-        detail: "Failed to ensure workspace-local Codex home directory.",
-        cause,
-      }),
-  });
+  yield* fileSystem.makeDirectory(codexHomePath, { recursive: true }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new T3workCodexCliError({
+          detail: "Failed to ensure workspace-local Codex home directory.",
+          cause,
+        }),
+    ),
+  );
 
   const plan = buildT3workProviderToolInjectionPlan(input.environment);
   const existing = yield* listCodexMcpServers({

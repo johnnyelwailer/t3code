@@ -4,6 +4,7 @@ import { enrichPullRequestState } from "./t3work-github-routes-pr.ts";
 import type {
   GitHubInboxAttempt,
   GitHubInboxItem,
+  GitHubRepositoryCandidate,
   GitHubRepositoriesAttempt,
   RawGitHubNotification,
   RawGitHubRepo,
@@ -54,11 +55,11 @@ export function loadRepositoriesAttempt(
       ),
       Effect.match({
         onFailure: () => ({
-          items: [] as ReadonlyArray<any>,
+          items: [] as ReadonlyArray<GitHubRepositoryCandidate>,
           warning:
             "Unable to list repositories for this host (check host, permissions, or API availability).",
         }),
-        onSuccess: (items) => ({ items, warning: undefined as string | undefined }),
+        onSuccess: (items) => ({ items }),
       }),
     );
 }
@@ -88,7 +89,7 @@ export function loadInboxAttempt(
             const subjectApiUrl = readTrimmedString(item.subject?.url);
             const updatedAt = readTrimmedString(item.updated_at);
             if (!id || !repository || !reason) return undefined;
-            return {
+            const inboxItem: GitHubInboxItem = {
               id,
               repository,
               repositoryUrl: `https://${host}/${repository}`,
@@ -98,7 +99,8 @@ export function loadInboxAttempt(
               ...(subjectTitle ? { subjectTitle } : {}),
               ...(subjectApiUrl ? { subjectUrl: subjectApiUrl } : {}),
               ...(updatedAt ? { updatedAt } : {}),
-            } satisfies GitHubInboxItem;
+            };
+            return inboxItem;
           })
           .filter((value): value is GitHubInboxItem => value !== undefined),
       ),
@@ -108,7 +110,7 @@ export function loadInboxAttempt(
           items: [] as ReadonlyArray<GitHubInboxItem>,
           warning: "Unable to load GitHub inbox (notifications scope may be missing).",
         }),
-        onSuccess: (items) => ({ items, warning: undefined as string | undefined }),
+        onSuccess: (items) => ({ items }),
       }),
     );
 }

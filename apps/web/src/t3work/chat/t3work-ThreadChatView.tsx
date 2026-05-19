@@ -14,15 +14,11 @@ import {
   ThreadKickoffPlaceholder,
 } from "~/t3work/chat/t3work-threadKickoffPlaceholder";
 import { ThreadPendingChat } from "~/t3work/chat/t3work-threadPendingChat";
+import { prepareThreadContextAttachments } from "~/t3work/chat/t3work-prepareThreadContextAttachments";
 import { ContextAttachmentStrip } from "~/t3work/components/t3work-ContextAttachmentChip";
 import { useThreadBootstrap } from "~/t3work/chat/t3work-useThreadBootstrap";
 import { resolveCanonicalProjectIdForWorkspaceRoot } from "~/t3work/hooks/t3work-threadBridge";
-import { buildContextAttachment } from "~/t3work/t3work-addToChatUtils";
 import { useT3WorkAddToChatStore } from "~/t3work/t3work-addToChatStore";
-import {
-  resolveContextAttachmentRequest,
-  syncContextAttachmentFromRequest,
-} from "~/t3work/t3work-contextAttachmentSync";
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
 
 const EMPTY_ATTACHMENTS: T3WorkContextAttachment[] = [];
@@ -136,47 +132,10 @@ export function ThreadChatView({
   const removeContextAttachment = useT3WorkAddToChatStore((state) => state.removeThreadAttachment);
   const clearThreadAttachments = useT3WorkAddToChatStore((state) => state.clearThreadAttachments);
 
-  const prepareComposerContextAttachments = useCallback(async () => {
-    const current = useT3WorkAddToChatStore.getState().threadAttachmentsByThreadId[threadId] ?? [];
-    const nextAttachments: T3WorkContextAttachment[] = [];
-
-    for (const attachment of current) {
-      const request = resolveContextAttachmentRequest(attachment.id);
-      if (!request) {
-        nextAttachments.push(attachment);
-        continue;
-      }
-
-      try {
-        const nextAttachment = await syncContextAttachmentFromRequest({
-          attachmentId: attachment.id,
-          request,
-          ...(backend ? { backend } : {}),
-          forceRefresh: true,
-        });
-        useT3WorkAddToChatStore
-          .getState()
-          .replaceThreadAttachment(threadId, attachment.id, nextAttachment);
-        nextAttachments.push(nextAttachment);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to sync attached context.";
-        const failedAttachment = buildContextAttachment({
-          id: attachment.id,
-          request,
-          syncStatus: "error",
-          syncError: message,
-        });
-        useT3WorkAddToChatStore
-          .getState()
-          .replaceThreadAttachment(threadId, attachment.id, failedAttachment);
-        throw new Error(`Failed to sync attached context "${attachment.label}": ${message}`, {
-          cause: error,
-        });
-      }
-    }
-
-    return nextAttachments;
-  }, [backend, threadId]);
+  const prepareComposerContextAttachments = useCallback(
+    () => prepareThreadContextAttachments({ threadId, backend }),
+    [backend, threadId],
+  );
 
   const contextAttachmentSlot =
     contextAttachments.length > 0 ? (

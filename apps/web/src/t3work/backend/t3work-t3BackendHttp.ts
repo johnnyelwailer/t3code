@@ -30,6 +30,7 @@ export async function postJson<TInput extends object, TResponse>(
   const url = new URL(routePath, httpBaseUrl);
   const response = await fetch(url, {
     method: "POST",
+    credentials: "include",
     headers: {
       "content-type": "application/json",
     },

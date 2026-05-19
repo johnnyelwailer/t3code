@@ -1,3 +1,5 @@
+import * as DateTime from "effect/DateTime";
+
 import { normalizeRepositoryUrls } from "./t3work-project-repository-utils.ts";
 
 export type GitHubInboxDiscoverRequest = {
@@ -95,6 +97,10 @@ export type GitHubInboxAttempt = {
 
 type CacheEntry<T> = { readonly value: T; readonly expiresAt: number };
 
+function currentEpochMilliseconds(): number {
+  return DateTime.nowUnsafe().epochMilliseconds;
+}
+
 export const ACCOUNT_CACHE_TTL_MS = 5 * 60_000;
 export const UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS = 20_000;
 export const REPOSITORIES_CACHE_TTL_MS = 2 * 60_000;
@@ -129,7 +135,7 @@ export const pullRequestStateCache = new Map<
 export function readCached<T>(cache: Map<string, CacheEntry<T>>, key: string): T | undefined {
   const entry = cache.get(key);
   if (!entry) return undefined;
-  if (entry.expiresAt <= Date.now()) {
+  if (entry.expiresAt <= currentEpochMilliseconds()) {
     cache.delete(key);
     return undefined;
   }
@@ -146,7 +152,7 @@ export function writeCached<T>(
     const oldestKey = cache.keys().next().value;
     if (typeof oldestKey === "string") cache.delete(oldestKey);
   }
-  cache.set(key, { value, expiresAt: Date.now() + ttlMs });
+  cache.set(key, { value, expiresAt: currentEpochMilliseconds() + ttlMs });
 }
 
 export function readTrimmedString(value: unknown): string | undefined {

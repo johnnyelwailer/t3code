@@ -11,6 +11,7 @@
     "bun.lock",
     "apps/server/package.json",
     "apps/server/src/server.ts",
+    "apps/server/src/server.test.ts",
     "apps/server/tsdown.config.ts",
     "apps/web/package.json",
     "apps/web/vite.config.ts",

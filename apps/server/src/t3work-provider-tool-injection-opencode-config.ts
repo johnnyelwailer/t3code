@@ -1,10 +1,13 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 
 import { buildT3workProviderToolInjectionPlan } from "./t3work-provider-tool-injection.ts";
+
+const UnknownPrettyJson = fromJsonStringPretty(Schema.Unknown);
+const encodeUnknownPrettyJson = Schema.encodeEffect(UnknownPrettyJson);
 
 export class T3workOpenCodeConfigError extends Schema.TaggedErrorClass<T3workOpenCodeConfigError>()(
   "T3workOpenCodeConfigError",
@@ -54,23 +57,26 @@ function parseJsoncObject(raw: string): Record<string, unknown> {
   return isRecord(parsed) ? parsed : {};
 }
 
-export function resolveWorkspaceLocalOpenCodeConfigPath(input: {
+export const resolveWorkspaceLocalOpenCodeConfigPath = Effect.fn(
+  "resolveWorkspaceLocalOpenCodeConfigPath",
+)(function* (input: {
   readonly workspaceRoot: string;
   readonly openCodeConfigRelativePath?: string;
-}): string {
+}) {
+  const path = yield* Path.Path;
   const workspaceRoot = path.resolve(input.workspaceRoot);
   const requested = (
     input.openCodeConfigRelativePath ?? DEFAULT_WORKSPACE_LOCAL_OPENCODE_CONFIG
   ).trim();
 
   if (requested.length === 0) {
-    throw new T3workWorkspacePathError({
+    return yield* new T3workWorkspacePathError({
       detail: "openCodeConfigRelativePath cannot be empty.",
     });
   }
 
   if (path.isAbsolute(requested)) {
-    throw new T3workWorkspacePathError({
+    return yield* new T3workWorkspacePathError({
       detail:
         "openCodeConfigRelativePath must be workspace-relative, absolute paths are forbidden.",
     });
@@ -86,38 +92,31 @@ export function resolveWorkspaceLocalOpenCodeConfigPath(input: {
     return resolved;
   }
 
-  throw new T3workWorkspacePathError({
+  return yield* new T3workWorkspacePathError({
     detail: "openCodeConfigRelativePath resolves outside workspaceRoot and is not allowed.",
   });
-}
+});
 
-function readExistingConfig(configPath: string): Record<string, unknown> {
-  try {
-    return parseJsoncObject(readFileSync(configPath, "utf8"));
-  } catch {
-    return {};
-  }
-}
+const readExistingConfig = Effect.fn("readExistingConfig")(function* (configPath: string) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const raw = yield* fileSystem.readFileString(configPath).pipe(Effect.orElseSucceed(() => ""));
+  return parseJsoncObject(raw);
+});
 
 export const applyT3workOpenCodeMcpConfig = Effect.fn("applyT3workOpenCodeMcpConfig")(function* (
   input: T3workOpenCodeConfigApplyInput,
 ) {
-  const openCodeConfigPath = yield* Effect.try({
-    try: () =>
-      resolveWorkspaceLocalOpenCodeConfigPath({
-        workspaceRoot: input.workspaceRoot,
-        openCodeConfigRelativePath: input.openCodeConfigRelativePath,
-      }),
-    catch: (cause) =>
-      cause instanceof T3workWorkspacePathError
-        ? cause
-        : new T3workWorkspacePathError({
-            detail: "Failed to resolve workspace-local OpenCode config path.",
-          }),
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const openCodeConfigPath = yield* resolveWorkspaceLocalOpenCodeConfigPath({
+    workspaceRoot: input.workspaceRoot,
+    ...(input.openCodeConfigRelativePath
+      ? { openCodeConfigRelativePath: input.openCodeConfigRelativePath }
+      : {}),
   });
 
   const plan = buildT3workProviderToolInjectionPlan(input.environment);
-  const existingConfig = readExistingConfig(openCodeConfigPath);
+  const existingConfig = yield* readExistingConfig(openCodeConfigPath);
   const existingMcp = isRecord(existingConfig.mcp) ? existingConfig.mcp : {};
 
   const nextMcp: Record<string, unknown> = { ...existingMcp };
@@ -141,18 +140,34 @@ export const applyT3workOpenCodeMcpConfig = Effect.fn("applyT3workOpenCodeMcpCon
     ...existingConfig,
     mcp: nextMcp,
   };
+  const encodedConfig = yield* encodeUnknownPrettyJson(nextConfig).pipe(
+    Effect.mapError(
+      (cause) =>
+        new T3workOpenCodeConfigError({
+          detail: "Failed to encode workspace-local OpenCode config.",
+          cause,
+        }),
+    ),
+  );
 
-  yield* Effect.try({
-    try: () => {
-      mkdirSync(path.dirname(openCodeConfigPath), { recursive: true });
-      writeFileSync(openCodeConfigPath, `${JSON.stringify(nextConfig, null, 2)}\n`, "utf8");
-    },
-    catch: (cause) =>
-      new T3workOpenCodeConfigError({
-        detail: "Failed to write workspace-local OpenCode config.",
-        cause,
-      }),
-  });
+  yield* fileSystem.makeDirectory(path.dirname(openCodeConfigPath), { recursive: true }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new T3workOpenCodeConfigError({
+          detail: "Failed to ensure workspace-local OpenCode config directory.",
+          cause,
+        }),
+    ),
+  );
+  yield* fileSystem.writeFileString(openCodeConfigPath, `${encodedConfig}\n`, { flag: "w" }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new T3workOpenCodeConfigError({
+          detail: "Failed to write workspace-local OpenCode config.",
+          cause,
+        }),
+    ),
+  );
 
   return {
     openCodeConfigPath,

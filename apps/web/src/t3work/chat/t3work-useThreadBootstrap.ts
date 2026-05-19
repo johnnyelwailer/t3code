@@ -19,12 +19,8 @@ import {
   recordThreadBootstrapSkipped,
 } from "~/t3work/chat/t3work-threadBootstrapInstrumentation";
 
-type BackendLike = {
-  dispatchCommand: BackendApi["dispatchCommand"];
-};
-
 type ThreadBootstrapInput = {
-  backend: BackendLike | null | undefined;
+  backend: BackendApi | null | undefined;
   environmentId: string | null | undefined;
   threadId: string;
   projectTitle: string;

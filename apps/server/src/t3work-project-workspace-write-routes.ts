@@ -31,7 +31,7 @@ export const t3workProjectWorkspaceWriteContextFilesRouteLayer = HttpRouter.add(
       return yield* new T3workAtlassianError({ message: "workspaceRoot is required." });
     }
 
-    const workspaceRoot = normalizeT3workWorkspaceRoot(workspaceRootInput);
+    const workspaceRoot = yield* normalizeT3workWorkspaceRoot(workspaceRootInput);
     yield* fileSystem
       .makeDirectory(workspaceRoot, { recursive: true })
       .pipe(Effect.mapError(toAtlassianError("Failed to ensure workspace directory exists.")));

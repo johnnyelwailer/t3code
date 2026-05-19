@@ -19,6 +19,8 @@ Prefix policy:
   - Add `t3work` bin and `dev:t3work` / `start:t3work` scripts.
 - `apps/server/src/server.ts`
   - Mount `/api/t3work/atlassian/*` routes in the main server so migrated `/t3work` UI sign-in does not 404.
+- `apps/server/src/server.test.ts`
+  - Provide the live `VcsProcess` layer in the server router seam test so repo-wide typecheck remains green after the shared VCS service split.
 - `apps/server/tsdown.config.ts`
   - Bundle `src/t3work-bin.ts` alongside existing server bin.
 - `apps/web/package.json`

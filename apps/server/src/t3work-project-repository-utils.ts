@@ -1,5 +1,6 @@
 import * as OS from "node:os";
-import path from "node:path";
+import * as Effect from "effect/Effect";
+import * as Path from "effect/Path";
 
 import { T3workAtlassianError } from "./t3work-atlassian-http.ts";
 
@@ -62,7 +63,10 @@ export function normalizeRepositoryUrls(
   return [...deduped.values()];
 }
 
-export function normalizeT3workWorkspaceRoot(workspaceRoot: string): string {
+export const normalizeT3workWorkspaceRoot = Effect.fn("normalizeT3workWorkspaceRoot")(function* (
+  workspaceRoot: string,
+) {
+  const path = yield* Path.Path;
   const trimmed = workspaceRoot.trim();
   if (trimmed === "~") {
     return OS.homedir();
@@ -71,7 +75,7 @@ export function normalizeT3workWorkspaceRoot(workspaceRoot: string): string {
     return path.join(OS.homedir(), trimmed.slice(2));
   }
   return path.resolve(trimmed);
-}
+});
 
 function sanitizeSlugSegment(value: string): string {
   return value

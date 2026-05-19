@@ -15,6 +15,6 @@ export function loadAccount(
     })
     .pipe(
       Effect.map((output) => readTrimmedString(output.stdout)),
-      Effect.catch(() => Effect.void),
+      Effect.orElseSucceed(() => undefined),
     );
 }
