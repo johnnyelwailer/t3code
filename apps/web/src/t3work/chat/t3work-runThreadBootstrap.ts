@@ -51,6 +51,16 @@ export async function runThreadBootstrap({
   state,
   onInitialUserMessageSent,
 }: RunThreadBootstrapInput) {
+  if (projectWorkspaceRoot) {
+    try {
+      await backend.projectWorkspace.bootstrapWorkspace({
+        workspaceRoot: projectWorkspaceRoot,
+      });
+    } catch {
+      // Thread bootstrap should keep going; the next project sync can retry the scaffold repair.
+    }
+  }
+
   if (projectWorkspaceRoot && shouldEnsureProject) {
     state.projectEnsured = true;
     recordThreadBootstrapEvent("thread-bootstrap.project-create.start", {

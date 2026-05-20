@@ -1,0 +1,147 @@
+import type { ProjectShellProject } from "@t3tools/project-context";
+import {
+  resolveT3WorkProjectSetupProfileId,
+  T3WORK_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+  T3WORK_PROJECT_CONTEXT_ROOT,
+  T3WORK_PROJECT_PROFILE_MANIFEST_PATH,
+} from "~/t3work/t3work-projectSetup";
+
+import type { BackendApi, ProjectWorkspaceContextFile } from "~/t3work/backend/t3work-types";
+import { compactJson, dedupeDirectoryBundleFiles } from "~/t3work/t3work-contextDirectoryBundle";
+import { buildProjectContextEntryPoint } from "~/t3work/t3work-contextCachePaths";
+import { buildProjectContextBundle } from "~/t3work/t3work-projectContextBundle";
+import type { ProjectTicket } from "~/t3work/t3work-types";
+
+const syncStateByWorkspaceRoot = new Map<string, { signature: string; promise?: Promise<void> }>();
+
+function buildProjectWorkspaceSyncSignature(input: {
+  project: ProjectShellProject;
+  linkedRepositoryUrls: ReadonlyArray<string>;
+  projectTickets: ReadonlyArray<ProjectTicket>;
+  setupProfileId: string;
+}): string {
+  return JSON.stringify({
+    projectId: input.project.id,
+    title: input.project.title,
+    workspaceRoot: input.project.workspace?.rootPath ?? null,
+    externalProjectId: input.project.source.externalProjectId ?? null,
+    updatedAt: input.project.updatedAt,
+    setupProfileId: input.setupProfileId,
+    linkedRepositoryUrls: [...input.linkedRepositoryUrls].toSorted(),
+    projectTickets: input.projectTickets
+      .map((ticket) => `${ticket.id}:${ticket.ref.displayId}:${ticket.updatedAt}:${ticket.status}`)
+      .toSorted(),
+  });
+}
+
+export function buildProjectWorkspaceSyncFiles(input: {
+  project: ProjectShellProject;
+  linkedRepositoryUrls: ReadonlyArray<string>;
+  projectTickets: ReadonlyArray<ProjectTicket>;
+  setupProfileId?: string;
+}): ReadonlyArray<ProjectWorkspaceContextFile> {
+  const setupProfileId = resolveT3WorkProjectSetupProfileId(input.setupProfileId);
+  const bundle = buildProjectContextBundle({
+    project: input.project,
+    linkedRepositoryUrls: input.linkedRepositoryUrls,
+    projectTickets: input.projectTickets,
+  });
+  const baseEntryPoint = bundle.files.find(
+    (file) => file.relativePath === T3WORK_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+  );
+  const entryPoint = baseEntryPoint ? (JSON.parse(baseEntryPoint.contents) as object) : {};
+  const files = dedupeDirectoryBundleFiles([
+    ...bundle.files,
+    {
+      relativePath: T3WORK_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+      contents: compactJson({
+        ...entryPoint,
+        syncedAt: new Date().toISOString(),
+        profileId: setupProfileId,
+        contextRoot: T3WORK_PROJECT_CONTEXT_ROOT,
+        projectEntryPointPath: buildProjectContextEntryPoint(input.project.id),
+        referencesManifestPath: ".t3work/references/reference-repositories.json",
+        profilePath: T3WORK_PROJECT_PROFILE_MANIFEST_PATH,
+      }),
+    },
+  ]);
+
+  return files.map((file) => ({
+    relativePath: file.relativePath,
+    contents: file.contents,
+    ...(file.encoding ? { encoding: file.encoding } : {}),
+  }));
+}
+
+async function runProjectWorkspaceSync(input: {
+  backend: BackendApi;
+  project: ProjectShellProject;
+  linkedRepositoryUrls: ReadonlyArray<string>;
+  projectTickets: ReadonlyArray<ProjectTicket>;
+  setupProfileId?: string;
+  ensureBootstrap?: boolean;
+}): Promise<void> {
+  const workspaceRoot = input.project.workspace?.rootPath;
+  if (!workspaceRoot) {
+    return;
+  }
+  const setupProfileId = resolveT3WorkProjectSetupProfileId(input.setupProfileId);
+  if (input.ensureBootstrap !== false) {
+    await input.backend.projectWorkspace.bootstrapWorkspace({
+      workspaceRoot,
+      linkedRepositoryUrls: input.linkedRepositoryUrls,
+      setupProfileId,
+    });
+  }
+  await input.backend.projectWorkspace.writeContextFiles({
+    workspaceRoot,
+    files: buildProjectWorkspaceSyncFiles({
+      project: input.project,
+      linkedRepositoryUrls: input.linkedRepositoryUrls,
+      projectTickets: input.projectTickets,
+      setupProfileId,
+    }),
+  });
+}
+
+export function syncProjectWorkspaceContext(input: {
+  backend: BackendApi;
+  project: ProjectShellProject;
+  linkedRepositoryUrls: ReadonlyArray<string>;
+  projectTickets: ReadonlyArray<ProjectTicket>;
+  setupProfileId?: string;
+  ensureBootstrap?: boolean;
+}): Promise<void> {
+  const workspaceRoot = input.project.workspace?.rootPath;
+  if (!workspaceRoot) {
+    return Promise.resolve();
+  }
+
+  const setupProfileId = resolveT3WorkProjectSetupProfileId(input.setupProfileId);
+  const signature = buildProjectWorkspaceSyncSignature({
+    project: input.project,
+    linkedRepositoryUrls: input.linkedRepositoryUrls,
+    projectTickets: input.projectTickets,
+    setupProfileId,
+  });
+  const existing = syncStateByWorkspaceRoot.get(workspaceRoot);
+  if (existing && existing.signature === signature) {
+    return existing.promise ?? Promise.resolve();
+  }
+
+  const promise = runProjectWorkspaceSync({
+    ...input,
+    setupProfileId,
+  }).finally(() => {
+    const current = syncStateByWorkspaceRoot.get(workspaceRoot);
+    if (current?.promise === promise) {
+      syncStateByWorkspaceRoot.set(workspaceRoot, { signature });
+    }
+  });
+  syncStateByWorkspaceRoot.set(workspaceRoot, { signature, promise });
+  return promise;
+}
+
+export function resetProjectWorkspaceSyncStateForTests(): void {
+  syncStateByWorkspaceRoot.clear();
+}

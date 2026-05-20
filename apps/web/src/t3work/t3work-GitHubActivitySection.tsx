@@ -24,6 +24,7 @@ export function GitHubActivitySection({
   host,
   account,
   loading,
+  lastCheckedAt,
   onItemContextMenu,
 }: {
   title: string;
@@ -33,6 +34,7 @@ export function GitHubActivitySection({
   host?: string;
   account?: string;
   loading?: boolean;
+  lastCheckedAt?: number;
   onItemContextMenu?: (event: React.MouseEvent, item: GitHubWorkActivityItem) => void;
 }) {
   return (
@@ -103,7 +105,10 @@ export function GitHubActivitySection({
                     {rowContent}
                   </TooltipTrigger>
                   <TooltipPopup side="top" align="start" className="max-w-96">
-                    <GitHubActivityTooltipContent item={item} />
+                    <GitHubActivityTooltipContent
+                      item={item}
+                      {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
+                    />
                   </TooltipPopup>
                 </Tooltip>
               </div>

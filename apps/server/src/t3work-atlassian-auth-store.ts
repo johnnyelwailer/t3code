@@ -3,8 +3,10 @@ import {
   type AtlassianAccessibleResource,
   type JiraApiAuth,
   type TokenExchangeResult,
+  refreshAccessToken,
 } from "@t3tools/integrations-atlassian";
 import { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -47,6 +49,8 @@ const PersistedJiraApiAuth = Schema.Union([
     kind: Schema.Literal("oauth"),
     cloudId: Schema.String,
     accessToken: Schema.String,
+    refreshToken: Schema.optional(Schema.String),
+    expiresAt: Schema.optional(Schema.Number),
   }),
   Schema.Struct({
     kind: Schema.Literal("basic"),
@@ -70,6 +74,7 @@ const encodePersistedAtlassianAuths = Schema.encodeEffect(PersistedAtlassianAuth
 
 const mockProvider = new MockIntegrationProvider();
 const atlassianAuths = new Map<string, JiraApiAuth>();
+const OAUTH_REFRESH_SKEW_MS = 60_000;
 
 function persistedAuthsPayload(): PersistedAtlassianAuths {
   return {
@@ -137,18 +142,67 @@ export const savePersistedAuths = Effect.gen(function* () {
   );
 });
 
+function atlassianOAuthClientConfig(): { clientId: string; clientSecret?: string } {
+  const clientId =
+    process.env.T3WORK_ATLASSIAN_CLIENT_ID?.trim() ??
+    process.env.VITE_ATLASSIAN_CLIENT_ID?.trim() ??
+    "";
+  const clientSecret = process.env.T3WORK_ATLASSIAN_CLIENT_SECRET?.trim();
+  return {
+    clientId,
+    ...(clientSecret ? { clientSecret } : {}),
+  };
+}
+
+function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
+  return Effect.gen(function* () {
+    if (auth.kind !== "oauth" || !auth.refreshToken || !auth.expiresAt) {
+      return auth;
+    }
+
+    const now = yield* Clock.currentTimeMillis;
+    if (auth.expiresAt - now > OAUTH_REFRESH_SKEW_MS) {
+      return auth;
+    }
+
+    const config = atlassianOAuthClientConfig();
+    if (!config.clientId) {
+      return auth;
+    }
+
+    const token = yield* Effect.tryPromise({
+      try: () => refreshAccessToken(config, auth.refreshToken!),
+      catch: toAtlassianError("Failed to refresh Atlassian OAuth token."),
+    });
+    const nextAuth: JiraApiAuth = {
+      kind: "oauth",
+      cloudId: auth.cloudId,
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken,
+      expiresAt: now + token.expiresIn * 1000,
+    };
+    atlassianAuths.set(accountId, nextAuth);
+    yield* savePersistedAuths;
+    return nextAuth;
+  });
+}
+
 export function providerForAccount(accountId: string) {
   return Effect.gen(function* () {
     yield* loadPersistedAuths;
     const auth = atlassianAuths.get(accountId);
-    return auth ? new AtlassianIntegrationProvider(auth) : mockProvider;
+    return auth
+      ? new AtlassianIntegrationProvider(yield* refreshOAuthAuthIfNeeded(accountId, auth))
+      : mockProvider;
   });
 }
 
 export function providerForPersistedAuths() {
   return Effect.gen(function* () {
     yield* loadPersistedAuths;
-    const auths = [...atlassianAuths.values()];
+    const auths = yield* Effect.all(
+      [...atlassianAuths].map(([accountId, auth]) => refreshOAuthAuthIfNeeded(accountId, auth)),
+    );
     return auths.length > 0 ? AtlassianIntegrationProvider.fromMultipleAuths(auths) : null;
   });
 }

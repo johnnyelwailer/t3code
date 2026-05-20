@@ -14,6 +14,14 @@ import type {
   IntegrationAccountRef,
 } from "@t3tools/integrations-core";
 import type { ResourcePage, ResourceSnapshot } from "@t3tools/project-context";
+import type {
+  GitHubAssetDownloadRequest,
+  GitHubDownloadedAsset,
+} from "~/t3work/backend/t3work-githubAssetTypes";
+import type {
+  GitHubPullRequestContextRequest,
+  GitHubPullRequestContextResponse,
+} from "~/t3work/backend/t3work-githubTypes";
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 
@@ -67,6 +75,7 @@ export interface ProjectWorkspaceBackendApi {
   readonly bootstrapWorkspace: (input: {
     readonly workspaceRoot: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+    readonly setupProfileId?: string;
   }) => Promise<ProjectWorkspaceBootstrapResult>;
   readonly writeContextFiles: (input: {
     readonly workspaceRoot: string;
@@ -121,6 +130,10 @@ export interface GitHubBackendApi {
     readonly projectTitle?: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
   }) => Promise<GitHubInboxDiscoverResponse>;
+  readonly getPullRequestContext: (
+    input: GitHubPullRequestContextRequest,
+  ) => Promise<GitHubPullRequestContextResponse>;
+  readonly downloadAsset: (input: GitHubAssetDownloadRequest) => Promise<GitHubDownloadedAsset>;
 }
 
 export type AtlassianBasicConnectInput = {
@@ -132,6 +145,17 @@ export type AtlassianBasicConnectInput = {
 export type AtlassianOAuthConnectInput = {
   readonly sites: ReadonlyArray<AtlassianAccessibleResource>;
   readonly token: TokenExchangeResult;
+};
+
+export type AtlassianOAuthExchangeInput = {
+  readonly code: string;
+  readonly codeVerifier: string;
+  readonly redirectUri: string;
+};
+
+export type AtlassianOAuthExchangeResult = {
+  readonly token: TokenExchangeResult;
+  readonly sites: ReadonlyArray<AtlassianAccessibleResource>;
 };
 
 export type AtlassianDownloadedAsset = {
@@ -148,6 +172,9 @@ export interface AtlassianBackendApi {
   readonly connectOAuth: (
     input: AtlassianOAuthConnectInput,
   ) => Promise<ReadonlyArray<IntegrationAccount>>;
+  readonly exchangeOAuthCode: (
+    input: AtlassianOAuthExchangeInput,
+  ) => Promise<AtlassianOAuthExchangeResult>;
   readonly listProjects: (
     account: IntegrationAccountRef,
   ) => Promise<ReadonlyArray<ExternalProject>>;

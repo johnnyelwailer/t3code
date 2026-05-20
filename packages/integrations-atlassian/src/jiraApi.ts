@@ -20,6 +20,8 @@ export type JiraApiAuth =
       readonly kind: "oauth";
       readonly cloudId: string;
       readonly accessToken: string;
+      readonly refreshToken?: string | undefined;
+      readonly expiresAt?: number | undefined;
     }
   | {
       readonly kind: "basic";

@@ -13,7 +13,18 @@ export type CreateProjectInput = {
   readonly raw?: unknown;
 };
 
-const makeWorkspacePath = (projectId: ProjectShellProjectId): string => {
+function normalizeWorkspaceDirectoryName(title: string): string {
+  const normalized = title
+    .trim()
+    .normalize("NFKC")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/g, "")
+    .trim();
+  return normalized.length > 0 ? normalized.slice(0, 80) : "Project";
+}
+
+const makeWorkspacePath = (title: string): string => {
   const maybeProcess = globalThis as typeof globalThis & {
     process?: { env?: Record<string, string | undefined>; platform?: string };
   };
@@ -27,7 +38,7 @@ const makeWorkspacePath = (projectId: ProjectShellProjectId): string => {
         : platform === "browser"
           ? `${home}/.t3code/t3work/projects`
           : `${home}/.config/T3 Code/t3work/projects`;
-  return `${base}/${projectId}`;
+  return `${base}/${normalizeWorkspaceDirectoryName(title)}`;
 };
 
 export const t3workCreateProject = (input: CreateProjectInput) =>
@@ -35,7 +46,7 @@ export const t3workCreateProject = (input: CreateProjectInput) =>
     const now = yield* DateTime.now;
     const id = crypto.randomUUID() as ProjectShellProjectId;
     const workspace = {
-      rootPath: makeWorkspacePath(id),
+      rootPath: makeWorkspacePath(input.title),
       createdAt: DateTime.formatIso(now),
     };
 

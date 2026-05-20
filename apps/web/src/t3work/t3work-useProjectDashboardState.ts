@@ -11,7 +11,7 @@ export function useProjectDashboardState({
   project: ProjectShellProject;
   fallbackTickets: ProjectTicket[];
 }) {
-  const { tickets: fetchedTickets } = useProjectResources(project);
+  const { tickets: fetchedTickets, lastCheckedAt } = useProjectResources(project);
   const tickets = fetchedTickets.length > 0 ? fetchedTickets : fallbackTickets;
 
   const openTickets = tickets.filter(
@@ -167,6 +167,7 @@ export function useProjectDashboardState({
 
   return {
     tickets,
+    jiraLastCheckedAt: lastCheckedAt,
     openTickets,
     inReviewTickets,
     doneTickets,

@@ -3,17 +3,14 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import type { MouseEvent } from "react";
 
 import { SidebarMenuSubButton } from "~/t3work/components/ui/t3work-sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
 import { JiraIssueTypeIcon } from "~/t3work/components/ticket/t3work-JiraIssueType";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { GitHubActivityInlineList } from "~/t3work/t3work-GitHubActivityViews";
-import {
-  buildGitHubActivityContextBundle,
-  buildGitHubActivityDisplay,
-} from "~/t3work/t3work-githubActivityContextPayload";
+import { TicketCardDetailsTooltip } from "~/t3work/t3work-TicketCardDetailsTooltip";
+import { createGitHubActivityAddToChatRequest } from "~/t3work/t3work-githubActivityAttachmentRequest";
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
-import type { AddToChatPayloadInput } from "~/t3work/t3work-addToChatUtils";
 import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
-import { buildTicketContextBundle } from "~/t3work/t3work-ticketContextBundle";
 import { ThreadRow } from "./t3work-ProjectSidebarThreadRow";
 import { buildTicketSidebarAddToChatRequest } from "./t3work-projectSidebarAddToChatRequests";
 import type { ProjectThread, ProjectTicket, ViewState } from "~/t3work/t3work-types";
@@ -26,7 +23,9 @@ export interface TicketSidebarEntryProps {
   projectId: string;
   view: ViewState | null;
   ticketThreads: readonly ProjectThread[];
+  jiraLastCheckedAt?: number;
   githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
+  githubActivityLastCheckedAt?: number;
   showGitHubActivity: boolean;
   onSelectTicket: (projectId: string, ticketId: string) => void;
   onCreateTicketThread: (input: {
@@ -46,7 +45,9 @@ export function TicketSidebarEntry({
   projectId,
   view,
   ticketThreads,
+  jiraLastCheckedAt,
   githubActivityItems,
+  githubActivityLastCheckedAt,
   showGitHubActivity,
   onSelectTicket,
   onCreateTicketThread,
@@ -95,24 +96,36 @@ export function TicketSidebarEntry({
       onContextMenu={handleContextMenu}
     >
       <div className="relative">
-        <SidebarMenuSubButton
-          size="sm"
-          isActive={view?.type === "ticket" && view.ticketId === ticket.id}
-          className="h-auto min-h-8 w-full flex-col items-start py-1"
-          onClick={() => onSelectTicket(projectId, ticket.id)}
-        >
-          <div className="flex w-full items-center gap-1">
-            <JiraIssueTypeIcon
-              issueType={ticket.issueType}
-              issueTypeIconUrl={ticket.issueTypeIconUrl ?? ticket.ref.issueTypeIconUrl}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <SidebarMenuSubButton
+                size="sm"
+                isActive={view?.type === "ticket" && view.ticketId === ticket.id}
+                className="h-auto min-h-8 w-full flex-col items-start py-1"
+                onClick={() => onSelectTicket(projectId, ticket.id)}
+              />
+            }
+          >
+            <div className="flex w-full items-center gap-1">
+              <JiraIssueTypeIcon
+                issueType={ticket.issueType}
+                issueTypeIconUrl={ticket.issueTypeIconUrl ?? ticket.ref.issueTypeIconUrl}
+              />
+              <span className="truncate text-[11px] font-medium">{ticket.ref.displayId}</span>
+              <span className="ml-1 text-[10px] text-muted-foreground/75">{ticket.status}</span>
+            </div>
+            <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
+              {ticket.ref.title}
+            </div>
+          </TooltipTrigger>
+          <TooltipPopup side="top" align="start" className="max-w-84">
+            <TicketCardDetailsTooltip
+              ticket={ticket}
+              {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
             />
-            <span className="truncate text-[11px] font-medium">{ticket.ref.displayId}</span>
-            <span className="ml-1 text-[10px] text-muted-foreground/75">{ticket.status}</span>
-          </div>
-          <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
-            {ticket.ref.title}
-          </div>
-        </SidebarMenuSubButton>
+          </TooltipPopup>
+        </Tooltip>
 
         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-start opacity-0 transition-opacity duration-150 group-hover/ticket:pointer-events-auto group-hover/ticket:opacity-100">
           <div className="h-full w-6 bg-gradient-to-r from-transparent to-card" />
@@ -171,36 +184,21 @@ export function TicketSidebarEntry({
             items={githubActivityItems}
             limit={2}
             compact
+            {...(githubActivityLastCheckedAt !== undefined
+              ? { lastCheckedAt: githubActivityLastCheckedAt }
+              : {})}
             onItemContextMenu={(event, item) => {
-              const display = buildGitHubActivityDisplay({ item });
-              void showAddToChatContextMenu(event, {
-                projectId,
-                projectTitle: project.title,
-                projectWorkspaceRoot: project.workspace?.rootPath,
-                targetLabel: display.targetLabel,
-                targetType: display.targetType,
-                kind: display.activityKind,
-                dedupeKey: `${projectId}:github-activity:${item.id}`,
-                summaryItems: display.summaryItems,
-                payload: async (input?: AddToChatPayloadInput) => {
-                  const linkedTicketBundle = backend
-                    ? await buildTicketContextBundle({
-                        backend,
-                        project,
-                        ticket,
-                        projectTickets,
-                        githubActivityItems,
-                        ...(input?.reportProgress ? { onProgress: input.reportProgress } : {}),
-                      })
-                    : undefined;
-                  return buildGitHubActivityContextBundle({
-                    project,
-                    item,
-                    linkedWorkItem: ticket,
-                    ...(linkedTicketBundle ? { linkedTicketBundle } : {}),
-                  });
-                },
-              });
+              void showAddToChatContextMenu(
+                event,
+                createGitHubActivityAddToChatRequest({
+                  backend,
+                  project,
+                  item,
+                  linkedWorkItem: ticket,
+                  projectTickets,
+                  githubActivityItems,
+                }),
+              );
             }}
           />
         </div>

@@ -18,11 +18,13 @@ export function GitHubActivityInlineList({
   items,
   limit = 3,
   compact,
+  lastCheckedAt,
   onItemContextMenu,
 }: {
   items: ReadonlyArray<GitHubWorkActivityItem>;
   limit?: number;
   compact?: boolean;
+  lastCheckedAt?: number;
   onItemContextMenu?: (event: React.MouseEvent, item: GitHubWorkActivityItem) => void;
 }) {
   if (items.length === 0) return null;
@@ -91,7 +93,10 @@ export function GitHubActivityInlineList({
                   {rowContent}
                 </TooltipTrigger>
                 <TooltipPopup side="top" align="start" className="max-w-96">
-                  <GitHubActivityTooltipContent item={item} />
+                  <GitHubActivityTooltipContent
+                    item={item}
+                    {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
+                  />
                 </TooltipPopup>
               </Tooltip>
             </div>

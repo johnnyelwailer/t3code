@@ -1,13 +1,12 @@
 import { useCallback, useRef, useState } from "react";
 import {
-  AtlassianOAuthApiClient,
   generatePkce,
   buildAuthorizeUrl,
-  buildOAuthCallbackHandler,
   type AtlassianAccessibleResource,
   type AtlassianOAuthConfig,
   type TokenExchangeResult,
 } from "@t3tools/integrations-atlassian";
+import { useBackend } from "~/t3work/backend/t3work-index";
 
 const OAUTH_POPUP_WIDTH = 500;
 const OAUTH_POPUP_HEIGHT = 600;
@@ -83,6 +82,7 @@ export type UseAtlassianOAuthResult = {
 };
 
 export function useAtlassianOAuth(): UseAtlassianOAuthResult {
+  const backend = useBackend();
   const [state, setState] = useState<OAuthState>({ kind: "idle" });
   const abortRef = useRef<(() => void) | null>(null);
 
@@ -92,52 +92,72 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
     setState({ kind: "idle" });
   }, []);
 
-  const startOAuth = useCallback(async (clientId?: string) => {
-    const resolvedClientId = clientId ?? __ATLASSIAN_CLIENT_ID__;
-    if (!resolvedClientId) {
-      setState({
-        kind: "error",
-        message:
-          "Atlassian OAuth is not configured. Set VITE_ATLASSIAN_CLIENT_ID or provide a client ID.",
-      });
-      return;
-    }
-
-    const redirectUri = `${window.location.origin}/oauth/callback`;
-    const config: AtlassianOAuthConfig = {
-      clientId: resolvedClientId,
-      redirectUri,
-    };
-
-    setState({ kind: "opening" });
-
-    try {
-      const pkce = await generatePkce();
-      const stateParam = crypto.randomUUID();
-      const authUrl = buildAuthorizeUrl(config, pkce, stateParam);
-
-      setState({ kind: "waiting" });
-      const popup = openOAuthPopup(authUrl);
-      if (!popup) {
-        throw new Error("Failed to open OAuth popup. Check your popup blocker settings.");
+  const startOAuth = useCallback(
+    async (clientId?: string) => {
+      const resolvedClientId = clientId ?? __ATLASSIAN_CLIENT_ID__;
+      if (!resolvedClientId) {
+        setState({
+          kind: "error",
+          message:
+            "Atlassian OAuth is not configured. Set VITE_ATLASSIAN_CLIENT_ID or provide a client ID.",
+        });
+        return;
       }
 
-      const callbackUrl = await waitForCallback(popup, redirectUri);
+      const redirectUri = `${window.location.origin}/oauth/callback`;
+      const config: AtlassianOAuthConfig = {
+        clientId: resolvedClientId,
+        redirectUri,
+      };
 
-      setState({ kind: "exchanging" });
-      const handler = buildOAuthCallbackHandler(config, stateParam, pkce.codeVerifier);
-      const token = await handler(callbackUrl);
+      setState({ kind: "opening" });
 
-      setState({ kind: "listing_sites" });
-      const oauthClient = new AtlassianOAuthApiClient(config, token);
-      const sites = await oauthClient.listAccessibleResources();
+      try {
+        const pkce = await generatePkce();
+        const stateParam = crypto.randomUUID();
+        const authUrl = buildAuthorizeUrl(config, pkce, stateParam);
 
-      setState({ kind: "done", token, sites });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "OAuth failed";
-      setState({ kind: "error", message });
-    }
-  }, []);
+        setState({ kind: "waiting" });
+        const popup = openOAuthPopup(authUrl);
+        if (!popup) {
+          throw new Error("Failed to open OAuth popup. Check your popup blocker settings.");
+        }
+
+        const callbackUrl = await waitForCallback(popup, redirectUri);
+        const callback = new URL(callbackUrl);
+        const code = callback.searchParams.get("code");
+        const returnedState = callback.searchParams.get("state");
+        const error = callback.searchParams.get("error");
+        const errorDescription = callback.searchParams.get("error_description");
+
+        if (error) {
+          throw new Error(`OAuth error: ${error} ${errorDescription ?? ""}`.trim());
+        }
+        if (returnedState !== stateParam) {
+          throw new Error("OAuth state mismatch. Possible CSRF attack.");
+        }
+        if (!code) {
+          throw new Error("No authorization code in callback.");
+        }
+        if (!backend) {
+          throw new Error("Backend not available");
+        }
+
+        setState({ kind: "exchanging" });
+        const { token, sites } = await backend.atlassian.exchangeOAuthCode({
+          code,
+          codeVerifier: pkce.codeVerifier,
+          redirectUri,
+        });
+
+        setState({ kind: "done", token, sites });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "OAuth failed";
+        setState({ kind: "error", message });
+      }
+    },
+    [backend],
+  );
 
   return { state, startOAuth, reset };
 }

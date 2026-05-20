@@ -38,6 +38,7 @@ export function ProjectDashboard({
 
   const {
     tickets,
+    jiraLastCheckedAt,
     openTickets,
     inReviewTickets,
     doneTickets,
@@ -165,6 +166,10 @@ export function ProjectDashboard({
                 kanbanColumns={kanbanColumns}
                 parentChildGroups={parentChildGroups}
                 githubActivityByWorkItem={githubActivity.activityByWorkItem}
+                {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
+                {...(githubActivity.lastCheckedAt !== undefined
+                  ? { githubLastCheckedAt: githubActivity.lastCheckedAt }
+                  : {})}
                 projectId={project.id}
                 onOpenTicket={onOpenTicket}
               />

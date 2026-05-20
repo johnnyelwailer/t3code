@@ -2,8 +2,8 @@ import { CornerDownRight, GitBranch } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 import { JiraIssueTypeIcon } from "~/t3work/components/ticket/t3work-JiraIssueType";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
-import { TicketCardDetailsTooltip } from "~/t3work/t3work-TicketCardDetailsTooltip";
+import { Tooltip, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
+import { TicketTooltipPopup } from "~/t3work/t3work-TicketTooltipPopup";
 
 export function TicketWorkItemCard({
   ticket,
@@ -12,6 +12,7 @@ export function TicketWorkItemCard({
   flat,
   child,
   childCount,
+  lastCheckedAt,
   extraChildren,
   onContextMenu,
 }: {
@@ -21,10 +22,10 @@ export function TicketWorkItemCard({
   flat?: boolean;
   child?: boolean;
   childCount?: number;
+  lastCheckedAt?: number;
   extraChildren?: ReactNode;
   onContextMenu?: (event: React.MouseEvent) => void;
 }) {
-  const shouldUseCompactTooltip = compact;
   const cardContent = (
     <div
       className={`h-full overflow-hidden rounded-md border shadow-sm transition-all hover:-translate-y-px hover:bg-accent/35 hover:shadow-md @container/ticket-card ${
@@ -108,22 +109,17 @@ export function TicketWorkItemCard({
       onContextMenu={onContextMenu}
     >
       {child && <span className="absolute top-2 left-0 h-px w-2 bg-border/70" aria-hidden />}
-      {shouldUseCompactTooltip ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={<button type="button" className="block w-full text-left" onClick={onOpen} />}
-          >
-            {cardContent}
-          </TooltipTrigger>
-          <TooltipPopup side="top" align="start" className="max-w-84">
-            <TicketCardDetailsTooltip ticket={ticket} />
-          </TooltipPopup>
-        </Tooltip>
-      ) : (
-        <button type="button" className="block w-full text-left" onClick={onOpen}>
+      <Tooltip>
+        <TooltipTrigger
+          render={<button type="button" className="block w-full text-left" onClick={onOpen} />}
+        >
           {cardContent}
-        </button>
-      )}
+        </TooltipTrigger>
+        <TicketTooltipPopup
+          ticket={ticket}
+          {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
+        />
+      </Tooltip>
       {extraChildren}
     </div>
   );
@@ -134,6 +130,7 @@ export function TicketWorkItemRow({
   onOpen,
   child,
   childCount,
+  lastCheckedAt,
   extraChildren,
   onContextMenu,
 }: {
@@ -141,55 +138,66 @@ export function TicketWorkItemRow({
   onOpen: () => void;
   child?: boolean;
   childCount?: number;
+  lastCheckedAt?: number;
   extraChildren?: ReactNode;
   onContextMenu?: (event: React.MouseEvent) => void;
 }) {
   return (
     <div className="w-full" onContextMenu={onContextMenu}>
-      <button
-        type="button"
-        className={`flex w-full items-start gap-2 rounded-md border border-transparent px-1 py-1 text-left transition-colors hover:border-border/50 hover:bg-accent/25 ${child ? "relative pl-3" : ""}`}
-        onClick={onOpen}
-      >
-        {child && <span className="absolute top-2 left-0 h-px w-2 bg-border/70" aria-hidden />}
-        <JiraIssueTypeIcon
-          issueType={ticket.issueType}
-          issueTypeIconUrl={ticket.issueTypeIconUrl ?? ticket.ref.issueTypeIconUrl}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
-              {ticket.ref.displayId}
-            </span>
-            {child ? (
-              <span
-                className="inline-flex items-center text-muted-foreground/75"
-                aria-label="Child item"
-              >
-                <CornerDownRight className="size-3" />
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              className={`flex w-full items-start gap-2 rounded-md border border-transparent px-1 py-1 text-left transition-colors hover:border-border/50 hover:bg-accent/25 ${child ? "relative pl-3" : ""}`}
+              onClick={onOpen}
+            />
+          }
+        >
+          {child && <span className="absolute top-2 left-0 h-px w-2 bg-border/70" aria-hidden />}
+          <JiraIssueTypeIcon
+            issueType={ticket.issueType}
+            issueTypeIconUrl={ticket.issueTypeIconUrl ?? ticket.ref.issueTypeIconUrl}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                {ticket.ref.displayId}
               </span>
-            ) : childCount ? (
-              <span
-                className="inline-flex items-center gap-1 rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                aria-label={`${childCount} child items`}
-              >
-                <GitBranch className="size-3" />
-                <span className="tabular-nums">{childCount}</span>
-              </span>
-            ) : null}
-            <span className="text-[10px] text-muted-foreground/75">{ticket.status}</span>
-            {ticket.priority && (
-              <span className="rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {ticket.priority}
-              </span>
+              {child ? (
+                <span
+                  className="inline-flex items-center text-muted-foreground/75"
+                  aria-label="Child item"
+                >
+                  <CornerDownRight className="size-3" />
+                </span>
+              ) : childCount ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                  aria-label={`${childCount} child items`}
+                >
+                  <GitBranch className="size-3" />
+                  <span className="tabular-nums">{childCount}</span>
+                </span>
+              ) : null}
+              <span className="text-[10px] text-muted-foreground/75">{ticket.status}</span>
+              {ticket.priority && (
+                <span className="rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {ticket.priority}
+                </span>
+              )}
+            </div>
+            <div className="mt-0.5 text-sm font-medium leading-5">{ticket.ref.title}</div>
+            {ticket.assignee && (
+              <div className="text-xs text-muted-foreground">Assigned to {ticket.assignee}</div>
             )}
           </div>
-          <div className="mt-0.5 text-sm font-medium leading-5">{ticket.ref.title}</div>
-          {ticket.assignee && (
-            <div className="text-xs text-muted-foreground">Assigned to {ticket.assignee}</div>
-          )}
-        </div>
-      </button>
+        </TooltipTrigger>
+        <TicketTooltipPopup
+          ticket={ticket}
+          {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
+        />
+      </Tooltip>
       {extraChildren}
     </div>
   );

@@ -4,10 +4,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
 import type { AddToChatPayloadInput } from "~/t3work/t3work-addToChatUtils";
-import {
-  buildGitHubActivityContextBundle,
-  buildGitHubActivityDisplay,
-} from "~/t3work/t3work-githubActivityContextPayload";
+import { createGitHubActivityAddToChatRequest } from "~/t3work/t3work-githubActivityAttachmentRequest";
 import { buildJiraWorkItemSummary } from "~/t3work/t3work-jiraContextMetadata";
 import { buildTicketContextBundle } from "~/t3work/t3work-ticketContextBundle";
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
@@ -59,36 +56,18 @@ export function useTicketAddToChatContextMenus(input: {
     ticket: ProjectTicket,
     item: GitHubWorkActivityItem,
   ) => {
-    const display = buildGitHubActivityDisplay({ item });
     const githubItems = githubActivityByWorkItem.get(ticket.ref.displayId) ?? [];
-    void showAddToChatContextMenu(event, {
-      projectId,
-      projectTitle: project.title,
-      projectWorkspaceRoot: project.workspace?.rootPath,
-      targetLabel: display.targetLabel,
-      targetType: display.targetType,
-      kind: display.activityKind,
-      dedupeKey: `${projectId}:github-activity:${item.id}`,
-      summaryItems: display.summaryItems,
-      payload: async (input?: AddToChatPayloadInput) => {
-        const linkedTicketBundle = backend
-          ? await buildTicketContextBundle({
-              backend,
-              project,
-              ticket,
-              projectTickets,
-              githubActivityItems: githubItems,
-              ...(input?.reportProgress ? { onProgress: input.reportProgress } : {}),
-            })
-          : undefined;
-        return buildGitHubActivityContextBundle({
-          project,
-          item,
-          linkedWorkItem: ticket,
-          ...(linkedTicketBundle ? { linkedTicketBundle } : {}),
-        });
-      },
-    });
+    void showAddToChatContextMenu(
+      event,
+      createGitHubActivityAddToChatRequest({
+        backend,
+        project,
+        item,
+        linkedWorkItem: ticket,
+        projectTickets,
+        githubActivityItems: githubItems,
+      }),
+    );
   };
 
   return {

@@ -39,6 +39,7 @@ export async function generatePkce(): Promise<PkcePair> {
 export type AtlassianOAuthConfig = {
   readonly clientId: string;
   readonly redirectUri: string;
+  readonly clientSecret?: string;
   readonly scopes?: ReadonlyArray<string>;
 };
 
@@ -80,6 +81,7 @@ export async function exchangeCode(
     body: JSON.stringify({
       grant_type: "authorization_code",
       client_id: config.clientId,
+      ...(config.clientSecret ? { client_secret: config.clientSecret } : {}),
       code,
       redirect_uri: config.redirectUri,
       code_verifier: codeVerifier,
@@ -107,7 +109,7 @@ export async function exchangeCode(
 }
 
 export async function refreshAccessToken(
-  config: Pick<AtlassianOAuthConfig, "clientId">,
+  config: Pick<AtlassianOAuthConfig, "clientId" | "clientSecret">,
   refreshToken: string,
 ): Promise<TokenExchangeResult> {
   const response = await fetch(`${AUTH_BASE}/oauth/token`, {
@@ -118,6 +120,7 @@ export async function refreshAccessToken(
     body: JSON.stringify({
       grant_type: "refresh_token",
       client_id: config.clientId,
+      ...(config.clientSecret ? { client_secret: config.clientSecret } : {}),
       refresh_token: refreshToken,
     }),
   });

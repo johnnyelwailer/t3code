@@ -22,6 +22,29 @@ export function resolveHttpBaseUrl(rawUrl: string): string {
   return resolved.toString();
 }
 
+function buildBackendFetchErrorMessage(input: { url: URL; error: unknown }): string {
+  const reason = input.error instanceof Error ? input.error.message : String(input.error);
+  const browserOrigin = globalThis.location?.origin;
+  const isCrossOrigin = browserOrigin ? browserOrigin !== input.url.origin : false;
+
+  const parts = [
+    `Failed to reach backend ${input.url.pathname} at ${input.url.origin}.`,
+    `Fetch error: ${reason}.`,
+  ];
+
+  if (browserOrigin) {
+    parts.push(`Browser origin: ${browserOrigin}.`);
+  }
+
+  if (isCrossOrigin) {
+    parts.push(
+      "This is a cross-origin browser request. If the backend is running, a CORS mismatch or blocked preflight likely prevented the request from reaching the route.",
+    );
+  }
+
+  return parts.join(" ");
+}
+
 export async function postJson<TInput extends object, TResponse>(
   httpBaseUrl: string,
   routePath: string,
@@ -30,11 +53,18 @@ export async function postJson<TInput extends object, TResponse>(
   const url = new URL(routePath, httpBaseUrl);
   const response = await fetch(url, {
     method: "POST",
-    credentials: "include",
+    credentials: "same-origin",
     headers: {
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
+  }).catch((error) => {
+    throw new Error(
+      buildBackendFetchErrorMessage({
+        url,
+        error,
+      }),
+    );
   });
 
   const payload = (await response.json().catch(() => null)) as
@@ -49,7 +79,7 @@ export async function postJson<TInput extends object, TResponse>(
       "error" in payload &&
       typeof payload.error === "string"
         ? payload.error
-        : `Request failed with ${response.status}`;
+        : `Request to ${url.pathname} failed with ${response.status}`;
     throw new Error(errorMessage);
   }
 

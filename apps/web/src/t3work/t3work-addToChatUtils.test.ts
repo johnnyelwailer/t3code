@@ -37,17 +37,17 @@ describe("t3work add-to-chat utils", () => {
     const payload: T3WorkDirectoryBundlePayload = {
       kind: "t3work-directory-bundle",
       dedupeKey: "project-alpha:PROJ-7:work-item",
-      bundleRootRelativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7",
+      bundleRootRelativePath: ".t3work/context/jira/project-alpha/items/proj-7",
       files: [
         {
-          relativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7/entrypoint.json",
+          relativePath: ".t3work/context/jira/project-alpha/items/proj-7/entrypoint.json",
           contents: '{"kind":"jira-work-item"}',
         },
       ],
       fileReferences: [
         {
           label: "Ticket entrypoint",
-          relativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7/entrypoint.json",
+          relativePath: ".t3work/context/jira/project-alpha/items/proj-7/entrypoint.json",
         },
       ],
       lightweightItem: { kind: "jira-work-item", label: "PROJ-7 Investigate context sync" },
@@ -62,9 +62,7 @@ describe("t3work add-to-chat utils", () => {
     });
 
     expect(attachment.fileReferences).toEqual(payload.fileReferences);
-    expect(attachment.contextText).toContain(
-      ".t3work/context-cache/jira/project-alpha/items/proj-7",
-    );
+    expect(attachment.contextText).toContain(".t3work/context/jira/project-alpha/items/proj-7");
     expect(attachment.contextText).toContain("- Synced at: 2026-05-18T12:34:56.000Z");
   });
 });

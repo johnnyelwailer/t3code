@@ -2,7 +2,7 @@ import { TicketWorkItemCard, TicketWorkItemRow } from "~/t3work/t3work-ProjectDa
 import { T3SurfacePanel } from "~/t3work/components/ui/t3work-surface";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
-import { GitHubActivityInlineList } from "~/t3work/t3work-GitHubActivityViews";
+import { ProjectDashboardTicketGitHubActivity } from "~/t3work/t3work-ProjectDashboardTicketGitHubActivity";
 
 type TicketHierarchy = {
   roots: readonly ProjectTicket[];
@@ -15,6 +15,8 @@ export function ProjectDashboardHierarchyContent({
   parentChildGroups,
   showGitHubActivity,
   githubActivityByWorkItem,
+  jiraLastCheckedAt,
+  githubLastCheckedAt,
   projectId,
   onTicketContextMenu,
   onGitHubActivityContextMenu,
@@ -24,6 +26,8 @@ export function ProjectDashboardHierarchyContent({
   parentChildGroups: TicketHierarchy;
   showGitHubActivity: boolean;
   githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
+  jiraLastCheckedAt?: number;
+  githubLastCheckedAt?: number;
   projectId: string;
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
   onGitHubActivityContextMenu: (
@@ -33,15 +37,16 @@ export function ProjectDashboardHierarchyContent({
   ) => void;
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const renderGitHubActivity = (ticket: ProjectTicket, limit: number, compact?: boolean) =>
-    showGitHubActivity ? (
-      <GitHubActivityInlineList
-        items={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
-        limit={limit}
-        {...(compact ? { compact } : {})}
-        onItemContextMenu={(event, item) => onGitHubActivityContextMenu(event, ticket, item)}
-      />
-    ) : null;
+  const renderGitHubActivity = (ticket: ProjectTicket, limit: number, compact?: boolean) => (
+    <ProjectDashboardTicketGitHubActivity
+      items={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
+      enabled={showGitHubActivity}
+      limit={limit}
+      {...(compact ? { compact } : {})}
+      {...(githubLastCheckedAt !== undefined ? { lastCheckedAt: githubLastCheckedAt } : {})}
+      onItemContextMenu={(event, item) => onGitHubActivityContextMenu(event, ticket, item)}
+    />
+  );
 
   if (viewMode === "list") {
     return (
@@ -53,6 +58,7 @@ export function ProjectDashboardHierarchyContent({
               <TicketWorkItemRow
                 ticket={parent}
                 childCount={children.length}
+                {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
                 onContextMenu={(event) => onTicketContextMenu(event, parent)}
                 extraChildren={renderGitHubActivity(parent, 3)}
                 onOpen={() => onOpenTicket(projectId, parent.id)}
@@ -65,6 +71,9 @@ export function ProjectDashboardHierarchyContent({
                         key={child.id}
                         ticket={child}
                         child
+                        {...(jiraLastCheckedAt !== undefined
+                          ? { lastCheckedAt: jiraLastCheckedAt }
+                          : {})}
                         onContextMenu={(event) => onTicketContextMenu(event, child)}
                         extraChildren={renderGitHubActivity(child, 2, true)}
                         onOpen={() => onOpenTicket(projectId, child.id)}
@@ -86,6 +95,7 @@ export function ProjectDashboardHierarchyContent({
                   key={child.id}
                   ticket={child}
                   child
+                  {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
                   onContextMenu={(event) => onTicketContextMenu(event, child)}
                   extraChildren={renderGitHubActivity(child, 2, true)}
                   onOpen={() => onOpenTicket(projectId, child.id)}
@@ -108,6 +118,7 @@ export function ProjectDashboardHierarchyContent({
               ticket={ticket}
               flat
               childCount={children.length}
+              {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
               onContextMenu={(event) => onTicketContextMenu(event, ticket)}
               extraChildren={renderGitHubActivity(ticket, 3)}
               onOpen={() => onOpenTicket(projectId, ticket.id)}
@@ -122,6 +133,9 @@ export function ProjectDashboardHierarchyContent({
                       compact
                       flat
                       child
+                      {...(jiraLastCheckedAt !== undefined
+                        ? { lastCheckedAt: jiraLastCheckedAt }
+                        : {})}
                       onContextMenu={(event) => onTicketContextMenu(event, child)}
                       extraChildren={renderGitHubActivity(child, 2, true)}
                       onOpen={() => onOpenTicket(projectId, child.id)}

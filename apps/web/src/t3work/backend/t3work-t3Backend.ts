@@ -9,6 +9,10 @@ import {
   createGitHubBackendApi,
   createProjectWorkspaceBackendApi,
 } from "./t3work-t3BackendApis";
+import {
+  createAtlassianPollingBackendApi,
+  createGitHubPollingBackendApi,
+} from "./t3work-pollingBackend";
 import { resolveHttpBaseUrl, resolveWsUrl } from "./t3work-t3BackendHttp";
 
 export function createT3Backend(wsBaseUrl: string): BackendApi {
@@ -62,8 +66,14 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     await api.orchestration.dispatchCommand(command);
   }
 
-  const atlassian = createAtlassianBackendApi(httpBaseUrl);
-  const github = createGitHubBackendApi(httpBaseUrl);
+  const atlassian = {
+    ...createAtlassianBackendApi(httpBaseUrl),
+    ...createAtlassianPollingBackendApi(httpBaseUrl),
+  };
+  const github = {
+    ...createGitHubBackendApi(httpBaseUrl),
+    ...createGitHubPollingBackendApi(httpBaseUrl),
+  };
   const projectWorkspace = createProjectWorkspaceBackendApi(httpBaseUrl);
 
   return {

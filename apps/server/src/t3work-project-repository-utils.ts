@@ -7,6 +7,7 @@ import { T3workAtlassianError } from "./t3work-atlassian-http.ts";
 export type BootstrapWorkspaceRequest = {
   readonly workspaceRoot: string;
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+  readonly setupProfileId?: string;
 };
 
 export type LinkedRepositoryBootstrapResult = {

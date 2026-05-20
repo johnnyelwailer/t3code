@@ -1,3 +1,5 @@
+import { T3WORK_PROJECT_CONTEXT_ROOT } from "~/t3work/t3work-projectSetup";
+
 function sanitizePathSegment(input: string): string {
   const value = input
     .toLowerCase()
@@ -21,8 +23,8 @@ function sanitizeFileLeaf(input: string): string {
   return `${safeBase}${extension}`;
 }
 
-export function buildProjectContextCacheRoot(projectId: string): string {
-  return `.t3work/context-cache/projects/${sanitizePathSegment(projectId)}`;
+export function buildProjectContextCacheRoot(_projectId: string): string {
+  return T3WORK_PROJECT_CONTEXT_ROOT;
 }
 
 export function buildProjectContextEntryPoint(projectId: string): string {
@@ -30,7 +32,7 @@ export function buildProjectContextEntryPoint(projectId: string): string {
 }
 
 export function buildJiraTicketCacheRoot(projectId: string, ticketKey: string): string {
-  return `.t3work/context-cache/jira/${sanitizePathSegment(projectId)}/items/${sanitizePathSegment(ticketKey)}`;
+  return `${T3WORK_PROJECT_CONTEXT_ROOT}/jira/${sanitizePathSegment(projectId)}/items/${sanitizePathSegment(ticketKey)}`;
 }
 
 export function buildJiraTicketEntryPoint(projectId: string, ticketKey: string): string {
@@ -70,7 +72,7 @@ export function buildGitHubActivityCacheRoot(input: {
   repository: string;
   activityId: string;
 }): string {
-  return `.t3work/context-cache/github/${sanitizePathSegment(input.projectId)}/${sanitizePathSegment(
+  return `${T3WORK_PROJECT_CONTEXT_ROOT}/github/${sanitizePathSegment(input.projectId)}/${sanitizePathSegment(
     input.repository,
   )}/${sanitizePathSegment(input.activityId)}`;
 }

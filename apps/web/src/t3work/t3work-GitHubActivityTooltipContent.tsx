@@ -4,8 +4,9 @@ import {
   DiffRemovedIcon,
   FileDiffIcon,
 } from "@primer/octicons-react";
-import type { ComponentType } from "react";
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
+import { formatLastCheckedAt } from "~/t3work/t3work-integrationFreshness";
+import { AuthorAvatar, MetadataRow, StatChip } from "~/t3work/t3work-GitHubActivityTooltipParts";
 import {
   formatPullRequestState,
   isActiveReviewRequested,
@@ -37,70 +38,20 @@ function parseOwnerAndRepo(repository: string): { owner: string; repo: string } 
   return { owner, repo };
 }
 
-function MetadataRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[4.25rem_1fr] gap-2">
-      <span className="text-muted-foreground/80">{label}</span>
-      <span className="text-foreground">{value}</span>
-    </div>
-  );
-}
-
-function StatChip({
-  label,
-  value,
-  tone,
-  Icon,
+export function GitHubActivityTooltipContent({
+  item,
+  lastCheckedAt,
 }: {
-  label: string;
-  value: string;
-  tone: "neutral" | "positive" | "negative";
-  Icon?: ComponentType<{ className?: string }>;
+  item: GitHubWorkActivityItem;
+  lastCheckedAt?: number;
 }) {
-  const toneClass =
-    tone === "positive"
-      ? "text-emerald-700 dark:text-emerald-400"
-      : tone === "negative"
-        ? "text-rose-700 dark:text-rose-400"
-        : "text-foreground/80";
-  return (
-    <div className={`inline-flex items-center gap-1.5 ${toneClass}`}>
-      {Icon ? <Icon className="size-3" /> : null}
-      <span className="text-[10px] font-semibold tabular-nums">{value}</span>
-      <span className="text-[10px] text-muted-foreground/80">{label}</span>
-    </div>
-  );
-}
-
-function AuthorAvatar({
-  login,
-  avatarUrl,
-}: {
-  login: string | undefined;
-  avatarUrl: string | undefined;
-}) {
-  if (!login && !avatarUrl) return null;
-  const fallback = (login?.[0] ?? "?").toUpperCase();
-  return avatarUrl ? (
-    <img
-      src={avatarUrl}
-      alt={login ? `@${login}` : "GitHub author"}
-      className="size-7 rounded-full border border-border/70 object-cover"
-    />
-  ) : (
-    <div className="inline-flex size-7 items-center justify-center rounded-full border border-border/70 bg-muted/40 text-[10px] font-semibold text-foreground/80">
-      {fallback}
-    </div>
-  );
-}
-
-export function GitHubActivityTooltipContent({ item }: { item: GitHubWorkActivityItem }) {
   const prNumber = parsePullRequestNumber(item.subjectUrl);
   const state = formatPullRequestState(item.subjectState);
   const reviewRequested = isActiveReviewRequested(item);
   const reason =
     reviewRequested || isRedundantPullRequestReason(item) ? undefined : formatReason(item.reason);
   const absoluteUpdatedAt = formatAbsoluteTime(item.updatedAt);
+  const lastChecked = formatLastCheckedAt(lastCheckedAt);
   const ownerAndRepo = parseOwnerAndRepo(item.repository);
   const owner = "owner" in ownerAndRepo ? ownerAndRepo.owner : undefined;
   const totalCommentCount =
@@ -201,6 +152,7 @@ export function GitHubActivityTooltipContent({ item }: { item: GitHubWorkActivit
         {item.authorLogin ? <MetadataRow label="Author" value={`@${item.authorLogin}`} /> : null}
         {item.subjectBranch ? <MetadataRow label="Branch" value={item.subjectBranch} /> : null}
         {absoluteUpdatedAt ? <MetadataRow label="Updated" value={absoluteUpdatedAt} /> : null}
+        {lastChecked ? <MetadataRow label="Last checked" value={lastChecked} /> : null}
       </div>
     </div>
   );

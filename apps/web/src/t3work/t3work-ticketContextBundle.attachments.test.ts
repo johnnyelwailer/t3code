@@ -74,17 +74,16 @@ describe("buildTicketContextBundle attachments", () => {
     });
     expect(bundle.fileReferences).toContainEqual({
       label: "Attachment index",
-      relativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/index.json",
+      relativePath: ".t3work/context/jira/project-alpha/items/proj-7/attachments/index.json",
     });
 
     const entryPoint = bundle.files.find(
       (file) =>
-        file.relativePath ===
-        ".t3work/context-cache/jira/project-alpha/items/proj-7/entrypoint.json",
+        file.relativePath === ".t3work/context/jira/project-alpha/items/proj-7/entrypoint.json",
     );
     expect(JSON.parse(entryPoint?.contents ?? "{}")).toMatchObject({
       paths: {
-        attachments: ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/index.json",
+        attachments: ".t3work/context/jira/project-alpha/items/proj-7/attachments/index.json",
       },
       attachmentSummary: {
         count: 1,
@@ -95,7 +94,7 @@ describe("buildTicketContextBundle attachments", () => {
     const attachmentIndex = bundle.files.find(
       (file) =>
         file.relativePath ===
-        ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/index.json",
+        ".t3work/context/jira/project-alpha/items/proj-7/attachments/index.json",
     );
     expect(JSON.parse(attachmentIndex?.contents ?? "{}")).toMatchObject({
       attachmentCount: 1,
@@ -107,7 +106,7 @@ describe("buildTicketContextBundle attachments", () => {
           filename: "screenshot-1.png",
           mimeType: "image/png",
           localPath:
-            ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/files/att-1-screenshot-1.png",
+            ".t3work/context/jira/project-alpha/items/proj-7/attachments/files/att-1-screenshot-1.png",
           status: "downloaded",
         },
       ],
@@ -115,7 +114,7 @@ describe("buildTicketContextBundle attachments", () => {
 
     expect(bundle.files).toContainEqual({
       relativePath:
-        ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/files/att-1-screenshot-1.png",
+        ".t3work/context/jira/project-alpha/items/proj-7/attachments/files/att-1-screenshot-1.png",
       contents: "AQIDBA==",
       encoding: "base64",
       sizeBytes: 4,

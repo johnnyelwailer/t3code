@@ -52,41 +52,39 @@ describe("buildProjectContextBundle", () => {
       projectTickets: [createTicket("PROJ-1"), createTicket("PROJ-2")],
     });
 
-    expect(bundle.bundleRootRelativePath).toBe(".t3work/context-cache/projects/project-alpha");
+    expect(bundle.bundleRootRelativePath).toBe(".t3work/context");
     expect(bundle.fileReferences).toEqual([
       {
         label: "Project entrypoint",
-        relativePath: ".t3work/context-cache/projects/project-alpha/entrypoint.json",
+        relativePath: ".t3work/context/entrypoint.json",
       },
     ]);
 
     const entryPoint = bundle.files.find(
-      (file) =>
-        file.relativePath === ".t3work/context-cache/projects/project-alpha/entrypoint.json",
+      (file) => file.relativePath === ".t3work/context/entrypoint.json",
     );
     expect(entryPoint).toBeDefined();
     expect(JSON.parse(entryPoint?.contents ?? "{}")).toMatchObject({
       kind: "project",
       paths: {
-        workItemsIndex: ".t3work/context-cache/projects/project-alpha/work-items/index.json",
+        workItemsIndex: ".t3work/context/work-items/index.json",
       },
     });
 
     const workItemsIndex = bundle.files.find(
-      (file) =>
-        file.relativePath === ".t3work/context-cache/projects/project-alpha/work-items/index.json",
+      (file) => file.relativePath === ".t3work/context/work-items/index.json",
     );
     expect(JSON.parse(workItemsIndex?.contents ?? "{}")).toMatchObject({
       workItems: [
         {
           key: "PROJ-1",
           ticketEntryPointRelativePath:
-            ".t3work/context-cache/jira/project-alpha/items/proj-1/entrypoint.json",
+            ".t3work/context/jira/project-alpha/items/proj-1/entrypoint.json",
         },
         {
           key: "PROJ-2",
           ticketEntryPointRelativePath:
-            ".t3work/context-cache/jira/project-alpha/items/proj-2/entrypoint.json",
+            ".t3work/context/jira/project-alpha/items/proj-2/entrypoint.json",
         },
       ],
     });

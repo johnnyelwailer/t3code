@@ -39,7 +39,9 @@ export function TicketDetailMainColumn({
   htmlBaseUrl,
   attachments,
   sortedComments,
+  jiraLastCheckedAt,
   githubActivityItems,
+  githubActivityLastCheckedAt,
   githubActivityLoading,
   githubActivityWarning,
   githubHost,
@@ -111,23 +113,20 @@ export function TicketDetailMainColumn({
       >
         <TicketParentSummary
           projectId={projectId}
+          {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
           onOpenTicket={onOpenTicket}
           parentEntry={relationshipData.parentEntry}
         />
       </div>
 
       <TicketDetailGitHubSection
-        projectId={projectId}
-        projectTitle={project.title}
-        {...(project.workspace?.rootPath
-          ? { projectWorkspaceRoot: project.workspace.rootPath }
-          : {})}
         {...(backend ? { backend } : {})}
         project={project}
         {...(ticket ? { ticket } : {})}
         projectTickets={projectTickets}
         displayId={displayId}
         githubActivityItems={githubActivityItems}
+        {...(githubActivityLastCheckedAt !== undefined ? { githubActivityLastCheckedAt } : {})}
         showAddToChatContextMenu={showAddToChatContextMenu}
         {...(githubActivityLoading ? { githubActivityLoading } : {})}
         {...(githubActivityWarning ? { githubActivityWarning } : {})}
@@ -180,6 +179,7 @@ export function TicketDetailMainColumn({
           <div>
             <TicketRelatedLinks
               projectId={projectId}
+              {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
               onOpenTicket={onOpenTicket}
               childEntries={relationshipData.childEntries}
               referencedEntries={relationshipData.referencedEntries}

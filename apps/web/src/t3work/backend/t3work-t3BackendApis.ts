@@ -10,6 +10,8 @@ import type {
   AtlassianBasicConnectInput,
   AtlassianDownloadedAsset,
   AtlassianOAuthConnectInput,
+  AtlassianOAuthExchangeInput,
+  AtlassianOAuthExchangeResult,
   GitHubBackendApi,
   GitHubInboxDiscoverResponse,
   ProjectWorkspaceContextFile,
@@ -17,6 +19,11 @@ import type {
   ProjectWorkspaceBootstrapResult,
   ProjectWorkspaceWriteContextFilesResult,
 } from "./t3work-types";
+import type { GitHubAssetDownloadRequest, GitHubDownloadedAsset } from "./t3work-githubAssetTypes";
+import type {
+  GitHubPullRequestContextRequest,
+  GitHubPullRequestContextResponse,
+} from "./t3work-githubTypes";
 import { postJson } from "./t3work-t3BackendHttp";
 
 export function createAtlassianBackendApi(httpBaseUrl: string): AtlassianBackendApi {
@@ -67,6 +74,14 @@ export function createAtlassianBackendApi(httpBaseUrl: string): AtlassianBackend
         },
       });
       return response.accounts;
+    },
+
+    exchangeOAuthCode(input: AtlassianOAuthExchangeInput): Promise<AtlassianOAuthExchangeResult> {
+      return postJson<AtlassianOAuthExchangeInput, AtlassianOAuthExchangeResult>(
+        httpBaseUrl,
+        "/api/t3work/atlassian/oauth/exchange",
+        input,
+      );
     },
 
     async listProjects(account: IntegrationAccountRef): Promise<ReadonlyArray<ExternalProject>> {
@@ -130,6 +145,20 @@ export function createGitHubBackendApi(httpBaseUrl: string): GitHubBackendApi {
         input,
       );
     },
+    getPullRequestContext(input: GitHubPullRequestContextRequest) {
+      return postJson<GitHubPullRequestContextRequest, GitHubPullRequestContextResponse>(
+        httpBaseUrl,
+        "/api/t3work/github/pull-request-context",
+        input,
+      );
+    },
+    downloadAsset(input: GitHubAssetDownloadRequest) {
+      return postJson<GitHubAssetDownloadRequest, { asset: GitHubDownloadedAsset }>(
+        httpBaseUrl,
+        "/api/t3work/github/asset",
+        input,
+      ).then((response) => response.asset);
+    },
   };
 }
 
@@ -138,6 +167,7 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
     bootstrapWorkspace(input: {
       readonly workspaceRoot: string;
       readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+      readonly setupProfileId?: string;
     }): Promise<ProjectWorkspaceBootstrapResult> {
       return postJson<typeof input, ProjectWorkspaceBootstrapResult>(
         httpBaseUrl,

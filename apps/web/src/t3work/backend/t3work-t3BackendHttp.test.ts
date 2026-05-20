@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe("postJson", () => {
-  it("includes browser credentials on backend POST requests", async () => {
+  it("uses same-origin credentials on backend POST requests", async () => {
     const response = {
       ok: true,
       json: vi.fn().mockResolvedValue({ ok: true }),
@@ -30,7 +30,7 @@ describe("postJson", () => {
     );
     expect(init).toMatchObject({
       method: "POST",
-      credentials: "include",
+      credentials: "same-origin",
       headers: {
         "content-type": "application/json",
       },
@@ -39,5 +39,21 @@ describe("postJson", () => {
         files: [],
       }),
     });
+  });
+
+  it("surfaces route and origin details when the browser fails before a response arrives", async () => {
+    vi.stubGlobal("location", {
+      origin: "http://127.0.0.1:5733",
+    } satisfies Pick<Location, "origin">);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockRejectedValue(new TypeError("Failed to fetch")),
+    );
+
+    await expect(
+      postJson("http://127.0.0.1:13773/", "/api/t3work/atlassian/accounts", {}),
+    ).rejects.toThrow(
+      "Failed to reach backend /api/t3work/atlassian/accounts at http://127.0.0.1:13773. Fetch error: Failed to fetch. Browser origin: http://127.0.0.1:5733. This is a cross-origin browser request. If the backend is running, a CORS mismatch or blocked preflight likely prevented the request from reaching the route.",
+    );
   });
 });

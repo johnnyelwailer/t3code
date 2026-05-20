@@ -195,6 +195,7 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
     visibleTreeUnresolvedChildren,
     hiddenTicketCount,
     githubActivityByWorkItem: githubActivity.activityByWorkItem,
+    githubActivityLastCheckedAt: githubActivity.lastCheckedAt,
     handleProjectClick,
     handleToggleExpand,
     handleNewThread,

@@ -11,7 +11,11 @@ const configuredWsUrl = process.env.VITE_WS_URL?.trim();
 const defaultDevWsUrl = "ws://localhost:3773";
 const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
 const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
-const configuredAtlassianClientId = process.env.ATLASSIAN_CLIENT_ID?.trim() || "";
+const configuredAtlassianClientId =
+  process.env.T3WORK_ATLASSIAN_CLIENT_ID?.trim() ||
+  process.env.VITE_ATLASSIAN_CLIENT_ID?.trim() ||
+  process.env.ATLASSIAN_CLIENT_ID?.trim() ||
+  "";
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
   if (explicitHostedAppUrl) {

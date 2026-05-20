@@ -31,7 +31,7 @@ function createBackend(): BackendApi {
       })),
       writeContextFiles: vi.fn(async () => ({
         workspaceRoot: "/tmp/project-alpha",
-        writtenFiles: [".t3work/context-cache/misc/project-alpha/context/entrypoint.json"],
+        writtenFiles: [".t3work/context/misc/project-alpha/context/entrypoint.json"],
       })),
     },
     subscribeConfig: vi.fn(() => () => undefined),
@@ -98,6 +98,9 @@ describe("runThreadBootstrap", () => {
       onInitialUserMessageSent,
     });
 
+    expect(backend.projectWorkspace.bootstrapWorkspace).toHaveBeenCalledWith({
+      workspaceRoot: "/tmp/project-alpha",
+    });
     expect(backend.dispatchCommand).toHaveBeenCalledTimes(1);
     expect(backend.dispatchCommand).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -144,6 +147,9 @@ describe("runThreadBootstrap", () => {
       onInitialUserMessageSent: undefined,
     });
 
+    expect(backend.projectWorkspace.bootstrapWorkspace).toHaveBeenCalledWith({
+      workspaceRoot: "/tmp/project-alpha",
+    });
     expect(backend.projectWorkspace.writeContextFiles).toHaveBeenCalledTimes(1);
     expect(backend.dispatchCommand).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -38,7 +38,7 @@ describe("syncContextAttachmentFromRequest", () => {
       files: [
         {
           relativePath:
-            ".t3work/context-cache/misc/project-alpha/project-alpha-proj-7-work-item/entrypoint.json",
+            ".t3work/context/misc/project-alpha/project-alpha-proj-7-work-item/entrypoint.json",
           contents: '{\n  "ok": true\n}',
         },
       ],
@@ -49,7 +49,7 @@ describe("syncContextAttachmentFromRequest", () => {
       kind: "jira-work-item",
     });
     expect(attachment.contextText).toContain(
-      ".t3work/context-cache/misc/project-alpha/project-alpha-proj-7-work-item/entrypoint.json",
+      ".t3work/context/misc/project-alpha/project-alpha-proj-7-work-item/entrypoint.json",
     );
   });
 

@@ -37,21 +37,21 @@ describe("syncContextAttachmentFromRequest directory bundles", () => {
     const payload: T3WorkDirectoryBundlePayload = {
       kind: "t3work-directory-bundle",
       dedupeKey: "project-alpha:PROJ-7:work-item",
-      bundleRootRelativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7",
+      bundleRootRelativePath: ".t3work/context/jira/project-alpha/items/proj-7",
       files: [
         {
-          relativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7/entrypoint.json",
+          relativePath: ".t3work/context/jira/project-alpha/items/proj-7/entrypoint.json",
           contents: '{"kind":"jira-work-item"}',
         },
         {
-          relativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7/manifest.json",
+          relativePath: ".t3work/context/jira/project-alpha/items/proj-7/manifest.json",
           contents: '{"kind":"jira-work-item-context-manifest"}',
         },
       ],
       fileReferences: [
         {
           label: "Ticket entrypoint",
-          relativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7/entrypoint.json",
+          relativePath: ".t3work/context/jira/project-alpha/items/proj-7/entrypoint.json",
         },
       ],
       lightweightItem: { kind: "jira-work-item", label: "PROJ-7 Investigate context sync" },
@@ -68,7 +68,7 @@ describe("syncContextAttachmentFromRequest directory bundles", () => {
       workspaceRoot: "/tmp/project-alpha",
       files: [
         {
-          relativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7/entrypoint.json",
+          relativePath: ".t3work/context/jira/project-alpha/items/proj-7/entrypoint.json",
           contents: '{"kind":"jira-work-item"}',
         },
       ],
@@ -81,11 +81,11 @@ describe("syncContextAttachmentFromRequest directory bundles", () => {
     const payload: T3WorkDirectoryBundlePayload = {
       kind: "t3work-directory-bundle",
       dedupeKey: "project-alpha:PROJ-7:attachments",
-      bundleRootRelativePath: ".t3work/context-cache/jira/project-alpha/items/proj-7",
+      bundleRootRelativePath: ".t3work/context/jira/project-alpha/items/proj-7",
       files: [
         {
           relativePath:
-            ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/files/att-1-example.png",
+            ".t3work/context/jira/project-alpha/items/proj-7/attachments/files/att-1-example.png",
           contents: "AQIDBA==",
           encoding: "base64",
           sizeBytes: 4,
@@ -94,8 +94,7 @@ describe("syncContextAttachmentFromRequest directory bundles", () => {
       fileReferences: [
         {
           label: "Attachment index",
-          relativePath:
-            ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/index.json",
+          relativePath: ".t3work/context/jira/project-alpha/items/proj-7/attachments/index.json",
         },
       ],
       lightweightItem: { kind: "jira-ticket-attachments", label: "Attachments" },
@@ -112,7 +111,7 @@ describe("syncContextAttachmentFromRequest directory bundles", () => {
       files: [
         {
           relativePath:
-            ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/files/att-1-example.png",
+            ".t3work/context/jira/project-alpha/items/proj-7/attachments/files/att-1-example.png",
           contents: "AQIDBA==",
           encoding: "base64",
         },

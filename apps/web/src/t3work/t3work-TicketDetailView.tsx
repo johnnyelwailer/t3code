@@ -54,7 +54,8 @@ export function TicketDetailView({
   onBack: () => void;
 }) {
   const backendState = useBackendState();
-  const { tickets: projectTickets } = useProjectResources(project);
+  const { tickets: projectTickets, lastCheckedAt: jiraLastCheckedAt } =
+    useProjectResources(project);
   const ticket = projectTickets.find((candidate) => candidate.id === ticketId);
   const resourceId = ticket?.ref.id ?? ticketId;
   const { snapshot, loading, error, reload } = useTicketDetail(project, resourceId);
@@ -146,7 +147,11 @@ export function TicketDetailView({
                 htmlBaseUrl={htmlBaseUrl}
                 attachments={attachments}
                 sortedComments={sortedComments}
+                {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
                 githubActivityItems={matchedGitHubActivityItems}
+                {...(githubActivity.lastCheckedAt !== undefined
+                  ? { githubActivityLastCheckedAt: githubActivity.lastCheckedAt }
+                  : {})}
                 githubActivityLoading={githubActivity.loading}
                 {...(githubActivity.warning
                   ? { githubActivityWarning: githubActivity.warning }

@@ -15,6 +15,7 @@ import type {
 import { MOCK_THREADS } from "~/t3work/data/t3work-mockThreads";
 import { useProjectStoreQueries } from "./t3work-useProjectStoreQueries";
 import { useProjectThreadActions } from "./t3work-useProjectThreadActions";
+import { useHydrateStoredProjects } from "./t3work-useHydrateStoredProjects";
 import {
   generateProjectId,
   deriveLooseWorkspaceProjects,
@@ -22,6 +23,7 @@ import {
   saveStoredProjects,
   upsertProjectBySource,
 } from "./t3work-projectStoreUtils";
+import { hydrateStoredProjects, persistStoredProjects } from "./t3work-projectStorePersistence";
 
 export function useProjectStore() {
   const [storedProjects, setStoredProjects] = useState<ProjectShellProject[]>(loadStoredProjects);
@@ -38,6 +40,12 @@ export function useProjectStore() {
   const [threadPreviewCount, setThreadPreviewCount] = useState(5);
   const liveProjects = useStore(useShallow(selectProjectsAcrossEnvironments));
   const liveThreads = useStore(useShallow(selectThreadsAcrossEnvironments));
+  useHydrateStoredProjects({
+    setStoredProjects,
+    setSelectedProjectId,
+    setExpandedProjectIds,
+  });
+
   const looseWorkspaceProjects = useMemo(
     () => deriveLooseWorkspaceProjects(storedProjects, liveProjects),
     [liveProjects, storedProjects],
@@ -58,6 +66,7 @@ export function useProjectStore() {
     setStoredProjects((prev) => {
       const next = upsertProjectBySource(prev, project);
       saveStoredProjects(next);
+      persistStoredProjects(next);
       return next;
     });
     setSelectedProjectId(project.id);
@@ -69,6 +78,7 @@ export function useProjectStore() {
     setStoredProjects((prev) => {
       const next = prev.filter((p) => p.id !== id);
       saveStoredProjects(next);
+      persistStoredProjects(next);
       return next;
     });
     setThreads((prev) => prev.filter((t) => t.projectId !== id));
@@ -95,6 +105,7 @@ export function useProjectStore() {
           ? prev.map((candidate) => (candidate.id === id ? updatedProject : candidate))
           : [...prev, updatedProject];
         saveStoredProjects(next);
+        persistStoredProjects(next);
         return next;
       });
     },
@@ -108,6 +119,7 @@ export function useProjectStore() {
         ? prev.map((candidate) => (candidate.id === id ? nextProject : candidate))
         : [...prev, nextProject];
       saveStoredProjects(next);
+      persistStoredProjects(next);
       return next;
     });
   }, []);

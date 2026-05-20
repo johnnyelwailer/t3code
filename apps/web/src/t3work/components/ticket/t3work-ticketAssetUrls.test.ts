@@ -33,7 +33,7 @@ describe("createJiraTicketAssetUrlResolver", () => {
       "https://nexwork.atlassian.net/rest/api/3/attachment/content/34816",
     );
     expect(fromAbsolute.searchParams.get("relativePath")).toBe(
-      ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/files/34816-image-20260226-084855.png",
+      ".t3work/context/jira/project-alpha/items/proj-7/attachments/files/34816-image-20260226-084855.png",
     );
 
     const fromRelativeThumbnail = new URL(
@@ -44,7 +44,7 @@ describe("createJiraTicketAssetUrlResolver", () => {
       "https://nexwork.atlassian.net/rest/api/3/attachment/content/34816",
     );
     expect(fromRelativeThumbnail.searchParams.get("relativePath")).toBe(
-      ".t3work/context-cache/jira/project-alpha/items/proj-7/attachments/files/34816-image-20260226-084855.png",
+      ".t3work/context/jira/project-alpha/items/proj-7/attachments/files/34816-image-20260226-084855.png",
     );
   });
 

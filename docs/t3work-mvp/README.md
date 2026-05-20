@@ -60,6 +60,7 @@ The user should be able to:
 - [Epic 14: Native Provider Tool Injection](./14-native-provider-tool-injection.md)
 - [Epic 16: Action Recipes](./16-action-recipes.md)
 - [Epic 17: Build-Time Localization Spike](./17-build-time-localization.md)
+- [Epic 18: Integration Freshness Polling Plan](./18-integration-freshness-polling-plan.md)
 
 ## Supporting Docs
 

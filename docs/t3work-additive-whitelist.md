@@ -39,6 +39,8 @@ Prefix policy:
   - Parse and render context attachment chips from user message text, then strip the inline attachment block from message body rendering so timeline displays clean content.
 - `apps/web/src/composerDraftStore.ts`
   - Add optional `contextAttachments?: ComposerContextAttachment[]` field + 3 CRUD methods (`addContextAttachment`, `removeContextAttachment`, `clearContextAttachments`) to per-thread draft state. Generic, upstreamable extension point for ephemeral context attachments.
+- `packages/contracts/src/settings.ts`
+  - Add an optional `t3workStoredProjectsJson` client-setting key so desktop-stable t3work project persistence can reuse the existing local client-settings seam without widening unrelated runtime APIs.
 - `packages/t3-adapter/src/workspace.ts`
   - Move managed workspace default path from `project-shell` to `t3work`.
 - `bun.lock`

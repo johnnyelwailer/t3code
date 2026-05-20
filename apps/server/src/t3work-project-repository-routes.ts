@@ -4,6 +4,11 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { HttpRouter } from "effect/unstable/http";
 import {
+  renderT3WorkProjectSetupFiles,
+  resolveT3WorkProjectSetupProfileId,
+  T3WORK_PROJECT_PROFILE_MANIFEST_PATH,
+} from "./t3work-projectSetup.ts";
+import {
   errorResponse,
   okJson,
   readJsonBody,
@@ -31,6 +36,15 @@ import type {
   ReferenceManifestFile,
 } from "./t3work-project-repository-utils.ts";
 
+function readPersistedSetupProfileId(value: string): string | undefined {
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed?.profileId === "string" ? parsed.profileId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const t3workProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3work/project/workspace/bootstrap",
@@ -46,6 +60,36 @@ export const t3workProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
     yield* fileSystem
       .makeDirectory(workspaceRoot, { recursive: true })
       .pipe(Effect.mapError(toAtlassianError("Failed to ensure workspace directory exists.")));
+
+    const persistedProfilePath = path.join(workspaceRoot, T3WORK_PROJECT_PROFILE_MANIFEST_PATH);
+    const persistedProfileExists = yield* fileSystem
+      .exists(persistedProfilePath)
+      .pipe(Effect.orElseSucceed(() => false));
+    const persistedProfileId = persistedProfileExists
+      ? readPersistedSetupProfileId(
+          yield* fileSystem
+            .readFileString(persistedProfilePath)
+            .pipe(Effect.orElseSucceed(() => "")),
+        )
+      : undefined;
+    const setupProfileId = resolveT3WorkProjectSetupProfileId(
+      input.setupProfileId ?? persistedProfileId,
+    );
+    const setupFiles = renderT3WorkProjectSetupFiles({ profileId: setupProfileId });
+    for (const file of setupFiles) {
+      const targetPath = path.join(workspaceRoot, file.relativePath);
+      const exists = yield* fileSystem.exists(targetPath).pipe(Effect.orElseSucceed(() => false));
+      if (exists && file.writeMode !== "overwrite") {
+        continue;
+      }
+      yield* fileSystem
+        .makeDirectory(path.dirname(targetPath), { recursive: true })
+        .pipe(Effect.mapError(toAtlassianError("Failed to create workspace setup directory.")));
+      yield* fileSystem
+        .writeFileString(targetPath, file.contents)
+        .pipe(Effect.mapError(toAtlassianError("Failed to write workspace setup file.")));
+    }
+
     const workspaceRepositoryInitialized = yield* ensureWorkspaceGitRepository(workspaceRoot);
     yield* ensureWorkspaceGitignore(workspaceRoot);
 

@@ -25,7 +25,9 @@ export type TicketDetailMainColumnProps = {
   htmlBaseUrl: string | undefined;
   attachments: Array<Record<string, unknown>>;
   sortedComments: Array<Record<string, unknown>>;
+  jiraLastCheckedAt?: number;
   githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
+  githubActivityLastCheckedAt?: number;
   githubActivityLoading?: boolean;
   githubActivityWarning?: string;
   githubHost?: string;

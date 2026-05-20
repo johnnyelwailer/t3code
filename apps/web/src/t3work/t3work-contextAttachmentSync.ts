@@ -9,6 +9,7 @@ import {
 } from "~/t3work/t3work-addToChatUtils";
 import type { BackendApi } from "~/t3work/backend/t3work-types";
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
+import { T3WORK_PROJECT_CONTEXT_ROOT } from "~/t3work/t3work-projectSetup";
 import {
   buildInitialSyncProgressUpdate,
   buildSyncProgressAttachment,
@@ -20,8 +21,7 @@ const attachmentSyncPromiseById = new Map<string, Promise<T3WorkContextAttachmen
 
 function buildFallbackSnapshotPath(request: AddToChatRequest): string {
   return [
-    ".t3work",
-    "context-cache",
+    T3WORK_PROJECT_CONTEXT_ROOT,
     "misc",
     sanitizeForFileName(request.projectId),
     sanitizeForFileName(request.dedupeKey ?? request.kind ?? request.targetLabel),

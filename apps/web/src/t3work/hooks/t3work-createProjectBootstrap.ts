@@ -1,3 +1,4 @@
+import { resolveT3WorkProjectSetupProfileId } from "~/t3work/t3work-projectSetup";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type {
   LinkedRepositorySyncResult,
@@ -15,6 +16,10 @@ export type ProjectAgentReferences = {
   readonly referencesRoot?: string;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryReference>;
   readonly workspaceRepositoryInitialized?: boolean;
+};
+
+export type ProjectAgentSetup = {
+  readonly profileId?: string;
 };
 
 export function normalizeRepositoryUrls(
@@ -37,12 +42,16 @@ function readObjectRecord(value: unknown): Record<string, unknown> {
 export function buildInitialRaw(
   externalProjectRaw: unknown,
   linkedRepositoryUrls: ReadonlyArray<string>,
+  setupProfileId?: string,
 ): Record<string, unknown> {
   const base = readObjectRecord(externalProjectRaw);
   const references: ProjectAgentReferences = {
     linkedRepositories: linkedRepositoryUrls.map((url) => ({ url })),
   };
-  return { ...base, agentReferences: references };
+  const agentSetup: ProjectAgentSetup = {
+    profileId: resolveT3WorkProjectSetupProfileId(setupProfileId),
+  };
+  return { ...base, agentReferences: references, agentSetup };
 }
 
 function mapLinkedRepositories(
@@ -97,6 +106,14 @@ export function readLinkedRepositoryUrlsFromProject(
     : [];
   return normalizeRepositoryUrls(
     linked.map((entry) => entry?.url).filter((value): value is string => typeof value === "string"),
+  );
+}
+
+export function readProjectSetupProfileIdFromProject(project: ProjectShellProject): string {
+  const currentRaw = readObjectRecord(project.source.raw);
+  const currentSetup = readObjectRecord(currentRaw.agentSetup);
+  return resolveT3WorkProjectSetupProfileId(
+    typeof currentSetup.profileId === "string" ? currentSetup.profileId : undefined,
   );
 }
 

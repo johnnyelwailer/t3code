@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import * as Effect from "effect/Effect";
-import { DEFAULT_MODEL, ProviderInstanceId } from "@t3tools/contracts";
+import { resolveT3WorkProjectSetupProfileId } from "~/t3work/t3work-projectSetup";
 import type {
   AtlassianAccessibleResource,
   TokenExchangeResult,
@@ -9,20 +9,21 @@ import type { ExternalProject, IntegrationAccount } from "@t3tools/integrations-
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { t3workCreateProject } from "~/t3work/t3work-mock-adapter";
-import {
-  applyWorkspaceBootstrapToProject,
-  buildInitialRaw,
-  normalizeRepositoryUrls,
-} from "./t3work-createProjectBootstrap";
+import { buildInitialRaw, normalizeRepositoryUrls } from "./t3work-createProjectBootstrap";
+import { finalizeCreatedProject } from "./t3work-createProjectFinalization";
 import { isValidAtlassianUrl, normalizeAtlassianUrl } from "./t3work-createProjectUtils";
 import { writeIntegrationCache } from "./t3work-integrationCache";
+import { readT3workProjectSetupProfile } from "~/t3work/t3work-projectSetupProfile";
 import { loadProjectsForAccount } from "./t3work-useCreateProjectAccountLoaders";
 import { applyLoadedAccounts, failWithStep } from "./t3work-useCreateProjectHelpers";
 import { loadPersistedAccountsStep } from "./t3work-useCreateProjectLoadPersisted";
 
 export type CreateProjectStep = "source" | "account" | "project" | "confirm" | "creating";
 export type AtlassianBasicCredentials = { siteUrl: string; email: string; apiToken: string };
-type CreateProjectOptions = { readonly linkedRepositoryUrls?: ReadonlyArray<string> };
+type CreateProjectOptions = {
+  readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+  readonly setupProfileId?: string;
+};
 
 export function useCreateProject() {
   const backend = useBackend();
@@ -138,6 +139,9 @@ export function useCreateProject() {
         if (!selectedAccount)
           throw new Error("Select an Atlassian site before creating a project.");
         const linkedRepositoryUrls = normalizeRepositoryUrls(options?.linkedRepositoryUrls);
+        const setupProfileId = resolveT3WorkProjectSetupProfileId(
+          options?.setupProfileId ?? readT3workProjectSetupProfile(),
+        );
         const project = await Effect.runPromise(
           t3workCreateProject({
             title: externalProject.title,
@@ -146,33 +150,15 @@ export function useCreateProject() {
             externalProjectId: externalProject.id,
             ...(externalProject.key ? { externalProjectKey: externalProject.key } : {}),
             ...(externalProject.url ? { externalProjectUrl: externalProject.url } : {}),
-            raw: buildInitialRaw(externalProject.raw, linkedRepositoryUrls),
+            raw: buildInitialRaw(externalProject.raw, linkedRepositoryUrls, setupProfileId),
           }),
         );
-        if (!project.workspace?.rootPath)
-          throw new Error("Created project is missing a managed workspace root.");
-        await backend.dispatchCommand({
-          type: "project.create",
-          commandId: crypto.randomUUID() as any,
-          projectId: project.id as any,
-          title: project.title,
-          workspaceRoot: project.workspace.rootPath,
-          createWorkspaceRootIfMissing: true,
-          defaultModelSelection: {
-            instanceId: ProviderInstanceId.make("codex"),
-            model: DEFAULT_MODEL,
-          },
-          createdAt: new Date().toISOString(),
+        return await finalizeCreatedProject({
+          backend,
+          project,
+          linkedRepositoryUrls,
+          setupProfileId,
         });
-        try {
-          const bootstrap = await backend.projectWorkspace.bootstrapWorkspace({
-            workspaceRoot: project.workspace.rootPath,
-            linkedRepositoryUrls,
-          });
-          return applyWorkspaceBootstrapToProject(project, bootstrap);
-        } catch {
-          return project;
-        }
       } catch (e) {
         fail(e, "Failed to create project", "project");
         throw e;

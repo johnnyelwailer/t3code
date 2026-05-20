@@ -1,6 +1,7 @@
 import { AtlassianIntegrationProvider, type JiraApiAuth } from "@t3tools/integrations-atlassian";
 import { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
 import type { IntegrationAccountRef } from "@t3tools/integrations-core";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { HttpRouter } from "effect/unstable/http";
 import {
@@ -19,12 +20,7 @@ import {
   tryAtlassianPromise,
 } from "./t3work-atlassian-http.ts";
 export { t3workAtlassianAssetContentRouteLayer } from "./t3work-atlassian-asset-content-route.ts";
-
-type ResourceListInput = {
-  readonly account: IntegrationAccountRef;
-  readonly externalProjectId: string;
-  readonly limit?: number;
-};
+export { t3workAtlassianResourcesRouteLayer } from "./t3work-atlassian-resources-routes.ts";
 
 type ResourceGetInput = {
   readonly accountId: string;
@@ -89,10 +85,14 @@ export const t3workAtlassianConnectOAuthRouteLayer = HttpRouter.add(
   Effect.gen(function* () {
     yield* loadPersistedAuths;
     const input = yield* readJsonBody<OAuthConnectInput>();
+    const now = yield* Clock.currentTimeMillis;
+    const expiresAt = now + input.auth.token.expiresIn * 1000;
     const auths: ReadonlyArray<JiraApiAuth> = input.auth.sites.map((site) => ({
       kind: "oauth",
       cloudId: site.id,
       accessToken: input.auth.token.accessToken,
+      refreshToken: input.auth.token.refreshToken,
+      expiresAt,
     }));
 
     if (auths.length === 0) {
@@ -133,25 +133,6 @@ export const t3workAtlassianProjectsRouteLayer = HttpRouter.add(
       "Failed to load Atlassian projects.",
     );
     return okJson({ projects });
-  }).pipe(Effect.catch(errorResponse)),
-);
-
-export const t3workAtlassianResourcesRouteLayer = HttpRouter.add(
-  "POST",
-  "/api/t3work/atlassian/resources",
-  Effect.gen(function* () {
-    const input = yield* readJsonBody<ResourceListInput>();
-    const provider = yield* providerForAccount(input.account.id);
-    const page = yield* tryAtlassianPromise(
-      () =>
-        provider.listResources({
-          account: input.account,
-          externalProjectId: input.externalProjectId,
-          ...(input.limit !== undefined ? { limit: input.limit } : {}),
-        }),
-      "Failed to load Atlassian issues.",
-    );
-    return okJson({ page });
   }).pipe(Effect.catch(errorResponse)),
 );
 

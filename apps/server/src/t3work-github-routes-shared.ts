@@ -1,5 +1,6 @@
 import * as DateTime from "effect/DateTime";
 
+import type { GitHubPullRequestContextResponse } from "./t3work-github-routes-pr-types.ts";
 import { normalizeRepositoryUrls } from "./t3work-project-repository-utils.ts";
 
 export type GitHubInboxDiscoverRequest = {
@@ -106,12 +107,17 @@ export const UNAUTHENTICATED_ACCOUNT_CACHE_TTL_MS = 20_000;
 export const REPOSITORIES_CACHE_TTL_MS = 2 * 60_000;
 export const INBOX_CACHE_TTL_MS = 45_000;
 export const RESPONSE_CACHE_TTL_MS = 20_000;
+export const PULL_REQUEST_CONTEXT_CACHE_TTL_MS = 45_000;
 const CACHE_MAX_ENTRIES = 256;
 
 export const accountCache = new Map<string, CacheEntry<string | undefined>>();
 export const repositoriesCache = new Map<string, CacheEntry<GitHubRepositoriesAttempt>>();
 export const inboxCache = new Map<string, CacheEntry<GitHubInboxAttempt>>();
 export const responseCache = new Map<string, CacheEntry<GitHubInboxDiscoverResponse>>();
+export const pullRequestContextCache = new Map<
+  string,
+  CacheEntry<GitHubPullRequestContextResponse>
+>();
 export const pullRequestStateCache = new Map<
   string,
   CacheEntry<

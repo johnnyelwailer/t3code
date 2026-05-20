@@ -87,6 +87,12 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
                     childrenByParentId={state.ticketHierarchy.childrenByParentId}
                     ticketThreadsById={state.ticketThreadsById}
                     githubActivityByWorkItem={state.githubActivityByWorkItem}
+                    {...(props.jiraLastCheckedAt !== undefined
+                      ? { jiraLastCheckedAt: props.jiraLastCheckedAt }
+                      : {})}
+                    {...(state.githubActivityLastCheckedAt !== undefined
+                      ? { githubActivityLastCheckedAt: state.githubActivityLastCheckedAt }
+                      : {})}
                     showGitHubActivity={showGitHubActivity}
                     onSelectTicket={onSelectTicket}
                     onCreateTicketThread={onCreateTicketThread}
@@ -105,9 +111,15 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
                     projectId={project.id}
                     view={view}
                     ticketThreads={state.ticketThreadsById.get(ticket.id) ?? []}
+                    {...(props.jiraLastCheckedAt !== undefined
+                      ? { jiraLastCheckedAt: props.jiraLastCheckedAt }
+                      : {})}
                     githubActivityItems={
                       state.githubActivityByWorkItem.get(ticket.ref.displayId) ?? []
                     }
+                    {...(state.githubActivityLastCheckedAt !== undefined
+                      ? { githubActivityLastCheckedAt: state.githubActivityLastCheckedAt }
+                      : {})}
                     showGitHubActivity={showGitHubActivity}
                     onSelectTicket={onSelectTicket}
                     onCreateTicketThread={onCreateTicketThread}
@@ -132,9 +144,15 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
                     projectId={project.id}
                     view={view}
                     ticketThreads={state.ticketThreadsById.get(ticket.id) ?? []}
+                    {...(props.jiraLastCheckedAt !== undefined
+                      ? { jiraLastCheckedAt: props.jiraLastCheckedAt }
+                      : {})}
                     githubActivityItems={
                       state.githubActivityByWorkItem.get(ticket.ref.displayId) ?? []
                     }
+                    {...(state.githubActivityLastCheckedAt !== undefined
+                      ? { githubActivityLastCheckedAt: state.githubActivityLastCheckedAt }
+                      : {})}
                     showGitHubActivity={showGitHubActivity}
                     onSelectTicket={onSelectTicket}
                     onCreateTicketThread={onCreateTicketThread}

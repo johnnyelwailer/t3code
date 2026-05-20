@@ -10,10 +10,12 @@ import type { ProjectTicket } from "~/t3work/t3work-types";
 
 export function TicketParentSummary({
   projectId,
+  lastCheckedAt,
   onOpenTicket,
   parentEntry,
 }: {
   projectId: string;
+  lastCheckedAt?: number;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   parentEntry: RelationshipEntry | undefined;
 }) {
@@ -28,6 +30,7 @@ export function TicketParentSummary({
           <TicketWorkItemCard
             ticket={toRelationshipTicket(parentEntry, projectId)}
             flat
+            {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
             onOpen={() => onOpenTicket(projectId, parentEntry.ticket?.id ?? parentEntry.key)}
           />
         ) : (
@@ -42,6 +45,7 @@ export function TicketParentSummary({
 
 export function TicketRelatedLinks({
   projectId,
+  lastCheckedAt,
   onOpenTicket,
   childEntries,
   referencedEntries,
@@ -49,6 +53,7 @@ export function TicketRelatedLinks({
   onReferenceContextMenu,
 }: {
   projectId: string;
+  lastCheckedAt?: number;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   childEntries: RelationshipEntry[];
   referencedEntries: RelationshipEntry[];
@@ -68,6 +73,7 @@ export function TicketRelatedLinks({
                 <TicketWorkItemRow
                   key={`child-${entry.key}`}
                   ticket={toRelationshipTicket(entry, projectId)}
+                  {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
                   onOpen={() => onOpenTicket(projectId, entry.ticket?.id ?? entry.key)}
                   {...(onChildContextMenu
                     ? {
@@ -95,6 +101,7 @@ export function TicketRelatedLinks({
                 <TicketWorkItemRow
                   key={`ref-${entry.key}`}
                   ticket={toRelationshipTicket(entry, projectId)}
+                  {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
                   onOpen={() => onOpenTicket(projectId, entry.ticket?.id ?? entry.key)}
                   {...(onReferenceContextMenu
                     ? {

@@ -21,6 +21,7 @@
     "apps/web/src/components/chat/MessagesTimeline.tsx",
     "apps/web/src/composerDraftStore.ts",
     "apps/web/src/routeTree.gen.ts",
+    "packages/contracts/src/settings.ts",
     "packages/t3-adapter/src/workspace.ts"
   ],
   "allowedUnprefixedNewFiles": [

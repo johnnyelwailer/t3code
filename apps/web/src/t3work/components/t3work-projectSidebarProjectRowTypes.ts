@@ -12,6 +12,7 @@ export interface ProjectRowProps {
   project: ProjectShellProject;
   projectThreads: ProjectThread[];
   projectTickets: ProjectTicket[];
+  jiraLastCheckedAt?: number;
   expanded: boolean;
   projectStatus: ThreadStatusPill | null;
   view: ViewState | null;

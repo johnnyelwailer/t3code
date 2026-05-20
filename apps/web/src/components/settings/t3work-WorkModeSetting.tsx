@@ -1,14 +1,30 @@
 import {
+  listT3WorkProjectSetupProfiles,
+  type T3WorkProjectSetupProfileId,
+} from "../../t3work/t3work-projectSetup";
+
+import {
   useT3workWorkMode,
   writeT3workWorkMode,
   type T3workWorkMode,
 } from "../../t3work/t3work-workMode";
+import {
+  useT3workProjectSetupProfile,
+  writeT3workProjectSetupProfile,
+} from "../../t3work/t3work-projectSetupProfile";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 
 export function T3workWorkModeSetting() {
   const workMode = useT3workWorkMode();
+  const projectSetupProfile = useT3workProjectSetupProfile();
+  const projectSetupProfiles = listT3WorkProjectSetupProfiles();
 
   const setMode = (mode: T3workWorkMode) => {
     writeT3workWorkMode(mode);
+  };
+
+  const setProjectSetupProfile = (profileId: T3WorkProjectSetupProfileId) => {
+    writeT3workProjectSetupProfile(profileId);
   };
 
   return (
@@ -68,6 +84,47 @@ export function T3workWorkModeSetting() {
           </div>
         </label>
       </div>
+
+      {workMode === "t3work" ? (
+        <div className="space-y-2 border-t pt-4">
+          <div className="space-y-1">
+            <h4 className="text-sm font-medium">Default project setup</h4>
+            <p className="text-xs text-muted-foreground">
+              Choose the default profile used when t3work creates a managed project workspace.
+            </p>
+          </div>
+          <Select
+            value={projectSetupProfile}
+            onValueChange={(value) => {
+              if (
+                value === "project-partner" ||
+                value === "test-engineer" ||
+                value === "requirements-engineer" ||
+                value === "developer"
+              ) {
+                setProjectSetupProfile(value);
+              }
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-56" aria-label="Default project setup profile">
+              <SelectValue>
+                {projectSetupProfiles.find((profile) => profile.id === projectSetupProfile)
+                  ?.title ?? "Project Partner"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="start" alignItemWithTrigger={false}>
+              {projectSetupProfiles.map((profile) => (
+                <SelectItem hideIndicator key={profile.id} value={profile.id}>
+                  <div className="space-y-0.5">
+                    <div>{profile.title}</div>
+                    <div className="text-xs text-muted-foreground">{profile.description}</div>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { JiraAttachment } from "./t3work-ticketRichContentTypes";
 import { buildTicketAttachmentCacheRelativePath } from "~/t3work/t3work-ticketAttachmentUtils";
+import { buildAtlassianAssetContentUrl } from "~/t3work/t3work-atlassianAssetUrls";
 
 function resolveUrlAgainstBase(url: string, baseUrl?: string): string {
   const trimmed = url.trim();
@@ -10,27 +11,6 @@ function resolveUrlAgainstBase(url: string, baseUrl?: string): string {
   } catch {
     return trimmed;
   }
-}
-
-function buildAtlassianAssetContentUrl(input: {
-  accountId: string;
-  url: string;
-  workspaceRoot?: string;
-  relativePath?: string;
-}): string {
-  const params = new URLSearchParams({
-    accountId: input.accountId,
-    url: input.url,
-  });
-
-  if (input.workspaceRoot) {
-    params.set("workspaceRoot", input.workspaceRoot);
-  }
-  if (input.relativePath) {
-    params.set("relativePath", input.relativePath);
-  }
-
-  return `/api/t3work/atlassian/asset/content?${params.toString()}`;
 }
 
 export function createJiraTicketAssetUrlResolver(input: {
