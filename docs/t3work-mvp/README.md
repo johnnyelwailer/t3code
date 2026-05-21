@@ -61,6 +61,7 @@ The user should be able to:
 - [Epic 16: Action Recipes](./16-action-recipes.md)
 - [Epic 17: Build-Time Localization Spike](./17-build-time-localization.md)
 - [Epic 18: Integration Freshness Polling Plan](./18-integration-freshness-polling-plan.md)
+- [Epic 19: Workspace Miniapps](./19-workspace-miniapps.md)
 
 ## Supporting Docs
 
