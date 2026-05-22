@@ -3,24 +3,19 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
 import { ThreadChatView } from "~/t3work/chat/t3work-ThreadChatView";
 import { useBackendState } from "~/t3work/backend/t3work-index";
-import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
 import type { ProjectThread, ViewState } from "~/t3work/t3work-types";
 import { ProjectDashboardKickoffAside } from "~/t3work/t3work-ProjectDashboardKickoffAside";
 import { ResizableRightSidebarLayout } from "~/t3work/t3work-ResizableRightSidebarLayout";
+import { AppMainContentHomeEmptyState } from "~/t3work/t3work-AppMainContentHomeEmptyState";
 import { isHomeProjectId } from "~/t3work/t3work-homeProject";
 import { useThreadResolutionDebug } from "~/t3work/t3work-useThreadResolutionDebug";
-import {
-  ProjectBrowserEmptyWithChat,
-  useHomeProjectChat,
-  useSyncActiveChatTarget,
-} from "./t3work-AppMainContentShell";
+import { useHomeProjectChat, useSyncActiveChatTarget } from "./t3work-AppMainContentShell";
 
 type MainContentProps = {
   view: ViewState | null;
   projects: ProjectShellProject[];
   allProjects: ProjectShellProject[];
   getThreadsForProject: (projectId: string) => ProjectThread[];
-  onOpenTicket: (projectId: string, ticketId: string) => void;
   onOpenThread: (projectId: string, threadId: string) => void;
   onKickoffProjectThread: (input: {
     projectId: string;
@@ -30,20 +25,10 @@ type MainContentProps = {
     kickoffInteractionMode: ProviderInteractionMode;
     kickoffContextAttachments: ReadonlyArray<T3WorkContextAttachment>;
   }) => void;
-  onKickoffTicketThread: (input: {
-    projectId: string;
-    ticketId: string;
-    ticketDisplayId: string;
-    githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
-    kickoffMessage: string;
-    kickoffModelSelection: ModelSelection;
-    kickoffRuntimeMode: RuntimeMode;
-    kickoffInteractionMode: ProviderInteractionMode;
-    kickoffContextAttachments: ReadonlyArray<T3WorkContextAttachment>;
-  }) => void;
   onThreadKickoffConsumed: (threadId: string) => void;
   onBackToDashboard: (projectId: string) => void;
   onCreate: () => void;
+  onInlineProjectCreated: (project: ProjectShellProject) => void;
   renderDashboard: (project: ProjectShellProject) => React.ReactNode;
   renderTicketDetail: (project: ProjectShellProject, ticketId: string) => React.ReactNode;
 };
@@ -57,6 +42,7 @@ export function AppMainContent({
   onKickoffProjectThread,
   onBackToDashboard,
   onCreate,
+  onInlineProjectCreated,
   renderDashboard,
   renderTicketDetail,
   onThreadKickoffConsumed,
@@ -66,17 +52,21 @@ export function AppMainContent({
     projects,
     getThreadsForProject,
   });
-  const renderHomeBrowserEmpty = () => (
-    <ProjectBrowserEmptyWithChat
+  const isFirstRunSetup = !view && projects.length === 0;
+  const homeBrowserEmpty = (
+    <AppMainContentHomeEmptyState
       onCreate={onCreate}
-      project={homeChatProject}
-      projectThreads={homeChatProject ? getThreadsForProject(homeChatProject.id) : []}
+      onInlineProjectCreated={onInlineProjectCreated}
+      isFirstRunSetup={isFirstRunSetup}
+      showAside={projects.length > 0}
+      homeChatProject={homeChatProject}
+      homeChatProjectThreads={homeChatProject ? getThreadsForProject(homeChatProject.id) : []}
       providers={backendState.providers}
       isConnected={backendState.connectionStatus === "connected"}
-      onOpenThread={(threadId) => {
+      onOpenHomeThread={(threadId) => {
         if (homeChatProject) onOpenThread(homeChatProject.id, threadId);
       }}
-      onKickoffThread={(
+      onKickoffHomeThread={(
         kickoffMessage,
         kickoffModelSelection,
         kickoffRuntimeMode,
@@ -124,7 +114,7 @@ export function AppMainContent({
     kickoffPending: resolvedThread?.kickoffPending ?? null,
   });
 
-  if (!view) return renderHomeBrowserEmpty();
+  if (!view) return homeBrowserEmpty;
 
   if (view.type === "thread") {
     return (
@@ -161,7 +151,7 @@ export function AppMainContent({
 
   const project = projects.find((candidate) => candidate.id === view.projectId);
   if (!project) {
-    return renderHomeBrowserEmpty();
+    return homeBrowserEmpty;
   }
 
   if (view.type === "dashboard") {
@@ -206,5 +196,5 @@ export function AppMainContent({
 
   if (view.type === "ticket") return <>{renderTicketDetail(project, view.ticketId)}</>;
 
-  return renderHomeBrowserEmpty();
+  return homeBrowserEmpty;
 }

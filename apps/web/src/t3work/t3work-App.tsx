@@ -132,13 +132,16 @@ export function App({
             projects={store.projects}
             allProjects={store.allProjects}
             getThreadsForProject={store.getThreadsForProject}
-            onOpenTicket={handleSelectTicket}
             onOpenThread={handleSelectThread}
             onKickoffProjectThread={handleCreateProjectKickoffThread}
-            onKickoffTicketThread={handleCreateTicketKickoffThread}
             onThreadKickoffConsumed={handleThreadKickoffConsumed}
             onBackToDashboard={handleSelectProject}
             onCreate={() => setShowCreate(true)}
+            onInlineProjectCreated={(project) => {
+              store.addProject(project);
+              onProjectCreated?.(project);
+              handleSelectProject(project.id);
+            }}
             renderDashboard={(project) => (
               <ProjectDashboard
                 project={project}

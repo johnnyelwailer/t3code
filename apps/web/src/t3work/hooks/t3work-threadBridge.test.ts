@@ -70,3 +70,9 @@ describe("resolveCanonicalProjectIdForWorkspaceRoot", () => {
     const canonicalProjectId = resolveCanonicalProjectIdForWorkspaceRoot(
       "/workspace/saved/",
       "stored-project",
+      [makeLiveProject({ id: ProjectId.make("live-saved"), cwd: "/workspace/saved" })],
+    );
+
+    expect(canonicalProjectId).toBe(ProjectId.make("live-saved"));
+  });
+});

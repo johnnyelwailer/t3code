@@ -33,7 +33,7 @@ const PROFILE_DEFINITIONS: Record<T3WorkProjectSetupProfileId, T3WorkProjectSetu
   "project-partner": {
     id: "project-partner",
     title: "Project Partner",
-    description: "Short, plain-language guidance for non-technical project work.",
+    description: "Plain-language guidance that makes technical project work easier to follow.",
     audience: "mixed",
     communicationStyle: {
       technicalDepth: "low",
@@ -45,23 +45,23 @@ const PROFILE_DEFINITIONS: Record<T3WorkProjectSetupProfileId, T3WorkProjectSetu
   "test-engineer": {
     id: "test-engineer",
     title: "Test Engineer",
-    description: "Concise validation-focused guidance with clear risks and coverage gaps.",
+    description: "Product flows, repro steps, and clear bug reports.",
     audience: "qa",
     communicationStyle: {
-      technicalDepth: "medium",
-      brevity: "short",
-      hideImplementationComplexity: false,
+      technicalDepth: "low",
+      brevity: "balanced",
+      hideImplementationComplexity: true,
     },
     recommendedSkillPackIds: ["qa", "delivery"],
   },
   "requirements-engineer": {
     id: "requirements-engineer",
     title: "Requirements Engineer",
-    description: "Clear requirement framing, ambiguity checks, and decision-ready summaries.",
+    description: "Clear requirements, less jargon, and decision-ready summaries.",
     audience: "product",
     communicationStyle: {
       technicalDepth: "low",
-      brevity: "short",
+      brevity: "balanced",
       hideImplementationComplexity: true,
     },
     recommendedSkillPackIds: ["product", "delivery"],
