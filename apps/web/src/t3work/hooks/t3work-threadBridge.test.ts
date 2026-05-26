@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProjectId, type EnvironmentId } from "@t3tools/contracts";
-import type { ProjectShellProject } from "@t3tools/project-context";
-
-import type { Project } from "~/types";
+import { ProjectId, ThreadId, type EnvironmentId } from "@t3tools/contracts";
 
 import {
   mapLiveThreadToProjectThread,
@@ -200,5 +197,45 @@ describe("remapProjectThreadToStoredProject", () => {
         ticketId: "ticket-1",
       }),
     ]);
+  });
+
+  it("maps durable parent and ticket metadata from live threads", () => {
+    expect(
+      mapLiveThreadToProjectThread({
+        id: "thread-child",
+        projectId: ProjectId.make("live-saved"),
+        title: "Investigate regression",
+        messages: [],
+        activities: [
+          {
+            id: "activity-handoff-1",
+            tone: "info",
+            kind: "t3work.handoff.created",
+            summary: "Created from Parent thread",
+            payload: {
+              parentThreadId: ThreadId.make("thread-parent"),
+              childThreadId: ThreadId.make("thread-child"),
+              ticketId: "PROJ-123",
+            },
+            turnId: null,
+            createdAt: "2026-05-22T09:00:00.000Z",
+          },
+        ],
+        latestTurn: null,
+        archivedAt: null,
+        error: null,
+        session: null,
+        createdAt: "2026-05-22T09:00:00.000Z",
+        updatedAt: "2026-05-22T10:00:00.000Z",
+        environmentId: "env-local" as EnvironmentId,
+        defaultModelSelection: null,
+      } as never),
+    ).toEqual(
+      expect.objectContaining({
+        id: "thread-child",
+        parentThreadId: "thread-parent",
+        ticketId: "PROJ-123",
+      }),
+    );
   });
 });

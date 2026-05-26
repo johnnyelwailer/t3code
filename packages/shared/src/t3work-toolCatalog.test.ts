@@ -23,11 +23,16 @@ describe("t3work-toolCatalog", () => {
     expect(listImplementedT3workToolCatalogEntries().map((tool) => tool.id)).toEqual([
       "t3work.view.read",
       "t3work.thread.rename",
+      "t3work.thread.start_child",
     ]);
   });
 
   it("defaults thread tool selection from the catalog", () => {
-    expect(DEFAULT_T3WORK_THREAD_TOOL_IDS).toEqual(["t3work.view.read", "t3work.thread.rename"]);
+    expect(DEFAULT_T3WORK_THREAD_TOOL_IDS).toEqual([
+      "t3work.view.read",
+      "t3work.thread.rename",
+      "t3work.thread.start_child",
+    ]);
   });
 
   it("keeps documented planned tools in the catalog without enabling them by default", () => {

@@ -6,6 +6,7 @@ export type T3workThreadToolId = T3workToolId;
 export type ProjectThread = {
   id: string;
   projectId: string;
+  parentThreadId?: string;
   ticketId?: string;
   dashboardMode?: ProjectDashboardMode;
   title: string;

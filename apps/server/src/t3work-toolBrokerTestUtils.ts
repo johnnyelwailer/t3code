@@ -1,9 +1,12 @@
 import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 
+import { GitWorkflowService, type GitWorkflowServiceShape } from "./git/GitWorkflowService.ts";
 import {
   OrchestrationEngineService,
   type OrchestrationEngineShape,
@@ -12,12 +15,27 @@ import {
   ProjectionSnapshotQuery,
   type ProjectionSnapshotQueryShape,
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import {
+  ProjectSetupScriptRunner,
+  type ProjectSetupScriptRunnerShape,
+} from "./project/Services/ProjectSetupScriptRunner.ts";
+import {
+  SourceControlProviderRegistry,
+  type SourceControlProviderRegistryShape,
+} from "./sourceControl/SourceControlProviderRegistry.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
 import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
 
 export const threadId = ThreadId.make("thread-1");
 
 const projectId = ProjectId.make("project-1");
+const stubStartChildServices = Layer.mergeAll(
+  Layer.succeed(FileSystem.FileSystem, {} as FileSystem.FileSystem),
+  Layer.succeed(Path.Path, {} as Path.Path),
+  Layer.succeed(GitWorkflowService, {} as GitWorkflowServiceShape),
+  Layer.succeed(SourceControlProviderRegistry, {} as SourceControlProviderRegistryShape),
+  Layer.succeed(ProjectSetupScriptRunner, {} as ProjectSetupScriptRunnerShape),
+);
 
 const projectionQueryMock: ProjectionSnapshotQueryShape = {
   getCommandReadModel: () => Effect.die("unused"),
@@ -70,12 +88,19 @@ const projectionQueryMock: ProjectionSnapshotQueryShape = {
 };
 
 export const makeBrokerLayer = (orchestrationMock: OrchestrationEngineShape) =>
+  makeBrokerLayerWithOptions(orchestrationMock);
+
+export const makeBrokerLayerWithOptions = (
+  orchestrationMock: OrchestrationEngineShape,
+  options: { readonly includeStartChildServices?: boolean } = {},
+) =>
   T3workToolBrokerLive.pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(ProjectionSnapshotQuery, projectionQueryMock),
         Layer.succeed(OrchestrationEngineService, orchestrationMock),
         T3workThreadToolContextStoreLive,
+        ...(options.includeStartChildServices === false ? [] : [stubStartChildServices]),
       ),
     ),
   );

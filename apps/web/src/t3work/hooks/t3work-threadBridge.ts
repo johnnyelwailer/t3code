@@ -3,6 +3,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import type { Project, Thread } from "~/types";
 import type { ProjectThread } from "~/t3work/t3work-types";
 import { mergeProjectThreadLocalState } from "~/t3work/t3work-threadToolContext";
+import { readHandoffThreadAttachmentMetadata } from "~/t3work/hooks/t3work-threadHandoffMetadata";
 
 function readHomeDirectory(): string | null {
   const maybeProcess = globalThis as typeof globalThis & {
@@ -185,9 +186,12 @@ export function mapLiveThreadToProjectThread(
   thread: Thread,
   projectIdOverride: string = thread.projectId,
 ): ProjectThread {
+  const attachmentMetadata = readHandoffThreadAttachmentMetadata(thread);
+
   return {
     id: thread.id,
     projectId: projectIdOverride,
+    ...attachmentMetadata,
     title: thread.title,
     messageCount: thread.messages.length,
     lastMessageAt: thread.latestTurn?.completedAt ?? thread.updatedAt ?? thread.createdAt,

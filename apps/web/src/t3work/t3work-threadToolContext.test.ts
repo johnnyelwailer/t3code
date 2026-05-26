@@ -54,6 +54,11 @@ describe("createT3workTurnToolContext", () => {
           label: "Rename thread",
           capabilities: ["write"],
         },
+        {
+          id: "t3work.thread.start_child",
+          label: "Start child session",
+          capabilities: ["write"],
+        },
       ],
       state: {
         view: {
@@ -76,7 +81,12 @@ describe("createT3workTurnToolContext", () => {
       threadId: "thread-1",
       threadTitle: "Kickoff",
       ticketId: "ticket-1",
-      selectedToolIds: ["t3work.view.read", "t3work.view.read", "t3work.thread.rename"],
+      selectedToolIds: [
+        "t3work.view.read",
+        "t3work.view.read",
+        "t3work.thread.rename",
+        "t3work.thread.start_child",
+      ],
     });
 
     expect(toolContext).toEqual({
@@ -90,6 +100,11 @@ describe("createT3workTurnToolContext", () => {
         {
           id: "t3work.thread.rename",
           label: "Rename thread",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3work.thread.start_child",
+          label: "Start child session",
           capabilities: ["write"],
         },
       ],

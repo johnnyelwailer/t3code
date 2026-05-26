@@ -421,8 +421,22 @@ t3work.thread.attach_context
 t3work.thread.open_full_page
 ```
 
-`t3work.view.read` and `t3work.thread.rename` are the minimal live runtime slice used by
-the current broker implementation. The rest of this section remains planned catalog scope.
+`t3work.view.read`, `t3work.thread.rename`, and `t3work.thread.start_child` are the
+current live runtime slice used by the broker implementation. The rest of this section
+remains planned catalog scope.
+
+`t3work.thread.start_child` keeps the `t3work` tool id, but uses session-style input and
+result vocabulary aligned with Copilot session tooling:
+
+- `name` for the child session title
+- optional `kickoff_prompt`
+- optional `kickoff_mode` (`plan`, `interactive`, `autopilot`)
+- optional `model` and `reasoning_effort`
+- optional `repo_full_name` for linked-repository worktree handoffs
+- result metadata including `project_session_id`, navigation hint, and repo/worktree details
+
+The first live slice creates project-level child sessions with durable parent/child
+activity cards. Visual parent-thread or work-item attachment metadata remains planned.
 
 `start_child` is agent-started and does not require user approval in the MVP. The created
 child thread must be visible in navigation and receive the chosen context immediately.

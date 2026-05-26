@@ -8,6 +8,20 @@ import { IMPLEMENTED_T3WORK_TOOL_CATALOG } from "./t3workToolCatalogImplemented.
 import { PLANNED_WORK_ITEM_GITHUB_THREAD_T3WORK_TOOL_CATALOG } from "./t3workToolCatalogItemTools.js";
 import { PLANNED_PROJECT_BACKLOG_MY_WORK_T3WORK_TOOL_CATALOG } from "./t3workToolCatalogProjectTools.js";
 
+const IMPLEMENTED_T3WORK_TOOL_IDS = new Set(Object.keys(IMPLEMENTED_T3WORK_TOOL_CATALOG));
+
+const PLANNED_PROJECT_BACKLOG_MY_WORK_TOOL_CATALOG = Object.fromEntries(
+  Object.entries(PLANNED_PROJECT_BACKLOG_MY_WORK_T3WORK_TOOL_CATALOG).filter(
+    ([toolId]) => !IMPLEMENTED_T3WORK_TOOL_IDS.has(toolId),
+  ),
+) as Readonly<Record<string, T3workToolCatalogEntry>>;
+
+const PLANNED_WORK_ITEM_GITHUB_THREAD_TOOL_CATALOG = Object.fromEntries(
+  Object.entries(PLANNED_WORK_ITEM_GITHUB_THREAD_T3WORK_TOOL_CATALOG).filter(
+    ([toolId]) => !IMPLEMENTED_T3WORK_TOOL_IDS.has(toolId),
+  ),
+) as Readonly<Record<string, T3workToolCatalogEntry>>;
+
 export type {
   T3workToolCapability,
   T3workToolCatalogEntry,
@@ -17,8 +31,8 @@ export type {
 } from "./t3workToolCatalogCore.js";
 
 export const T3WORK_TOOL_CATALOG = {
-  ...PLANNED_PROJECT_BACKLOG_MY_WORK_T3WORK_TOOL_CATALOG,
-  ...PLANNED_WORK_ITEM_GITHUB_THREAD_T3WORK_TOOL_CATALOG,
+  ...PLANNED_PROJECT_BACKLOG_MY_WORK_TOOL_CATALOG,
+  ...PLANNED_WORK_ITEM_GITHUB_THREAD_TOOL_CATALOG,
   ...IMPLEMENTED_T3WORK_TOOL_CATALOG,
 } as const satisfies Record<string, T3workToolCatalogEntry>;
 

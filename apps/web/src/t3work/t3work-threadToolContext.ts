@@ -82,6 +82,7 @@ export function mergeProjectThreadLocalState(
 
   return {
     ...next,
+    ...(existing.parentThreadId ? { parentThreadId: existing.parentThreadId } : {}),
     ...(existing.ticketId ? { ticketId: existing.ticketId } : {}),
     ...(existing.dashboardMode ? { dashboardMode: existing.dashboardMode } : {}),
     ...(existing.kickoffMessage ? { kickoffMessage: existing.kickoffMessage } : {}),

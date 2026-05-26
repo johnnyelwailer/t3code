@@ -139,7 +139,13 @@ export function useProjectBacklogLoader(input: {
     }
 
     void loadBacklog(input.requestedSelection);
-  }, [input.backend, input.connectedSource, input.projectId, input.requestedSelection, loadBacklog]);
+  }, [
+    input.backend,
+    input.connectedSource,
+    input.projectId,
+    input.requestedSelection,
+    loadBacklog,
+  ]);
 
   useEffect(() => {
     if (!input.backend || !input.connectedSource || pollingUpdatedAt === null) {

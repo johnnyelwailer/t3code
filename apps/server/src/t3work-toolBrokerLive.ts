@@ -1,11 +1,16 @@
-import { CommandId, type ThreadId } from "@t3tools/contracts";
+import { CommandId, type ThreadId as ThreadIdType } from "@t3tools/contracts";
 import { isT3workImplementedToolId } from "@t3tools/project-context/t3workToolCatalog";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ProjectSetupScriptRunner } from "./project/Services/ProjectSetupScriptRunner.ts";
+import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import {
   T3WORK_CURRENT_VIEW_RESOURCE_URI,
   T3WORK_MCP_SERVER_NAME,
@@ -23,19 +28,43 @@ import {
   readRenameTitle,
   resourceResult,
 } from "./t3work-toolBrokerHelpers.ts";
+import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
 
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;
   const contextStore = yield* T3workThreadToolContextStore;
+  const fileSystem = Option.getOrUndefined(yield* Effect.serviceOption(FileSystem.FileSystem));
+  const path = Option.getOrUndefined(yield* Effect.serviceOption(Path.Path));
+  const gitWorkflow = Option.getOrUndefined(yield* Effect.serviceOption(GitWorkflowService));
+  const sourceControlProviders = Option.getOrUndefined(
+    yield* Effect.serviceOption(SourceControlProviderRegistry),
+  );
+  const projectSetupScriptRunner = Option.getOrUndefined(
+    yield* Effect.serviceOption(ProjectSetupScriptRunner),
+  );
 
-  const loadView = (threadId: ThreadId, toolContext: T3workTurnToolContext) =>
+  const loadThreadProject = (threadId: ThreadIdType) =>
     Effect.gen(function* () {
       const thread = Option.getOrUndefined(yield* query.getThreadDetailById(threadId));
-      const project = thread
-        ? Option.getOrUndefined(yield* query.getProjectShellById(thread.projectId))
-        : undefined;
+      if (!thread) {
+        return yield* Effect.fail("Current t3work thread was not found.");
+      }
+
+      const project = Option.getOrUndefined(yield* query.getProjectShellById(thread.projectId));
+      if (!project) {
+        return yield* Effect.fail("Current t3work project was not found.");
+      }
+
+      return { project, thread };
+    });
+
+  const loadView = (threadId: ThreadIdType, toolContext: T3workTurnToolContext) =>
+    Effect.gen(function* () {
+      const resolved = yield* loadThreadProject(threadId).pipe(Effect.option);
+      const thread = Option.isSome(resolved) ? resolved.value.thread : undefined;
+      const project = Option.isSome(resolved) ? resolved.value.project : undefined;
       return {
         surface: toolContext.surface,
         state: toolContext.state,
@@ -60,13 +89,25 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       };
     });
 
-  const renameThread = (threadId: ThreadId, title: string) =>
+  const renameThread = (threadId: ThreadIdType, title: string) =>
     orchestration.dispatch({
       type: "thread.meta.update",
       commandId: CommandId.make(`server:t3work:rename:${crypto.randomUUID()}`),
       threadId,
       title,
     });
+  const startChildThread = makeStartChildThread({
+    loadThreadProject,
+    orchestration,
+    contextStore,
+    services: {
+      ...(fileSystem ? { fileSystem } : {}),
+      ...(path ? { path } : {}),
+      ...(gitWorkflow ? { gitWorkflow } : {}),
+      ...(sourceControlProviders ? { sourceControlProviders } : {}),
+      ...(projectSetupScriptRunner ? { projectSetupScriptRunner } : {}),
+    },
+  });
 
   const bindSession: T3workToolBrokerShape["bindSession"] = ({ threadId, toolContext }) =>
     Effect.gen(function* () {
@@ -123,6 +164,11 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
             renameThread(threadId, title),
             () => okResult({ ok: true, threadId, title }),
             (message) => errorResult(`Failed to rename thread: ${message}`),
+          );
+        }
+        if (tool === "t3work.thread.start_child") {
+          return foldResult(startChildThread(threadId, toolArgs), okResult, (message) =>
+            errorResult(`Failed to start child session: ${message}`),
           );
         }
         return foldResult(loadView(threadId, resolvedToolContext), okResult, (message) =>

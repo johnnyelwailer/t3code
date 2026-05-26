@@ -4,8 +4,10 @@ import { enqueueThreadKickoffAttachments } from "~/t3work/t3work-enqueueThreadKi
 import type { AddToChatPayloadInput } from "~/t3work/t3work-addToChatUtils";
 import { buildJiraWorkItemSummary } from "~/t3work/t3work-jiraContextMetadata";
 import type { TicketKickoffThreadInput } from "~/t3work/t3work-kickoffTypes";
+import { useT3WorkPinnedSidebarStore } from "~/t3work/t3work-pinnedSidebarStore";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 import { buildExistingProjectThreadViewState } from "~/t3work/t3work-projectThreadViewState";
+import { buildTicketSidebarPinnedItem } from "~/t3work/t3work-sidebarPinningTypes";
 import { buildTicketContextBundle } from "~/t3work/t3work-ticketContextBundle";
 import type { ViewState } from "~/t3work/t3work-types";
 import type { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
@@ -42,6 +44,12 @@ export async function createTicketKickoffThread(input: {
     ...threadInput,
     projectId: resolvedProjectId,
   });
+  useT3WorkPinnedSidebarStore.getState().pinItem(
+    buildTicketSidebarPinnedItem({
+      projectId: resolvedProjectId,
+      ticketId: threadInput.ticketId,
+    }),
+  );
   enqueueThreadKickoffAttachments(thread.id, threadInput.kickoffContextAttachments);
   onOpenTicket?.(resolvedProjectId, threadInput.ticketId, thread.id);
 

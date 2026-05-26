@@ -198,24 +198,38 @@ User stays on current page.
 
 The provider tool should create a child thread and optionally start its first turn.
 
-Tool shape:
+Effective live tool shape:
 
 ```ts
 type StartChildThreadInput = {
-  title: string;
-  goal: string;
-  projectId: string;
-  parentThreadId: string;
-  attachTo:
-    | { type: "thread"; threadId: string }
-    | { type: "work-item"; resourceRefId: string }
-    | { type: "project"; projectId: string };
-  workspace:
-    | { type: "meta" }
-    | { type: "linked-repository"; repositoryId: string; createWorktree: true }
-    | { type: "existing-workspace"; workspaceRoot: string };
-  contextRefs: string[];
-  startImmediately: boolean;
+  name: string;
+  kickoff_prompt?: string;
+  kickoff_mode?: "plan" | "interactive" | "autopilot";
+  model?: string;
+  reasoning_effort?: "low" | "medium" | "high";
+  repo_full_name?: string;
+};
+
+type StartChildThreadResult = {
+  ok: true;
+  project_id: string;
+  project_session_id: string;
+  name: string;
+  started: boolean;
+  interaction_mode: "plan" | "default";
+  runtime_mode: "approval-required" | "auto-accept-edits" | "full-access";
+  model: string;
+  requested_kickoff_mode?: "plan" | "interactive" | "autopilot";
+  reasoning_effort?: string;
+  repo_full_name?: string;
+  branch?: string;
+  worktree_path?: string;
+  setup_script_status: "not-requested" | "no-script" | "started" | "failed";
+  navigate_to: {
+    target: "project_session";
+    project_session_id: string;
+  };
+  startup_error?: string;
 };
 ```
 
@@ -224,9 +238,17 @@ Rules:
 - no user approval required for MVP
 - child thread is created in background
 - current page does not navigate
-- child thread appears in navigation under the requested attachment point
-- child thread starts with the provided goal and context refs
+- `repo_full_name` selects a linked repository and creates a fresh worktree/branch
+- without `repo_full_name`, the child session uses the project meta workspace
+- `kickoff_prompt` is optional; when present, the first turn starts immediately
+- durable handoff activity cards are recorded on both the parent and child threads
 - server validates project, repository, and workspace access
+
+First live-slice limitation:
+
+- visual parent-thread and work-item attachment metadata is not persisted yet
+- child sessions are currently linked through project membership plus durable activity/result metadata
+- true nested parent-thread or ticket attachment remains a follow-up schema/UI change
 
 ## Workspace And Worktree Policy
 
@@ -258,7 +280,7 @@ the workspace choice explicit.
 
 Child threads can attach to different visual parents.
 
-Supported parents:
+Target parents for the full design:
 
 - parent chat thread
 - project
@@ -273,8 +295,10 @@ Agent: create new thread under work item PROJ-123.
 Result: child appears below PROJ-123 in navigation and receives PROJ-123 context.
 ```
 
-Attaching under a work item should also attach that work item's context immediately to
-the child thread.
+The first live slice creates project-level child sessions and links them back to the
+parent through durable activity cards. Persisted work-item or parent-thread placement
+still needs an explicit metadata extension before the UI can render those children under
+their visual parent.
 
 ## Cross-Thread Messaging
 
