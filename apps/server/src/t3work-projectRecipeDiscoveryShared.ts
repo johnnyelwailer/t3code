@@ -8,8 +8,9 @@ import {
 
 export const DEFAULT_VISIBILITY_TIMEOUT_MS = 1_500;
 
-export type RawProjectRecipeManifest = Omit<ProjectRecipeManifest, "scope"> & {
+export type RawProjectRecipeManifest = Omit<ProjectRecipeManifest, "scope" | "kickoff"> & {
   readonly scope?: string;
+  readonly kickoff?: unknown;
 };
 
 const ProjectRecipeVisibilityExpressionSchema = Schema.Struct({
@@ -31,7 +32,7 @@ const RawProjectRecipeManifestSchema = Schema.Struct({
   ),
   actionView: Schema.optional(Schema.String),
   prompt: Schema.String,
-  kickoff: Schema.optional(ProjectRecipeKickoffProgram),
+  kickoff: Schema.optional(Schema.Unknown),
   files: Schema.optional(Schema.Array(Schema.String)),
   initScript: Schema.optional(Schema.String),
   workflow: Schema.optional(Schema.String),
@@ -88,8 +89,22 @@ export function normalizeRecipeManifest(raw: RawProjectRecipeManifest): ProjectR
   if (typeof raw.prompt !== "string" || raw.prompt.trim().length === 0) {
     throw new Error("Recipe manifest must include a prompt file path.");
   }
+
+  const kickoff =
+    raw.kickoff !== undefined
+      ? (() => {
+          try {
+            return Schema.decodeUnknownSync(ProjectRecipeKickoffProgram)(raw.kickoff);
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            throw new Error(`Recipe manifest kickoff is invalid: ${detail}`);
+          }
+        })()
+      : undefined;
+
   return {
     ...raw,
     scope: "project",
+    ...(kickoff !== undefined ? { kickoff } : {}),
   } as ProjectRecipeManifest;
 }

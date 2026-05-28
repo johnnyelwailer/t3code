@@ -19,7 +19,10 @@ import {
 } from "~/t3work/t3work-kickoffLaunchConfig";
 import { TicketKickoffComposerControls } from "~/t3work/t3work-TicketKickoffComposerControls";
 import { TicketKickoffComposerSelectedRecipe } from "~/t3work/t3work-TicketKickoffComposerSelectedRecipe";
-import { type T3workSelectedRecipeQuickStart } from "~/t3work/t3work-recipeQuickStartLaunch";
+import {
+  getT3workSelectedRecipeComposerPlaceholder,
+  type T3workSelectedRecipeQuickStart,
+} from "~/t3work/t3work-recipeQuickStartLaunch";
 import { runtimeModeConfig, runtimeModeOptions } from "~/t3work/t3work-ticketKickoffRuntimeConfig";
 import type { T3workThreadToolId } from "~/t3work/t3work-types";
 
@@ -157,7 +160,7 @@ export const TicketKickoffComposer = forwardRef<
                 placeholder={
                   isConnected
                     ? selectedRecipe
-                      ? "Add an optional note, constraint, or nuance"
+                      ? getT3workSelectedRecipeComposerPlaceholder(selectedRecipe)
                       : "Ask anything, @tag files/folders, $use skills, or / for commands"
                     : "Server is disconnected"
                 }

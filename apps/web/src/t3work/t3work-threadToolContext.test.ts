@@ -204,7 +204,7 @@ describe("createT3workTurnToolContext", () => {
         title: "Create a recipe for this context",
         description: "Design a contextual recipe for the current surface.",
         source: "bundled",
-        surface: "project.dashboard",
+        surface: "project.dashboard.backlog",
       },
     });
 
@@ -219,7 +219,7 @@ describe("createT3workTurnToolContext", () => {
         pending: false,
         workflow: {
           recipeId: "create-contextual-recipe",
-          surface: "project.dashboard",
+          surface: "project.dashboard.backlog",
         },
       },
     });

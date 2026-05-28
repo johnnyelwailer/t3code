@@ -11,9 +11,12 @@ import type { BackendApi } from "~/t3work/backend/t3work-types";
 import { buildAvailableContextKeys } from "~/t3work/t3work-sidecarRecipeContextKeys";
 import {
   buildPinnedQuickStartSelection,
+  mergeSidecarRecipeQuickStarts,
+  mapDiscoveredRecipesToQuickStarts,
+} from "~/t3work/t3work-sidecarRecipeDiscoveryMapping";
+import {
   buildProjectRecipeDiscoveryRequest,
   buildRecipeRenderContext,
-  mapDiscoveredRecipesToQuickStarts,
 } from "~/t3work/t3work-sidecarRecipeRenderContext";
 import {
   buildBundledRecipeTemplateValues,
@@ -26,6 +29,7 @@ import type {
 } from "~/t3work/t3work-sidecarRecipeTypes";
 
 export type {
+  T3workRecipeComposerGuidance,
   T3workSidecarRecipeActionView,
   T3workSidecarRecipeLinkedResource,
   T3workSidecarRecipeQuickStart,
@@ -41,6 +45,8 @@ export function buildT3workSidecarRecipeQuickStarts(
 ): ReadonlyArray<T3workSidecarRecipeQuickStart> {
   const profile = getT3WorkProfile(input.profileId);
   const renderContext = buildRecipeRenderContext(input, profile);
+  const resolvedSurface = renderContext.surface;
+  const projectWorkspaceRoot = input.project.workspace?.rootPath;
   const availableContextKeys = buildAvailableContextKeys(input);
   const templateValues = buildBundledRecipeTemplateValues(input);
   const matches = matchRecipes(listBundledT3WorkRecipes(), {
@@ -50,7 +56,7 @@ export function buildT3workSidecarRecipeQuickStarts(
     availableIntegrations: [
       ...new Set([input.project.source.provider, ...(input.availableIntegrations ?? [])]),
     ],
-    surface: input.surface,
+    surface: resolvedSurface,
     ...(input.jiraIssueType ? { jiraIssueType: input.jiraIssueType } : {}),
     enabledSkillPacks: profile.recommendedSkillPackIds,
     profile: toRecipeProfileContext(profile),
@@ -59,6 +65,10 @@ export function buildT3workSidecarRecipeQuickStarts(
 
   return buildPinnedQuickStartSelection(matches, input.limit ?? 5).map((result) => {
     const bundledRecipe = getBundledT3WorkRecipe(result.recipe.id);
+    const localBundledRecipePath =
+      result.recipe.id === "create-recipe" && projectWorkspaceRoot
+        ? `${projectWorkspaceRoot}/.t3work/recipes/create-recipe`
+        : undefined;
     const renderedTitle = renderPromptTemplate(
       bundledRecipe?.manifestDisplayName ?? result.recipe.title,
       templateValues,
@@ -81,13 +91,23 @@ export function buildT3workSidecarRecipeQuickStarts(
         title: renderedTitle,
         description: renderedDescription,
         source: "bundled",
-        surface: input.surface,
+        surface: resolvedSurface,
         reason: result.reason,
+        ...(localBundledRecipePath ? { recipePath: localBundledRecipePath } : {}),
+        ...(localBundledRecipePath
+          ? { workflowPath: `${localBundledRecipePath}/workflow.ts` }
+          : {}),
         ...(bundledRecipe?.allowedToolGroups
           ? { allowedToolGroups: bundledRecipe.allowedToolGroups }
           : {}),
       },
     };
+
+    if (bundledRecipe?.composerGuidance) {
+      Object.assign(quickStart, {
+        composerGuidance: bundledRecipe.composerGuidance,
+      });
+    }
 
     return bundledRecipe?.actionViewTemplate
       ? Object.assign(quickStart, {
@@ -151,13 +171,14 @@ export function useT3workSidecarRecipeQuickStarts(
           setQuickStartsIfChanged(fallbackQuickStarts);
           return;
         }
+        const discoveredQuickStarts = mapDiscoveredRecipesToQuickStarts(
+          response.recipes,
+          discoveryRequest.context.surface,
+          input.limit,
+          discoveryRequest.context,
+        );
         setQuickStartsIfChanged(
-          mapDiscoveredRecipesToQuickStarts(
-            response.recipes,
-            input.surface,
-            input.limit,
-            discoveryRequest.context,
-          ),
+          mergeSidecarRecipeQuickStarts(discoveredQuickStarts, fallbackQuickStarts, input.limit),
         );
       })
       .catch(() => {

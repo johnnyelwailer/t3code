@@ -6,6 +6,7 @@ import * as Schema from "effect/Schema";
 import { pathToFileURL } from "node:url";
 import { ProjectRecipeWorkflowDocument } from "@t3tools/project-recipes";
 
+import { normalizeWorkflowCandidate } from "./t3work-recipeWorkflowRuntimeNormalization.ts";
 import { resolveWithinRoot } from "./t3work-recipeWorkflowRuntimeShared.ts";
 
 const decodeProjectRecipeWorkflowDocument = Schema.decodeUnknownEffect(
@@ -97,5 +98,5 @@ export const readWorkflowModule = Effect.fn("readWorkflowModule")(function* (inp
     );
   }
 
-  return yield* decodeProjectRecipeWorkflowDocument(candidate);
+  return yield* decodeProjectRecipeWorkflowDocument(normalizeWorkflowCandidate(candidate));
 });

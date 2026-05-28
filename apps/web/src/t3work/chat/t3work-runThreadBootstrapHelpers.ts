@@ -7,6 +7,14 @@ import {
 } from "~/t3work/chat/t3work-threadBootstrapInstrumentation";
 import type { ThreadBootstrapDispatchState } from "~/t3work/chat/t3work-threadBootstrapPlan";
 
+const DUPLICATE_THREAD_CREATE_ERROR_FRAGMENT = "already exists and cannot be created twice.";
+
+export function isDuplicateThreadCreateError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+
+  return message.includes(DUPLICATE_THREAD_CREATE_ERROR_FRAGMENT);
+}
+
 export async function ensureThreadBootstrapProject(input: {
   backend: BackendApi;
   projectWorkspaceRoot: string | undefined;

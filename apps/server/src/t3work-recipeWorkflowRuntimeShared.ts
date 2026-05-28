@@ -1,6 +1,6 @@
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { EventId, ThreadId } from "@t3tools/contracts";
+import { EventId, MessageId, ThreadId } from "@t3tools/contracts";
 import {
   ProjectRecipeConversationCard,
   ProjectRecipeWorkflowLaunch,
@@ -13,7 +13,8 @@ import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 
 const RECIPE_WORKFLOW_STATE_DIR = ".t3work/recipe-workflows";
 
-const PersistedRecipeWorkflowWait = Schema.Struct({
+const PersistedRecipeWorkflowCardActionWait = Schema.Struct({
+  kind: Schema.Literal("card-action"),
   stepId: Schema.String,
   cardId: Schema.String,
   cardActivityStepId: Schema.String,
@@ -21,12 +22,22 @@ const PersistedRecipeWorkflowWait = Schema.Struct({
   card: ProjectRecipeConversationCard,
 });
 
+const PersistedRecipeWorkflowAgentMessageWait = Schema.Struct({
+  kind: Schema.Literal("agent-message"),
+  stepId: Schema.String,
+});
+
+const PersistedRecipeWorkflowWait = Schema.Union([
+  PersistedRecipeWorkflowCardActionWait,
+  PersistedRecipeWorkflowAgentMessageWait,
+]);
+
 const PersistedRecipeWorkflowRunStateSchema = Schema.Struct({
   version: Schema.Literal(1),
   threadId: ThreadId,
   workflowRunId: Schema.String,
   workspaceRoot: Schema.String,
-  workflowPath: Schema.String,
+  workflowPath: Schema.optional(Schema.String),
   recipePath: Schema.optional(Schema.String),
   launch: ProjectRecipeWorkflowLaunch,
   kickoffMessage: Schema.String,
@@ -91,6 +102,10 @@ export function stepActivityId(threadId: ThreadId, stepId: string): EventId {
   return EventId.make(`t3work:recipe-step:${threadId}:${stepId}`);
 }
 
+export function workflowMessageId(threadId: ThreadId, stepId: string): MessageId {
+  return MessageId.make(`t3work:recipe-message:${threadId}:${stepId}`);
+}
+
 export function actionActivityId(threadId: ThreadId, stepId: string, actionId: string): EventId {
   return EventId.make(
     `t3work:recipe-card-action:${threadId}:${stepId}:${actionId}:${crypto.randomUUID()}`,
@@ -136,7 +151,7 @@ export function launchSummaryForPhase(
       return `Bootstrapping ${launch.title}`;
     case "running":
       return `${launch.title} is running`;
-    case "waiting-for-card-action":
+    case "waiting-for-input":
       return `${launch.title} is waiting for input`;
     case "completed":
       return `${launch.title} completed`;

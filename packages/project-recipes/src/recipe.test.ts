@@ -30,7 +30,11 @@ const RECIPES: ReadonlyArray<Recipe> = [
     id: "explain-selected-work",
     title: "Explain this simply",
     shortDescription: "Summarize the selected work in plain language.",
-    surfaces: ["project.dashboard", "workitem.detail.sidepanel"],
+    surfaces: [
+      "project.dashboard.backlog",
+      "project.dashboard.myWork",
+      "workitem.detail.sidepanel",
+    ],
     promptTemplate: "Explain {{selectedWorkLabel}} in plain language.",
     appliesTo: {
       projectSourceKinds: ["atlassian", "github"],

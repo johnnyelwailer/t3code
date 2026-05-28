@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_MODEL,
   DEFAULT_RUNTIME_MODE,
@@ -40,6 +40,8 @@ type ThreadBootstrapInput = {
   serverThread: unknown | undefined;
 };
 
+export type ThreadBootstrapStatus = "idle" | "running" | "failed";
+
 export function useThreadBootstrap({
   backend,
   environmentId,
@@ -57,18 +59,39 @@ export function useThreadBootstrap({
   initialToolContext,
   onInitialUserMessageSent,
   serverThread,
-}: ThreadBootstrapInput): void {
+}: ThreadBootstrapInput): {
+  bootstrapStatus: ThreadBootstrapStatus;
+  retryThreadBootstrap: () => void;
+} {
   const dispatchStateRef = useRef<ThreadBootstrapDispatchState | undefined>(undefined);
   const onInitialUserMessageSentRef = useRef(onInitialUserMessageSent);
+  const [bootstrapStatus, setBootstrapStatus] = useState<ThreadBootstrapStatus>("idle");
+  const [retryGeneration, setRetryGeneration] = useState(0);
   onInitialUserMessageSentRef.current = onInitialUserMessageSent;
 
+  const retryThreadBootstrap = useCallback(() => {
+    dispatchStateRef.current = undefined;
+    setBootstrapStatus("idle");
+    setRetryGeneration((value) => value + 1);
+  }, []);
+
   useEffect(() => {
+    let active = true;
+    const updateBootstrapStatus = (status: ThreadBootstrapStatus) => {
+      if (active) {
+        setBootstrapStatus(status);
+      }
+    };
+
     if (!backend || !environmentId) {
+      updateBootstrapStatus("idle");
       recordThreadBootstrapSkipped({
         threadId,
         reason: !backend ? "missing-backend" : "missing-environment",
       });
-      return;
+      return () => {
+        active = false;
+      };
     }
 
     const bootstrapPlan = planThreadBootstrap({
@@ -94,8 +117,23 @@ export function useThreadBootstrap({
       dispatchState: bootstrapPlan.state,
     });
 
+    if (serverThread !== undefined) {
+      updateBootstrapStatus("idle");
+    } else if (
+      bootstrapPlan.action === "none" &&
+      (bootstrapPlan.state.kickoffSent || bootstrapPlan.state.threadCreateSent)
+    ) {
+      updateBootstrapStatus("running");
+    } else if (bootstrapPlan.action === "none") {
+      updateBootstrapStatus("idle");
+    } else {
+      updateBootstrapStatus("running");
+    }
+
     if (bootstrapPlan.action === "none") {
-      return;
+      return () => {
+        active = false;
+      };
     }
 
     const createdAt = new Date().toISOString();
@@ -127,6 +165,7 @@ export function useThreadBootstrap({
       state: bootstrapPlan.state,
       onInitialUserMessageSent: onInitialUserMessageSentRef.current,
     }).catch((error) => {
+      updateBootstrapStatus("failed");
       recordThreadBootstrapFailure({
         environmentId,
         threadId,
@@ -141,6 +180,10 @@ export function useThreadBootstrap({
         bootstrapPlan.state.threadCreateSent = false;
       }
     });
+
+    return () => {
+      active = false;
+    };
   }, [
     backend,
     canonicalProjectId,
@@ -154,8 +197,14 @@ export function useThreadBootstrap({
     projectExists,
     projectTitle,
     projectWorkspaceRoot,
+    retryGeneration,
     serverThread,
     threadId,
     title,
   ]);
+
+  return {
+    bootstrapStatus,
+    retryThreadBootstrap,
+  };
 }

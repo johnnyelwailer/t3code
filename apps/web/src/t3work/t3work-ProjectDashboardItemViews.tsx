@@ -20,6 +20,7 @@ export function TicketWorkItemCard({
   childCount,
   lastCheckedAt,
   githubActivityItems,
+  showGitHubActivityTitleBadge,
   extraChildren,
   onContextMenu,
 }: {
@@ -34,6 +35,7 @@ export function TicketWorkItemCard({
   childCount?: number;
   lastCheckedAt?: number;
   githubActivityItems?: ReadonlyArray<GitHubWorkActivityItem>;
+  showGitHubActivityTitleBadge?: boolean;
   extraChildren?: ReactNode;
   onContextMenu?: (event: React.MouseEvent) => void;
 }) {
@@ -73,6 +75,7 @@ export function TicketWorkItemCard({
               inlineChild={inlineChild}
               childCount={childCount}
               githubActivityItems={githubActivityItems}
+              showGitHubActivityTitleBadge={showGitHubActivityTitleBadge}
             />
             <div
               className={`mt-1 overflow-hidden font-medium ${

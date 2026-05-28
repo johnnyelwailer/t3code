@@ -18,15 +18,18 @@ const TEST_WORKFLOW: T3workKickoffWorkflow = {
     version: 1,
     steps: [
       {
-        kind: "wait-for-kickoff-input",
+        kind: "collect-input",
         id: "collect-brief",
-        when: "missing-prompt",
-        promptRequest: {
-          title: "Recipe authoring kickoff",
+        request: {
+          kind: "text",
+          when: "missing-prompt",
+          promptRequest: {
+            title: "Recipe authoring kickoff",
+          },
         },
       },
       {
-        kind: "run-interactive-agent",
+        kind: "agent",
         id: "author",
       },
     ],
@@ -34,7 +37,7 @@ const TEST_WORKFLOW: T3workKickoffWorkflow = {
   title: "Create a recipe for this context",
   description: "Design a contextual recipe for the current surface.",
   source: "bundled",
-  surface: "project.dashboard",
+  surface: "project.dashboard.backlog",
 };
 
 describe("launchPendingRecipeWorkflowTurn", () => {

@@ -1,3 +1,4 @@
+import { queryableToReadonlyArray } from "@t3tools/project-context";
 import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
 
 function formatTemplateNumber(value: number | undefined): string {
@@ -21,7 +22,8 @@ function buildRecipeExpressionContext(
   context: ProjectRecipeRenderContext,
 ): Readonly<Record<string, unknown>> {
   const selectedWorkLabel = context.workitem?.displayId ?? context.project.title;
-  const attachedWorkitems = (context.contextAttachments ?? []).filter(
+  const contextAttachments = queryableToReadonlyArray(context.contextAttachments);
+  const attachedWorkitems = contextAttachments.filter(
     (attachment) => attachment.kind === "jira-work-item",
   );
   const attachedBug = attachedWorkitems.find((attachment) => attachment.jiraIssueType === "Bug");
@@ -67,6 +69,10 @@ function buildRecipeExpressionContext(
 
   return {
     ...context,
+    linkedResources: queryableToReadonlyArray(context.linkedResources),
+    artifacts: queryableToReadonlyArray(context.artifacts),
+    contextAttachments,
+    availableContextKeys: queryableToReadonlyArray(context.availableContextKeys),
     projectTitle: context.project.title,
     selectedWorkLabel,
     selectedWorkTitle: context.workitem?.title ?? "",
@@ -92,7 +98,7 @@ function buildRecipeExpressionContext(
     surfaceAuthoringLabel,
     currentViewSummarySuffix,
     dashboardMode: dashboardMode ?? "",
-    attachedItemCount: String(context.contextAttachments?.length ?? 0),
+    attachedItemCount: String(contextAttachments.length),
     attachedWorkitemCount: String(attachedWorkitems.length),
     attachedBugLabel: attachedBug?.label ?? "",
     currentViewItemCount: String(currentViewSummary?.itemCount ?? 0),

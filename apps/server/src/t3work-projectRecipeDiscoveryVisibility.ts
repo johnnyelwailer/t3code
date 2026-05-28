@@ -4,6 +4,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { pathToFileURL } from "node:url";
+import { queryableToReadonlyArray } from "@t3tools/project-context";
 import {
   matchRecipes,
   type ProjectRecipeManifest,
@@ -28,7 +29,7 @@ function buildBundledCompatibilityResult(
     return null;
   }
   const provider = context.project.provider;
-  const linkedProviders = context.linkedResources
+  const linkedProviders = queryableToReadonlyArray(context.linkedResources)
     .map((resource) => resource.provider)
     .filter((value): value is string => typeof value === "string" && value.length > 0);
   const match = matchRecipes([bundledRecipe], {
@@ -40,7 +41,7 @@ function buildBundledCompatibilityResult(
     ...(context.workitem?.type ? { jiraIssueType: context.workitem.type } : {}),
     enabledSkillPacks: context.enabledSkillPacks,
     profile: context.profile,
-    availableContextKeys: context.availableContextKeys,
+    availableContextKeys: queryableToReadonlyArray(context.availableContextKeys),
   })[0];
 
   return match ? { visible: true, rank: match.score, reason: match.reason } : { visible: false };

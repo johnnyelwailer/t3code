@@ -10,9 +10,15 @@ export type T3workSidecarRecipeQuickStart = {
   readonly id: string;
   readonly title: string;
   readonly description: string;
+  readonly composerGuidance?: T3workRecipeComposerGuidance;
   readonly prompt: string;
   readonly workflow: T3workKickoffWorkflow;
   readonly actionView?: T3workSidecarRecipeActionView;
+};
+
+export type T3workRecipeComposerGuidance = {
+  readonly helperText?: string;
+  readonly placeholder?: string;
 };
 
 export type T3workSidecarRecipeActionView = {
@@ -62,7 +68,7 @@ export type T3workSidecarRecipeTicketContext = {
 };
 
 export type T3workSidecarRecipeInput = {
-  readonly surface: RecipeSurface;
+  readonly surface: RecipeSurface | "project.dashboard";
   readonly project: ProjectShellProject;
   readonly profileId?: string | undefined;
   readonly selectedWorkLabel: string;

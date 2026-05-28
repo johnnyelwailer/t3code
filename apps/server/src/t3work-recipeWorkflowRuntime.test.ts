@@ -1,12 +1,12 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
 import {
   type ProjectRecipeWorkflowLaunch,
-  PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD,
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD_ACTION,
 } from "@t3tools/project-recipes";
 import { describe, expect, it } from "vitest";
@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.js";
 import {
   runProjectRecipeWorkflowLaunch,
+  resumeProjectRecipeWorkflowAfterAgentReply,
   submitProjectRecipeCardAction,
 } from "./t3work-recipeWorkflowRuntime.js";
 
@@ -21,14 +22,21 @@ const CREATED_AT = "2026-05-27T12:00:00.000Z";
 
 const PersistedWorkflowStateSnapshot = Schema.Struct({
   waitingFor: Schema.optional(
-    Schema.Struct({
-      cardId: Schema.String,
-      cardActivityStepId: Schema.String,
-      actionId: Schema.String,
-      card: Schema.Struct({
-        title: Schema.String,
+    Schema.Union([
+      Schema.Struct({
+        kind: Schema.Literal("card-action"),
+        cardId: Schema.String,
+        cardActivityStepId: Schema.String,
+        actionId: Schema.String,
+        card: Schema.Struct({
+          title: Schema.String,
+        }),
       }),
-    }),
+      Schema.Struct({
+        kind: Schema.Literal("agent-message"),
+        stepId: Schema.String,
+      }),
+    ]),
   ),
   nextStepIndex: Schema.Number,
 });
@@ -59,6 +67,13 @@ function activityAppendCommands(commands: ReadonlyArray<OrchestrationCommand>) {
   );
 }
 
+function messageUpsertCommands(commands: ReadonlyArray<OrchestrationCommand>) {
+  return commands.filter(
+    (command): command is Extract<OrchestrationCommand, { type: "thread.message.upsert" }> =>
+      command.type === "thread.message.upsert",
+  );
+}
+
 const makeTempWorkspace = Effect.fn("makeTempWorkspace")(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   return yield* fileSystem.makeTempDirectoryScoped({
@@ -68,7 +83,14 @@ const makeTempWorkspace = Effect.fn("makeTempWorkspace")(function* () {
 
 const writeRecipeWorkflowFixture = Effect.fn("writeRecipeWorkflowFixture")(function* (input: {
   readonly workspaceRoot: string;
-}) {
+}): Effect.fn.Return<
+  {
+    readonly recipeRoot: string;
+    readonly workflowPath: string;
+  },
+  PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
   const fileSystem = yield* FileSystem.FileSystem;
   const recipeRoot = `${input.workspaceRoot}/.t3work/recipes/qa-test-plan`;
 
@@ -155,6 +177,7 @@ describe("runProjectRecipeWorkflowLaunch", () => {
           const state = yield* decodePersistedWorkflowStateSnapshot(stateJson);
 
           expect(state.waitingFor).toMatchObject({
+            kind: "card-action",
             cardId: "approval-card",
             cardActivityStepId: "present-card",
             actionId: "approve",
@@ -162,15 +185,93 @@ describe("runProjectRecipeWorkflowLaunch", () => {
           });
           expect(state.nextStepIndex).toBe(3);
 
-          const cardActivities = activityAppendCommands(commands).filter(
-            (command) => command.activity.kind === PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD,
+          const cardMessages = messageUpsertCommands(commands).filter(
+            (command) =>
+              command.message.t3workExt?.attachments?.some(
+                (attachment) => attachment.kind === "view",
+              ) === true,
           );
-          expect(cardActivities).toHaveLength(2);
-          expect(cardActivities[1]?.activity.payload).toMatchObject({
-            stepId: "present-card",
-            phase: "updated",
-            awaitingActionId: "approve",
+          expect(cardMessages).toHaveLength(2);
+          expect(cardMessages[1]?.message.t3workExt?.attachments?.[0]).toMatchObject({
+            props: {
+              stepId: "present-card",
+              phase: "updated",
+              awaitingActionId: "approve",
+            },
           });
+        }).pipe(Effect.provide(NodeServices.layer)),
+      ),
+    );
+  });
+});
+
+describe("resumeProjectRecipeWorkflowAfterAgentReply", () => {
+  it("waits for a mid-flow agent reply before continuing to later present-message steps", async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const workspaceRoot = yield* makeTempWorkspace();
+          const fileSystem = yield* FileSystem.FileSystem;
+          const recipeRoot = `${workspaceRoot}/.t3work/recipes/create-recipe`;
+          yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
+          yield* fileSystem.writeFileString(
+            `${recipeRoot}/workflow.ts`,
+            [
+              "export const steps = [",
+              '  { kind: "present-message", id: "announce", message: { body: "Before agent" } },',
+              '  { kind: "agent", id: "draft", promptText: "Draft the recipe" },',
+              '  { kind: "present-message", id: "after-agent", message: { body: "After agent" } },',
+              "];",
+              "",
+            ].join("\n"),
+          );
+
+          const { orchestration, commands } = createMockOrchestration();
+          const threadId = ThreadId.make("thread-recipe-agent-resume");
+
+          const launch = buildLaunch(`${recipeRoot}/workflow.ts`, recipeRoot);
+          const launchResult = yield* runProjectRecipeWorkflowLaunch({
+            orchestration,
+            threadId,
+            workspaceRoot,
+            launch,
+            kickoffMessage: "Start the create-recipe flow",
+            createdAt: CREATED_AT,
+          });
+
+          expect(launchResult.turnStartMessage).toBe("Draft the recipe");
+
+          const stateJson = yield* fileSystem.readFileString(
+            `${workspaceRoot}/.t3work/recipe-workflows/${threadId}.json`,
+          );
+          const state = yield* decodePersistedWorkflowStateSnapshot(stateJson);
+          expect(state.waitingFor).toMatchObject({
+            kind: "agent-message",
+            stepId: "draft",
+          });
+          expect(state.nextStepIndex).toBe(2);
+
+          const resumed = yield* resumeProjectRecipeWorkflowAfterAgentReply({
+            orchestration,
+            workspaceRoot,
+            threadId,
+            messageText: "Here is the drafted recipe",
+            createdAt: "2026-05-27T12:00:10.000Z",
+          });
+
+          expect(resumed?.turnStartMessage).toBeUndefined();
+          const workflowStateExists = yield* fileSystem.exists(
+            `${workspaceRoot}/.t3work/recipe-workflows/${threadId}.json`,
+          );
+          expect(workflowStateExists).toBe(false);
+
+          const upserts = messageUpsertCommands(commands).filter(
+            (command) => command.message.role === "system",
+          );
+          expect(upserts.map((command) => command.message.text)).toEqual([
+            "Before agent",
+            "After agent",
+          ]);
         }).pipe(Effect.provide(NodeServices.layer)),
       ),
     );
@@ -225,14 +326,14 @@ describe("submitProjectRecipeCardAction", () => {
             ),
           ).toBe(true);
           expect(
-            activities.some(
-              (command) =>
-                command.activity.kind === PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD &&
-                (command.activity.payload as { phase?: string; completedActionId?: string })
-                  .phase === "completed" &&
-                (command.activity.payload as { completedActionId?: string }).completedActionId ===
-                  "approve",
-            ),
+            messageUpsertCommands(commands).some((command) => {
+              const props = command.message.t3workExt?.attachments?.[0];
+              if (!props || props.kind !== "view") {
+                return false;
+              }
+              const payload = props.props as { phase?: string; completedActionId?: string };
+              return payload.phase === "completed" && payload.completedActionId === "approve";
+            }),
           ).toBe(true);
         }).pipe(Effect.provide(NodeServices.layer)),
       ),

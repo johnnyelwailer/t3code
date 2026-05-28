@@ -377,6 +377,7 @@ export function projectEvent(
             role: payload.role,
             text: payload.text,
             ...(payload.attachments !== undefined ? { attachments: payload.attachments } : {}),
+            ...(payload.t3workExt !== undefined ? { t3workExt: payload.t3workExt } : {}),
             turnId: payload.turnId,
             streaming: payload.streaming,
             createdAt: payload.createdAt,
@@ -403,6 +404,7 @@ export function projectEvent(
                     ...(message.attachments !== undefined
                       ? { attachments: message.attachments }
                       : {}),
+                    ...(message.t3workExt !== undefined ? { t3workExt: message.t3workExt } : {}),
                   }
                 : entry,
             )

@@ -2,22 +2,27 @@ import * as Effect from "effect/Effect";
 import type { ThreadId } from "@t3tools/contracts";
 import {
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD_ACTION,
-  ProjectRecipeWorkflowCardActivityPayload,
   type ProjectRecipeWorkflowLaunch as ProjectRecipeWorkflowLaunchType,
-  PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD,
 } from "@t3tools/project-recipes";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import {
   upsertProjectRecipeLaunchActivity,
   upsertThreadActivity,
 } from "./t3work-recipeWorkflowRuntimeActivities.ts";
+import {
+  finalizeWorkflowExecution,
+  resumeProjectRecipeWorkflowAfterAgentReply,
+  resolveWorkflowLaunchPhase,
+} from "./t3work-recipeWorkflowRuntimeContinuation.ts";
 import { executeWorkflowSteps } from "./t3work-recipeWorkflowRuntimeExecution.ts";
+import { upsertWorkflowCardSystemMessage } from "./t3work-recipeWorkflowRuntimeMessages.ts";
 import { readWorkflowModule } from "./t3work-recipeWorkflowRuntimeModule.ts";
 import {
   clearWorkflowState,
   persistWorkflowState,
   readPersistedWorkflowState,
 } from "./t3work-recipeWorkflowRuntimeState.ts";
+import { normalizeWorkflowLaunch } from "./t3work-recipeWorkflowRuntimeNormalization.ts";
 import {
   actionActivityId,
   cardActivityId,
@@ -26,6 +31,7 @@ import {
 } from "./t3work-recipeWorkflowRuntimeShared.ts";
 
 export { upsertProjectRecipeLaunchActivity } from "./t3work-recipeWorkflowRuntimeActivities.ts";
+export { resumeProjectRecipeWorkflowAfterAgentReply } from "./t3work-recipeWorkflowRuntimeContinuation.ts";
 
 export const runProjectRecipeWorkflowLaunch = Effect.fn("runProjectRecipeWorkflowLaunch")(
   function* (input: {
@@ -37,39 +43,53 @@ export const runProjectRecipeWorkflowLaunch = Effect.fn("runProjectRecipeWorkflo
     createdAt: string;
   }) {
     const workflowRunId = workflowRunIdForThread(input.threadId);
+    const launch = normalizeWorkflowLaunch(input.launch);
     yield* upsertProjectRecipeLaunchActivity({
       orchestration: input.orchestration,
       threadId: input.threadId,
-      launch: input.launch,
+      launch,
       workflowRunId,
       phase: "creating-thread",
       createdAt: input.createdAt,
     });
 
-    if (!input.launch.workflowPath) {
+    if (!launch.workflowPath && !launch.kickoff) {
+      yield* upsertProjectRecipeLaunchActivity({
+        orchestration: input.orchestration,
+        threadId: input.threadId,
+        launch,
+        workflowRunId,
+        phase: "bootstrapping-agent",
+        createdAt: input.createdAt,
+      });
       yield* clearWorkflowState({
         workspaceRoot: input.workspaceRoot,
         threadId: input.threadId,
       });
-      return { kickoffMessage: input.kickoffMessage };
+      return {
+        kickoffMessage: input.kickoffMessage,
+        turnStartMessage: input.kickoffMessage,
+      };
     }
 
-    const workflowDocument = yield* readWorkflowModule({
-      workflowPath: input.launch.workflowPath,
-      workspaceRoot: input.workspaceRoot,
-      ...(input.launch.recipePath ? { recipePath: input.launch.recipePath } : {}),
-    });
+    const workflowDocument = launch.workflowPath
+      ? yield* readWorkflowModule({
+          workflowPath: launch.workflowPath,
+          workspaceRoot: input.workspaceRoot,
+          ...(launch.recipePath ? { recipePath: launch.recipePath } : {}),
+        })
+      : { steps: [] };
 
     const initialState: PersistedRecipeWorkflowRunState = {
       version: 1,
       threadId: input.threadId,
       workflowRunId,
       workspaceRoot: input.workspaceRoot,
-      workflowPath: input.launch.workflowPath,
-      ...(input.launch.recipePath ? { recipePath: input.launch.recipePath } : {}),
-      launch: input.launch,
+      ...(launch.workflowPath ? { workflowPath: launch.workflowPath } : {}),
+      ...(launch.recipePath ? { recipePath: launch.recipePath } : {}),
+      launch,
       kickoffMessage: input.kickoffMessage,
-      steps: workflowDocument.steps,
+      steps: [...(launch.kickoff?.steps ?? []), ...workflowDocument.steps],
       nextStepIndex: 0,
       updatedAt: input.createdAt,
     };
@@ -83,16 +103,20 @@ export const runProjectRecipeWorkflowLaunch = Effect.fn("runProjectRecipeWorkflo
       allowKickoffAgentStep: true,
     });
 
-    if (result.stateToPersist) {
-      yield* persistWorkflowState(result.stateToPersist);
-    } else {
-      yield* clearWorkflowState({
-        workspaceRoot: input.workspaceRoot,
-        threadId: input.threadId,
-      });
-    }
+    yield* finalizeWorkflowExecution({
+      orchestration: input.orchestration,
+      workspaceRoot: input.workspaceRoot,
+      threadId: input.threadId,
+      launch,
+      workflowRunId,
+      createdAt: input.createdAt,
+      result,
+    });
 
-    return { kickoffMessage: result.kickoffMessage };
+    return {
+      kickoffMessage: result.kickoffMessage,
+      ...(result.turnStartMessage ? { turnStartMessage: result.turnStartMessage } : {}),
+    };
   },
 );
 
@@ -115,6 +139,9 @@ export const submitProjectRecipeCardAction = Effect.fn("submitProjectRecipeCardA
     }
 
     if (!state.waitingFor) {
+      throw new Error("This workflow is not waiting for a card action.");
+    }
+    if (state.waitingFor.kind !== "card-action") {
       throw new Error("This workflow is not waiting for a card action.");
     }
     if (state.waitingFor.cardId !== input.cardId) {
@@ -140,20 +167,16 @@ export const submitProjectRecipeCardAction = Effect.fn("submitProjectRecipeCardA
       },
     });
 
-    yield* upsertThreadActivity({
+    yield* upsertWorkflowCardSystemMessage({
       orchestration: input.orchestration,
       threadId: input.threadId,
-      activityId: cardActivityId(input.threadId, state.waitingFor.cardActivityStepId),
+      workflowRunId: state.workflowRunId,
+      recipeId: state.launch.recipeId,
+      stepId: state.waitingFor.cardActivityStepId,
+      card: state.waitingFor.card,
+      phase: "completed",
       createdAt: input.createdAt,
-      kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD,
-      summary: state.waitingFor.card.title,
-      payload: {
-        workflowRunId: state.workflowRunId,
-        stepId: state.waitingFor.cardActivityStepId,
-        phase: "completed",
-        completedActionId: input.actionId,
-        card: state.waitingFor.card,
-      } satisfies typeof ProjectRecipeWorkflowCardActivityPayload.Type,
+      completedActionId: input.actionId,
     });
 
     const resumedState: PersistedRecipeWorkflowRunState = {
@@ -170,13 +193,16 @@ export const submitProjectRecipeCardAction = Effect.fn("submitProjectRecipeCardA
       allowKickoffAgentStep: false,
     });
 
-    if (result.stateToPersist) {
-      yield* persistWorkflowState(result.stateToPersist);
-    } else {
-      yield* clearWorkflowState({
-        workspaceRoot: input.workspaceRoot,
-        threadId: input.threadId,
-      });
-    }
+    yield* finalizeWorkflowExecution({
+      orchestration: input.orchestration,
+      workspaceRoot: input.workspaceRoot,
+      threadId: input.threadId,
+      launch: state.launch,
+      workflowRunId: state.workflowRunId,
+      createdAt: input.createdAt,
+      result,
+    });
+
+    return result.turnStartMessage ? { turnStartMessage: result.turnStartMessage } : {};
   },
 );

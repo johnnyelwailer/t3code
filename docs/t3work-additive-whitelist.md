@@ -43,10 +43,30 @@ Prefix policy:
   - Bind the in-process t3work tool broker into Codex session startup so dynamic tool registration and MCP-backed view/thread actions work per thread without introducing a second provider stack.
 - `apps/server/src/provider/Layers/CodexSessionRuntime.test.ts`
   - Cover the Codex runtime's dynamic-tool thread-start payload and MCP binding behavior alongside the owning upstream runtime file.
+- `apps/server/src/orchestration/Layers/ProjectionPipeline.ts`
+  - Preserve optional `t3workExt` on thread message upserts inside the existing projection pipeline so system-message metadata survives projection updates.
+- `apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts`
+  - Decode and return optional `t3workExt` from projection-thread message rows so the additive message seam is readable from snapshots.
+- `apps/server/src/orchestration/decider.ts`
+  - Add the minimal `thread.message.upsert` command-to-event seam needed to persist first-class system messages without forking the orchestration model.
+- `apps/server/src/orchestration/projector.ts`
+  - Project optional `t3workExt` through thread message sent/update events so the read model keeps workflow message metadata.
+- `apps/server/src/persistence/Layers/ProjectionThreadMessages.ts`
+  - Persist optional `t3workExt` JSON alongside existing projection-thread message fields as the smallest storage seam for workflow message metadata.
+- `apps/server/src/persistence/Migrations.ts`
+  - Register the additive t3work migration that adds `projection_thread_messages.t3work_ext_json`.
+- `apps/server/src/persistence/Services/ProjectionThreadMessages.ts`
+  - Extend the projection-thread message schema with optional `t3workExt` so the persistence layer can carry the namespaced message extension.
 - `packages/contracts/src/settings.ts`
   - Add optional `t3workStoredProjectsJson` / `t3workStoredSidebarPinsJson` client-setting keys so desktop-stable t3work project and sidebar-pin persistence can reuse the existing local client-settings seam without widening unrelated runtime APIs.
-- `packages/t3-adapter/src/workspace.ts`
-  - Move managed workspace default path from `project-shell` to `t3work`.
+- `apps/web/src/store.ts`
+  - Thread optional `t3workExt` through the existing chat-message mapper so user-visible timeline filtering/rendering can read the additive message seam.
+- `apps/web/src/types.ts`
+  - Add optional `t3workExt` to the web chat-message type as the minimal client-side seam for workflow system message metadata.
+- `packages/contracts/src/index.ts`
+  - Export the additive `t3work-message-ext` contract from the shared contracts entrypoint so upstream seams can import the namespaced extension type.
+- `packages/contracts/src/orchestration.ts`
+  - Add optional `t3workExt` and `thread.message.upsert` to the orchestration contract so first-class system messages flow through the existing command/event channel.
 - `bun.lock`
   - Lockfile drift due workspace/package updates.
 

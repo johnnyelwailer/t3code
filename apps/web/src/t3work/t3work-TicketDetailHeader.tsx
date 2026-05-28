@@ -45,13 +45,18 @@ export function TicketDetailHeader({
         <div className="truncate text-xs text-muted-foreground/80 mt-0.5">{title}</div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <Button size="xs" variant="outline" onClick={onReload}>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          onClick={onReload}
+          aria-label="Refresh ticket"
+          title="Refresh ticket"
+        >
           <RefreshCw className="size-3.5" />
-          Refresh
         </Button>
         {ticketUrl ? (
           <a href={ticketUrl} target="_blank" rel="noreferrer">
-            <Button size="xs" variant="outline">
+            <Button size="xs" variant="outline" className="gap-2.5">
               <ExternalLink className="size-3.5" />
               Open Jira
             </Button>

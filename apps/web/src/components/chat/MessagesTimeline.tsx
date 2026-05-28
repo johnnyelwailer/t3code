@@ -73,6 +73,12 @@ import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { ContextAttachmentStrip } from "~/t3work/components/t3work-ContextAttachmentChip";
 import { extractContextAttachmentsFromMessageText } from "~/t3work/t3work-contextAttachmentText";
 import { type T3workRecipeActivityCardEntry } from "~/t3work/chat/t3work-threadRecipeActivityCards";
+import {
+  getT3workRenderableAttachments,
+  getT3workWorkflowCardAttachment,
+  T3workMessageAttachmentList,
+  T3workWorkflowCardBody,
+} from "~/t3work/chat/t3work-messageExtViews";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -372,7 +378,7 @@ function recipeLaunchPhaseLabel(
       return "Bootstrapping agent";
     case "running":
       return "Running";
-    case "waiting-for-card-action":
+    case "waiting-for-input":
       return "Waiting for input";
     case "completed":
       return "Completed";
@@ -381,59 +387,6 @@ function recipeLaunchPhaseLabel(
     default:
       return "Queued";
   }
-}
-
-function renderWorkflowCardFields(
-  card: Extract<T3workRecipeActivityCardEntry, { kind: "workflow-card" }>["card"]["card"],
-) {
-  if (!card.fields || card.fields.length === 0) {
-    return null;
-  }
-
-  if (card.kind === "checklist") {
-    return (
-      <div className="mt-3 space-y-1.5">
-        {card.fields.map((field, index) => {
-          const label = typeof field.label === "string" ? field.label : `Item ${index + 1}`;
-          const checked = field.checked === true;
-          return (
-            <div
-              key={`${card.id}:field:${index}`}
-              className="flex items-center gap-2 text-sm text-muted-foreground"
-            >
-              {checked ? (
-                <CheckCircle2Icon className="size-4 text-emerald-600" />
-              ) : (
-                <div className="size-4 rounded-full border border-border/70" />
-              )}
-              <span>{label}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-      {card.fields.map((field, index) => (
-        <div
-          key={`${card.id}:field:${index}`}
-          className="rounded-lg border border-border/55 bg-background/65 px-3 py-2 text-xs"
-        >
-          {Object.entries(field).map(([key, value]) => (
-            <div
-              key={`${card.id}:field:${index}:${key}`}
-              className="flex items-start justify-between gap-2"
-            >
-              <span className="text-muted-foreground/70">{key}</span>
-              <span className="max-w-[70%] text-right text-foreground/85">{String(value)}</span>
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
 }
 
 const ActivityCardTimelineRow = memo(function ActivityCardTimelineRow(props: {
@@ -488,68 +441,10 @@ const ActivityCardTimelineRow = memo(function ActivityCardTimelineRow(props: {
 
   return (
     <div className="rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1.5">
-          <p className="text-sm font-semibold text-foreground">{card.title}</p>
-          {card.body ? (
-            <p className="text-sm leading-6 text-muted-foreground">{card.body}</p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          <Badge variant="secondary">{card.kind}</Badge>
-          <Badge variant="outline">
-            {workflowCard.phase === "completed" ? "Completed" : "Open"}
-          </Badge>
-        </div>
-      </div>
-
-      {renderWorkflowCardFields(card)}
-
-      {card.actions && card.actions.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {card.actions.map((action) => {
-            const isAwaitedAction = awaitingActionId === action.id;
-            const isCompletedAction = completedActionId === action.id;
-            const isSubmitting = submittingActionId === action.id;
-            const disabled =
-              isCompletedAction || isSubmitting || !onSubmitRecipeCardAction || !isAwaitedAction;
-
-            return (
-              <Button
-                key={`${card.id}:action:${action.id}`}
-                type="button"
-                size="sm"
-                variant={
-                  action.style === "secondary"
-                    ? "outline"
-                    : action.style === "danger"
-                      ? "destructive"
-                      : "default"
-                }
-                disabled={disabled}
-                onClick={() => {
-                  if (!onSubmitRecipeCardAction || !isAwaitedAction || disabled) {
-                    return;
-                  }
-
-                  setSubmittingActionId(action.id);
-                  void onSubmitRecipeCardAction({
-                    cardId: card.id,
-                    actionId: action.id,
-                    ...(action.submit ? { submit: action.submit } : {}),
-                  }).finally(() =>
-                    setSubmittingActionId((current) => (current === action.id ? null : current)),
-                  );
-                }}
-              >
-                {isSubmitting ? <LoaderCircleIcon className="mr-1 size-3 animate-spin" /> : null}
-                {isCompletedAction ? <CheckCircle2Icon className="mr-1 size-3" /> : null}
-                {action.label}
-              </Button>
-            );
-          })}
-        </div>
-      ) : null}
+      <T3workWorkflowCardBody
+        workflowCard={workflowCard}
+        onSubmitRecipeCardAction={onSubmitRecipeCardAction}
+      />
     </div>
   );
 });
@@ -693,6 +588,13 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
 
 function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  const workflowCard = getT3workWorkflowCardAttachment(row.message);
+  const attachments = getT3workRenderableAttachments(row.message);
+  const hasText = row.message.text.trim().length > 0;
+
+  if (row.message.t3workExt?.visibleToUser === false) {
+    return null;
+  }
 
   return (
     <div className="min-w-0 px-1 py-0.5">
@@ -700,12 +602,31 @@ function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message
         <div className="mb-2 flex items-center gap-2">
           <Badge variant="outline">System</Badge>
         </div>
-        <ChatMarkdown
-          text={row.message.text || "(empty system message)"}
-          cwd={ctx.markdownCwd}
-          isStreaming={false}
-          skills={ctx.skills}
-        />
+        {hasText ? (
+          <ChatMarkdown
+            text={row.message.text}
+            cwd={ctx.markdownCwd}
+            isStreaming={false}
+            skills={ctx.skills}
+          />
+        ) : null}
+        {workflowCard ? (
+          <div className={hasText ? "mt-3" : undefined}>
+            <T3workWorkflowCardBody
+              workflowCard={workflowCard}
+              onSubmitRecipeCardAction={ctx.onSubmitRecipeCardAction}
+            />
+          </div>
+        ) : null}
+        {attachments.length > 0 ? <T3workMessageAttachmentList attachments={attachments} /> : null}
+        {!hasText && !workflowCard && attachments.length === 0 ? (
+          <ChatMarkdown
+            text="(empty system message)"
+            cwd={ctx.markdownCwd}
+            isStreaming={false}
+            skills={ctx.skills}
+          />
+        ) : null}
         <p className="mt-1.5 text-[10px] text-muted-foreground/40">
           {formatTimestamp(row.message.createdAt, ctx.timestampFormat)}
         </p>

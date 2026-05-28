@@ -1,8 +1,11 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
   isWaitingForKickoffInput,
   shouldShowThreadKickoffPlaceholder,
+  ThreadKickoffPlaceholder,
 } from "~/t3work/chat/t3work-threadKickoffPlaceholder";
 import { buildT3workSidecarRecipeQuickStarts } from "~/t3work/t3work-sidecarRecipes";
 import type { ProjectShellProject } from "@t3tools/project-context";
@@ -107,5 +110,17 @@ describe("shouldShowThreadKickoffPlaceholder", () => {
 
     expect(isWaitingForKickoffInput(createRecipe?.workflow, false)).toBe(true);
     expect(isWaitingForKickoffInput(createRecipe?.workflow, true)).toBe(false);
+  });
+
+  it("renders kickoff content in a scrollable card", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ThreadKickoffPlaceholder, {
+        message: Array.from({ length: 40 }, (_, index) => `Line ${index + 1}`).join("\n"),
+      }),
+    );
+
+    expect(markup).toContain("max-h-[min(50dvh,28rem)]");
+    expect(markup).toContain("overflow-x-hidden");
+    expect(markup).toContain("overflow-y-auto");
   });
 });

@@ -15,7 +15,7 @@ const CATALOG_DOC_PATH = new URL(
 
 function readDocumentedToolIds(): ReadonlyArray<string> {
   const doc = readFileSync(CATALOG_DOC_PATH, "utf8");
-  return [...new Set([...doc.matchAll(/t3work\.[a-z0-9_.]+/g)].map((match) => match[0]))].sort();
+  return [...new Set([...doc.matchAll(/t3work\.[a-z0-9_.]+/g)].map((match) => match[0]))].toSorted();
 }
 
 describe("t3work-toolCatalog", () => {
@@ -48,7 +48,7 @@ describe("t3work-toolCatalog", () => {
     expect(
       listT3workToolCatalogEntries()
         .map((tool) => tool.id)
-        .sort(),
+        .toSorted(),
     ).toEqual(readDocumentedToolIds());
   });
 });

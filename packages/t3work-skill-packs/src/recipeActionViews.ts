@@ -1,7 +1,5 @@
 export const EXPLAIN_SELECTED_WORK_ACTION_VIEW = `
-export default function Action({ ctx }) {
-  const priority = ctx.workitem?.priority ?? "Unspecified";
-
+export default function Action() {
   return (
     <RecipeAction
       title="Explain simply"
@@ -29,10 +27,6 @@ export default function Action({ ctx }) {
           },
         ]}
       />
-      {String(priority).toLowerCase().includes("critical") ||
-      String(priority).toLowerCase().includes("high") ? (
-        <RiskPill level="high">High-priority work</RiskPill>
-      ) : null}
     </RecipeAction>
   );
 }
@@ -41,33 +35,29 @@ export default function Action({ ctx }) {
 export const CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW = `
 export default function Action({ ctx }) {
   const dashboardMode = ctx.surfaceState?.dashboardMode;
-  const surfaceLabel =
+  const surfaceTarget =
     ctx.surface === "workitem.detail.sidepanel"
-      ? "Ticket detail"
+      ? "this ticket"
       : dashboardMode === "my-work"
-        ? "My work"
+        ? "my work"
         : dashboardMode === "backlog"
-          ? "Backlog"
-          : "Project dashboard";
-  const selectedWork =
-    ctx.workitem?.displayId ??
-    ctx.workitem?.title ??
-    "No selected work";
+          ? "this backlog"
+          : "this view";
+  const description =
+    ctx.surface === "workitem.detail.sidepanel"
+      ? "Let the agent handle repeatable ticket work: draft a handoff, check QA gaps, or trace blockers."
+      : dashboardMode === "my-work"
+        ? "Let the agent handle repeatable queue work: rank next actions, surface unblockers, or prep handoffs."
+        : dashboardMode === "backlog"
+          ? "Let the agent handle repeatable backlog work: triage risk, shape the next slice, or flag missing owners."
+          : "Let the agent handle repeatable work here: triage, review, or prep a handoff.";
 
   return (
     <RecipeAction
-      title="Create a recipe for this context"
-      subtitle={<Badge variant="outline">{surfaceLabel}</Badge>}
+      title={"Create a recipe for " + surfaceTarget}
       icon="sparkles"
-      description="Open a guided recipe-authoring thread for the current context, or add a custom note to hand it to the agent immediately."
-    >
-      <FieldList
-        items={[
-          { label: "Context keys", value: String(ctx.availableContextKeys?.length ?? 0) },
-          { label: "Selected work", value: selectedWork },
-        ]}
-      />
-    </RecipeAction>
+      description={description}
+    />
   );
 }
 `;
@@ -114,7 +104,6 @@ export default function Action({ ctx }) {
   return (
     <RecipeAction
       title="Summarize project risk"
-      subtitle={<Badge variant="outline">Risk scan</Badge>}
       icon="triangle-alert"
     >
       <FieldList
@@ -123,7 +112,6 @@ export default function Action({ ctx }) {
           { label: "Bugs", value: String(bugCount) },
         ]}
       />
-      {bugCount > 0 ? <RiskPill level="high">Bug-driven risk</RiskPill> : null}
     </RecipeAction>
   );
 }
@@ -133,21 +121,16 @@ export const PRIORITIZE_PENDING_WORK_ACTION_VIEW = `
 export default function Action({ ctx }) {
   const itemCount = ctx.surfaceState?.currentView?.itemCount ?? 0;
   const bugCount = ctx.surfaceState?.currentView?.bugCount ?? 0;
-  const leadingItem =
-    ctx.surfaceState?.currentView?.primaryBugLabel ??
-    ctx.surfaceState?.currentView?.primaryItemLabel ??
-    "No primary item";
 
   return (
     <RecipeAction
       title="Prioritize {{currentViewLabel}}"
-      subtitle={<Badge variant="outline">Current view</Badge>}
       icon="list-todo"
     >
       <FieldList
         items={[
           { label: "Items", value: String(itemCount) },
-          { label: "Lead", value: leadingItem },
+          { label: "Bugs", value: String(bugCount) },
         ]}
       />
       <LaunchOptionGroup
@@ -172,7 +155,6 @@ export default function Action({ ctx }) {
           },
         ]}
       />
-      {bugCount > 0 ? <RiskPill level="high">Bug-heavy queue</RiskPill> : null}
     </RecipeAction>
   );
 }
@@ -182,12 +164,10 @@ export const FOCUS_NEEDS_MY_ACTION_ACTION_VIEW = `
 export default function Action({ ctx }) {
   const itemCount = ctx.surfaceState?.currentView?.itemCount ?? 0;
   const bugCount = ctx.surfaceState?.currentView?.bugCount ?? 0;
-  const dashboardLabel = ctx.surfaceState?.dashboardMode === "my-work" ? "My work" : "Backlog";
 
   return (
     <RecipeAction
       title="Show what needs my action"
-      subtitle={<Badge variant="outline">{dashboardLabel}</Badge>}
       icon="list-filter"
       description="Filter the current view to the slice most likely waiting on you, then explain the next best move."
     >
@@ -204,25 +184,20 @@ export default function Action({ ctx }) {
 
 export const SHAPE_NEXT_BACKLOG_SLICE_ACTION_VIEW = `
 export default function Action({ ctx }) {
+  const itemCount = ctx.surfaceState?.currentView?.itemCount ?? 0;
   const bugCount = ctx.surfaceState?.currentView?.bugCount ?? 0;
-  const leadingItem =
-    ctx.surfaceState?.currentView?.primaryBugLabel ??
-    ctx.surfaceState?.currentView?.primaryItemLabel ??
-    "Pick the next pull-forward item";
 
   return (
     <RecipeAction
       title="Shape the next backlog slice"
-      subtitle={<Badge variant="outline">Backlog</Badge>}
       icon="list-filter"
     >
       <FieldList
         items={[
-          { label: "Items", value: String(ctx.surfaceState?.currentView?.itemCount ?? 0) },
-          { label: "Lead", value: leadingItem },
+          { label: "Items", value: String(itemCount) },
+          { label: "Bugs", value: String(bugCount) },
         ]}
       />
-      {bugCount > 0 ? <RiskPill level="high">Lead bug first</RiskPill> : null}
     </RecipeAction>
   );
 }
@@ -230,29 +205,20 @@ export default function Action({ ctx }) {
 
 export const UNBLOCK_MY_WORK_ACTION_VIEW = `
 export default function Action({ ctx }) {
-  const leadingItem =
-    ctx.surfaceState?.currentView?.primaryItemLabel ??
-    ctx.surfaceState?.currentView?.primaryBugLabel ??
-    "No lead item";
-  const contextCount = ctx.contextAttachments?.length ?? 0;
+  const itemCount = ctx.surfaceState?.currentView?.itemCount ?? 0;
+  const bugCount = ctx.surfaceState?.currentView?.bugCount ?? 0;
 
   return (
     <RecipeAction
       title="Unblock my work"
-      subtitle={<Badge variant="outline">Current work</Badge>}
       icon="arrow-up-right"
     >
       <FieldList
         items={[
-          { label: "Items", value: String(ctx.surfaceState?.currentView?.itemCount ?? 0) },
-          { label: "Lead", value: leadingItem },
+          { label: "Items", value: String(itemCount) },
+          { label: "Bugs", value: String(bugCount) },
         ]}
       />
-      {contextCount > 0 || ctx.surfaceState?.hasSelectedWork ? (
-        null
-      ) : (
-        <RiskPill level="medium">Needs clarification</RiskPill>
-      )}
     </RecipeAction>
   );
 }
@@ -280,14 +246,15 @@ export default function Action({ ctx }) {
   const blockerStatus = blockerResource?.raw?.status;
   const blockerIssueType = blockerResource?.raw?.issueType;
   const blockerIssueTypeIconUrl = blockerResource?.raw?.issueTypeIconUrl;
+  const blockerPriority = blockerResource?.raw?.priority;
   const additionalBlockerCount = Math.max(0, blockedByKeys.length - 1);
-  const blockerMeta = blockerStatus ? "· " + blockerStatus : undefined;
 
   return (
     <RecipeAction
       title="Unblock {{selectedWorkLabel}}"
       icon="arrow-up-right"
       eyebrow="Primary blocker"
+      description="Identify the blocker that is actually constraining progress, recommend the next move to clear it, and give a fallback if it stays blocked."
     >
       {primaryBlockedByKey || blockerResource ? (
         <JiraInlineIssue
@@ -295,7 +262,8 @@ export default function Action({ ctx }) {
           title={blockerTitle}
           issueType={blockerIssueType}
           issueTypeIconUrl={blockerIssueTypeIconUrl}
-          meta={blockerMeta}
+          status={blockerStatus}
+          priority={blockerPriority}
         />
       ) : null}
       {additionalBlockerCount > 0 ? (
@@ -309,9 +277,7 @@ export default function Action({ ctx }) {
 `;
 
 export const TECHNICAL_IMPLEMENTATION_PLAN_ACTION_VIEW = `
-export default function Action({ ctx }) {
-  const priority = ctx.workitem?.priority ?? "Unspecified";
-
+export default function Action() {
   return (
     <RecipeAction
       title="Draft implementation plan"
@@ -340,10 +306,6 @@ export default function Action({ ctx }) {
         placeholder="Optional subsystem, risk, or dependency"
         promptTemplate="Pay extra attention to {{value}}."
       />
-      {String(priority).toLowerCase().includes("critical") ||
-      String(priority).toLowerCase().includes("high") ? (
-        <RiskPill level="high">High-impact change</RiskPill>
-      ) : null}
     </RecipeAction>
   );
 }

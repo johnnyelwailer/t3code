@@ -1,4 +1,5 @@
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import type { ProjectRecipeWorkflowDocument } from "@t3tools/project-recipes";
 
 import type { BackendApi } from "~/t3work/backend/t3work-types";
 import type { T3workKickoffWorkflow } from "~/t3work/t3work-types";
@@ -11,7 +12,9 @@ export function toProjectRecipeWorkflowLaunch(workflow: RecipeKickoffWorkflow) {
     recipeId: workflow.recipeId,
     ...(workflow.recipeVersion ? { recipeVersion: workflow.recipeVersion } : {}),
     ...(workflow.parameters ? { parameters: workflow.parameters } : {}),
-    ...(workflow.kickoff ? { kickoff: workflow.kickoff } : {}),
+    ...(workflow.kickoff
+      ? { kickoff: workflow.kickoff as unknown as ProjectRecipeWorkflowDocument }
+      : {}),
     title: workflow.title,
     description: workflow.description,
     source: workflow.source,

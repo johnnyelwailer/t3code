@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "~/t3work/components/ui/t3work-badge";
+import { RecipeActionIssuePreview } from "~/t3work/t3work-recipeActionIssuePreview";
 import { LaunchOptionGroup, LaunchTextInput } from "~/t3work/t3work-recipeActionLaunchControls";
 import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipes";
 
@@ -60,30 +61,26 @@ function RecipeAction(props: {
   const Icon = resolveRecipeActionIcon(props.icon);
 
   return (
-    <div className="flex items-start gap-3">
-      <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background/80">
-        <Icon className="size-4 text-muted-foreground" />
+    <div className="relative min-w-0 space-y-2 pr-7">
+      <div className="absolute top-0.5 right-0 flex size-5 items-center justify-center text-muted-foreground/45">
+        <Icon className="size-3.5" />
       </div>
-      <div className="min-w-0 flex-1 space-y-2">
-        {props.eyebrow ? (
-          <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
-            {props.eyebrow}
-          </div>
-        ) : null}
-        <div>
-          <div className="text-sm font-medium text-foreground/90">{props.title}</div>
-          {props.subtitle ? (
-            <div className="mt-1 text-xs leading-5 text-muted-foreground/80">{props.subtitle}</div>
-          ) : null}
-          {props.description ? (
-            <div className="mt-2 text-xs leading-5 text-muted-foreground/80">
-              {props.description}
-            </div>
-          ) : null}
+      {props.eyebrow ? (
+        <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
+          {props.eyebrow}
         </div>
-        {props.children ? <div className="space-y-2">{props.children}</div> : null}
-        {props.footer ? <div>{props.footer}</div> : null}
+      ) : null}
+      <div>
+        <div className="text-sm font-medium text-foreground/90">{props.title}</div>
+        {props.subtitle ? (
+          <div className="mt-1 text-xs leading-5 text-muted-foreground/80">{props.subtitle}</div>
+        ) : null}
+        {props.description ? (
+          <div className="mt-2 text-xs leading-5 text-muted-foreground/80">{props.description}</div>
+        ) : null}
       </div>
+      {props.children ? <div className="space-y-2">{props.children}</div> : null}
+      {props.footer ? <div>{props.footer}</div> : null}
     </div>
   );
 }
@@ -140,10 +137,23 @@ function RiskPill(props: { readonly level?: string; readonly children?: ReactNod
   );
 }
 
+function JiraInlineIssue(props: {
+  readonly displayId: string;
+  readonly title?: ReactNode;
+  readonly issueType?: string;
+  readonly issueTypeIconUrl?: string;
+  readonly status?: string;
+  readonly priority?: string;
+  readonly meta?: ReactNode;
+}) {
+  return <RecipeActionIssuePreview {...props} />;
+}
+
 export const recipeActionViewComponents = {
   ArtifactLink,
   Badge,
   FieldList,
+  JiraInlineIssue,
   LaunchOptionGroup,
   LaunchTextInput,
   RecipeAction,

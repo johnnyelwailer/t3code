@@ -1,3 +1,5 @@
+import { X } from "lucide-react";
+
 import { Button } from "~/t3work/components/ui/t3work-button";
 
 import {
@@ -26,22 +28,25 @@ export function TicketKickoffComposerSelectedRecipe({
           <div className="truncate text-sm font-medium text-foreground">
             {selectedRecipe.recipe.title}
           </div>
-          {selectedRecipeSummary ? (
-            <div className="text-xs leading-5 text-muted-foreground">{selectedRecipeSummary}</div>
-          ) : null}
           <div className="text-xs leading-5 text-muted-foreground">
-            Add an optional note below, or send now.
+            {selectedRecipe.recipe.description}
           </div>
+          {selectedRecipeSummary ? (
+            <div className="text-[11px] leading-5 text-muted-foreground/80">
+              {selectedRecipeSummary}
+            </div>
+          ) : null}
         </div>
         {onClearSelectedRecipe ? (
           <Button
             type="button"
-            size="xs"
+            size="icon-xs"
             variant="ghost"
             className="shrink-0"
+            aria-label="Clear selected action"
             onClick={onClearSelectedRecipe}
           >
-            Clear
+            <X className="size-4" />
           </Button>
         ) : null}
       </div>

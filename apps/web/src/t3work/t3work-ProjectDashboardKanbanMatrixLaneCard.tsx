@@ -98,6 +98,7 @@ export function ProjectDashboardKanbanMatrixLaneCard({
             compact
             flat
             githubActivityItems={githubActivityItems}
+            showGitHubActivityTitleBadge={false}
             {...(groupParent ? { groupParent: true } : {})}
             {...(inlineParent ? { inlineParent: true } : {})}
             {...(inlineChild ? { inlineChild: true } : {})}

@@ -71,6 +71,10 @@ import * as z from "zod";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import {
+  loadAgentVisiblePromptContext,
+  prependAgentVisiblePromptContext,
+} from "../../t3work-agentVisiblePromptContext.ts";
+import {
   NoopT3workToolBroker,
   T3workToolBroker,
   type T3workToolBinding,
@@ -655,7 +659,12 @@ const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(function* (
     readonly boundInstanceId: ProviderInstanceId;
   },
 ) {
-  const text = buildPromptText(input, dependencies.boundInstanceId);
+  const promptText = buildPromptText(input, dependencies.boundInstanceId);
+  const contextText = yield* loadAgentVisiblePromptContext(input.threadId);
+  const text = prependAgentVisiblePromptContext({
+    promptText,
+    contextText,
+  });
   const sdkContent: Array<Record<string, unknown>> = [];
 
   if (text.length > 0) {

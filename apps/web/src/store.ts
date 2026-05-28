@@ -182,6 +182,7 @@ function mapMessage(environmentId: EnvironmentId, message: OrchestrationMessage)
     streaming: message.streaming,
     ...(message.streaming ? {} : { completedAt: message.updatedAt }),
     ...(attachments && attachments.length > 0 ? { attachments } : {}),
+    ...(message.t3workExt ? { t3workExt: message.t3workExt } : {}),
   };
 }
 

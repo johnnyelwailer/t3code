@@ -87,7 +87,7 @@ export function ThreadChatView({
     title,
   });
 
-  useThreadBootstrap({
+  const { bootstrapStatus, retryThreadBootstrap } = useThreadBootstrap({
     backend,
     environmentId,
     threadId,
@@ -148,37 +148,52 @@ export function ThreadChatView({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
-      {showKickoffPlaceholder && kickoffMessage ? (
-        <ThreadKickoffPlaceholder
-          message={kickoffMessage}
-          hasServerThread={hasServerThread}
-          {...(kickoffPending !== undefined ? { kickoffPending } : {})}
-          {...(kickoffWorkflow ? { workflow: kickoffWorkflow } : {})}
-        />
-      ) : null}
       {hasServerThread ? (
-        <ChatView
-          environmentId={environmentId}
-          threadId={threadId as never}
-          routeKind="server"
-          {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
-          {...(onBack ? { onBack } : {})}
-          {...(headerAccessory ? { headerAccessory } : {})}
-          hideHeader={hideHeader || embeddedMode}
-          hideBranchToolbar={embeddedMode}
-          minimalComposer={embeddedMode}
-          beforeDispatchTurnStart={prepareTurnStart}
-          dispatchTurnStartOverride={dispatchTurnStartOverride}
-          composerContextAttachmentSlot={contextAttachmentSlot}
-          composerContainerProps={composerDropTarget.composerContainerProps}
-          composerContainerOverlay={composerDropTarget.composerContainerOverlay}
-          composerContextAttachments={contextAttachments}
-          prepareComposerContextAttachments={prepareComposerContextAttachments}
-          onComposerContextAttachmentsConsumed={clearThreadAttachments}
-          onSubmitRecipeCardAction={submitRecipeCardAction}
-        />
+        <>
+          {showKickoffPlaceholder && kickoffMessage ? (
+            <ThreadKickoffPlaceholder
+              message={kickoffMessage}
+              hasServerThread={hasServerThread}
+              {...(kickoffPending !== undefined ? { kickoffPending } : {})}
+              {...(kickoffWorkflow ? { workflow: kickoffWorkflow } : {})}
+            />
+          ) : null}
+          <ChatView
+            environmentId={environmentId}
+            threadId={threadId as never}
+            routeKind="server"
+            {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
+            {...(onBack ? { onBack } : {})}
+            {...(headerAccessory ? { headerAccessory } : {})}
+            hideHeader={hideHeader || embeddedMode}
+            hideBranchToolbar={embeddedMode}
+            minimalComposer={embeddedMode}
+            beforeDispatchTurnStart={prepareTurnStart}
+            dispatchTurnStartOverride={dispatchTurnStartOverride}
+            composerContextAttachmentSlot={contextAttachmentSlot}
+            composerContainerProps={composerDropTarget.composerContainerProps}
+            composerContainerOverlay={composerDropTarget.composerContainerOverlay}
+            composerContextAttachments={contextAttachments}
+            prepareComposerContextAttachments={prepareComposerContextAttachments}
+            onComposerContextAttachmentsConsumed={clearThreadAttachments}
+            onSubmitRecipeCardAction={submitRecipeCardAction}
+          />
+        </>
       ) : (
-        <ThreadPendingChat />
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {showKickoffPlaceholder && kickoffMessage ? (
+            <ThreadKickoffPlaceholder
+              message={kickoffMessage}
+              hasServerThread={hasServerThread}
+              {...(kickoffPending !== undefined ? { kickoffPending } : {})}
+              {...(kickoffWorkflow ? { workflow: kickoffWorkflow } : {})}
+            />
+          ) : null}
+          <ThreadPendingChat
+            bootstrapStatus={bootstrapStatus}
+            onRetryLaunch={retryThreadBootstrap}
+          />
+        </div>
       )}
     </div>
   );

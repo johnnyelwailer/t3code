@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { queryableToReadonlyArray } from "@t3tools/project-context";
 
 import {
   buildProjectRecipeDiscoveryRequest,
   buildT3workSidecarRecipeQuickStarts,
 } from "~/t3work/t3work-sidecarRecipes";
 
-function createProject(profileId: string): ProjectShellProject {
+function createProject(profileId: string, workspaceRoot?: string): ProjectShellProject {
   return {
     id: "project-alpha" as ProjectShellProject["id"],
     title: "Project Alpha",
@@ -19,6 +20,14 @@ function createProject(profileId: string): ProjectShellProject {
         },
       },
     },
+    ...(workspaceRoot
+      ? {
+          workspace: {
+            rootPath: workspaceRoot,
+            createdAt: "2026-05-01T00:00:00.000Z",
+          },
+        }
+      : {}),
     createdAt: "2026-05-01T00:00:00.000Z",
     updatedAt: "2026-05-01T00:00:00.000Z",
   };
@@ -170,6 +179,27 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     });
   });
 
+  it("includes local recipePath and workflowPath for the bundled create-recipe quick start", () => {
+    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+      surface: "workitem.detail.sidepanel",
+      project: createProject("engineering-copilot", "/tmp/project-alpha"),
+      profileId: "engineering-copilot",
+      selectedWorkLabel: "PROJ-123",
+      selectedWorkTitle: "Stabilize search",
+      resourceKind: "ticket",
+      jiraIssueType: "Bug",
+      availableContextKeys: ["project.summary", "ticket.summary"],
+    });
+
+    expect(quickStarts.find((recipe) => recipe.id === "create-recipe")).toMatchObject({
+      workflow: {
+        recipeId: "create-recipe",
+        recipePath: "/tmp/project-alpha/.t3work/recipes/create-recipe",
+        workflowPath: "/tmp/project-alpha/.t3work/recipes/create-recipe/workflow.ts",
+      },
+    });
+  });
+
   it("hides dashboard quick starts for very large unfocused views", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
@@ -299,7 +329,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
       displayId: "PROJ-123 Stabilize search",
       type: "Bug",
     });
-    expect(request.context.contextAttachments).toEqual([
+    expect(queryableToReadonlyArray(request.context.contextAttachments)).toEqual([
       {
         kind: "jira-work-item",
         label: "PROJ-123 Stabilize search",
@@ -421,7 +451,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
         reviewCommentCount: 3,
       },
     });
-    expect(request.context.linkedResources).toEqual(
+    expect(queryableToReadonlyArray(request.context.linkedResources)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: "github.pull-request",
@@ -430,7 +460,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
         }),
       ]),
     );
-    expect(request.context.availableContextKeys).toEqual(
+    expect(queryableToReadonlyArray(request.context.availableContextKeys)).toEqual(
       expect.arrayContaining([
         "ticket.status.in-progress",
         "ticket.assignment.me",
@@ -500,6 +530,13 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     expect(recipeIds).toContain("re-scope-ticket-overrun");
     expect(recipeIds).not.toContain("technical-implementation-plan");
     expect(recipeIds).not.toContain("release-handoff-checklist");
+
+    expect(quickStarts.find((recipe) => recipe.id === "unblock-blocked-ticket")).toMatchObject({
+      composerGuidance: {
+        helperText: "Add any context that could change the recommendation.",
+        placeholder: "Add owner, attempts, deadline, or fallback",
+      },
+    });
   });
 
   it("surfaces closeout recipes only after linked code is merged", () => {

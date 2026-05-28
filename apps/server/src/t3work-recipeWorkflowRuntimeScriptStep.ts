@@ -5,20 +5,18 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { pathToFileURL } from "node:url";
 import {
-  PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD,
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
   ProjectRecipeConversationCard,
-  ProjectRecipeWorkflowCardActivityPayload,
   ProjectRecipeWorkflowCardPhase,
   type ProjectRecipeConversationCard as ProjectRecipeConversationCardType,
   type ProjectRecipeWorkflowStep as ProjectRecipeWorkflowStepType,
 } from "@t3tools/project-recipes";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+import { upsertWorkflowCardSystemMessage } from "./t3work-recipeWorkflowRuntimeMessages.ts";
 import { upsertThreadActivity } from "./t3work-recipeWorkflowRuntimeActivities.ts";
 import type { PresentedWorkflowCardState } from "./t3work-recipeWorkflowRuntimeExecutionTypes.ts";
 import {
-  cardActivityId,
   resolveWithinRoot,
   stepActivityId,
   type PersistedRecipeWorkflowRunState,
@@ -125,20 +123,16 @@ export const executeScriptWorkflowStep = Effect.fn("executeScriptWorkflowStep")(
         }
         presentedCard = { cardId: card.id, activityStepId: input.step.id, card };
         await runPromise(
-          upsertThreadActivity({
+          upsertWorkflowCardSystemMessage({
             orchestration: input.orchestration,
             threadId: input.state.threadId,
-            activityId: cardActivityId(input.state.threadId, input.step.id),
+            workflowRunId: input.state.workflowRunId,
+            recipeId: input.state.launch.recipeId,
+            stepId: input.step.id,
+            card,
+            phase: options?.phase ?? "presented",
             createdAt: input.createdAt,
-            kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD,
-            summary: card.title,
-            payload: {
-              workflowRunId: input.state.workflowRunId,
-              stepId: input.step.id,
-              phase: options?.phase ?? "presented",
-              ...(options?.awaitingActionId ? { awaitingActionId: options.awaitingActionId } : {}),
-              card,
-            } satisfies typeof ProjectRecipeWorkflowCardActivityPayload.Type,
+            ...(options?.awaitingActionId ? { awaitingActionId: options.awaitingActionId } : {}),
           }),
         );
       },
@@ -164,19 +158,15 @@ export const executeScriptWorkflowStep = Effect.fn("executeScriptWorkflowStep")(
 
   if (isProjectRecipeConversationCard(result)) {
     presentedCard = { cardId: result.id, activityStepId: input.step.id, card: result };
-    yield* upsertThreadActivity({
+    yield* upsertWorkflowCardSystemMessage({
       orchestration: input.orchestration,
       threadId: input.state.threadId,
-      activityId: cardActivityId(input.state.threadId, input.step.id),
+      workflowRunId: input.state.workflowRunId,
+      recipeId: input.state.launch.recipeId,
+      stepId: input.step.id,
+      card: result,
+      phase: "presented",
       createdAt: input.createdAt,
-      kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD,
-      summary: result.title,
-      payload: {
-        workflowRunId: input.state.workflowRunId,
-        stepId: input.step.id,
-        phase: "presented",
-        card: result,
-      } satisfies typeof ProjectRecipeWorkflowCardActivityPayload.Type,
     });
   }
 

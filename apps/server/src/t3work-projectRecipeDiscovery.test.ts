@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { describe, expect, it } from "vitest";
+import { createQueryable } from "@t3tools/project-context";
 
 import { discoverProjectRecipes } from "./t3work-projectRecipeDiscovery.js";
 
@@ -124,8 +125,8 @@ export function visible(ctx) {
                 priority: "High",
                 provider: "jira",
               },
-              linkedResources: [],
-              artifacts: [],
+              linkedResources: createQueryable([]),
+              artifacts: createQueryable([]),
               profile: {
                 technicalDepth: "medium",
                 brevity: "balanced",
@@ -137,7 +138,7 @@ export function visible(ctx) {
               },
               enabledSkillPacks: ["qa"],
               schema: {},
-              availableContextKeys: ["ticket.summary"],
+              availableContextKeys: createQueryable(["ticket.summary"]),
             },
           });
 
@@ -154,16 +155,19 @@ export function visible(ctx) {
               version: 1,
               steps: [
                 {
-                  kind: "wait-for-kickoff-input",
+                  kind: "collect-input",
                   id: "collect-brief",
-                  when: "missing-prompt",
-                  promptRequest: {
-                    title: "Recipe kickoff",
-                    sections: ["context-summary"],
+                  request: {
+                    kind: "text",
+                    when: "missing-prompt",
+                    promptRequest: {
+                      title: "Recipe kickoff",
+                      sections: ["context-summary"],
+                    },
                   },
                 },
                 {
-                  kind: "run-interactive-agent",
+                  kind: "agent",
                   id: "author",
                 },
               ],
@@ -188,8 +192,8 @@ export function visible(ctx) {
                 priority: "Medium",
                 provider: "jira",
               },
-              linkedResources: [],
-              artifacts: [],
+              linkedResources: createQueryable([]),
+              artifacts: createQueryable([]),
               profile: {
                 technicalDepth: "medium",
                 brevity: "balanced",
@@ -201,7 +205,7 @@ export function visible(ctx) {
               },
               enabledSkillPacks: ["qa"],
               schema: {},
-              availableContextKeys: ["ticket.summary"],
+              availableContextKeys: createQueryable(["ticket.summary"]),
             },
           });
 
@@ -246,8 +250,8 @@ export function visible(ctx) {
                 displayId: "ALPHA-99",
                 type: "Story",
               },
-              linkedResources: [],
-              artifacts: [],
+              linkedResources: createQueryable([]),
+              artifacts: createQueryable([]),
               profile: {
                 technicalDepth: "high",
                 brevity: "balanced",
@@ -259,7 +263,7 @@ export function visible(ctx) {
               },
               enabledSkillPacks: ["engineering"],
               schema: {},
-              availableContextKeys: ["ticket.summary", "project.summary"],
+              availableContextKeys: createQueryable(["ticket.summary", "project.summary"]),
             },
           });
 
@@ -281,8 +285,8 @@ export function visible(ctx) {
                 displayId: "ALPHA-100",
                 type: "Story",
               },
-              linkedResources: [],
-              artifacts: [],
+              linkedResources: createQueryable([]),
+              artifacts: createQueryable([]),
               profile: {
                 technicalDepth: "low",
                 brevity: "short",
@@ -294,7 +298,7 @@ export function visible(ctx) {
               },
               enabledSkillPacks: ["product"],
               schema: {},
-              availableContextKeys: ["ticket.summary", "project.summary"],
+              availableContextKeys: createQueryable(["ticket.summary", "project.summary"]),
             },
           });
 
@@ -319,7 +323,7 @@ export function visible(ctx) {
   "scope": "project",
   "displayName": "Prioritize {{ surfaceState?.dashboardMode ?? 'project' }}: {{ surfaceState?.currentView?.itemCount ?? 0 }} items",
   "shortDescription": "Top item: {{ contextAttachments?.[0]?.label ?? 'none' }}",
-  "surfaces": ["project.dashboard"],
+  "surfaces": ["project.dashboard.backlog"],
   "rank": "{{ surfaceState?.currentView?.bugCount === 1 ? 88 : 40 }}",
   "visibleWhen": {
     "kind": "expr",
@@ -333,20 +337,20 @@ export function visible(ctx) {
           const results = yield* discoverProjectRecipes({
             workspaceRoot,
             context: {
-              surface: "project.dashboard",
+              surface: "project.dashboard.backlog",
               project: {
                 title: "Project Alpha",
                 provider: "atlassian",
               },
-              linkedResources: [],
-              artifacts: [],
-              contextAttachments: [
+              linkedResources: createQueryable([]),
+              artifacts: createQueryable([]),
+              contextAttachments: createQueryable([
                 {
                   kind: "jira-work-item",
                   label: "ALPHA-42 Fix import crash",
                   jiraIssueType: "Bug",
                 },
-              ],
+              ]),
               surfaceState: {
                 dashboardMode: "backlog",
                 hasContextAttachments: true,
@@ -369,7 +373,10 @@ export function visible(ctx) {
               },
               enabledSkillPacks: ["delivery"],
               schema: {},
-              availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
+              availableContextKeys: createQueryable([
+                "project.summary",
+                "dashboard.backlog.summary",
+              ]),
             },
           });
 
@@ -399,7 +406,7 @@ export function visible(ctx) {
   "scope": "project",
   "displayName": "Create a recipe for {{surfaceAuthoringLabel}}",
   "shortDescription": "Prioritize {{currentViewLabel}}{{currentViewSummarySuffix}}",
-  "surfaces": ["project.dashboard"],
+  "surfaces": ["project.dashboard.backlog"],
   "prompt": "./prompt.md"
 }`,
             prompt:
@@ -409,13 +416,13 @@ export function visible(ctx) {
           const results = yield* discoverProjectRecipes({
             workspaceRoot,
             context: {
-              surface: "project.dashboard",
+              surface: "project.dashboard.backlog",
               project: {
                 title: "Project Alpha",
                 provider: "atlassian",
               },
-              linkedResources: [],
-              artifacts: [],
+              linkedResources: createQueryable([]),
+              artifacts: createQueryable([]),
               surfaceState: {
                 dashboardMode: "backlog",
                 hasContextAttachments: false,
@@ -438,7 +445,10 @@ export function visible(ctx) {
               },
               enabledSkillPacks: ["delivery"],
               schema: {},
-              availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
+              availableContextKeys: createQueryable([
+                "project.summary",
+                "dashboard.backlog.summary",
+              ]),
             },
           });
 

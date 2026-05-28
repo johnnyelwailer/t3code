@@ -1,3 +1,4 @@
+import { queryableToReadonlyArray } from "@t3tools/project-context";
 import type {
   ProjectRecipeKickoffPromptRequest,
   ProjectRecipeRenderContext,
@@ -9,16 +10,10 @@ function formatRecipeAuthoringSurfaceLabel(
   switch (context?.surface) {
     case "workitem.detail.sidepanel":
       return "ticket detail";
-    case "project.dashboard": {
-      const dashboardMode = context.surfaceState?.dashboardMode;
-      if (dashboardMode === "backlog") {
-        return "project dashboard backlog";
-      }
-      if (dashboardMode === "my-work") {
-        return "project dashboard my work";
-      }
-      return "project dashboard";
-    }
+    case "project.dashboard.backlog":
+      return "backlog view";
+    case "project.dashboard.myWork":
+      return "my work view";
     default:
       return context?.surface ?? "current t3work view";
   }
@@ -28,30 +23,33 @@ function buildRecipeAuthoringContextSummary(
   context: ProjectRecipeRenderContext | undefined,
 ): ReadonlyArray<string> {
   if (!context) {
-    return ["- Surface: current t3work view"];
+    return ["- View: current t3work view"];
   }
 
   const lines = [
-    `- Surface: ${formatRecipeAuthoringSurfaceLabel(context)}`,
+    `- View: ${formatRecipeAuthoringSurfaceLabel(context)}`,
     `- Project: ${context.project.title}`,
   ];
 
-  if (context.workitem?.displayId || context.workitem?.title) {
-    lines.push(
-      `- Selected work: ${[context.workitem.displayId, context.workitem.title].filter(Boolean).join(" - ")}`,
-    );
+  const currentFocus = [context.workitem?.displayId, context.workitem?.title]
+    .filter(Boolean)
+    .join(" - ");
+  if (currentFocus) {
+    lines.push(`- Current focus: ${currentFocus}`);
+  } else if (
+    context.surface === "project.dashboard.backlog" ||
+    context.surface === "project.dashboard.myWork"
+  ) {
+    lines.push("- Current focus: Everything visible in this view");
   }
   if (context.workitem?.type) {
-    lines.push(`- Work type: ${context.workitem.type}`);
+    lines.push(`- Type: ${context.workitem.type}`);
   }
   if (context.workitem?.status) {
     lines.push(`- Status: ${context.workitem.status}`);
   }
   if (context.workitem?.priority) {
     lines.push(`- Priority: ${context.workitem.priority}`);
-  }
-  if (context.surfaceState?.dashboardMode) {
-    lines.push(`- Dashboard mode: ${context.surfaceState.dashboardMode}`);
   }
   if (context.surfaceState?.currentView) {
     const currentView = context.surfaceState.currentView;
@@ -60,17 +58,16 @@ function buildRecipeAuthoringContextSummary(
       parts.push(`${String(currentView.bugCount)} bugs`);
     }
     if (currentView.primaryItemLabel) {
-      parts.push(`lead item ${currentView.primaryItemLabel}`);
+      parts.push(`top item ${currentView.primaryItemLabel}`);
     } else if (currentView.primaryBugLabel) {
-      parts.push(`lead bug ${currentView.primaryBugLabel}`);
+      parts.push(`top bug ${currentView.primaryBugLabel}`);
     }
-    lines.push(`- Current view: ${parts.join(", ")}`);
+    lines.push(`- Visible work: ${parts.join(", ")}`);
   }
-  if ((context.contextAttachments?.length ?? 0) > 0) {
+  const contextAttachments = queryableToReadonlyArray(context.contextAttachments);
+  if (contextAttachments.length > 0) {
     lines.push(
-      `- Context attachments: ${context.contextAttachments
-        ?.map((attachment) => attachment.label)
-        .join(", ")}`,
+      `- Extra references: ${contextAttachments.map((attachment) => attachment.label).join(", ")}`,
     );
   }
 
@@ -82,32 +79,32 @@ function buildRecipeAuthoringExamples(
 ): ReadonlyArray<string> {
   if (context?.surface === "workitem.detail.sidepanel") {
     return [
-      "Review acceptance criteria only when the ticket is still before implementation.",
-      "Prepare post-merge closeout when linked PRs are merged but the ticket is not done.",
-      "Create a ticket-specific recipe that escalates blocker analysis when dependencies exist.",
+      "Draft a handoff or validation checklist from the current ticket.",
+      "Show a closeout helper only when linked PRs are merged but the ticket is not done.",
+      "Show a blocker-triage recipe only when this ticket has dependencies.",
     ];
   }
 
-  if (context?.surface === "project.dashboard") {
-    if (context.surfaceState?.dashboardMode === "backlog") {
-      return [
-        "Narrow the backlog to items that still need planning, then shape the next slice.",
-        "Surface a stakeholder-update recipe only when the visible slice is a concentrated risk hotspot.",
-        "Create a recipe that identifies work missing owners or estimates before asking the agent to prioritize it.",
-      ];
-    }
-
+  if (context?.surface === "project.dashboard.backlog") {
     return [
-      "Focus review-stage work waiting on you, then rank the next response.",
+      "Shape the next planning slice from the visible backlog.",
+      "Show a stakeholder-update shortcut only when this backlog slice looks risky.",
+      "Highlight work that still needs an owner or estimate before prioritizing it.",
+    ];
+  }
+
+  if (context?.surface === "project.dashboard.myWork") {
+    return [
+      "Rank the work waiting on you right now.",
       "Create a recipe that summarizes unblockers across your active items.",
-      "Design a recipe that drafts a handoff only when merged PR activity exists on visible work.",
+      "Draft a handoff only when merged PR activity appears on visible work.",
     ];
   }
 
   return [
-    "Create a prompt-only quick start tuned to the current context.",
-    "Create a recipe with a pre-launch action view that captures a few structured options.",
-    "Create a recipe that only appears when specific context keys or profile signals are present.",
+    "Create a quick action that sends a tailored prompt for this view.",
+    "Create a recipe that asks a couple of setup questions before it runs.",
+    "Create a recipe that only appears when this view matches the right signals.",
   ];
 }
 
@@ -115,11 +112,16 @@ export function buildRecipeAuthoringKickoffMessage(input: {
   context: ProjectRecipeRenderContext | undefined;
   promptRequest: ProjectRecipeKickoffPromptRequest;
 }): string {
-  const contextKeys = input.context?.availableContextKeys ?? [];
+  const contextKeys = input.context
+    ? queryableToReadonlyArray(input.context.availableContextKeys)
+    : [];
   const contextKeyLines =
     contextKeys.length > 0
       ? contextKeys.map((key) => `- ${key}`)
-      : ["- project.summary", "- availableContextKeys will be populated from the active surface"];
+      : [
+          "- project.summary",
+          "- More view-specific signals will appear here when they are available.",
+        ];
   const sections = input.promptRequest.sections ?? [];
   const lines = [input.promptRequest.title];
 
@@ -128,15 +130,19 @@ export function buildRecipeAuthoringKickoffMessage(input: {
   }
 
   if (sections.includes("context-summary")) {
-    lines.push("", "Current context", ...buildRecipeAuthoringContextSummary(input.context));
+    lines.push(
+      "",
+      "What the agent can already see",
+      ...buildRecipeAuthoringContextSummary(input.context),
+    );
   }
 
   if (sections.includes("available-context-keys")) {
     lines.push(
       "",
-      "Available context data you can use",
-      "- Render context fields: project, workitem, linkedResources, contextAttachments, surfaceState, profile, enabledSkillPacks, availableContextKeys.",
-      "- Active context keys in this view:",
+      "Signals this recipe can use",
+      "- Recipes can react to what is visible here: the current project, the current ticket or queue, linked items, attached references, your working style defaults, and the structured signals below.",
+      "- Structured signals available right now:",
       ...contextKeyLines,
     );
   }
@@ -155,7 +161,7 @@ export function buildRecipeAuthoringKickoffMessage(input: {
   if (sections.includes("capabilities") && (input.promptRequest.capabilities?.length ?? 0) > 0) {
     lines.push(
       "",
-      "Capabilities",
+      "What a recipe can do",
       ...(input.promptRequest.capabilities ?? []).map((capability) => `- ${capability}`),
     );
   }

@@ -1,7 +1,11 @@
 import type { ProjectRecipeKickoffProgram } from "@t3tools/project-recipes";
 
 import { buildRecipeAuthoringKickoffMessage } from "~/t3work/t3work-recipeQuickStartAuthoring";
-import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipes";
+import { buildT3workKickoffLaunchFromProgram } from "~/t3work/t3work-recipeKickoffProgram";
+import type {
+  T3workRecipeComposerGuidance,
+  T3workSidecarRecipeQuickStart,
+} from "~/t3work/t3work-sidecarRecipes";
 
 export const T3WORK_RECIPE_AUTHORING_RECIPE_ID = "create-contextual-recipe";
 
@@ -26,6 +30,18 @@ export type T3workSelectedRecipeKickoffLaunch = {
   readonly kickoffMessage: string;
   readonly kickoffPending: boolean;
 };
+
+export const DEFAULT_T3WORK_SELECTED_RECIPE_HELPER_TEXT =
+  "Add an optional note below, or send now.";
+
+export const DEFAULT_T3WORK_SELECTED_RECIPE_PLACEHOLDER =
+  "Add an optional note, constraint, or nuance";
+
+function readSelectedRecipeComposerGuidance(
+  selectedRecipe: T3workSelectedRecipeQuickStart,
+): T3workRecipeComposerGuidance | undefined {
+  return selectedRecipe.recipe.composerGuidance;
+}
 
 export function areT3workRecipeQuickStartLaunchCustomizationsEqual(
   left: T3workRecipeQuickStartLaunchCustomization | undefined,
@@ -106,47 +122,16 @@ export function buildT3workSelectedRecipeKickoffMessage(input: {
   return `${input.selectedRecipe.recipe.prompt}\n\nAdditional user note:\n${trimmedCustomMessage}`;
 }
 
-function buildRecipeKickoffLaunchFromProgram(input: {
-  readonly selectedRecipe: T3workSelectedRecipeQuickStart;
-  readonly customMessage?: string;
-  readonly program: ProjectRecipeKickoffProgram;
-}): T3workSelectedRecipeKickoffLaunch | null {
-  const trimmedCustomMessage = input.customMessage?.trim();
-
-  for (const step of input.program.steps) {
-    if (step.kind === "wait-for-kickoff-input") {
-      if (step.when === "always" || !trimmedCustomMessage) {
-        return {
-          kickoffMessage: buildRecipeAuthoringKickoffMessage({
-            context: input.selectedRecipe.recipe.actionView?.context,
-            promptRequest: step.promptRequest,
-          }),
-          kickoffPending: false,
-        };
-      }
-
-      continue;
-    }
-
-    if (step.kind === "run-interactive-agent") {
-      return {
-        kickoffMessage: buildT3workSelectedRecipeKickoffMessage(input),
-        kickoffPending: true,
-      };
-    }
-  }
-
-  return null;
-}
-
 export function buildT3workSelectedRecipeKickoffLaunch(input: {
   readonly selectedRecipe: T3workSelectedRecipeQuickStart;
   readonly customMessage?: string;
 }): T3workSelectedRecipeKickoffLaunch {
   const kickoffFromProgram = input.selectedRecipe.recipe.workflow.kickoff
-    ? buildRecipeKickoffLaunchFromProgram({
-        ...input,
+    ? buildT3workKickoffLaunchFromProgram({
         program: input.selectedRecipe.recipe.workflow.kickoff,
+        prompt: input.selectedRecipe.recipe.prompt,
+        ...(input.customMessage !== undefined ? { customMessage: input.customMessage } : {}),
+        context: input.selectedRecipe.recipe.actionView?.context,
       })
     : null;
 
@@ -158,6 +143,24 @@ export function buildT3workSelectedRecipeKickoffLaunch(input: {
     kickoffMessage: buildT3workSelectedRecipeKickoffMessage(input),
     kickoffPending: true,
   };
+}
+
+export function getT3workSelectedRecipeComposerHelperText(
+  selectedRecipe: T3workSelectedRecipeQuickStart,
+): string {
+  return (
+    readSelectedRecipeComposerGuidance(selectedRecipe)?.helperText ??
+    DEFAULT_T3WORK_SELECTED_RECIPE_HELPER_TEXT
+  );
+}
+
+export function getT3workSelectedRecipeComposerPlaceholder(
+  selectedRecipe: T3workSelectedRecipeQuickStart,
+): string {
+  return (
+    readSelectedRecipeComposerGuidance(selectedRecipe)?.placeholder ??
+    DEFAULT_T3WORK_SELECTED_RECIPE_PLACEHOLDER
+  );
 }
 
 export function describeT3workSelectedRecipeQuickStart(

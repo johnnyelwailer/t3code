@@ -24,7 +24,11 @@ function deriveTicketStatusCategory(status: string): "active" | "review" | "done
 export function buildAvailableContextKeys(input: T3workSidecarRecipeInput): ReadonlyArray<string> {
   const keys = new Set(input.availableContextKeys ?? []);
 
-  if (input.surface === "project.dashboard") {
+  if (
+    input.surface === "project.dashboard" ||
+    input.surface === "project.dashboard.backlog" ||
+    input.surface === "project.dashboard.myWork"
+  ) {
     if (input.dashboardMode) {
       keys.add(`dashboard.mode.${input.dashboardMode}`);
     }

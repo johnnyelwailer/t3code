@@ -22,6 +22,7 @@ import {
   type OrchestrationThreadShell,
   ModelSelection,
   ProjectId,
+  T3workMessageExt,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -69,6 +70,7 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   Struct.assign({
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
+    t3workExt: Schema.NullOr(Schema.fromJsonString(T3workMessageExt)),
   }),
 );
 const ProjectionThreadProposedPlanDbRowSchema = ProjectionThreadProposedPlan;
@@ -413,6 +415,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
+          t3work_ext_json AS "t3workExt",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -776,6 +779,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
+          t3work_ext_json AS "t3workExt",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -1047,6 +1051,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   role: row.role,
                   text: row.text,
                   ...(row.attachments !== null ? { attachments: row.attachments } : {}),
+                  ...(row.t3workExt !== null ? { t3workExt: row.t3workExt } : {}),
                   turnId: row.turnId,
                   streaming: row.isStreaming === 1,
                   createdAt: row.createdAt,
@@ -1984,6 +1989,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             streaming: row.isStreaming === 1,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
+            ...(row.t3workExt !== null ? { t3workExt: row.t3workExt } : {}),
           };
           if (row.attachments !== null) {
             return Object.assign(message, { attachments: row.attachments });

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import { Badge } from "~/t3work/components/ui/t3work-badge";
 import { T3SurfaceCard, T3SurfaceCardContent } from "~/t3work/components/ui/t3work-surface";
 import { createJiraTicketAssetUrlResolver } from "./t3work-ticketAssetUrls";
 import { HtmlBlock, MarkdownBlock } from "./t3work-ticketRichContentBlocks";
@@ -55,12 +54,7 @@ export function TicketRichContent({
       <div onContextMenu={onDescriptionContextMenu}>
         <T3SurfaceCard>
           <T3SurfaceCardContent className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold">Description</h3>
-              <Badge variant="outline" className="text-[10px]">
-                Jira content
-              </Badge>
-            </div>
+            <h3 className="text-sm font-semibold">Description</h3>
             {descriptionHtml ? (
               <HtmlBlock
                 content={descriptionHtml}

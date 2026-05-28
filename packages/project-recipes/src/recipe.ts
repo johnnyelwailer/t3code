@@ -2,16 +2,9 @@ import * as Schema from "effect/Schema";
 
 import type { ExternalResourceRef } from "@t3tools/project-context";
 import { ProjectRecipeKickoffProgram } from "./kickoff.ts";
+import { RecipeSurface } from "./surface.ts";
 
-export const RecipeSurface = Schema.Literals([
-  "project.dashboard",
-  "workitem.detail.sidepanel",
-  "thread.context",
-  "github.pull_request.detail.sidepanel",
-  "github.pull_request.diff.selection",
-  "github.review.comment",
-]);
-export type RecipeSurface = typeof RecipeSurface.Type;
+export { RecipeSurface };
 
 export const RecipeTechnicalDepth = Schema.Literals(["low", "medium", "high"]);
 export type RecipeTechnicalDepth = typeof RecipeTechnicalDepth.Type;

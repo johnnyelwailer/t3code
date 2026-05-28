@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import { normalizeQueryable } from "@t3tools/project-context";
 import {
   type ProjectRecipeDiscovered,
   type ProjectRecipeRenderContext,
@@ -10,6 +11,18 @@ import {
 import { discoverProjectRecipeAtPath, sortRecipes } from "./t3work-projectRecipeDiscoveryRecipe.ts";
 import { T3WORK_PROJECT_RECIPES_ROOT } from "./t3work-projectSetupShared.ts";
 
+function normalizeRenderContext(context: ProjectRecipeRenderContext): ProjectRecipeRenderContext {
+  return {
+    ...context,
+    linkedResources: normalizeQueryable(context.linkedResources),
+    artifacts: normalizeQueryable(context.artifacts),
+    ...(context.contextAttachments
+      ? { contextAttachments: normalizeQueryable(context.contextAttachments) }
+      : {}),
+    availableContextKeys: normalizeQueryable(context.availableContextKeys),
+  };
+}
+
 export const discoverProjectRecipes = Effect.fn("discoverProjectRecipes")(function* (input: {
   readonly workspaceRoot: string;
   readonly context: ProjectRecipeRenderContext;
@@ -17,6 +30,7 @@ export const discoverProjectRecipes = Effect.fn("discoverProjectRecipes")(functi
   const fileSystem = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const workspaceRoot = pathService.resolve(input.workspaceRoot);
+  const context = normalizeRenderContext(input.context);
   const recipesRoot = pathService.join(workspaceRoot, T3WORK_PROJECT_RECIPES_ROOT);
   if (!(yield* fileSystem.exists(recipesRoot).pipe(Effect.orElseSucceed(() => false)))) {
     return {
@@ -41,7 +55,7 @@ export const discoverProjectRecipes = Effect.fn("discoverProjectRecipes")(functi
     const maybeRecipe = yield* discoverProjectRecipeAtPath({
       workspaceRoot,
       recipePath,
-      context: input.context,
+      context,
     }).pipe(Effect.catch(() => Effect.succeed(Option.none<ProjectRecipeDiscovered>())));
 
     if (

@@ -18,9 +18,20 @@ export type BundledT3WorkRecipe = Recipe & {
   readonly manifestDisplayName: string;
   readonly allowedToolGroups: ReadonlyArray<string>;
   readonly actionViewTemplate?: string;
+  readonly composerGuidance?: {
+    readonly helperText?: string;
+    readonly placeholder?: string;
+  };
 };
 
 const DEFAULT_ALLOWED_TOOL_GROUPS = ["integration.read", "artifact.rw", "ui.render"] as const;
+const DASHBOARD_SURFACES = ["project.dashboard.backlog", "project.dashboard.myWork"] as const;
+const DASHBOARD_AND_WORKITEM_SURFACES = [
+  ...DASHBOARD_SURFACES,
+  "workitem.detail.sidepanel",
+] as const;
+const BACKLOG_DASHBOARD_SURFACE = ["project.dashboard.backlog"] as const;
+const MY_WORK_DASHBOARD_SURFACE = ["project.dashboard.myWork"] as const;
 
 function createBundledRecipe(
   recipe: Omit<BundledT3WorkRecipe, "version" | "allowedToolGroups"> & {
@@ -36,42 +47,102 @@ function createBundledRecipe(
 
 const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
-    id: "create-contextual-recipe",
-    title: "Create a recipe for this context",
-    manifestDisplayName: "Create a recipe for {{surfaceAuthoringLabel}}",
+    id: "create-recipe",
+    title: "Create a project-local recipe",
+    manifestDisplayName: "Create a project-local recipe",
     shortDescription:
-      "Open a guided recipe-authoring thread that uses the current surface and context data as raw material.",
-    actionViewTemplate: CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
-    surfaces: ["project.dashboard", "workitem.detail.sidepanel"],
+      "Scaffold a reusable recipe in .t3work/recipes and have the agent finish the files.",
+    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
     promptTemplate:
-      "Help me design a new t3work recipe for the current context. First identify the active surface and contextual signals available here. Then propose the recipe manifest, visibility gates, prompt template, any action view or workflow needs, and the files that should be created or updated.",
+      "Create a reusable t3work recipe for this project. Describe what the recipe should do, where it should appear, the signals it should use, and any setup fields it needs before launch.",
     kickoff: {
       version: 1,
       steps: [
         {
-          kind: "wait-for-kickoff-input",
+          kind: "collect-input",
           id: "collect-recipe-brief",
-          when: "missing-prompt",
-          promptRequest: {
-            title: "Recipe authoring kickoff",
-            sections: ["context-summary", "available-context-keys", "capabilities"],
-            examples: [
-              "Create a prompt-only quick start tuned to the current context.",
-              "Create a recipe with a pre-launch action view that captures a few structured options.",
-              "Create a recipe that only appears when specific context keys or profile signals are present.",
-            ],
-            capabilities: [
-              "Prompt-only recipes with templated placeholders.",
-              "Visibility and ranking based on available context keys and render context.",
-              "Optional action views for pre-launch controls and structured launch parameters.",
-              "Optional first-class workflows or host-owned deterministic actions when plain prompts are not enough.",
-            ],
-            responseInstructions:
-              "Reply with the recipe you want to create. Include the outcome, where it should appear, what context should unlock it, and whether it needs a workflow or a deterministic UI action.",
+          request: {
+            kind: "text",
+            when: "missing-prompt",
+            promptRequest: {
+              title: "Describe the recipe you want to create",
+              body: "Tell the agent what the recipe should help with, where it should appear, which project or ticket signals it should react to, and whether it needs a small setup form before it runs.",
+              sections: ["context-summary", "available-context-keys", "capabilities"],
+              capabilities: [
+                "Create a new recipe under .t3work/recipes/<recipe-id>.",
+                "Author recipe.json, prompt.md, workflow.ts, and helper script files when needed.",
+                "Use project and ticket context signals to control where the recipe appears.",
+                "Build a multi-step workflow when a single kickoff prompt is not enough.",
+              ],
+              responseInstructions:
+                "Describe the recipe goal, target surface, visibility rules, and any setup or workflow steps it should include.",
+            },
           },
         },
         {
-          kind: "run-interactive-agent",
+          kind: "script",
+          id: "prepare-authoring-workspace",
+          module: "./recipe-script.ts#prepareAuthoringWorkspace",
+        },
+        {
+          kind: "agent",
+          id: "author-recipe",
+        },
+        {
+          kind: "present-message",
+          id: "recipe-ready",
+          message: {
+            body: "Recipe authoring turn finished. Review the new or updated files under .t3work/recipes and run the flow again if you want another pass.",
+            visibleToAgent: false,
+          },
+        },
+      ],
+    },
+    icon: "sparkles",
+    appliesTo: {},
+    requiredContext: [{ key: "project.summary", description: "Project overview" }],
+    skillRef: { id: "recipe.create" },
+    outputPreference: "plan",
+    artifactKinds: ["implementation-plan", "decision-notes"],
+    actionFamilies: ["delivery", "engineering", "product"],
+    rankHint: 19,
+  }),
+  createBundledRecipe({
+    id: "create-contextual-recipe",
+    title: "Create a recipe for this view",
+    manifestDisplayName: "Create a recipe for {{surfaceAuthoringLabel}}",
+    shortDescription:
+      "Draft a reusable quick action based on what is visible here, with optional setup fields or show/hide rules.",
+    actionViewTemplate: CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
+    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
+    promptTemplate:
+      "Help me design a reusable t3work recipe for this view. Start by explaining, in plain language, what the user can see here and which signals the recipe can use. Then propose the recipe manifest, visibility rules, prompt, any pre-launch setup UI, and the files that should be created or updated.",
+    kickoff: {
+      version: 1,
+      steps: [
+        {
+          kind: "collect-input",
+          id: "collect-recipe-brief",
+          request: {
+            kind: "text",
+            when: "missing-prompt",
+            promptRequest: {
+              title: "Describe the recipe you want",
+              body: "A recipe is a reusable quick action for views like this. It can send a tailored prompt, ask a few setup questions before launch, or only appear when the right project or ticket signals are present.",
+              sections: ["context-summary", "available-context-keys", "capabilities"],
+              capabilities: [
+                "Simple quick actions that send a tailored prompt.",
+                "Recipes that only appear when this view matches certain signals.",
+                "Optional setup fields before launch, like tone, scope, or priority.",
+                "Multi-step flows or built-in UI actions when one prompt is not enough.",
+              ],
+              responseInstructions:
+                "Reply with the shortcut you want to create: what it should help with, where it should appear, what should make it show up, and whether it needs a small setup step before launch.",
+            },
+          },
+        },
+        {
+          kind: "agent",
           id: "author-recipe",
         },
       ],
@@ -91,7 +162,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     manifestDisplayName: "Explain {{selectedWorkLabel}}",
     shortDescription: "Summarize the selected work with user impact, checks, and open questions.",
     actionViewTemplate: EXPLAIN_SELECTED_WORK_ACTION_VIEW,
-    surfaces: ["project.dashboard", "workitem.detail.sidepanel"],
+    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
     promptTemplate:
       "Explain {{selectedWorkLabel}} in plain language. Cover user impact, what is changing, what needs checking, and any unclear points.",
     icon: "sparkles",
@@ -158,7 +229,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     manifestDisplayName: "Summarize project risk",
     shortDescription: "Highlight blockers, unclear work, and the next high-leverage actions.",
     actionViewTemplate: SUMMARIZE_PROJECT_RISK_ACTION_VIEW,
-    surfaces: ["project.dashboard"],
+    surfaces: DASHBOARD_SURFACES,
     promptTemplate:
       "Summarize risk for {{projectTitle}}. Group it into blockers, unclear work, dependency risks, and the next actions that would reduce risk fastest.",
     icon: "triangle-alert",
@@ -182,7 +253,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     title: "Suggest next best task",
     manifestDisplayName: "Suggest next best task",
     shortDescription: "Recommend the highest-leverage next task based on current project context.",
-    surfaces: ["project.dashboard"],
+    surfaces: DASHBOARD_SURFACES,
     promptTemplate:
       "Based on the current context for {{projectTitle}}, recommend the next highest-leverage task to do now. Explain why it should come next, what it depends on, and what could block it.",
     icon: "arrow-right",
@@ -207,7 +278,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     shortDescription:
       "Rank the {{currentViewLabel}} in front of you by urgency, unblock value, and user impact.",
     actionViewTemplate: PRIORITIZE_PENDING_WORK_ACTION_VIEW,
-    surfaces: ["project.dashboard"],
+    surfaces: DASHBOARD_SURFACES,
     promptTemplate:
       "Prioritize the {{currentViewLabel}} for {{projectTitle}}. Group what should happen now, next, and later. Explain urgency, user impact, dependencies, and which item would unlock the most progress.",
     icon: "list-todo",
@@ -232,7 +303,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     shortDescription:
       "Filter the current view to the work most likely waiting on you, then rank the next move.",
     actionViewTemplate: FOCUS_NEEDS_MY_ACTION_ACTION_VIEW,
-    surfaces: ["project.dashboard"],
+    surfaces: DASHBOARD_SURFACES,
     promptTemplate:
       "I just filtered the {{currentViewLabel}} for {{projectTitle}} down to the work most likely to need my action. From this filtered slice, identify what is truly waiting on me, rank it by leverage and urgency, and give me the next concrete move.",
     icon: "list-filter",
@@ -243,6 +314,11 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
         key: "dashboard.view.too-broad",
         description:
           "Visible dashboard slice is broad enough that it should be narrowed before deeper prioritization",
+      },
+      {
+        key: "dashboard.view.needs-my-action",
+        description:
+          "Visible dashboard slice exposes a deterministic needs-my-action narrowing the recipe can apply before ranking the next move",
       },
     ],
     skillRef: { id: "delivery.focus-needs-my-action" },
@@ -258,7 +334,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     shortDescription:
       "Pick the next 1-3 backlog items to pull forward and explain why they beat the rest.",
     actionViewTemplate: SHAPE_NEXT_BACKLOG_SLICE_ACTION_VIEW,
-    surfaces: ["project.dashboard"],
+    surfaces: BACKLOG_DASHBOARD_SURFACE,
     promptTemplate:
       "Using the visible backlog context for {{projectTitle}}, choose the next 1-3 items to pull forward now. Explain why they should come next, what they unblock, what should wait, and the one risk or dependency to resolve first.",
     icon: "list-filter",
@@ -285,7 +361,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     shortDescription:
       "Find the single unblock, clarification, or handoff that will move your current work fastest.",
     actionViewTemplate: UNBLOCK_MY_WORK_ACTION_VIEW,
-    surfaces: ["project.dashboard"],
+    surfaces: MY_WORK_DASHBOARD_SURFACE,
     promptTemplate:
       "Using the visible my work context for {{projectTitle}}, identify the single highest-leverage unblock to make next. Call out the blocked item, what evidence supports that choice, who or what is needed, and the exact next action to take.",
     icon: "arrow-up-right",
@@ -309,7 +385,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     title: "Draft stakeholder update",
     manifestDisplayName: "Draft stakeholder update",
     shortDescription: "Turn current status into a low-jargon update for stakeholders or customers.",
-    surfaces: ["project.dashboard"],
+    surfaces: DASHBOARD_SURFACES,
     promptTemplate:
       "Draft a stakeholder update for {{projectTitle}}. Lead with what changed, why it matters, current risk, and the decisions or follow-ups that need attention. Keep jargon low.",
     icon: "newspaper",
@@ -337,7 +413,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     title: "Draft status update",
     manifestDisplayName: "Draft status update",
     shortDescription: "Prepare a concise status, blocker, and next-step update for the team.",
-    surfaces: ["project.dashboard"],
+    surfaces: DASHBOARD_SURFACES,
     promptTemplate:
       "Draft a concise status update for {{projectTitle}}. Include done, in progress, blocked, next, and the single most important dependency or risk to watch.",
     icon: "clipboard-check",
@@ -423,8 +499,11 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     id: "unblock-blocked-ticket",
     title: "Unblock blocked ticket",
     manifestDisplayName: "Unblock {{selectedWorkLabel}}",
-    shortDescription:
-      "Use the linked blockers and dependencies to pick the single next move that will reopen progress.",
+    shortDescription: "Pick the next move that will reopen progress.",
+    composerGuidance: {
+      helperText: "Add any context that could change the recommendation.",
+      placeholder: "Add owner, attempts, deadline, or fallback",
+    },
     actionViewTemplate: UNBLOCK_BLOCKED_TICKET_ACTION_VIEW,
     surfaces: ["workitem.detail.sidepanel"],
     promptTemplate:
@@ -477,7 +556,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     title: "Prepare release handoff",
     manifestDisplayName: "Prepare release handoff for {{selectedWorkLabel}}",
     shortDescription: "Summarize what changed, what to verify, and what could block rollout.",
-    surfaces: ["project.dashboard", "workitem.detail.sidepanel"],
+    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
     promptTemplate:
       "Prepare a release or QA handoff for {{selectedWorkLabel}}. Cover what changed, what to verify, rollout or deployment cues, blockers, and ownership for the next step.",
     icon: "ship",

@@ -174,7 +174,7 @@ When designing an extension, ask in this order:
 
 1. Can it live entirely in a `t3work-`-prefixed file inside a whitelisted package
    (`packages/project-recipes/**`, `packages/project-context/**`,
-   `packages/integrations-*/**`, `packages/t3work-skill-packs/**`, `packages/t3-adapter/**`,
+   `packages/integrations-*/**`, `packages/t3work-skill-packs/**`,
    `apps/web/src/routes/t3work.tsx`)? **Prefer this. No allowlist growth.**
 2. If it must touch upstream, what is the smallest possible optional seam? Aim for one
    optional field, one slot, one component insertion.

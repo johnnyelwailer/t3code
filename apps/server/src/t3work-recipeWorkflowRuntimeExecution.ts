@@ -1,20 +1,36 @@
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import type { ProjectRecipeWorkflowStep as ProjectRecipeWorkflowStepType } from "@t3tools/project-recipes";
+import {
+  PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
+  type ProjectRecipeWorkflowStep as ProjectRecipeWorkflowStepType,
+} from "@t3tools/project-recipes";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+import { upsertThreadActivity } from "./t3work-recipeWorkflowRuntimeActivities.ts";
 import type {
   ExecuteWorkflowStepsResult,
   PresentedWorkflowCardState,
 } from "./t3work-recipeWorkflowRuntimeExecutionTypes.ts";
-import { executeScriptWorkflowStep } from "./t3work-recipeWorkflowRuntimeScriptStep.ts";
+import { executeAgentWorkflowStep } from "./t3work-recipeWorkflowRuntimeAgentStep.ts";
+import { executeCollectInputWorkflowStep } from "./t3work-recipeWorkflowRuntimeCollectInputStep.ts";
 import {
-  handleAgentWorkflowStep,
-  handleAwaitCardActionWorkflowStep,
-  handleCardWorkflowStep,
-  handleUnsupportedToolWorkflowStep,
-} from "./t3work-recipeWorkflowRuntimeStepHandlers.ts";
-import type { PersistedRecipeWorkflowRunState } from "./t3work-recipeWorkflowRuntimeShared.ts";
+  upsertWorkflowCardSystemMessage,
+  upsertWorkflowSystemMessage,
+} from "./t3work-recipeWorkflowRuntimeMessages.ts";
+import { executeScriptWorkflowStep } from "./t3work-recipeWorkflowRuntimeScriptStep.ts";
+import { executeToolWorkflowStep } from "./t3work-recipeWorkflowRuntimeToolStep.ts";
+import {
+  resolveWithinRoot,
+  stepActivityId,
+  type PersistedRecipeWorkflowRunState,
+} from "./t3work-recipeWorkflowRuntimeShared.ts";
+import {
+  NoopT3workToolBroker,
+  T3workToolBroker,
+  type T3workToolBrokerShape,
+} from "./t3work-toolBroker.ts";
 
 export const executeWorkflowSteps = Effect.fn("executeWorkflowSteps")(function* (input: {
   orchestration: OrchestrationEngineShape;
@@ -24,48 +40,114 @@ export const executeWorkflowSteps = Effect.fn("executeWorkflowSteps")(function* 
   createdAt: string;
   allowKickoffAgentStep: boolean;
 }) {
+  const fileSystem = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
+  const toolBroker = Option.getOrElse(
+    yield* Effect.serviceOption(T3workToolBroker),
+    () => NoopT3workToolBroker,
+  );
   let kickoffMessage = input.kickoffMessage;
+  let shouldBootstrapAgent = false;
   let lastPresentedCard: PresentedWorkflowCardState | null = null;
-  const recipeBasePath = input.state.recipePath ?? pathService.dirname(input.state.workflowPath);
+  const recipeBasePath =
+    input.state.recipePath ??
+    (input.state.workflowPath
+      ? pathService.dirname(input.state.workflowPath)
+      : input.state.workspaceRoot);
 
   for (let index = input.startIndex; index < input.state.steps.length; index += 1) {
     const step = input.state.steps[index] as ProjectRecipeWorkflowStepType;
+    const activityId = stepActivityId(input.state.threadId, step.id);
 
     switch (step.kind) {
       case "agent": {
-        const result = yield* handleAgentWorkflowStep({
+        const isKickoffAgentStep = input.allowKickoffAgentStep && index === input.startIndex;
+        const result = yield* executeAgentWorkflowStep({
           orchestration: input.orchestration,
           state: input.state,
           step,
-          createdAt: input.createdAt,
-          allowKickoffAgentStep: input.allowKickoffAgentStep,
-          recipeBasePath,
+          stepIndex: index,
           kickoffMessage,
+          createdAt: input.createdAt,
+          recipeBasePath,
+          waitForReply: !isKickoffAgentStep,
         });
         kickoffMessage = result.kickoffMessage;
+        if (isKickoffAgentStep) {
+          shouldBootstrapAgent = true;
+          continue;
+        }
+        return result;
+      }
+      case "present-message": {
+        const card = step.message.card;
+        if (card) {
+          yield* upsertWorkflowCardSystemMessage({
+            orchestration: input.orchestration,
+            threadId: input.state.threadId,
+            workflowRunId: input.state.workflowRunId,
+            recipeId: input.state.launch.recipeId,
+            stepId: step.id,
+            card,
+            phase: "presented",
+            createdAt: input.createdAt,
+            text: step.message.body ?? "",
+            ...(step.message.visibleToUser !== undefined
+              ? { visibleToUser: step.message.visibleToUser }
+              : {}),
+            ...(step.message.visibleToAgent !== undefined
+              ? { visibleToAgent: step.message.visibleToAgent }
+              : {}),
+          });
+          lastPresentedCard = { cardId: card.id, activityStepId: step.id, card };
+        } else {
+          yield* upsertWorkflowSystemMessage({
+            orchestration: input.orchestration,
+            threadId: input.state.threadId,
+            workflowRunId: input.state.workflowRunId,
+            recipeId: input.state.launch.recipeId,
+            stepId: step.id,
+            text: step.message.body ?? "",
+            createdAt: input.createdAt,
+            status: "active",
+            ...(step.message.visibleToUser !== undefined
+              ? { visibleToUser: step.message.visibleToUser }
+              : {}),
+            ...(step.message.visibleToAgent !== undefined
+              ? { visibleToAgent: step.message.visibleToAgent }
+              : {}),
+          });
+        }
+
+        yield* upsertThreadActivity({
+          orchestration: input.orchestration,
+          threadId: input.state.threadId,
+          activityId,
+          createdAt: input.createdAt,
+          kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
+          summary: "Presented workflow message",
+          payload: {
+            workflowRunId: input.state.workflowRunId,
+            stepId: step.id,
+            stepKind: step.kind,
+            phase: "completed",
+            ...(step.message.body ? { detail: step.message.body } : {}),
+          },
+        });
         continue;
       }
-      case "card":
-        lastPresentedCard = yield* handleCardWorkflowStep({
+      case "collect-input": {
+        const collectInputResult = yield* executeCollectInputWorkflowStep({
           orchestration: input.orchestration,
-          state: input.state,
+          state: { ...input.state, nextStepIndex: index },
           step,
-          createdAt: input.createdAt,
-        });
-        continue;
-      case "await-card-action": {
-        const stateToPersist = yield* handleAwaitCardActionWorkflowStep({
-          orchestration: input.orchestration,
-          state: input.state,
-          step,
-          index,
-          createdAt: input.createdAt,
+          activityId,
           kickoffMessage,
+          createdAt: input.createdAt,
           lastPresentedCard,
         });
-        if (stateToPersist) {
-          return { kickoffMessage, stateToPersist } satisfies ExecuteWorkflowStepsResult;
+        if (collectInputResult) {
+          return collectInputResult;
         }
         continue;
       }
@@ -82,15 +164,24 @@ export const executeWorkflowSteps = Effect.fn("executeWorkflowSteps")(function* 
         }
         continue;
       }
-      default:
-        yield* handleUnsupportedToolWorkflowStep({
+      case "tool": {
+        yield* executeToolWorkflowStep({
           orchestration: input.orchestration,
           state: input.state,
           step,
+          activityId,
           createdAt: input.createdAt,
+          toolBroker: toolBroker as T3workToolBrokerShape,
         });
+        continue;
+      }
     }
   }
 
-  return { kickoffMessage, stateToPersist: null } satisfies ExecuteWorkflowStepsResult;
+  const result: ExecuteWorkflowStepsResult = {
+    kickoffMessage,
+    stateToPersist: null,
+    ...(shouldBootstrapAgent ? { turnStartMessage: kickoffMessage } : {}),
+  };
+  return result;
 });

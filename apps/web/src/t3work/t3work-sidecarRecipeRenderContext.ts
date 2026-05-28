@@ -1,33 +1,24 @@
 import {
   type DiscoverProjectRecipesRequest,
-  type ProjectRecipeDiscovered,
   type ProjectRecipeRenderContext,
   type RecipeSurface,
 } from "@t3tools/project-recipes";
+import { createQueryable } from "@t3tools/project-context";
 import { getT3WorkProfile, toRecipeProfileContext } from "@t3tools/t3work-skill-packs";
 
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
 import { buildAvailableContextKeys } from "~/t3work/t3work-sidecarRecipeContextKeys";
-import type {
-  T3workSidecarRecipeInput,
-  T3workSidecarRecipeQuickStart,
-} from "~/t3work/t3work-sidecarRecipeTypes";
+import type { T3workSidecarRecipeInput } from "~/t3work/t3work-sidecarRecipeTypes";
 
-const PINNED_T3WORK_META_QUICK_START_IDS = new Set(["create-contextual-recipe"]);
-
-export function buildPinnedQuickStartSelection<
-  T extends { readonly recipe: { readonly id: string } },
->(matches: ReadonlyArray<T>, limit: number): ReadonlyArray<T> {
-  const pinned: Array<T> = [];
-  const regular: Array<T> = [];
-  for (const match of matches) {
-    if (PINNED_T3WORK_META_QUICK_START_IDS.has(match.recipe.id)) {
-      pinned.push(match);
-    } else {
-      regular.push(match);
-    }
+function resolveRecipeSurface(
+  input: Pick<T3workSidecarRecipeInput, "surface" | "dashboardMode">,
+): RecipeSurface {
+  if (input.surface === "project.dashboard") {
+    return input.dashboardMode === "my-work"
+      ? "project.dashboard.myWork"
+      : "project.dashboard.backlog";
   }
-  return [...regular.slice(0, limit), ...pinned];
+  return input.surface;
 }
 
 function hasAttachedWorkitem(
@@ -76,6 +67,7 @@ export function buildRecipeRenderContext(
   profile: ReturnType<typeof getT3WorkProfile>,
   workspaceRoot?: string,
 ): ProjectRecipeRenderContext {
+  const surface = resolveRecipeSurface(input);
   const explicitWorkitemContext = hasExplicitWorkitemContext(input);
   const attachedWorkitem = hasAttachedWorkitem(input.contextAttachments);
   const availableContextKeys = buildAvailableContextKeys(input);
@@ -88,62 +80,54 @@ export function buildRecipeRenderContext(
       label: provider,
     }));
   const linkedResources = [...integrationLinkedResources, ...(input.linkedResources ?? [])];
-
-  return {
-    surface: input.surface,
+  const workitem = explicitWorkitemContext
+    ? {
+        ...(input.resourceKind ? { kind: input.resourceKind } : {}),
+        displayId: input.selectedWorkLabel,
+        ...(input.selectedWorkTitle ? { title: input.selectedWorkTitle } : {}),
+        ...(input.jiraIssueType ? { type: input.jiraIssueType } : {}),
+        ...(input.workitemPriority ? { priority: input.workitemPriority } : {}),
+        ...(input.ticketContext?.status ? { status: input.ticketContext.status } : {}),
+        ...(input.ticketContext?.assignee ? { assignee: input.ticketContext.assignee } : {}),
+        ...(input.ticketContext?.assigneeRelation
+          ? { assigneeRelation: input.ticketContext.assigneeRelation }
+          : {}),
+        ...(typeof input.ticketContext?.estimateValue === "number"
+          ? { estimateValue: input.ticketContext.estimateValue }
+          : {}),
+        ...(typeof input.ticketContext?.originalEstimateHours === "number"
+          ? { originalEstimateHours: input.ticketContext.originalEstimateHours }
+          : {}),
+        ...(typeof input.ticketContext?.remainingEstimateHours === "number"
+          ? { remainingEstimateHours: input.ticketContext.remainingEstimateHours }
+          : {}),
+        ...(input.ticketContext?.relationships
+          ? { relationships: input.ticketContext.relationships }
+          : {}),
+        ...(input.ticketContext?.github ? { github: input.ticketContext.github } : {}),
+        ...(input.project.source.provider === "atlassian" && input.resourceKind === "ticket"
+          ? { provider: "jira" }
+          : { provider: input.project.source.provider }),
+      }
+    : undefined;
+  const contextAttachments =
+    input.contextAttachments && input.contextAttachments.length > 0
+      ? createQueryable(buildRenderContextAttachments(input.contextAttachments))
+      : undefined;
+  const surfaceState = {
+    hasContextAttachments: (input.contextAttachments?.length ?? 0) > 0,
+    hasSelectedWork: explicitWorkitemContext || attachedWorkitem,
+    ...(input.currentViewSummary ? { currentView: input.currentViewSummary } : {}),
+  };
+  const baseContext = {
     project: {
       id: input.project.id,
       title: input.project.title,
       provider: input.project.source.provider,
       ...(workspaceRoot ? { workspaceRoot } : {}),
     },
-    ...(explicitWorkitemContext
-      ? {
-          workitem: {
-            ...(input.resourceKind ? { kind: input.resourceKind } : {}),
-            displayId: input.selectedWorkLabel,
-            ...(input.selectedWorkTitle ? { title: input.selectedWorkTitle } : {}),
-            ...(input.jiraIssueType ? { type: input.jiraIssueType } : {}),
-            ...(input.workitemPriority ? { priority: input.workitemPriority } : {}),
-            ...(input.ticketContext?.status ? { status: input.ticketContext.status } : {}),
-            ...(input.ticketContext?.assignee ? { assignee: input.ticketContext.assignee } : {}),
-            ...(input.ticketContext?.assigneeRelation
-              ? { assigneeRelation: input.ticketContext.assigneeRelation }
-              : {}),
-            ...(typeof input.ticketContext?.estimateValue === "number"
-              ? { estimateValue: input.ticketContext.estimateValue }
-              : {}),
-            ...(typeof input.ticketContext?.originalEstimateHours === "number"
-              ? { originalEstimateHours: input.ticketContext.originalEstimateHours }
-              : {}),
-            ...(typeof input.ticketContext?.remainingEstimateHours === "number"
-              ? { remainingEstimateHours: input.ticketContext.remainingEstimateHours }
-              : {}),
-            ...(input.ticketContext?.relationships
-              ? { relationships: input.ticketContext.relationships }
-              : {}),
-            ...(input.ticketContext?.github ? { github: input.ticketContext.github } : {}),
-            ...(input.project.source.provider === "atlassian" && input.resourceKind === "ticket"
-              ? { provider: "jira" }
-              : { provider: input.project.source.provider }),
-          },
-        }
-      : {}),
-    linkedResources,
-    artifacts: [],
-    ...(input.contextAttachments && input.contextAttachments.length > 0
-      ? { contextAttachments: buildRenderContextAttachments(input.contextAttachments) }
-      : {}),
-    ...(input.dashboardMode !== undefined || input.contextAttachments?.length
-      ? {
-          surfaceState: {
-            ...(input.dashboardMode ? { dashboardMode: input.dashboardMode } : {}),
-            hasContextAttachments: (input.contextAttachments?.length ?? 0) > 0,
-            hasSelectedWork: explicitWorkitemContext || attachedWorkitem,
-            ...(input.currentViewSummary ? { currentView: input.currentViewSummary } : {}),
-          },
-        }
-      : {}),
+    linkedResources: createQueryable(linkedResources),
+    artifacts: createQueryable([]),
     profile: {
       id: profile.id,
       title: profile.title,
@@ -151,7 +135,46 @@ export function buildRecipeRenderContext(
     },
     enabledSkillPacks: profile.recommendedSkillPackIds,
     schema: {},
-    availableContextKeys,
+    availableContextKeys: createQueryable(availableContextKeys),
+  };
+
+  if (surface === "project.dashboard.backlog") {
+    return {
+      surface,
+      ...baseContext,
+      ...(workitem ? { workitem } : {}),
+      ...(contextAttachments ? { contextAttachments } : {}),
+      surfaceState: {
+        dashboardMode: "backlog",
+        ...surfaceState,
+      },
+    };
+  }
+
+  if (surface === "project.dashboard.myWork") {
+    return {
+      surface,
+      ...baseContext,
+      ...(workitem ? { workitem } : {}),
+      ...(contextAttachments ? { contextAttachments } : {}),
+      surfaceState: {
+        dashboardMode: "my-work",
+        ...surfaceState,
+      },
+    };
+  }
+
+  return {
+    surface,
+    ...baseContext,
+    ...(workitem ? { workitem } : {}),
+    ...(contextAttachments ? { contextAttachments } : {}),
+    ...(explicitWorkitemContext ||
+    attachedWorkitem ||
+    input.contextAttachments?.length ||
+    input.currentViewSummary
+      ? { surfaceState }
+      : {}),
   };
 }
 
@@ -163,50 +186,4 @@ export function buildProjectRecipeDiscoveryRequest(
     workspaceRoot: input.workspaceRoot,
     context: buildRecipeRenderContext(input, profile, input.workspaceRoot),
   };
-}
-
-export function mapDiscoveredRecipesToQuickStarts(
-  recipes: ReadonlyArray<ProjectRecipeDiscovered>,
-  surface: RecipeSurface,
-  limit: number | undefined,
-  renderContext: ProjectRecipeRenderContext,
-): ReadonlyArray<T3workSidecarRecipeQuickStart> {
-  const visibleRecipes = buildPinnedQuickStartSelection(
-    recipes.map((recipe) => ({ recipe })),
-    limit ?? 5,
-  ).map((entry) => entry.recipe);
-
-  return visibleRecipes.map((recipe) => {
-    const quickStart: T3workSidecarRecipeQuickStart = {
-      id: recipe.id,
-      title: recipe.displayName,
-      description: recipe.shortDescription,
-      prompt: recipe.prompt,
-      workflow: {
-        kind: "recipe",
-        recipeId: recipe.id,
-        recipeVersion: recipe.version,
-        ...(recipe.kickoff ? { kickoff: recipe.kickoff } : {}),
-        title: recipe.displayName,
-        description: recipe.shortDescription,
-        source: recipe.source,
-        surface,
-        ...(recipe.reason ? { reason: recipe.reason } : {}),
-        recipePath: recipe.recipePath,
-        promptPath: recipe.promptPath,
-        ...(recipe.workflowPath ? { workflowPath: recipe.workflowPath } : {}),
-        allowedToolGroups: recipe.allowedToolGroups,
-      },
-    };
-
-    return recipe.actionViewSource
-      ? Object.assign(quickStart, {
-          actionView: {
-            source: recipe.actionViewSource,
-            ...(recipe.actionViewPath ? { path: recipe.actionViewPath } : {}),
-            context: renderContext,
-          },
-        })
-      : quickStart;
-  });
 }

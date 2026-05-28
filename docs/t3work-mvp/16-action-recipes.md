@@ -464,8 +464,8 @@ type ConversationMessage = {
   visibleToAgent: boolean;
 
   body?: { text?: string; structured?: Record<string, unknown> };
-  view?: { miniappId: string; props: Record<string, unknown> }; // interactive UI carrier
-  status?: "live" | "completed" | "superseded"; // mutable system messages
+  attachments?: ReadonlyArray<MessageAttachment>; // files, images, typed resources, more Views
+  status?: "active" | "waiting-for-input" | "completed"; // mutable system messages
   updatedAt?: string;
 };
 ```
@@ -478,16 +478,55 @@ The flags give you three useful cases:
 | ✓               | ✗                | UX-only (e.g. "Workflow paused, awaiting your input")                   |
 | ✗               | ✓                | hidden agent context (workflow-injected instructions, structured input) |
 
-The `view` field is how interactive UI lives **inside** a conversation message: it
-references a [View](#views) (a miniapp) plus props. Actions on that View round-trip through
-the workflow runtime as typed events; the renderer does not mutate React state directly.
-This is the same View primitive used by recipe action launchers — the placement is just
-`conversation.inlineCard` instead of `action`.
+System messages are **mutable**. A workflow may update body/attachments/status until the
+message reaches its terminal `completed` state. While it is still in progress, `status`
+captures whether the message is actively progressing or paused on user input. This
+subsumes the former `activity.phase: presented → updated → completed` pattern; the upsert
+semantics live on the message itself.
 
-System messages are **mutable**. A workflow may update body/view/status until the message
-reaches a terminal `completed` or `superseded` state. This subsumes the former
-`activity.phase: presented → updated → completed` pattern; the upsert semantics live on the
-message itself.
+### Attachments
+
+All three author kinds can carry typed attachments. Attachments are how a message holds
+content richer than plain text — files, images, structural typed context with its own
+renderer, t3work artifacts, and additional interactive Views beyond the message's primary
+body.
+
+```ts
+type MessageAttachment =
+  | { kind: "file"; ref: BlobRef; mime: string; name?: string; size?: number }
+  | { kind: "image"; ref: BlobRef; mime: string; name?: string; thumbnail?: BlobRef }
+  | { kind: "resource"; ref: ResourceRef; snapshot?: ResourceSnapshot } // typed external context (Jira issue, GitHub PR, ...)
+  | { kind: "artifact"; ref: ArtifactRef } // a durable t3work artifact (test plan, risk board, ...)
+  | { kind: "view"; miniappId: string; props: Record<string, unknown> }; // an interactive View attached to this message
+```
+
+Each attachment kind has a host-registered renderer:
+
+- **`file` / `image`** — standard blob attachments. Blobs live in workspace storage; the
+  message carries a `BlobRef`, not inline bytes.
+- **`resource`** — typed structural context (e.g. a Jira issue snapshot, a GitHub PR
+  selection). Renders via the integration-provided component for that resource kind,
+  using the resource-reference model from [Epic 13](./13-resource-references.md). This is
+  the path for "structural context with special rendering."
+- **`artifact`** — a reference to a durable t3work artifact ([Epic 08](./08-rich-artifacts.md)).
+  Renders via the artifact's registered kind renderer.
+- **`view`** — an interactive miniapp ([Epic 19](./19-workspace-miniapps.md)) attached to
+  the message. Multiple `view` attachments may coexist with the message's primary body;
+  actions on each round-trip through the workflow runtime as typed events. This is the
+  path for "custom views inside a message" — for example, a checklist View next to a
+  diff-preview View on the same system message.
+
+User messages today already use a parallel attachment seam (composer context attachments
+land as `resource` kind on the user message). The system author reuses the same
+attachment infrastructure — there is no system-specific attachment list. The agent's
+visible LLM context is built from each message's body plus the projected representation of
+its attachments (resource snapshots, artifact summaries, file/image refs); the adapter
+([Epic 20](./20-embedded-chat-and-handoffs.md)) owns that projection.
+
+A message's "primary View" is just the first `view` attachment (or, equivalently, an
+attachment whose role the renderer treats as the message's main card). The launch card
+described in [Conversation-Native Launch UX](#conversation-native-launch-ux) is one such
+view attachment on the workflow run's first system message.
 
 **LLM-context mapping** is an adapter concern, not part of the conversation model. When the
 t3 adapter builds an agent turn, it filters by `visibleToAgent` and projects each message
@@ -512,8 +551,8 @@ export type T3workMessageExt = {
   author?: { kind: "system"; source?: { workflowRunId: string; stepId?: string } };
   visibleToUser?: boolean;
   visibleToAgent?: boolean;
-  view?: { miniappId: string; props: Record<string, unknown> };
-  status?: "live" | "completed" | "superseded";
+  attachments?: ReadonlyArray<MessageAttachment>; // file | image | resource | artifact | view
+  status?: "active" | "waiting-for-input" | "completed";
   updatedAt?: string;
 };
 ```
@@ -543,10 +582,12 @@ type RecipeWorkflowStep =
   | { kind: "collect-input"; id: string; request: InputRequest }; // partial — see Step status
 ```
 
-`present-message` emits a system message (text and/or a View) into the conversation. It
-absorbs the former `card` step: a "card" is just a `present-message` whose `message.view`
-is a miniapp at `conversation.inlineCard`. Visibility flags on the message decide whether
-the user, the agent, or both see it.
+`present-message` emits a system message (text, typed attachments, and/or one or more
+Views) into the conversation. It absorbs the former `card` step: a "card" is just a
+`present-message` whose attachments include a `view` kind at `conversation.inlineCard`.
+The full payload — text body, files, images, resource snapshots, artifacts, and any number
+of interactive Views — is the message's [attachments list](#attachments). Visibility flags
+decide whether the user, the agent, or both see it.
 
 `collect-input` pauses the workflow until a typed event arrives. The input may come from a
 View action on a prior `present-message`, structured form data, or plain text. This
@@ -769,8 +810,8 @@ thread bootstrap or first context build is still pending. It shows at least:
   `waiting-for-input`, `completed`, `failed`
 - optional reason/rank metadata when discovery provided it
 
-The launch card updates in place (`status: live → completed`/`superseded`) as the workflow
-advances. Subsequent workflow turns appear as additional system messages.
+The launch card updates in place (`status: active` → `waiting-for-input` → `completed`) as
+the workflow advances. Subsequent workflow turns appear as additional system messages.
 
 Launch is dynamic, decided by the workflow, not by a web-only special case: some recipes
 auto-run the first agent turn immediately; others present a `collect-input` step and wait.
@@ -795,8 +836,9 @@ submission as workflow input. Any provider-specific translation from attachments
 material happens after the workflow resumes, keeping kickoff and workflow one continuous
 host-owned system.
 
-> **Implementation status.** The launch card and a string-only kickoff message are live.
-> The structured submission and `collect-input` are planned (Phase 2).
+> **Implementation status.** The launch card, string/text kickoff, and `collect-input`
+> resume path are live. Attachment-backed kickoff submissions and structured kickoff
+> payloads remain planned.
 
 ## Security: Two Stages
 
@@ -973,10 +1015,10 @@ project is created. Project-local recipes are the editable source of truth for t
 | Project-local discovery + bundled matching                                                         | Built                                              |
 | Visibility (predicate + script, timeout, isolation)                                                | Built (via `recipe.json` + expression engine)      |
 | TS-module authoring (`recipe.ts`), retire expression engine                                        | Planned (Phase 1)                                  |
-| Unified workflow step union; kickoff absorbed                                                      | Planned (Phase 2)                                  |
+| Unified workflow step union; kickoff absorbed                                                      | Built                                              |
 | Workflow runtime: bootstrap agent, card, await-card-action, script                                 | Built                                              |
-| Workflow runtime: mid-flow agent, tool, present-message, collect-input                             | Planned (Phase 2)                                  |
-| Three-author conversation model + `t3workExt` seam (system messages, view-in-message)              | Planned (Phase 2)                                  |
+| Workflow runtime: mid-flow agent, tool, present-message, collect-input                             | Built except tool step                             |
+| Three-author conversation model + `t3workExt` seam (system messages, view-in-message)              | Built                                              |
 | Shared tool surface for scripts/steps via broker; enforce `allowedToolGroups`                      | Planned (Phase 3)                                  |
 | Run-directory materialization, `context.json`/schema/map                                           | Planned (Phase 4)                                  |
 | Setup script (formerly `init.ts`)                                                                  | Deferred until stage-2 sandbox                     |
@@ -984,7 +1026,7 @@ project is created. Project-local recipes are the editable source of truth for t
 | `Queryable<T>` contract (Array-backed at MVP)                                                      | Planned (Phase 2 — needed by unified steps)        |
 | `Queryable<T>` runtime: SQL-backed + signals (Signia / equivalent); projection-driven invalidation | Planned (Phase 6 — scale tier)                     |
 | Agent-discovery types pipeline: generated `.d.ts` + `context.schema.json` + `context-map.md`       | Planned (Phase 4 — pairs with run materialization) |
-| `create-recipe` recipe (canonical end-to-end workflow proof)                                       | Planned (after Phase 2)                            |
+| `create-recipe` recipe (canonical end-to-end workflow proof)                                       | Built                                              |
 | Stage-2 sandboxing                                                                                 | Planned, parallel track                            |
 
 ## Implementation Notes

@@ -1,8 +1,18 @@
-import { CommandId, MessageId, ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
+  DEFAULT_RUNTIME_MODE,
+  MessageId,
+  ProviderInstanceId,
+  ThreadId,
+  type ProviderInteractionMode,
+  type RuntimeMode,
+} from "@t3tools/contracts";
 import {
   type LaunchProjectRecipeWorkflowRequest,
   type SubmitProjectRecipeCardActionRequest,
 } from "@t3tools/project-recipes";
+import { createModelSelection } from "@t3tools/shared/model";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import { HttpRouter } from "effect/unstable/http";
@@ -20,7 +30,16 @@ import {
   submitProjectRecipeCardAction,
   upsertProjectRecipeLaunchActivity,
 } from "./t3work-recipeWorkflowRuntime.ts";
+import { dispatchRecipeWorkflowTurnStart } from "./t3work-recipeWorkflowTurnStart.ts";
 import { toT3workError } from "./t3work-project-repository-utils.ts";
+
+function isRuntimeMode(value: string): value is RuntimeMode {
+  return value === "approval-required" || value === "auto-accept-edits" || value === "full-access";
+}
+
+function isProviderInteractionMode(value: string): value is ProviderInteractionMode {
+  return value === "default" || value === "plan";
+}
 
 const loadThreadProjectContext = Effect.fn("loadThreadProjectContext")(function* (
   threadId: ThreadId,
@@ -65,6 +84,14 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     }
 
     const threadId = ThreadId.make(threadIdInput);
+    const runtimeMode = isRuntimeMode(input.runtimeMode) ? input.runtimeMode : DEFAULT_RUNTIME_MODE;
+    const interactionMode = isProviderInteractionMode(input.interactionMode)
+      ? input.interactionMode
+      : DEFAULT_PROVIDER_INTERACTION_MODE;
+    const modelSelection = createModelSelection(
+      ProviderInstanceId.make(input.modelSelection.instanceId),
+      input.modelSelection.model,
+    );
     const { project } = yield* loadThreadProjectContext(threadId);
 
     const program = Effect.gen(function* () {
@@ -85,32 +112,27 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         createdAt: input.createdAt,
       });
 
-      yield* orchestrationEngine.dispatch({
-        type: "thread.turn.start",
-        commandId: CommandId.make(`server:t3work:recipe-workflow-launch:${crypto.randomUUID()}`),
-        threadId,
-        message: {
-          messageId: MessageId.make(
-            `server:t3work:recipe-workflow-launch-message:${crypto.randomUUID()}`,
-          ),
-          role: "user",
-          text: prepared.kickoffMessage,
-          attachments: [],
-        },
-        modelSelection: input.modelSelection as never,
-        titleSeed: input.titleSeed as never,
-        runtimeMode: input.runtimeMode as never,
-        interactionMode: input.interactionMode as never,
-        createdAt: input.createdAt,
-      });
+      if (prepared.turnStartMessage) {
+        yield* dispatchRecipeWorkflowTurnStart({
+          orchestration: orchestrationEngine,
+          threadId,
+          turnStartMessage: prepared.turnStartMessage,
+          createdAt: input.createdAt,
+          modelSelection,
+          runtimeMode,
+          interactionMode,
+          titleSeed: input.titleSeed,
+          commandPrefix: "recipe-workflow-launch",
+        });
 
-      yield* upsertProjectRecipeLaunchActivity({
-        orchestration: orchestrationEngine,
-        threadId,
-        launch: input.launch,
-        phase: "running",
-        createdAt: input.createdAt,
-      });
+        yield* upsertProjectRecipeLaunchActivity({
+          orchestration: orchestrationEngine,
+          threadId,
+          launch: input.launch,
+          phase: "running",
+          createdAt: input.createdAt,
+        });
+      }
 
       return okJson({ ok: true });
     });
@@ -153,10 +175,10 @@ export const t3workThreadRecipeWorkflowCardActionRouteLayer = HttpRouter.add(
     }
 
     const threadId = ThreadId.make(threadIdInput);
-    const { project } = yield* loadThreadProjectContext(threadId);
+    const { project, thread } = yield* loadThreadProjectContext(threadId);
     const createdAt = yield* Effect.map(DateTime.now, DateTime.formatIso);
 
-    yield* submitProjectRecipeCardAction({
+    const resumed = yield* submitProjectRecipeCardAction({
       orchestration: orchestrationEngine,
       workspaceRoot: project.workspaceRoot,
       threadId,
@@ -165,6 +187,19 @@ export const t3workThreadRecipeWorkflowCardActionRouteLayer = HttpRouter.add(
       ...(input.submit ? { submit: input.submit } : {}),
       createdAt,
     });
+
+    if (resumed.turnStartMessage) {
+      yield* dispatchRecipeWorkflowTurnStart({
+        orchestration: orchestrationEngine,
+        threadId,
+        turnStartMessage: resumed.turnStartMessage,
+        createdAt,
+        modelSelection: thread.modelSelection,
+        runtimeMode: thread.runtimeMode,
+        interactionMode: thread.interactionMode,
+        commandPrefix: "recipe-workflow-resume",
+      });
+    }
 
     return okJson({ ok: true });
   }).pipe(

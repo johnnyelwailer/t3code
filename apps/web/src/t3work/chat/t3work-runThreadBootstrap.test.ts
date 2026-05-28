@@ -99,15 +99,18 @@ const TEST_KICKOFF_WORKFLOW: T3workKickoffWorkflow = {
     version: 1,
     steps: [
       {
-        kind: "wait-for-kickoff-input",
+        kind: "collect-input",
         id: "collect-brief",
-        when: "missing-prompt",
-        promptRequest: {
-          title: "Recipe kickoff",
+        request: {
+          kind: "text",
+          when: "missing-prompt",
+          promptRequest: {
+            title: "Recipe kickoff",
+          },
         },
       },
       {
-        kind: "run-interactive-agent",
+        kind: "agent",
         id: "author",
       },
     ],
@@ -288,15 +291,18 @@ describe("runThreadBootstrap", () => {
           version: 1,
           steps: [
             {
-              kind: "wait-for-kickoff-input",
+              kind: "collect-input",
               id: "collect-brief",
-              when: "missing-prompt",
-              promptRequest: {
-                title: "Recipe kickoff",
+              request: {
+                kind: "text",
+                when: "missing-prompt",
+                promptRequest: {
+                  title: "Recipe kickoff",
+                },
               },
             },
             {
-              kind: "run-interactive-agent",
+              kind: "agent",
               id: "author",
             },
           ],
@@ -312,5 +318,45 @@ describe("runThreadBootstrap", () => {
         allowedToolGroups: ["integration.read"],
       },
     });
+  });
+
+  it("continues recipe launch when retrying after the thread already exists", async () => {
+    const backend = createBackend();
+    vi.mocked(backend.dispatchCommand).mockRejectedValueOnce(
+      new Error("Thread 'thread-4' already exists and cannot be created twice."),
+    );
+
+    await runThreadBootstrap({
+      backend,
+      environmentId: "env-1",
+      threadId: "thread-4",
+      projectTitle: "Project Alpha",
+      projectWorkspaceRoot: "/tmp/project-alpha",
+      canonicalProjectId: "project-alpha",
+      title: "Thread title",
+      initialUserMessage: "Tell me something about this",
+      kickoffModelSelection: { instanceId: "codex" as any, model: "gpt-5.4" },
+      kickoffRuntimeMode: "full-access",
+      kickoffInteractionMode: "default",
+      kickoffWorkflow: TEST_KICKOFF_WORKFLOW,
+      toolContext: TEST_TOOL_CONTEXT,
+      createdAt: "2026-05-19T12:00:00.000Z",
+      shouldEnsureProject: false,
+      action: "kickoff",
+      state: {
+        threadId: "thread-4",
+        projectEnsured: false,
+        threadCreateSent: false,
+        kickoffSent: false,
+      },
+      onInitialUserMessageSent: undefined,
+    });
+
+    expect(backend.launchRecipeWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-4",
+        kickoffMessage: "Tell me something about this",
+      }),
+    );
   });
 });

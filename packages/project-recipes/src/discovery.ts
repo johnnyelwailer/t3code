@@ -1,3 +1,5 @@
+import type { Queryable } from "@t3tools/project-context";
+
 import type { RecipeProfileContext, RecipeSurface } from "./recipe.js";
 import type { ProjectRecipeKickoffProgram } from "./kickoff.js";
 
@@ -89,19 +91,57 @@ export type ProjectRecipeRenderProfile = RecipeProfileContext & {
   readonly title?: string;
 };
 
-export type ProjectRecipeRenderContext = {
+type ProjectRecipeRenderContextBase = {
   readonly surface: RecipeSurface;
   readonly project: ProjectRecipeRenderProject;
-  readonly workitem?: ProjectRecipeRenderWorkitem;
-  readonly linkedResources: ReadonlyArray<ProjectRecipeRenderLinkedResource>;
-  readonly artifacts: ReadonlyArray<ProjectRecipeRenderArtifact>;
-  readonly contextAttachments?: ReadonlyArray<ProjectRecipeRenderContextAttachment>;
-  readonly surfaceState?: ProjectRecipeRenderSurfaceState;
+  readonly linkedResources: Queryable<ProjectRecipeRenderLinkedResource>;
+  readonly artifacts: Queryable<ProjectRecipeRenderArtifact>;
   readonly profile: ProjectRecipeRenderProfile;
   readonly enabledSkillPacks: ReadonlyArray<string>;
   readonly schema: Readonly<Record<string, unknown>>;
-  readonly availableContextKeys: ReadonlyArray<string>;
+  readonly availableContextKeys: Queryable<string>;
 };
+
+export type ProjectRecipeDashboardBacklogRenderContext = ProjectRecipeRenderContextBase & {
+  readonly surface: "project.dashboard.backlog";
+  readonly workitem?: ProjectRecipeRenderWorkitem;
+  readonly contextAttachments?: Queryable<ProjectRecipeRenderContextAttachment>;
+  readonly surfaceState?: ProjectRecipeRenderSurfaceState & {
+    readonly dashboardMode?: "backlog";
+  };
+};
+
+export type ProjectRecipeDashboardMyWorkRenderContext = ProjectRecipeRenderContextBase & {
+  readonly surface: "project.dashboard.myWork";
+  readonly workitem?: ProjectRecipeRenderWorkitem;
+  readonly contextAttachments?: Queryable<ProjectRecipeRenderContextAttachment>;
+  readonly surfaceState?: ProjectRecipeRenderSurfaceState & {
+    readonly dashboardMode?: "my-work";
+  };
+};
+
+export type ProjectRecipeWorkitemDetailRenderContext = ProjectRecipeRenderContextBase & {
+  readonly surface: "workitem.detail.sidepanel";
+  readonly workitem?: ProjectRecipeRenderWorkitem;
+  readonly contextAttachments?: Queryable<ProjectRecipeRenderContextAttachment>;
+  readonly surfaceState?: ProjectRecipeRenderSurfaceState;
+};
+
+export type ProjectRecipeOtherRenderContext = ProjectRecipeRenderContextBase & {
+  readonly surface: Exclude<
+    RecipeSurface,
+    "project.dashboard.backlog" | "project.dashboard.myWork" | "workitem.detail.sidepanel"
+  >;
+  readonly workitem?: ProjectRecipeRenderWorkitem;
+  readonly contextAttachments?: Queryable<ProjectRecipeRenderContextAttachment>;
+  readonly surfaceState?: ProjectRecipeRenderSurfaceState;
+};
+
+export type ProjectRecipeRenderContext =
+  | ProjectRecipeDashboardBacklogRenderContext
+  | ProjectRecipeDashboardMyWorkRenderContext
+  | ProjectRecipeWorkitemDetailRenderContext
+  | ProjectRecipeOtherRenderContext;
 
 export type ProjectRecipeVisibilityResult = {
   readonly visible: boolean;

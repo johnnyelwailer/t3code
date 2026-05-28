@@ -114,6 +114,7 @@ import {
 import { t3workProjectWorkspaceBootstrapRouteLayer } from "./t3work-project-repository-routes.ts";
 import { t3workThreadPlacementRouteLayer } from "./t3work-thread-placement-routes.ts";
 import { t3workThreadToolContextRouteLayer } from "./t3work-thread-tool-context-routes.ts";
+import { T3workRecipeWorkflowRuntimeReactorLive } from "./t3work-recipeWorkflowRuntimeReactor.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
 import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
 import * as NetService from "@t3tools/shared/Net";
@@ -461,6 +462,7 @@ export const makeServerLayer = Layer.unwrap(
       httpListeningLayer,
       runtimeStateLayer,
       tailscaleServeLayer,
+      T3workRecipeWorkflowRuntimeReactorLive,
     );
 
     return serverApplicationLayer.pipe(

@@ -90,6 +90,7 @@ export function ProjectDashboardKanbanLane({
                   compact
                   flat
                   githubActivityItems={githubActivityItems}
+                  showGitHubActivityTitleBadge={false}
                   {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
                   {...(isHierarchyMode ? { childCount: children.length } : {})}
                   onContextMenu={(event) => onTicketContextMenu(event, ticket)}

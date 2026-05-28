@@ -12,6 +12,7 @@ export function TicketWorkItemCardMeta({
   inlineChild,
   childCount,
   githubActivityItems,
+  showGitHubActivityTitleBadge,
 }: {
   ticket: ProjectTicket;
   compact: boolean | undefined;
@@ -19,6 +20,7 @@ export function TicketWorkItemCardMeta({
   inlineChild: boolean | undefined;
   childCount: number | undefined;
   githubActivityItems: ReadonlyArray<GitHubWorkActivityItem> | undefined;
+  showGitHubActivityTitleBadge: boolean | undefined;
 }) {
   const updatedLabel = compact ? renderRelativeUpdatedAt(ticket.updatedAt) : undefined;
   return (
@@ -50,7 +52,9 @@ export function TicketWorkItemCardMeta({
           {ticket.priority}
         </span>
       )}
-      {githubActivityItems && githubActivityItems.length > 0 ? (
+      {showGitHubActivityTitleBadge !== false &&
+      githubActivityItems &&
+      githubActivityItems.length > 0 ? (
         <GitHubActivityTitleBadge
           items={githubActivityItems}
           {...(compact ? { compact: true } : {})}

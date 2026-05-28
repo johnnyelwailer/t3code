@@ -14,12 +14,16 @@ import type {
 import {
   ApprovalRequestId,
   ClaudeSettings,
+  MessageId,
+  ProjectId,
   ProviderDriverKind,
   ProviderItemId,
   ProviderRuntimeEvent,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
   type RuntimeMode,
   ThreadId,
   ProviderInstanceId,
+  type OrchestrationThread,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { assert, describe, it } from "@effect/vitest";
@@ -27,6 +31,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Random from "effect/Random";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -34,6 +39,7 @@ import * as TestClock from "effect/testing/TestClock";
 
 import { attachmentRelativePath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import {
   T3WORK_MCP_SERVER_NAME,
@@ -297,6 +303,46 @@ async function readFirstPromptMessage(
 
 const THREAD_ID = ThreadId.make("thread-claude-1");
 const RESUME_THREAD_ID = ThreadId.make("thread-claude-resume");
+
+function makeProjectionSnapshotQueryWithMessages(messages: ReadonlyArray<unknown>) {
+  const threadDetail: OrchestrationThread = {
+    id: THREAD_ID,
+    projectId: ProjectId.make("project-claude"),
+    title: "Claude test thread",
+    modelSelection: createModelSelection(ProviderInstanceId.make("claudeAgent"), "claude-opus-4-6"),
+    runtimeMode: "full-access",
+    interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+    branch: null,
+    worktreePath: null,
+    latestTurn: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
+    deletedAt: null,
+    messages: messages as never,
+    proposedPlans: [],
+    activities: [],
+    checkpoints: [],
+    session: null,
+  };
+
+  return {
+    getCommandReadModel: () => Effect.die("unused"),
+    getSnapshot: () => Effect.die("unused"),
+    getShellSnapshot: () => Effect.die("unused"),
+    getArchivedShellSnapshot: () => Effect.die("unused"),
+    getSnapshotSequence: () => Effect.die("unused"),
+    getCounts: () => Effect.die("unused"),
+    getActiveProjectByWorkspaceRoot: () => Effect.die("unused"),
+    getProjectShellById: () => Effect.die("unused"),
+    getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),
+    getThreadCheckpointContext: () => Effect.die("unused"),
+    getFullThreadDiffContext: () => Effect.die("unused"),
+    getThreadShellById: () => Effect.die("unused"),
+    getThreadDetailById: (threadId: ThreadId) =>
+      Effect.succeed(threadId === THREAD_ID ? Option.some(threadDetail) : Option.none()),
+  };
+}
 
 describe("ClaudeAdapterLive", () => {
   it.effect("returns validation error for non-claude provider on startSession", () => {
@@ -726,6 +772,88 @@ describe("ClaudeAdapterLive", () => {
       const promptText = yield* Effect.promise(() => readFirstPromptText(createInput));
       assert.equal(promptText, "Ultrathink:\nInvestigate the edge cases");
     }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("prepends agent-visible system workflow context to Claude prompts", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "Continue the workflow",
+        attachments: [],
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      const promptText = yield* Effect.promise(() => readFirstPromptText(createInput));
+      assert.equal(
+        promptText,
+        [
+          "Workflow context:",
+          "- Visible workflow note",
+          "- View attachment: t3work.workflow-card",
+          "",
+          "User request:",
+          "Continue the workflow",
+        ].join("\n"),
+      );
+    }).pipe(
+      Effect.provideService(
+        ProjectionSnapshotQuery,
+        makeProjectionSnapshotQueryWithMessages([
+          {
+            id: MessageId.make("message-system-visible"),
+            role: "system",
+            text: "Visible workflow note",
+            attachments: [],
+            t3workExt: {
+              attachments: [
+                {
+                  kind: "view",
+                  miniappId: "t3work.workflow-card",
+                  props: { status: "waiting" },
+                },
+              ],
+            },
+            turnId: null,
+            streaming: false,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: MessageId.make("message-system-hidden"),
+            role: "system",
+            text: "Hidden workflow note",
+            attachments: [],
+            t3workExt: {
+              visibleToAgent: false,
+            },
+            turnId: null,
+            streaming: false,
+            createdAt: "2026-01-01T00:00:01.000Z",
+            updatedAt: "2026-01-01T00:00:01.000Z",
+          },
+          {
+            id: MessageId.make("message-user"),
+            role: "user",
+            text: "User text should not be duplicated",
+            attachments: [],
+            turnId: null,
+            streaming: false,
+            createdAt: "2026-01-01T00:00:02.000Z",
+            updatedAt: "2026-01-01T00:00:02.000Z",
+          },
+        ]),
+      ),
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),
     );

@@ -42,6 +42,15 @@ describe("renderT3WorkProjectSetupFiles", () => {
     const starterRecipePrompt = files.find(
       (file) => file.relativePath === ".t3work/recipes/explain-selected-work/prompt.md",
     );
+    const createRecipeManifest = files.find(
+      (file) => file.relativePath === ".t3work/recipes/create-recipe/recipe.json",
+    );
+    const createRecipeWorkflow = files.find(
+      (file) => file.relativePath === ".t3work/recipes/create-recipe/workflow.ts",
+    );
+    const createRecipeScript = files.find(
+      (file) => file.relativePath === ".t3work/recipes/create-recipe/recipe-script.ts",
+    );
     const skillTemplate = files.find(
       (file) => file.relativePath === ".t3work/templates/skills/repeatable-workflow/SKILL.md",
     );
@@ -79,6 +88,11 @@ describe("renderT3WorkProjectSetupFiles", () => {
     expect(statusSkill?.contents).toContain("Do not narrate file exploration");
     expect(starterRecipeManifest?.contents).toContain('"scope": "project"');
     expect(starterRecipePrompt?.contents).toContain("Explain this simply");
+    expect(createRecipeManifest?.contents).toContain('"workflow": "./workflow.ts"');
+    expect(createRecipeWorkflow?.contents).toContain('kind: "script"');
+    expect(createRecipeWorkflow?.contents).toContain('kind: "agent"');
+    expect(createRecipeScript?.contents).toContain("prepareAuthoringWorkspace");
+    expect(createRecipeScript?.contents).toContain("starter/recipe.json");
     expect(skillTemplate?.contents).toContain("use a read-only subagent");
   });
 

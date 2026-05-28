@@ -60,17 +60,17 @@ Current `t3work` additive packages on disk:
 - `packages/integrations-core` (formerly proposed as `t3work-integrations-core`)
 - `packages/integrations-atlassian` (formerly proposed as `t3work-integrations-atlassian`)
 - `packages/t3work-skill-packs`
-- `packages/t3-adapter` (formerly proposed as `t3work-t3-adapter`)
 - planned new additive packages: `@t3work/plugin-sdk` (recipe/workflow SDK) and
   `@t3work/miniapp-sdk` (the View primitive)
 
-The unprefixed names (`project-*`, `integrations-*`, `t3-adapter`) are explicitly whitelisted
-in the additive guard — they predate the prefix policy and stay for compatibility. Anything
-new should prefer the `t3work-` prefix unless extending one of these existing packages.
+The unprefixed names (`project-*`, `integrations-*`) are explicitly whitelisted in the
+additive guard because they predate the prefix policy. Anything new should prefer the
+`t3work-` prefix unless extending one of these existing packages.
 
 Rules:
 
-- Only `packages/t3-adapter` may deep import unstable T3 internals.
+- If a dedicated adapter package is introduced later, it is the only package allowed to
+  deep import unstable T3 internals.
 - Integration-specific logic must not leak into generic project, recipe, or artifact
   packages.
 - UI components must not call integration clients directly.

@@ -1,7 +1,14 @@
 import * as Schema from "effect/Schema";
 
-import { ProjectRecipeKickoffProgram } from "./kickoff.ts";
-import { RecipeSurface } from "./recipe.ts";
+import { ProjectRecipeWorkflowCollectInputRequest } from "./input.ts";
+import {
+  ProjectRecipeConversationCard,
+  ProjectRecipeConversationCardAction,
+  ProjectRecipeConversationCardActionStyle,
+  ProjectRecipeConversationCardKind,
+  ProjectRecipeWorkflowSystemMessageSpec,
+} from "./message.ts";
+import { RecipeSurface } from "./surface.ts";
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -10,41 +17,6 @@ export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP = "t3work.recipe.workflo
 export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD = "t3work.recipe.workflow.card";
 export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD_ACTION =
   "t3work.recipe.workflow.card-action";
-
-export const ProjectRecipeConversationCardKind = Schema.Literals([
-  "checklist",
-  "form",
-  "approval",
-  "artifact-preview",
-  "status",
-]);
-export type ProjectRecipeConversationCardKind = typeof ProjectRecipeConversationCardKind.Type;
-
-export const ProjectRecipeConversationCardActionStyle = Schema.Literals([
-  "primary",
-  "secondary",
-  "danger",
-]);
-export type ProjectRecipeConversationCardActionStyle =
-  typeof ProjectRecipeConversationCardActionStyle.Type;
-
-export const ProjectRecipeConversationCardAction = Schema.Struct({
-  id: Schema.String,
-  label: Schema.String,
-  style: Schema.optional(ProjectRecipeConversationCardActionStyle),
-  submit: Schema.optional(JsonRecord),
-});
-export type ProjectRecipeConversationCardAction = typeof ProjectRecipeConversationCardAction.Type;
-
-export const ProjectRecipeConversationCard = Schema.Struct({
-  kind: ProjectRecipeConversationCardKind,
-  id: Schema.String,
-  title: Schema.String,
-  body: Schema.optional(Schema.String),
-  fields: Schema.optional(Schema.Array(JsonRecord)),
-  actions: Schema.optional(Schema.Array(ProjectRecipeConversationCardAction)),
-});
-export type ProjectRecipeConversationCard = typeof ProjectRecipeConversationCard.Type;
 
 export const ProjectRecipeWorkflowAgentStep = Schema.Struct({
   kind: Schema.Literal("agent"),
@@ -69,27 +41,28 @@ export const ProjectRecipeWorkflowToolStep = Schema.Struct({
 });
 export type ProjectRecipeWorkflowToolStep = typeof ProjectRecipeWorkflowToolStep.Type;
 
-export const ProjectRecipeWorkflowCardStep = Schema.Struct({
-  kind: Schema.Literal("card"),
+export const ProjectRecipeWorkflowPresentMessageStep = Schema.Struct({
+  kind: Schema.Literal("present-message"),
   id: Schema.String,
-  card: ProjectRecipeConversationCard,
+  message: ProjectRecipeWorkflowSystemMessageSpec,
 });
-export type ProjectRecipeWorkflowCardStep = typeof ProjectRecipeWorkflowCardStep.Type;
+export type ProjectRecipeWorkflowPresentMessageStep =
+  typeof ProjectRecipeWorkflowPresentMessageStep.Type;
 
-export const ProjectRecipeWorkflowAwaitCardActionStep = Schema.Struct({
-  kind: Schema.Literal("await-card-action"),
+export const ProjectRecipeWorkflowCollectInputStep = Schema.Struct({
+  kind: Schema.Literal("collect-input"),
   id: Schema.String,
-  actionId: Schema.String,
+  request: ProjectRecipeWorkflowCollectInputRequest,
 });
-export type ProjectRecipeWorkflowAwaitCardActionStep =
-  typeof ProjectRecipeWorkflowAwaitCardActionStep.Type;
+export type ProjectRecipeWorkflowCollectInputStep =
+  typeof ProjectRecipeWorkflowCollectInputStep.Type;
 
 export const ProjectRecipeWorkflowStep = Schema.Union([
   ProjectRecipeWorkflowAgentStep,
   ProjectRecipeWorkflowScriptStep,
   ProjectRecipeWorkflowToolStep,
-  ProjectRecipeWorkflowCardStep,
-  ProjectRecipeWorkflowAwaitCardActionStep,
+  ProjectRecipeWorkflowPresentMessageStep,
+  ProjectRecipeWorkflowCollectInputStep,
 ]);
 export type ProjectRecipeWorkflowStep = typeof ProjectRecipeWorkflowStep.Type;
 
@@ -103,7 +76,7 @@ export const ProjectRecipeWorkflowLaunch = Schema.Struct({
   recipeId: Schema.String,
   recipeVersion: Schema.optional(Schema.String),
   parameters: Schema.optional(JsonRecord),
-  kickoff: Schema.optional(ProjectRecipeKickoffProgram),
+  kickoff: Schema.optional(ProjectRecipeWorkflowDocument),
   title: Schema.String,
   description: Schema.String,
   source: Schema.Literals(["bundled", "project-local"]),
@@ -121,7 +94,7 @@ export const ProjectRecipeLaunchPhase = Schema.Literals([
   "creating-thread",
   "bootstrapping-agent",
   "running",
-  "waiting-for-card-action",
+  "waiting-for-input",
   "completed",
   "failed",
 ]);
@@ -139,7 +112,7 @@ export const ProjectRecipeLaunchActivityPayload = Schema.Struct({
   recipeId: Schema.String,
   recipeVersion: Schema.optional(Schema.String),
   parameters: Schema.optional(JsonRecord),
-  kickoff: Schema.optional(ProjectRecipeKickoffProgram),
+  kickoff: Schema.optional(ProjectRecipeWorkflowDocument),
   workflowRunId: Schema.String,
   title: Schema.String,
   description: Schema.String,
