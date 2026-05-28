@@ -11,5 +11,7 @@ export type PresentedWorkflowCardState = {
 export type ExecuteWorkflowStepsResult = {
   kickoffMessage: string;
   stateToPersist: PersistedRecipeWorkflowRunState | null;
+  stateSnapshot: PersistedRecipeWorkflowRunState;
   turnStartMessage?: string;
+  turnStartStepId?: string;
 };

@@ -104,11 +104,12 @@ export default defineRecipe({
 });
 ```
 
-> **Implementation status.** Today recipes are authored as `recipe.json` with `{{ }}`
-> expression strings evaluated by a `new Function` engine
-> (`t3work-projectRecipeDiscoveryVisibility.ts`). The TS-module form above is the target.
-> Migrating discovery from "parse JSON + eval strings" to "`import()` a typed module" is
-> Phase 1 of the delivery plan and deletes the expression engine entirely.
+> **Implementation status.** Today recipes are still authored as `recipe.json` with `{{ }}`
+> expression strings evaluated by `new Function` engines in both
+> `t3work-projectRecipeDiscoveryVisibility.ts` and
+> `t3work-projectRecipeDiscoveryTemplate.ts`. The TS-module form above is still the Phase 1
+> target. Phase 1 is not complete until discovery moves from "parse JSON + eval strings" to
+> "`import()` a typed module" and the expression-engine path is removed.
 
 ### Supported authoring subset
 
@@ -867,9 +868,11 @@ runs/
       workflow-state.json # persisted forward-only cursor + step results
 ```
 
-Materializing inputs to disk (rather than stuffing everything into the prompt) lets the
-agent navigate large context with filesystem tools, gives a durable record of exactly what
-was launched, and gives scripts a place to write outputs.
+The run directory is the **workflow runtime's** persistent record of a launch — a
+durable working directory the runtime uses for audit, replay, and to give `script` /
+`tool` steps a place to write outputs. **It is not an API surface the agent navigates.**
+`recipe.ts` and `workflow.ts` are runtime-internal artifacts; the agent never sees them
+and is never told to "follow" them.
 
 Launch sequence (thread-first, so the user sees state immediately):
 
@@ -881,22 +884,43 @@ Launch sequence (thread-first, so the user sees state immediately):
 5. Begin executing the workflow. Show progress on the launch card.
 6. Only send the first agent turn when the workflow reaches an `agent` step.
 
-Agent bootstrap message:
+### What the agent actually sees
 
-```md
-Follow the instantiated action recipe at:
-<absolute-run-recipe-path>
+When the workflow reaches an `agent` step, the workflow runtime constructs the agent's
+turn material — it does **not** send a "read this directory" instruction. The agent's
+view is built from three sources:
 
-Read recipe.ts (or recipe.json) first, then prompt.md.
-Use context.json as source data.
-Persist durable outputs as artifacts when appropriate.
-```
+- **Prompt material** — the rendered content of the recipe's `prompt.md` (and any
+  `promptText` / `promptPath` on the specific agent step) becomes prompt content
+  delivered through the normal provider channel.
+- **Context attachments** — `context.json` and any relevant resource snapshots ride as
+  typed `MessageAttachment`s ([Conversation Participants — Attachments](#attachments))
+  on a `system`-authored message with `visibleToUser: false, visibleToAgent: true`.
+  Resource attachments use the typed renderer per [Epic 13](./13-resource-references.md);
+  the JSON blob (`context.json`) attaches as a `file` or `resource` snapshot depending
+  on size, with the projection rule owned by the t3-adapter (see [Tools](#tools)).
+- **Tools** — the broker binding the agent received already exposes any read tools
+  scoped by the recipe's `allowedToolGroups`. Recipes that genuinely need the agent to
+  read or write run-local files declare it through tools (e.g., a `t3work.run.read_file`
+  tool gated to that recipe), not through prose instructions.
 
-> **Implementation status.** Run-directory materialization, `context.json`/schema/map, and
-> the `init`/setup script are **not built yet** — today a launch hands the agent a rendered
-> prompt string plus an optional workflow document; no instance directory is created. This
-> is Phase 4. The optional setup script (formerly `init.ts`) is deferred until stage-2
-> sandboxing exists, because it is the riskiest ambient-code path.
+The user never sees the bootstrap material in the conversation timeline — it lives on
+a system message with `visibleToUser: false`. The first user-visible message in the
+conversation is either the launch card (host-owned) or whatever the workflow's first
+`present-message` emits.
+
+**Anti-pattern:** do NOT emit a user-role message containing
+"Follow the instantiated action recipe at &lt;path&gt;. Read recipe.ts first, then
+prompt.md…". That string leaks workflow-runtime internals into the conversation,
+ventriloquises through the user role, and exposes file paths the agent has no general
+business reading. The runtime owns `recipe.ts` / `workflow.ts`; the agent owns the
+task.
+
+> **Implementation status.** Run-directory materialization is built. Each launch writes a
+> concrete run under `runs/<workflowRunId>/recipe/` including `recipe.json`, `prompt.md`,
+> `context.json`, `context.schema.json`, and `context-map.md`. The optional setup script
+> (formerly `init.ts`) remains deferred until stage-2 sandboxing exists, because it is the
+> riskiest ambient-code path.
 
 ### Full context contract
 
@@ -1106,6 +1130,34 @@ unified step union, system messages with embedded Views, the shared tool surface
 materialized run directory, and the additive-guard discipline — all on the same primitives
 described in this epic.
 
+### The `edit-plugin-module` recipe
+
+`create-recipe` writes new plugin modules. Its peer `edit-plugin-module` edits existing
+ones. It is the **single canonical AI-edit entry point** invoked by every "Edit this…"
+affordance in the UI — recipe context menus, sidecar section context menus, and any
+future Edit-this surface ([Epic 19 — Context menus](./19-workspace-miniapps.md#context-menus)).
+
+Shape:
+
+1. **Input**: a target file path (the source of an existing `define*` call) plus the
+   kickoff customization (what change the user wants).
+2. **Script step**: reads the target file, inspects which `define*` helper it exports,
+   and selects the appropriate authoring guidance to inject into the agent's prompt.
+3. **Agent step**: drafts the change with the targeted guidance.
+4. **Present-message + collect-input**: shows the proposed diff as a `view` attachment,
+   awaits explicit approval.
+5. **Script step**: writes the change to disk.
+
+One recipe handles every `define*` kind. Splitting prompt material into multiple
+referenced files (`./prompts/edit-recipe.md`, `./prompts/edit-section.md`, etc.) is the
+right move once per-kind guidance grows beyond what fits cleanly in one prompt — same
+recipe, multiple prompt references picked by the script step.
+
+The same workflow also backs the **"Customize…"** context-menu action used for
+_structured / destructive_ operations (revert-to-bundled, reset overrides, change tool
+grants, etc.). There are intentionally no ad-hoc confirmation dialogs in the UI — every
+destructive customization routes through this guided workflow's preview + approval steps.
+
 ### Default behavior
 
 - **Offer first**, never silently create. The agent triggers the `create-recipe` workflow
@@ -1148,28 +1200,29 @@ project is created. Project-local recipes are the editable source of truth for t
 
 ## Implementation Status Summary
 
-| Area                                                                                               | Status                                             |
-| -------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Project-local discovery + bundled matching                                                         | Built                                              |
-| Visibility (predicate + script, timeout, isolation)                                                | Built (via `recipe.json` + expression engine)      |
-| TS-module authoring (`recipe.ts`), retire expression engine                                        | Planned (Phase 1)                                  |
-| Unified workflow step union; kickoff absorbed                                                      | Built                                              |
-| Workflow runtime: bootstrap agent, card, await-card-action, script                                 | Built                                              |
-| Workflow runtime: mid-flow agent, tool, present-message, collect-input                             | Built except tool step                             |
-| Three-author conversation model + `t3workExt` seam (system messages, view-in-message)              | Built                                              |
-| Shared tool surface for scripts/steps via broker; enforce `allowedToolGroups`                      | Built                                              |
-| Deterministic workflows (no-agent workflows skip thread/launch-card) + `action.inline` placement   | Planned (Phase 3 — same broker work)               |
-| `agent.task` step (background non-interactive LLM call) + step-result binding model                | Planned (Phase 4 — design step-result model first) |
-| Sidecar sections + `defineSidecarSection` SDK + composition model + remove hardcoded kickoff aside | Planned (Phase 5 — same Views-on-miniapp work)     |
-| `define*` SDK surface (per-placement helpers, no generic primitive, multi-placement via exports)   | Planned (Phase 5 — ships alongside the placements it covers) |
-| Run-directory materialization, `context.json`/schema/map                                           | Planned (Phase 4)                                  |
-| Setup script (formerly `init.ts`)                                                                  | Deferred until stage-2 sandbox                     |
-| Views unified on miniapp model; typed-event action path                                            | Planned (Phase 5)                                  |
-| `Queryable<T>` contract (Array-backed at MVP)                                                      | Planned (Phase 2 — needed by unified steps)        |
-| `Queryable<T>` runtime: SQL-backed + signals (Signia / equivalent); projection-driven invalidation | Planned (Phase 6 — scale tier)                     |
-| Agent-discovery types pipeline: generated `.d.ts` + `context.schema.json` + `context-map.md`       | Planned (Phase 4 — pairs with run materialization) |
-| `create-recipe` recipe (canonical end-to-end workflow proof)                                       | Built                                              |
-| Stage-2 sandboxing                                                                                 | Planned, parallel track                            |
+| Area                                                                                                  | Status                                                       |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Project-local discovery + bundled matching                                                            | Built                                                        |
+| Visibility (predicate + script, timeout, isolation)                                                   | Built (via `recipe.json` + expression engine)                |
+| TS-module authoring (`recipe.ts`), retire expression engine                                           | Planned (Phase 1 target; current engine still active)        |
+| Unified workflow step union; kickoff absorbed                                                         | Built                                                        |
+| Workflow runtime: bootstrap agent, card, await-card-action, script                                    | Built                                                        |
+| Workflow runtime: mid-flow agent, tool, present-message, collect-input                                | Built                                                        |
+| Three-author conversation model + `t3workExt` seam (system messages, view-in-message)                 | Built                                                        |
+| Shared tool surface for scripts/steps via broker; enforce `allowedToolGroups`                         | Built                                                        |
+| Deterministic workflows (no-agent workflows skip thread/launch-card) + `action.inline` placement      | Built (tool-step no-chat path; backlog inline chip wired)    |
+| `agent.task` step (background non-interactive LLM call) + step-result binding model                   | Planned (Phase 4 — design step-result model first)           |
+| Sidecar sections + `defineSidecarSection` SDK + composition model + remove hardcoded kickoff aside    | Planned (Phase 5 — same Views-on-miniapp work)               |
+| `define*` SDK surface (per-placement helpers, no generic primitive, multi-placement via exports)      | Planned (Phase 5 — ships alongside the placements it covers) |
+| Run-directory materialization, `context.json`/schema/map                                              | Built                                                        |
+| Setup script (formerly `init.ts`)                                                                     | Deferred until stage-2 sandbox                               |
+| Views unified on miniapp model; typed-event action path                                               | Planned (Phase 5)                                            |
+| `Queryable<T>` contract (Array-backed at MVP)                                                         | Planned (Phase 2 — needed by unified steps)                  |
+| `Queryable<T>` runtime: SQL-backed + signals (Signia / equivalent); projection-driven invalidation    | Planned (Phase 6 — scale tier)                               |
+| Agent-discovery types pipeline: generated `.d.ts` + `context.schema.json` + `context-map.md`          | Built                                                        |
+| `create-recipe` recipe (canonical end-to-end workflow proof)                                          | Built                                                        |
+| `edit-plugin-module` recipe (single canonical AI-edit entry point; backs "Edit this…" + "Customize…") | Planned (Phase 5 — after context-menu chrome lands)          |
+| Stage-2 sandboxing                                                                                    | Planned, parallel track                                      |
 
 ## Implementation Notes
 

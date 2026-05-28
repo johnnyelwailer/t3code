@@ -8,6 +8,7 @@ import {
 } from "@t3tools/t3work-skill-packs";
 
 import type { BackendApi } from "~/t3work/backend/t3work-types";
+import { buildT3workActionRecipeLaunchContext } from "~/t3work/t3work-actionRecipeLaunchContext";
 import { buildAvailableContextKeys } from "~/t3work/t3work-sidecarRecipeContextKeys";
 import {
   buildPinnedQuickStartSelection,
@@ -49,6 +50,7 @@ export function buildT3workSidecarRecipeQuickStarts(
   const projectWorkspaceRoot = input.project.workspace?.rootPath;
   const availableContextKeys = buildAvailableContextKeys(input);
   const templateValues = buildBundledRecipeTemplateValues(input);
+  const launchContext = buildT3workActionRecipeLaunchContext(renderContext);
   const matches = matchRecipes(listBundledT3WorkRecipes(), {
     activeProject: input.project,
     selectedResource: null,
@@ -77,12 +79,16 @@ export function buildT3workSidecarRecipeQuickStarts(
       result.recipe.shortDescription,
       templateValues,
     );
+    const renderedPrompt = renderPromptTemplate(
+      result.recipe.promptTemplate ?? result.recipe.shortDescription,
+      templateValues,
+    );
 
     const quickStart: T3workSidecarRecipeQuickStart = {
       id: result.recipe.id,
       title: renderedTitle,
       description: renderedDescription,
-      prompt: renderPromptTemplate(result.recipe.promptTemplate, templateValues),
+      prompt: renderedPrompt,
       workflow: {
         kind: "recipe",
         recipeId: result.recipe.id,
@@ -93,6 +99,7 @@ export function buildT3workSidecarRecipeQuickStarts(
         source: "bundled",
         surface: resolvedSurface,
         reason: result.reason,
+        launchContext,
         ...(localBundledRecipePath ? { recipePath: localBundledRecipePath } : {}),
         ...(localBundledRecipePath
           ? { workflowPath: `${localBundledRecipePath}/workflow.ts` }

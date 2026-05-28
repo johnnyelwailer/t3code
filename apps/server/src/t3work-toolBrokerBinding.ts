@@ -1,11 +1,5 @@
 import type { ThreadId } from "@t3tools/contracts";
-import {
-  PROJECT_RECIPE_PRELAUNCH_TOOL_GROUP_IDS,
-  PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID,
-  getProjectRecipeToolGroupForToolId,
-  normalizeProjectRecipeToolGroups,
-  type ProjectRecipeToolGroupId,
-} from "@t3tools/project-recipes";
+import { PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID } from "@t3tools/project-recipes";
 import * as Effect from "effect/Effect";
 
 import {
@@ -20,11 +14,18 @@ import {
   foldResource,
   foldResult,
   okResult,
+  readBacklogAssigneeFilterMode,
   readRenameTitle,
   resourceResult,
 } from "./t3work-toolBrokerHelpers.ts";
+import { buildBindingState, permissionMessage } from "./t3work-toolBrokerBindingPermissions.ts";
 
-type CreateBindingInput<TRenameError = never, TStartChildError = never, TReadError = never> = {
+type CreateBindingInput<
+  TRenameError = never,
+  TStartChildError = never,
+  TReadError = never,
+  TBacklogAssigneeFilterError = never,
+> = {
   readonly availableToolIds: ReadonlyArray<string>;
   readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
   readonly scopeLabel: string;
@@ -33,51 +34,24 @@ type CreateBindingInput<TRenameError = never, TStartChildError = never, TReadErr
   readonly renameThread?: (title: string) => Effect.Effect<unknown, TRenameError>;
   readonly renameThreadResult?: (title: string) => unknown;
   readonly startChild?: (arguments_: unknown) => Effect.Effect<unknown, TStartChildError>;
+  readonly setBacklogAssigneeFilter?: (
+    mode: "current-user",
+  ) => Effect.Effect<unknown, TBacklogAssigneeFilterError>;
 };
 
-function formatAllowedToolGroups(groups: ReadonlyArray<ProjectRecipeToolGroupId>): string {
-  return `[${groups.map((group) => `'${group}'`).join(", ")}]`;
-}
-
-function buildBindingState<TRenameError, TStartChildError, TReadError>(
-  input: CreateBindingInput<TRenameError, TStartChildError, TReadError>,
+function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogAssigneeFilterError>(
+  input: CreateBindingInput<
+    TRenameError,
+    TStartChildError,
+    TReadError,
+    TBacklogAssigneeFilterError
+  >,
 ) {
-  const normalizedGroups = normalizeProjectRecipeToolGroups(input.allowedToolGroups);
-  const effectiveGroups =
-    normalizedGroups === undefined
-      ? undefined
-      : input.prelaunchOnly
-        ? normalizedGroups.filter((group) =>
-            PROJECT_RECIPE_PRELAUNCH_TOOL_GROUP_IDS.some((candidate) => candidate === group),
-          )
-        : normalizedGroups;
-  const availableToolIds = [...new Set(input.availableToolIds)];
-  const availableToolIdSet = new Set(availableToolIds);
-  const allowedToolIds =
-    effectiveGroups === undefined
-      ? availableToolIds
-      : availableToolIds.filter((toolId) => {
-          const group = getProjectRecipeToolGroupForToolId(toolId);
-          return group !== undefined && effectiveGroups.includes(group);
-        });
-  const allowedToolIdSet = new Set(allowedToolIds);
-  return { availableToolIdSet, allowedToolIds, allowedToolIdSet, effectiveGroups };
-}
-
-function permissionMessage(
-  toolId: string,
-  effectiveGroups: ReadonlyArray<ProjectRecipeToolGroupId>,
-): string {
-  const requiredGroup = getProjectRecipeToolGroupForToolId(toolId);
-  return requiredGroup
-    ? `Tool '${toolId}' requires group '${requiredGroup}' but recipe declares only ${formatAllowedToolGroups(effectiveGroups)}.`
-    : `Tool '${toolId}' is not classified in the recipe tool-group registry.`;
-}
-
-function createToolSurface<TRenameError, TStartChildError, TReadError>(
-  input: CreateBindingInput<TRenameError, TStartChildError, TReadError>,
-) {
-  const state = buildBindingState(input);
+  const state = buildBindingState({
+    availableToolIds: input.availableToolIds,
+    ...(input.allowedToolGroups ? { allowedToolGroups: input.allowedToolGroups } : {}),
+    ...(input.prelaunchOnly ? { prelaunchOnly: true } : {}),
+  });
 
   const callTool: T3workToolBinding["callTool"] = ({ server, tool, arguments: toolArgs }) => {
     if (server !== T3WORK_MCP_SERVER_NAME) {
@@ -112,6 +86,20 @@ function createToolSurface<TRenameError, TStartChildError, TReadError>(
       }
       return foldResult(input.startChild(toolArgs), okResult, (message) =>
         errorResult(`Failed to start child session: ${message}`),
+      );
+    }
+    if (tool === "t3work.backlog.set_assignee_filter") {
+      if (!input.setBacklogAssigneeFilter) {
+        return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
+      }
+      const mode = readBacklogAssigneeFilterMode(toolArgs);
+      if (!mode) {
+        return Effect.succeed(
+          errorResult("t3work.backlog.set_assignee_filter requires mode: 'current-user'."),
+        );
+      }
+      return foldResult(input.setBacklogAssigneeFilter(mode), okResult, (message) =>
+        errorResult(`Failed to update backlog assignee filter: ${message}`),
       );
     }
     if (tool !== "t3work.view.read") {
@@ -171,9 +159,14 @@ function createToolSurface<TRenameError, TStartChildError, TReadError>(
   };
 }
 
-export function createT3workThreadToolBinding<TRenameError, TStartChildError, TReadError>(
+export function createT3workThreadToolBinding<
+  TRenameError,
+  TStartChildError,
+  TReadError,
+  TBacklogAssigneeFilterError,
+>(
   input: Omit<
-    CreateBindingInput<TRenameError, TStartChildError, TReadError>,
+    CreateBindingInput<TRenameError, TStartChildError, TReadError, TBacklogAssigneeFilterError>,
     "scopeLabel" | "prelaunchOnly"
   > & {
     readonly threadId: ThreadId;
@@ -185,9 +178,14 @@ export function createT3workThreadToolBinding<TRenameError, TStartChildError, TR
   };
 }
 
-export function createT3workPrelaunchToolBinding<TRenameError, TStartChildError, TReadError>(
+export function createT3workPrelaunchToolBinding<
+  TRenameError,
+  TStartChildError,
+  TReadError,
+  TBacklogAssigneeFilterError,
+>(
   input: Omit<
-    CreateBindingInput<TRenameError, TStartChildError, TReadError>,
+    CreateBindingInput<TRenameError, TStartChildError, TReadError, TBacklogAssigneeFilterError>,
     "availableToolIds" | "prelaunchOnly" | "scopeLabel"
   > & {
     readonly workspaceRoot: string;

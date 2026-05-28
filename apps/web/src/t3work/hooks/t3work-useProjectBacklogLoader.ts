@@ -139,13 +139,7 @@ export function useProjectBacklogLoader(input: {
     }
 
     void loadBacklog(input.requestedSelection);
-  }, [
-    input.backend,
-    input.connectedSource,
-    input.projectId,
-    input.requestedSelection,
-    loadBacklog,
-  ]);
+  }, [input.backend, input.connectedSource, input.projectId, input.requestedSelection]);
 
   useEffect(() => {
     if (!input.backend || !input.connectedSource || pollingUpdatedAt === null) {
@@ -166,13 +160,7 @@ export function useProjectBacklogLoader(input: {
     });
 
     return () => poller.dispose();
-  }, [
-    input.backend,
-    input.connectedSource,
-    input.requestedSelection,
-    pollingUpdatedAt,
-    loadBacklog,
-  ]);
+  }, [input.backend, input.connectedSource, input.requestedSelection, pollingUpdatedAt]);
 
   return { loading, error, loadBacklog };
 }

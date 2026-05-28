@@ -129,6 +129,20 @@ export const executeCollectInputWorkflowStep = Effect.fn("executeCollectInputWor
         },
         updatedAt: input.createdAt,
       },
+      stateSnapshot: {
+        ...state,
+        kickoffMessage: input.kickoffMessage,
+        nextStepIndex: state.nextStepIndex + 1,
+        waitingFor: {
+          kind: "card-action",
+          stepId: step.id,
+          cardId: input.lastPresentedCard.cardId,
+          cardActivityStepId: input.lastPresentedCard.activityStepId,
+          actionId: step.request.actionId,
+          card: input.lastPresentedCard.card,
+        },
+        updatedAt: input.createdAt,
+      },
     };
     return result;
   },

@@ -21,6 +21,7 @@ import {
 import { Badge } from "~/t3work/components/ui/t3work-badge";
 import { RecipeActionIssuePreview } from "~/t3work/t3work-recipeActionIssuePreview";
 import { LaunchOptionGroup, LaunchTextInput } from "~/t3work/t3work-recipeActionLaunchControls";
+import { InlineActionChip } from "~/t3work/t3work-recipeInlineActionChip";
 import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipes";
 
 const iconByName = {
@@ -153,6 +154,7 @@ export const recipeActionViewComponents = {
   ArtifactLink,
   Badge,
   FieldList,
+  InlineActionChip,
   JiraInlineIssue,
   LaunchOptionGroup,
   LaunchTextInput,

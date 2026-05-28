@@ -4,6 +4,7 @@ import type {
   RecipeSurface,
 } from "@t3tools/project-recipes";
 
+import { buildT3workActionRecipeLaunchContext } from "~/t3work/t3work-actionRecipeLaunchContext";
 import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipeTypes";
 
 const PINNED_T3WORK_META_QUICK_START_IDS = new Set(["create-contextual-recipe", "create-recipe"]);
@@ -29,6 +30,7 @@ export function mapDiscoveredRecipesToQuickStarts(
   limit: number | undefined,
   renderContext: ProjectRecipeRenderContext,
 ): ReadonlyArray<T3workSidecarRecipeQuickStart> {
+  const launchContext = buildT3workActionRecipeLaunchContext(renderContext);
   const visibleRecipes = buildPinnedQuickStartSelection(
     recipes.map((recipe) => ({ recipe })),
     limit ?? 5,
@@ -49,6 +51,7 @@ export function mapDiscoveredRecipesToQuickStarts(
         description: recipe.shortDescription,
         source: recipe.source,
         surface,
+        launchContext,
         ...(recipe.reason ? { reason: recipe.reason } : {}),
         recipePath: recipe.recipePath,
         promptPath: recipe.promptPath,

@@ -1,5 +1,6 @@
 import type { T3workDashboardRecipeActionOutcome } from "~/t3work/t3work-dashboardRecipeActions";
 import { resolveT3workDashboardRecipeAction } from "~/t3work/t3work-dashboardRecipeActions";
+import type { T3workDashboardRecipeAction } from "~/t3work/t3work-dashboardRecipeActions";
 import {
   applyT3workRecipeQuickStartLaunchCustomization,
   type T3workRecipeQuickStartLaunchCustomization,
@@ -10,9 +11,9 @@ import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecip
 export function buildProjectDashboardSelectedRecipe(input: {
   readonly recipe: T3workSidecarRecipeQuickStart;
   readonly customization?: T3workRecipeQuickStartLaunchCustomization;
-  readonly runDashboardRecipeAction: (action: {
-    readonly kind: "focus-needs-my-action";
-  }) => T3workDashboardRecipeActionOutcome | null;
+  readonly runDashboardRecipeAction: (
+    action: T3workDashboardRecipeAction,
+  ) => T3workDashboardRecipeActionOutcome | null;
 }): T3workSelectedRecipeQuickStart | null {
   const resolvedRecipe = applyT3workRecipeQuickStartLaunchCustomization(
     input.recipe,

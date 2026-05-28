@@ -96,6 +96,57 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       },
       thread: null,
     });
+
+  const setBacklogAssigneeFilter = (toolContext: T3workTurnToolContext, mode: "current-user") =>
+    Effect.gen(function* () {
+      if (mode !== "current-user") {
+        return yield* Effect.fail("Only the current-user assignee filter mode is supported.");
+      }
+
+      if (!toolContext.state || typeof toolContext.state !== "object") {
+        return yield* Effect.fail("Backlog view state is not available.");
+      }
+
+      const state = toolContext.state as {
+        readonly backlog?: {
+          readonly state?: {
+            readonly assigneeFilter?: unknown;
+          };
+          readonly currentUserDisplayName?: unknown;
+        };
+      };
+      const currentUserDisplayName =
+        typeof state.backlog?.currentUserDisplayName === "string"
+          ? state.backlog.currentUserDisplayName.trim()
+          : "";
+
+      if (currentUserDisplayName.length === 0) {
+        return yield* Effect.fail(
+          "Current user display name is unavailable for this backlog view.",
+        );
+      }
+
+      const currentAssigneeFilter =
+        typeof state.backlog?.state?.assigneeFilter === "string"
+          ? state.backlog.state.assigneeFilter
+          : undefined;
+      const alreadyApplied = currentAssigneeFilter === currentUserDisplayName;
+
+      return {
+        ok: true,
+        applied: !alreadyApplied,
+        promptText: alreadyApplied
+          ? `The dashboard is already filtered to work assigned to ${currentUserDisplayName}.`
+          : `The dashboard is now filtered to work assigned to ${currentUserDisplayName}.`,
+        ...(alreadyApplied
+          ? {}
+          : {
+              viewStatePatch: {
+                assigneeFilter: currentUserDisplayName,
+              },
+            }),
+      };
+    });
   const renameThread = (threadId: ThreadIdType, title: string) =>
     orchestration.dispatch({
       type: "thread.meta.update",
@@ -144,6 +195,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
         renameThread: (title) => renameThread(threadId, title),
         renameThreadResult: (title) => ({ ok: true, threadId, title }),
         startChild: (toolArgs) => startChildThread(threadId, toolArgs),
+        setBacklogAssigneeFilter: (mode) => setBacklogAssigneeFilter(resolvedToolContext, mode),
       });
     });
 

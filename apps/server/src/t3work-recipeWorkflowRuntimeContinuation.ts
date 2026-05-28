@@ -14,6 +14,7 @@ import {
   persistWorkflowState,
   readPersistedWorkflowState,
 } from "./t3work-recipeWorkflowRuntimeState.ts";
+import { materializeRecipeWorkflowRun } from "./t3work-recipeWorkflowRunMaterialization.ts";
 import type { PersistedRecipeWorkflowRunState } from "./t3work-recipeWorkflowRuntimeShared.ts";
 
 export function resolveWorkflowLaunchPhase(input: {
@@ -44,14 +45,20 @@ export const finalizeWorkflowExecution = Effect.fn("finalizeWorkflowExecution")(
   createdAt: string;
   result: ExecuteWorkflowStepsResult;
 }) {
-  if (input.result.stateToPersist) {
-    yield* persistWorkflowState(input.result.stateToPersist);
-  } else {
-    yield* clearWorkflowState({
-      workspaceRoot: input.workspaceRoot,
-      threadId: input.threadId,
-    });
-  }
+  yield* materializeRecipeWorkflowRun({
+    workspaceRoot: input.workspaceRoot,
+    workflowRunId: input.workflowRunId,
+    launch: input.launch,
+    promptText: input.result.turnStartMessage ?? input.result.kickoffMessage,
+    ...(input.result.stateSnapshot.launchContext
+      ? { launchContext: input.result.stateSnapshot.launchContext }
+      : {}),
+  });
+  yield* persistWorkflowState(input.result.stateSnapshot);
+  yield* clearWorkflowState({
+    workspaceRoot: input.workspaceRoot,
+    threadId: input.threadId,
+  });
 
   yield* upsertProjectRecipeLaunchActivity({
     orchestration: input.orchestration,

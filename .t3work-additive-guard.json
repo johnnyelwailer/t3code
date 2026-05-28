@@ -41,7 +41,8 @@
     "packages/contracts/src/orchestration.ts",
     "packages/contracts/src/settings.ts",
     "packages/contracts/src/settings.test.ts",
-    "packages/shared/src/model.test.ts"
+    "packages/shared/src/model.test.ts",
+    "packages/project-context/src/index.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".t3work-additive-guard.json",

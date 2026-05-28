@@ -205,6 +205,31 @@ describe("createT3workTurnToolContext", () => {
         description: "Design a contextual recipe for the current surface.",
         source: "bundled",
         surface: "project.dashboard.backlog",
+        promptPath: "/workspace/project-alpha/.t3work/recipes/create-contextual-recipe/prompt.md",
+        workflowPath:
+          "/workspace/project-alpha/.t3work/recipes/create-contextual-recipe/workflow.ts",
+        launchContext: {
+          surface: "project.dashboard.backlog",
+          project: {
+            title: "Project Alpha",
+            provider: "managed",
+            workspaceRoot: "/workspace/project-alpha",
+          },
+          linkedResources: { state: "ready", items: [] },
+          artifacts: { state: "ready", items: [] },
+          profile: {
+            technicalDepth: "medium",
+            brevity: "balanced",
+            guidanceStyle: "balanced",
+            detailDensity: "balanced",
+            preferredArtifactKinds: [],
+            defaultActionFamilies: [],
+            defaultRecipeWeights: {},
+          },
+          schema: {},
+          enabledSkillPacks: ["core"],
+          availableContextKeys: { state: "ready", items: ["project", "workitem"] },
+        },
       },
     });
 
@@ -220,6 +245,17 @@ describe("createT3workTurnToolContext", () => {
         workflow: {
           recipeId: "create-contextual-recipe",
           surface: "project.dashboard.backlog",
+          promptPath: "/workspace/project-alpha/.t3work/recipes/create-contextual-recipe/prompt.md",
+          workflowPath:
+            "/workspace/project-alpha/.t3work/recipes/create-contextual-recipe/workflow.ts",
+          launchContext: {
+            surface: "project.dashboard.backlog",
+            project: {
+              title: "Project Alpha",
+              provider: "managed",
+              workspaceRoot: "/workspace/project-alpha",
+            },
+          },
         },
       },
     });

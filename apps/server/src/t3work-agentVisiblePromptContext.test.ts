@@ -80,4 +80,51 @@ describe("formatAgentVisiblePromptContext", () => {
     );
     expect(contextText).toContain("- View attachment: t3work.custom-view");
   });
+
+  it("inlines textual file attachments and resource snapshot fields when available", () => {
+    const contextText = formatAgentVisiblePromptContext([
+      {
+        id: "message-2" as any,
+        role: "system",
+        text: "Expanded workflow context",
+        createdAt: "2026-05-28T12:00:10.000Z",
+        t3workExt: {
+          attachments: [
+            {
+              kind: "file",
+              file: {
+                id: "context-json",
+                label: "Recipe context (context.json)",
+                mimeType: "application/json",
+                url: `data:application/json;base64,${Buffer.from('{"project":{"title":"Project Alpha"}}').toString("base64")}`,
+              },
+            },
+            {
+              kind: "resource",
+              resource: {
+                ref: {
+                  provider: "github",
+                  kind: "pull-request",
+                  id: "42",
+                  displayId: "PR-42",
+                  title: "Fix import crash",
+                },
+                fetchedAt: "2026-05-28T12:00:10.000Z",
+                summary: "Active pull request linked to the selected work item.",
+                fields: {
+                  state: "open",
+                  author: "pj",
+                },
+              },
+            },
+          ],
+        },
+      } as any,
+    ]);
+
+    expect(contextText).toContain("Expanded workflow context");
+    expect(contextText).toContain('{"project":{"title":"Project Alpha"}}');
+    expect(contextText).toContain("Active pull request linked to the selected work item.");
+    expect(contextText).toContain('"state": "open"');
+  });
 });

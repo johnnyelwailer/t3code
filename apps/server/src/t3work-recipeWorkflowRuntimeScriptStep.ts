@@ -35,7 +35,7 @@ export const executeScriptWorkflowStep = Effect.fn("executeScriptWorkflowStep")(
   state: PersistedRecipeWorkflowRunState;
   step: Extract<ProjectRecipeWorkflowStepType, { kind: "script" }>;
   createdAt: string;
-  recipeBasePath: string;
+  recipeSourcePath: string;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
@@ -61,7 +61,7 @@ export const executeScriptWorkflowStep = Effect.fn("executeScriptWorkflowStep")(
   const [relativeModulePath, exportName = "default"] = input.step.module.split("#", 2);
   const modulePath = resolveWithinRoot(
     pathService,
-    input.recipeBasePath,
+    input.recipeSourcePath,
     relativeModulePath ?? input.step.module,
   );
   const moduleUrl = pathToFileURL(modulePath);
@@ -103,16 +103,16 @@ export const executeScriptWorkflowStep = Effect.fn("executeScriptWorkflowStep")(
       ? createT3workPromiseToolApi({ binding, runPromise })
       : createUnavailableT3workPromiseToolApi("during workflow execution"),
     workspace: {
-      rootPath: input.state.workspaceRoot,
-      recipePath: input.recipeBasePath,
+      rootPath: input.state.runRootPath,
+      recipePath: input.recipeSourcePath,
       readText: async (relativePath: string) =>
         runPromise(
           fileSystem.readFileString(
-            resolveWithinRoot(pathService, input.recipeBasePath, relativePath),
+            resolveWithinRoot(pathService, input.state.runRootPath, relativePath),
           ),
         ),
       writeText: async (relativePath: string, contents: string) => {
-        const targetPath = resolveWithinRoot(pathService, input.recipeBasePath, relativePath);
+        const targetPath = resolveWithinRoot(pathService, input.state.runRootPath, relativePath);
         await runPromise(
           fileSystem
             .makeDirectory(pathService.dirname(targetPath), { recursive: true })
@@ -122,7 +122,7 @@ export const executeScriptWorkflowStep = Effect.fn("executeScriptWorkflowStep")(
       exists: async (relativePath: string) =>
         runPromise(
           fileSystem
-            .exists(resolveWithinRoot(pathService, input.recipeBasePath, relativePath))
+            .exists(resolveWithinRoot(pathService, input.state.runRootPath, relativePath))
             .pipe(Effect.orElseSucceed(() => false)),
         ),
     },
@@ -164,7 +164,8 @@ export const executeScriptWorkflowStep = Effect.fn("executeScriptWorkflowStep")(
           threadId: input.state.threadId,
           workflowRunId: input.state.workflowRunId,
           workspaceRoot: input.state.workspaceRoot,
-          recipePath: input.recipeBasePath,
+          recipePath: input.recipeSourcePath,
+          runPath: input.state.runRootPath,
           recipe: input.state.launch,
         },
         scriptApi,

@@ -100,8 +100,26 @@ export function createT3workTurnToolContext(
                       description: input.kickoffWorkflow.description,
                       source: input.kickoffWorkflow.source,
                       surface: input.kickoffWorkflow.surface,
+                      ...(input.kickoffWorkflow.kickoff
+                        ? { kickoff: input.kickoffWorkflow.kickoff }
+                        : {}),
                       ...(input.kickoffWorkflow.reason
                         ? { reason: input.kickoffWorkflow.reason }
+                        : {}),
+                      ...(input.kickoffWorkflow.recipePath
+                        ? { recipePath: input.kickoffWorkflow.recipePath }
+                        : {}),
+                      ...(input.kickoffWorkflow.promptPath
+                        ? { promptPath: input.kickoffWorkflow.promptPath }
+                        : {}),
+                      ...(input.kickoffWorkflow.workflowPath
+                        ? { workflowPath: input.kickoffWorkflow.workflowPath }
+                        : {}),
+                      ...(input.kickoffWorkflow.allowedToolGroups
+                        ? { allowedToolGroups: input.kickoffWorkflow.allowedToolGroups }
+                        : {}),
+                      ...(input.kickoffWorkflow.launchContext
+                        ? { launchContext: input.kickoffWorkflow.launchContext }
                         : {}),
                     },
                   }

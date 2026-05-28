@@ -81,3 +81,12 @@ export const readRenameTitle = (value: unknown): string | undefined => {
   const title = rawTitle.trim();
   return title.length > 0 ? title : undefined;
 };
+
+export const readBacklogAssigneeFilterMode = (value: unknown): "current-user" | undefined => {
+  if (!value || typeof value !== "object" || globalThis.Array.isArray(value)) {
+    return undefined;
+  }
+
+  const rawMode = (value as { readonly mode?: unknown }).mode;
+  return rawMode === "current-user" ? rawMode : undefined;
+};

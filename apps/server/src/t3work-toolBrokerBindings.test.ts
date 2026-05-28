@@ -83,6 +83,103 @@ describe("T3workToolBroker allowed tool groups", () => {
     expect(result.writeResult.content[0]?.text).toContain("requires group 'view.state'");
   });
 
+  it("allows backlog view-state tools when the recipe declares view.state", async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const broker = yield* T3workToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId,
+          toolContext: {
+            surface: "t3work",
+            tools: [
+              {
+                id: "t3work.backlog.set_assignee_filter",
+                label: "Set backlog assignee filter",
+                capabilities: ["write"],
+              },
+            ],
+            state: {
+              view: {
+                kind: "project-dashboard-backlog",
+                projectId: "project-1",
+                projectTitle: "Project One",
+              },
+              backlog: {
+                state: {
+                  assigneeFilter: "all",
+                },
+                currentUserDisplayName: "Pat Jones",
+              },
+            },
+          },
+          allowedToolGroups: ["view.state"],
+        });
+
+        const toolResult = yield* binding!.callTool({
+          server: "t3work",
+          tool: "t3work.backlog.set_assignee_filter",
+          arguments: { mode: "current-user" },
+        });
+
+        return { binding, toolResult };
+      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+    );
+
+    expect(result.binding?.listServers()[0]?.tools).toEqual({
+      "t3work.backlog.set_assignee_filter": expect.objectContaining({
+        name: "t3work.backlog.set_assignee_filter",
+      }),
+    });
+    expect(result.toolResult.isError).toBeUndefined();
+    expect(result.toolResult.structuredContent).toEqual({
+      ok: true,
+      applied: true,
+      promptText: "The dashboard is now filtered to work assigned to Pat Jones.",
+      viewStatePatch: {
+        assigneeFilter: "Pat Jones",
+      },
+    });
+  });
+
+  it("rejects backlog view-state tools when the recipe omits view.state", async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const broker = yield* T3workToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId,
+          toolContext: {
+            surface: "t3work",
+            tools: [
+              {
+                id: "t3work.backlog.set_assignee_filter",
+                label: "Set backlog assignee filter",
+                capabilities: ["write"],
+              },
+            ],
+            state: {
+              backlog: {
+                state: {
+                  assigneeFilter: "all",
+                },
+                currentUserDisplayName: "Pat Jones",
+              },
+            },
+          },
+          allowedToolGroups: ["ui.render"],
+        });
+
+        return yield* binding!.callTool({
+          server: "t3work",
+          tool: "t3work.backlog.set_assignee_filter",
+          arguments: { mode: "current-user" },
+        });
+      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("requires group 'view.state'");
+  });
+
   it("binds visibility in no-thread read-only mode", async () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {

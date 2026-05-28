@@ -115,7 +115,7 @@ describe("applyT3workRecipeQuickStartLaunchCustomization", () => {
       id: bundledRecipe.id,
       title: "Create a recipe for this view",
       description: bundledRecipe.shortDescription,
-      prompt: bundledRecipe.promptTemplate,
+      prompt: bundledRecipe.promptTemplate ?? bundledRecipe.shortDescription,
       actionView: {
         source: "export default function Action() { return null; }",
         context: {

@@ -1,5 +1,4 @@
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import {
@@ -22,7 +21,6 @@ import {
 import { executeScriptWorkflowStep } from "./t3work-recipeWorkflowRuntimeScriptStep.ts";
 import { executeToolWorkflowStep } from "./t3work-recipeWorkflowRuntimeToolStep.ts";
 import {
-  resolveWithinRoot,
   stepActivityId,
   type PersistedRecipeWorkflowRunState,
 } from "./t3work-recipeWorkflowRuntimeShared.ts";
@@ -32,6 +30,20 @@ import {
   type T3workToolBrokerShape,
 } from "./t3work-toolBroker.ts";
 
+function buildStateSnapshot(input: {
+  state: PersistedRecipeWorkflowRunState;
+  kickoffMessage: string;
+  nextStepIndex: number;
+  createdAt: string;
+}): PersistedRecipeWorkflowRunState {
+  return {
+    ...input.state,
+    kickoffMessage: input.kickoffMessage,
+    nextStepIndex: input.nextStepIndex,
+    updatedAt: input.createdAt,
+  };
+}
+
 export const executeWorkflowSteps = Effect.fn("executeWorkflowSteps")(function* (input: {
   orchestration: OrchestrationEngineShape;
   state: PersistedRecipeWorkflowRunState;
@@ -40,7 +52,6 @@ export const executeWorkflowSteps = Effect.fn("executeWorkflowSteps")(function* 
   createdAt: string;
   allowKickoffAgentStep: boolean;
 }) {
-  const fileSystem = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const toolBroker = Option.getOrElse(
     yield* Effect.serviceOption(T3workToolBroker),
@@ -48,8 +59,9 @@ export const executeWorkflowSteps = Effect.fn("executeWorkflowSteps")(function* 
   );
   let kickoffMessage = input.kickoffMessage;
   let shouldBootstrapAgent = false;
+  let bootstrapStepId: string | undefined;
   let lastPresentedCard: PresentedWorkflowCardState | null = null;
-  const recipeBasePath =
+  const recipeSourcePath =
     input.state.recipePath ??
     (input.state.workflowPath
       ? pathService.dirname(input.state.workflowPath)
@@ -69,12 +81,13 @@ export const executeWorkflowSteps = Effect.fn("executeWorkflowSteps")(function* 
           stepIndex: index,
           kickoffMessage,
           createdAt: input.createdAt,
-          recipeBasePath,
+          recipeSourcePath,
           waitForReply: !isKickoffAgentStep,
         });
         kickoffMessage = result.kickoffMessage;
         if (isKickoffAgentStep) {
           shouldBootstrapAgent = true;
+          bootstrapStepId = step.id;
           continue;
         }
         return result;
@@ -157,7 +170,7 @@ export const executeWorkflowSteps = Effect.fn("executeWorkflowSteps")(function* 
           state: input.state,
           step,
           createdAt: input.createdAt,
-          recipeBasePath,
+          recipeSourcePath,
         });
         if (presentedCard) {
           lastPresentedCard = presentedCard;
@@ -181,7 +194,14 @@ export const executeWorkflowSteps = Effect.fn("executeWorkflowSteps")(function* 
   const result: ExecuteWorkflowStepsResult = {
     kickoffMessage,
     stateToPersist: null,
+    stateSnapshot: buildStateSnapshot({
+      state: input.state,
+      kickoffMessage,
+      nextStepIndex: input.state.steps.length,
+      createdAt: input.createdAt,
+    }),
     ...(shouldBootstrapAgent ? { turnStartMessage: kickoffMessage } : {}),
+    ...(bootstrapStepId ? { turnStartStepId: bootstrapStepId } : {}),
   };
   return result;
 });

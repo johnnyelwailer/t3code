@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildBacklogAssignedToMeOutcome,
   buildBacklogNeedsMyActionOutcome,
   buildMyWorkNeedsMyActionOutcome,
   resolveT3workDashboardRecipeAction,
@@ -45,7 +46,20 @@ describe("t3work-dashboardRecipeActions", () => {
     expect(resolveT3workDashboardRecipeAction("focus-needs-my-action")).toEqual({
       kind: "focus-needs-my-action",
     });
+    expect(resolveT3workDashboardRecipeAction("show-only-assigned-to-me")).toBeUndefined();
     expect(resolveT3workDashboardRecipeAction("prioritize-pending-work")).toBeUndefined();
+  });
+
+  it("updates the backlog assignee filter to the current user", () => {
+    const outcome = buildBacklogAssignedToMeOutcome(
+      createDefaultProjectDashboardBacklogState(),
+      "Pat Jones",
+    );
+
+    expect(outcome).toEqual({
+      nextState: expect.objectContaining({ assigneeFilter: "Pat Jones" }),
+      promptText: "The dashboard is now filtered to work assigned to Pat Jones.",
+    });
   });
 
   it("filters backlog to needs-plan work before other presets", () => {

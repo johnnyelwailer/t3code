@@ -57,6 +57,11 @@ import type { ServerConfigShape } from "./config.ts";
 import { deriveServerPaths, ServerConfig } from "./config.ts";
 import { makeRoutesLayer } from "./server.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
+import {
+  NoopT3workToolBroker,
+  T3workToolBroker,
+  type T3workToolBrokerShape,
+} from "./t3work-toolBroker.ts";
 import { resolveAttachmentRelativePath } from "./attachmentPaths.ts";
 import {
   CheckpointDiffQuery,
@@ -339,6 +344,7 @@ const buildAppUnderTest = (options?: {
     serverRuntimeStartup?: Partial<ServerRuntimeStartupShape>;
     serverEnvironment?: Partial<ServerEnvironmentShape>;
     repositoryIdentityResolver?: Partial<RepositoryIdentityResolverShape>;
+    toolBroker?: Partial<T3workToolBrokerShape>;
   };
 }) =>
   Effect.gen(function* () {
@@ -503,6 +509,10 @@ const buildAppUnderTest = (options?: {
           ...options.layers.vcsStatusBroadcaster,
         })
       : VcsStatusBroadcaster.layer.pipe(Layer.provide(gitWorkflowLayer));
+    const toolBrokerLayer = Layer.succeed(T3workToolBroker, {
+      ...NoopT3workToolBroker,
+      ...options?.layers?.toolBroker,
+    });
 
     const servedRoutesLayer = HttpRouter.serve(makeRoutesLayer, {
       disableListenLog: true,
@@ -625,6 +635,7 @@ const buildAppUnderTest = (options?: {
           ...options?.layers?.projectSetupScriptRunner,
         }),
       ),
+      Layer.provide(toolBrokerLayer),
       Layer.provide(
         Layer.mock(TerminalManager)({
           ...options?.layers?.terminalManager,

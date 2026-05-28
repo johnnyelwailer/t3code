@@ -7,6 +7,7 @@ import {
   compileT3workRecipeActionView,
   T3workCompiledRecipeActionView,
 } from "~/t3work/t3work-recipeActionView";
+import { T3workDashboardRecipeActionProvider } from "~/t3work/t3work-dashboardRecipeActions";
 import { RecipeLaunchControlsProvider } from "~/t3work/t3work-recipeActionLaunchControls";
 
 async function renderBundledRecipeActionView(input: {
@@ -21,9 +22,11 @@ async function renderBundledRecipeActionView(input: {
   const CompiledActionView = await compileT3workRecipeActionView(recipe.actionViewTemplate);
 
   return renderToStaticMarkup(
-    <RecipeLaunchControlsProvider>
-      <T3workCompiledRecipeActionView Component={CompiledActionView} context={input.context} />
-    </RecipeLaunchControlsProvider>,
+    <T3workDashboardRecipeActionProvider>
+      <RecipeLaunchControlsProvider>
+        <T3workCompiledRecipeActionView Component={CompiledActionView} context={input.context} />
+      </RecipeLaunchControlsProvider>
+    </T3workDashboardRecipeActionProvider>,
   );
 }
 
@@ -286,6 +289,7 @@ export default function Action() {
       riskMarkup,
       prioritizeMarkup,
       focusMarkup,
+      assignedMarkup,
       backlogMarkup,
       unblockMarkup,
       explainMarkup,
@@ -302,6 +306,17 @@ export default function Action() {
       renderBundledRecipeActionView({
         recipeId: "focus-needs-my-action",
         context: dashboardContext,
+      }),
+      renderBundledRecipeActionView({
+        recipeId: "show-only-assigned-to-me",
+        context: {
+          ...dashboardContext,
+          surface: "project.dashboard.backlog",
+          surfaceState: {
+            ...dashboardContext.surfaceState,
+            dashboardMode: "backlog",
+          },
+        },
       }),
       renderBundledRecipeActionView({
         recipeId: "shape-next-backlog-slice",
@@ -348,6 +363,9 @@ export default function Action() {
     expect(focusMarkup).toContain("Show what needs my action");
     expect(focusMarkup).toContain("Visible items");
     expect(focusMarkup).not.toContain("My work");
+
+    expect(assignedMarkup).toContain("Show only assigned to me");
+    expect(assignedMarkup).toContain("Apply filter");
 
     expect(backlogMarkup).toContain("Shape the next backlog slice");
     expect(backlogMarkup).toContain("Bugs");

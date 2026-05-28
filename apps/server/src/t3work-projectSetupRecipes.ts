@@ -30,7 +30,9 @@ function renderBundledRecipeManifest(
 function renderBundledRecipePrompt(
   recipe: ReturnType<typeof listBundledT3WorkRecipes>[number],
 ): string {
-  return `# ${recipe.title}\n\n${recipe.shortDescription}\n\n## Prompt\n\n${recipe.promptTemplate}\n`;
+  return recipe.promptTemplate
+    ? `# ${recipe.title}\n\n${recipe.shortDescription}\n\n## Prompt\n\n${recipe.promptTemplate}\n`
+    : `# ${recipe.title}\n\n${recipe.shortDescription}\n\n## Prompt\n\nThis recipe runs as a deterministic workflow and does not require an agent prompt.\n`;
 }
 
 function renderCreateRecipeWorkflow(): string {

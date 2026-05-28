@@ -67,6 +67,8 @@ Prefix policy:
   - Export the additive `t3work-message-ext` contract from the shared contracts entrypoint so upstream seams can import the namespaced extension type.
 - `packages/contracts/src/orchestration.ts`
   - Add optional `t3workExt` and `thread.message.upsert` to the orchestration contract so first-class system messages flow through the existing command/event channel.
+- `packages/project-context/src/index.ts`
+  - Export additive action-recipe context helpers from the shared package entrypoint so runtime and UI code can share one canonical launch-context schema.
 - `bun.lock`
   - Lockfile drift due workspace/package updates.
 

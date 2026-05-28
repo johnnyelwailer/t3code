@@ -22,7 +22,7 @@ export const executeAgentWorkflowStep = Effect.fn("executeAgentWorkflowStep")(fu
   stepIndex: number;
   kickoffMessage: string;
   createdAt: string;
-  recipeBasePath: string;
+  recipeSourcePath: string;
   waitForReply: boolean;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -32,9 +32,17 @@ export const executeAgentWorkflowStep = Effect.fn("executeAgentWorkflowStep")(fu
   if (typeof input.step.promptText === "string" && input.step.promptText.trim().length > 0) {
     kickoffMessage = input.step.promptText;
   } else if (typeof input.step.promptPath === "string" && input.step.promptPath.trim().length > 0) {
-    kickoffMessage = yield* fileSystem.readFileString(
-      resolveWithinRoot(pathService, input.recipeBasePath, input.step.promptPath),
+    const runPromptPath = resolveWithinRoot(
+      pathService,
+      input.state.runRootPath,
+      input.step.promptPath,
     );
+    const promptPath = (yield* fileSystem
+      .exists(runPromptPath)
+      .pipe(Effect.orElseSucceed(() => false)))
+      ? runPromptPath
+      : resolveWithinRoot(pathService, input.recipeSourcePath, input.step.promptPath);
+    kickoffMessage = yield* fileSystem.readFileString(promptPath);
   }
 
   const hasRemainingSteps = input.stepIndex < input.state.steps.length - 1;
@@ -61,21 +69,30 @@ export const executeAgentWorkflowStep = Effect.fn("executeAgentWorkflowStep")(fu
     },
   });
 
+  const stateSnapshot: PersistedRecipeWorkflowRunState = shouldWaitForReply
+    ? {
+        ...input.state,
+        kickoffMessage,
+        nextStepIndex: input.stepIndex + 1,
+        waitingFor: {
+          kind: "agent-message",
+          stepId: input.step.id,
+        },
+        updatedAt: input.createdAt,
+      }
+    : {
+        ...input.state,
+        kickoffMessage,
+        nextStepIndex: input.stepIndex + 1,
+        updatedAt: input.createdAt,
+      };
+
   const result: ExecuteWorkflowStepsResult = {
     kickoffMessage,
-    stateToPersist: shouldWaitForReply
-      ? {
-          ...input.state,
-          kickoffMessage,
-          nextStepIndex: input.stepIndex + 1,
-          waitingFor: {
-            kind: "agent-message",
-            stepId: input.step.id,
-          },
-          updatedAt: input.createdAt,
-        }
-      : null,
+    stateToPersist: shouldWaitForReply ? stateSnapshot : null,
+    stateSnapshot,
     turnStartMessage: kickoffMessage,
+    turnStartStepId: input.step.id,
   };
   return result;
 });

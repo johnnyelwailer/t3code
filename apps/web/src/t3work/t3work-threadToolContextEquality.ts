@@ -11,6 +11,14 @@ function kickoffWorkflowParametersEqual(
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
+function kickoffWorkflowValueEqual(left: unknown, right: unknown): boolean {
+  if (left === right) {
+    return true;
+  }
+
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
 function kickoffWorkflowEqual(
   left: T3workKickoffWorkflow | undefined,
   right: T3workKickoffWorkflow | undefined,
@@ -32,10 +40,13 @@ function kickoffWorkflowEqual(
     left.description === right.description &&
     left.source === right.source &&
     left.surface === right.surface &&
+    kickoffWorkflowValueEqual(left.kickoff, right.kickoff) &&
     left.reason === right.reason &&
     left.recipePath === right.recipePath &&
     left.promptPath === right.promptPath &&
-    projectThreadArraysEqual(left.allowedToolGroups, right.allowedToolGroups)
+    left.workflowPath === right.workflowPath &&
+    projectThreadArraysEqual(left.allowedToolGroups, right.allowedToolGroups) &&
+    kickoffWorkflowValueEqual(left.launchContext, right.launchContext)
   );
 }
 

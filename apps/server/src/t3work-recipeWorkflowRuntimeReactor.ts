@@ -8,6 +8,7 @@ import * as Stream from "effect/Stream";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { upsertRecipeWorkflowAgentBootstrapContext } from "./t3work-recipeWorkflowAgentBootstrap.ts";
 import { resumeProjectRecipeWorkflowAfterAgentReply } from "./t3work-recipeWorkflowRuntimeContinuation.ts";
 import { dispatchRecipeWorkflowTurnStart } from "./t3work-recipeWorkflowTurnStart.ts";
 
@@ -50,10 +51,20 @@ export const T3workRecipeWorkflowRuntimeReactorLive = Layer.effectDiscard(
         return;
       }
 
+      yield* upsertRecipeWorkflowAgentBootstrapContext({
+        orchestration,
+        threadId: thread.id,
+        workspaceRoot: project.workspaceRoot,
+        launch: resumed.stateSnapshot.launch,
+        stepId: resumed.turnStartStepId ?? "resume",
+        createdAt: event.payload.updatedAt,
+        agentPromptText: resumed.turnStartMessage,
+      });
+
       yield* dispatchRecipeWorkflowTurnStart({
         orchestration,
         threadId: thread.id,
-        turnStartMessage: resumed.turnStartMessage,
+        userTurnMessage: "",
         createdAt: event.payload.updatedAt,
         modelSelection: thread.modelSelection,
         runtimeMode: thread.runtimeMode,

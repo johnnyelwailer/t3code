@@ -101,8 +101,21 @@ export function createMockBackend(): BackendApi {
     },
 
     async launchRecipeWorkflow(input) {
-      void simulateMockConversation(input.threadId, input.kickoffMessage, emitThreadEvent);
-      return { ok: true };
+      if (!input.threadId) {
+        return {
+          ok: true,
+          mode: "deterministic" as const,
+          workflowRunId: `mock-${Date.now()}`,
+          effects: [],
+          completionActivity: {
+            title: input.launch.title,
+            tone: "info" as const,
+          },
+        };
+      }
+
+      void simulateMockConversation(input.threadId, input.kickoffMessage ?? "", emitThreadEvent);
+      return { ok: true, mode: "thread" as const };
     },
 
     async submitRecipeCardAction() {

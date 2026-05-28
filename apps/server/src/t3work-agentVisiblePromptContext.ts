@@ -2,6 +2,7 @@ import type { OrchestrationMessage, ThreadId, T3workMessageAttachment } from "@t
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
+import { parseBase64DataUrl } from "./imageMime.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 
 function formatAttachmentDetails(details: ReadonlyArray<string | undefined>): string {
@@ -11,6 +12,42 @@ function formatAttachmentDetails(details: ReadonlyArray<string | undefined>): st
   }
 
   return ` (${definedDetails.join("; ")})`;
+}
+
+function isTextualAttachmentMimeType(mimeType: string | undefined): boolean {
+  const normalized = mimeType?.trim().toLowerCase() ?? "";
+  return (
+    normalized.startsWith("text/") ||
+    normalized === "application/json" ||
+    normalized.endsWith("+json") ||
+    normalized.endsWith("+xml")
+  );
+}
+
+function projectAttachmentDataUrl(
+  url: string | undefined,
+  mimeType: string | undefined,
+): string | null {
+  if (!url || !isTextualAttachmentMimeType(mimeType)) {
+    return null;
+  }
+
+  const parsed = parseBase64DataUrl(url);
+  if (!parsed || !isTextualAttachmentMimeType(parsed.mimeType)) {
+    return null;
+  }
+
+  const text = Buffer.from(parsed.base64, "base64").toString("utf8").trim();
+  return text.length > 0 ? text : null;
+}
+
+function formatSnapshotFields(fields: unknown): string | null {
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) {
+    return null;
+  }
+
+  const json = JSON.stringify(fields, null, 2)?.trim();
+  return json ? json : null;
 }
 
 function describeAgentVisibleAttachment(attachment: T3workMessageAttachment): string {
@@ -24,11 +61,16 @@ function describeAgentVisibleAttachment(attachment: T3workMessageAttachment): st
       ])}`;
     }
     case "file": {
-      return `File attachment: ${attachment.file.label}${formatAttachmentDetails([
+      const projectedContents = projectAttachmentDataUrl(
+        attachment.file.url,
+        attachment.file.mimeType,
+      );
+      const header = `File attachment: ${attachment.file.label}${formatAttachmentDetails([
         attachment.file.mimeType,
         attachment.file.sizeBytes ? `${attachment.file.sizeBytes} bytes` : undefined,
-        "contents not yet projected",
+        projectedContents ? undefined : "contents not yet projected",
       ])}`;
+      return projectedContents ? `${header}\n${projectedContents}` : header;
     }
     case "image": {
       // TODO: replace this placeholder text when we can safely project image/media content.
@@ -44,12 +86,27 @@ function describeAgentVisibleAttachment(attachment: T3workMessageAttachment): st
       const resourceLabel = resourceRef.displayId
         ? `${resourceRef.displayId} - ${resourceRef.title}`
         : resourceRef.title;
-
-      return `Resource attachment: ${resourceLabel}${formatAttachmentDetails([
+      const header = `Resource attachment: ${resourceLabel}${formatAttachmentDetails([
         `${resourceRef.provider} ${resourceRef.kind}`,
         resourceRef.status ? `status: ${resourceRef.status}` : undefined,
         resourceRef.url,
       ])}`;
+      const details: string[] = [];
+
+      if ("ref" in attachment.resource) {
+        if (attachment.resource.summary?.trim()) {
+          details.push(attachment.resource.summary.trim());
+        }
+        if (attachment.resource.text?.trim()) {
+          details.push(attachment.resource.text.trim());
+        }
+        const snapshotFields = formatSnapshotFields(attachment.resource.fields);
+        if (snapshotFields) {
+          details.push(snapshotFields);
+        }
+      }
+
+      return details.length > 0 ? `${header}\n${details.join("\n")}` : header;
     }
     case "view": {
       return `View attachment: ${attachment.miniappId}`;

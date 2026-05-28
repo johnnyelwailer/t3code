@@ -10,9 +10,13 @@ import {
 } from "~/t3work/t3work-dashboardRecipeSummary";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 
-export type T3workDashboardRecipeAction = {
-  readonly kind: "focus-needs-my-action";
-};
+export type T3workDashboardRecipeAction =
+  | {
+      readonly kind: "focus-needs-my-action";
+    }
+  | {
+      readonly kind: "show-only-assigned-to-me";
+    };
 
 export type T3workDashboardRecipeActionOutcome = {
   readonly applied: boolean;
@@ -36,6 +40,33 @@ export function resolveT3workDashboardRecipeAction(
         kind: "focus-needs-my-action",
       }
     : undefined;
+}
+
+export function buildBacklogAssignedToMeOutcome(
+  state: ProjectDashboardBacklogState,
+  currentUserDisplayName: string | undefined,
+): {
+  readonly nextState: ProjectDashboardBacklogState;
+  readonly promptText: string;
+} | null {
+  const displayName = currentUserDisplayName?.trim();
+  if (!displayName) {
+    return null;
+  }
+  if (state.assigneeFilter === displayName) {
+    return {
+      nextState: state,
+      promptText: `The dashboard is already filtered to work assigned to ${displayName}.`,
+    };
+  }
+
+  return {
+    nextState: {
+      ...state,
+      assigneeFilter: displayName,
+    },
+    promptText: `The dashboard is now filtered to work assigned to ${displayName}.`,
+  };
 }
 
 function resolveBacklogNeedsMyActionFocus(

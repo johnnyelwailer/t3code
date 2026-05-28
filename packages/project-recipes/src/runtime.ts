@@ -184,23 +184,65 @@ export const SubmitProjectRecipeCardActionRequest = Schema.Struct({
 });
 export type SubmitProjectRecipeCardActionRequest = typeof SubmitProjectRecipeCardActionRequest.Type;
 
+export const ProjectRecipeWorkflowLaunchToolDescriptor = Schema.Struct({
+  id: Schema.String,
+  label: Schema.optional(Schema.String),
+  capabilities: Schema.Array(Schema.Literals(["read", "write"])),
+});
+export type ProjectRecipeWorkflowLaunchToolDescriptor =
+  typeof ProjectRecipeWorkflowLaunchToolDescriptor.Type;
+
+export const ProjectRecipeWorkflowLaunchToolContext = Schema.Struct({
+  surface: Schema.String,
+  tools: Schema.Array(ProjectRecipeWorkflowLaunchToolDescriptor),
+  state: Schema.Unknown,
+});
+export type ProjectRecipeWorkflowLaunchToolContext =
+  typeof ProjectRecipeWorkflowLaunchToolContext.Type;
+
+export const ProjectRecipeDeterministicLaunchEffect = Schema.Struct({
+  kind: Schema.Literal("view-state-patch"),
+  stepId: Schema.String,
+  toolName: Schema.String,
+  statePatch: JsonRecord,
+  promptText: Schema.optional(Schema.String),
+});
+export type ProjectRecipeDeterministicLaunchEffect =
+  typeof ProjectRecipeDeterministicLaunchEffect.Type;
+
+export const ProjectRecipeDeterministicCompletionActivity = Schema.Struct({
+  title: Schema.String,
+  description: Schema.optional(Schema.String),
+  tone: Schema.Literals(["success", "info"]),
+});
+export type ProjectRecipeDeterministicCompletionActivity =
+  typeof ProjectRecipeDeterministicCompletionActivity.Type;
+
 export const LaunchProjectRecipeWorkflowRequest = Schema.Struct({
-  threadId: Schema.String,
-  kickoffMessage: Schema.String,
-  titleSeed: Schema.String,
+  threadId: Schema.optional(Schema.String),
+  workspaceRoot: Schema.optional(Schema.String),
+  kickoffMessage: Schema.optional(Schema.String),
+  titleSeed: Schema.optional(Schema.String),
   createdAt: Schema.String,
-  modelSelection: Schema.Struct({
-    instanceId: Schema.String,
-    model: Schema.String,
-  }),
-  runtimeMode: Schema.String,
-  interactionMode: Schema.String,
+  modelSelection: Schema.optional(
+    Schema.Struct({
+      instanceId: Schema.String,
+      model: Schema.String,
+    }),
+  ),
+  runtimeMode: Schema.optional(Schema.String),
+  interactionMode: Schema.optional(Schema.String),
   launch: ProjectRecipeWorkflowLaunch,
+  toolContext: Schema.optional(ProjectRecipeWorkflowLaunchToolContext),
 });
 export type LaunchProjectRecipeWorkflowRequest = typeof LaunchProjectRecipeWorkflowRequest.Type;
 
 export const LaunchProjectRecipeWorkflowResponse = Schema.Struct({
   ok: Schema.Boolean,
+  mode: Schema.optional(Schema.Literals(["thread", "deterministic"])),
+  workflowRunId: Schema.optional(Schema.String),
+  effects: Schema.optional(Schema.Array(ProjectRecipeDeterministicLaunchEffect)),
+  completionActivity: Schema.optional(ProjectRecipeDeterministicCompletionActivity),
 });
 export type LaunchProjectRecipeWorkflowResponse = typeof LaunchProjectRecipeWorkflowResponse.Type;
 

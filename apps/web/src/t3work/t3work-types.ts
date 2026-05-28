@@ -1,3 +1,4 @@
+import type { T3workActionRecipeContext } from "@t3tools/project-context";
 import type { T3workToolId } from "@t3tools/project-context/t3workToolCatalog";
 import type { ProjectRecipeKickoffProgram, RecipeSurface } from "@t3tools/project-recipes";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
@@ -21,6 +22,7 @@ export type T3workKickoffWorkflow = {
   readonly promptPath?: string;
   readonly workflowPath?: string;
   readonly allowedToolGroups?: ReadonlyArray<string>;
+  readonly launchContext?: T3workActionRecipeContext;
 };
 
 export type ProjectThread = {

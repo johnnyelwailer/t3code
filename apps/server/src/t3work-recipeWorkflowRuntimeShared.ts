@@ -1,6 +1,7 @@
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { EventId, MessageId, ThreadId } from "@t3tools/contracts";
+import { T3workActionRecipeContext } from "@t3tools/project-context";
 import {
   ProjectRecipeConversationCard,
   ProjectRecipeWorkflowLaunch,
@@ -10,8 +11,6 @@ import {
   type ProjectRecipeWorkflowLaunch as ProjectRecipeWorkflowLaunchType,
 } from "@t3tools/project-recipes";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
-
-const RECIPE_WORKFLOW_STATE_DIR = ".t3work/recipe-workflows";
 
 const PersistedRecipeWorkflowCardActionWait = Schema.Struct({
   kind: Schema.Literal("card-action"),
@@ -37,8 +36,10 @@ const PersistedRecipeWorkflowRunStateSchema = Schema.Struct({
   threadId: ThreadId,
   workflowRunId: Schema.String,
   workspaceRoot: Schema.String,
+  runRootPath: Schema.String,
   workflowPath: Schema.optional(Schema.String),
   recipePath: Schema.optional(Schema.String),
+  launchContext: Schema.optional(T3workActionRecipeContext),
   launch: ProjectRecipeWorkflowLaunch,
   kickoffMessage: Schema.String,
   steps: Schema.Array(ProjectRecipeWorkflowStepSchema),
@@ -82,12 +83,8 @@ export function workflowRunIdForThread(threadId: ThreadId): string {
   return `t3work:recipe-workflow:${threadId}`;
 }
 
-export function workflowStatePath(
-  pathService: Path.Path,
-  workspaceRoot: string,
-  threadId: ThreadId,
-): string {
-  return pathService.join(workspaceRoot, RECIPE_WORKFLOW_STATE_DIR, `${threadId}.json`);
+export function workflowRunIdForDeterministicLaunch(): string {
+  return `t3work:recipe-workflow:deterministic:${crypto.randomUUID()}`;
 }
 
 export function launchActivityId(threadId: ThreadId): EventId {

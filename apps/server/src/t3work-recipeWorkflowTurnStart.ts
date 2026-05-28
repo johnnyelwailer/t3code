@@ -14,7 +14,7 @@ export const dispatchRecipeWorkflowTurnStart = Effect.fn("dispatchRecipeWorkflow
   function* (input: {
     orchestration: OrchestrationEngineShape;
     threadId: ThreadId;
-    turnStartMessage: string;
+    userTurnMessage: string;
     createdAt: string;
     modelSelection: ModelSelection;
     runtimeMode: RuntimeMode;
@@ -31,7 +31,7 @@ export const dispatchRecipeWorkflowTurnStart = Effect.fn("dispatchRecipeWorkflow
           `server:t3work:${input.commandPrefix}-message:${crypto.randomUUID()}`,
         ),
         role: "user",
-        text: input.turnStartMessage,
+        text: input.userTurnMessage,
         attachments: [],
       },
       modelSelection: input.modelSelection as never,

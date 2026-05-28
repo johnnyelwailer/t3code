@@ -83,6 +83,7 @@ export const PROJECT_RECIPE_TOOL_GROUPS_BY_ID = Object.fromEntries(
 ) as Readonly<Record<ProjectRecipeToolGroupId, ProjectRecipeToolGroup>>;
 
 export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
+  "t3work.backlog.set_assignee_filter": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
   "t3work.view.read": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3work.project.list_linked_repositories": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3work.project.open_dashboard_mode": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,

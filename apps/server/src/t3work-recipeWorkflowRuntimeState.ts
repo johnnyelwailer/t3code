@@ -8,27 +8,43 @@ import {
   decodePersistedRecipeWorkflowRunState,
   encodePersistedRecipeWorkflowRunState,
   type PersistedRecipeWorkflowRunState,
-  workflowStatePath,
+  workflowRunIdForThread,
 } from "./t3work-recipeWorkflowRuntimeShared.ts";
+import {
+  legacyWorkflowStatePath,
+  workflowStatePathForRun,
+} from "./t3work-recipeWorkflowRunPaths.ts";
 
 export const readPersistedWorkflowState = Effect.fn("readPersistedWorkflowState")(
   function* (input: { workspaceRoot: string; threadId: ThreadId }) {
     const fileSystem = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;
-    const statePath = workflowStatePath(pathService, input.workspaceRoot, input.threadId);
-    const exists = yield* fileSystem.exists(statePath).pipe(Effect.orElseSucceed(() => false));
-    if (!exists) {
-      return null;
+    const candidatePaths = [
+      workflowStatePathForRun(
+        pathService,
+        input.workspaceRoot,
+        workflowRunIdForThread(input.threadId),
+      ),
+      legacyWorkflowStatePath(pathService, input.workspaceRoot, input.threadId),
+    ];
+
+    for (const statePath of candidatePaths) {
+      const exists = yield* fileSystem.exists(statePath).pipe(Effect.orElseSucceed(() => false));
+      if (!exists) {
+        continue;
+      }
+      const raw = yield* fileSystem.readFileString(statePath).pipe(Effect.orElseSucceed(() => ""));
+      const trimmed = raw.trim();
+      if (trimmed.length === 0) {
+        continue;
+      }
+      const decoded = yield* decodePersistedRecipeWorkflowRunState(trimmed).pipe(Effect.option);
+      if (decoded._tag === "Some") {
+        return decoded.value;
+      }
     }
 
-    const raw = yield* fileSystem.readFileString(statePath).pipe(Effect.orElseSucceed(() => ""));
-    const trimmed = raw.trim();
-    if (trimmed.length === 0) {
-      return null;
-    }
-
-    const decoded = yield* decodePersistedRecipeWorkflowRunState(trimmed).pipe(Effect.option);
-    return decoded._tag === "Some" ? decoded.value : null;
+    return null;
   },
 );
 
@@ -36,7 +52,7 @@ export const persistWorkflowState = Effect.fn("persistWorkflowState")(function* 
   state: PersistedRecipeWorkflowRunState,
 ) {
   const pathService = yield* Path.Path;
-  const statePath = workflowStatePath(pathService, state.workspaceRoot, state.threadId as ThreadId);
+  const statePath = workflowStatePathForRun(pathService, state.workspaceRoot, state.workflowRunId);
   const encodedState = yield* encodePersistedRecipeWorkflowRunState(state);
   yield* writeFileStringAtomically({
     filePath: statePath,
@@ -51,6 +67,8 @@ export const clearWorkflowState = Effect.fn("clearWorkflowState")(function* (inp
   const fileSystem = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   yield* fileSystem
-    .remove(workflowStatePath(pathService, input.workspaceRoot, input.threadId), { force: true })
+    .remove(legacyWorkflowStatePath(pathService, input.workspaceRoot, input.threadId), {
+      force: true,
+    })
     .pipe(Effect.ignore({ log: true }));
 });

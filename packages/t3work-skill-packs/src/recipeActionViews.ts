@@ -182,6 +182,19 @@ export default function Action({ ctx }) {
 }
 `;
 
+export const SHOW_ONLY_ASSIGNED_TO_ME_ACTION_VIEW = `
+export default function Action() {
+  return (
+    <RecipeAction
+      title="Show only assigned to me"
+      icon="list-filter"
+      description="Apply the assignee filter inline and stay on the dashboard."
+      footer={<InlineActionChip recipeId="show-only-assigned-to-me" label="Apply filter" />}
+    />
+  );
+}
+`;
+
 export const SHAPE_NEXT_BACKLOG_SLICE_ACTION_VIEW = `
 export default function Action({ ctx }) {
   const itemCount = ctx.surfaceState?.currentView?.itemCount ?? 0;

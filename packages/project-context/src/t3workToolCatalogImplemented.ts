@@ -53,7 +53,32 @@ const START_CHILD_INPUT_SCHEMA = {
   required: ["name"],
 } as const;
 
+const BACKLOG_SET_ASSIGNEE_FILTER_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    mode: {
+      type: "string",
+      description: "Filter mode to apply to the visible backlog assignee filter.",
+      enum: ["current-user"],
+    },
+  },
+  required: ["mode"],
+} as const;
+
 export const IMPLEMENTED_T3WORK_TOOL_CATALOG = {
+  "t3work.backlog.set_assignee_filter": {
+    id: "t3work.backlog.set_assignee_filter",
+    label: "Set backlog assignee filter",
+    title: "Set visible backlog assignee filter",
+    description: "Update the visible backlog assignee filter for the current dashboard view.",
+    capabilities: ["write"],
+    kind: "view-state",
+    surfaces: ["backlog"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: BACKLOG_SET_ASSIGNEE_FILTER_INPUT_SCHEMA,
+  },
   "t3work.view.read": {
     id: "t3work.view.read",
     label: "Read view",

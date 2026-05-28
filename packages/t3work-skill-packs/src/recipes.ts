@@ -6,6 +6,7 @@ import {
   FOCUS_NEEDS_MY_ACTION_ACTION_VIEW,
   PRIORITIZE_PENDING_WORK_ACTION_VIEW,
   REVIEW_ACCEPTANCE_CRITERIA_ACTION_VIEW,
+  SHOW_ONLY_ASSIGNED_TO_ME_ACTION_VIEW,
   SHAPE_NEXT_BACKLOG_SLICE_ACTION_VIEW,
   SUMMARIZE_PROJECT_RISK_ACTION_VIEW,
   TECHNICAL_IMPLEMENTATION_PLAN_ACTION_VIEW,
@@ -331,6 +332,35 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
     artifactKinds: ["priority-list", "next-step"],
     actionFamilies: ["delivery", "engineering", "product"],
     rankHint: 34,
+  }),
+  createBundledRecipe({
+    id: "show-only-assigned-to-me",
+    title: "Show only assigned to me",
+    manifestDisplayName: "Show only assigned to me",
+    shortDescription: "Apply the current-user assignee filter inline without opening chat.",
+    actionViewTemplate: SHOW_ONLY_ASSIGNED_TO_ME_ACTION_VIEW,
+    surfaces: BACKLOG_DASHBOARD_SURFACE,
+    kickoff: {
+      version: 1,
+      steps: [
+        {
+          kind: "tool",
+          id: "apply-assignee-filter",
+          toolName: "t3work.backlog.set_assignee_filter",
+          input: {
+            mode: "current-user",
+          },
+        },
+      ],
+    },
+    icon: "list-filter",
+    allowedToolGroups: ["view.state"],
+    appliesTo: {},
+    requiredContext: [{ key: "project.summary", description: "Project overview" }],
+    outputPreference: "plan",
+    artifactKinds: ["next-step"],
+    actionFamilies: ["delivery"],
+    rankHint: 33,
   }),
   createBundledRecipe({
     id: "shape-next-backlog-slice",
