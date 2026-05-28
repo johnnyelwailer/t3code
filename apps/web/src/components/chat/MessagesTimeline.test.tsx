@@ -117,6 +117,22 @@ function buildUserTimelineEntry(text: string) {
   };
 }
 
+function buildSystemTimelineEntry(text: string) {
+  return {
+    id: "entry-system-1",
+    kind: "message" as const,
+    createdAt: MESSAGE_CREATED_AT,
+    message: {
+      id: MessageId.make("message-system-1"),
+      role: "system" as const,
+      text,
+      createdAt: MESSAGE_CREATED_AT,
+      completedAt: MESSAGE_CREATED_AT,
+      streaming: false,
+    },
+  };
+}
+
 describe("MessagesTimeline", () => {
   it("renders collapse controls for long user messages", async () => {
     const { MessagesTimeline } = await import("./MessagesTimeline");
@@ -210,6 +226,20 @@ describe("MessagesTimeline", () => {
 
     expect(markup).toContain("Context compacted");
     expect(markup).toContain("Work log");
+  });
+
+  it("renders system messages as first-class timeline rows", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[buildSystemTimelineEntry("Recipe authoring kickoff")]}
+      />,
+    );
+
+    expect(markup).toContain("System");
+    expect(markup).toContain("Recipe authoring kickoff");
+    expect(markup).toContain('data-message-role="system"');
   });
 
   it("formats changed file paths from the workspace root", async () => {

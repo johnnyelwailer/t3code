@@ -1,14 +1,21 @@
-import { useEffect, useState } from "react";
-import { Card, CardContent } from "~/t3work/components/ui/t3work-card";
+import { useEffect, useRef, useState } from "react";
 import { ScrollArea } from "~/t3work/components/ui/t3work-scroll-area";
 import type { ProjectThread, T3workThreadToolId } from "~/t3work/t3work-types";
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
-import { formatRelativeTime } from "./t3work-AppTicketHelpers";
 import { mergeContextAttachmentsById } from "~/t3work/t3work-contextAttachmentMerge";
 import { ContextAttachmentChip } from "~/t3work/components/t3work-ContextAttachmentChip";
+import { T3workRecentConversations } from "~/t3work/t3work-ProjectDashboardRecentConversations";
 import { T3workKickoffRecipeList } from "~/t3work/t3work-KickoffRecipeList";
+import {
+  applyT3workRecipeQuickStartLaunchCustomization,
+  areT3workRecipeQuickStartLaunchCustomizationsEqual,
+  buildT3workSelectedRecipeKickoffLaunch,
+  type T3workSelectedRecipeQuickStart,
+} from "~/t3work/t3work-recipeQuickStartLaunch";
+import { type T3workKickoffComposerHandle } from "~/t3work/t3work-TicketKickoffComposer";
 import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipes";
+import type { T3workKickoffWorkflow } from "~/t3work/t3work-types";
 
 type TicketKickoffPanelProps = {
   displayId: string;
@@ -18,14 +25,19 @@ type TicketKickoffPanelProps = {
   onOpenThread: (threadId: string) => void;
   onKickoff: (
     instruction: string,
+    kickoffPending: boolean | undefined,
     selection: ModelSelection,
     runtimeMode: RuntimeMode,
     interactionMode: ProviderInteractionMode,
     selectedToolIds: ReadonlyArray<T3workThreadToolId>,
     contextAttachments: ReadonlyArray<T3WorkContextAttachment>,
+    kickoffWorkflow?: T3workKickoffWorkflow,
   ) => void;
   renderComposer: (props: {
+    composerRef: React.RefObject<T3workKickoffComposerHandle | null>;
     prefillText?: string;
+    selectedRecipe?: T3workSelectedRecipeQuickStart;
+    onClearSelectedRecipe?: () => void;
     onSubmit: (
       text: string,
       selection: ModelSelection,
@@ -45,13 +57,14 @@ export function TicketKickoffPanel({
   onKickoff,
   renderComposer,
 }: TicketKickoffPanelProps) {
-  const [prefill, setPrefill] = useState<string | undefined>(undefined);
   const [localContextAttachments, setLocalContextAttachments] = useState<
     ReadonlyArray<T3WorkContextAttachment>
   >([]);
+  const composerRef = useRef<T3workKickoffComposerHandle | null>(null);
   const [dismissedAttachmentIds, setDismissedAttachmentIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [selectedRecipe, setSelectedRecipe] = useState<T3workSelectedRecipeQuickStart | null>(null);
 
   useEffect(() => {
     if (!injectedContextAttachments || injectedContextAttachments.length === 0) {
@@ -92,37 +105,36 @@ export function TicketKickoffPanel({
             </h4>
             <T3workKickoffRecipeList
               recipes={quickStartRecipes}
-              onSelectRecipe={(recipe) => setPrefill(recipe.prompt)}
+              {...(selectedRecipe?.recipe.id ? { selectedRecipeId: selectedRecipe.recipe.id } : {})}
+              onSelectRecipe={(recipe, customization) => {
+                setSelectedRecipe((current) => {
+                  if (
+                    current?.recipe.id === recipe.id &&
+                    areT3workRecipeQuickStartLaunchCustomizationsEqual(
+                      current.customization,
+                      customization,
+                    )
+                  ) {
+                    return current;
+                  }
+
+                  return {
+                    recipe: applyT3workRecipeQuickStartLaunchCustomization(recipe, customization),
+                    ...(customization ? { customization } : {}),
+                  };
+                });
+              }}
             />
           </section>
 
-          <section className="space-y-2.5 pb-1">
-            <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
-              Conversations
-            </h4>
-            {issueThreads.length === 0 && (
-              <p className="px-1 py-1 text-xs text-muted-foreground/70">
-                No conversations started for this ticket yet.
-              </p>
-            )}
-            {issueThreads.map((thread) => (
-              <button
-                key={thread.id}
-                type="button"
-                className="block w-full text-left"
-                onClick={() => onOpenThread(thread.id)}
-              >
-                <Card className="border-border/70 bg-transparent transition-colors hover:bg-accent/35">
-                  <CardContent className="p-3.5">
-                    <div className="truncate text-sm font-medium">{thread.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {thread.messageCount} messages • {formatRelativeTime(thread.lastMessageAt)}
-                    </div>
-                  </CardContent>
-                </Card>
-              </button>
-            ))}
-          </section>
+          <T3workRecentConversations
+            threads={issueThreads}
+            onOpenThread={onOpenThread}
+            title="Conversations"
+            emptyMessage="No conversations started for this ticket yet."
+            showSearch={false}
+            showCount={false}
+          />
         </div>
       </ScrollArea>
 
@@ -139,19 +151,32 @@ export function TicketKickoffPanel({
           </div>
         )}
         {renderComposer({
-          ...(prefill ? { prefillText: prefill } : {}),
+          composerRef,
+          ...(selectedRecipe ? { selectedRecipe } : {}),
+          onClearSelectedRecipe: () => setSelectedRecipe(null),
           onSubmit: (text, selection, runtimeMode, interactionMode, selectedToolIds) => {
+            const kickoff = selectedRecipe
+              ? buildT3workSelectedRecipeKickoffLaunch({
+                  selectedRecipe,
+                  customMessage: text,
+                })
+              : {
+                  kickoffMessage: text,
+                  kickoffPending: true,
+                };
             onKickoff(
-              text,
+              kickoff.kickoffMessage,
+              kickoff.kickoffPending,
               selection,
               runtimeMode,
               interactionMode,
               selectedToolIds,
               localContextAttachments,
+              selectedRecipe?.recipe.workflow,
             );
-            setPrefill(undefined);
             setLocalContextAttachments([]);
             setDismissedAttachmentIds(new Set());
+            setSelectedRecipe(null);
           },
         })}
       </div>

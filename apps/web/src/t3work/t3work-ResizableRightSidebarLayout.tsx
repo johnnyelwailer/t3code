@@ -11,6 +11,12 @@ import * as Schema from "effect/Schema";
 import { cn } from "~/lib/utils";
 import { useMediaQuery } from "~/t3work/hooks/t3work-useMediaQuery";
 import { getLocalStorageItem, setLocalStorageItem } from "~/t3work/hooks/t3work-useLocalStorage";
+import { T3workMobilePanelLayout } from "~/t3work/t3work-MobilePanelLayout";
+import {
+  clampRightSidebarWidth,
+  readStoredRightSidebarCollapsedState,
+  type ResizableRightSidebarDragState,
+} from "~/t3work/t3work-ResizableRightSidebarLayoutShared";
 import { runT3workViewTransition } from "~/t3work/t3work-runViewTransition";
 import { ResizableRightSidebarAside } from "./t3work-ResizableRightSidebarAside";
 
@@ -25,33 +31,10 @@ type ResizableRightSidebarLayoutProps = {
   minAsideWidth?: number;
   defaultAsideWidth?: number;
   minMainWidth?: number;
+  mobileDefaultPanel?: "main" | "aside";
+  mobileMainLabel?: string;
+  mobileAsideLabel?: string;
 };
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function readStoredCollapsedState(storageKey: string): boolean {
-  try {
-    const stored = getLocalStorageItem(storageKey, Schema.Boolean);
-    return stored ?? false;
-  } catch {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    const legacyValue = window.localStorage.getItem(storageKey);
-    if (legacyValue === "1") {
-      setLocalStorageItem(storageKey, true, Schema.Boolean);
-      return true;
-    }
-    if (legacyValue === "0") {
-      setLocalStorageItem(storageKey, false, Schema.Boolean);
-      return false;
-    }
-    return false;
-  }
-}
 
 export function ResizableRightSidebarLayout({
   main,
@@ -64,20 +47,18 @@ export function ResizableRightSidebarLayout({
   minAsideWidth = 22 * 16,
   defaultAsideWidth = 26 * 16,
   minMainWidth = 44 * 16,
+  mobileDefaultPanel = "main",
+  mobileMainLabel,
+  mobileAsideLabel,
 }: ResizableRightSidebarLayoutProps) {
   const isDesktop = useMediaQuery("lg");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [asideWidth, setAsideWidth] = useState(defaultAsideWidth);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<"main" | "aside">(mobileDefaultPanel);
   const widthStorageKey = `${storageKey}:width`;
   const effectiveCollapsedStorageKey = collapsedStorageKey ?? `${storageKey}:collapsed`;
-  const dragStateRef = useRef<{
-    currentWidth: number;
-    pointerId: number;
-    startX: number;
-    startWidth: number;
-    handle: HTMLButtonElement;
-  } | null>(null);
+  const dragStateRef = useRef<ResizableRightSidebarDragState | null>(null);
 
   useEffect(() => {
     const storedWidth = getLocalStorageItem(widthStorageKey, Schema.Finite);
@@ -85,7 +66,7 @@ export function ResizableRightSidebarLayout({
       setAsideWidth(storedWidth);
     }
 
-    setIsCollapsed(readStoredCollapsedState(effectiveCollapsedStorageKey));
+    setIsCollapsed(readStoredRightSidebarCollapsedState(effectiveCollapsedStorageKey));
   }, [effectiveCollapsedStorageKey, widthStorageKey]);
 
   useEffect(
@@ -95,6 +76,12 @@ export function ResizableRightSidebarLayout({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!isDesktop) {
+      setMobilePanel(mobileDefaultPanel);
+    }
+  }, [isDesktop, mobileDefaultPanel]);
 
   const setCollapsedState = useCallback(
     (nextCollapsed: boolean) => {
@@ -140,7 +127,11 @@ export function ResizableRightSidebarLayout({
       event.preventDefault();
       const delta = dragState.startX - event.clientX;
       const maxAsideWidth = Math.max(minAsideWidth, container.clientWidth - minMainWidth);
-      const nextWidth = clamp(dragState.startWidth + delta, minAsideWidth, maxAsideWidth);
+      const nextWidth = clampRightSidebarWidth(
+        dragState.startWidth + delta,
+        minAsideWidth,
+        maxAsideWidth,
+      );
       dragState.currentWidth = nextWidth;
       setAsideWidth(nextWidth);
     },
@@ -181,10 +172,17 @@ export function ResizableRightSidebarLayout({
 
   if (!isDesktop) {
     return (
-      <div className={cn("grid min-h-0 flex-1 grid-cols-1", className)}>
-        <div className={cn("min-h-0 min-w-0 overflow-hidden", mainClassName)}>{main}</div>
-        <div className={cn("min-h-0 overflow-hidden", asideClassName)}>{aside}</div>
-      </div>
+      <T3workMobilePanelLayout
+        activePanel={mobilePanel}
+        onActivePanelChange={setMobilePanel}
+        main={main}
+        aside={aside}
+        className={className}
+        mainClassName={mainClassName}
+        asideClassName={asideClassName}
+        mainLabel={mobileMainLabel}
+        asideLabel={mobileAsideLabel}
+      />
     );
   }
 

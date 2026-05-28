@@ -107,6 +107,11 @@ describe("syncProjectWorkspaceContext", () => {
     const backend = {
       projectWorkspace: {
         bootstrapWorkspace: backendHarness.bootstrapWorkspace,
+        discoverRecipes: vi.fn(async () => ({
+          workspaceRoot: "/tmp/project-alpha",
+          hasProjectLocalRecipes: false,
+          recipes: [],
+        })),
         writeContextFiles: backendHarness.writeContextFiles,
       },
     } as unknown as BackendApi;

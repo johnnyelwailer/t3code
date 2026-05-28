@@ -15,6 +15,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import * as Equal from "effect/Equal";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { deriveTimelineEntries, formatElapsed } from "../../session-logic";
 import { type TurnDiffSummary } from "../../types";
@@ -22,18 +23,22 @@ import { summarizeTurnDiffStats } from "../../lib/turnDiffTree";
 import ChatMarkdown from "../ChatMarkdown";
 import {
   BotIcon,
+  CheckCircle2Icon,
   CheckIcon,
   CircleAlertIcon,
   EyeIcon,
   GlobeIcon,
   HammerIcon,
+  LoaderCircleIcon,
   type LucideIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
+  WandSparklesIcon,
   WrenchIcon,
   ZapIcon,
 } from "lucide-react";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { buildExpandedImagePreview, ExpandedImagePreview } from "./ExpandedImagePreview";
 import { ProposedPlanCard } from "./ProposedPlanCard";
@@ -41,12 +46,10 @@ import { ChangedFilesTree } from "./ChangedFilesTree";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { MessageCopyButton } from "./MessageCopyButton";
 import {
-  computeStableMessagesTimelineRows,
   MAX_VISIBLE_WORK_LOG_ENTRIES,
   deriveMessagesTimelineRows,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
-  type StableMessagesTimelineRowsState,
   type MessagesTimelineRow,
 } from "./MessagesTimeline.logic";
 import { TerminalContextInlineChip } from "./TerminalContextInlineChip";
@@ -69,6 +72,7 @@ import { SkillInlineText } from "./SkillInlineText";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { ContextAttachmentStrip } from "~/t3work/components/t3work-ContextAttachmentChip";
 import { extractContextAttachmentsFromMessageText } from "~/t3work/t3work-contextAttachmentText";
+import { type T3workRecipeActivityCardEntry } from "~/t3work/chat/t3work-threadRecipeActivityCards";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -88,6 +92,13 @@ interface TimelineRowSharedState {
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onSubmitRecipeCardAction?:
+    | ((input: {
+        cardId: string;
+        actionId: string;
+        submit?: Record<string, unknown>;
+      }) => Promise<void>)
+    | undefined;
 }
 
 interface TimelineRowActivityState {
@@ -100,6 +111,7 @@ const TimelineRowActivityCtx = createContext<TimelineRowActivityState>(null!);
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
+const EMPTY_ACTIVITY_CARDS: ReadonlyArray<T3workRecipeActivityCardEntry> = [];
 
 // ---------------------------------------------------------------------------
 // Props (public API)
@@ -128,6 +140,14 @@ interface MessagesTimelineProps {
   workspaceRoot: string | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   onIsAtEndChange: (isAtEnd: boolean) => void;
+  activityCards?: ReadonlyArray<T3workRecipeActivityCardEntry>;
+  onSubmitRecipeCardAction?:
+    | ((input: {
+        cardId: string;
+        actionId: string;
+        submit?: Record<string, unknown>;
+      }) => Promise<void>)
+    | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,8 +177,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   workspaceRoot,
   skills = EMPTY_TIMELINE_SKILLS,
   onIsAtEndChange,
+  activityCards = EMPTY_ACTIVITY_CARDS,
+  onSubmitRecipeCardAction,
 }: MessagesTimelineProps) {
-  const rawRows = useMemo(
+  const baseRows = useMemo(
     () =>
       deriveMessagesTimelineRows({
         timelineEntries,
@@ -182,6 +204,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       turnDiffSummaryByAssistantMessageId,
       revertTurnCountByUserMessageId,
     ],
+  );
+  const rawRows = useMemo(
+    () => mergeTimelineRows(baseRows, activityCards),
+    [activityCards, baseRows],
   );
   const rows = useStableRows(rawRows);
 
@@ -222,6 +248,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
+      onSubmitRecipeCardAction,
     }),
     [
       timestampFormat,
@@ -234,6 +261,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
+      onSubmitRecipeCardAction,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -247,7 +275,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   // Stable renderItem — no closure deps. Row components read shared state
   // from TimelineRowCtx, which propagates through LegendList's memo.
   const renderItem = useCallback(
-    ({ item }: { item: MessagesTimelineRow }) => (
+    ({ item }: { item: TimelineRow }) => (
       <div className="mx-auto w-full min-w-0 max-w-3xl overflow-x-clip" data-timeline-root="true">
         <TimelineRowContent row={item} />
       </div>
@@ -268,7 +296,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   return (
     <TimelineRowCtx value={sharedState}>
       <TimelineRowActivityCtx value={activityState}>
-        <LegendList<MessagesTimelineRow>
+        <LegendList<TimelineRow>
           ref={listRef}
           data={rows}
           keyExtractor={keyExtractor}
@@ -288,7 +316,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   );
 });
 
-function keyExtractor(item: MessagesTimelineRow) {
+function keyExtractor(item: TimelineRow) {
   return item.id;
 }
 
@@ -298,8 +326,14 @@ function keyExtractor(item: MessagesTimelineRow) {
 
 type TimelineEntry = ReturnType<typeof deriveTimelineEntries>[number];
 type TimelineMessage = Extract<TimelineEntry, { kind: "message" }>["message"];
+type TimelineActivityCardRow = {
+  kind: "activity-card";
+  id: string;
+  createdAt: string;
+  activityCard: T3workRecipeActivityCardEntry;
+};
 type TimelineWorkEntry = Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"][number];
-type TimelineRow = MessagesTimelineRow;
+type TimelineRow = MessagesTimelineRow | TimelineActivityCardRow;
 
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
   return (
@@ -314,12 +348,208 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       data-message-role={row.kind === "message" ? row.message.role : undefined}
     >
       {row.kind === "work" ? <WorkGroupSection groupedEntries={row.groupedEntries} /> : null}
+      {row.kind === "activity-card" ? <ActivityCardTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "user" ? <UserTimelineRow row={row} /> : null}
+      {row.kind === "message" && row.message.role === "system" ? (
+        <SystemTimelineRow row={row} />
+      ) : null}
       {row.kind === "message" && row.message.role === "assistant" ? (
         <AssistantTimelineRow row={row} />
       ) : null}
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
+    </div>
+  );
+});
+
+function recipeLaunchPhaseLabel(
+  phase: Extract<T3workRecipeActivityCardEntry, { kind: "recipe-launch" }>["launch"]["phase"],
+): string {
+  switch (phase) {
+    case "creating-thread":
+      return "Creating conversation";
+    case "bootstrapping-agent":
+      return "Bootstrapping agent";
+    case "running":
+      return "Running";
+    case "waiting-for-card-action":
+      return "Waiting for input";
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
+    default:
+      return "Queued";
+  }
+}
+
+function renderWorkflowCardFields(
+  card: Extract<T3workRecipeActivityCardEntry, { kind: "workflow-card" }>["card"]["card"],
+) {
+  if (!card.fields || card.fields.length === 0) {
+    return null;
+  }
+
+  if (card.kind === "checklist") {
+    return (
+      <div className="mt-3 space-y-1.5">
+        {card.fields.map((field, index) => {
+          const label = typeof field.label === "string" ? field.label : `Item ${index + 1}`;
+          const checked = field.checked === true;
+          return (
+            <div
+              key={`${card.id}:field:${index}`}
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+            >
+              {checked ? (
+                <CheckCircle2Icon className="size-4 text-emerald-600" />
+              ) : (
+                <div className="size-4 rounded-full border border-border/70" />
+              )}
+              <span>{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      {card.fields.map((field, index) => (
+        <div
+          key={`${card.id}:field:${index}`}
+          className="rounded-lg border border-border/55 bg-background/65 px-3 py-2 text-xs"
+        >
+          {Object.entries(field).map(([key, value]) => (
+            <div
+              key={`${card.id}:field:${index}:${key}`}
+              className="flex items-start justify-between gap-2"
+            >
+              <span className="text-muted-foreground/70">{key}</span>
+              <span className="max-w-[70%] text-right text-foreground/85">{String(value)}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const ActivityCardTimelineRow = memo(function ActivityCardTimelineRow(props: {
+  row: TimelineActivityCardRow;
+}) {
+  const { row } = props;
+  const { onSubmitRecipeCardAction } = use(TimelineRowCtx);
+  const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
+
+  if (row.activityCard.kind === "recipe-launch") {
+    const launch = row.activityCard.launch;
+    return (
+      <div className="rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <WandSparklesIcon className="size-4 text-primary" />
+              <p className="text-sm font-semibold text-foreground">{launch.title}</p>
+            </div>
+            <p className="text-sm leading-6 text-muted-foreground">{launch.description}</p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="secondary">
+              {launch.source === "project-local" ? "Project recipe" : "Bundled recipe"}
+            </Badge>
+            <Badge variant={launch.phase === "failed" ? "destructive" : "outline"}>
+              {recipeLaunchPhaseLabel(launch.phase)}
+            </Badge>
+            {launch.reason ? <Badge variant="outline">{launch.reason}</Badge> : null}
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.12em] text-muted-foreground/70">
+          <span>{launch.recipeId}</span>
+          {launch.recipeVersion ? <span>v{launch.recipeVersion}</span> : null}
+          <span>{launch.surface}</span>
+        </div>
+
+        {launch.error ? (
+          <div className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/8 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
+            {launch.error}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  const workflowCard = row.activityCard.card;
+  const card = workflowCard.card;
+  const awaitingActionId = workflowCard.awaitingActionId;
+  const completedActionId = workflowCard.completedActionId;
+
+  return (
+    <div className="rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1.5">
+          <p className="text-sm font-semibold text-foreground">{card.title}</p>
+          {card.body ? (
+            <p className="text-sm leading-6 text-muted-foreground">{card.body}</p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="secondary">{card.kind}</Badge>
+          <Badge variant="outline">
+            {workflowCard.phase === "completed" ? "Completed" : "Open"}
+          </Badge>
+        </div>
+      </div>
+
+      {renderWorkflowCardFields(card)}
+
+      {card.actions && card.actions.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {card.actions.map((action) => {
+            const isAwaitedAction = awaitingActionId === action.id;
+            const isCompletedAction = completedActionId === action.id;
+            const isSubmitting = submittingActionId === action.id;
+            const disabled =
+              isCompletedAction || isSubmitting || !onSubmitRecipeCardAction || !isAwaitedAction;
+
+            return (
+              <Button
+                key={`${card.id}:action:${action.id}`}
+                type="button"
+                size="sm"
+                variant={
+                  action.style === "secondary"
+                    ? "outline"
+                    : action.style === "danger"
+                      ? "destructive"
+                      : "default"
+                }
+                disabled={disabled}
+                onClick={() => {
+                  if (!onSubmitRecipeCardAction || !isAwaitedAction || disabled) {
+                    return;
+                  }
+
+                  setSubmittingActionId(action.id);
+                  void onSubmitRecipeCardAction({
+                    cardId: card.id,
+                    actionId: action.id,
+                    ...(action.submit ? { submit: action.submit } : {}),
+                  }).finally(() =>
+                    setSubmittingActionId((current) => (current === action.id ? null : current)),
+                  );
+                }}
+              >
+                {isSubmitting ? <LoaderCircleIcon className="mr-1 size-3 animate-spin" /> : null}
+                {isCompletedAction ? <CheckCircle2Icon className="mr-1 size-3" /> : null}
+                {action.label}
+              </Button>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 });
@@ -458,6 +688,29 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         </div>
       </div>
     </>
+  );
+}
+
+function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+  const ctx = use(TimelineRowCtx);
+
+  return (
+    <div className="min-w-0 px-1 py-0.5">
+      <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
+        <div className="mb-2 flex items-center gap-2">
+          <Badge variant="outline">System</Badge>
+        </div>
+        <ChatMarkdown
+          text={row.message.text || "(empty system message)"}
+          cwd={ctx.markdownCwd}
+          isStreaming={false}
+          skills={ctx.skills}
+        />
+        <p className="mt-1.5 text-[10px] text-muted-foreground/40">
+          {formatTimestamp(row.message.createdAt, ctx.timestampFormat)}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -947,17 +1200,106 @@ const UserMessageBody = memo(function UserMessageBody(props: {
 
 /** Returns a structurally-shared copy of `rows`: for each row whose content
  *  hasn't changed since last call, the previous object reference is reused. */
-function useStableRows(rows: MessagesTimelineRow[]): MessagesTimelineRow[] {
-  const prevState = useRef<StableMessagesTimelineRowsState>({
-    byId: new Map<string, MessagesTimelineRow>(),
+function useStableRows(rows: TimelineRow[]): TimelineRow[] {
+  const prevState = useRef<StableTimelineRowsState>({
+    byId: new Map<string, TimelineRow>(),
     result: [],
   });
 
   return useMemo(() => {
-    const nextState = computeStableMessagesTimelineRows(rows, prevState.current);
+    const nextState = computeStableTimelineRows(rows, prevState.current);
     prevState.current = nextState;
     return nextState.result;
   }, [rows]);
+}
+
+interface StableTimelineRowsState {
+  byId: Map<string, TimelineRow>;
+  result: TimelineRow[];
+}
+
+function mergeTimelineRows(
+  baseRows: ReadonlyArray<MessagesTimelineRow>,
+  activityCards: ReadonlyArray<T3workRecipeActivityCardEntry>,
+): TimelineRow[] {
+  const workingRows = baseRows.filter((row) => row.kind === "working");
+  const sortableRows = [
+    ...baseRows.filter((row) => row.kind !== "working").map((row, index) => ({ row, index })),
+    ...activityCards.map((activityCard, index) => ({
+      row: {
+        kind: "activity-card" as const,
+        id: activityCard.id,
+        createdAt: activityCard.createdAt,
+        activityCard,
+      },
+      index: baseRows.length + index,
+    })),
+  ];
+
+  return [
+    ...sortableRows
+      .toSorted((left, right) => {
+        const createdAtComparison = left.row.createdAt.localeCompare(right.row.createdAt);
+        if (createdAtComparison !== 0) {
+          return createdAtComparison;
+        }
+        return left.index - right.index;
+      })
+      .map((entry) => entry.row),
+    ...workingRows,
+  ];
+}
+
+function computeStableTimelineRows(
+  rows: TimelineRow[],
+  previous: StableTimelineRowsState,
+): StableTimelineRowsState {
+  const next = new Map<string, TimelineRow>();
+  let anyChanged = rows.length !== previous.byId.size;
+
+  const result = rows.map((row, index) => {
+    const prevRow = previous.byId.get(row.id);
+    const nextRow = prevRow && isTimelineRowUnchanged(prevRow, row) ? prevRow : row;
+    next.set(row.id, nextRow);
+    if (!anyChanged && previous.result[index] !== nextRow) {
+      anyChanged = true;
+    }
+    return nextRow;
+  });
+
+  return anyChanged ? { byId: next, result } : previous;
+}
+
+function isTimelineRowUnchanged(a: TimelineRow, b: TimelineRow): boolean {
+  if (a.kind !== b.kind || a.id !== b.id) return false;
+
+  switch (a.kind) {
+    case "activity-card":
+      return a.activityCard === (b as typeof a).activityCard;
+
+    case "working":
+      return a.createdAt === (b as typeof a).createdAt;
+
+    case "proposed-plan":
+      return a.proposedPlan === (b as typeof a).proposedPlan;
+
+    case "work":
+      return Equal.equals(a.groupedEntries, (b as typeof a).groupedEntries);
+
+    case "message": {
+      const nextRow = b as typeof a;
+      return (
+        a.message === nextRow.message &&
+        a.durationStart === nextRow.durationStart &&
+        a.showCompletionDivider === nextRow.showCompletionDivider &&
+        a.completionSummary === nextRow.completionSummary &&
+        a.showAssistantCopyButton === nextRow.showAssistantCopyButton &&
+        a.assistantCopyStreaming === nextRow.assistantCopyStreaming &&
+        a.assistantTurnDiffSummary === nextRow.assistantTurnDiffSummary &&
+        a.revertTurnCount === nextRow.revertTurnCount
+      );
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

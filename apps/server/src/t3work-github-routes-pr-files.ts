@@ -134,16 +134,22 @@ export function fetchFileSnapshots(input: {
         ...(base ? { base } : {}),
         ...(head ? { head } : {}),
       }).pipe(
-        Effect.map(
-          (versions) =>
-            ({
-              path,
-              ...(file.status ? { status: file.status } : {}),
-              ...(previousPath ? { previousPath } : {}),
-              ...(versions.base ? { base: versions.base } : {}),
-              ...(versions.head ? { head: versions.head } : {}),
-            }) satisfies GitHubPullRequestFileSnapshot,
-        ),
+        Effect.map((versions) => {
+          const snapshot: GitHubPullRequestFileSnapshot = { path };
+          if (file.status) {
+            Object.assign(snapshot, { status: file.status });
+          }
+          if (previousPath) {
+            Object.assign(snapshot, { previousPath });
+          }
+          if (versions.base) {
+            Object.assign(snapshot, { base: versions.base });
+          }
+          if (versions.head) {
+            Object.assign(snapshot, { head: versions.head });
+          }
+          return snapshot;
+        }),
       );
     },
     { concurrency: 4 },

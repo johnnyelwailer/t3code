@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import type { ExternalResourceRef } from "@t3tools/project-context";
+import { ProjectRecipeKickoffProgram } from "./kickoff.ts";
 
 export const RecipeSurface = Schema.Literals([
   "project.dashboard",
@@ -66,6 +67,7 @@ export const Recipe = Schema.Struct({
   shortDescription: Schema.String,
   surfaces: Schema.Array(RecipeSurface),
   promptTemplate: Schema.String,
+  kickoff: Schema.optional(ProjectRecipeKickoffProgram),
   icon: Schema.optional(Schema.String),
   appliesTo: RecipeApplicability,
   requiredContext: Schema.Array(RecipeContextRequirement),

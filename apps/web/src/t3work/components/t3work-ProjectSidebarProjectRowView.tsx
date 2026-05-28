@@ -1,17 +1,16 @@
-import { SidebarMenuSub } from "~/t3work/components/ui/t3work-sidebar";
 import { ProjectSidebarCurrentIssuesContent } from "./t3work-ProjectSidebarCurrentIssuesContent";
 import { ProjectSidebarDashboardNav } from "./t3work-ProjectSidebarDashboardNav";
 import { ProjectSidebarDashboardThreadList } from "./t3work-ProjectSidebarDashboardThreadList";
 import { ProjectSidebarProjectHeader } from "./t3work-ProjectSidebarProjectHeader";
-import { ProjectSidebarThreadOverflowToggle } from "./t3work-ProjectSidebarThreadOverflowToggle";
-import { ThreadRow } from "./t3work-ProjectSidebarThreadRow";
+import { ProjectSidebarProjectThreadSection } from "./t3work-ProjectSidebarProjectThreadSection";
+import { ProjectSidebarPinnedItems } from "./t3work-ProjectSidebarPinnedItems";
+import { deriveProjectSidebarPinnedFeedState } from "./t3work-projectSidebarPinnedFeedState";
 import type { ProjectRowProps } from "./t3work-projectSidebarProjectRowTypes";
 import { useProjectSidebarProjectRow } from "./t3work-useProjectSidebarProjectRow";
 import { useProjectSidebarProjectRowPinnedState } from "./t3work-useProjectSidebarProjectRowPinnedState";
 import {
   getSidebarProjectSectionState,
   getSidebarProjectState,
-  getSidebarThreadState,
 } from "./t3work-projectSidebarItemState";
 
 export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
@@ -48,6 +47,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
     view,
   });
   const {
+    pinnedItems,
     showPinnedOnlyFeed,
     effectiveProjectTickets,
     effectiveTicketHierarchy,
@@ -57,6 +57,15 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
     effectiveVisibleTicketIds,
     effectiveHiddenTicketCount,
   } = useProjectSidebarProjectRowPinnedState(props, state);
+  const { visiblePinnedItems, pinnedItemVisibleTicketIds, currentIssueCount, githubItems } =
+    deriveProjectSidebarPinnedFeedState({
+      showPinnedOnlyFeed,
+      ticketViewMode,
+      pinnedItems,
+      effectiveProjectTickets,
+      effectiveUnlinkedGitHubItems,
+      effectiveVisibleTicketIds,
+    });
 
   return (
     <>
@@ -84,7 +93,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
           myWorkState={myWorkState}
           myWorkExpanded={state.myWorkExpanded}
           myWorkThreadCount={showMyActivityFeed ? state.myWorkThreads.length : 0}
-          pinnedItemCount={0}
+          pinnedItemCount={visiblePinnedItems.length}
           onMyWorkExpandedChange={state.setMyWorkExpanded}
           onSelectBacklog={() => onSelectProjectDashboardMode(project.id, "backlog")}
           onSelectMyWork={() => {
@@ -113,12 +122,28 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
               />
             ) : undefined
           }
-          pinnedContent={undefined}
+          pinnedContent={
+            visiblePinnedItems.length > 0 ? (
+              <ProjectSidebarPinnedItems
+                project={project}
+                projectTickets={props.projectTickets}
+                githubActivityByWorkItem={state.githubActivityByWorkItem}
+                items={visiblePinnedItems}
+                view={view}
+                visibleTicketIds={pinnedItemVisibleTicketIds}
+                {...(props.jiraLastCheckedAt !== undefined
+                  ? { jiraLastCheckedAt: props.jiraLastCheckedAt }
+                  : {})}
+                {...(state.githubActivityLastCheckedAt !== undefined
+                  ? { githubActivityLastCheckedAt: state.githubActivityLastCheckedAt }
+                  : {})}
+                onSelectTicket={onSelectTicket}
+              />
+            ) : undefined
+          }
           showMyActivityFeed={showMyActivityFeed}
           showJiraItems={showJiraItems}
-          currentIssueCount={
-            showPinnedOnlyFeed ? effectiveProjectTickets.length : props.projectTickets.length
-          }
+          currentIssueCount={currentIssueCount}
           currentIssuesContent={
             <ProjectSidebarCurrentIssuesContent
               project={project}
@@ -147,7 +172,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
             />
           }
           showGitHubActivity={showGitHubActivity}
-          githubItems={effectiveUnlinkedGitHubItems}
+          githubItems={githubItems}
           {...(state.githubActivityLastCheckedAt !== undefined
             ? { githubActivityLastCheckedAt: state.githubActivityLastCheckedAt }
             : {})}
@@ -155,24 +180,17 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
       ) : null}
 
       {expanded && showProjectThreads && (
-        <SidebarMenuSub className="mx-1 mt-1 mb-1.5 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 py-0.5">
-          {state.visibleThreads.map((thread) => (
-            <ThreadRow
-              key={thread.id}
-              thread={thread}
-              state={getSidebarThreadState({ view, threadId: thread.id })}
-              onSelect={() => onSelectThread(project.id, thread.id)}
-              onDelete={() => onDeleteThread(thread.id)}
-              onRename={(newTitle) => onRenameThread(thread.id, newTitle)}
-            />
-          ))}
-          {state.hasOverflowingThreads && (
-            <ProjectSidebarThreadOverflowToggle
-              expanded={state.expandedThreadList}
-              onToggle={() => state.setExpandedThreadList(!state.expandedThreadList)}
-            />
-          )}
-        </SidebarMenuSub>
+        <ProjectSidebarProjectThreadSection
+          projectId={project.id}
+          view={view}
+          visibleThreads={state.visibleThreads}
+          hasOverflowingThreads={state.hasOverflowingThreads}
+          expandedThreadList={state.expandedThreadList}
+          onExpandedThreadListChange={state.setExpandedThreadList}
+          onSelectThread={onSelectThread}
+          onDeleteThread={onDeleteThread}
+          onRenameThread={onRenameThread}
+        />
       )}
     </>
   );

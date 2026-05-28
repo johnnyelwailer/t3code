@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import type {
   ModelSelection,
   ProviderInteractionMode,
@@ -6,12 +7,18 @@ import type {
 } from "@t3tools/contracts";
 
 import { ContextAttachmentChip } from "~/t3work/components/t3work-ContextAttachmentChip";
-import { TicketKickoffComposer } from "~/t3work/t3work-TicketKickoffComposer";
+import {
+  TicketKickoffComposer,
+  type T3workKickoffComposerHandle,
+} from "~/t3work/t3work-TicketKickoffComposer";
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
+import type { T3workSelectedRecipeQuickStart } from "~/t3work/t3work-recipeQuickStartLaunch";
 import type { T3workThreadToolId } from "~/t3work/t3work-types";
 
-export function ProjectDashboardKickoffComposer(input: {
+type ProjectDashboardKickoffComposerProps = {
   prefillText?: string;
+  selectedRecipe?: T3workSelectedRecipeQuickStart;
+  onClearSelectedRecipe?: () => void;
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
   injectedContextAttachments: ReadonlyArray<T3WorkContextAttachment>;
@@ -23,7 +30,12 @@ export function ProjectDashboardKickoffComposer(input: {
     interactionMode: ProviderInteractionMode,
     selectedToolIds: ReadonlyArray<T3workThreadToolId>,
   ) => void;
-}) {
+};
+
+export const ProjectDashboardKickoffComposer = forwardRef<
+  T3workKickoffComposerHandle,
+  ProjectDashboardKickoffComposerProps
+>((input, ref) => {
   return (
     <div className="shrink-0 border-t border-border bg-background/75 p-3 sm:p-4">
       {input.injectedContextAttachments.length > 0 ? (
@@ -38,11 +50,18 @@ export function ProjectDashboardKickoffComposer(input: {
         </div>
       ) : null}
       <TicketKickoffComposer
+        ref={ref}
         {...(input.prefillText ? { prefillText: input.prefillText } : {})}
+        {...(input.selectedRecipe ? { selectedRecipe: input.selectedRecipe } : {})}
+        {...(input.onClearSelectedRecipe
+          ? { onClearSelectedRecipe: input.onClearSelectedRecipe }
+          : {})}
         providers={input.providers}
         isConnected={input.isConnected}
         onSubmit={input.onSubmit}
       />
     </div>
   );
-}
+});
+
+ProjectDashboardKickoffComposer.displayName = "ProjectDashboardKickoffComposer";

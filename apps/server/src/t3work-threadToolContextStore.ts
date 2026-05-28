@@ -18,26 +18,24 @@ export class T3workThreadToolContextStore extends Context.Service<
   T3workThreadToolContextStoreShape
 >()("t3/t3work/T3workThreadToolContextStore") {}
 
-const createT3workThreadToolContextStore = Effect.fn("createT3workThreadToolContextStore")(
-  function* () {
-    const contexts = new Map<ThreadId, T3workTurnToolContext>();
+const createT3workThreadToolContextStore = Effect.fn("createT3workThreadToolContextStore")(() => {
+  const contexts = new Map<ThreadId, T3workTurnToolContext>();
 
-    const get: T3workThreadToolContextStoreShape["get"] = (threadId) =>
-      Effect.sync(() => contexts.get(threadId));
+  const get: T3workThreadToolContextStoreShape["get"] = (threadId) =>
+    Effect.sync(() => contexts.get(threadId));
 
-    const put: T3workThreadToolContextStoreShape["put"] = ({ threadId, toolContext }) =>
-      Effect.sync(() => {
-        if (toolContext) {
-          contexts.set(threadId, toolContext);
-          return;
-        }
+  const put: T3workThreadToolContextStoreShape["put"] = ({ threadId, toolContext }) =>
+    Effect.sync(() => {
+      if (toolContext) {
+        contexts.set(threadId, toolContext);
+        return;
+      }
 
-        contexts.delete(threadId);
-      });
+      contexts.delete(threadId);
+    });
 
-    return { get, put } satisfies T3workThreadToolContextStoreShape;
-  },
-);
+  return Effect.succeed({ get, put } satisfies T3workThreadToolContextStoreShape);
+});
 
 export const T3workThreadToolContextStoreLive = Layer.effect(
   T3workThreadToolContextStore,

@@ -7,6 +7,7 @@ import { useProjectSidebarState } from "~/t3work/hooks/t3work-useProjectSidebarS
 import { useProjectStore } from "~/t3work/hooks/t3work-useProjectStore";
 import type { ViewState } from "~/t3work/t3work-types";
 import { AppOverlays } from "~/t3work/t3work-AppOverlays";
+import { T3workLeftSidebarDesktopToggle } from "~/t3work/t3work-LeftSidebarDesktopToggle";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 import { useAppHandlers } from "~/t3work/t3work-useAppHandlers";
 import { useResolvedViewSync } from "~/t3work/t3work-useResolvedViewSync";
@@ -162,6 +163,7 @@ export function App({
         </div>
         <SidebarRail />
       </Sidebar>
+      <T3workLeftSidebarDesktopToggle />
 
       <AppContentPane
         activeDashboardMode={activeDashboardMode}

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, type ReactNode } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
 
 import { SidebarTrigger } from "~/t3work/components/ui/t3work-sidebar";
 import { useT3WorkActiveChatStore } from "~/t3work/t3work-activeChatStore";
 import { createHomeProject } from "~/t3work/t3work-homeProject";
 import { ProjectDashboardKickoffAside } from "~/t3work/t3work-ProjectDashboardKickoffAside";
+import type { ProjectDashboardKickoffAsideProps } from "~/t3work/t3work-ProjectDashboardKickoffAsideTypes";
 import { ResizableRightSidebarLayout } from "~/t3work/t3work-ResizableRightSidebarLayout";
 import { T3workSetupWelcomeSurface } from "~/t3work/t3work-SetupWelcomeSurface";
+import { getT3workMainContentHeaderClassName } from "~/t3work/t3work-mainContentHeader";
 import {
   readActiveThreadIdFromView,
   type ProjectThread,
@@ -77,14 +78,20 @@ function ProjectBrowserEmpty({
   onCreate,
   content,
   showInlineCreateWizard = false,
+  shouldInsetDesktopHeader = false,
 }: {
   onCreate: () => void;
   content?: ReactNode;
   showInlineCreateWizard?: boolean;
+  shouldInsetDesktopHeader?: boolean;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <header className="drag-region flex h-13 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-5 wco:h-[env(titlebar-area-height)] wco:pl-[calc(env(titlebar-area-x)+1em)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]">
+      <header
+        className={getT3workMainContentHeaderClassName({
+          shouldInsetDesktopHeader,
+        })}
+      >
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
         <span className="text-sm font-medium text-muted-foreground/70">Set up t3work</span>
       </header>
@@ -111,6 +118,7 @@ export function ProjectBrowserEmptyWithChat({
   showAside = true,
   emptyContent,
   showInlineCreateWizard = false,
+  shouldInsetDesktopHeader = false,
 }: {
   onCreate: () => void;
   project: ProjectShellProject | null;
@@ -118,17 +126,11 @@ export function ProjectBrowserEmptyWithChat({
   providers: ReadonlyArray<import("@t3tools/contracts").ServerProvider>;
   isConnected: boolean;
   onOpenThread: (threadId: string) => void;
-  onKickoffThread: (
-    kickoffMessage: string,
-    kickoffModelSelection: import("@t3tools/contracts").ModelSelection,
-    kickoffRuntimeMode: import("@t3tools/contracts").RuntimeMode,
-    kickoffInteractionMode: import("@t3tools/contracts").ProviderInteractionMode,
-    selectedToolIds: ReadonlyArray<import("~/t3work/t3work-types").T3workThreadToolId>,
-    kickoffContextAttachments: ReadonlyArray<T3WorkContextAttachment>,
-  ) => void;
+  onKickoffThread: ProjectDashboardKickoffAsideProps["onKickoffThread"];
   showAside?: boolean;
   emptyContent?: ReactNode;
   showInlineCreateWizard?: boolean;
+  shouldInsetDesktopHeader?: boolean;
 }) {
   if (!showAside) {
     return (
@@ -136,6 +138,7 @@ export function ProjectBrowserEmptyWithChat({
         onCreate={onCreate}
         content={emptyContent}
         showInlineCreateWizard={showInlineCreateWizard}
+        shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       />
     );
   }
@@ -145,17 +148,21 @@ export function ProjectBrowserEmptyWithChat({
       storageKey="t3work_home_right_sidebar"
       defaultAsideWidth={28 * 16}
       minAsideWidth={24 * 16}
+      mobileMainLabel={showInlineCreateWizard ? "Setup" : "Home"}
+      mobileAsideLabel="Agent"
       main={
         <ProjectBrowserEmpty
           onCreate={onCreate}
           content={emptyContent}
           showInlineCreateWizard={showInlineCreateWizard}
+          shouldInsetDesktopHeader={shouldInsetDesktopHeader}
         />
       }
       aside={
         project ? (
           <ProjectDashboardKickoffAside
             project={project}
+            dashboardMode="backlog"
             projectThreads={projectThreads}
             activeThread={null}
             providers={providers}

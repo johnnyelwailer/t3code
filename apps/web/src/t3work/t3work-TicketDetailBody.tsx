@@ -3,7 +3,10 @@ import { ScrollArea } from "~/t3work/components/ui/t3work-scroll-area";
 import { t3SurfaceBackdrops } from "~/t3work/components/ui/t3work-surface";
 import { ResizableRightSidebarLayout } from "~/t3work/t3work-ResizableRightSidebarLayout";
 import { getTicketRightSidebarCollapsedStorageKey } from "~/t3work/t3work-rightSidebarPersistence";
-import { TicketDetailKickoffAside } from "~/t3work/t3work-TicketDetailKickoffAside";
+import {
+  TicketDetailKickoffAside,
+  type TicketDetailKickoffAsideProps,
+} from "~/t3work/t3work-TicketDetailKickoffAside";
 import { TicketDetailMainColumn } from "~/t3work/t3work-TicketDetailMainColumn";
 
 export function TicketDetailBody({
@@ -17,7 +20,7 @@ export function TicketDetailBody({
   ticketId: string;
   activeThreadId: string | undefined;
   mainColumnProps: ComponentProps<typeof TicketDetailMainColumn>;
-  kickoffAsideProps: ComponentProps<typeof TicketDetailKickoffAside>;
+  kickoffAsideProps: TicketDetailKickoffAsideProps;
 }) {
   return (
     <ResizableRightSidebarLayout
@@ -37,6 +40,9 @@ export function TicketDetailBody({
       className={t3SurfaceBackdrops.ticketContent}
       minAsideWidth={22 * 16}
       defaultAsideWidth={24 * 16}
+      mobileDefaultPanel={activeThreadId ? "aside" : "main"}
+      mobileMainLabel="Details"
+      mobileAsideLabel={activeThreadId ? "Chat" : "Agent"}
       main={
         <section
           className={`flex h-full min-h-0 flex-col border-b border-border ${t3SurfaceBackdrops.ticketMainColumn} lg:border-r lg:border-b-0`}

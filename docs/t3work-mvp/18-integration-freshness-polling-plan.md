@@ -41,6 +41,16 @@ It works with the current architecture:
 This gives us user-visible freshness now, while leaving room for a later server-owned sync
 loop if we decide an additive seam is worth adding.
 
+## Relationship to the Queryable Cache Model
+
+The cache this plan refreshes is the same local SQL store defined in
+[Epic 04 — Caching](./04-integration-platform.md#caching) and consumed by the
+`Queryable<T>` contract in [Epic 16](./16-action-recipes.md#context-reactive-queryable-surface).
+Polling lands fresh provider data into the SQL tables; the existing projection pipeline
+invalidates downstream subscribers (recipe discovery, Views, open workflow `collect-input`
+steps). A future server-owned sync loop swaps the _trigger_ of these writes (push instead
+of pull) without changing the cache shape or the consumer contract.
+
 ## Phase 1: Additive Client Polling
 
 Deliverables:

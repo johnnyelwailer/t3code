@@ -36,6 +36,7 @@
     "@t3tools/integrations-atlassian": "workspace:*",
     "@t3tools/integrations-core": "workspace:*",
     "@t3tools/project-context": "workspace:*",
+    "@t3tools/project-recipes": "workspace:*",
     "@t3tools/t3work-skill-packs": "workspace:*",
     "effect": "catalog:",
     "node-pty": "^1.1.0",

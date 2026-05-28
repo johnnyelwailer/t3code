@@ -1,9 +1,27 @@
 import type { T3workToolId } from "@t3tools/project-context/t3workToolCatalog";
+import type { ProjectRecipeKickoffProgram, RecipeSurface } from "@t3tools/project-recipes";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 
 export type T3workThreadToolId = T3workToolId;
 
 export type ProjectThreadDisplayMode = "embedded" | "thread";
+
+export type T3workKickoffWorkflow = {
+  readonly kind: "recipe";
+  readonly recipeId: string;
+  readonly recipeVersion?: string;
+  readonly parameters?: Readonly<Record<string, unknown>>;
+  readonly kickoff?: ProjectRecipeKickoffProgram;
+  readonly title: string;
+  readonly description: string;
+  readonly source: "bundled" | "project-local";
+  readonly surface: RecipeSurface;
+  readonly reason?: string;
+  readonly recipePath?: string;
+  readonly promptPath?: string;
+  readonly workflowPath?: string;
+  readonly allowedToolGroups?: ReadonlyArray<string>;
+};
 
 export type ProjectThread = {
   id: string;
@@ -23,6 +41,7 @@ export type ProjectThread = {
   kickoffRuntimeMode?: import("@t3tools/contracts").RuntimeMode;
   kickoffInteractionMode?: import("@t3tools/contracts").ProviderInteractionMode;
   selectedToolIds?: ReadonlyArray<T3workThreadToolId>;
+  kickoffWorkflow?: T3workKickoffWorkflow;
   status: "idle" | "running" | "completed" | "error";
 };
 

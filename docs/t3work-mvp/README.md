@@ -60,6 +60,7 @@ The user should be able to:
 - [Epic 12: Profiles And Skill Packs](./12-profiles-and-skill-packs.md)
 - [Epic 13: Resource References](./13-resource-references.md)
 - [Epic 14: Native Provider Tool Injection](./14-native-provider-tool-injection.md)
+- [Epic 15: Native Provider Tool Injection Additive Design](./15-native-provider-tool-injection-additive-design.md)
 - [Epic 16: Action Recipes](./16-action-recipes.md)
 - [Epic 17: Build-Time Localization Spike](./17-build-time-localization.md)
 - [Epic 18: Integration Freshness Polling Plan](./18-integration-freshness-polling-plan.md)

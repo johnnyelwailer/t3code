@@ -9,6 +9,12 @@ A dashboard is only one render location. The core primitive is the miniapp: a
 workspace-owned artifact with a manifest, React entrypoint, declared placements, and
 declared tool capabilities.
 
+The miniapp **is** the **View** primitive from [Epic 16](./16-action-recipes.md). A recipe
+action launcher (in the dashboard or side panel) and an interactive conversation card are
+both miniapps mounted at different placements (`action`, `conversation.inlineCard`,
+`conversation.sidecar`) — not separate UI mechanisms. Views, Workflows, Tools, and Context
+are the four shared primitives all `t3work` automation is built on; this epic owns Views.
+
 ## Product Model
 
 Miniapps should let users and agents extend the shell without changing core app code.
@@ -88,6 +94,12 @@ Every miniapp requires a manifest.
 
 The manifest is the review surface. It tells the shell where the miniapp may appear,
 which tools it may call, and which shell-provided component modules it expects.
+
+Consistent with the code-based direction in [Epic 16](./16-action-recipes.md), placement
+and tool declarations may also be expressed from a TypeScript plugin module rather than raw
+JSON. The declarative manifest is retained as a pre-execution review surface — the shell
+must be able to show placements and requested capabilities (and gate enablement) _before_
+running any miniapp code.
 
 ## Placements
 
@@ -206,7 +218,9 @@ export default function App() {
 
 The SDK should expose:
 
-- stable host context
+- stable host context (the same surface-typed reactive Context primitive defined in
+  [Epic 16 — Context: Reactive Queryable Surface](./16-action-recipes.md#context-reactive-queryable-surface);
+  field access in a miniapp is a subscription, identical to recipe discovery)
 - declared tool bridge
 - shell design system components
 - visualization components
@@ -228,7 +242,11 @@ components should be intentionally exported and versioned through the SDK.
 
 ## Tool Access
 
-Miniapps should use the same exposed-tool concept as agent workflows.
+Miniapps use the **single shared tool surface** — the same `T3workToolBroker` capability
+surface consumed by agent turns and workflow steps, scoped by the declared tool groups.
+There is no miniapp-specific tool API. The catalog, tool classes, and safety matrix are in
+[Epic 21](./21-context-tool-catalog.md); the recipe/workflow side is in
+[Epic 16](./16-action-recipes.md).
 
 They do not get raw filesystem, process, credential, or network access by default.
 Instead, they call declared tools through the shell:
@@ -249,20 +267,30 @@ Rules:
 
 ## Security And Isolation
 
-Miniapps are powerful user/workspace code, not trusted core app code.
+Miniapps are powerful user/workspace code. They follow the same **two-stage security
+model** as recipe scripts, defined in [Epic 16](./16-action-recipes.md#security-two-stages):
 
-Required constraints:
+- **Stage 1 — Trusted (current):** miniapps are trusted workspace code, evaluated
+  client-side. This is what ships first, consistent with project recipes being trusted
+  local code in the MVP.
+- **Stage 2 — Sandboxed (target):** miniapps run with no ambient capabilities; data and
+  actions flow only through host-injected props, the tool bridge, and typed events.
+
+The stage-2 constraints (build toward these now so the transition is "remove the escape
+hatches," not a rewrite):
 
 - run miniapps in an isolated runtime, likely a sandboxed iframe or equivalent boundary
 - load imports only from `@t3work/miniapp-sdk` and approved runtime shims
 - deny arbitrary package installs for the MVP
 - deny direct access to browser storage outside the miniapp namespace
 - pass data through structured host props and tool results
+- View actions emit typed events the workflow runtime handles, rather than calling tools
+  directly from the renderer
 - enforce timeouts and crash containment per placement
 - show manifest permissions before first enablement
 
-Later trusted workspaces may loosen some restrictions, but the default should be
-capability-gated.
+The declared tool groups are the single enforcement point: inert under stage 1, enforced
+under stage 2.
 
 ## Agent Workflow
 

@@ -7,8 +7,11 @@ import {
 import type {
   ProjectThread,
   ProjectThreadDisplayMode,
+  T3workKickoffWorkflow,
   T3workThreadToolId,
 } from "~/t3work/t3work-types";
+
+import { projectThreadsEqual } from "~/t3work/t3work-threadToolContextEquality";
 
 export type T3workTurnToolCapability = T3workToolCapability;
 
@@ -39,6 +42,9 @@ const TOOL_BY_ID = new Map<T3workThreadToolId, T3workTurnToolDescriptor>(
 );
 
 type CreateT3workTurnToolContextInput = {
+  kickoffMessage?: string;
+  kickoffPending?: boolean;
+  kickoffWorkflow?: T3workKickoffWorkflow;
   projectId: string;
   projectTitle: string;
   workspaceRoot?: string;
@@ -74,6 +80,35 @@ export function createT3workTurnToolContext(
         displayMode: input.displayMode ?? "thread",
         ...(input.ticketId ? { ticketId: input.ticketId } : {}),
       },
+      ...(input.kickoffMessage || input.kickoffWorkflow || input.kickoffPending !== undefined
+        ? {
+            kickoff: {
+              ...(input.kickoffMessage ? { message: input.kickoffMessage } : {}),
+              ...(input.kickoffPending !== undefined ? { pending: input.kickoffPending } : {}),
+              ...(input.kickoffWorkflow
+                ? {
+                    workflow: {
+                      kind: input.kickoffWorkflow.kind,
+                      recipeId: input.kickoffWorkflow.recipeId,
+                      ...(input.kickoffWorkflow.recipeVersion
+                        ? { recipeVersion: input.kickoffWorkflow.recipeVersion }
+                        : {}),
+                      ...(input.kickoffWorkflow.parameters
+                        ? { parameters: input.kickoffWorkflow.parameters }
+                        : {}),
+                      title: input.kickoffWorkflow.title,
+                      description: input.kickoffWorkflow.description,
+                      source: input.kickoffWorkflow.source,
+                      surface: input.kickoffWorkflow.surface,
+                      ...(input.kickoffWorkflow.reason
+                        ? { reason: input.kickoffWorkflow.reason }
+                        : {}),
+                    },
+                  }
+                : {}),
+            },
+          }
+        : {}),
     },
   };
 }
@@ -105,12 +140,13 @@ export function mergeProjectThreadLocalState(
     ...(existing.selectedToolIds !== undefined
       ? { selectedToolIds: existing.selectedToolIds }
       : {}),
+    ...(existing.kickoffWorkflow ? { kickoffWorkflow: existing.kickoffWorkflow } : {}),
   };
 }
 
 function projectThreadArraysEqual(
-  left: ReadonlyArray<T3workThreadToolId> | undefined,
-  right: ReadonlyArray<T3workThreadToolId> | undefined,
+  left: ReadonlyArray<string> | undefined,
+  right: ReadonlyArray<string> | undefined,
 ): boolean {
   if (left === right) {
     return true;
@@ -121,30 +157,6 @@ function projectThreadArraysEqual(
   }
 
   return left.every((value, index) => value === right[index]);
-}
-
-function projectThreadsEqual(left: ProjectThread, right: ProjectThread): boolean {
-  return (
-    left.id === right.id &&
-    left.projectId === right.projectId &&
-    left.parentThreadId === right.parentThreadId &&
-    left.ticketId === right.ticketId &&
-    left.ticketDisplayId === right.ticketDisplayId &&
-    left.dashboardMode === right.dashboardMode &&
-    left.displayMode === right.displayMode &&
-    left.title === right.title &&
-    left.messageCount === right.messageCount &&
-    left.lastMessageAt === right.lastMessageAt &&
-    left.createdAt === right.createdAt &&
-    left.kickoffMessage === right.kickoffMessage &&
-    left.kickoffPending === right.kickoffPending &&
-    left.kickoffModelSelection?.instanceId === right.kickoffModelSelection?.instanceId &&
-    left.kickoffModelSelection?.model === right.kickoffModelSelection?.model &&
-    left.kickoffRuntimeMode === right.kickoffRuntimeMode &&
-    left.kickoffInteractionMode === right.kickoffInteractionMode &&
-    left.status === right.status &&
-    projectThreadArraysEqual(left.selectedToolIds, right.selectedToolIds)
-  );
 }
 
 export function upsertProjectThreadLocalState(

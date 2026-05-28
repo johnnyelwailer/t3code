@@ -4,19 +4,16 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import { useAtlassianCurrentUserDisplayName } from "~/t3work/hooks/t3work-useAtlassianCurrentUserDisplayName";
 import { useProjectBacklog } from "~/t3work/hooks/t3work-useProjectBacklog";
 import { useTicketAgentContext } from "~/t3work/hooks/t3work-useTicketAgentContext";
+import { useProjectDashboardBacklogDerivedData } from "~/t3work/hooks/t3work-useProjectDashboardBacklogDerivedData";
 import { useProjectDashboardBacklogState } from "~/t3work/hooks/t3work-useProjectDashboardBacklogState";
 import { useProjectDashboardBacklogTableState } from "~/t3work/hooks/t3work-useProjectDashboardBacklogTableState";
 import { ProjectDashboardBacklogContent } from "~/t3work/t3work-ProjectDashboardBacklogContent";
 import { ProjectBacklogOverview } from "~/t3work/t3work-ProjectBacklogOverview";
 import {
-  buildProjectBacklogOwnershipGroups,
-  buildProjectBacklogPlanningLanes,
-  buildVisibleBacklogHierarchy,
-} from "~/t3work/t3work-projectBacklogPresentation";
-import {
-  buildProjectBacklogAssigneeFilterOptions,
-  filterProjectBacklogTickets,
-} from "~/t3work/t3work-projectBacklogUtils";
+  buildBacklogNeedsMyActionOutcome,
+  type T3workDashboardRecipeAction,
+  useRegisterT3workDashboardRecipeActionHandler,
+} from "~/t3work/t3work-dashboardRecipeActions";
 
 export function ProjectDashboardBacklogView({
   project,
@@ -70,28 +67,13 @@ export function ProjectDashboardBacklogView({
     hierarchyPresentation,
     ownershipGroups,
     planningLanes,
-  } = useMemo(() => {
-    const filteredTickets = filterProjectBacklogTickets({
-      tickets,
-      query: deferredQuery,
-      focusFilter: backlogState.focusFilter,
-      assigneeFilter: backlogState.assigneeFilter,
-    });
-
-    return {
-      filteredTickets,
-      assigneeOptions: buildProjectBacklogAssigneeFilterOptions(tickets, currentUserDisplayName),
-      hierarchyPresentation: buildVisibleBacklogHierarchy(tickets, filteredTickets),
-      planningLanes: buildProjectBacklogPlanningLanes(filteredTickets),
-      ownershipGroups: buildProjectBacklogOwnershipGroups(filteredTickets),
-    };
-  }, [
-    backlogState.assigneeFilter,
-    backlogState.focusFilter,
-    currentUserDisplayName,
-    deferredQuery,
+  } = useProjectDashboardBacklogDerivedData({
     tickets,
-  ]);
+    query: deferredQuery,
+    focusFilter: backlogState.focusFilter,
+    assigneeFilter: backlogState.assigneeFilter,
+    currentUserDisplayName,
+  });
   const { getTicketAgentContext, openTicketAgentContextMenu } = useTicketAgentContext({
     project,
     projectTickets: tickets,
@@ -110,6 +92,24 @@ export function ProjectDashboardBacklogView({
     requestCollapseTableGroups,
     requestExpandTableGroups,
   } = useProjectDashboardBacklogTableState({ setBacklogState });
+  useRegisterT3workDashboardRecipeActionHandler(
+    useCallback(
+      (action: T3workDashboardRecipeAction) => {
+        if (action.kind !== "focus-needs-my-action") {
+          return null;
+        }
+
+        const outcome = buildBacklogNeedsMyActionOutcome(backlogState, filteredTickets);
+        if (!outcome) {
+          return { applied: false };
+        }
+
+        setBacklogState(outcome.nextState);
+        return { applied: true, promptText: outcome.promptText };
+      },
+      [backlogState, filteredTickets, setBacklogState],
+    ),
+  );
 
   const isTableView = backlogState.viewMode === "table";
 

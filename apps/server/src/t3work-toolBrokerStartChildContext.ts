@@ -10,7 +10,6 @@ import {
   HIDDEN_T3WORK_DIR,
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
-  type LinkedRepositoryBootstrapResult,
 } from "./t3work-project-repository-utils.ts";
 import {
   buildChildBranchName,

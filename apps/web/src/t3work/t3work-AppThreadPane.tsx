@@ -62,6 +62,12 @@ export function AppThreadPane({
         : {})}
       title={resolvedThread?.title ?? "New thread"}
       {...(resolvedThread?.kickoffMessage ? { kickoffMessage: resolvedThread.kickoffMessage } : {})}
+      {...(resolvedThread?.kickoffPending !== undefined
+        ? { kickoffPending: resolvedThread.kickoffPending }
+        : {})}
+      {...(resolvedThread?.kickoffWorkflow
+        ? { kickoffWorkflow: resolvedThread.kickoffWorkflow }
+        : {})}
       {...(resolvedThread?.kickoffPending && resolvedThread.kickoffMessage
         ? { initialUserMessage: resolvedThread.kickoffMessage }
         : {})}

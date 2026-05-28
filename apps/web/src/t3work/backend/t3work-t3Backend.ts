@@ -14,6 +14,12 @@ import {
   createGitHubPollingBackendApi,
 } from "./t3work-pollingBackend";
 import { postJson, resolveHttpBaseUrl, resolveWsUrl } from "./t3work-t3BackendHttp";
+import type {
+  LaunchProjectRecipeWorkflowRequest,
+  LaunchProjectRecipeWorkflowResponse,
+  SubmitProjectRecipeCardActionRequest,
+  SubmitProjectRecipeCardActionResponse,
+} from "@t3tools/project-recipes";
 
 export function createT3Backend(wsBaseUrl: string): BackendApi {
   const httpBaseUrl = resolveHttpBaseUrl(wsBaseUrl);
@@ -81,6 +87,22 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     );
   }
 
+  async function launchRecipeWorkflow(input: LaunchProjectRecipeWorkflowRequest) {
+    return postJson<LaunchProjectRecipeWorkflowRequest, LaunchProjectRecipeWorkflowResponse>(
+      httpBaseUrl,
+      "/api/t3work/thread/recipe-workflow/launch",
+      input,
+    );
+  }
+
+  async function submitRecipeCardAction(input: SubmitProjectRecipeCardActionRequest) {
+    return postJson<SubmitProjectRecipeCardActionRequest, SubmitProjectRecipeCardActionResponse>(
+      httpBaseUrl,
+      "/api/t3work/thread/recipe-workflow/card-action",
+      input,
+    );
+  }
+
   const atlassian = {
     ...createAtlassianBackendApi(httpBaseUrl),
     ...createAtlassianPollingBackendApi(httpBaseUrl),
@@ -98,6 +120,8 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     connect,
     disconnect,
     dispatchCommand: dispatch,
+    launchRecipeWorkflow,
+    submitRecipeCardAction,
     listThreadPlacements,
     syncThreadToolContext,
     atlassian,

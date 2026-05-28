@@ -34,6 +34,19 @@ beforeEach(() => {
 });
 
 describe("useT3WorkAddToChatStore", () => {
+  it("dedupes thread attachments by dedupe key even when attachment ids differ", () => {
+    const request = createRequest();
+    const firstAttachment = buildPendingContextAttachment({ request, id: "att-1" });
+    const duplicateAttachment = buildPendingContextAttachment({ request, id: "att-2" });
+
+    useT3WorkAddToChatStore.getState().enqueueThreadAttachment("thread-1", firstAttachment);
+    useT3WorkAddToChatStore.getState().enqueueThreadAttachment("thread-1", duplicateAttachment);
+
+    expect(useT3WorkAddToChatStore.getState().threadAttachmentsByThreadId["thread-1"]).toEqual([
+      firstAttachment,
+    ]);
+  });
+
   it("replaces thread attachments and clears sync sources when removed", () => {
     const request = createRequest();
     const pendingAttachment = buildPendingContextAttachment({ request, id: "att-1" });

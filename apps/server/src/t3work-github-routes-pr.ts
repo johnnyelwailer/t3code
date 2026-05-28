@@ -159,20 +159,31 @@ export function enrichPullRequestState(
       if (!item.subjectUrl) return Effect.succeed(item);
       if (!isPullRequest) {
         const fallbackUrl = toGitHubWebUrl(host, item.repository, item.subjectUrl);
-        return Effect.succeed({ ...item, ...(fallbackUrl ? { subjectUrl: fallbackUrl } : {}) });
+        return Effect.succeed(
+          fallbackUrl ? Object.assign({}, item, { subjectUrl: fallbackUrl }) : item,
+        );
       }
 
       return fetchPullRequestState(vcs, host, item.repository, item.subjectUrl, account).pipe(
-        Effect.map((stateData) => ({
-          ...item,
-          ...(stateData.subjectUrl ? { subjectUrl: stateData.subjectUrl } : {}),
-          ...(stateData.subjectBranch ? { subjectBranch: stateData.subjectBranch } : {}),
-          ...(stateData.authorLogin ? { authorLogin: stateData.authorLogin } : {}),
-          ...(typeof stateData.reviewRequested === "boolean"
-            ? { reviewRequested: stateData.reviewRequested }
-            : {}),
-          ...(stateData.subjectState ? { subjectState: stateData.subjectState } : {}),
-        })),
+        Effect.map((stateData) => {
+          const nextItem = Object.assign({}, item);
+          if (stateData.subjectUrl) {
+            Object.assign(nextItem, { subjectUrl: stateData.subjectUrl });
+          }
+          if (stateData.subjectBranch) {
+            Object.assign(nextItem, { subjectBranch: stateData.subjectBranch });
+          }
+          if (stateData.authorLogin) {
+            Object.assign(nextItem, { authorLogin: stateData.authorLogin });
+          }
+          if (typeof stateData.reviewRequested === "boolean") {
+            Object.assign(nextItem, { reviewRequested: stateData.reviewRequested });
+          }
+          if (stateData.subjectState) {
+            Object.assign(nextItem, { subjectState: stateData.subjectState });
+          }
+          return nextItem;
+        }),
       );
     },
     { concurrency: 4 },

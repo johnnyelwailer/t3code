@@ -139,11 +139,12 @@ export function useAppHandlers({
         ...(input.dashboardMode ? { dashboardMode: input.dashboardMode } : {}),
         title: "Project kickoff",
         kickoffMessage: input.kickoffMessage,
-        kickoffPending: true,
+        kickoffPending: input.kickoffPending ?? true,
         kickoffModelSelection: input.kickoffModelSelection,
         kickoffRuntimeMode: input.kickoffRuntimeMode,
         kickoffInteractionMode: input.kickoffInteractionMode,
         selectedToolIds: input.selectedToolIds,
+        ...(input.kickoffWorkflow ? { kickoffWorkflow: input.kickoffWorkflow } : {}),
       });
       enqueueThreadKickoffAttachments(thread.id, input.kickoffContextAttachments);
       onOpenDashboard?.(resolvedProjectId, input.dashboardMode, thread.id);

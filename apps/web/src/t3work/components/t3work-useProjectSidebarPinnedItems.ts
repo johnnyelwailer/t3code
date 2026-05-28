@@ -1,12 +1,17 @@
 import { useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { useShallow } from "zustand/react/shallow";
 
+import { selectProjectsAcrossEnvironments, useStore } from "~/store";
+import type { Project } from "~/types";
+import { loadStoredProjects } from "~/t3work/hooks/t3work-projectStoreUtils";
+import {
+  resolveCanonicalProjectId,
+  resolveStoredProjectId,
+} from "~/t3work/hooks/t3work-threadBridge";
 import { useT3WorkPinnedSidebarStore } from "~/t3work/t3work-pinnedSidebarStore";
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
-import {
-  buildTicketSidebarPinnedItem,
-  type T3WorkSidebarPinnedItem,
-} from "~/t3work/t3work-sidebarPinningTypes";
+import type { T3WorkSidebarPinnedItem } from "~/t3work/t3work-sidebarPinningTypes";
 import { buildProjectTicketLookup } from "~/t3work/t3work-ticketLookup";
 import type { ProjectThread, ProjectTicket } from "~/t3work/t3work-types";
 import {
@@ -41,18 +46,46 @@ type ResolvedGitHubActivityById = ReadonlyMap<
   { item: GitHubWorkActivityItem; linkedWorkItem: ProjectTicket | null }
 >;
 
+export function resolveProjectSidebarPinnedProjectIds(input: {
+  project: ProjectShellProject;
+  storedProjects: ReadonlyArray<ProjectShellProject>;
+  liveProjects: ReadonlyArray<Project>;
+}): readonly string[] {
+  return [
+    ...new Set(
+      [
+        input.project.id,
+        resolveStoredProjectId(input.project.id, input.storedProjects, input.liveProjects),
+        resolveCanonicalProjectId(input.project, input.liveProjects),
+      ].filter(
+        (projectId): projectId is string => typeof projectId === "string" && projectId.length > 0,
+      ),
+    ),
+  ];
+}
+
 export function resolveProjectSidebarPinnedItems(input: {
   projectId: string;
+  projectIdAliases?: ReadonlyArray<string>;
   pinnedSidebarItems: ReadonlyArray<T3WorkSidebarPinnedItem>;
   ticketLookup: ReadonlyMap<string, ProjectTicket>;
   ticketThreadsById: ReadonlyMap<string, SidebarPinnedTicketThreadFallback>;
   githubActivityById: ResolvedGitHubActivityById;
 }): ResolvedPinnedSidebarItem[] {
   const resolvedItems: ResolvedPinnedSidebarItem[] = [];
-  const resolvedPinnedItemIds = new Set<string>();
+  const resolvedEntityKeys = new Set<string>();
+  const matchingProjectIds = new Set([input.projectId, ...(input.projectIdAliases ?? [])]);
 
   for (const pinnedItem of input.pinnedSidebarItems) {
-    if (pinnedItem.projectId !== input.projectId) {
+    if (!matchingProjectIds.has(pinnedItem.projectId)) {
+      continue;
+    }
+
+    const entityKey =
+      pinnedItem.kind === "jira-work-item"
+        ? `jira-work-item:${pinnedItem.ticketId}`
+        : `github-activity:${pinnedItem.activityId}`;
+    if (resolvedEntityKeys.has(entityKey)) {
       continue;
     }
 
@@ -61,7 +94,7 @@ export function resolveProjectSidebarPinnedItems(input: {
       const ticketThreads = input.ticketThreadsById.get(pinnedItem.ticketId)?.ticketThreads ?? [];
       if (ticket) {
         resolvedItems.push({ kind: "jira-work-item", pinnedItem, ticket, ticketThreads });
-        resolvedPinnedItemIds.add(pinnedItem.id);
+        resolvedEntityKeys.add(entityKey);
         continue;
       }
 
@@ -75,7 +108,7 @@ export function resolveProjectSidebarPinnedItems(input: {
           title: fallback.title,
           ticketThreads: fallback.ticketThreads,
         });
-        resolvedPinnedItemIds.add(pinnedItem.id);
+        resolvedEntityKeys.add(entityKey);
       }
       continue;
     }
@@ -88,7 +121,7 @@ export function resolveProjectSidebarPinnedItems(input: {
         item: githubActivity.item,
         linkedWorkItem: githubActivity.linkedWorkItem,
       });
-      resolvedPinnedItemIds.add(pinnedItem.id);
+      resolvedEntityKeys.add(entityKey);
     }
   }
 
@@ -110,11 +143,21 @@ export function useProjectSidebarPinnedItems(input: {
     unlinkedGitHubActivityItems,
   } = input;
   const pinnedSidebarItems = useT3WorkPinnedSidebarStore((state) => state.items);
+  const liveProjects = useStore(useShallow(selectProjectsAcrossEnvironments));
 
   const ticketLookup = useMemo(() => buildProjectTicketLookup(projectTickets), [projectTickets]);
   const ticketThreadsById = useMemo(
     () => buildPinnedTicketThreadFallbacks(projectThreads, ticketLookup),
     [projectThreads, ticketLookup],
+  );
+  const projectIdAliases = useMemo(
+    () =>
+      resolveProjectSidebarPinnedProjectIds({
+        project,
+        storedProjects: loadStoredProjects(),
+        liveProjects,
+      }).filter((projectId) => projectId !== project.id),
+    [liveProjects, project],
   );
   const githubActivityById = useMemo(() => {
     const resolvedItems = new Map<
@@ -139,11 +182,19 @@ export function useProjectSidebarPinnedItems(input: {
     () =>
       resolveProjectSidebarPinnedItems({
         projectId: project.id,
+        projectIdAliases,
         pinnedSidebarItems,
         ticketLookup,
         ticketThreadsById,
         githubActivityById,
       }),
-    [githubActivityById, pinnedSidebarItems, project.id, ticketLookup, ticketThreadsById],
+    [
+      githubActivityById,
+      pinnedSidebarItems,
+      project.id,
+      projectIdAliases,
+      ticketLookup,
+      ticketThreadsById,
+    ],
   );
 }

@@ -1,4 +1,8 @@
 import type {
+  DiscoverProjectRecipesRequest,
+  DiscoverProjectRecipesResponse,
+} from "@t3tools/project-recipes";
+import type {
   GitHubBackendApi,
   GitHubInboxDiscoverResponse,
   ProjectWorkspaceContextFile,
@@ -56,6 +60,13 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       return postJson<typeof input, ProjectWorkspaceBootstrapResult>(
         httpBaseUrl,
         "/api/t3work/project/workspace/bootstrap",
+        input,
+      );
+    },
+    discoverRecipes(input: DiscoverProjectRecipesRequest): Promise<DiscoverProjectRecipesResponse> {
+      return postJson<DiscoverProjectRecipesRequest, DiscoverProjectRecipesResponse>(
+        httpBaseUrl,
+        "/api/t3work/project/workspace/recipes/discover",
         input,
       );
     },

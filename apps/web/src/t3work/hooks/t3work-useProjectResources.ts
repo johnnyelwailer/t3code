@@ -54,12 +54,16 @@ export function useProjectResources(project: ProjectShellProject) {
         throw new Error("Missing cached Atlassian resources for unchanged poll result.");
       }
       const nextCheckedAt = Date.now();
-      setResources(page);
-      setLastCheckedAt(nextCheckedAt);
+      setResources((current) => (current === page ? current : page));
       writeIntegrationCache(cacheKey, page, {
         fingerprint: result.fingerprint,
         updatedAt: nextCheckedAt,
       });
+
+      // Keep cache freshness for poll scheduling, but skip timeline churn when the payload is unchanged.
+      if (!result.unchanged || cachedRecord?.updatedAt === undefined) {
+        setLastCheckedAt(nextCheckedAt);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load resources");
     } finally {

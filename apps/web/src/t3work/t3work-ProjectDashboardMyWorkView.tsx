@@ -5,6 +5,7 @@ import { ProjectDashboardUnmatchedActivity } from "~/t3work/t3work-ProjectDashbo
 import { ProjectMyWorkContent } from "~/t3work/t3work-ProjectMyWorkContent";
 import { ProjectMyWorkFilterBar } from "~/t3work/t3work-ProjectMyWorkFilterBar";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
+import { useProjectDashboardMyWorkRecipeSupport } from "~/t3work/hooks/t3work-useProjectDashboardMyWorkRecipeSupport";
 import { useProjectGitHubActivity } from "~/t3work/hooks/t3work-useProjectGitHubActivity";
 import { useProjectKanbanStatusMutation } from "~/t3work/hooks/t3work-useProjectKanbanStatusMutation";
 import { useProjectMyWorkState } from "~/t3work/hooks/t3work-useProjectMyWorkState";
@@ -72,6 +73,28 @@ export function ProjectDashboardMyWorkView({
   const { canMoveTickets, moveTicketToStatus } = useProjectKanbanStatusMutation({
     project,
     reloadTickets,
+  });
+  useProjectDashboardMyWorkRecipeSupport({
+    state: {
+      query,
+      viewMode,
+      groupMode,
+      statusCategory,
+      showGitHubActivity,
+      hiddenKanbanColumnIds,
+      hasCustomizedKanbanLanes: hiddenKanbanColumnIds.length > 0,
+      excludedTypeKeys,
+      selectedPriority,
+      selectedStatus,
+      tableSortBy,
+      tableSortDirection,
+    },
+    filteredWorkItems,
+    setQuery,
+    setStatusCategory,
+    setShowGitHubActivity,
+    setSelectedPriority,
+    setSelectedStatus,
   });
 
   return (

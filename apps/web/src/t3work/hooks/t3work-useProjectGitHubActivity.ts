@@ -11,6 +11,10 @@ import {
   type GitHubWorkActivityItem,
 } from "~/t3work/t3work-githubActivity";
 import {
+  areGitHubActivityItemsEqual,
+  type ProjectGitHubActivityCache,
+} from "./t3work-projectGitHubActivityShared";
+import {
   normalizeCacheList,
   readIntegrationCache,
   writeIntegrationCache,
@@ -20,14 +24,6 @@ import {
   GITHUB_ACTIVITY_POLL_INTERVAL_MS,
   startBrowserPolling,
 } from "./t3work-integrationPolling";
-
-type ProjectGitHubActivityCache = {
-  readonly host: string;
-  readonly account?: string;
-  readonly warning?: string;
-  readonly suggestedRepositoryCount: number;
-  readonly activityItems: ReadonlyArray<GitHubWorkActivityItem>;
-};
 
 type UseProjectGitHubActivityOptions = {
   readonly project: ProjectShellProject;
@@ -88,18 +84,21 @@ export function useProjectGitHubActivity({
       const cachedRecord = readIntegrationCache<ProjectGitHubActivityCache>(cacheKey);
       setLoading(cachedRecord?.value == null);
       try {
-        let resolvedHost = "github.com";
-        let discoveredAccount: string | undefined;
-        const localApi = readLocalApi();
-        if (localApi) {
-          const discovery = await localApi.server.discoverSourceControl();
-          resolvedHost = parseGitHubHostFromDiscovery(discovery);
-          const githubProvider = discovery.sourceControlProviders.find(
-            (provider) => provider.kind === "github",
-          );
-          discoveredAccount = githubProvider
-            ? parseOptionString(githubProvider.auth.account)
-            : undefined;
+        // Prefer cached metadata and avoid rediscovering source control on every poll cycle.
+        let resolvedHost = cachedRecord?.value.host ?? host;
+        let discoveredAccount = cachedRecord?.value.account ?? account;
+        if (!resolvedHost || resolvedHost === "github.com") {
+          const localApi = readLocalApi();
+          if (localApi) {
+            const discovery = await localApi.server.discoverSourceControl();
+            resolvedHost = parseGitHubHostFromDiscovery(discovery);
+            const githubProvider = discovery.sourceControlProviders.find(
+              (provider) => provider.kind === "github",
+            );
+            discoveredAccount = githubProvider
+              ? parseOptionString(githubProvider.auth.account)
+              : discoveredAccount;
+          }
         }
 
         const response = await backend.github.pollInbox({
@@ -137,12 +136,24 @@ export function useProjectGitHubActivity({
           fingerprint: response.fingerprint,
           updatedAt: nextCheckedAt,
         });
-        setHost(nextCache.host);
-        setAccount(nextCache.account);
-        setWarning(nextCache.warning);
-        setSuggestedRepositoryCount(nextCache.suggestedRepositoryCount);
-        setActivityItems(nextCache.activityItems);
-        setLastCheckedAt(nextCheckedAt);
+        setHost((current) => (current === nextCache.host ? current : nextCache.host));
+        setAccount((current) => (current === nextCache.account ? current : nextCache.account));
+        setWarning((current) => (current === nextCache.warning ? current : nextCache.warning));
+        setSuggestedRepositoryCount((current) =>
+          current === nextCache.suggestedRepositoryCount
+            ? current
+            : nextCache.suggestedRepositoryCount,
+        );
+        setActivityItems((current) =>
+          areGitHubActivityItemsEqual(current, nextCache.activityItems)
+            ? current
+            : nextCache.activityItems,
+        );
+
+        // Keep polling cadence fresh via cache timestamp, but avoid minute-level UI churn when data is unchanged.
+        if (!response.unchanged || cachedRecord?.updatedAt === undefined) {
+          setLastCheckedAt(nextCheckedAt);
+        }
       } catch (error) {
         if (cancelled) return;
         setWarning(error instanceof Error ? error.message : "Unable to load GitHub activity");
@@ -171,6 +182,8 @@ export function useProjectGitHubActivity({
     linkedRepositoryUrls,
     project.source.externalProjectKey,
     project.title,
+    account,
+    host,
   ]);
 
   const activityByWorkItem = useMemo(

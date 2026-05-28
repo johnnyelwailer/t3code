@@ -43,8 +43,10 @@ Profiles affect:
 
 ### Skill Pack
 
-A skill pack is a bundle of recipes, action recipe templates, prompt blocks, artifact
-templates, and tool permissions for a type of work.
+A skill pack is a bundle of recipes (authored as `recipe.ts` plugin modules), prompt
+blocks, artifact templates, and tool-group permissions for a type of work. A skill pack's
+recipes are bundled-source recipes — the same recipe model as project-local recipes, just
+shipped with the app (see [Epic 16](./16-action-recipes.md)).
 
 Examples:
 

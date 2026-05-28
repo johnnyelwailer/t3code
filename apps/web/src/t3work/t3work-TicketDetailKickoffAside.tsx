@@ -1,22 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ServerProvider } from "@t3tools/contracts";
-import type { ProjectShellProject } from "@t3tools/project-context";
-import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
+import { useMemo } from "react";
+import { useBackend } from "~/t3work/backend/t3work-index";
 import { readProjectSetupProfileIdFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
+import { useAtlassianCurrentUserDisplayName } from "~/t3work/hooks/t3work-useAtlassianCurrentUserDisplayName";
 import { TicketKickoffComposer } from "~/t3work/t3work-TicketKickoffComposer";
 import { TicketKickoffPanel } from "~/t3work/t3work-TicketKickoffPanel";
-import { useT3WorkAddToChatStore, buildKickoffQueueKey } from "~/t3work/t3work-addToChatStore";
-import { mergeContextAttachmentsById } from "~/t3work/t3work-contextAttachmentMerge";
 import { EmbeddedThreadAside } from "~/t3work/t3work-EmbeddedThreadAside";
-import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
-import type { TicketKickoffThreadInput } from "~/t3work/t3work-kickoffTypes";
+import { buildTicketLinkedResources } from "~/t3work/t3work-ticketDetailKickoffLinkedResources";
+import type { TicketDetailKickoffAsideProps } from "~/t3work/t3work-TicketDetailKickoffAside.types";
+import { buildTicketRecipeContext } from "~/t3work/t3work-ticketDetailKickoffRecipeContext";
+import { useTicketKickoffInjectedContextAttachments } from "~/t3work/t3work-useTicketKickoffInjectedContextAttachments";
 import { runT3workViewTransition } from "~/t3work/t3work-runViewTransition";
-import { buildT3workSidecarRecipeQuickStarts } from "~/t3work/t3work-sidecarRecipes";
-import type { ProjectThread } from "~/t3work/t3work-types";
+import { useT3workSidecarRecipeQuickStarts } from "~/t3work/t3work-sidecarRecipes";
+
+export type { TicketDetailKickoffAsideProps } from "~/t3work/t3work-TicketDetailKickoffAside.types";
 
 export function TicketDetailKickoffAside({
   project,
   displayId,
+  ticketTitle,
+  ticket,
+  ticketStatus,
+  ticketRelationshipKeys,
+  relatedTickets,
+  jiraIssueType,
+  ticketPriority,
   issueThreads,
   projectId,
   projectTitle,
@@ -30,62 +37,70 @@ export function TicketDetailKickoffAside({
   onOpenFullThread,
   onThreadKickoffConsumed,
   onKickoffThread,
-}: {
-  project: ProjectShellProject;
-  displayId: string;
-  issueThreads: ProjectThread[];
-  projectId: string;
-  projectTitle: string;
-  projectWorkspaceRoot?: string;
-  ticketId: string;
-  activeThread: ProjectThread | null;
-  githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
-  providers: ReadonlyArray<ServerProvider>;
-  isConnected: boolean;
-  onOpenThread: (projectId: string, threadId: string) => void;
-  onOpenFullThread?: (projectId: string, threadId: string) => void;
-  onThreadKickoffConsumed: (threadId: string) => void;
-  onKickoffThread: (input: TicketKickoffThreadInput) => void;
-}) {
-  const [injectedContextAttachments, setInjectedContextAttachments] = useState<
-    readonly T3WorkContextAttachment[]
-  >([]);
-  const kickoffQueueKey = useMemo(
-    () => buildKickoffQueueKey(projectId, ticketId),
-    [projectId, ticketId],
-  );
-  const quickStartRecipes = useMemo(
+}: TicketDetailKickoffAsideProps) {
+  const backend = useBackend();
+  const injectedContextAttachments = useTicketKickoffInjectedContextAttachments({
+    projectId,
+    ticketId,
+  });
+  const currentUserDisplayName = useAtlassianCurrentUserDisplayName(project.source.accountId);
+  const ticketRecipeContext = useMemo(
     () =>
-      buildT3workSidecarRecipeQuickStarts({
-        surface: "workitem.detail.sidepanel",
-        project,
-        profileId: readProjectSetupProfileIdFromProject(project),
-        selectedWorkLabel: displayId,
-        resourceKind: "ticket",
-        availableIntegrations: githubActivityItems.length > 0 ? ["github"] : [],
-        availableContextKeys: ["project.summary", "ticket.summary"],
+      buildTicketRecipeContext({
+        ticket,
+        ticketStatus,
+        ticketRelationshipKeys,
+        githubActivityItems,
+        ...(project.source.accountId ? { currentUserAccountId: project.source.accountId } : {}),
+        ...(currentUserDisplayName ? { currentUserDisplayName } : {}),
       }),
-    [displayId, githubActivityItems.length, project],
+    [
+      currentUserDisplayName,
+      githubActivityItems,
+      project.source.accountId,
+      ticket,
+      ticketRelationshipKeys,
+      ticketStatus,
+    ],
   );
-  const pendingKickoffCount = useT3WorkAddToChatStore(
-    (state) => (state.pendingByKickoffKey[kickoffQueueKey] ?? []).length,
-  );
-
-  useEffect(() => {
-    if (pendingKickoffCount === 0) {
-      return;
-    }
-    const drained = useT3WorkAddToChatStore.getState().drainKickoff(projectId, ticketId);
-    if (drained.length === 0) {
-      return;
-    }
-    setInjectedContextAttachments((current) =>
-      mergeContextAttachmentsById({
-        current,
-        incoming: drained.map((item) => item.attachment),
+  const recipeLinkedResources = useMemo(
+    () =>
+      buildTicketLinkedResources({
+        relatedTickets,
+        ticketRelationshipKeys,
+        githubActivityItems,
       }),
-    );
-  }, [pendingKickoffCount, projectId, ticketId]);
+    [githubActivityItems, relatedTickets, ticketRelationshipKeys],
+  );
+  const quickStartRecipeInput = useMemo(
+    () => ({
+      backend,
+      surface: "workitem.detail.sidepanel" as const,
+      project,
+      profileId: readProjectSetupProfileIdFromProject(project),
+      selectedWorkLabel: displayId,
+      selectedWorkTitle: ticketTitle,
+      resourceKind: "ticket" as const,
+      jiraIssueType,
+      workitemPriority: ticketPriority,
+      ticketContext: ticketRecipeContext,
+      linkedResources: recipeLinkedResources,
+      availableIntegrations: githubActivityItems.length > 0 ? (["github"] as const) : [],
+      availableContextKeys: ["project.summary", "ticket.summary"] as const,
+    }),
+    [
+      backend,
+      displayId,
+      githubActivityItems.length,
+      jiraIssueType,
+      project,
+      recipeLinkedResources,
+      ticketPriority,
+      ticketRecipeContext,
+      ticketTitle,
+    ],
+  );
+  const quickStartRecipes = useT3workSidecarRecipeQuickStarts(quickStartRecipeInput);
 
   if (activeThread) {
     return (
@@ -115,11 +130,13 @@ export function TicketDetailKickoffAside({
         }
         onKickoff={(
           instruction,
+          kickoffPending,
           kickoffModelSelection,
           kickoffRuntimeMode,
           kickoffInteractionMode,
           selectedToolIds,
           kickoffContextAttachments,
+          kickoffWorkflow,
         ) => {
           runT3workViewTransition(() => {
             onKickoffThread({
@@ -128,17 +145,28 @@ export function TicketDetailKickoffAside({
               ticketDisplayId: displayId,
               githubActivityItems,
               kickoffMessage: instruction,
+              ...(kickoffPending !== undefined ? { kickoffPending } : {}),
               kickoffModelSelection,
               kickoffRuntimeMode,
               kickoffInteractionMode,
               selectedToolIds,
               kickoffContextAttachments,
+              ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
             });
           });
         }}
-        renderComposer={({ prefillText, onSubmit }) => (
+        renderComposer={({
+          composerRef,
+          prefillText,
+          selectedRecipe,
+          onClearSelectedRecipe,
+          onSubmit,
+        }) => (
           <TicketKickoffComposer
+            ref={composerRef}
             {...(prefillText ? { prefillText } : {})}
+            {...(selectedRecipe ? { selectedRecipe } : {})}
+            {...(onClearSelectedRecipe ? { onClearSelectedRecipe } : {})}
             providers={providers}
             isConnected={isConnected}
             onSubmit={onSubmit}

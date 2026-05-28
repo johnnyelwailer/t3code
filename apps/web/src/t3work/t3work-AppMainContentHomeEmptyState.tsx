@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
-import type {
-  ModelSelection,
-  ProviderInteractionMode,
-  RuntimeMode,
-  ServerProvider,
-} from "@t3tools/contracts";
+import type { ServerProvider } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { CreateProjectDialog } from "~/t3work/t3work-CreateProjectDialog";
-import type { ProjectKickoffThreadInput } from "~/t3work/t3work-kickoffTypes";
+import type { ProjectDashboardKickoffAsideProps } from "~/t3work/t3work-ProjectDashboardKickoffAsideTypes";
 import type { ProjectThread } from "~/t3work/t3work-types";
 import { runT3workViewTransition } from "~/t3work/t3work-runViewTransition";
 
@@ -19,6 +14,7 @@ export function AppMainContentHomeEmptyState({
   onInlineProjectCreated,
   showInitialSetup,
   showAside,
+  shouldInsetDesktopHeader = false,
   homeChatProject,
   homeChatProjectThreads,
   providers,
@@ -30,19 +26,13 @@ export function AppMainContentHomeEmptyState({
   onInlineProjectCreated: (project: ProjectShellProject) => void;
   showInitialSetup: boolean;
   showAside: boolean;
+  shouldInsetDesktopHeader?: boolean;
   homeChatProject: ProjectShellProject | null;
   homeChatProjectThreads: ProjectThread[];
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
   onOpenHomeThread: (threadId: string) => void;
-  onKickoffHomeThread: (
-    kickoffMessage: string,
-    kickoffModelSelection: ModelSelection,
-    kickoffRuntimeMode: RuntimeMode,
-    kickoffInteractionMode: ProviderInteractionMode,
-    selectedToolIds: ProjectKickoffThreadInput["selectedToolIds"],
-    kickoffContextAttachments: ProjectKickoffThreadInput["kickoffContextAttachments"],
-  ) => void;
+  onKickoffHomeThread: ProjectDashboardKickoffAsideProps["onKickoffThread"];
 }) {
   const [showInlineCreateWizard, setShowInlineCreateWizard] = useState(false);
 
@@ -63,6 +53,7 @@ export function AppMainContentHomeEmptyState({
           : onCreate
       }
       showAside={showAside}
+      shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       emptyContent={
         showInlineCreateWizard ? (
           <CreateProjectDialog

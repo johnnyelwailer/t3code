@@ -1,7 +1,8 @@
 import { useCallback, useMemo } from "react";
-import type { MouseEvent } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { useShallow } from "zustand/react/shallow";
 
+import { selectProjectsAcrossEnvironments, useStore } from "~/store";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { useAgentContext } from "~/t3work/hooks/t3work-useAgentContext";
 import { useT3WorkPinnedSidebarStore } from "~/t3work/t3work-pinnedSidebarStore";
@@ -10,13 +11,21 @@ import { buildProjectTicketHierarchy } from "~/t3work/t3work-ticketHierarchy";
 import {
   buildGitHubActivitySidebarPinnedItem,
   buildTicketSidebarPinnedItem,
-  buildTicketSidebarPinnedItemId,
 } from "~/t3work/t3work-sidebarPinningTypes";
 import {
   buildGitHubActivityAgentContextCapabilities,
   buildTicketAgentContextCapabilities,
 } from "~/t3work/t3work-ticketAgentContext";
 import type { ProjectTicket } from "~/t3work/t3work-types";
+import { useTicketAgentContextMenus } from "~/t3work/hooks/t3work-useTicketAgentContextMenus";
+import {
+  buildTicketPathPinnedSidebarItemIds,
+  buildTicketSubtreePinnedSidebarItemIds,
+  findPinnedGitHubActivitySidebarItem,
+  findPinnedTicketSidebarItem,
+  findPinnedTicketSubtreeItemIds,
+  resolveTicketAgentContextPinnedProjectState,
+} from "./t3work-ticketSidebarPinState";
 
 const emptyGitHubActivityByWorkItem = new Map<string, readonly GitHubWorkActivityItem[]>();
 
@@ -33,48 +42,14 @@ export function useTicketAgentContext(input: {
   const backend = useBackend();
   const { showAgentContextMenu, showAgentContextMenuAt } = useAgentContext();
   const pinnedSidebarItems = useT3WorkPinnedSidebarStore((state) => state.items);
-  const pinnedItemIds = useMemo(
-    () => new Set(pinnedSidebarItems.map((item) => item.id)),
-    [pinnedSidebarItems],
+  const liveProjects = useStore(useShallow(selectProjectsAcrossEnvironments));
+  const { resolvedProjectId, pinnedProjectIds } = useMemo(
+    () => resolveTicketAgentContextPinnedProjectState({ project, liveProjects }),
+    [liveProjects, project],
   );
   const ticketHierarchy = useMemo(
     () => buildProjectTicketHierarchy(projectTickets),
     [projectTickets],
-  );
-
-  const buildTicketPathSidebarItemIds = useCallback(
-    (ticketId: string) => {
-      const ancestorIds: string[] = [];
-      let parentId = ticketHierarchy.parentByChildId.get(ticketId);
-      while (parentId) {
-        ancestorIds.unshift(
-          buildTicketSidebarPinnedItemId({ projectId: project.id, ticketId: parentId }),
-        );
-        parentId = ticketHierarchy.parentByChildId.get(parentId);
-      }
-
-      return [...ancestorIds, buildTicketSidebarPinnedItemId({ projectId: project.id, ticketId })];
-    },
-    [project.id, ticketHierarchy.parentByChildId],
-  );
-
-  const buildTicketSubtreeSidebarItemIds = useCallback(
-    (ticketId: string) => {
-      const subtreeItemIds: string[] = [];
-
-      const visit = (nextTicketId: string) => {
-        subtreeItemIds.push(
-          buildTicketSidebarPinnedItemId({ projectId: project.id, ticketId: nextTicketId }),
-        );
-        for (const child of ticketHierarchy.childrenByParentId.get(nextTicketId) ?? []) {
-          visit(child.id);
-        }
-      };
-
-      visit(ticketId);
-      return subtreeItemIds;
-    },
-    [project.id, ticketHierarchy.childrenByParentId],
   );
 
   const getTicketAgentContext = useCallback(
@@ -83,10 +58,34 @@ export function useTicketAgentContext(input: {
         return null;
       }
 
-      const sidebarPinItem = buildTicketSidebarPinnedItem({
-        projectId: project.id,
+      const existingPinnedItem = findPinnedTicketSidebarItem(
+        pinnedSidebarItems,
+        pinnedProjectIds,
+        ticket.id,
+      );
+      const sidebarPinItem =
+        existingPinnedItem ??
+        buildTicketSidebarPinnedItem({
+          projectId: resolvedProjectId,
+          ticketId: ticket.id,
+        });
+      const prioritizeItemIds = buildTicketPathPinnedSidebarItemIds({
+        projectId: resolvedProjectId,
         ticketId: ticket.id,
+        parentByChildId: ticketHierarchy.parentByChildId,
       });
+      const cascadeItemIds = existingPinnedItem
+        ? findPinnedTicketSubtreeItemIds({
+            rootTicketId: ticket.id,
+            projectIds: pinnedProjectIds,
+            pinnedSidebarItems,
+            childrenByParentId: ticketHierarchy.childrenByParentId,
+          })
+        : buildTicketSubtreePinnedSidebarItemIds({
+            projectId: resolvedProjectId,
+            rootTicketId: ticket.id,
+            childrenByParentId: ticketHierarchy.childrenByParentId,
+          });
 
       return buildTicketAgentContextCapabilities(
         {
@@ -99,9 +98,9 @@ export function useTicketAgentContext(input: {
         {
           sidebarPin: {
             item: sidebarPinItem,
-            pinned: pinnedItemIds.has(sidebarPinItem.id),
-            prioritizeItemIds: buildTicketPathSidebarItemIds(ticket.id),
-            cascadeItemIds: buildTicketSubtreeSidebarItemIds(ticket.id),
+            pinned: existingPinnedItem !== null,
+            prioritizeItemIds,
+            cascadeItemIds,
             ...(options?.visibleInSidebar ? { visibleInSidebar: true } : {}),
           },
         },
@@ -109,12 +108,13 @@ export function useTicketAgentContext(input: {
     },
     [
       backend,
-      buildTicketPathSidebarItemIds,
-      buildTicketSubtreeSidebarItemIds,
       githubActivityByWorkItem,
-      pinnedItemIds,
+      pinnedProjectIds,
+      pinnedSidebarItems,
       project,
       projectTickets,
+      resolvedProjectId,
+      ticketHierarchy.childrenByParentId,
     ],
   );
 
@@ -124,10 +124,24 @@ export function useTicketAgentContext(input: {
       item: GitHubWorkActivityItem,
       options?: { fallbackHost?: string; visibleInSidebar?: boolean },
     ) => {
-      const sidebarPinItem = buildGitHubActivitySidebarPinnedItem({
-        projectId: project.id,
-        activityId: item.id,
-      });
+      const existingPinnedItem = findPinnedGitHubActivitySidebarItem(
+        pinnedSidebarItems,
+        pinnedProjectIds,
+        item.id,
+      );
+      const sidebarPinItem =
+        existingPinnedItem ??
+        buildGitHubActivitySidebarPinnedItem({
+          projectId: resolvedProjectId,
+          activityId: item.id,
+        });
+      const prioritizeItemIds = ticket
+        ? buildTicketPathPinnedSidebarItemIds({
+            projectId: resolvedProjectId,
+            ticketId: ticket.id,
+            parentByChildId: ticketHierarchy.parentByChildId,
+          })
+        : undefined;
 
       return buildGitHubActivityAgentContextCapabilities(
         {
@@ -146,8 +160,8 @@ export function useTicketAgentContext(input: {
         {
           sidebarPin: {
             item: sidebarPinItem,
-            pinned: pinnedItemIds.has(sidebarPinItem.id),
-            ...(ticket ? { prioritizeItemIds: buildTicketPathSidebarItemIds(ticket.id) } : {}),
+            pinned: existingPinnedItem !== null,
+            ...(prioritizeItemIds ? { prioritizeItemIds } : {}),
             ...(options?.visibleInSidebar ? { visibleInSidebar: true } : {}),
           },
         },
@@ -155,49 +169,26 @@ export function useTicketAgentContext(input: {
     },
     [
       backend,
-      buildTicketPathSidebarItemIds,
       githubActivityByWorkItem,
-      pinnedItemIds,
+      pinnedProjectIds,
+      pinnedSidebarItems,
       project,
       projectTickets,
+      resolvedProjectId,
+      ticketHierarchy.parentByChildId,
     ],
   );
 
-  const openTicketAgentContextMenu = useCallback(
-    (event: MouseEvent, ticket: ProjectTicket, options?: { visibleInSidebar?: boolean }) => {
-      const capabilities = getTicketAgentContext(ticket, options);
-      if (!capabilities) {
-        return;
-      }
-
-      void showAgentContextMenu(event, capabilities);
-    },
-    [getTicketAgentContext, showAgentContextMenu],
-  );
-
-  const openTicketAgentContextMenuAt = useCallback(
-    (ticket: ProjectTicket, x: number, y: number, options?: { visibleInSidebar?: boolean }) => {
-      const capabilities = getTicketAgentContext(ticket, options);
-      if (!capabilities) {
-        return;
-      }
-
-      void showAgentContextMenuAt({ capabilities, x, y });
-    },
-    [getTicketAgentContext, showAgentContextMenuAt],
-  );
-
-  const openGitHubActivityAgentContextMenu = useCallback(
-    (
-      event: MouseEvent,
-      ticket: ProjectTicket | null,
-      item: GitHubWorkActivityItem,
-      options?: { fallbackHost?: string; visibleInSidebar?: boolean },
-    ) => {
-      void showAgentContextMenu(event, getGitHubActivityAgentContext(ticket, item, options));
-    },
-    [getGitHubActivityAgentContext, showAgentContextMenu],
-  );
+  const {
+    openTicketAgentContextMenu,
+    openTicketAgentContextMenuAt,
+    openGitHubActivityAgentContextMenu,
+  } = useTicketAgentContextMenus({
+    getTicketAgentContext,
+    getGitHubActivityAgentContext,
+    showAgentContextMenu,
+    showAgentContextMenuAt,
+  });
 
   return {
     getTicketAgentContext,

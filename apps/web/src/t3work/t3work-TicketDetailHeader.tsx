@@ -2,6 +2,7 @@ import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "~/t3work/components/ui/t3work-button";
 import { SidebarTrigger } from "~/t3work/components/ui/t3work-sidebar";
 import { JiraIssueTypeIcon } from "~/t3work/components/ticket/t3work-JiraIssueType";
+import { getT3workMainContentHeaderClassName } from "~/t3work/t3work-mainContentHeader";
 
 export function TicketDetailHeader({
   displayId,
@@ -9,6 +10,7 @@ export function TicketDetailHeader({
   title,
   issueType,
   issueTypeIconUrl,
+  shouldInsetDesktopHeader = false,
   onBack,
   onReload,
   ticketUrl,
@@ -18,12 +20,18 @@ export function TicketDetailHeader({
   title: string;
   issueType: string | undefined;
   issueTypeIconUrl: string | undefined;
+  shouldInsetDesktopHeader?: boolean;
   onBack: () => void;
   onReload: () => void;
   ticketUrl: string | undefined;
 }) {
   return (
-    <header className="drag-region flex h-13 shrink-0 items-center gap-2 border-b border-border bg-gradient-to-b from-background to-muted/12 px-3 sm:px-5 wco:h-[env(titlebar-area-height)] wco:pl-[calc(env(titlebar-area-x)+1em)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]">
+    <header
+      className={getT3workMainContentHeaderClassName({
+        className: "bg-gradient-to-b from-background to-muted/12",
+        shouldInsetDesktopHeader,
+      })}
+    >
       <SidebarTrigger className="size-7 shrink-0 md:hidden" />
       <Button size="icon-xs" variant="ghost" onClick={onBack} aria-label="Back to dashboard">
         <ArrowLeft className="size-4" />

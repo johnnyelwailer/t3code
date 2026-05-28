@@ -100,6 +100,15 @@ export function createMockBackend(): BackendApi {
       await new Promise((resolve) => setTimeout(resolve, 200));
     },
 
+    async launchRecipeWorkflow(input) {
+      void simulateMockConversation(input.threadId, input.kickoffMessage, emitThreadEvent);
+      return { ok: true };
+    },
+
+    async submitRecipeCardAction() {
+      return { ok: true };
+    },
+
     async listThreadPlacements() {
       return [];
     },
@@ -120,6 +129,11 @@ export function createMockBackend(): BackendApi {
           localPath: `${input.workspaceRoot}/.t3work/references/${String(index + 1).padStart(2, "0")}-reference`,
           status: "cloned" as const,
         })),
+      }),
+      discoverRecipes: async (input) => ({
+        workspaceRoot: input.workspaceRoot,
+        hasProjectLocalRecipes: false,
+        recipes: [],
       }),
       writeContextFiles: async (input) => ({
         workspaceRoot: input.workspaceRoot,

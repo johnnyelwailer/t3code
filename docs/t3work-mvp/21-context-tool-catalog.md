@@ -21,6 +21,23 @@ Agent mutates hidden Jira state that no visible surface can explain or review.
 
 Tool outputs and mutations must stay reflectable in the current view.
 
+## One Shared Surface
+
+This catalog is the **Tools** primitive — one of the four shared primitives (Context,
+Tools, Workflows, Views) the rest of `t3work` is built on. There is a single tool surface,
+brokered by `T3workToolBroker`, consumed identically by:
+
+- **agent turns** (the original consumer),
+- **workflow `tool`/`script` steps** in action recipes ([Epic 16](./16-action-recipes.md)),
+- **miniapp/View tool bridges** ([Epic 19](./19-workspace-miniapps.md)).
+
+Tools began as agent-scoped capabilities, but scripts, workflows, and Views all bind to the
+_same_ registry rather than getting parallel APIs. A recipe's `allowedToolGroups` scopes
+this surface for everything that recipe runs, and is the single enforcement point for
+stage-2 sandboxing. Pre-launch code (recipe visibility, View pre-render) binds in a
+no-thread, read-only mode — read tools and resource reads only, no view-state or mutation
+tools.
+
 ## Context Files First
 
 `t3work` already has a context attachment model. Attached context is written into the
@@ -525,8 +542,10 @@ Start from existing code paths:
 - `TicketDetailMainColumn` already registers section context menus for metadata,
   parent, description, attachments, comments, references, and GitHub activity.
 
-The next implementation should define a common registry that lets these surfaces expose
-tools without each tool calling component state directly.
+The next implementation should grow the common registry behind `T3workToolBroker` so these
+surfaces expose tools without each tool calling component state directly. The broker already
+binds a per-thread tool surface for agents; scripts, workflow steps, and Views bind to the
+same registry (with a no-thread, read-only binding for pre-launch code).
 
 Recommended flow:
 

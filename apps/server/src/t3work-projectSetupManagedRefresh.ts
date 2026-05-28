@@ -6,7 +6,6 @@ import {
   renderPreviousAgentsMd,
 } from "./t3work-projectSetupAgentsManagedRefresh.ts";
 import {
-  T3WORK_PROJECT_PROFILE_MANIFEST_PATH,
   T3WORK_PROJECT_SETUP_VERSION,
   type ProjectSetupProfileDefinition,
   type T3WorkProjectSetupFile,

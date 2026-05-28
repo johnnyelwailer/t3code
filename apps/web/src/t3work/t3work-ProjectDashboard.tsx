@@ -6,6 +6,7 @@ import { t3SurfaceBackdrops } from "~/t3work/components/ui/t3work-surface";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/t3work/components/ui/t3work-menu";
 import { AppProjectIcon } from "~/t3work/t3work-AppStatusBits";
 import { useProjectDashboardModeState } from "~/t3work/hooks/t3work-useProjectDashboardModeState";
+import { getT3workMainContentHeaderClassName } from "~/t3work/t3work-mainContentHeader";
 import { ProjectDashboardBacklogView } from "~/t3work/t3work-ProjectDashboardBacklogView";
 import { ProjectDashboardMyWorkView } from "~/t3work/t3work-ProjectDashboardMyWorkView";
 import type { ProjectTicket } from "~/t3work/t3work-types";
@@ -13,11 +14,13 @@ import type { ProjectTicket } from "~/t3work/t3work-types";
 export function ProjectDashboard({
   project,
   tickets: fallbackTickets,
+  shouldInsetDesktopHeader = false,
   onOpenTicket,
   onManageRepositories,
 }: {
   project: ProjectShellProject;
   tickets: ProjectTicket[];
+  shouldInsetDesktopHeader?: boolean;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onManageRepositories: (projectId: string) => void;
 }) {
@@ -26,7 +29,12 @@ export function ProjectDashboard({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <header className="drag-region flex h-13 shrink-0 items-center gap-2 border-b border-border bg-gradient-to-b from-background to-muted/15 px-3 sm:px-5 wco:h-[env(titlebar-area-height)] wco:pl-[calc(env(titlebar-area-x)+1em)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]">
+      <header
+        className={getT3workMainContentHeaderClassName({
+          className: "bg-gradient-to-b from-background to-muted/15",
+          shouldInsetDesktopHeader,
+        })}
+      >
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
         <AppProjectIcon project={project} />
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">

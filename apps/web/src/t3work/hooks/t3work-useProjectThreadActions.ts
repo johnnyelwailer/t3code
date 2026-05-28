@@ -6,7 +6,12 @@ import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeS
 import type { ProjectThreadDisplayMode } from "~/t3work/t3work-projectThreadViewState";
 import { buildProjectThreadViewState } from "~/t3work/t3work-projectThreadViewState";
 import { setProjectThreadDisplayMode } from "~/t3work/t3work-threadToolContext";
-import type { ProjectThread, T3workThreadToolId, ViewState } from "~/t3work/t3work-types";
+import type {
+  ProjectThread,
+  T3workKickoffWorkflow,
+  T3workThreadToolId,
+  ViewState,
+} from "~/t3work/t3work-types";
 import { createTicketThread } from "./t3work-projectThreadFactories";
 import { buildThreadForProject } from "./t3work-projectStoreUtils";
 
@@ -25,6 +30,7 @@ type CreateThreadOptions = {
   kickoffRuntimeMode?: RuntimeMode;
   kickoffInteractionMode?: ProviderInteractionMode;
   selectedToolIds?: ReadonlyArray<T3workThreadToolId>;
+  kickoffWorkflow?: T3workKickoffWorkflow;
 };
 
 export function useProjectThreadActions(input: {
@@ -62,10 +68,12 @@ export function useProjectThreadActions(input: {
       ticketId: string;
       ticketDisplayId: string;
       kickoffMessage: string;
+      kickoffPending?: boolean;
       kickoffModelSelection: ModelSelection;
       kickoffRuntimeMode: RuntimeMode;
       kickoffInteractionMode: ProviderInteractionMode;
       selectedToolIds: ReadonlyArray<T3workThreadToolId>;
+      kickoffWorkflow?: T3workKickoffWorkflow;
     }) =>
       createTicketThread({
         ...ticketInput,

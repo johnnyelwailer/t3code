@@ -5,45 +5,35 @@
 Recipes turn blank chat into contextual actions. A recipe is a visible UI launcher backed
 by a skill or project-local action recipe.
 
-Action recipes are the stronger project-scoped form: a trusted directory template with
-metadata, MDX action UI, templated files, optional visibility script, and optional init
-script. When launched, the shell instantiates the directory into the current run and
-gives the agent only the instantiated recipe path.
+Action recipes are the stronger project-scoped form: a trusted plugin-module directory
+(`recipe.ts`) with metadata, a launcher View, templated files, a visibility predicate, and
+a workflow. When launched, the shell materializes the recipe into a run directory and gives
+the agent only the path to that run. See [Epic 16](./16-action-recipes.md) for the full model.
 
 ## Recipe Model
 
+A recipe is a **launchable workflow plus its presentation** — discovery metadata, an
+optional launcher View, and the workflow that runs on click. It is authored as a
+TypeScript plugin module (`recipe.ts`), not a JSON manifest with embedded expression
+strings. The full model, the four core primitives (Context, Tools, Workflows, Views), and
+the plugin-module contract are defined in [Epic 16: Action Recipes](./16-action-recipes.md).
+
+The UI-facing projection that matching and the dashboard consume is small:
+
 ```ts
-type Recipe = {
-  id: string;
-  title: string;
-  shortDescription: string;
-  appliesTo: RecipeApplicability;
-  requiredContext: RecipeContextRequirement[];
-  skillRef: SkillRef;
-  outputPreference: RichOutputPreference;
-  suggestedActions?: RecipeFollowup[];
+type RecipeMatchResult = {
+  recipe: Recipe; // id, surfaces, displayName/shortDescription/icon/rank, applicability
+  score: number;
+  reason: string;
+  missingContext: string[];
 };
 ```
 
-For action recipes, the flat recipe model becomes the UI-facing projection of a
-template directory:
-
-```ts
-type ActionRecipeTemplate = {
-  id: string;
-  version: string;
-  scope: "project";
-  displayName: TemplateExpression<string>;
-  shortDescription?: TemplateExpression<string>;
-  icon?: TemplateExpression<string>;
-  surfaces: ("project.dashboard" | "workitem.detail.sidepanel")[];
-  visibleWhen?: RecipeVisibilityRule;
-  actionView?: string;
-  prompt: string;
-  files?: string[];
-  initScript?: string;
-};
-```
+Bundled skill-pack recipes and project-local recipes are the same concept with different
+sources: bundled recipes are matched against the render context; project-local recipes are
+discovered from the workspace `recipes/` directory and authored as plugin modules. Metadata
+that varies by context (display name, icon, rank, visibility) is plain code over the render
+context, not a `{{ }}` template language.
 
 ## Recipe Scope
 
@@ -178,18 +168,20 @@ A recipe launch should provide the skill with:
 Skills should save durable artifacts by default and return a concise chat summary only
 as a companion.
 
-An action recipe launch should additionally write these files into the instantiated
-recipe directory:
+An action recipe launch should additionally materialize these files into the run directory
+(`runs/<run-id>/recipe/`):
 
 - `context.json`
 - `context.schema.json`
 - `context-map.md`
-- rendered `recipe.json`
+- the resolved `recipe.ts`
 - rendered prompt and subfiles
-- optional `init-result.json`
+- `workflow-state.json` (the persisted forward-only cursor)
 
 The schema and context map are part of the authoring contract. Agents creating new
-project recipes should inspect them before writing template expressions.
+project recipes should inspect them before writing recipe modules. "Allowed tools" above
+is the recipe's `allowedToolGroups` scoping the single shared tool surface
+([Epic 21](./21-context-tool-catalog.md)), not a recipe-specific tool API.
 
 ## Product Positioning
 

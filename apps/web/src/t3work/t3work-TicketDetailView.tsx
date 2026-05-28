@@ -15,12 +15,17 @@ import { useTicketDetail } from "~/t3work/hooks/t3work-useTicketDetail";
 import type { TicketKickoffThreadInput } from "~/t3work/t3work-kickoffTypes";
 import { TicketDetailBody } from "~/t3work/t3work-TicketDetailBody";
 import { TicketDetailHeader } from "~/t3work/t3work-TicketDetailHeader";
+import {
+  buildTicketDetailKickoffAsideProps,
+  buildTicketDetailMainColumnProps,
+} from "~/t3work/t3work-TicketDetailViewProps";
 import { navigateBackWithFallback } from "~/t3work/t3work-historyBack";
 import {
   asRecordArray,
   resolveHtmlBaseUrl,
   sortCommentItems,
 } from "~/t3work/t3work-ticketDetailUtils";
+import { extractRelationshipKeys } from "~/t3work/t3work-ticketRelationshipKeys";
 import {
   buildProjectTicketLookup,
   resolveCanonicalProjectTicketId,
@@ -31,6 +36,7 @@ import { useTicketDetailEmbeddedThreadEffects } from "~/t3work/t3work-useTicketD
 export function TicketDetailView({
   project,
   ticketId,
+  shouldInsetDesktopHeader = false,
   activeThreadId,
   projectThreads,
   onOpenTicket,
@@ -43,6 +49,7 @@ export function TicketDetailView({
 }: {
   project: ProjectShellProject;
   ticketId: string;
+  shouldInsetDesktopHeader?: boolean;
   activeThreadId?: string;
   projectThreads: ProjectThread[];
   onOpenTicket: (projectId: string, ticketId: string) => void;
@@ -72,13 +79,14 @@ export function TicketDetailView({
     readIssueTypeIconUrlFromSnapshotFields(snapshot?.fields);
   const displayId = ticket?.ref.displayId ?? snapshot?.ref.displayId ?? ticketId;
   const title = ticket?.ref.title ?? snapshot?.ref.title ?? "Ticket";
-  const { ticketsWithRelated } = useRelatedTickets({
+  const { relatedTickets, ticketsWithRelated } = useRelatedTickets({
     project,
     snapshot,
     projectTickets,
     currentTicketId: ticket?.id ?? ticketId,
     currentDisplayId: displayId,
   });
+  const relationshipKeys = useMemo(() => extractRelationshipKeys(snapshot?.raw), [snapshot?.raw]);
   const status = ticket?.status ?? (snapshot?.fields.status as string | undefined) ?? "Unknown";
   const priority =
     ticket?.priority ?? (snapshot?.fields.priority as string | undefined) ?? undefined;
@@ -131,6 +139,7 @@ export function TicketDetailView({
         title={title}
         issueType={issueType}
         issueTypeIconUrl={issueTypeIconUrl}
+        shouldInsetDesktopHeader={shouldInsetDesktopHeader}
         onBack={handleBack}
         onReload={() => void reload()}
         ticketUrl={ticketUrl}
@@ -140,22 +149,17 @@ export function TicketDetailView({
         projectId={project.id}
         ticketId={ticketId}
         activeThreadId={activeThreadId}
-        mainColumnProps={{
+        mainColumnProps={buildTicketDetailMainColumnProps({
           snapshot,
           displayId,
           title,
           status,
           priority,
           assignee,
-          projectId: project.id,
           project,
           projectTickets: ticketsWithRelated,
-          ticketId: ticket?.id ?? canonicalTicketId,
+          resolvedTicketId: ticket?.id ?? canonicalTicketId,
           ticketParentId: ticket?.parentId,
-          snapshotParentId:
-            typeof snapshot?.ref.parentId === "string" ? snapshot.ref.parentId : undefined,
-          snapshotRaw: snapshot?.raw,
-          onOpenTicket,
           loading,
           error,
           descriptionMarkdown,
@@ -163,35 +167,31 @@ export function TicketDetailView({
           htmlBaseUrl,
           attachments,
           sortedComments,
-          ...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {}),
-          githubActivityItems: matchedGitHubActivityItems,
-          ...(githubActivity.lastCheckedAt !== undefined
-            ? { githubActivityLastCheckedAt: githubActivity.lastCheckedAt }
-            : {}),
-          githubActivityLoading: githubActivity.loading,
-          ...(githubActivity.warning ? { githubActivityWarning: githubActivity.warning } : {}),
-          ...(githubActivity.host ? { githubHost: githubActivity.host } : {}),
-          ...(githubActivity.account ? { githubAccount: githubActivity.account } : {}),
-        }}
-        kickoffAsideProps={{
+          jiraLastCheckedAt,
+          matchedGitHubActivityItems,
+          githubActivity,
+          onOpenTicket,
+        })}
+        kickoffAsideProps={buildTicketDetailKickoffAsideProps({
           project,
           displayId,
+          title,
+          ticket,
+          status,
+          relationshipKeys,
+          relatedTickets,
+          issueType,
+          priority,
           issueThreads,
-          projectId: project.id,
-          projectTitle: project.title,
-          ...(project.workspace?.rootPath
-            ? { projectWorkspaceRoot: project.workspace.rootPath }
-            : {}),
-          ticketId: ticket?.id ?? canonicalTicketId,
+          resolvedTicketId: ticket?.id ?? canonicalTicketId,
           activeThread,
-          githubActivityItems: matchedGitHubActivityItems,
-          providers: backendState.providers,
-          isConnected: backendState.connectionStatus === "connected",
+          matchedGitHubActivityItems,
+          backendState,
           onOpenThread,
           onOpenFullThread,
           onThreadKickoffConsumed,
           onKickoffThread,
-        }}
+        })}
       />
     </div>
   );

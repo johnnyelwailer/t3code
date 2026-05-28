@@ -1,33 +1,60 @@
 import { useEffect } from "react";
 
-import { hydrateStoredSidebarPins } from "~/t3work/hooks/t3work-sidebarPinPersistence";
+import { useServerConfig } from "~/rpc/serverState";
 import { hydrateStoredSidebarNavPreferences } from "~/t3work/hooks/t3work-sidebarNavPreferencesPersistence";
+import {
+  migrateLegacyStoredSidebarPinsToServer,
+  readStoredSidebarPinsFromServerSettings,
+} from "~/t3work/hooks/t3work-sidebarPinPersistence";
 import { useT3WorkPinnedSidebarStore } from "~/t3work/t3work-pinnedSidebarStore";
 import { useT3WorkSidebarNavPreferencesStore } from "~/t3work/t3work-sidebarNavPreferencesStore";
 
 export function useHydratePinnedSidebarItems() {
+  const serverConfig = useServerConfig();
   const hydratePins = useT3WorkPinnedSidebarStore((state) => state.hydrate);
   const hydrateNavPreferences = useT3WorkSidebarNavPreferencesStore((state) => state.hydrate);
 
   useEffect(() => {
+    if (!serverConfig) {
+      return;
+    }
+
+    hydratePins(readStoredSidebarPinsFromServerSettings(serverConfig.settings));
+  }, [hydratePins, serverConfig?.settings.t3workStoredSidebarPinsJson]);
+
+  useEffect(() => {
     let cancelled = false;
 
-    void Promise.allSettled([
-      hydrateStoredSidebarPins(),
-      hydrateStoredSidebarNavPreferences(),
-    ]).then(([pinsResult, navPreferencesResult]) => {
-      if (cancelled) {
-        return;
+    void hydrateStoredSidebarNavPreferences().then((preferences) => {
+      if (!cancelled) {
+        hydrateNavPreferences(preferences);
       }
-
-      hydratePins(pinsResult.status === "fulfilled" ? pinsResult.value : []);
-      hydrateNavPreferences(
-        navPreferencesResult.status === "fulfilled" ? navPreferencesResult.value : {},
-      );
     });
 
     return () => {
       cancelled = true;
     };
-  }, [hydrateNavPreferences, hydratePins]);
+  }, [hydrateNavPreferences]);
+
+  useEffect(() => {
+    if (!serverConfig) {
+      return;
+    }
+    if ((serverConfig.settings.t3workStoredSidebarPinsJson ?? "").length > 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void migrateLegacyStoredSidebarPinsToServer().then((items) => {
+      if (cancelled || !items) {
+        return;
+      }
+      hydratePins(items);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydratePins, serverConfig?.settings.t3workStoredSidebarPinsJson]);
 }

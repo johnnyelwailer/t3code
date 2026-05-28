@@ -35,7 +35,14 @@ const projectDashboardRecipes = buildT3workSidecarRecipeQuickStarts({
   project: productProject,
   profileId: "product-partner",
   selectedWorkLabel: productProject.title,
-  availableContextKeys: ["project.summary"],
+  dashboardMode: "backlog",
+  currentViewSummary: {
+    itemCount: 7,
+    bugCount: 2,
+    primaryBugLabel: "ALPHA-78",
+    primaryItemLabel: "ALPHA-34",
+  },
+  availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
 });
 
 const ticketDetailRecipes = buildT3workSidecarRecipeQuickStarts({
@@ -43,7 +50,9 @@ const ticketDetailRecipes = buildT3workSidecarRecipeQuickStarts({
   project: engineeringProject,
   profileId: "engineering-copilot",
   selectedWorkLabel: "ALPHA-42",
+  selectedWorkTitle: "Stabilize import retries",
   resourceKind: "ticket",
+  jiraIssueType: "Bug",
   availableContextKeys: ["project.summary", "ticket.summary"],
 });
 
@@ -53,9 +62,9 @@ function KickoffRecipePreview() {
       <section className="space-y-4 rounded-xl border border-border/70 bg-card p-5">
         <header className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            Project dashboard
+            Project dashboard backlog
           </p>
-          <h2 className="text-lg font-semibold">Product partner quick starts</h2>
+          <h2 className="text-lg font-semibold">Product partner rich quick starts</h2>
         </header>
         <T3workKickoffRecipeList recipes={projectDashboardRecipes} onSelectRecipe={() => {}} />
       </section>
@@ -65,7 +74,7 @@ function KickoffRecipePreview() {
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
             Ticket detail
           </p>
-          <h2 className="text-lg font-semibold">Engineering copilot quick starts</h2>
+          <h2 className="text-lg font-semibold">Engineering copilot rich quick starts</h2>
         </header>
         <T3workKickoffRecipeList recipes={ticketDetailRecipes} onSelectRecipe={() => {}} />
       </section>

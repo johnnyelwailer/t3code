@@ -9,6 +9,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "~/t3work/components/ui/t3work-sidebar";
+import { T3workLeftSidebarHeaderToggle } from "~/t3work/t3work-LeftSidebarHeaderToggle";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { isElectron } from "~/env";
 import { LocalWorkspaceSidebarSection } from "./t3work-LocalWorkspaceSidebarSection";
@@ -80,7 +81,7 @@ export function ProjectSidebarLayout({
   return (
     <>
       <SidebarHeader className={sidebarHeaderClassName}>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full min-w-0 items-center gap-2">
           <SidebarTrigger className="shrink-0 md:hidden" />
           <span className="truncate text-sm font-semibold">T3 Work</span>
           <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
@@ -164,10 +165,10 @@ export function ProjectSidebarLayout({
         <SidebarSeparator className="shrink-0" />
         <SidebarFooter className="shrink-0 p-2">
           <SidebarMenu>
-            <SidebarMenuItem>
+            <SidebarMenuItem className="flex items-center gap-1">
               <SidebarMenuButton
                 size="sm"
-                className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                className="min-w-0 flex-1 gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
                 onClick={onOpenSettings}
                 disabled={!onOpenSettings}
                 aria-disabled={!onOpenSettings}
@@ -175,6 +176,7 @@ export function ProjectSidebarLayout({
                 <SettingsIcon className="size-3.5" />
                 <span className="text-xs">Settings</span>
               </SidebarMenuButton>
+              <T3workLeftSidebarHeaderToggle />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

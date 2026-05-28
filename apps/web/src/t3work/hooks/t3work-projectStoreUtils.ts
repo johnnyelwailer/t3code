@@ -6,6 +6,7 @@ import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeS
 import type {
   ProjectThread,
   ProjectThreadDisplayMode,
+  T3workKickoffWorkflow,
   T3workThreadToolId,
 } from "~/t3work/t3work-types";
 import {
@@ -43,6 +44,7 @@ export function buildThreadForProject(
     kickoffRuntimeMode?: RuntimeMode;
     kickoffInteractionMode?: ProviderInteractionMode;
     selectedToolIds?: ReadonlyArray<T3workThreadToolId>;
+    kickoffWorkflow?: T3workKickoffWorkflow;
   },
 ): ProjectThread {
   const now = new Date().toISOString();
@@ -68,6 +70,7 @@ export function buildThreadForProject(
       ? { kickoffInteractionMode: options.kickoffInteractionMode }
       : {}),
     ...(options?.selectedToolIds !== undefined ? { selectedToolIds: options.selectedToolIds } : {}),
+    ...(options?.kickoffWorkflow ? { kickoffWorkflow: options.kickoffWorkflow } : {}),
   };
 }
 

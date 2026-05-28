@@ -5,6 +5,14 @@ import type {
   ServerProvider,
   ThreadId,
 } from "@t3tools/contracts";
+import type {
+  DiscoverProjectRecipesRequest,
+  DiscoverProjectRecipesResponse,
+  LaunchProjectRecipeWorkflowRequest,
+  LaunchProjectRecipeWorkflowResponse,
+  SubmitProjectRecipeCardActionRequest,
+  SubmitProjectRecipeCardActionResponse,
+} from "@t3tools/project-recipes";
 import type { AtlassianBackendApi } from "./t3work-atlassianBackendTypes";
 import type {
   GitHubAssetDownloadRequest,
@@ -36,6 +44,12 @@ export interface BackendApi {
   readonly connect: () => Promise<void>;
   readonly disconnect: () => Promise<void>;
   readonly dispatchCommand: (command: ClientOrchestrationCommand) => Promise<void>;
+  readonly launchRecipeWorkflow: (
+    input: LaunchProjectRecipeWorkflowRequest,
+  ) => Promise<LaunchProjectRecipeWorkflowResponse>;
+  readonly submitRecipeCardAction: (
+    input: SubmitProjectRecipeCardActionRequest,
+  ) => Promise<SubmitProjectRecipeCardActionResponse>;
   readonly listThreadPlacements: (input: {
     readonly threadIds?: ReadonlyArray<string>;
   }) => Promise<ReadonlyArray<T3workThreadPlacement>>;
@@ -83,6 +97,9 @@ export interface ProjectWorkspaceBackendApi {
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
     readonly setupProfileId?: string;
   }) => Promise<ProjectWorkspaceBootstrapResult>;
+  readonly discoverRecipes: (
+    input: DiscoverProjectRecipesRequest,
+  ) => Promise<DiscoverProjectRecipesResponse>;
   readonly writeContextFiles: (input: {
     readonly workspaceRoot: string;
     readonly files: ReadonlyArray<ProjectWorkspaceContextFile>;

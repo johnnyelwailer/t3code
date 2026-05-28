@@ -47,24 +47,37 @@ Any new `t3work` UI surface should be able to answer:
 
 ## Package Boundaries
 
-`t3work` code should live in additive packages:
+`t3work` code lives in additive packages. New files must either use the `t3work-` /
+`t3work.` prefix or sit in a whitelisted package path (see
+[`docs/t3work-additive-whitelist.md`](../t3work-additive-whitelist.md) and the additive
+extension pattern in [Epic 02](./02-additive-architecture.md#additive-extension-pattern)).
+
+Current `t3work` additive packages on disk:
 
 - `apps/web/src/t3work`
-- `packages/t3work-context`
-- `packages/t3work-recipes`
-- `packages/t3work-integrations-core`
-- `packages/t3work-integrations-atlassian`
-- `packages/t3work-artifacts`
+- `packages/project-context` (formerly proposed as `t3work-context`)
+- `packages/project-recipes` (formerly proposed as `t3work-recipes`)
+- `packages/integrations-core` (formerly proposed as `t3work-integrations-core`)
+- `packages/integrations-atlassian` (formerly proposed as `t3work-integrations-atlassian`)
 - `packages/t3work-skill-packs`
-- `packages/t3work-t3-adapter`
+- `packages/t3-adapter` (formerly proposed as `t3work-t3-adapter`)
+- planned new additive packages: `@t3work/plugin-sdk` (recipe/workflow SDK) and
+  `@t3work/miniapp-sdk` (the View primitive)
+
+The unprefixed names (`project-*`, `integrations-*`, `t3-adapter`) are explicitly whitelisted
+in the additive guard — they predate the prefix policy and stay for compatibility. Anything
+new should prefer the `t3work-` prefix unless extending one of these existing packages.
 
 Rules:
 
-- Only `packages/t3work-t3-adapter` may deep import unstable T3 internals.
+- Only `packages/t3-adapter` may deep import unstable T3 internals.
 - Integration-specific logic must not leak into generic project, recipe, or artifact
   packages.
 - UI components must not call integration clients directly.
 - Skills and recipes should depend on tools/contracts, not concrete service clients.
+- New cross-cutting concerns follow the additive extension pattern: minimal optional seam
+  upstream + all logic in `t3work-`-prefixed files. Do not grow the modified-files
+  allowlist if a smaller seam exists.
 
 ## File Size
 

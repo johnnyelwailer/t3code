@@ -1,4 +1,5 @@
-import { SidebarInset } from "~/t3work/components/ui/t3work-sidebar";
+import { SidebarInset, useSidebar } from "~/t3work/components/ui/t3work-sidebar";
+import { isElectron } from "~/env";
 import { useProjectStore } from "~/t3work/hooks/t3work-useProjectStore";
 import { AppMainContent } from "~/t3work/t3work-AppMainContent";
 import { ProjectDashboard } from "~/t3work/t3work-ProjectDashboard";
@@ -39,6 +40,9 @@ export function AppContentPane({
   onBackToDashboard: (projectId: string) => void;
   onManageRepositories: (projectId: string | null) => void;
 }) {
+  const { isMobile, open } = useSidebar();
+  const shouldInsetDesktopHeader = isElectron && !isMobile && !open;
+
   return (
     <SidebarInset className="h-full min-h-0 overflow-hidden bg-background text-foreground">
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -49,6 +53,7 @@ export function AppContentPane({
           projects={store.projects}
           allProjects={store.allProjects}
           reopenInitialSetup={reopenInitialSetup}
+          shouldInsetDesktopHeader={shouldInsetDesktopHeader}
           getThreadsForProject={store.getThreadsForProject}
           onOpenTicket={onOpenTicket}
           onOpenThread={onOpenThread}
@@ -68,6 +73,7 @@ export function AppContentPane({
             <ProjectDashboard
               project={project}
               tickets={[]}
+              shouldInsetDesktopHeader={shouldInsetDesktopHeader}
               onOpenTicket={onOpenTicket}
               onManageRepositories={onManageRepositories}
             />
@@ -76,6 +82,7 @@ export function AppContentPane({
             <TicketDetailView
               project={project}
               ticketId={ticketId}
+              shouldInsetDesktopHeader={shouldInsetDesktopHeader}
               {...(activeThreadId ? { activeThreadId } : {})}
               projectThreads={store.getThreadsForProject(project.id)}
               onOpenTicket={onOpenTicket}

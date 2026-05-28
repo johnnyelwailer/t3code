@@ -1,22 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
-import { SearchIcon } from "lucide-react";
-import { Card, CardContent } from "~/t3work/components/ui/t3work-card";
-import { Input } from "~/t3work/components/ui/t3work-input";
+import { useMemo, useRef, useState } from "react";
+import { useBackend } from "~/t3work/backend/t3work-index";
 import { ScrollArea } from "~/t3work/components/ui/t3work-scroll-area";
+import { useProjectDashboardInjectedContextAttachments } from "~/t3work/hooks/t3work-useProjectDashboardInjectedContextAttachments";
 import type { ProjectDashboardKickoffAsideProps } from "~/t3work/t3work-ProjectDashboardKickoffAsideTypes";
-import { useT3WorkAddToChatStore } from "~/t3work/t3work-addToChatStore";
-import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
-import { formatRelativeTime } from "~/t3work/t3work-AppTicketHelpers";
-import { mergeContextAttachmentsById } from "~/t3work/t3work-contextAttachmentMerge";
 import { EmbeddedThreadAside } from "~/t3work/t3work-EmbeddedThreadAside";
 import { readProjectSetupProfileIdFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
 import { T3workKickoffRecipeList } from "~/t3work/t3work-KickoffRecipeList";
 import { ProjectDashboardKickoffComposer } from "~/t3work/t3work-ProjectDashboardKickoffComposer";
+import { ProjectDashboardRecentConversations } from "~/t3work/t3work-ProjectDashboardRecentConversations";
+import { useRunT3workDashboardRecipeAction } from "~/t3work/t3work-dashboardRecipeActions";
+import { buildProjectDashboardSelectedRecipe } from "~/t3work/t3work-dashboardRecipeSelection";
+import {
+  areT3workRecipeQuickStartLaunchCustomizationsEqual,
+  buildT3workSelectedRecipeKickoffLaunch,
+  type T3workSelectedRecipeQuickStart,
+} from "~/t3work/t3work-recipeQuickStartLaunch";
+import { useT3workDashboardRecipeViewSummary } from "~/t3work/t3work-dashboardRecipeViewContext";
 import { runT3workViewTransition } from "~/t3work/t3work-runViewTransition";
-import { buildT3workSidecarRecipeQuickStarts } from "~/t3work/t3work-sidecarRecipes";
+import { useT3workSidecarRecipeQuickStarts } from "~/t3work/t3work-sidecarRecipes";
+import { type T3workKickoffComposerHandle } from "~/t3work/t3work-TicketKickoffComposer";
 
 export function ProjectDashboardKickoffAside({
   project,
+  dashboardMode,
   projectThreads,
   activeThread,
   providers,
@@ -26,78 +32,58 @@ export function ProjectDashboardKickoffAside({
   onThreadKickoffConsumed,
   onKickoffThread,
 }: ProjectDashboardKickoffAsideProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [prefillText, setPrefillText] = useState<string | undefined>(undefined);
-  const [injectedContextAttachments, setInjectedContextAttachments] = useState<
-    readonly T3WorkContextAttachment[]
-  >([]);
-  const [dismissedAttachmentIds, setDismissedAttachmentIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
+  const backend = useBackend();
+  const runDashboardRecipeAction = useRunT3workDashboardRecipeAction();
+  const composerRef = useRef<T3workKickoffComposerHandle | null>(null);
+  const { clearInjectedContextAttachments, injectedContextAttachments, removeContextAttachment } =
+    useProjectDashboardInjectedContextAttachments(project.id);
+  const [selectedRecipe, setSelectedRecipe] = useState<T3workSelectedRecipeQuickStart | null>(null);
+  const currentViewSummary = useT3workDashboardRecipeViewSummary();
 
-  const pendingProjectContextCount = useT3WorkAddToChatStore(
-    (state) => (state.pendingByProjectId[project.id] ?? []).length,
+  const primaryWorkitemAttachment = useMemo(
+    () => injectedContextAttachments.find((attachment) => attachment.kind === "jira-work-item"),
+    [injectedContextAttachments],
   );
-
-  useEffect(() => {
-    if (pendingProjectContextCount === 0) {
-      return;
+  const quickStartContextKeys = useMemo(() => {
+    const keys = [
+      "project.summary",
+      dashboardMode === "my-work" ? "dashboard.my-work.summary" : "dashboard.backlog.summary",
+    ];
+    if (injectedContextAttachments.length > 0) {
+      keys.push("attached-context.summary");
     }
-    const drained = useT3WorkAddToChatStore.getState().drainProject(project.id);
-    if (drained.length === 0) {
-      return;
+    if (primaryWorkitemAttachment) {
+      keys.push("selected-work.summary", "ticket.summary");
     }
-    setInjectedContextAttachments((current) =>
-      mergeContextAttachmentsById({
-        current,
-        incoming: drained.map((item) => item.attachment),
-        dismissedIds: dismissedAttachmentIds,
-      }),
-    );
-  }, [dismissedAttachmentIds, pendingProjectContextCount, project.id]);
-
-  const removeContextAttachment = (id: string) => {
-    setInjectedContextAttachments((current) =>
-      current.filter((attachment) => attachment.id !== id),
-    );
-    setDismissedAttachmentIds((current) => {
-      const next = new Set(current);
-      next.add(id);
-      return next;
-    });
-  };
-
-  const recentThreads = useMemo(
-    () =>
-      projectThreads.toSorted(
-        (left, right) =>
-          new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime(),
-      ),
-    [projectThreads],
+    return keys;
+  }, [dashboardMode, injectedContextAttachments.length, primaryWorkitemAttachment]);
+  const quickStartRecipeInput = useMemo(
+    () => ({
+      backend,
+      surface: "project.dashboard" as const,
+      project,
+      profileId: readProjectSetupProfileIdFromProject(project),
+      selectedWorkLabel: primaryWorkitemAttachment?.label ?? project.title,
+      dashboardMode,
+      currentViewSummary: currentViewSummary ?? undefined,
+      ...(primaryWorkitemAttachment ? { resourceKind: "ticket" as const } : {}),
+      ...(primaryWorkitemAttachment?.jiraIssueType
+        ? { jiraIssueType: primaryWorkitemAttachment.jiraIssueType }
+        : {}),
+      contextAttachments: injectedContextAttachments,
+      availableContextKeys: quickStartContextKeys,
+    }),
+    [
+      backend,
+      currentViewSummary,
+      dashboardMode,
+      injectedContextAttachments,
+      primaryWorkitemAttachment,
+      project,
+      quickStartContextKeys,
+    ],
   );
-
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const quickStartRecipes = useMemo(
-    () =>
-      buildT3workSidecarRecipeQuickStarts({
-        surface: "project.dashboard",
-        project,
-        profileId: readProjectSetupProfileIdFromProject(project),
-        selectedWorkLabel: project.title,
-        availableContextKeys: ["project.summary"],
-      }),
-    [project],
-  );
-  const filteredThreads = useMemo(() => {
-    if (!normalizedQuery) {
-      return recentThreads;
-    }
-    return recentThreads.filter((thread) => {
-      const title = thread.title.toLowerCase();
-      const ticketId = (thread.ticketId ?? "").toLowerCase();
-      return title.includes(normalizedQuery) || ticketId.includes(normalizedQuery);
-    });
-  }, [normalizedQuery, recentThreads]);
+  const quickStartRecipes = useT3workSidecarRecipeQuickStarts(quickStartRecipeInput);
 
   if (activeThread) {
     return (
@@ -131,74 +117,70 @@ export function ProjectDashboardKickoffAside({
             </h4>
             <T3workKickoffRecipeList
               recipes={quickStartRecipes}
-              onSelectRecipe={(recipe) => setPrefillText(recipe.prompt)}
+              {...(selectedRecipe?.recipe.id ? { selectedRecipeId: selectedRecipe.recipe.id } : {})}
+              onSelectRecipe={(recipe, customization) => {
+                const nextSelectedRecipe = buildProjectDashboardSelectedRecipe({
+                  recipe,
+                  ...(customization ? { customization } : {}),
+                  runDashboardRecipeAction,
+                });
+                if (nextSelectedRecipe) {
+                  setSelectedRecipe((current) => {
+                    if (
+                      current?.recipe.id === nextSelectedRecipe.recipe.id &&
+                      areT3workRecipeQuickStartLaunchCustomizationsEqual(
+                        current.customization,
+                        nextSelectedRecipe.customization,
+                      )
+                    ) {
+                      return current;
+                    }
+
+                    return nextSelectedRecipe;
+                  });
+                }
+              }}
             />
           </section>
 
-          <section className="space-y-2.5 pb-1">
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
-                Recent conversations
-              </h4>
-              <span className="text-xs text-muted-foreground/70">{filteredThreads.length}</span>
-            </div>
-
-            <div className="relative">
-              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground/70" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search conversations"
-                className="h-8 pl-8"
-              />
-            </div>
-
-            {filteredThreads.length === 0 ? (
-              <p className="px-1 py-1 text-xs text-muted-foreground/70">
-                No matching conversations.
-              </p>
-            ) : null}
-
-            {filteredThreads.map((thread) => (
-              <button
-                key={thread.id}
-                type="button"
-                className="block w-full text-left"
-                onClick={() => runT3workViewTransition(() => onOpenThread(thread.id))}
-              >
-                <Card className="border-border/70 bg-transparent transition-colors hover:bg-accent/35">
-                  <CardContent className="p-3.5">
-                    <div className="truncate text-sm font-medium">{thread.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {thread.messageCount} messages • {formatRelativeTime(thread.lastMessageAt)}
-                    </div>
-                  </CardContent>
-                </Card>
-              </button>
-            ))}
-          </section>
+          <ProjectDashboardRecentConversations
+            threads={projectThreads}
+            onOpenThread={onOpenThread}
+          />
         </div>
       </ScrollArea>
 
       <ProjectDashboardKickoffComposer
-        {...(prefillText ? { prefillText } : {})}
+        ref={composerRef}
+        {...(selectedRecipe ? { selectedRecipe } : {})}
+        onClearSelectedRecipe={() => setSelectedRecipe(null)}
         providers={providers}
         isConnected={isConnected}
         injectedContextAttachments={injectedContextAttachments}
         onRemoveContextAttachment={removeContextAttachment}
         onSubmit={(text, selection, runtimeMode, interactionMode, selectedToolIds) => {
           runT3workViewTransition(() => {
+            const kickoff = selectedRecipe
+              ? buildT3workSelectedRecipeKickoffLaunch({
+                  selectedRecipe,
+                  customMessage: text,
+                })
+              : {
+                  kickoffMessage: text,
+                  kickoffPending: true,
+                };
             onKickoffThread(
-              text,
+              kickoff.kickoffMessage,
+              kickoff.kickoffPending,
               selection,
               runtimeMode,
               interactionMode,
               selectedToolIds,
               injectedContextAttachments,
+              selectedRecipe?.recipe.workflow,
             );
-            setPrefillText(undefined);
-            setInjectedContextAttachments([]);
-            setDismissedAttachmentIds(new Set());
+            clearInjectedContextAttachments();
+            setSelectedRecipe(null);
           });
         }}
       />

@@ -1,37 +1,48 @@
-import type { ProjectShellProject } from "@t3tools/project-context";
-import { matchRecipes, type RecipeSurface } from "@t3tools/project-recipes";
+import { useEffect, useMemo, useState } from "react";
+import { matchRecipes } from "@t3tools/project-recipes";
 import {
+  getBundledT3WorkRecipe,
   getT3WorkProfile,
   listBundledT3WorkRecipes,
   toRecipeProfileContext,
 } from "@t3tools/t3work-skill-packs";
 
-export type T3workSidecarRecipeQuickStart = {
-  readonly id: string;
-  readonly title: string;
-  readonly description: string;
-  readonly prompt: string;
-};
+import type { BackendApi } from "~/t3work/backend/t3work-types";
+import { buildAvailableContextKeys } from "~/t3work/t3work-sidecarRecipeContextKeys";
+import {
+  buildPinnedQuickStartSelection,
+  buildProjectRecipeDiscoveryRequest,
+  buildRecipeRenderContext,
+  mapDiscoveredRecipesToQuickStarts,
+} from "~/t3work/t3work-sidecarRecipeRenderContext";
+import {
+  buildBundledRecipeTemplateValues,
+  renderPromptTemplate,
+} from "~/t3work/t3work-sidecarRecipeTemplates";
+import { areQuickStartsEqual } from "~/t3work/t3work-sidecarRecipeQuickStartEquality";
+import type {
+  T3workSidecarRecipeInput,
+  T3workSidecarRecipeQuickStart,
+} from "~/t3work/t3work-sidecarRecipeTypes";
 
-function renderPromptTemplate(template: string, values: Readonly<Record<string, string>>): string {
-  return template.replace(
-    /{{\s*([a-zA-Z0-9]+)\s*}}/g,
-    (_match, key: string) => values[key] ?? "selected work",
-  );
-}
+export type {
+  T3workSidecarRecipeActionView,
+  T3workSidecarRecipeLinkedResource,
+  T3workSidecarRecipeQuickStart,
+  T3workSidecarRecipeTicketContext,
+  T3workSidecarRecipeTicketGitHubSummary,
+  T3workSidecarRecipeTicketRelationships,
+} from "~/t3work/t3work-sidecarRecipeTypes";
 
-export function buildT3workSidecarRecipeQuickStarts(input: {
-  readonly surface: RecipeSurface;
-  readonly project: ProjectShellProject;
-  readonly profileId?: string;
-  readonly selectedWorkLabel: string;
-  readonly resourceKind?: string | null;
-  readonly jiraIssueType?: string | null;
-  readonly availableIntegrations?: ReadonlyArray<string>;
-  readonly availableContextKeys?: ReadonlyArray<string>;
-  readonly limit?: number;
-}): ReadonlyArray<T3workSidecarRecipeQuickStart> {
+export { buildProjectRecipeDiscoveryRequest } from "~/t3work/t3work-sidecarRecipeRenderContext";
+
+export function buildT3workSidecarRecipeQuickStarts(
+  input: T3workSidecarRecipeInput,
+): ReadonlyArray<T3workSidecarRecipeQuickStart> {
   const profile = getT3WorkProfile(input.profileId);
+  const renderContext = buildRecipeRenderContext(input, profile);
+  const availableContextKeys = buildAvailableContextKeys(input);
+  const templateValues = buildBundledRecipeTemplateValues(input);
   const matches = matchRecipes(listBundledT3WorkRecipes(), {
     activeProject: input.project,
     selectedResource: null,
@@ -43,16 +54,131 @@ export function buildT3workSidecarRecipeQuickStarts(input: {
     ...(input.jiraIssueType ? { jiraIssueType: input.jiraIssueType } : {}),
     enabledSkillPacks: profile.recommendedSkillPackIds,
     profile: toRecipeProfileContext(profile),
-    ...(input.availableContextKeys ? { availableContextKeys: input.availableContextKeys } : {}),
-  });
+    availableContextKeys,
+  }).filter((result) => result.missingContext.length === 0);
 
-  return matches.slice(0, input.limit ?? 5).map((result) => ({
-    id: result.recipe.id,
-    title: result.recipe.title,
-    description: result.recipe.shortDescription,
-    prompt: renderPromptTemplate(result.recipe.promptTemplate, {
-      projectTitle: input.project.title,
-      selectedWorkLabel: input.selectedWorkLabel,
-    }),
-  }));
+  return buildPinnedQuickStartSelection(matches, input.limit ?? 5).map((result) => {
+    const bundledRecipe = getBundledT3WorkRecipe(result.recipe.id);
+    const renderedTitle = renderPromptTemplate(
+      bundledRecipe?.manifestDisplayName ?? result.recipe.title,
+      templateValues,
+    );
+    const renderedDescription = renderPromptTemplate(
+      result.recipe.shortDescription,
+      templateValues,
+    );
+
+    const quickStart: T3workSidecarRecipeQuickStart = {
+      id: result.recipe.id,
+      title: renderedTitle,
+      description: renderedDescription,
+      prompt: renderPromptTemplate(result.recipe.promptTemplate, templateValues),
+      workflow: {
+        kind: "recipe",
+        recipeId: result.recipe.id,
+        ...(bundledRecipe?.version ? { recipeVersion: bundledRecipe.version } : {}),
+        ...(result.recipe.kickoff ? { kickoff: result.recipe.kickoff } : {}),
+        title: renderedTitle,
+        description: renderedDescription,
+        source: "bundled",
+        surface: input.surface,
+        reason: result.reason,
+        ...(bundledRecipe?.allowedToolGroups
+          ? { allowedToolGroups: bundledRecipe.allowedToolGroups }
+          : {}),
+      },
+    };
+
+    return bundledRecipe?.actionViewTemplate
+      ? Object.assign(quickStart, {
+          actionView: {
+            source: renderPromptTemplate(bundledRecipe.actionViewTemplate, templateValues),
+            context: renderContext,
+          },
+        })
+      : quickStart;
+  });
+}
+
+export function useT3workSidecarRecipeQuickStarts(
+  input: T3workSidecarRecipeInput & {
+    readonly backend: BackendApi | null;
+  },
+): ReadonlyArray<T3workSidecarRecipeQuickStart> {
+  const fallbackQuickStarts = useMemo(() => buildT3workSidecarRecipeQuickStarts(input), [input]);
+  const [quickStarts, setQuickStarts] =
+    useState<ReadonlyArray<T3workSidecarRecipeQuickStart>>(fallbackQuickStarts);
+  const workspaceRoot = input.project.workspace?.rootPath;
+  const availableContextKey = (input.availableContextKeys ?? []).join("\u0000");
+  const availableIntegrationsKey = (input.availableIntegrations ?? []).join("\u0000");
+  const contextAttachmentsKey = (input.contextAttachments ?? [])
+    .map((attachment) =>
+      [attachment.id, attachment.kind, attachment.label, attachment.jiraIssueType ?? ""].join(
+        "\u0001",
+      ),
+    )
+    .join("\u0000");
+  const linkedResourcesKey = JSON.stringify(input.linkedResources ?? []);
+  const ticketContextKey = JSON.stringify(input.ticketContext ?? null);
+
+  useEffect(() => {
+    const setQuickStartsIfChanged = (
+      nextQuickStarts: ReadonlyArray<T3workSidecarRecipeQuickStart>,
+    ) => {
+      setQuickStarts((current) =>
+        areQuickStartsEqual(current, nextQuickStarts) ? current : nextQuickStarts,
+      );
+    };
+
+    setQuickStartsIfChanged(fallbackQuickStarts);
+
+    if (!input.backend || !workspaceRoot) {
+      return;
+    }
+
+    const discoveryRequest = buildProjectRecipeDiscoveryRequest({
+      ...input,
+      workspaceRoot,
+    });
+    let cancelled = false;
+    void input.backend.projectWorkspace
+      .discoverRecipes(discoveryRequest)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        if (!response.hasProjectLocalRecipes) {
+          setQuickStartsIfChanged(fallbackQuickStarts);
+          return;
+        }
+        setQuickStartsIfChanged(
+          mapDiscoveredRecipesToQuickStarts(
+            response.recipes,
+            input.surface,
+            input.limit,
+            discoveryRequest.context,
+          ),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQuickStartsIfChanged(fallbackQuickStarts);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    availableContextKey,
+    contextAttachmentsKey,
+    availableIntegrationsKey,
+    linkedResourcesKey,
+    ticketContextKey,
+    fallbackQuickStarts,
+    input,
+    workspaceRoot,
+  ]);
+
+  return quickStarts;
 }

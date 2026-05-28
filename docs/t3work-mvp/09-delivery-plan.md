@@ -58,9 +58,9 @@ Deliverables:
 
 - recipe registry
 - applicability matcher
-- project-scoped action recipe template registry
+- project-scoped recipe plugin-module (`recipe.ts`) registry
 - pre-launch recipe metadata rendering for dashboard and side panel actions
-- recipe instantiation into `runs/<run-id>/recipe/`
+- recipe run materialization into `runs/<run-id>/recipe/`
 - `context.json`, `context.schema.json`, and `context-map.md` generation
 - recipe cards on project and issue pages
 - recipe launch into T3 thread
@@ -72,7 +72,7 @@ Validation:
 
 - issue page shows context-relevant recipes
 - rendered action labels use selected issue data before launch
-- launched recipe creates an instantiated recipe directory
+- launched recipe materializes a run directory (`runs/<run-id>/recipe/`)
 - recipe output references the selected issue
 - chat is no longer the first blank surface
 

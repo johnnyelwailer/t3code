@@ -12,8 +12,8 @@ import {
   type ViewState,
 } from "~/t3work/t3work-types";
 import { AppDashboardPane } from "~/t3work/t3work-AppDashboardPane";
+import { AppMainContentHomeBrowser } from "~/t3work/t3work-AppMainContentHomeBrowser";
 import { AppThreadPane } from "~/t3work/t3work-AppThreadPane";
-import { AppMainContentHomeEmptyState } from "~/t3work/t3work-AppMainContentHomeEmptyState";
 import { isHomeProjectId } from "~/t3work/t3work-homeProject";
 import { useThreadResolutionDebug } from "~/t3work/t3work-useThreadResolutionDebug";
 import { useHomeProjectChat, useSyncActiveChatTarget } from "./t3work-AppMainContentShell";
@@ -25,6 +25,7 @@ type MainContentProps = {
   projects: ProjectShellProject[];
   allProjects: ProjectShellProject[];
   reopenInitialSetup?: boolean;
+  shouldInsetDesktopHeader?: boolean;
   getThreadsForProject: (projectId: string) => ProjectThread[];
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onOpenThread: (projectId: string, threadId: string) => void;
@@ -52,6 +53,7 @@ export function AppMainContent({
   projects,
   allProjects,
   reopenInitialSetup = false,
+  shouldInsetDesktopHeader = false,
   getThreadsForProject,
   onOpenTicket,
   onOpenThread,
@@ -78,41 +80,25 @@ export function AppMainContent({
         allProjects[0] ??
         null)
       : null;
-
-  const renderHomeBrowserEmpty = () => (
-    <AppMainContentHomeEmptyState
+  const homeChatProjectThreads = homeChatProject ? getThreadsForProject(homeChatProject.id) : [];
+  const homeBrowser = (
+    <AppMainContentHomeBrowser
       onCreate={onCreate}
       onInlineProjectCreated={onInlineProjectCreated}
       showInitialSetup={showInitialSetup}
       showAside={!reopenInitialSetup && projects.length > 0}
+      shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       homeChatProject={homeChatProject}
-      homeChatProjectThreads={homeChatProject ? getThreadsForProject(homeChatProject.id) : []}
+      homeChatProjectThreads={homeChatProjectThreads}
       providers={backendState.providers}
       isConnected={backendState.connectionStatus === "connected"}
       onOpenHomeThread={(threadId) => {
         if (homeChatProject) onOpenThread(homeChatProject.id, threadId);
       }}
-      onKickoffHomeThread={(
-        kickoffMessage,
-        kickoffModelSelection,
-        kickoffRuntimeMode,
-        kickoffInteractionMode,
-        selectedToolIds,
-        kickoffContextAttachments,
-      ) => {
-        if (!homeChatProject) return;
-        onKickoffProjectThread({
-          projectId: homeChatProject.id,
-          kickoffMessage,
-          kickoffModelSelection,
-          kickoffRuntimeMode,
-          kickoffInteractionMode,
-          selectedToolIds,
-          kickoffContextAttachments,
-        });
-      }}
+      onKickoffProjectThread={onKickoffProjectThread}
     />
   );
+
   useSyncActiveChatTarget({
     view,
     getThreadsForProject,
@@ -164,7 +150,7 @@ export function AppMainContent({
       );
     }
 
-    return renderHomeBrowserEmpty();
+    return homeBrowser;
   }
 
   if (view.type === "thread") {
@@ -183,7 +169,7 @@ export function AppMainContent({
   }
 
   const project = allProjects.find((candidate) => candidate.id === view.projectId);
-  if (!project) return renderHomeBrowserEmpty();
+  if (!project) return homeBrowser;
 
   if (view.type === "dashboard") {
     return (
@@ -208,5 +194,5 @@ export function AppMainContent({
   if (view.type === "ticket")
     return <>{renderTicketDetail(project, view.ticketId, view.embeddedThreadId)}</>;
 
-  return renderHomeBrowserEmpty();
+  return homeBrowser;
 }

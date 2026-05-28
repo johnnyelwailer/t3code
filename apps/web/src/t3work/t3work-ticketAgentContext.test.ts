@@ -75,6 +75,7 @@ describe("ticket agent context builders", () => {
     expect(addToChatAction?.id).toBe("add-to-chat");
     expect(addToChatAction?.request.targetLabel).toBe("PROJ-9 Prepare release checklist");
     expect(addToChatAction?.request.kind).toBe("jira-work-item");
+    expect(addToChatAction?.request.dedupeKey).toBe("project-1:PROJ-9:work-item");
   });
 
   it("builds GitHub activity capabilities with the same shared action shape", () => {

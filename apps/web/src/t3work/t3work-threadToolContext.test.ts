@@ -188,6 +188,42 @@ describe("createT3workTurnToolContext", () => {
       },
     });
   });
+
+  it("includes kickoff metadata when a thread is waiting on a guided first prompt", () => {
+    const toolContext = createT3workTurnToolContext({
+      projectId: "project-alpha",
+      projectTitle: "Project Alpha",
+      workspaceRoot: "/workspace/project-alpha",
+      threadId: "thread-1",
+      threadTitle: "Kickoff",
+      kickoffMessage: "Recipe authoring kickoff",
+      kickoffPending: false,
+      kickoffWorkflow: {
+        kind: "recipe",
+        recipeId: "create-contextual-recipe",
+        title: "Create a recipe for this context",
+        description: "Design a contextual recipe for the current surface.",
+        source: "bundled",
+        surface: "project.dashboard",
+      },
+    });
+
+    expect(toolContext).toBeDefined();
+    if (!toolContext) {
+      throw new Error("Expected tool context");
+    }
+
+    expect(toolContext.state).toMatchObject({
+      kickoff: {
+        message: "Recipe authoring kickoff",
+        pending: false,
+        workflow: {
+          recipeId: "create-contextual-recipe",
+          surface: "project.dashboard",
+        },
+      },
+    });
+  });
 });
 
 describe("mergeProjectThreads", () => {

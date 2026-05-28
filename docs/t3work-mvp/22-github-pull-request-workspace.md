@@ -161,7 +161,12 @@ Use the existing app stack rather than introducing a second frontend architectur
 
 - React 19 for the PR workspace UI
 - TanStack Router for route/search state
-- TanStack Query for PR overview/activity/checks/diff data fetching
+- PR overview, activity, checks, and diff data flows through the \*\*shared local SQL cache
+  - `Queryable<T>` model\*\* defined in [Epic 16 — Context: Reactive Queryable Surface](./16-action-recipes.md#context-reactive-queryable-surface).
+    GitHub data syncs into namespaced tables in the existing
+    [`effect/sql` persistence layer](../../apps/server/src/persistence/Layers/Sqlite.ts);
+    the web UI consumes it via the same queryable surface that powers recipe discovery and
+    Views, with projection-driven reactivity rather than URL-keyed HTTP cache invalidation.
 - `@pierre/diffs` and `@pierre/diffs/react` for patch parsing, syntax highlighting,
   `FileDiff`, and hunk virtualization
 - `DiffWorkerPoolProvider` for worker-backed diff parsing/rendering

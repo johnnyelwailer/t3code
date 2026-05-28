@@ -34,6 +34,7 @@ export function buildTicketAgentContextCapabilities(
       targetLabel: `${ticket.ref.displayId} ${ticket.ref.title}`,
       targetType: "work-item",
       kind: "jira-work-item",
+      dedupeKey: `${project.id}:${ticket.ref.displayId}:work-item`,
       ...(jiraSummary.jiraIssueType ? { jiraIssueType: jiraSummary.jiraIssueType } : {}),
       ...(jiraSummary.jiraIssueTypeIconUrl
         ? { jiraIssueTypeIconUrl: jiraSummary.jiraIssueTypeIconUrl }

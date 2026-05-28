@@ -192,6 +192,10 @@ import {
   isVersionMismatchDismissed,
   resolveServerConfigVersionMismatch,
 } from "../versionSkew";
+import {
+  deriveT3workRecipeActivityCardEntries,
+  isT3workRecipeActivity,
+} from "~/t3work/chat/t3work-threadRecipeActivityCards";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
@@ -346,6 +350,7 @@ type ChatViewProps =
       hideHeader?: boolean;
       hideBranchToolbar?: boolean;
       minimalComposer?: boolean;
+      syntheticMessages?: ReadonlyArray<ChatMessage>;
       routeKind: "server";
       draftId?: never;
       /** Optional slot rendered above the image chip strip inside the composer. */
@@ -362,8 +367,29 @@ type ChatViewProps =
         | undefined;
       /** Optional hook fired immediately before dispatching a turn-start command. */
       beforeDispatchTurnStart?: (() => Promise<void>) | undefined;
+      /** Optional override for host-owned turn-start flows. Return true when handled. */
+      dispatchTurnStartOverride?:
+        | ((input: {
+            threadId: ThreadId;
+            messageId: MessageId;
+            messageText: string;
+            modelSelection: ModelSelection;
+            titleSeed: string;
+            runtimeMode: RuntimeMode;
+            interactionMode: ProviderInteractionMode;
+            createdAt: string;
+            hasAttachments: boolean;
+          }) => Promise<boolean>)
+        | undefined;
       /** Optional callback fired after a send consumes composer context attachments. */
       onComposerContextAttachmentsConsumed?: (() => void) | undefined;
+      onSubmitRecipeCardAction?:
+        | ((input: {
+            cardId: string;
+            actionId: string;
+            submit?: Record<string, unknown>;
+          }) => Promise<void>)
+        | undefined;
     }
   | {
       environmentId: EnvironmentId;
@@ -375,6 +401,7 @@ type ChatViewProps =
       hideHeader?: boolean;
       hideBranchToolbar?: boolean;
       minimalComposer?: boolean;
+      syntheticMessages?: ReadonlyArray<ChatMessage>;
       routeKind: "draft";
       draftId: DraftId;
       /** Optional slot rendered above the image chip strip inside the composer. */
@@ -391,8 +418,29 @@ type ChatViewProps =
         | undefined;
       /** Optional hook fired immediately before dispatching a turn-start command. */
       beforeDispatchTurnStart?: (() => Promise<void>) | undefined;
+      /** Optional override for host-owned turn-start flows. Return true when handled. */
+      dispatchTurnStartOverride?:
+        | ((input: {
+            threadId: ThreadId;
+            messageId: MessageId;
+            messageText: string;
+            modelSelection: ModelSelection;
+            titleSeed: string;
+            runtimeMode: RuntimeMode;
+            interactionMode: ProviderInteractionMode;
+            createdAt: string;
+            hasAttachments: boolean;
+          }) => Promise<boolean>)
+        | undefined;
       /** Optional callback fired after a send consumes composer context attachments. */
       onComposerContextAttachmentsConsumed?: (() => void) | undefined;
+      onSubmitRecipeCardAction?:
+        | ((input: {
+            cardId: string;
+            actionId: string;
+            submit?: Record<string, unknown>;
+          }) => Promise<void>)
+        | undefined;
     };
 
 interface TerminalLaunchContext {
@@ -658,13 +706,16 @@ export default function ChatView(props: ChatViewProps) {
     hideHeader = false,
     hideBranchToolbar = false,
     minimalComposer = false,
+    syntheticMessages = [],
     composerContextAttachmentSlot,
     composerContainerProps,
     composerContainerOverlay,
     composerContextAttachments = [],
     prepareComposerContextAttachments,
     beforeDispatchTurnStart,
+    dispatchTurnStartOverride,
     onComposerContextAttachmentsConsumed,
+    onSubmitRecipeCardAction,
   } = props;
   const draftId = routeKind === "draft" ? props.draftId : null;
   const routeThreadRef = useMemo(
@@ -1320,9 +1371,17 @@ export default function ChatView(props: ChatViewProps) {
   const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
   const phase = derivePhase(activeThread?.session ?? null);
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
+  const nonRecipeThreadActivities = useMemo(
+    () => threadActivities.filter((activity) => !isT3workRecipeActivity(activity)),
+    [threadActivities],
+  );
   const workLogEntries = useMemo(
-    () => deriveWorkLogEntries(threadActivities, activeLatestTurn?.turnId ?? undefined),
-    [activeLatestTurn?.turnId, threadActivities],
+    () => deriveWorkLogEntries(nonRecipeThreadActivities, activeLatestTurn?.turnId ?? undefined),
+    [activeLatestTurn?.turnId, nonRecipeThreadActivities],
+  );
+  const activityCardEntries = useMemo(
+    () => deriveT3workRecipeActivityCardEntries(threadActivities),
+    [threadActivities],
   );
   const latestTurnHasToolActivity = useMemo(
     () => hasToolActivityForTurn(threadActivities, activeLatestTurn?.turnId),
@@ -1603,16 +1662,30 @@ export default function ChatView(props: ChatViewProps) {
             return changed ? { ...message, attachments } : message;
           });
 
-    if (optimisticUserMessages.length === 0) {
-      return serverMessagesWithPreviewHandoff;
-    }
     const serverIds = new Set(serverMessagesWithPreviewHandoff.map((message) => message.id));
-    const pendingMessages = optimisticUserMessages.filter((message) => !serverIds.has(message.id));
-    if (pendingMessages.length === 0) {
-      return serverMessagesWithPreviewHandoff;
+    const syntheticMessagesWithoutDuplicates = syntheticMessages.filter(
+      (message) => !serverIds.has(message.id),
+    );
+    const baseMessages =
+      syntheticMessagesWithoutDuplicates.length === 0
+        ? serverMessagesWithPreviewHandoff
+        : [...syntheticMessagesWithoutDuplicates, ...serverMessagesWithPreviewHandoff];
+
+    if (optimisticUserMessages.length === 0) {
+      return baseMessages;
     }
-    return [...serverMessagesWithPreviewHandoff, ...pendingMessages];
-  }, [serverMessages, attachmentPreviewHandoffByMessageId, optimisticUserMessages]);
+    const baseIds = new Set(baseMessages.map((message) => message.id));
+    const pendingMessages = optimisticUserMessages.filter((message) => !baseIds.has(message.id));
+    if (pendingMessages.length === 0) {
+      return baseMessages;
+    }
+    return [...baseMessages, ...pendingMessages];
+  }, [
+    serverMessages,
+    attachmentPreviewHandoffByMessageId,
+    optimisticUserMessages,
+    syntheticMessages,
+  ]);
   const timelineEntries = useMemo(
     () =>
       deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
@@ -2941,6 +3014,21 @@ export default function ChatView(props: ChatViewProps) {
           : undefined;
       beginLocalDispatch({ preparingWorktree: false });
       await beforeDispatchTurnStart?.();
+      const handledByOverride = await dispatchTurnStartOverride?.({
+        threadId: threadIdForSend,
+        messageId: messageIdForSend,
+        messageText: outgoingMessageText,
+        modelSelection: ctxSelectedModelSelection,
+        titleSeed: title,
+        runtimeMode,
+        interactionMode,
+        createdAt: messageCreatedAt,
+        hasAttachments: turnAttachments.length > 0,
+      });
+      if (handledByOverride) {
+        turnStartSucceeded = true;
+        return;
+      }
       await api.orchestration.dispatchCommand({
         type: "thread.turn.start",
         commandId: newCommandId(),
@@ -3683,6 +3771,8 @@ export default function ChatView(props: ChatViewProps) {
               workspaceRoot={activeWorkspaceRoot}
               skills={activeProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS}
               onIsAtEndChange={onIsAtEndChange}
+              activityCards={activityCardEntries}
+              onSubmitRecipeCardAction={onSubmitRecipeCardAction}
             />
 
             {/* scroll to bottom pill — shown when user has scrolled away from the bottom */}

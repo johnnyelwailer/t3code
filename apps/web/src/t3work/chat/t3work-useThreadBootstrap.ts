@@ -14,6 +14,7 @@ import {
 } from "~/t3work/chat/t3work-threadBootstrapPlan";
 import { runThreadBootstrap } from "~/t3work/chat/t3work-runThreadBootstrap";
 import type { T3workTurnToolContext } from "~/t3work/t3work-threadToolContext";
+import type { T3workKickoffWorkflow } from "~/t3work/t3work-types";
 import {
   recordThreadBootstrapFailure,
   recordThreadBootstrapPlan,
@@ -33,6 +34,7 @@ type ThreadBootstrapInput = {
   initialModelSelection: ModelSelection | undefined;
   initialRuntimeMode: RuntimeMode | undefined;
   initialInteractionMode: ProviderInteractionMode | undefined;
+  kickoffWorkflow: T3workKickoffWorkflow | undefined;
   initialToolContext: T3workTurnToolContext | undefined;
   onInitialUserMessageSent: (() => void) | undefined;
   serverThread: unknown | undefined;
@@ -51,6 +53,7 @@ export function useThreadBootstrap({
   initialModelSelection,
   initialRuntimeMode,
   initialInteractionMode,
+  kickoffWorkflow,
   initialToolContext,
   onInitialUserMessageSent,
   serverThread,
@@ -116,6 +119,7 @@ export function useThreadBootstrap({
       kickoffModelSelection,
       kickoffRuntimeMode,
       kickoffInteractionMode,
+      ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
       ...(initialToolContext !== undefined ? { toolContext: initialToolContext } : {}),
       createdAt,
       shouldEnsureProject: bootstrapPlan.shouldEnsureProject,
@@ -142,6 +146,7 @@ export function useThreadBootstrap({
     canonicalProjectId,
     environmentId,
     initialInteractionMode,
+    kickoffWorkflow,
     initialModelSelection,
     initialRuntimeMode,
     initialToolContext,

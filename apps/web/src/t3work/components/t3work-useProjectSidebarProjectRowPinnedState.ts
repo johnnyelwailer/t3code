@@ -28,6 +28,7 @@ export function useProjectSidebarProjectRowPinnedState(
   });
 
   return {
+    pinnedItems,
     showPinnedOnlyFeed,
     effectiveProjectTickets: showPinnedOnlyFeed
       ? pinnedOnlyFeed.projectTickets

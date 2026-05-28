@@ -64,12 +64,25 @@ Left nav: thread-123 appears under the backlog/project attachment point
 Keep the current kickoff panel concept, but make kickoff become the first step of a
 context-bound thread.
 
+For recipe-driven launches, creating the thread does not necessarily mean the first agent turn
+starts immediately. Kickoff is the first phase of the recipe's workflow: the workflow may create
+the thread, render guided kickoff state in the embedded chat panel via a `collect-input` step, and
+wait for user input before advancing to the first `agent` step. See
+[Epic 16](./16-action-recipes.md#workflows) for the unified step model.
+
+A conversation has three message authors — `user`, `agent`, and `system` (workflow- or
+host-emitted) — with independent `visibleToUser`/`visibleToAgent` flags and an optional
+embedded `view` (a miniapp at `conversation.inlineCard`) that carries interactive UI for
+forms, approvals, and structured pickers. The embedded chat panel renders all three. See
+[Epic 16 — Conversation Participants](./16-action-recipes.md#conversation-participants)
+for the model and the `t3workExt` additive seam.
+
 Panel states:
 
 - kickoff draft for the default parent view
 - active context-bound thread
 - thread running
-- thread blocked on user input or approval
+- thread blocked on user input or approval (a `collect-input` waiting on a system message)
 - thread error
 
 Core controls:
@@ -241,6 +254,7 @@ Rules:
 - `repo_full_name` selects a linked repository and creates a fresh worktree/branch
 - without `repo_full_name`, the child session uses the project meta workspace
 - `kickoff_prompt` is optional; when present, the first turn starts immediately
+- a recipe-owned kickoff flow may still pause after thread creation and wait for a structured kickoff submission before the first agent turn starts
 - durable handoff activity cards are recorded on both the parent and child threads
 - server validates project, repository, and workspace access
 
