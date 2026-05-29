@@ -25,11 +25,11 @@ This epic closes that gap while keeping the existing two surfaces intact.
 
 ## Three tiers
 
-| Tier | Where | What lives here | Mechanism |
-|------|-------|-----------------|-----------|
-| **T1: inline prose MDX** | `Message.content` | Visual flourishes, refs, micro-vis, inline structures | tolerant streaming MDX renderer + whitelisted component registry |
-| **T2: structured view** | `Message.t3workExt.view` | Heavy, stateful, interactive components | **T2a:** registered miniapp invocation (Epic 19) · **T2b:** on-the-fly composer subagent that authors a new view in seconds |
-| **T3: persistent artifact** | `RichArtifact` (Epic 08) | Durable documents persisted to workspace | MDX/HTML/blocks formats |
+| Tier                        | Where                    | What lives here                                       | Mechanism                                                                                                                   |
+| --------------------------- | ------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **T1: inline prose MDX**    | `Message.content`        | Visual flourishes, refs, micro-vis, inline structures | tolerant streaming MDX renderer + whitelisted component registry                                                            |
+| **T2: structured view**     | `Message.t3workExt.view` | Heavy, stateful, interactive components               | **T2a:** registered miniapp invocation (Epic 19) · **T2b:** on-the-fly composer subagent that authors a new view in seconds |
+| **T3: persistent artifact** | `RichArtifact` (Epic 08) | Durable documents persisted to workspace              | MDX/HTML/blocks formats                                                                                                     |
 
 The dividing line between T1 and T2 is **state + interactivity**, not visual fanciness.
 A `<Chart>` with literal hard-coded data points is T1-eligible (renders once, no
@@ -51,7 +51,7 @@ registry decides which tier renders it.
   appears; never crashes the message.
 - **Fast at idle.** Rendered per message in a chat list potentially 200+ items deep —
   must amortize to free at idle. Render cost on first encounter is bounded but not
-  required to be zero (see *loading strategy* below).
+  required to be zero (see _loading strategy_ below).
 - **Searchable.** Each component declares a `fallback` text shape used for search
   index, copy-paste, and screen readers.
 - **Accessible.** Required `aria-label` derivation (often the fallback text).
@@ -382,7 +382,7 @@ authors the view in its own context, signals back when ready. The chat agent
 continues streaming in the meantime; the message shows a placeholder that swaps
 to the rendered view on completion.
 
-The mental model for the chat agent is: *"I want a card showing X"* — call
+The mental model for the chat agent is: _"I want a card showing X"_ — call
 `compose_view`, keep talking. No friction, no workspace navigation, no permission
 prompts. The composer subagent absorbs the cost of creating something new.
 
@@ -419,7 +419,7 @@ authoring output, never on chat content.
 **Model & reasoning.** The composer runs in its own context with its own model
 configuration, independent of the parent thread.
 
-*Reuse existing infrastructure.* t3work already has a workspace-level
+_Reuse existing infrastructure._ t3work already has a workspace-level
 "utility model" seam: `textGenerationModelSelection` in
 `packages/contracts/src/settings.ts` (defaulting to a Codex provider with
 `DEFAULT_GIT_TEXT_GENERATION_MODEL`, currently GPT-5.4 mini), backed by the
@@ -445,15 +445,15 @@ Two independent axes are configurable at each layer:
 - **Reasoning effort** — how much per-turn thought the model spends (extended
   thinking for Anthropic, `reasoning_effort` for OpenAI, etc.).
 
-*Per-provider built-in defaults (used when both settings are unset):*
+_Per-provider built-in defaults (used when both settings are unset):_
 
-| Provider | Default composer model | Reasoning effort | Notes |
-|---|---|---|---|
-| Anthropic | Sonnet 4.x | Extended thinking off | Code-loop tier; one step above Haiku |
-| OpenAI | GPT-5.5 | `reasoning_effort: low` | Capability retained; reasoning is the lever |
-| OpenAI (mini-tier preferred) | GPT-5.4 mini | `reasoning_effort: low` | Honor the established utility-model floor |
-| Cursor | Composer 2.5 | n/a | Pinned to the purpose-built coding model |
-| Other Codex provider | provider's text-gen default | provider default | Conservative; same as text-gen |
+| Provider                     | Default composer model      | Reasoning effort        | Notes                                       |
+| ---------------------------- | --------------------------- | ----------------------- | ------------------------------------------- |
+| Anthropic                    | Sonnet 4.x                  | Extended thinking off   | Code-loop tier; one step above Haiku        |
+| OpenAI                       | GPT-5.5                     | `reasoning_effort: low` | Capability retained; reasoning is the lever |
+| OpenAI (mini-tier preferred) | GPT-5.4 mini                | `reasoning_effort: low` | Honor the established utility-model floor   |
+| Cursor                       | Composer 2.5                | n/a                     | Pinned to the purpose-built coding model    |
+| Other Codex provider         | provider's text-gen default | provider default        | Conservative; same as text-gen              |
 
 The "OpenAI (mini-tier preferred)" row recognises that the existing
 `textGenerationModelSelection` default is already GPT-5.4 mini — so for users
@@ -468,7 +468,7 @@ prose. The cascade lets the user opt into separate tuning when needed without
 forcing the decision up front; the recipe-level override (`composer.model`)
 exists for recipes whose view authoring is genuinely demanding.
 
-*Reasoning policy per loop step (when the model supports the knob):*
+_Reasoning policy per loop step (when the model supports the knob):_
 
 - **Iteration loop steps: minimum** (`thinking: off` / `reasoning_effort: low`
   / `minimal`). Concrete error message + small file = no deep reasoning needed.
@@ -478,14 +478,14 @@ exists for recipes whose view authoring is genuinely demanding.
 - **Override per recipe** when an authoring task is genuinely hard
   (`composer: { reasoning: { onInitialDraft: "high", budget: 4000 } }`).
 
-*Cross-provider composers.* Explicitly supported via cascade step 1 or 2 — a
+_Cross-provider composers._ Explicitly supported via cascade step 1 or 2 — a
 recipe or workspace can pin a different provider than the parent thread (e.g.,
 `composer: { provider: "cursor" }` to use Composer 2.5 even when the parent
 chat is on Codex-Anthropic). Cross-provider routing inherits credentials from
 the workspace's existing provider config; no separate auth surface, no new
 secrets management, no surprise billing.
 
-*Why composer settings are workspace-level, not per-thread.* Matches existing
+_Why composer settings are workspace-level, not per-thread._ Matches existing
 `textGenerationModelSelection` semantics. The composer is a utility
 subsystem, not a thread-bound conversational identity. Per-thread tuning is
 available via recipe overrides for recipes that consistently need it, but the
@@ -504,10 +504,9 @@ default is "set it once for the workspace, forget about it."
 - **`scope: "home"`** — user-global, lands in the home workspace's
   `.t3work/miniapps/`. Reserved for views the user explicitly promotes.
 
-**Authoring format.** The composer subagent uses full MDX or `.tsx` per Epic
-19. Full MDX (with JSX, hooks, expressions) is available here because the
+**Authoring format.** The composer subagent uses full MDX or `.tsx` per Epic 19. Full MDX (with JSX, hooks, expressions) is available here because the
 output goes through the workspace compile pipeline — same trust boundary as
-any code. This is *not* free-typed MDX in a message; it is code committed to
+any code. This is _not_ free-typed MDX in a message; it is code committed to
 the workspace and rendered through the registered-component path.
 
 **Reuse-first behaviour.** The composer's first action is
@@ -576,8 +575,8 @@ Catalog entries are slim:
 type ComponentCatalogEntry = {
   name: string;
   tier: "T1" | "T2";
-  purpose: string;        // one-line
-  example: string;        // one tight example of MDX or tool-call shape
+  purpose: string; // one-line
+  example: string; // one tight example of MDX or tool-call shape
   propsSchemaRef: string; // pointer; full schema fetched lazily via describe_widget tool
 };
 ```
@@ -610,18 +609,18 @@ behaviour via `defineRecipe({ composer: { … } })`:
 defineRecipe({
   // ...
   composer: {
-    defaultScope: "thread",                       // "thread" | "project" | "home"
-    maxIterations: 6,                             // fix-loop budget
+    defaultScope: "thread", // "thread" | "project" | "home"
+    maxIterations: 6, // fix-loop budget
     maxWallClockMs: 120_000,
     allowedAuthoringFormats: ["tsx", "mdx"],
-    model: "auto",                                // "auto" → per-provider default table
-    provider: "inherit",                          // "inherit" | explicit provider id
+    model: "auto", // "auto" → per-provider default table
+    provider: "inherit", // "inherit" | explicit provider id
     reasoning: {
-      onInitialDraft: "auto",                     // "minimal" | "low" | "medium" | "high" | "auto"
-      onFixIteration: "minimal",                  // recommended minimal; loop turns are narrow
-      budget: 4000,                               // tokens (Anthropic extended thinking); ignored when provider uses level-based reasoning
+      onInitialDraft: "auto", // "minimal" | "low" | "medium" | "high" | "auto"
+      onFixIteration: "minimal", // recommended minimal; loop turns are narrow
+      budget: 4000, // tokens (Anthropic extended thinking); ignored when provider uses level-based reasoning
     },
-    allowedTools: undefined,                      // undefined = curated default set
+    allowedTools: undefined, // undefined = curated default set
   },
 });
 ```
@@ -634,7 +633,7 @@ native knob — Anthropic's extended-thinking budget (driven by `budget`),
 OpenAI's `reasoning_effort` parameter (`minimal` | `low` | `medium` | `high`),
 and provider-specific equivalents elsewhere.
 
-A component may export *both* an inline widget and a view from the same module to
+A component may export _both_ an inline widget and a view from the same module to
 share rendering code:
 
 ```ts
@@ -720,7 +719,7 @@ view appears in a context that cannot render React (e.g. exported PDF of a threa
   carry "UI as data" (the view name + props schema-validated). A2UI could become the
   on-the-wire schema for T2 if we want interop; the in-process shape is unaffected.
 - **MCP-UI** serves pre-built HTML in sandboxed iframes via `ui://` URIs. Suitable
-  for *external* tool surfaces that bring their own UI; not the right model for our
+  for _external_ tool surfaces that bring their own UI; not the right model for our
   first-party components which want React + shared design system + context bindings.
   MCP-UI could plug in as a fallback renderer for third-party MCP tools that bring
   their own UI.
@@ -752,7 +751,7 @@ view appears in a context that cannot render React (e.g. exported PDF of a threa
 - **Modified upstream files (T2b composer, Phase D):**
   - `packages/contracts/src/settings.ts` — already in the whitelist for
     t3work-prefixed client settings; this addition (`composerModelSelection:
-    ModelSelection`) is an upstream-style sibling to the existing
+ModelSelection`) is an upstream-style sibling to the existing
     `textGenerationModelSelection`, following the same shape. One new whitelist
     entry with the rationale: "Add upstreamable `composerModelSelection` next to
     `textGenerationModelSelection` for the view-composer subagent; same shape,
