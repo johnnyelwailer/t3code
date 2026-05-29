@@ -13,6 +13,7 @@ import {
   launchSummaryForPhase,
   workflowRunIdForThread,
 } from "./t3work-recipeWorkflowRuntimeShared.ts";
+import { t3workRandomUUID } from "./t3work-random.ts";
 
 export const upsertThreadActivity = Effect.fn("upsertThreadActivity")(function* (input: {
   orchestration: OrchestrationEngineShape;
@@ -26,7 +27,7 @@ export const upsertThreadActivity = Effect.fn("upsertThreadActivity")(function* 
 }) {
   yield* input.orchestration.dispatch({
     type: "thread.activity.append",
-    commandId: CommandId.make(`server:t3work:recipe-activity:${crypto.randomUUID()}`),
+    commandId: CommandId.make(`server:t3work:recipe-activity:${t3workRandomUUID()}`),
     threadId: input.threadId,
     activity: {
       id: input.activityId,

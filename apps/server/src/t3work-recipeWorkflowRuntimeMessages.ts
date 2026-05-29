@@ -9,6 +9,7 @@ import {
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { workflowMessageId } from "./t3work-recipeWorkflowRuntimeShared.ts";
+import { t3workRandomUUID } from "./t3work-random.ts";
 
 function buildWorkflowMessageExt(input: {
   workflowRunId: string;
@@ -49,7 +50,7 @@ export const upsertWorkflowSystemMessage = Effect.fn("upsertWorkflowSystemMessag
   }) {
     yield* input.orchestration.dispatch({
       type: "thread.message.upsert",
-      commandId: CommandId.make(`server:t3work:message:${crypto.randomUUID()}`),
+      commandId: CommandId.make(`server:t3work:message:${t3workRandomUUID()}`),
       threadId: input.threadId,
       message: {
         messageId: workflowMessageId(input.threadId, input.stepId),

@@ -1,9 +1,11 @@
-import { basename } from "node:path";
-
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
 
 import { t3workCreateProject } from "~/t3work/t3work-mock-adapter";
+
+function basename(path: string): string {
+  return path.split("/").filter(Boolean).at(-1) ?? path;
+}
 
 describe("t3workCreateProject", () => {
   it("uses the project title for the managed workspace directory name", async () => {

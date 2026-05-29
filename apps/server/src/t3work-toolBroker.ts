@@ -99,7 +99,7 @@ export interface T3workToolBrokerShape {
 }
 
 export class T3workToolBroker extends Context.Service<T3workToolBroker, T3workToolBrokerShape>()(
-  "t3/t3work/T3workToolBroker",
+  "t3/t3work-toolBroker/T3workToolBroker",
 ) {}
 
 export const NoopT3workToolBroker: T3workToolBrokerShape = {

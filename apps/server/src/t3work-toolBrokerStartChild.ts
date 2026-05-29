@@ -22,6 +22,7 @@ import {
   appendStartChildHandoffActivities,
   resolveStartChildHandoffPlacement,
 } from "./t3work-toolBrokerStartChildHandoff.ts";
+import { t3workRandomUUID } from "./t3work-random.ts";
 import {
   createChildThreadToolContext,
   readThreadDisplayModeFromToolContext,
@@ -45,11 +46,10 @@ export function makeStartChildThread(input: {
       const { project, thread } = yield* input.loadThreadProject(threadId);
       const parentToolContext = yield* input.contextStore.get(threadId);
       const baseModelSelection = thread.modelSelection ?? project.defaultModelSelection;
-      if (!baseModelSelection) {
+      if (!baseModelSelection)
         return yield* Effect.fail("Current t3work thread does not have a model selection.");
-      }
 
-      const childThreadId = ThreadId.make(crypto.randomUUID());
+      const childThreadId = ThreadId.make(t3workRandomUUID());
       const currentTicketId = readTicketIdFromThreadToolContext(parentToolContext);
       const currentDisplayMode = readThreadDisplayModeFromToolContext(parentToolContext);
       const { parentThreadId, ticketId } = resolveStartChildHandoffPlacement({
@@ -100,7 +100,7 @@ export function makeStartChildThread(input: {
 
       yield* input.orchestration.dispatch({
         type: "thread.create",
-        commandId: CommandId.make(`server:t3work:start-child:create:${crypto.randomUUID()}`),
+        commandId: CommandId.make(`server:t3work:start-child:create:${t3workRandomUUID()}`),
         threadId: childThreadId,
         projectId: thread.projectId,
         title: args.name,
@@ -161,10 +161,10 @@ export function makeStartChildThread(input: {
         const startResult = yield* input.orchestration
           .dispatch({
             type: "thread.turn.start",
-            commandId: CommandId.make(`server:t3work:start-child:kickoff:${crypto.randomUUID()}`),
+            commandId: CommandId.make(`server:t3work:start-child:kickoff:${t3workRandomUUID()}`),
             threadId: childThreadId,
             message: {
-              messageId: MessageId.make(crypto.randomUUID()),
+              messageId: MessageId.make(t3workRandomUUID()),
               role: "user",
               text: args.kickoffPrompt,
               attachments: [],

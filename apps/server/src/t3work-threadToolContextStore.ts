@@ -16,7 +16,7 @@ export interface T3workThreadToolContextStoreShape {
 export class T3workThreadToolContextStore extends Context.Service<
   T3workThreadToolContextStore,
   T3workThreadToolContextStoreShape
->()("t3/t3work/T3workThreadToolContextStore") {}
+>()("t3/t3work-threadToolContextStore/T3workThreadToolContextStore") {}
 
 const createT3workThreadToolContextStore = Effect.fn("createT3workThreadToolContextStore")(() => {
   const contexts = new Map<ThreadId, T3workTurnToolContext>();

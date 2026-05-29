@@ -1,4 +1,5 @@
 import type { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
+import { randomUUID } from "~/t3work/lib/t3work-utils";
 
 import type { T3workPollResult, T3workPollingBackend } from "./t3work-pollingBackend";
 import type {
@@ -126,7 +127,7 @@ export function createMockAtlassianBackendApi(input: {
       status: request.targetStatus.trim() || "No status",
     }),
     createSubtask: async () => ({
-      id: `mock-subtask-${globalThis.crypto.randomUUID()}`,
+      id: `mock-subtask-${randomUUID()}`,
       key: `MOCK-${Math.floor(Math.random() * 1000)}`,
     }),
     downloadAsset: async (request) => {

@@ -3,6 +3,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { BackendApi } from "~/t3work/backend/t3work-types";
 import { syncProjectWorkspaceContext } from "~/t3work/t3work-projectWorkspaceSync";
+import { randomUUID } from "~/lib/utils";
 
 import { applyWorkspaceBootstrapToProject } from "./t3work-createProjectBootstrap";
 
@@ -18,7 +19,7 @@ export async function finalizeCreatedProject(input: {
 
   await input.backend.dispatchCommand({
     type: "project.create",
-    commandId: crypto.randomUUID() as any,
+    commandId: randomUUID() as any,
     projectId: input.project.id as any,
     title: input.project.title,
     workspaceRoot: input.project.workspace.rootPath,

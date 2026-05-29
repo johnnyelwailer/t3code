@@ -6,6 +6,7 @@ import {
   type AtlassianOAuthConfig,
   type TokenExchangeResult,
 } from "@t3tools/integrations-atlassian";
+import { randomUUID } from "~/lib/utils";
 import { useBackend } from "~/t3work/backend/t3work-index";
 
 const OAUTH_POPUP_WIDTH = 500;
@@ -114,7 +115,7 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
 
       try {
         const pkce = await generatePkce();
-        const stateParam = crypto.randomUUID();
+        const stateParam = randomUUID();
         const authUrl = buildAuthorizeUrl(config, pkce, stateParam);
 
         setState({ kind: "waiting" });

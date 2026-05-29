@@ -13,7 +13,7 @@ const CodexMcpListSchema = Schema.Array(
   }),
 );
 
-const decodeCodexMcpList = Schema.decodeUnknownSync(CodexMcpListSchema);
+const decodeCodexMcpList = Schema.decodeEffect(Schema.fromJsonString(CodexMcpListSchema));
 
 export class T3workCodexCliError extends Schema.TaggedErrorClass<T3workCodexCliError>()(
   "T3workCodexCliError",
@@ -127,14 +127,15 @@ const listCodexMcpServers = (input: {
       codexHomePath: input.codexHomePath,
     });
 
-    return yield* Effect.try({
-      try: () => decodeCodexMcpList(JSON.parse(response.stdout)),
-      catch: (cause) =>
-        new T3workCodexCliError({
-          detail: "Failed to decode codex mcp list output.",
-          cause,
-        }),
-    });
+    return yield* decodeCodexMcpList(response.stdout).pipe(
+      Effect.mapError(
+        (cause) =>
+          new T3workCodexCliError({
+            detail: "Failed to decode codex mcp list output.",
+            cause,
+          }),
+      ),
+    );
   });
 
 export const applyT3workCodexMcpServers = Effect.fn("applyT3workCodexMcpServers")(function* (

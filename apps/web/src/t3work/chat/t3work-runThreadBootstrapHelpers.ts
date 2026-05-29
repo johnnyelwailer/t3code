@@ -6,6 +6,7 @@ import {
   type ThreadBootstrapAction,
 } from "~/t3work/chat/t3work-threadBootstrapInstrumentation";
 import type { ThreadBootstrapDispatchState } from "~/t3work/chat/t3work-threadBootstrapPlan";
+import { randomUUID } from "~/lib/utils";
 
 const DUPLICATE_THREAD_CREATE_ERROR_FRAGMENT = "already exists and cannot be created twice.";
 
@@ -50,7 +51,7 @@ export async function ensureThreadBootstrapProject(input: {
   try {
     await input.backend.dispatchCommand({
       type: "project.create",
-      commandId: crypto.randomUUID() as any,
+      commandId: randomUUID() as any,
       projectId: input.canonicalProjectId as any,
       title: input.projectTitle,
       workspaceRoot: input.projectWorkspaceRoot,
@@ -93,7 +94,7 @@ export async function dispatchThreadBootstrapCreate(input: {
 
   await input.backend.dispatchCommand({
     type: "thread.create",
-    commandId: crypto.randomUUID() as any,
+    commandId: randomUUID() as any,
     threadId: input.threadId as any,
     projectId: input.canonicalProjectId as any,
     title: input.title,

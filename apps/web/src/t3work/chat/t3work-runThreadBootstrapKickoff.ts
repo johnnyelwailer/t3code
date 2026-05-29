@@ -15,6 +15,7 @@ import {
   type ThreadBootstrapAction,
 } from "~/t3work/chat/t3work-threadBootstrapInstrumentation";
 import type { ThreadBootstrapDispatchState } from "~/t3work/chat/t3work-threadBootstrapPlan";
+import { randomUUID } from "~/lib/utils";
 import { useT3WorkAddToChatStore } from "~/t3work/t3work-addToChatStore";
 import type { T3workTurnToolContext } from "~/t3work/t3work-threadToolContext";
 import type { T3workKickoffWorkflow } from "~/t3work/t3work-types";
@@ -143,10 +144,10 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
 
   await input.backend.dispatchCommand({
     type: "thread.turn.start",
-    commandId: crypto.randomUUID() as any,
+    commandId: randomUUID() as any,
     threadId: input.threadId as any,
     message: {
-      messageId: crypto.randomUUID() as any,
+      messageId: randomUUID() as any,
       role: "user",
       text: bootstrapMessage,
       attachments: [],

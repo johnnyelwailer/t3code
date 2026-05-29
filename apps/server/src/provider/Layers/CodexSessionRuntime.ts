@@ -904,7 +904,6 @@ export const makeCodexSessionRuntime = (
       ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
     >();
     const crypto = yield* Crypto.Crypto;
-    const crypto = yield* Crypto.Crypto;
     const events = yield* Queue.unbounded<ProviderEvent>();
     const pendingApprovalsRef = yield* Ref.make(new Map<ApprovalRequestId, PendingApproval>());
     const approvalCorrelationsRef = yield* Ref.make(new Map<string, ApprovalCorrelation>());

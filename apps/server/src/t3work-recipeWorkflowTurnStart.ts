@@ -9,6 +9,7 @@ import {
 } from "@t3tools/contracts";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+import { t3workRandomUUID } from "./t3work-random.ts";
 
 export const dispatchRecipeWorkflowTurnStart = Effect.fn("dispatchRecipeWorkflowTurnStart")(
   function* (input: {
@@ -24,11 +25,11 @@ export const dispatchRecipeWorkflowTurnStart = Effect.fn("dispatchRecipeWorkflow
   }) {
     yield* input.orchestration.dispatch({
       type: "thread.turn.start",
-      commandId: CommandId.make(`server:t3work:${input.commandPrefix}:${crypto.randomUUID()}`),
+      commandId: CommandId.make(`server:t3work:${input.commandPrefix}:${t3workRandomUUID()}`),
       threadId: input.threadId,
       message: {
         messageId: MessageId.make(
-          `server:t3work:${input.commandPrefix}-message:${crypto.randomUUID()}`,
+          `server:t3work:${input.commandPrefix}-message:${t3workRandomUUID()}`,
         ),
         role: "user",
         text: input.userTurnMessage,

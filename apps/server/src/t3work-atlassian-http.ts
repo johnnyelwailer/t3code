@@ -54,10 +54,16 @@ export function okJson(body: unknown) {
   return HttpServerResponse.jsonUnsafe(body, { status: 200, headers: browserApiCorsHeaders });
 }
 
-export function errorResponse(error: T3workAtlassianError) {
+export function errorResponse(error: unknown) {
+  const message =
+    error instanceof T3workAtlassianError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : "Atlassian request failed.";
   return Effect.succeed(
     HttpServerResponse.jsonUnsafe(
-      { error: error.message },
+      { error: message },
       { status: 502, headers: browserApiCorsHeaders },
     ),
   );

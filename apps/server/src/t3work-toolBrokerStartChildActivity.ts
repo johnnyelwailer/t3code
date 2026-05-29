@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 
 import type { ProjectionRepositoryError } from "./persistence/Errors.ts";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+import { t3workRandomUUID } from "./t3work-random.ts";
 
 export type T3workStartChildProject = {
   readonly title: string;
@@ -38,10 +39,10 @@ export const appendThreadActivity = (
   orchestration
     .dispatch({
       type: "thread.activity.append",
-      commandId: CommandId.make(`server:t3work:activity:${crypto.randomUUID()}`),
+      commandId: CommandId.make(`server:t3work:activity:${t3workRandomUUID()}`),
       threadId,
       activity: {
-        id: EventId.make(crypto.randomUUID()),
+        id: EventId.make(t3workRandomUUID()),
         tone: "info",
         kind: input.kind,
         summary: input.summary,

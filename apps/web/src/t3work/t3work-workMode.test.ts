@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import settingsPanelsSource from "../components/settings/SettingsPanels.tsx?raw";
 
 import { describe, expect, it } from "vitest";
 
@@ -42,11 +42,6 @@ describe("t3work work mode helpers", () => {
 
 describe("t3work settings seam", () => {
   it("keeps the General Settings insertion seam mounted", () => {
-    const settingsPanelsSource = readFileSync(
-      new URL("../components/settings/SettingsPanels.tsx", import.meta.url),
-      "utf8",
-    );
-
     expect(settingsPanelsSource).toContain("T3work settings insertion seam");
     expect(settingsPanelsSource).toContain("<T3workWorkModeSetting />");
   });

@@ -221,6 +221,7 @@
       },
       "devDependencies": {
         "@effect/vitest": "catalog:",
+        "@types/node": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:",
       },

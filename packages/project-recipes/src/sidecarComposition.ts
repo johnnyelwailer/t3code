@@ -76,13 +76,16 @@ export function resolveSidecarComposition(input: {
     input.profileDefault,
     input.projectDefault,
     input.userOverrides,
-  ].reduce<SidecarComposition>((current, nextLayer) => {
-    if (!nextLayer) {
-      return current;
-    }
+  ].reduce<SidecarComposition>(
+    (current, nextLayer) => {
+      if (!nextLayer) {
+        return current;
+      }
 
-    return applyCompositionLayer(current, nextLayer);
-  }, { sections: [] });
+      return applyCompositionLayer(current, nextLayer);
+    },
+    { sections: [] },
+  );
 
   return {
     sections: layeredComposition.sections.filter((section) => section.visible !== false),

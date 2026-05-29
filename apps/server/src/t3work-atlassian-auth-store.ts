@@ -14,6 +14,7 @@ import * as Schema from "effect/Schema";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import { ServerConfig } from "./config.ts";
 import { toAtlassianError, tryAtlassianPromise } from "./t3work-atlassian-http.ts";
+import { t3workRandomUUID } from "./t3work-random.ts";
 
 export type BasicConnectInput = {
   readonly auth: {
@@ -124,7 +125,7 @@ export const savePersistedAuths = Effect.gen(function* () {
   const encoded = yield* encodePersistedAtlassianAuths(persistedAuthsPayload()).pipe(
     Effect.mapError(toAtlassianError("Failed to encode Atlassian settings.")),
   );
-  const tempPath = `${secretPath}.${globalThis.crypto.randomUUID()}.tmp`;
+  const tempPath = `${secretPath}.${t3workRandomUUID()}.tmp`;
   yield* Effect.gen(function* () {
     yield* fileSystem.writeFile(tempPath, textEncoder.encode(encoded));
     yield* fileSystem.chmod(tempPath, 0o600);

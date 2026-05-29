@@ -11,6 +11,7 @@ import {
   type ProjectRecipeWorkflowLaunch as ProjectRecipeWorkflowLaunchType,
 } from "@t3tools/project-recipes";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
+import { t3workRandomUUID } from "./t3work-random.ts";
 
 const PersistedRecipeWorkflowCardActionWait = Schema.Struct({
   kind: Schema.Literal("card-action"),
@@ -84,7 +85,7 @@ export function workflowRunIdForThread(threadId: ThreadId): string {
 }
 
 export function workflowRunIdForDeterministicLaunch(): string {
-  return `t3work:recipe-workflow:deterministic:${crypto.randomUUID()}`;
+  return `t3work:recipe-workflow:deterministic:${t3workRandomUUID()}`;
 }
 
 export function launchActivityId(threadId: ThreadId): EventId {
@@ -105,7 +106,7 @@ export function workflowMessageId(threadId: ThreadId, stepId: string): MessageId
 
 export function actionActivityId(threadId: ThreadId, stepId: string, actionId: string): EventId {
   return EventId.make(
-    `t3work:recipe-card-action:${threadId}:${stepId}:${actionId}:${crypto.randomUUID()}`,
+    `t3work:recipe-card-action:${threadId}:${stepId}:${actionId}:${t3workRandomUUID()}`,
   );
 }
 

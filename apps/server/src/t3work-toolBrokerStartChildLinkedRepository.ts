@@ -1,4 +1,5 @@
 import { sanitizeFeatureBranchName } from "@t3tools/shared/git";
+import { t3workRandomHex } from "./t3work-random.ts";
 import type * as Path from "effect/Path";
 
 import {
@@ -49,7 +50,7 @@ export function findLinkedRepository(
 }
 
 export function buildChildBranchName(name: string): string {
-  return `${sanitizeFeatureBranchName(name)}-${crypto.randomUUID().slice(0, 8).toLowerCase()}`;
+  return `${sanitizeFeatureBranchName(name)}-${t3workRandomHex(4).toLowerCase()}`;
 }
 
 function sanitizeScopedPathSegment(value: string): string {

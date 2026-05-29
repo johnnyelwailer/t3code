@@ -1,6 +1,9 @@
 import { Buffer } from "node:buffer";
 
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 import { T3workAtlassianError } from "./t3work-atlassian-http.ts";
 import type {
@@ -54,7 +57,7 @@ function readGitHubToken(
 export function downloadGitHubAsset(
   vcs: VcsProcessShape,
   input: GitHubAssetDownloadRequest,
-): Effect.Effect<GitHubDownloadedAsset, T3workAtlassianError, never> {
+): Effect.Effect<GitHubDownloadedAsset, T3workAtlassianError, HttpClient.HttpClient> {
   const host = readTrimmedString(input.host) ?? "github.com";
   const url = readTrimmedString(input.url);
   if (!url) {
@@ -73,47 +76,63 @@ export function downloadGitHubAsset(
   }
 
   return Effect.gen(function* () {
+    const httpClient = yield* HttpClient.HttpClient;
     const token = isGitHubHostedAsset(parsedUrl.host, host)
       ? yield* readGitHubToken(vcs, host)
       : undefined;
-    return yield* Effect.tryPromise({
-      try: async () => {
-        const response = await fetch(parsedUrl, {
-          headers: {
-            Accept: "*/*",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          redirect: "follow",
-          signal: AbortSignal.timeout(GITHUB_ASSET_TIMEOUT_MS),
-        });
-        if (!response.ok) {
-          throw new Error(
-            `GitHub asset request failed with ${String(response.status)} ${response.statusText}.`,
-          );
-        }
+    const response = yield* httpClient
+      .get(parsedUrl.toString(), {
+        headers: {
+          Accept: "*/*",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      })
+      .pipe(
+        Effect.timeoutOption(Duration.millis(GITHUB_ASSET_TIMEOUT_MS)),
+        Effect.mapError((cause) => toT3workError(cause, "Failed to download GitHub asset.")),
+        Effect.flatMap((responseOption) =>
+          Option.match(responseOption, {
+            onNone: () =>
+              Effect.fail(
+                new T3workAtlassianError({
+                  message: `GitHub asset download timed out after ${String(GITHUB_ASSET_TIMEOUT_MS)}ms.`,
+                }),
+              ),
+            onSome: (settledResponse) => Effect.succeed(settledResponse),
+          }),
+        ),
+      );
+    const okResponse = yield* HttpClientResponse.matchStatus({
+      "2xx": (success) => Effect.succeed(success),
+      orElse: (failed) =>
+        Effect.fail(
+          new T3workAtlassianError({
+            message: `GitHub asset request failed with ${String(failed.status)}.`,
+          }),
+        ),
+    })(response);
 
-        const contentLength = Number(response.headers.get("content-length") ?? "");
-        if (Number.isFinite(contentLength) && contentLength > MAX_GITHUB_ASSET_BYTES) {
-          throw new Error(
-            `GitHub asset exceeds ${String(MAX_GITHUB_ASSET_BYTES)} bytes and was skipped.`,
-          );
-        }
+    const contentLength = Number(okResponse.headers["content-length"] ?? "");
+    if (Number.isFinite(contentLength) && contentLength > MAX_GITHUB_ASSET_BYTES) {
+      return yield* invalidAssetRequest(
+        `GitHub asset exceeds ${String(MAX_GITHUB_ASSET_BYTES)} bytes and was skipped.`,
+      );
+    }
 
-        const bytes = await response.arrayBuffer();
-        if (bytes.byteLength > MAX_GITHUB_ASSET_BYTES) {
-          throw new Error(
-            `GitHub asset exceeds ${String(MAX_GITHUB_ASSET_BYTES)} bytes and was skipped.`,
-          );
-        }
+    const bytes = yield* okResponse.arrayBuffer.pipe(
+      Effect.mapError((cause) => toT3workError(cause, "Failed to read GitHub asset response.")),
+    );
+    if (bytes.byteLength > MAX_GITHUB_ASSET_BYTES) {
+      return yield* invalidAssetRequest(
+        `GitHub asset exceeds ${String(MAX_GITHUB_ASSET_BYTES)} bytes and was skipped.`,
+      );
+    }
 
-        const mimeType = readTrimmedString(response.headers.get("content-type") ?? undefined);
-        return {
-          base64Contents: Buffer.from(bytes).toString("base64"),
-          ...(mimeType ? { mimeType } : {}),
-          sizeBytes: bytes.byteLength,
-        } satisfies GitHubDownloadedAsset;
-      },
-      catch: (cause) => toT3workError(cause, "Failed to download GitHub asset."),
-    });
+    const mimeType = readTrimmedString(okResponse.headers["content-type"] ?? undefined);
+    return {
+      base64Contents: Buffer.from(bytes).toString("base64"),
+      ...(mimeType ? { mimeType } : {}),
+      sizeBytes: bytes.byteLength,
+    } satisfies GitHubDownloadedAsset;
   });
 }

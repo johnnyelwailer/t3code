@@ -2,6 +2,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { ProjectShellProject, ProjectShellProjectId } from "@t3tools/project-context";
+import { randomUUID } from "~/lib/utils";
 
 export type CreateProjectInput = {
   readonly title: string;
@@ -44,7 +45,7 @@ const makeWorkspacePath = (title: string): string => {
 export const t3workCreateProject = (input: CreateProjectInput) =>
   Effect.gen(function* () {
     const now = yield* DateTime.now;
-    const id = crypto.randomUUID() as ProjectShellProjectId;
+    const id = randomUUID() as ProjectShellProjectId;
     const workspace = {
       rootPath: makeWorkspacePath(input.title),
       createdAt: DateTime.formatIso(now),

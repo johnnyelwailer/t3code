@@ -20,6 +20,7 @@ import {
   createT3workPrelaunchToolBinding,
   createT3workThreadToolBinding,
 } from "./t3work-toolBrokerBinding.ts";
+import { t3workRandomUUID } from "./t3work-random.ts";
 import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
 
@@ -40,9 +41,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
   const loadThreadProject = (threadId: ThreadIdType) =>
     Effect.gen(function* () {
       const thread = Option.getOrUndefined(yield* query.getThreadDetailById(threadId));
-      if (!thread) {
-        return yield* Effect.fail("Current t3work thread was not found.");
-      }
+      if (!thread) return yield* Effect.fail("Current t3work thread was not found.");
 
       const project = Option.getOrUndefined(yield* query.getProjectShellById(thread.projectId));
       if (!project) {
@@ -150,7 +149,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
   const renameThread = (threadId: ThreadIdType, title: string) =>
     orchestration.dispatch({
       type: "thread.meta.update",
-      commandId: CommandId.make(`server:t3work:rename:${crypto.randomUUID()}`),
+      commandId: CommandId.make(`server:t3work:rename:${t3workRandomUUID()}`),
       threadId,
       title,
     });

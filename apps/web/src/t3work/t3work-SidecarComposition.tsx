@@ -41,7 +41,7 @@ class SidecarSectionErrorBoundary extends Component<
   SidecarSectionErrorBoundaryProps,
   SidecarSectionErrorBoundaryState
 > {
-    override state: SidecarSectionErrorBoundaryState = { hasError: false };
+  override state: SidecarSectionErrorBoundaryState = { hasError: false };
 
   static getDerivedStateFromError(): SidecarSectionErrorBoundaryState {
     return { hasError: true };
