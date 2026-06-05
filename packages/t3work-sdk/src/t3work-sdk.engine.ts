@@ -20,7 +20,7 @@
  * return the recorded value — but the host realm is reachable via prototype chains. Trust
  * model: "trusted project code." Stage-2 VM isolation (planned: SES or isolated-vm) is the
  * real sandbox if/when untrusted workflows are in scope (Epic 25 §Open question 1). See
- * t3work-sdk.sandbox.ts.
+ * t3work-sdk.loader.ts.
  * ============================================================================
  */
 

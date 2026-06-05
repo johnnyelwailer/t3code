@@ -23,7 +23,7 @@ import {
   runWorkflowBody,
   type WorkflowMeta,
   type WorkflowSource,
-} from "./t3work-sdk.sandbox.ts";
+} from "./t3work-sdk.loader.ts";
 import { withWorkflowRuntime } from "./t3work-sdk.ts";
 import type * as T from "./t3work-sdk.types.ts";
 import { buildWorkflowGlobals } from "./t3work-sdk.workflowGlobals.ts";

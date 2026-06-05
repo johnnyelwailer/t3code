@@ -6,6 +6,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
+import * as Schema from "effect/Schema";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -21,6 +22,8 @@ import {
 } from "./t3work-sdk.engineFixtures.ts";
 import {
   createDurableWorkflowRuntime,
+  defineTool,
+  defineToolGroup,
   JournalSchemaError,
   JournalSerializeError,
   resumeWorkflow,
@@ -62,6 +65,56 @@ describe("durable workflow engine — journal", () => {
     const serr = error as JournalSerializeError;
     expect(serr.refId).toBe("demo.bigintResult");
     expect(serr.seq).toBe(1);
+  });
+
+  it("strict result mode rejects nested undefined and Map results before journaling", async () => {
+    // A permissive (Schema.Unknown) result schema does not save a non-canonical-JSON value:
+    // the strict result-mode check (25.2) throws JournalSerializeError before the write.
+    const strictGroup = defineToolGroup({
+      id: "demo.strict",
+      label: "Strict-mode fixtures",
+      description: "Tools whose results exercise the strict canonical-JSON result check.",
+    });
+    const undefTool = defineTool({
+      id: "demo.undefProp",
+      group: strictGroup,
+      args: Schema.Struct({}),
+      result: Schema.Unknown,
+      handler: async () => ({ a: 1, b: undefined }),
+    });
+    const mapTool = defineTool({
+      id: "demo.mapResult",
+      group: strictGroup,
+      args: Schema.Struct({}),
+      result: Schema.Unknown,
+      handler: async () => new Map([["a", 1]]) as unknown,
+    });
+    const ctx: ToolHandlerCtx = {
+      runId: "strict",
+      workspaceRoot: "/tmp",
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+      fetch: async () => {
+        throw new Error("fetch unsupported");
+      },
+      workspace: { readText: async () => "", writeText: async () => {}, exists: async () => false },
+      callTool: <I, R>(_ref: never, _args: I): Promise<R> => {
+        throw new Error("callTool unsupported");
+      },
+    };
+    for (const tool of [undefTool, mapTool]) {
+      const writer = new JournalWriter(ensureRunDir(runsRoot, `strict-${tool.id}`));
+      try {
+        const runtime = createDurableWorkflowRuntime({
+          journal: new Map(), writer, toolCtx: ctx, scriptCtx: { ...ctx },
+          scriptNames: new Map(), filePath: "/dev/null",
+          nowIso: () => "1970-01-01T00:00:00.000Z",
+        });
+        const error = await runtime.callTool(tool, {}).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(JournalSerializeError);
+      } finally {
+        writer.dispose();
+      }
+    }
   });
 
   it("raises JournalSchemaError when a recorded result fails to re-decode", async () => {

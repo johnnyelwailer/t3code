@@ -1,5 +1,7 @@
 /**
- * Static loader for `.workflow.ts` files (Epic 25 §Static-extraction rules).
+ * The `.workflow.ts` loader (Epic 25 §Static-extraction rules). This is the loader — it
+ * transpiles, statically extracts `meta`, and executes the body. It is **not** a sandbox
+ * (Stage-1 has none; see the trust-model note below).
  *
  * Responsibilities:
  *   1. Split the file at the `meta` declaration into a *head* (imports + consts + meta)

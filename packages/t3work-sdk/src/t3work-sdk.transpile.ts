@@ -5,7 +5,7 @@
  * This is pure source-rewriting plumbing — it makes NO allow/deny decisions. Every import
  * is blanked unconditionally (the one allowlisted value import, `Schema`, is injected as a
  * global instead); there is no banned-globals scan here. Stage-1 trusts project code (see
- * the {@link ./t3work-sdk.sandbox.ts} header).
+ * the {@link ./t3work-sdk.loader.ts} header).
  */
 
 import type * as TsApi from "typescript";

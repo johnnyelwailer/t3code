@@ -57,7 +57,7 @@ export type {
 } from "./t3work-sdk.engine.ts";
 export type { ReplayDriftFacet, ReplayDriftReason } from "./t3work-sdk.errors.ts";
 export type { JournalEntry } from "./t3work-sdk.journalReader.ts";
-export type { WorkflowMeta } from "./t3work-sdk.sandbox.ts";
+export type { WorkflowMeta } from "./t3work-sdk.loader.ts";
 export type {
   EngineCapability,
   FetchLike,
