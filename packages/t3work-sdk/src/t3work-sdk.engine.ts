@@ -44,7 +44,12 @@ import {
 import { readJournal } from "./t3work-sdk.journalReader.ts";
 import type * as T from "./t3work-sdk.types.ts";
 import type { WorkflowRunOptions } from "./t3work-sdk.types.ts";
-import { assertInputArgsMatch, executeRun, nowIso } from "./t3work-sdk.workflowRunner.ts";
+import {
+  assertInputArgsMatch,
+  executeRun,
+  nowIso,
+  type RunOutcome,
+} from "./t3work-sdk.workflowRunner.ts";
 
 const nodeRequire = createRequire(import.meta.url);
 const path = nodeRequire("node:path") as {
@@ -70,6 +75,25 @@ export interface WorkflowRunResult<O> {
   readonly result: O;
 }
 
+/**
+ * Returned (instead of {@link WorkflowRunResult}) when a run durably suspends awaiting a
+ * Handle reply (Epic 25.4). The host parks the run, and when the reply for `correlationId`
+ * lands it appends a `resolved` journal entry (see `appendResolvedEntry`) and calls
+ * {@link resumeWorkflow}, which replays to the same `await` and continues. Narrow the union
+ * with `"suspended" in result`.
+ */
+export interface SuspendedResult {
+  readonly runId: string;
+  readonly suspended: true;
+  readonly correlationId: string;
+}
+
+function toRunResult<O>(runId: string, outcome: RunOutcome<O>): WorkflowRunResult<O> | SuspendedResult {
+  return outcome.kind === "suspended"
+    ? { runId, suspended: true, correlationId: outcome.correlationId }
+    : { runId, result: outcome.output };
+}
+
 // Dotted so per-run state stays out of project tree listings (and is easy to .gitignore).
 // Spec doc 25 §Open question 2 leaves the long-term home open (SQL-backed local cache);
 // `.t3work-runs/<run-id>/journal.jsonl` is the MVP on-disk shape the spec documents.
@@ -87,7 +111,7 @@ export async function startWorkflow<I, O>(
   ref: T.WorkflowRef<I, O>,
   args: I,
   options: StartWorkflowOptions = {},
-): Promise<WorkflowRunResult<O>> {
+): Promise<WorkflowRunResult<O> | SuspendedResult> {
   const runsRoot = options.runsRoot ?? defaultRunsRoot();
   const runId = options.runId ?? randomUUID();
   ensureRunDir(runsRoot, runId);
@@ -109,8 +133,8 @@ export async function startWorkflow<I, O>(
     createdAt: nowIso(),
   });
 
-  const result = await executeRun<O>({ runId, ref, args, runsRoot, options });
-  return { runId, result };
+  const outcome = await executeRun<O>({ runId, ref, args, runsRoot, options });
+  return toRunResult(runId, outcome);
 }
 
 /**
@@ -124,13 +148,13 @@ export async function resumeWorkflow<I, O>(
   ref: T.WorkflowRef<I, O>,
   args: I,
   options: WorkflowRunOptions = {},
-): Promise<WorkflowRunResult<O>> {
+): Promise<WorkflowRunResult<O> | SuspendedResult> {
   const runsRoot = options.runsRoot ?? defaultRunsRoot();
   const journalPath = journalFilePath(runsRoot, runId);
   if (!journalExists(journalPath)) throw new WorkflowRunNotFoundError(journalPath);
   assertInputArgsMatch({ runsRoot, runId, args, absolutePath: ref.absolutePath });
-  const result = await executeRun<O>({ runId, ref, args, runsRoot, options });
-  return { runId, result };
+  const outcome = await executeRun<O>({ runId, ref, args, runsRoot, options });
+  return toRunResult(runId, outcome);
 }
 
 // Re-export `createDurableWorkflowRuntime` + the `DurableWorkflowRuntime` interface so

@@ -13,8 +13,9 @@ import {
   type DurableWorkflowRuntime,
 } from "./t3work-sdk.durableRuntime.ts";
 import { ReplayDriftError, WorkflowError } from "./t3work-sdk.errors.ts";
+import { WorkflowSuspended } from "./t3work-sdk.handles.ts";
 import { journalFilePath, readRunMeta, runDirPath, runMetaFilePath } from "./t3work-sdk.journal.ts";
-import { readJournal } from "./t3work-sdk.journalReader.ts";
+import { readJournalEntries } from "./t3work-sdk.journalReader.ts";
 import { JournalWriter } from "./t3work-sdk.journalWriter.ts";
 import { executeToolHandler, listRegisteredTools } from "./t3work-sdk.ts";
 import type * as T from "./t3work-sdk.types.ts";
@@ -58,17 +59,23 @@ function buildRunContexts(opts: {
   return { toolCtx: toolCtxRef, scriptCtx: { ...shared, callTool } };
 }
 
+/** The result of one body execution: a completed value, or a durable suspension awaiting a
+ * Handle reply. {@link startWorkflow}/{@link resumeWorkflow} map this onto their public union. */
+export type RunOutcome<O> =
+  | { readonly kind: "completed"; readonly output: O }
+  | { readonly kind: "suspended"; readonly correlationId: string };
+
 export async function executeRun<O>(opts: {
   readonly runId: string;
   readonly ref: T.WorkflowRef<unknown, O>;
   readonly args: unknown;
   readonly runsRoot: string;
   readonly options: T.WorkflowRunOptions;
-}): Promise<O> {
+}): Promise<RunOutcome<O>> {
   const runDir = runDirPath(opts.runsRoot, opts.runId);
   const journalPath = journalFilePath(opts.runsRoot, opts.runId);
   const log = opts.options.log ?? noopLogger;
-  const journal = readJournal(journalPath, (message) => log.warn(message));
+  const { bySeq, byCorrelation } = readJournalEntries(journalPath, (message) => log.warn(message));
   const writer = new JournalWriter(journalPath);
   const toolRefs = opts.options.tools ?? listRegisteredTools();
   const scripts = opts.options.scripts ?? {};
@@ -81,13 +88,15 @@ export async function executeRun<O>(opts: {
     options: opts.options,
   });
   const runtime: DurableWorkflowRuntime = createDurableWorkflowRuntime({
-    journal,
+    journal: bySeq,
     writer,
     toolCtx,
     scriptCtx,
     scriptNames,
     filePath: opts.ref.absolutePath,
     nowIso,
+    runId: opts.runId,
+    resolved: byCorrelation,
   });
   try {
     const primitives = buildWorkflowPrimitives({
@@ -103,8 +112,17 @@ export async function executeRun<O>(opts: {
       toolRefs,
       scripts,
       primitives,
+      handleDispatch: runtime.handles,
+      ...(opts.options.broker === undefined ? {} : { broker: opts.options.broker }),
     });
-    return result as O;
+    return { kind: "completed", output: result as O };
+  } catch (error) {
+    // A genuine durable suspension (awaiting a Handle reply) is not a failure — the host
+    // parks the run and resumes it when the reply lands.
+    if (error instanceof WorkflowSuspended) {
+      return { kind: "suspended", correlationId: error.correlationId };
+    }
+    throw error;
   } finally {
     writer.dispose();
   }

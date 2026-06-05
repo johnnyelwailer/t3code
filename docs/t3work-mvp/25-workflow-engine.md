@@ -332,6 +332,18 @@ The engine classifies every primitive failure into exactly one of these. Authors
 
 ## The Handle pattern
 
+> **Status: implemented (25.4).** The pending/resolved journal split, deterministic
+> `correlationId` derivation, durable suspension, and `dismiss()` are live in
+> `@t3work/sdk` (`t3work-sdk.handles.ts` + `t3work-sdk.handlePrimitives.ts`). A fired
+> primitive writes a `"sent"` journal entry; the reply lands later as a `"resolved"` entry
+> keyed by the same `correlationId` (`"<runId>:<seq>"` of the sent entry, so a replay
+> re-derives it identically). When the body `await`s `.response` and no resolved entry
+> exists yet, the run durably suspends — `startWorkflow`/`resumeWorkflow` return a
+> `SuspendedResult` instead of a `WorkflowRunResult`, and the host resumes the run once the
+> reply is appended (see [§Capability gating](#capability-gating) and the broker seam below).
+> The `ui.show` view rendering itself (Epic 19) and real child-agent-turn execution remain
+> out of scope; the engine fires through the injected `MessageBroker` and journals the reply.
+
 All primitives that fire something into the system return a typed handle:
 
 ```ts
@@ -507,6 +519,14 @@ until then the engine relies on the determinism contract above, not on isolation
 safety.
 
 ## Capability gating
+
+> **Status: partially implemented (25.4).** The Handle globals are the first to be
+> capability-gated: `ui.show` ← `"ui"`, `thread.send` ← `"thread"`, `child.spawn` ←
+> `"child"`, `user.ask`/`user.notify` ← `"user"`. A workflow whose `meta.capabilities` omits
+> the relevant engine-feature string gets that global bound to a thrower that raises
+> `PermissionDeniedError` at the call site (rather than being live). The remaining gates
+> (`scripts.*` ← `"script"`, tool-group refs for `tools.*`, the load-time/pre-execution
+> permission UI, and nested-workflow capability intersection) land in 25.5.
 
 `meta.capabilities` is a declarative allowlist that gates which globals are bound at
 workflow-body-load time. A workflow that doesn't declare `"script"` has `script` as
@@ -957,7 +977,7 @@ This engine is not yet built. The current runtime is the forward-only step-list 
 | 25.1  | `.workflow.ts` file loader + `meta` static extractor + `defineWorkflow` / `defineTool` / `defineToolGroup` / `defineScript` SDK + ambient `tools.*` / `scripts.*` trees + ambient types                                                 | Planned |
 | 25.2  | Durable-execution engine prototype: journal, replay, `argsHash`, `ReplayDriftError`                                                                                                                                                     | Planned |
 | 25.3  | Inherited primitives: `agent`, `agent.task`, `parallel`, `pipeline`, `phase`, `log`, `args`, `budget`, `workflow`; plus the journaled-value primitives `random`, `now`, `uuid`, `wait`, and the `script` / `tool` invocation primitives | Implemented |
-| 25.4  | Handle primitives: `ui.show`, `child.spawn`, `thread.send`, `user.ask`, `user.notify` (depends on the cross-thread messaging broker work catalogued in Epic 16)                                                                         | Planned |
+| 25.4  | Handle primitives: `ui.show`, `child.spawn`, `thread.send`, `user.ask`, `user.notify` — pending/resolved journal split, durable suspension (`SuspendedResult`), capability gating of the Handle globals, and the `MessageBroker` host seam                                                                         | Implemented |
 | 25.5  | Determinism enforcement: lint rules flagging nondeterminism patterns, capability gating at load time                                                                                                                                    | Planned |
 | 25.6  | Migration tooling: legacy `recipe.json` + step-union → `.workflow.ts` conversion script                                                                                                                                                 | Planned |
 | 25.7  | Retire the step-union runtime; remove `recipeWorkflowRuntime*` once all recipes migrated                                                                                                                                                | Planned |

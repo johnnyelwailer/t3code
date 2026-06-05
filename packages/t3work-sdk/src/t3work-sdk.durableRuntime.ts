@@ -2,27 +2,23 @@
  * The durable runtime — a {@link T.WorkflowRuntime} backed by a per-run journal.
  *
  * Every primitive call lands on a monotonically-increasing `seq`, matched against the
- * journal on replay. Two seats share that counter and journal: the async `callPrimitive`
- * (tools/scripts/agent/wait/composition) and the synchronous `callDeterministic`
- * (now/random/uuid). Both decide between:
- *   • Hit + match     → return the recorded result (re-validated against the current
- *                       schema), do not re-execute. A matched `script-never` marker
- *                       re-executes (its result was never recorded).
- *   • Hit + mismatch  → throw {@link ReplayDriftError} (call-identity or argsHash).
- *   • Gap (seq ≤ max recorded, no entry) → `ReplayDriftError` (`presence: "gap"`).
- *   • Miss (past the frontier) → execute live, append a journal entry, return.
+ * journal on replay. Three seats share that counter and journal: the async `callPrimitive`
+ * (tools/scripts/agent/wait/composition), the synchronous `callDeterministic`
+ * (now/random/uuid), and the Handle-pattern `handles` dispatch (25.4 sent/resolved). The
+ * first two decide between: hit+match → return the recorded result; hit+mismatch →
+ * {@link ReplayDriftError}; gap (seq ≤ frontier, no entry) → drift; miss (past the
+ * frontier) → execute live + journal. A matched `script-never` marker always re-executes.
  *
  * Two black-box mechanisms skip the journal: a tool/script *handler* runs under the
- * `blackBox` runtime (a ref it calls re-entrantly doesn't journal), and
- * `parallel`/`pipeline`/`workflow` run their thunks inside {@link runBlackBoxed}, which
- * lifts a depth counter so nested primitive calls execute live without consuming a `seq`.
- * The composition primitive itself is the journal boundary — its inner calls are not
- * individually replayable (a documented Stage-1 tradeoff).
+ * `blackBox` runtime, and `parallel`/`pipeline`/`workflow` run their thunks inside
+ * {@link runBlackBoxed}, which lifts a depth counter so nested calls execute live without
+ * consuming a `seq` (the composition primitive is the journal boundary — a Stage-1 tradeoff).
  */
 
 import { canonicalJsonError, hashArgs } from "./t3work-sdk.canonicalJson.ts";
 import { JournalSchemaError, JournalSerializeError } from "./t3work-sdk.errors.ts";
-import type { JournalEntry } from "./t3work-sdk.journalReader.ts";
+import { createHandleDispatch, type HandleDispatch } from "./t3work-sdk.handles.ts";
+import type { JournalEntry, ResolvedEntry } from "./t3work-sdk.journalReader.ts";
 import type { JournalWriter } from "./t3work-sdk.journalWriter.ts";
 import { assertJournalMatch, gapDrift } from "./t3work-sdk.replayDrift.ts";
 import { createToolScriptCalls } from "./t3work-sdk.toolScriptCalls.ts";
@@ -40,6 +36,10 @@ export interface DurableRuntimeConfig {
   readonly filePath?: string;
   /** Host clock for journal timestamps (injected so workflowRunner can share it). */
   readonly nowIso: () => string;
+  /** Run id — the `correlationId` prefix for Handle primitives (`"<runId>:<seq>"`). */
+  readonly runId?: string;
+  /** Resolved Handle replies read from the journal, keyed by correlationId (25.4). */
+  readonly resolved?: ReadonlyMap<string, ResolvedEntry>;
 }
 
 /** A {@link T.WorkflowRuntime} backed by a per-run journal with replay + drift detection. */
@@ -53,6 +53,8 @@ export interface DurableWorkflowRuntime extends T.WorkflowRuntime {
   readonly spentAgentTokens: () => number;
   /** Real host wall-clock (unjournaled) — backs `wait`'s deadline math. */
   readonly hostNow: () => number;
+  /** Handle-pattern dispatch (sent/resolved/suspend) sharing this runtime's `seq` seat. */
+  readonly handles: HandleDispatch;
 }
 
 /**
@@ -67,11 +69,14 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
   const maxRecordedSeq =
     config.journal.size === 0 ? 0 : Math.max(...Array.from(config.journal.keys()));
 
+  // Resolved Handle replies (25.4), keyed by correlationId. Mutable so a broker that settles
+  // synchronously during this run is visible to a later `await handle.response`.
+  const resolved = new Map<string, ResolvedEntry>(config.resolved ?? []);
+
   // Real host wall-clock/entropy — journaled by the live path, returned raw by the black box.
   const host = hostSource();
 
-  // Budget accumulator: summed as `agent`/`agent.task` entries are replayed or journaled, so
-  // it rebuilds identically on resume. Black-boxed agent calls never reach a record site.
+  // Budget accumulator: summed as `agent`/`agent.task` entries replay or journal (rebuilds identically on resume; black-boxed agent calls never reach a record site).
   let spentAgentTokens = 0;
   const recordAgentTokens = (kind: T.PrimitiveKind, result: unknown): void => {
     if (kind !== "agent" && kind !== "agent.task") return;
@@ -147,8 +152,7 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
       return result;
     }
 
-    // Validate the result is canonical-JSON-encodable BEFORE writing. A `undefined`/void
-    // result is journaled as the void envelope, so it is always encodable.
+    // Validate the result is canonical-JSON-encodable BEFORE writing (void → void envelope).
     const serializeError = result === undefined ? undefined : canonicalJsonError(result);
     if (serializeError !== undefined) {
       throw new JournalSerializeError({
@@ -163,10 +167,9 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
     return result;
   };
 
-  // Synchronous journaled dispatch for the wall-clock/entropy primitives. Date.now(),
-  // Math.random(), and crypto.randomUUID() are synchronous in JS, so they can't ride the
-  // async `callPrimitive` seat; they share its seq counter, journal, and drift rules but run
-  // inline. The recorded value (a number or string) replays verbatim — no schema decode.
+  // Synchronous journaled dispatch for the wall-clock/entropy primitives: Date.now() /
+  // Math.random() / crypto.randomUUID() are synchronous, so they share the seq counter,
+  // journal, and drift rules of `callPrimitive` but run inline (no schema decode on replay).
   const callDeterministic = <R extends number | string>(
     kind: "now" | "random" | "uuid",
     exec: () => R,
@@ -201,9 +204,18 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
     scriptNames: config.scriptNames,
   });
 
+  // Handle-pattern dispatch shares this runtime's `seq` seat, so a sent entry's seq — and
+  // thus its correlationId — interleaves deterministically with the other primitive calls.
+  const handles = createHandleDispatch({
+    runId: config.runId ?? "run", filePath: config.filePath, nowIso: config.nowIso,
+    isBlackBoxed: () => blackBoxDepth > 0, takeSeq: () => (seq += 1), maxRecordedSeq,
+    recordedAt: (atSeq) => config.journal.get(atSeq), resolvedFor: (cid) => resolved.get(cid),
+    writer: config.writer, setResolved: (entry) => resolved.set(entry.correlationId, entry),
+  });
+
   return {
     callTool: toolScript.callTool, callScript: toolScript.callScript, callPrimitive,
     now, random, uuid, currentSeq: () => seq, runBlackBoxed,
-    spentAgentTokens: () => spentAgentTokens, hostNow: host.now,
+    spentAgentTokens: () => spentAgentTokens, hostNow: host.now, handles,
   };
 }

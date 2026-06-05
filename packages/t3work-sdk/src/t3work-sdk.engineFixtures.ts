@@ -13,7 +13,12 @@ import * as Schema from "effect/Schema";
 
 import type * as AgentPrimitiveWorkflow from "./__fixtures__/t3work-sdk.agentPrimitive.workflow.ts";
 import type * as AgentTaskWorkflow from "./__fixtures__/t3work-sdk.agentTask.workflow.ts";
+import type * as AskResponseWorkflow from "./__fixtures__/t3work-sdk.askResponse.workflow.ts";
 import type * as BudgetWorkflow from "./__fixtures__/t3work-sdk.budgetPrimitive.workflow.ts";
+import type * as ChildSpawnWorkflow from "./__fixtures__/t3work-sdk.childSpawn.workflow.ts";
+import type * as HandleDismissWorkflow from "./__fixtures__/t3work-sdk.handleDismiss.workflow.ts";
+import type * as FireForgetWorkflow from "./__fixtures__/t3work-sdk.handleFireForget.workflow.ts";
+import type * as ThreadSendDeniedWorkflow from "./__fixtures__/t3work-sdk.threadSendDenied.workflow.ts";
 import type * as ParallelWorkflow from "./__fixtures__/t3work-sdk.parallelPrimitive.workflow.ts";
 import type * as PipelineWorkflow from "./__fixtures__/t3work-sdk.pipelinePrimitive.workflow.ts";
 import type * as SubParentWorkflow from "./__fixtures__/t3work-sdk.subParent.workflow.ts";
@@ -217,6 +222,21 @@ export const subParentWorkflow = defineWorkflow<typeof SubParentWorkflow>(
 );
 export const waitWorkflow = defineWorkflow<typeof WaitWorkflow>(
   "./__fixtures__/t3work-sdk.waitPrimitive.workflow.ts",
+);
+export const askResponseWorkflow = defineWorkflow<typeof AskResponseWorkflow>(
+  "./__fixtures__/t3work-sdk.askResponse.workflow.ts",
+);
+export const handleDismissWorkflow = defineWorkflow<typeof HandleDismissWorkflow>(
+  "./__fixtures__/t3work-sdk.handleDismiss.workflow.ts",
+);
+export const fireForgetWorkflow = defineWorkflow<typeof FireForgetWorkflow>(
+  "./__fixtures__/t3work-sdk.handleFireForget.workflow.ts",
+);
+export const threadSendDeniedWorkflow = defineWorkflow<typeof ThreadSendDeniedWorkflow>(
+  "./__fixtures__/t3work-sdk.threadSendDenied.workflow.ts",
+);
+export const childSpawnWorkflow = defineWorkflow<typeof ChildSpawnWorkflow>(
+  "./__fixtures__/t3work-sdk.childSpawn.workflow.ts",
 );
 
 export const runsRoot = mkdtempSync(join(tmpdir(), "t3work-engine-"));

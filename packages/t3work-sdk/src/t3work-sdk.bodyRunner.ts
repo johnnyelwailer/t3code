@@ -12,8 +12,11 @@ import { createRequire } from "node:module";
 
 import * as Schema from "effect/Schema";
 
+import type { MessageBroker } from "./t3work-sdk.broker.ts";
 import type { DurableWorkflowRuntime } from "./t3work-sdk.durableRuntime.ts";
 import { WorkflowError } from "./t3work-sdk.errors.ts";
+import { createHandlePrimitives } from "./t3work-sdk.handlePrimitives.ts";
+import type { HandleDispatch } from "./t3work-sdk.handles.ts";
 import { decodeWithSchema, setNestedValue } from "./t3work-sdk.internal.ts";
 import { createWorkflowPrimitives, type WorkflowPrimitives } from "./t3work-sdk.primitives.ts";
 import type { LlmDispatcher } from "./t3work-sdk.primitiveTypes.ts";
@@ -36,6 +39,19 @@ const defaultLlm: LlmDispatcher = () => {
     "This workflow called agent()/agent.task() but the run was started without an `llm` dispatcher. Provide one via the run options.",
   );
 };
+
+const defaultBroker: MessageBroker = {
+  send: () => {
+    throw new WorkflowError(
+      "This workflow fired a Handle primitive (ui.show/thread.send/child.spawn/user.*) but the run was started without a `broker`. Provide one via the run options.",
+    );
+  },
+};
+
+/** Engine feature strings declared in `meta.capabilities` (the ToolGroupRefs are filtered out). */
+function engineCapabilities(meta: WorkflowMeta): ReadonlySet<string> {
+  return new Set((meta.capabilities ?? []).filter((cap): cap is string => typeof cap === "string"));
+}
 
 function buildToolTree(
   refs: ReadonlyArray<T.AnyToolRef>,
@@ -69,6 +85,8 @@ export async function runPreparedBody(opts: {
   readonly toolRefs: ReadonlyArray<T.AnyToolRef>;
   readonly scripts: Readonly<Record<string, T.AnyScriptRef>>;
   readonly primitives: WorkflowPrimitives;
+  readonly handleDispatch: HandleDispatch;
+  readonly broker?: MessageBroker;
 }): Promise<unknown> {
   const source: WorkflowSource = {
     absolutePath: opts.ref.absolutePath,
@@ -84,12 +102,19 @@ export async function runPreparedBody(opts: {
           opts.args,
           `Invalid inputs for workflow '${meta.name}'`,
         );
+  // Capability-gate the Handle globals against this workflow's declared meta.capabilities.
+  const handles = createHandlePrimitives({
+    dispatch: opts.handleDispatch,
+    broker: opts.broker ?? defaultBroker,
+    capabilities: engineCapabilities(meta),
+  });
   const globals = buildWorkflowGlobals({
     args: decodedArgs,
     tools: buildToolTree(opts.toolRefs, opts.runtime),
     scripts: buildScriptTree(opts.scripts, opts.runtime),
     runtime: opts.runtime,
     primitives: opts.primitives,
+    handles,
   });
   const output = await withWorkflowRuntime(opts.runtime, () =>
     runWorkflowBody(prepared, source, globals),
@@ -114,6 +139,7 @@ export function buildWorkflowPrimitives(opts: {
   readonly scripts: Readonly<Record<string, T.AnyScriptRef>>;
 }): WorkflowPrimitives {
   const { runtime, options } = opts;
+  const broker = options.broker ?? defaultBroker;
   const shared = {
     callPrimitive: runtime.callPrimitive,
     runBlackBoxed: runtime.runBlackBoxed,
@@ -133,6 +159,8 @@ export function buildWorkflowPrimitives(opts: {
       toolRefs: opts.toolRefs,
       scripts: opts.scripts,
       primitives: nested,
+      handleDispatch: runtime.handles,
+      broker,
     });
   return createWorkflowPrimitives({ ...shared, runSubWorkflow });
 }

@@ -25,6 +25,7 @@ import {
   TimeoutError,
   WorkflowError,
 } from "./t3work-sdk.errors.ts";
+import type { WorkflowHandlePrimitives } from "./t3work-sdk.handlePrimitives.ts";
 import type { WorkflowPrimitives } from "./t3work-sdk.primitives.ts";
 import { defineWorkflow } from "./t3work-sdk.ts";
 
@@ -116,8 +117,10 @@ export function buildWorkflowGlobals(opts: {
   readonly scripts: Record<string, unknown>;
   readonly runtime: DeterministicSource;
   readonly primitives: WorkflowPrimitives;
+  readonly handles: WorkflowHandlePrimitives;
 }): Record<string, unknown> {
   const p = opts.primitives;
+  const h = opts.handles;
   return {
     ...deterministicGlobals(opts.runtime),
     args: opts.args,
@@ -132,6 +135,11 @@ export function buildWorkflowGlobals(opts: {
     budget: p.budget,
     phase: p.phase,
     log: p.log,
+    // 25.4 Handle globals (capability-gated per meta.capabilities — see handlePrimitives).
+    ui: h.ui,
+    thread: h.thread,
+    child: h.child,
+    user: h.user,
     // `defineWorkflow` lets a body construct the typed sub-workflow ref `workflow()` needs;
     // it is a pure ref constructor (no capability concern), so it is unconditionally bound.
     defineWorkflow,

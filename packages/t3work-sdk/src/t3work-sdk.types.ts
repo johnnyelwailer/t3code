@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 
+import type { MessageBroker } from "./t3work-sdk.broker.ts";
 import type { LlmDispatcher } from "./t3work-sdk.primitiveTypes.ts";
 
 export type EngineCapability = "thread" | "child" | "user" | "script" | "ui" | "workflow";
@@ -220,4 +221,6 @@ export interface WorkflowRunOptions {
   readonly budget?: number;
   readonly onPhase?: (title: string) => void;
   readonly onLog?: (message: string) => void;
+  // 25.4 Handle wiring: the host delivery seam ui.show/thread.send/child.spawn/user.* fire into.
+  readonly broker?: MessageBroker;
 }

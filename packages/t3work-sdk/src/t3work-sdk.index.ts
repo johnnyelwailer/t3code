@@ -1,5 +1,6 @@
 import "./t3work-sdk.globals.ts";
 
+export { appendResolvedEntry, createHostBroker, createMockBroker } from "./t3work-sdk.broker.ts";
 export { builtinTools } from "./t3work-sdk.builtins.ts";
 export {
   createDurableWorkflowRuntime,
@@ -48,13 +49,29 @@ export {
 } from "./t3work-sdk.ts";
 export { renameThreadTool } from "./tools/t3work-sdk.t3work.ts";
 
+export type {
+  HandleKind,
+  HostBrokerHandlers,
+  MessageBroker,
+  MessageEnvelope,
+  MockBroker,
+  MockBrokerOutcome,
+  ThreadTargetWire,
+} from "./t3work-sdk.broker.ts";
 export type { BuiltinToolsTree } from "./t3work-sdk.builtins.ts";
 export type {
   DurableWorkflowRuntime,
   StartWorkflowOptions,
+  SuspendedResult,
   WorkflowRunOptions,
   WorkflowRunResult,
 } from "./t3work-sdk.engine.ts";
+export type {
+  ThreadRef,
+  ThreadTarget,
+  WorkflowHandlePrimitives,
+} from "./t3work-sdk.handlePrimitives.ts";
+export type { Handle, UiHandle } from "./t3work-sdk.handles.ts";
 export type { ReplayDriftFacet, ReplayDriftReason } from "./t3work-sdk.errors.ts";
 export type { JournalEntry } from "./t3work-sdk.journalReader.ts";
 export type { WorkflowMeta } from "./t3work-sdk.loader.ts";
