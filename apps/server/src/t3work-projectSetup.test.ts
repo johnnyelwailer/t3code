@@ -72,16 +72,12 @@ describe("renderT3WorkProjectSetupFiles", () => {
     expect(agents?.contents).toContain("Keep the thread title current as the topic changes.");
     expect(agents?.contents).toContain(T3WORK_PROJECT_CONTEXT_ENTRYPOINT_PATH);
     expect(agents?.contents).toContain("prefer a read-only subagent");
+    expect(agents?.contents).toContain("offer to save it as a one-click play");
     expect(agents?.contents).toContain(
-      "Default to a child session for work that requires digging through a repository",
+      "do it in a separate thread scoped to the right repository",
     );
-    expect(agents?.contents).toContain(
-      "passes repo_full_name and repo_ref so the runtime prepares the scoped directory and base ref up front",
-    );
-    expect(agents?.contents).toContain("Parent and child threads must keep each other updated.");
-    expect(agents?.contents).toContain(
-      "Use explicit cross-thread messaging when the runtime supports it",
-    );
+    expect(agents?.contents).toContain("surface that thread as a link");
+    expect(agents?.contents).toContain("Offer first");
     expect(agents?.managedRefresh?.knownContentHashes?.length).toBeGreaterThan(0);
     expect(claude?.contents).toBe(agents?.contents);
     expect(claude?.writeMode).toBe("if-missing");

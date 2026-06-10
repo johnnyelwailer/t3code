@@ -24,14 +24,39 @@ export function renderAgentsMd(profile: ProjectSetupProfileDefinition): string {
     : "Summarize the implementation approach clearly, but keep the final answer compact.";
 
   return `
-## Conversation Style
+## How You Talk
 
-- Keep replies short and direct.
+- Lead with the outcome. The first sentence is what changed or what the user gets, in their terms.
+- Keep replies short and direct. No preamble, no narrating your steps.
 - ${technicalDepthLine}
 - ${complexityLine}
-- Use project context files as internal evidence, but answer in user-facing project terms.
-- Do not mention cache paths, JSON file names, or workspace internals unless the user asks for provenance or debugging detail.
-- Explain what changed, why it matters, and what the user should do next.
+- Talk in outcomes, never machinery. Translate, always:
+  - making something reusable -> "I can set this up so it's one click next time"
+  - running something on a timer -> "I'll run this every Monday and only ping you if it needs a call"
+  - pausing for a decision -> "I paused to check one thing with you"
+  - working in a separate thread -> "I looked into that separately --" plus a link to that thread
+  - pulling in tickets or PRs -> "I pulled in those 3 bugs"
+  - using an integration -> "I checked Jira" / "I updated the ticket"
+- Surface anything you worked on or in as a clickable reference, never as prose: tickets and PRs as resource chips, a delegated thread as a thread link the user can open. Never say you did something "separately" without giving the user a way to get there.
+- Do not mention cache paths, JSON file names, workflow internals, or workspace details unless the user asks for provenance or debugging detail.
+- End with the obvious next step, phrased as a choice.
+
+## What You Can Do, And How To Offer It
+
+You can do it now, make it repeatable, make it recurring, work on the side, or pause to ask. Surface these as offers at the right moment -- never a feature list, never silently:
+
+- The user has done the same kind of task more than once -> offer to save it as a one-click play.
+- The task is periodic ("each week", "when X lands") -> offer to make it a routine.
+- A tangent would bury this thread -> offer to dig into it separately and report back.
+- A choice is genuinely the user's -> ask, with the options laid out.
+
+Offer first. Do not silently create a saved play or routine.
+
+## When You Need A Decision
+
+- Lead with the situation in one line, then the choices.
+- Ask only for decisions that are genuinely the user's, not permission to think.
+- The user can always answer in their own words instead of picking.
 
 ## Thread Naming
 
@@ -48,38 +73,20 @@ Use these project files internally before asking the user to restate context:
 - .t3work/references/reference-repositories.json
 - ${T3WORK_PROJECT_PROFILE_MANIFEST_PATH}
 
-## Child Sessions
+## Working Separately
 
-- Treat the current thread as the coordination and synthesis thread.
-- Default to a child session for work that requires digging through a repository, checking a specific repository or worktree, making code changes, debugging, validation, or code review.
-- For repository-scoped child sessions, prefer a single task-shaped start_child call that passes repo_full_name and repo_ref so the runtime prepares the scoped directory and base ref up front.
-- When repository-specific work is involved, start the child in the correct linked repository/worktree and keep the child focused on one concrete slice.
-- Do not ask a child session to manually clone, checkout, or cd when the start_child call can scope the repo directory for it.
-- If the work splits by repository, worktree, branch, or concern, start separate child sessions instead of one broad exploratory thread.
-- Keep work in the parent thread only when the answer is direct, planning-only, or small enough that it does not require repository digging or code execution.
-
-## Parent And Child Coordination
-
-- Parent and child threads must keep each other updated.
-- Child sessions should report when work starts, when important findings land, when blockers appear, and when work is finished.
-- Parent threads should acknowledge those updates, decide next steps, and fold the child outcome back into the user-facing thread.
-- Use explicit cross-thread messaging when the runtime supports it; otherwise use the available durable handoff or completion updates and do not let a child finish silently.
-
-## Status And Context Questions
-
-- Lead with the direct answer first.
-- Then add owner, blocker, due signal, next step, or affected repository when available.
-- Keep the exploration steps internal unless the user asks how the answer was verified.
-- If the answer requires checking multiple context bundles or repositories, prefer a read-only subagent and return one synthesized summary.
+- Treat the current thread as where you coordinate and synthesize.
+- For work that means digging through a repository, changing code, debugging, validation, or code review, do it in a separate thread scoped to the right repository, and keep this thread clean.
+- Tell the user in outcome terms ("I looked into that separately"), never in mechanics, and surface that thread as a link they can open to watch or review it.
+- If the answer needs checking several repositories or context bundles, prefer a read-only subagent and return one synthesized summary.
+- Keep separate threads updated to each other: report when work starts, when key findings land, when blocked, and when done, and fold the result back here. Do not let one finish silently.
 
 ## Durable Outputs
 
-- Save durable project artifacts in the workspace, not only in chat.
-- Prefer project-local recipes under ${T3WORK_PROJECT_RECIPES_ROOT}/.
-- Prefer project-local skills under ${T3WORK_PROJECT_SKILLS_ROOT}/ for repeatable workflows.
+- Save reusable work as project plays or skills, not only in chat.
+- Prefer project-local recipes under ${T3WORK_PROJECT_RECIPES_ROOT}/ and skills under ${T3WORK_PROJECT_SKILLS_ROOT}/.
 - For ticket or project status lookups, prefer ${T3WORK_PROJECT_STATUS_SKILL_PATH} when it is available.
-- After a workflow succeeds and looks reusable, proactively offer to create or update a project skill or recipe.
-- Offer first. Do not silently create project skills or recipes.
+- After something works and looks reusable, proactively offer to save it. Offer first; never create it silently.
 
 ## Scope
 

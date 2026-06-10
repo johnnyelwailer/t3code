@@ -67,6 +67,9 @@ Use these project files before asking the user to restate context:
 export function renderPreviousAgentsMd(profile: ProjectSetupProfileDefinition): string {
   const { technicalDepthLine, complexityLine } = resolveConversationStyleLines(profile);
 
+  // Reproduces the AGENTS.md version replaced by Epic 28 (the prior "Conversation Style" +
+  // "Child Sessions"/start_child form), so existing projects still on it are recognized as
+  // managed and auto-refreshed to the current content. Historical bytes — do not edit.
   return `
 ## Conversation Style
 
@@ -96,7 +99,9 @@ Use these project files internally before asking the user to restate context:
 
 - Treat the current thread as the coordination and synthesis thread.
 - Default to a child session for work that requires digging through a repository, checking a specific repository or worktree, making code changes, debugging, validation, or code review.
+- For repository-scoped child sessions, prefer a single task-shaped start_child call that passes repo_full_name and repo_ref so the runtime prepares the scoped directory and base ref up front.
 - When repository-specific work is involved, start the child in the correct linked repository/worktree and keep the child focused on one concrete slice.
+- Do not ask a child session to manually clone, checkout, or cd when the start_child call can scope the repo directory for it.
 - If the work splits by repository, worktree, branch, or concern, start separate child sessions instead of one broad exploratory thread.
 - Keep work in the parent thread only when the answer is direct, planning-only, or small enough that it does not require repository digging or code execution.
 
