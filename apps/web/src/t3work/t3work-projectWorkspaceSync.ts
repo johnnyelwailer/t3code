@@ -10,6 +10,7 @@ import type { BackendApi, ProjectWorkspaceContextFile } from "~/t3work/backend/t
 import { compactJson, dedupeDirectoryBundleFiles } from "~/t3work/t3work-contextDirectoryBundle";
 import { buildProjectContextEntryPoint } from "~/t3work/t3work-contextCachePaths";
 import { buildProjectContextBundle } from "~/t3work/t3work-projectContextBundle";
+import { isWorkProject } from "~/t3work/t3work-isWorkProject";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 
 const syncStateByWorkspaceRoot = new Map<string, { signature: string; promise?: Promise<void> }>();
@@ -83,6 +84,12 @@ async function runProjectWorkspaceSync(input: {
 }): Promise<void> {
   const workspaceRoot = input.project.workspace?.rootPath;
   if (!workspaceRoot) {
+    return;
+  }
+  if (!isWorkProject(input.project)) {
+    // Loose local workspaces are the user's own folders: never scaffold agent-instruction files
+    // (AGENTS.md/CLAUDE.md) or sync work context into them. Only real work projects (Jira/Linear/
+    // GitHub/managed sources) get project setup. See t3work-isWorkProject.
     return;
   }
   const setupProfileId = resolveT3WorkProjectSetupProfileId(input.setupProfileId);

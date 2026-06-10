@@ -176,6 +176,7 @@ function createBackend(input: {
     dispatchCommand: async () => undefined,
     launchRecipeWorkflow: async () => ({ ok: true }),
     submitRecipeCardAction: async () => ({ ok: true }),
+    resolveWorkflowInput: async () => undefined,
     listThreadPlacements: async () => [],
     syncThreadToolContext: async () => undefined,
     atlassian: atlassian as BackendApi["atlassian"],

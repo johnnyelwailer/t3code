@@ -6,6 +6,7 @@ import { syncProjectWorkspaceContext } from "~/t3work/t3work-projectWorkspaceSyn
 import { randomUUID } from "~/lib/utils";
 
 import { applyWorkspaceBootstrapToProject } from "./t3work-createProjectBootstrap";
+import { isWorkProject } from "~/t3work/t3work-isWorkProject";
 
 export async function finalizeCreatedProject(input: {
   backend: BackendApi;
@@ -30,6 +31,14 @@ export async function finalizeCreatedProject(input: {
     },
     createdAt: new Date().toISOString(),
   });
+
+  if (!isWorkProject(input.project)) {
+    // A loose local workspace is the user's own folder — finalizing it must not scaffold
+    // agent-instruction files (AGENTS.md/CLAUDE.md) or a managed .gitignore into their repo. Only
+    // work projects (Jira/Linear/GitHub/managed sources) receive project setup. The project record
+    // is already created above; there is simply nothing to scaffold. See t3work-isWorkProject.
+    return input.project;
+  }
 
   try {
     const bootstrap = await input.backend.projectWorkspace.bootstrapWorkspace({

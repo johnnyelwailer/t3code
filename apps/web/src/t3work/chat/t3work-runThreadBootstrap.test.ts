@@ -24,6 +24,7 @@ function createBackend(): BackendApi {
     dispatchCommand: vi.fn(async () => undefined),
     launchRecipeWorkflow: vi.fn(async () => ({ ok: true })),
     submitRecipeCardAction: vi.fn(async () => ({ ok: true })),
+    resolveWorkflowInput: vi.fn(async () => undefined),
     listThreadPlacements: vi.fn(async () => []),
     syncThreadToolContext: vi.fn(async () => undefined),
     atlassian: {} as BackendApi["atlassian"],
@@ -163,9 +164,9 @@ describe("runThreadBootstrap", () => {
       onInitialUserMessageSent,
     });
 
-    expect(backend.projectWorkspace.bootstrapWorkspace).toHaveBeenCalledWith({
-      workspaceRoot: "/tmp/project-alpha",
-    });
+    // Thread bootstrap no longer scaffolds the workspace; scaffolding is owned by the work-project
+    // create/sync paths (never thread invocation), so local workspaces are not polluted.
+    expect(backend.projectWorkspace.bootstrapWorkspace).not.toHaveBeenCalled();
     expect(backend.syncThreadToolContext).toHaveBeenCalledWith({
       threadId: "thread-1",
       toolContext: TEST_TOOL_CONTEXT,
@@ -217,9 +218,9 @@ describe("runThreadBootstrap", () => {
       onInitialUserMessageSent: undefined,
     });
 
-    expect(backend.projectWorkspace.bootstrapWorkspace).toHaveBeenCalledWith({
-      workspaceRoot: "/tmp/project-alpha",
-    });
+    // Thread bootstrap no longer scaffolds the workspace; scaffolding is owned by the work-project
+    // create/sync paths (never thread invocation), so local workspaces are not polluted.
+    expect(backend.projectWorkspace.bootstrapWorkspace).not.toHaveBeenCalled();
     expect(backend.syncThreadToolContext).toHaveBeenCalledWith({
       threadId: "thread-2",
       toolContext: TEST_TOOL_CONTEXT,

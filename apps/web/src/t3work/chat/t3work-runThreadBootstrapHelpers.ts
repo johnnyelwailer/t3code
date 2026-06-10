@@ -27,16 +27,12 @@ export async function ensureThreadBootstrapProject(input: {
   kickoffModelSelection: ModelSelection;
   createdAt: string;
 }) {
-  if (input.projectWorkspaceRoot) {
-    try {
-      await input.backend.projectWorkspace.bootstrapWorkspace({
-        workspaceRoot: input.projectWorkspaceRoot,
-      });
-    } catch {
-      // Thread bootstrap should keep going; the next project sync can retry the scaffold repair.
-    }
-  }
-
+  // Thread invocation must NOT scaffold the workspace. Project-setup scaffolding writes
+  // agent-instruction files (AGENTS.md/CLAUDE.md) and the .t3work setup tree into the project
+  // root — which pollutes a user's own repository when the project is a loose local workspace.
+  // Scaffolding is owned by the work-project create + sync paths (gated on isWorkProject); thread
+  // start only ensures the project record exists. The workspace directory itself is created by the
+  // `project.create` dispatch below via `createWorkspaceRootIfMissing`.
   if (!input.projectWorkspaceRoot || !input.shouldEnsureProject) {
     return;
   }
