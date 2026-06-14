@@ -18,6 +18,10 @@ import {
   updateT3workAtlassianBacklogEstimate,
   updateT3workAtlassianIssueStatus,
 } from "./t3work-atlassian-backlog.ts";
+import {
+  searchT3workAtlassianBacklog,
+  type T3workAtlassianBacklogSearchInput,
+} from "./t3work-atlassian-backlogSearch.ts";
 import { errorResponse, okJson, readJsonBody } from "./t3work-atlassian-http.ts";
 import { type T3workPollEnvelope } from "./t3work-integration-polling.ts";
 
@@ -41,10 +45,17 @@ const t3workAtlassianBacklogPollRouteLayer = HttpRouter.add(
   Effect.gen(function* () {
     const input = yield* readJsonBody<T3workAtlassianBacklogPollInput>();
     const { poll, ...request } = input;
-    const result = yield* loadT3workAtlassianBacklog({
-      ...request,
-      forceRefresh: true,
-    });
+    // While a background sync walk is still paging this selection, polls serve
+    // the growing cache (and re-kick a stalled walk) instead of hitting the
+    // provider; once the walk completes, polls go back to live refreshes.
+    const cachedResult = yield* loadT3workAtlassianBacklog(request);
+    const result =
+      cachedResult.page.nextCursor || cachedResult.cache.source === "live"
+        ? cachedResult
+        : yield* loadT3workAtlassianBacklog({
+            ...request,
+            forceRefresh: true,
+          });
 
     if (poll.knownFingerprint === result.cache.fingerprint) {
       return okJson({
@@ -58,6 +69,16 @@ const t3workAtlassianBacklogPollRouteLayer = HttpRouter.add(
       fingerprint: result.cache.fingerprint,
       value: result,
     });
+  }).pipe(Effect.catch(errorResponse)),
+);
+
+const t3workAtlassianBacklogSearchRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/t3work/atlassian/backlog/search",
+  Effect.gen(function* () {
+    const input = yield* readJsonBody<T3workAtlassianBacklogSearchInput>();
+    const result = yield* searchT3workAtlassianBacklog(input);
+    return okJson(result);
   }).pipe(Effect.catch(errorResponse)),
 );
 
@@ -124,6 +145,7 @@ const t3workAtlassianBacklogCreateSubtaskRouteLayer = HttpRouter.add(
 export const t3workAtlassianBacklogRouteLayer = Layer.mergeAll(
   t3workAtlassianBacklogReadRouteLayer,
   t3workAtlassianBacklogPollRouteLayer,
+  t3workAtlassianBacklogSearchRouteLayer,
   t3workAtlassianBoardColumnsRouteLayer,
   t3workAtlassianBacklogAssignableUsersRouteLayer,
   t3workAtlassianBacklogAssigneeRouteLayer,

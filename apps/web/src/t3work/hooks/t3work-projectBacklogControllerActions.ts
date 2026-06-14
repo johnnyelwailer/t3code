@@ -31,6 +31,7 @@ function getConnectedBacklogContext(input: {
 export function createProjectBacklogControllerActions(input: {
   readonly backend: BackendApi | null;
   readonly connectedSource: ConnectedBacklogSource | null;
+  readonly projectId: string;
   readonly currentSelection: BacklogSelectionInput;
   readonly setBacklogState: Dispatch<SetStateAction<ProjectBacklogState>>;
   readonly refreshBacklog: (options?: { clearProjectCache?: boolean }) => Promise<void>;
@@ -73,6 +74,7 @@ export function createProjectBacklogControllerActions(input: {
       return createProjectBacklogSubtask({
         backend,
         connectedSource,
+        projectId: input.projectId,
         currentSelection: input.currentSelection,
         setBacklogState: input.setBacklogState,
         refreshBacklog: input.refreshBacklog,

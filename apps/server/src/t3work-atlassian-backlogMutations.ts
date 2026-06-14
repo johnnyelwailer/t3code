@@ -3,9 +3,11 @@ import * as Effect from "effect/Effect";
 
 import {
   incrementCachedT3workAtlassianBacklogSubtaskCount,
+  insertCachedT3workAtlassianBacklogChildIssue,
   updateCachedT3workAtlassianBacklogAssignee,
   updateCachedT3workAtlassianBacklogEstimate,
 } from "./t3work-atlassian-backlog-cache.ts";
+import type { BacklogResourceRef } from "./t3work-atlassian-backlog-cacheShared.ts";
 import { providerForAccount } from "./t3work-atlassian-auth-store.ts";
 import { T3workAtlassianError, tryAtlassianPromise } from "./t3work-atlassian-http.ts";
 import type {
@@ -133,6 +135,28 @@ export function createT3workAtlassianBacklogSubtask(
       issueIdOrKey: input.parentIssueIdOrKey,
     }).pipe(Effect.catch(() => Effect.void));
 
-    return created;
+    // Fetch the created issue directly by key — Jira's search index lags issue
+    // creation by seconds, so sync/search pages won't include it yet — and
+    // seed it into the backlog cache next to its parent so it shows up
+    // immediately in cached views and resolves with full details.
+    const item = yield* tryAtlassianPromise(
+      () =>
+        provider.getBacklogIssue({
+          accountId: input.accountId,
+          issueIdOrKey: created.key,
+        }),
+      "Failed to load the created Jira subtask.",
+    ).pipe(Effect.catch(() => Effect.succeed(null)));
+
+    if (item) {
+      yield* insertCachedT3workAtlassianBacklogChildIssue({
+        provider: "atlassian",
+        accountId: input.accountId,
+        parentIssueIdOrKey: input.parentIssueIdOrKey,
+        item: item as BacklogResourceRef,
+      }).pipe(Effect.catch(() => Effect.void));
+    }
+
+    return { ...created, ...(item ? { item } : {}) };
   });
 }

@@ -162,6 +162,7 @@ function compareBacklogSavedFilters(
 }
 
 const jiraIssueSearchPageSize = 100;
+const defaultBacklogResourceLimit = 100;
 
 function toBacklogBoard(board: {
   id: string | number;
@@ -482,9 +483,7 @@ function issueTypeUsesHourEstimates(input: {
   }
 
   const normalized = input.issueType?.trim().toLowerCase() ?? "";
-  return (
-    normalized.includes("bug") || normalized.includes("subtask") || normalized.includes("sub-task")
-  );
+  return normalized.includes("subtask") || normalized.includes("sub-task");
 }
 
 function secondsToRoundedHours(seconds: number): number {
@@ -749,6 +748,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       boardId?: string;
       sprintId?: string;
       filterJql?: string;
+      cursor?: string;
     },
   ): Promise<ResourcePage> {
     const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
@@ -774,7 +774,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       this.resolveEstimateField(entry.client),
       this.resolveSprintField(entry.client),
     ]);
-    const responseIssues = await this.searchIssuesWithPagination(
+    const search = await this.searchIssuesWithPagination(
       entry.client,
       backlogJql,
       [
@@ -785,11 +785,98 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         "aggregatetimeoriginalestimate",
         "aggregatetimeestimate",
       ],
-      input.limit,
+      input.limit ?? defaultBacklogResourceLimit,
+      input.cursor,
     );
-    const items = responseIssues.map((issue) => {
-      const jiraIssue = issue as JiraIssue;
-      const normalized = normalizeIssueSearch({ issues: [jiraIssue], total: 1 }, entry.siteUrl)[0]!;
+    const items = search.issues.map((issue) =>
+      this.toBacklogItem(
+        issue as JiraIssue,
+        entry.siteUrl,
+        estimateField,
+        sprintField,
+        requestedSprintId,
+      ),
+    );
+
+    // Planning views need the referenced parents (epics, story parents of
+    // sprint subtasks) for titles and grouping; the backlog page itself often
+    // excludes them (other status category, outside the sprint). Fetch the
+    // missing ones in a single keyed search and append them.
+    const parentKeys = new Set<string>();
+    for (const issue of search.issues) {
+      if (!issue || typeof issue !== "object") continue;
+      const fields = (issue as { fields?: unknown }).fields;
+      if (!fields || typeof fields !== "object") continue;
+      const parent = (fields as { parent?: unknown }).parent;
+      if (!parent || typeof parent !== "object") continue;
+      const parentKey = (parent as { key?: unknown }).key;
+      if (typeof parentKey === "string" && parentKey.trim().length > 0) {
+        parentKeys.add(parentKey);
+      }
+    }
+    const presentDisplayIds = new Set(items.map((item) => item.displayId));
+    const missingParentKeys = [...parentKeys].filter((key) => !presentDisplayIds.has(key));
+    let parentItems: ReadonlyArray<(typeof items)[number]> = [];
+    if (missingParentKeys.length > 0) {
+      const quotedParentKeys = missingParentKeys.map((key) => `"${key.replace(/"/g, '\\"')}"`);
+      const parentJql = `key in (${quotedParentKeys.join(", ")}) ORDER BY updated DESC`;
+      const parentResponse = await entry.client.searchIssues(parentJql, missingParentKeys.length);
+      parentItems = normalizeIssueSearch(parentResponse, entry.siteUrl);
+    }
+    const itemsById = new Map<string, (typeof items)[number]>();
+    for (const item of items) {
+      itemsById.set(item.id, item);
+    }
+    for (const item of parentItems) {
+      if (!itemsById.has(item.id)) {
+        itemsById.set(item.id, item);
+      }
+    }
+    const enrichedItems = [...itemsById.values()];
+
+    return {
+      items: enrichedItems,
+      totalCount: search.total > 0 ? search.total : enrichedItems.length,
+      ...(search.hasMore && search.nextPageToken ? { nextCursor: search.nextPageToken } : {}),
+    };
+  }
+
+  /** Fetch a single issue by id/key, enriched the same way as backlog page
+   * items. Reads the issue directly (not via the search index), so it sees
+   * issues created moments ago that /search/jql does not return yet. */
+  async getBacklogIssue(input: {
+    accountId: string;
+    issueIdOrKey: string;
+  }): Promise<ReturnType<typeof normalizeIssueSearch>[number] | null> {
+    const entry = this.getClientForAccount(input.accountId) ?? this.getDefaultClient();
+    if (!entry) {
+      return null;
+    }
+
+    const [estimateField, sprintField] = await Promise.all([
+      this.resolveEstimateField(entry.client),
+      this.resolveSprintField(entry.client),
+    ]);
+    const issue = await entry.client.getIssue(input.issueIdOrKey, [
+      ...(estimateField ? [estimateField.id] : []),
+      ...(sprintField ? [sprintField.id] : []),
+      "timeoriginalestimate",
+      "timeestimate",
+      "aggregatetimeoriginalestimate",
+      "aggregatetimeestimate",
+    ]);
+    return this.toBacklogItem(issue, entry.siteUrl, estimateField, sprintField);
+  }
+
+  private toBacklogItem(
+    jiraIssue: JiraIssue,
+    siteUrl: string,
+    estimateField: JiraEstimateField | null,
+    sprintField: JiraSprintField | null,
+    requestedSprintId?: string,
+  ): ReturnType<typeof normalizeIssueSearch>[number] {
+    const normalized = normalizeIssueSearch({ issues: [jiraIssue] }, siteUrl)[0]!;
+    {
       const normalizedIssueTypeIsSubtask = (
         normalized as typeof normalized & { issueTypeIsSubtask?: boolean }
       ).issueTypeIsSubtask;
@@ -858,12 +945,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       }
 
       return item as typeof normalized;
-    });
-
-    return {
-      items,
-      totalCount: items.length,
-    };
+    }
   }
 
   async listProjectStatuses(input: {
@@ -1278,22 +1360,31 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     return { id: match.id, key: match.key };
   }
 
+  // /rest/api/3/search/jql pages via nextPageToken; it ignores startAt and
+  // does not return total. The token is the only valid continuation handle.
   private async searchIssuesWithPagination(
     client: JiraApiClient,
     jql: string,
     extraFields: ReadonlyArray<string>,
     limit?: number,
-  ): Promise<ReadonlyArray<unknown>> {
+    initialPageToken?: string,
+  ): Promise<{
+    issues: ReadonlyArray<unknown>;
+    total: number;
+    nextPageToken?: string;
+    hasMore: boolean;
+  }> {
     const requestedLimit =
       typeof limit === "number" && Number.isFinite(limit)
         ? Math.max(0, Math.floor(limit))
         : undefined;
     if (requestedLimit === 0) {
-      return [];
+      return { issues: [], total: 0, hasMore: false };
     }
 
     const issues: unknown[] = [];
-    let startAt = 0;
+    let pageToken = initialPageToken;
+    let total = 0;
 
     while (true) {
       const remaining =
@@ -1303,21 +1394,32 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         break;
       }
 
-      const response = await client.searchIssues(jql, pageSize, extraFields, startAt);
+      const response = await client.searchIssues(jql, pageSize, extraFields, pageToken);
       const pageIssues = response.issues.slice(0, pageSize);
       issues.push(...pageIssues);
-
-      const pageStartAt = response.startAt ?? startAt;
-      const nextStartAt = pageStartAt + pageIssues.length;
-      const reachedRequestedLimit = requestedLimit !== undefined && issues.length >= requestedLimit;
-      if (pageIssues.length === 0 || reachedRequestedLimit || nextStartAt >= response.total) {
-        break;
+      if (typeof response.total === "number") {
+        total = response.total;
       }
 
-      startAt = nextStartAt;
+      const exhausted =
+        pageIssues.length === 0 || response.isLast === true || !response.nextPageToken;
+      const reachedRequestedLimit = requestedLimit !== undefined && issues.length >= requestedLimit;
+      if (exhausted) {
+        return { issues, total, hasMore: false };
+      }
+      if (reachedRequestedLimit) {
+        return {
+          issues,
+          total,
+          nextPageToken: response.nextPageToken,
+          hasMore: true,
+        };
+      }
+
+      pageToken = response.nextPageToken;
     }
 
-    return issues;
+    return { issues, total, hasMore: false };
   }
 
   private async resolveEstimateField(client: JiraApiClient): Promise<JiraEstimateField | null> {

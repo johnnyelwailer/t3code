@@ -24,6 +24,7 @@ export function useProjectBacklogController(input: {
   const { updateAssignee, updateEstimate, createSubtask } = createProjectBacklogControllerActions({
     backend: input.backend,
     connectedSource: input.connectedSource,
+    projectId: input.projectId,
     currentSelection: input.currentSelection,
     setBacklogState: input.setBacklogState,
     refreshBacklog: (options) =>

@@ -141,11 +141,15 @@ export type JiraFilterSearchResponse = {
   readonly isLast?: boolean;
 };
 
+// Shape of /rest/api/3/search/jql: pagination is token-based (nextPageToken /
+// isLast); the endpoint ignores startAt and does not return total.
 export type JiraIssueSearchResponse = {
   readonly issues: ReadonlyArray<unknown>;
-  readonly total: number;
+  readonly total?: number;
   readonly startAt?: number;
   readonly maxResults?: number;
+  readonly nextPageToken?: string;
+  readonly isLast?: boolean;
 };
 
 export type JiraIssue = {

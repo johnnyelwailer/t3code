@@ -113,7 +113,7 @@ export function createProjectBacklogSubtaskRemote(input: {
   readonly externalProjectId: string;
   readonly ticket: ProjectTicket;
   readonly subtask: ProjectBacklogSubtaskCreateInput;
-}): Promise<{ id: string; key: string }> {
+}): ReturnType<AtlassianBackendApi["createSubtask"]> {
   return input.backend.createSubtask({
     accountId: input.accountId,
     projectId: input.externalProjectId,

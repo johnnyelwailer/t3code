@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 
 import type { AtlassianAssignableUser, BackendApi } from "~/t3work/backend/t3work-types";
 import type { ProjectBacklogSubtaskCreateInput, ProjectTicket } from "~/t3work/t3work-types";
+import { resourceRefToProjectTicket } from "~/t3work/t3work-ticketMappers";
 
 import { type BacklogSelectionInput } from "./t3work-projectBacklogCache";
 import {
@@ -11,6 +12,7 @@ import {
 } from "./t3work-projectBacklogRemote";
 import {
   incrementProjectBacklogStateSubtaskCount,
+  insertProjectBacklogStateTicket,
   type ProjectBacklogState,
   updateProjectBacklogStateAssignee,
   updateProjectBacklogStateEstimate,
@@ -71,11 +73,12 @@ export async function updateProjectBacklogEstimate(
 
 export async function createProjectBacklogSubtask(
   input: ProjectBacklogMutationContext & {
+    readonly projectId: string;
     readonly ticket: ProjectTicket;
     readonly subtask: ProjectBacklogSubtaskCreateInput;
   },
 ): Promise<void> {
-  await createProjectBacklogSubtaskRemote({
+  const created = await createProjectBacklogSubtaskRemote({
     backend: input.backend.atlassian,
     accountId: input.connectedSource.accountId,
     externalProjectId: input.connectedSource.externalProjectId,
@@ -83,9 +86,20 @@ export async function createProjectBacklogSubtask(
     subtask: input.subtask,
   });
 
-  input.setBacklogState((current) =>
-    incrementProjectBacklogStateSubtaskCount(current, input.ticket.id),
-  );
+  // The server returns the created issue fetched directly by key (Jira's
+  // search index lags creation, so a refresh would not include it yet) and has
+  // already seeded it into the cache. Insert it into local state so the modal
+  // resolves immediately and the subtask shows up with full details; the
+  // regular polling loop reconciles afterwards.
+  const createdTicket = created.item
+    ? resourceRefToProjectTicket(input.projectId, created.item)
+    : null;
+  input.setBacklogState((current) => {
+    const withCount = incrementProjectBacklogStateSubtaskCount(current, input.ticket.id);
+    return createdTicket ? insertProjectBacklogStateTicket(withCount, createdTicket) : withCount;
+  });
 
-  await input.refreshBacklog();
+  if (!createdTicket) {
+    await input.refreshBacklog();
+  }
 }

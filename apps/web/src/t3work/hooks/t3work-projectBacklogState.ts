@@ -169,6 +169,19 @@ export function updateProjectBacklogStateEstimate(
   };
 }
 
+export function insertProjectBacklogStateTicket(
+  state: ProjectBacklogState,
+  ticket: ProjectTicket,
+): ProjectBacklogState {
+  if (state.tickets.some((existing) => existing.id === ticket.id)) {
+    return state;
+  }
+  return {
+    ...state,
+    tickets: [...state.tickets, ticket],
+  };
+}
+
 export function incrementProjectBacklogStateSubtaskCount(
   state: ProjectBacklogState,
   ticketId: string,

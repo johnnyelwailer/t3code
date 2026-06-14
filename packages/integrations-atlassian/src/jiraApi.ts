@@ -310,13 +310,13 @@ export class JiraApiClient {
     jql: string,
     maxResults = 50,
     extraFields: ReadonlyArray<string> = [],
-    startAt = 0,
+    pageToken?: string,
   ): Promise<JiraIssueSearchResponse> {
     const encodedJql = encodeURIComponent(jql);
     const fields = this.buildIssueFields(extraFields);
     const params = [`jql=${encodedJql}`, `fields=${fields}`, `maxResults=${maxResults}`];
-    if (startAt > 0) {
-      params.push(`startAt=${startAt}`);
+    if (pageToken) {
+      params.push(`nextPageToken=${encodeURIComponent(pageToken)}`);
     }
     return this.fetchJson<JiraIssueSearchResponse>(`/rest/api/3/search/jql?${params.join("&")}`);
   }

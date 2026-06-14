@@ -184,3 +184,5 @@ export const incrementCachedT3workAtlassianBacklogSubtaskCount = Effect.fn(
     }),
   });
 });
+
+export { insertCachedT3workAtlassianBacklogChildIssue } from "./t3work-atlassian-backlog-cacheChildInsert.ts";

@@ -483,14 +483,83 @@ describe("AtlassianIntegrationProvider", () => {
       }
 
       if (url.pathname === "/rest/api/3/search/jql") {
-        const startAt = Number(url.searchParams.get("startAt") ?? "0");
+        const startAt = Number(url.searchParams.get("nextPageToken") ?? "0");
+        const maxResults = Number(url.searchParams.get("maxResults") ?? "0");
+        expect(maxResults).toBe(startAt === 0 ? 100 : 1);
+        const end = startAt + maxResults;
+        return Response.json({
+          issues: allIssues.slice(startAt, end),
+          ...(end < allIssues.length
+            ? { nextPageToken: String(end), isLast: false }
+            : { isLast: true }),
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    const page = await provider.listBacklogResources({
+      account: {
+        id: "https://test.atlassian.net",
+        provider: "atlassian",
+      },
+      externalProjectId: "project-1",
+      limit: 101,
+    });
+
+    const searchCalls = fetchMock.mock.calls.filter(([input]) =>
+      String(input).includes("/rest/api/3/search/jql"),
+    );
+    expect(searchCalls).toHaveLength(2);
+    expect(page.totalCount).toBe(101);
+    expect(page.items.some((item) => item.displayId === "PROJ-201")).toBe(true);
+    expect(page.items.find((item) => item.displayId === "PROJ-101")?.parentId).toBe("PROJ-201");
+  });
+
+  it("caps default backlog results to avoid unbounded project loads", async () => {
+    const allIssues = Array.from({ length: 101 }, (_, index) => ({
+      key: `PROJ-${index + 1}`,
+      fields: {
+        summary: `Summary for PROJ-${index + 1}`,
+        issuetype: { name: "Task" },
+        status: { name: "To Do" },
+        priority: { name: "Medium" },
+        project: { id: "project-1" },
+        updated: "2026-05-20T00:00:00.000Z",
+      },
+    }));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname === "/rest/api/3/project/search") {
+        return Response.json({
+          values: [{ id: "project-1", key: "PROJ" }],
+        });
+      }
+
+      if (url.pathname === "/rest/api/3/field") {
+        return Response.json([]);
+      }
+
+      if (url.pathname === "/rest/api/3/search/jql") {
+        const startAt = Number(url.searchParams.get("nextPageToken") ?? "0");
         const maxResults = Number(url.searchParams.get("maxResults") ?? "0");
         expect(maxResults).toBe(100);
+        const end = startAt + maxResults;
         return Response.json({
-          total: allIssues.length,
-          startAt,
-          maxResults,
-          issues: allIssues.slice(startAt, startAt + maxResults),
+          issues: allIssues.slice(startAt, end),
+          ...(end < allIssues.length
+            ? { nextPageToken: String(end), isLast: false }
+            : { isLast: true }),
         });
       }
 
@@ -516,10 +585,24 @@ describe("AtlassianIntegrationProvider", () => {
     const searchCalls = fetchMock.mock.calls.filter(([input]) =>
       String(input).includes("/rest/api/3/search/jql"),
     );
-    expect(searchCalls).toHaveLength(2);
-    expect(page.totalCount).toBe(101);
-    expect(page.items.some((item) => item.displayId === "PROJ-201")).toBe(true);
-    expect(page.items.find((item) => item.displayId === "PROJ-101")?.parentId).toBe("PROJ-201");
+    expect(searchCalls).toHaveLength(1);
+    expect(page.items).toHaveLength(100);
+    // /search/jql returns no total; a truncated page reports the fetched count
+    // and signals more data via the continuation token.
+    expect(page.totalCount).toBe(100);
+    expect(page.nextCursor).toBe("100");
+    expect(page.items.some((item) => item.displayId === "PROJ-101")).toBe(false);
+
+    const continuation = await provider.listBacklogResources({
+      account: {
+        id: "https://test.atlassian.net",
+        provider: "atlassian",
+      },
+      externalProjectId: "project-1",
+      cursor: page.nextCursor as string,
+    });
+    expect(continuation.items.some((item) => item.displayId === "PROJ-101")).toBe(true);
+    expect(continuation.nextCursor).toBeUndefined();
   });
 
   it("applies a selected Jira saved filter when loading the backlog", async () => {
@@ -1543,6 +1626,40 @@ describe("AtlassianIntegrationProvider", () => {
 
     await expect(
       provider.updateIssueEstimate("https://test.atlassian.net", "PROJ-9", 1.5, "hours"),
+    ).resolves.toEqual({ label: "Hours" });
+  });
+
+  it("does not update the remaining estimate when changing hour estimates", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.endsWith("/rest/api/3/issue/PROJ-9/editmeta")) {
+        return Response.json({ fields: { timetracking: {} } });
+      }
+
+      if (url.endsWith("/rest/api/3/issue/PROJ-9")) {
+        expect(init?.method).toBe("PUT");
+        const body = JSON.parse(String(init?.body)) as {
+          fields: { timetracking: Record<string, unknown> };
+        };
+        expect(body.fields.timetracking).toEqual({ originalEstimate: "2h" });
+        expect(body.fields.timetracking).not.toHaveProperty("remainingEstimate");
+        return new Response(null, { status: 204 });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.updateIssueEstimate("https://test.atlassian.net", "PROJ-9", 2, "hours"),
     ).resolves.toEqual({ label: "Hours" });
   });
 

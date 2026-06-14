@@ -11,42 +11,16 @@ import {
 import {
   buildPersistedSelectionKeys,
   fingerprintBacklogPayload,
-  materializeBacklogPayload,
+  parseJson,
+  type BacklogResourceRef,
   type T3workAtlassianBacklogPayload,
   type T3workBacklogCacheIdentity,
   type T3workBacklogSelectionInput,
-  type T3workCachedAtlassianBacklogRecord,
 } from "./t3work-atlassian-backlog-cacheShared.ts";
 import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables.ts";
 
-export const readCachedT3workAtlassianBacklog = Effect.fn("t3work.atlassianBacklogCache.read")(
-  function* (
-    input: T3workBacklogCacheIdentity & {
-      readonly selection?: T3workBacklogSelectionInput;
-    },
-  ) {
-    return yield* Effect.gen(function* () {
-      yield* ensureBacklogCacheTables();
-      const resolvedRow = yield* readCachedBacklogViewRow(input);
-      if (!resolvedRow) {
-        return null;
-      }
-
-      const issueRows = yield* readCachedBacklogIssueRows(input);
-
-      const response = materializeBacklogPayload({ row: resolvedRow, issueRows });
-      if (!response) {
-        return null;
-      }
-
-      return {
-        response,
-        updatedAt: resolvedRow.updatedAt,
-        fingerprint: fingerprintBacklogPayload(response),
-      } satisfies T3workCachedAtlassianBacklogRecord;
-    }).pipe(Effect.mapError(toPersistenceSqlError("t3work.atlassianBacklogCache.read")));
-  },
-);
+export { readCachedT3workAtlassianBacklog } from "./t3work-atlassian-backlog-cacheRead.ts";
+export { appendCachedT3workAtlassianBacklogSyncPage } from "./t3work-atlassian-backlog-cacheSyncAppend.ts";
 
 export const writeCachedT3workAtlassianBacklog = Effect.fn("t3work.atlassianBacklogCache.write")(
   function* (
@@ -55,14 +29,55 @@ export const writeCachedT3workAtlassianBacklog = Effect.fn("t3work.atlassianBack
       readonly response: T3workAtlassianBacklogPayload;
       readonly updatedAt?: number;
       readonly replaceProjectCache?: boolean;
+      readonly mergeExistingTail?: boolean;
     },
   ) {
     return yield* Effect.gen(function* () {
       yield* ensureBacklogCacheTables();
       const sql = yield* SqlClient.SqlClient;
       const updatedAt = input.updatedAt ?? (yield* Clock.currentTimeMillis);
+
+      // A bounded live fetch only sees the first page. When the cache already
+      // holds a longer list for this selection (from background sync), keep the
+      // known tail so a foreground refresh cannot shrink the backlog back to
+      // one page. The tail is pruned when a sync walk completes.
+      let response = input.response;
+      if (input.mergeExistingTail && !input.replaceProjectCache && input.response.page.nextCursor) {
+        const existingRow = yield* readCachedBacklogViewRow({
+          provider: input.provider,
+          accountId: input.accountId,
+          externalProjectId: input.externalProjectId,
+          ...(input.requestSelection ? { selection: input.requestSelection } : {}),
+        });
+        const existingIds = existingRow
+          ? parseJson<ReadonlyArray<string>>(existingRow.issueIdsJson)
+          : null;
+        const liveIds = new Set(input.response.page.items.map((item) => item.id));
+        const tailIds = (existingIds ?? []).filter((id) => !liveIds.has(id));
+        if (tailIds.length > 0) {
+          const issueRows = yield* readCachedBacklogIssueRows({
+            provider: input.provider,
+            accountId: input.accountId,
+            externalProjectId: input.externalProjectId,
+          });
+          const issuesById = new Map(
+            issueRows.map((row) => [row.issueId, parseJson<BacklogResourceRef>(row.resourceJson)]),
+          );
+          const tailItems = tailIds
+            .map((id) => issuesById.get(id))
+            .filter((item): item is BacklogResourceRef => Boolean(item));
+          response = {
+            ...input.response,
+            page: {
+              ...input.response.page,
+              items: [...input.response.page.items, ...tailItems],
+            },
+          };
+        }
+      }
+
       const selectionKeys = buildPersistedSelectionKeys({
-        response: input.response,
+        response,
         ...(input.requestSelection ? { requestSelection: input.requestSelection } : {}),
       });
 
@@ -135,16 +150,16 @@ export const writeCachedT3workAtlassianBacklog = Effect.fn("t3work.atlassianBack
               ${input.accountId},
               ${input.externalProjectId},
               ${selectionKey},
-              ${input.response.selectedBoardId ?? null},
-              ${input.response.selectedSprintId ?? null},
-              ${input.response.selectedFilterId ?? null},
-              ${serializeBacklogCacheJson(input.response.page.items.map((item) => item.id))},
-              ${serializeBacklogCacheJson(input.response.boards)},
-              ${serializeBacklogCacheJson(input.response.sprints)},
-              ${serializeBacklogCacheJson(input.response.savedFilters)},
-              ${serializeBacklogCacheJson(input.response.capabilities)},
-              ${input.response.page.nextCursor ?? null},
-              ${input.response.page.totalCount ?? null},
+              ${response.selectedBoardId ?? null},
+              ${response.selectedSprintId ?? null},
+              ${response.selectedFilterId ?? null},
+              ${serializeBacklogCacheJson(response.page.items.map((item) => item.id))},
+              ${serializeBacklogCacheJson(response.boards)},
+              ${serializeBacklogCacheJson(response.sprints)},
+              ${serializeBacklogCacheJson(response.savedFilters)},
+              ${serializeBacklogCacheJson(response.capabilities)},
+              ${response.page.nextCursor ?? null},
+              ${response.page.totalCount ?? null},
               ${updatedAt}
             )
             ON CONFLICT (provider, account_id, external_project_id, selection_key)
@@ -167,7 +182,8 @@ export const writeCachedT3workAtlassianBacklog = Effect.fn("t3work.atlassianBack
 
       return {
         updatedAt,
-        fingerprint: fingerprintBacklogPayload(input.response),
+        fingerprint: fingerprintBacklogPayload(response),
+        response,
       };
     }).pipe(Effect.mapError(toPersistenceSqlError("t3work.atlassianBacklogCache.write")));
   },

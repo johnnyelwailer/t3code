@@ -134,6 +134,13 @@ function createBackend(input: {
   readonly pollBacklog: T3workPollingBackend["atlassian"]["pollBacklog"];
 }): BackendApi {
   const atlassian = {
+    getTempoCapacity: vi.fn(async (input: { from: string; to: string }) => ({
+      configured: false,
+      from: input.from,
+      to: input.to,
+      capacities: [],
+    })),
+    setTempoToken: vi.fn(async () => ({ configured: false })),
     listAccounts: vi.fn(async () => []),
     connectBasic: vi.fn(async () => []),
     connectOAuth: vi.fn(async () => []),

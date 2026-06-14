@@ -18,6 +18,7 @@ import {
   readCachedT3workAtlassianBacklogResponse,
 } from "./t3work-atlassian-backlogCachedResponse.ts";
 import { loadLiveBacklogPayload, loadSelection } from "./t3work-atlassian-backlogLivePayload.ts";
+import { kickT3workAtlassianBacklogBackgroundSync } from "./t3work-atlassian-backlog-syncService.ts";
 
 export function loadT3workAtlassianBoardColumns(input: T3workAtlassianBoardColumnsInput) {
   return Effect.gen(function* () {
@@ -94,6 +95,16 @@ export function loadT3workAtlassianBacklog(input: T3workAtlassianBacklogInput) {
         source: "persisted",
       });
       if (cachedResponse) {
+        if (cachedResponse.page.nextCursor) {
+          // A previous sync walk is unfinished (or the server restarted
+          // mid-walk); resume it so the full backlog eventually lands.
+          yield* kickT3workAtlassianBacklogBackgroundSync({
+            provider,
+            account: input.account,
+            externalProjectId: input.externalProjectId,
+            selection: requestSelection,
+          });
+        }
         return cachedResponse;
       }
     }
@@ -126,6 +137,7 @@ export function loadT3workAtlassianBacklog(input: T3workAtlassianBacklogInput) {
       externalProjectId: input.externalProjectId,
       requestSelection,
       response: livePayload,
+      mergeExistingTail: true,
       ...(input.clearProjectCache ? { replaceProjectCache: true } : {}),
     }).pipe(
       Effect.catch(() =>
@@ -137,13 +149,23 @@ export function loadT3workAtlassianBacklog(input: T3workAtlassianBacklogInput) {
           return {
             updatedAt: response.cache.updatedAt,
             fingerprint: response.cache.fingerprint,
+            response: livePayload,
           };
         }),
       ),
     );
 
+    if (cacheRecord.response.page.nextCursor) {
+      yield* kickT3workAtlassianBacklogBackgroundSync({
+        provider,
+        account: input.account,
+        externalProjectId: input.externalProjectId,
+        selection: requestSelection,
+      });
+    }
+
     return createLiveT3workAtlassianBacklogResponse({
-      payload: livePayload,
+      payload: cacheRecord.response,
       updatedAt: cacheRecord.updatedAt,
       fingerprint: cacheRecord.fingerprint,
     });

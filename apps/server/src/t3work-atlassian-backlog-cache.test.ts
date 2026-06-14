@@ -10,6 +10,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import {
+  appendCachedT3workAtlassianBacklogSyncPage,
   readCachedT3workAtlassianBacklog,
   updateCachedT3workAtlassianBacklogAssignee,
   writeCachedT3workAtlassianBacklog,
@@ -146,5 +147,117 @@ backlogCacheLayer("t3work Atlassian backlog cache", (it) => {
         assert.deepStrictEqual(cached?.response.selectedSprintId, "sprint-1");
         assert.deepStrictEqual(cached?.response.page.items[0]?.displayId, "PROJ-1");
       }),
+  );
+
+  it.effect("appends sync pages, advances the cursor, and prunes on walk completion", () =>
+    Effect.gen(function* () {
+      yield* writeCachedT3workAtlassianBacklog({
+        provider: "atlassian",
+        accountId: "account-1",
+        externalProjectId: "project-1",
+        requestSelection: {},
+        response: createBacklogPayload({
+          page: {
+            items: [createIssue()],
+            nextCursor: "1",
+            totalCount: 3,
+          } satisfies ResourcePage,
+        }),
+      });
+
+      const selectionKeys = ["board=default:sprint=default:filter=default"];
+      yield* appendCachedT3workAtlassianBacklogSyncPage({
+        provider: "atlassian",
+        accountId: "account-1",
+        externalProjectId: "project-1",
+        selectionKeys,
+        items: [createIssue({ id: "10002", displayId: "PROJ-2", title: "Second" })],
+        cursor: { next: "2", totalCount: 3 },
+      });
+
+      const midWalk = yield* readCachedT3workAtlassianBacklog({
+        provider: "atlassian",
+        accountId: "account-1",
+        externalProjectId: "project-1",
+      });
+      assert.deepStrictEqual(
+        midWalk?.response.page.items.map((item) => item.displayId),
+        ["PROJ-1", "PROJ-2"],
+      );
+      assert.deepStrictEqual(midWalk?.response.page.nextCursor, "2");
+
+      // Final page: walk saw 10001 and 10003 only — 10002 was removed remotely.
+      yield* appendCachedT3workAtlassianBacklogSyncPage({
+        provider: "atlassian",
+        accountId: "account-1",
+        externalProjectId: "project-1",
+        selectionKeys,
+        items: [createIssue({ id: "10003", displayId: "PROJ-3", title: "Third" })],
+        cursor: { next: null, totalCount: 2 },
+        replaceIssueIds: ["10001", "10003"],
+      });
+
+      const completed = yield* readCachedT3workAtlassianBacklog({
+        provider: "atlassian",
+        accountId: "account-1",
+        externalProjectId: "project-1",
+      });
+      assert.deepStrictEqual(
+        completed?.response.page.items.map((item) => item.displayId),
+        ["PROJ-1", "PROJ-3"],
+      );
+      assert.deepStrictEqual(completed?.response.page.nextCursor, undefined);
+    }),
+  );
+
+  it.effect("merging a live first page keeps the synced tail instead of clobbering it", () =>
+    Effect.gen(function* () {
+      const selectionKeys = ["board=default:sprint=default:filter=default"];
+      yield* writeCachedT3workAtlassianBacklog({
+        provider: "atlassian",
+        accountId: "account-1",
+        externalProjectId: "project-1",
+        requestSelection: {},
+        response: createBacklogPayload({
+          page: { items: [createIssue()], nextCursor: "1", totalCount: 2 } satisfies ResourcePage,
+        }),
+      });
+      yield* appendCachedT3workAtlassianBacklogSyncPage({
+        provider: "atlassian",
+        accountId: "account-1",
+        externalProjectId: "project-1",
+        selectionKeys,
+        items: [createIssue({ id: "10002", displayId: "PROJ-2", title: "Second" })],
+        cursor: { next: null, totalCount: 2 },
+        replaceIssueIds: ["10001", "10002"],
+      });
+
+      // A later live refresh fetches only the first page again.
+      const written = yield* writeCachedT3workAtlassianBacklog({
+        provider: "atlassian",
+        accountId: "account-1",
+        externalProjectId: "project-1",
+        requestSelection: {},
+        response: createBacklogPayload({
+          page: { items: [createIssue()], nextCursor: "1", totalCount: 2 } satisfies ResourcePage,
+        }),
+        mergeExistingTail: true,
+      });
+
+      assert.deepStrictEqual(
+        written.response.page.items.map((item) => item.displayId),
+        ["PROJ-1", "PROJ-2"],
+      );
+
+      const cached = yield* readCachedT3workAtlassianBacklog({
+        provider: "atlassian",
+        accountId: "account-1",
+        externalProjectId: "project-1",
+      });
+      assert.deepStrictEqual(
+        cached?.response.page.items.map((item) => item.displayId),
+        ["PROJ-1", "PROJ-2"],
+      );
+    }),
   );
 });

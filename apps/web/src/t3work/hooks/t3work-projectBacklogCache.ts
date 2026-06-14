@@ -5,6 +5,9 @@ import type {
 
 export const ATLASSIAN_BACKLOG_POLL_INTERVAL_MS = 90_000;
 export const ATLASSIAN_BACKLOG_CACHE_MAX_AGE_MS = 90_000;
+// While the server-side background sync is still paging a selection
+// (response.page.nextCursor set), poll fast so new pages stream into the UI.
+export const ATLASSIAN_BACKLOG_SYNC_POLL_INTERVAL_MS = 4_000;
 const LEGACY_BACKLOG_CACHE_STORAGE_PREFIX = "t3work.integration-cache.v1:atlassian:backlog:";
 
 type StorageLike = Pick<Storage, "length" | "key" | "removeItem">;

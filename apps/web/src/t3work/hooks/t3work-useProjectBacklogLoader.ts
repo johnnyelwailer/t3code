@@ -12,6 +12,7 @@ import type { AtlassianBacklogResponse, BackendApi } from "~/t3work/backend/t3wo
 import {
   ATLASSIAN_BACKLOG_CACHE_MAX_AGE_MS,
   ATLASSIAN_BACKLOG_POLL_INTERVAL_MS,
+  ATLASSIAN_BACKLOG_SYNC_POLL_INTERVAL_MS,
   fingerprintProjectBacklog,
   type BacklogSelectionInput,
 } from "./t3work-projectBacklogCache";
@@ -37,6 +38,7 @@ export function useProjectBacklogLoader(input: {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pollingUpdatedAt, setPollingUpdatedAt] = useState<number | null>(null);
+  const [backgroundSyncPending, setBackgroundSyncPending] = useState(false);
   const refs = {
     loadRequestIdRef: useRef(0),
     visibleLoadRequestIdRef: useRef(0),
@@ -54,6 +56,7 @@ export function useProjectBacklogLoader(input: {
     refs.lastLoadedAtRef.current = updatedAt;
     setPollingUpdatedAt(updatedAt);
     refs.lastFingerprintRef.current = fingerprintProjectBacklog(response);
+    setBackgroundSyncPending(Boolean(response.page?.nextCursor));
     input.setBacklogState(createProjectBacklogState(input.projectId, response));
 
     const nextSelection = {
@@ -77,6 +80,7 @@ export function useProjectBacklogLoader(input: {
     refs.lastAutoRefreshKeyRef.current = null;
     refs.syncedSelectionRequestKeyRef.current = null;
     setPollingUpdatedAt(null);
+    setBackgroundSyncPending(false);
   }, [input.projectId, input.connectedSource?.accountId, input.connectedSource?.externalProjectId]);
 
   const loadBacklog = useEffectEvent(
@@ -148,8 +152,12 @@ export function useProjectBacklogLoader(input: {
 
     const poller = startBrowserPolling({
       enabled: true,
-      intervalMs: ATLASSIAN_BACKLOG_POLL_INTERVAL_MS,
-      maxAgeMs: ATLASSIAN_BACKLOG_CACHE_MAX_AGE_MS,
+      intervalMs: backgroundSyncPending
+        ? ATLASSIAN_BACKLOG_SYNC_POLL_INTERVAL_MS
+        : ATLASSIAN_BACKLOG_POLL_INTERVAL_MS,
+      maxAgeMs: backgroundSyncPending
+        ? ATLASSIAN_BACKLOG_SYNC_POLL_INTERVAL_MS
+        : ATLASSIAN_BACKLOG_CACHE_MAX_AGE_MS,
       getUpdatedAt: () => refs.lastLoadedAtRef.current ?? pollingUpdatedAt,
       poll: () =>
         loadBacklog(input.requestedSelection, {
@@ -160,7 +168,13 @@ export function useProjectBacklogLoader(input: {
     });
 
     return () => poller.dispose();
-  }, [input.backend, input.connectedSource, input.requestedSelection, pollingUpdatedAt]);
+  }, [
+    input.backend,
+    input.connectedSource,
+    input.requestedSelection,
+    pollingUpdatedAt,
+    backgroundSyncPending,
+  ]);
 
   return { loading, error, loadBacklog };
 }
