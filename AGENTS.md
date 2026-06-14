@@ -7,6 +7,7 @@
 - Use `vp test` for the built-in Vite+ test command and `vp run test` when you specifically need the `test` package script.
 - For t3work additive/prefix-constrained tasks, agents MUST run `node t3work-additive-guard.mjs` after finishing code changes and before reporting completion. DO NOT CHANGE THE WHITELIST WITHOUT APPROVAL.
 - The additive prefix guard is a blocking completion gate for those tasks: if it fails, the task is not complete.
+- The guard caps prefixed (`t3work-*`) production files at **200 non-empty lines** (150 = warning); tests/fixtures/stories/`*.browser.*` get 600/300. This is a **design constraint to honor while writing**, not a formatting fix to do at the end — splitting a finished 1000-line file into compliant modules is expensive rework. Design modules under the cap from the start; when a file passes ~150 lines, split it *then* into focused siblings (extract pure helpers, sub-components, hooks). A 400+-line file is a planning miss to catch in planning. A `PostToolUse` hook (`scripts/t3work-additive-fast-hook.mjs`, wired in `.claude/settings.json`) surfaces a live LOC warning the moment a new prefixed file crosses the cap — act on it immediately rather than waiting for the commit gate.
 
 ## Project Snapshot
 
@@ -25,6 +26,8 @@ If a tradeoff is required, choose correctness and robustness over short-term con
 ## Maintainability
 
 Long term maintainability is a core priority. If you add new functionality, first check if there is shared logic that can be extracted to a separate module. Duplicate logic across multiple files is a code smell and should be avoided. Don't be afraid to change existing code. Don't take shortcuts by just adding local logic to solve a problem.
+
+Keep files small and composable by default (see the 200-line cap under Task Completion Requirements). A large stateful component is a planning signal to decompose up front — a controller hook for state/effects plus presentational sub-components — not a monolith to split later.
 
 ## T3work MVP Constitution
 
