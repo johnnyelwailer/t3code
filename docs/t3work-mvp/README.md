@@ -80,6 +80,10 @@ The user should be able to:
 - [Epic 24: Tiered Message Composition (proposal)](./24-tiered-message-composition.md)
 - [Epic 25: Workflow Engine](./25-workflow-engine.md)
 - [Epic 26: Knowledge Workbench](./26-knowledge-workbench.md)
+- [Epic 27: Scheduled Workflows (Routines)](./27-scheduled-workflows.md)
+- [Epic 28: Agent Communication](./28-agent-communication.md)
+- [Epic 29: Planning Space (3D sprint planning view)](./29-planning-space.md)
+- [Epic 30: Capacity & Teams (capacity page, local teams, off-days, overhead)](./30-capacity-and-teams.md)
 
 ## Supporting Docs
 
