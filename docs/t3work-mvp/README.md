@@ -82,8 +82,8 @@ The user should be able to:
 - [Epic 26: Knowledge Workbench](./26-knowledge-workbench.md)
 - [Epic 27: Scheduled Workflows (Routines)](./27-scheduled-workflows.md)
 - [Epic 28: Agent Communication](./28-agent-communication.md)
-- [Epic 29: Planning Space (3D sprint planning view)](./29-planning-space.md)
-- [Epic 30: Capacity & Teams (capacity page, local teams, off-days, overhead)](./30-capacity-and-teams.md)
+- [29 — Planning Space (3D sprint planning view)](./29-planning-space.md)
+- [30 — Capacity & Teams (capacity page, local teams, off-days, overhead)](./30-capacity-and-teams.md)
 
 ## Supporting Docs
 
