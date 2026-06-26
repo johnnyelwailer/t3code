@@ -72,7 +72,8 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     }
     if (threadIdInput.length === 0) {
       return yield* new T3workAtlassianError({
-        message: "threadId is required: headless recipe launches are not yet supported by the engine.",
+        message:
+          "threadId is required: headless recipe launches are not yet supported by the engine.",
       });
     }
     if (modelInstanceId.length === 0 || modelName.length === 0) {
@@ -81,12 +82,17 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
 
     const threadId = ThreadId.make(threadIdInput);
     const runtimeMode =
-      input.runtimeMode && isRuntimeMode(input.runtimeMode) ? input.runtimeMode : DEFAULT_RUNTIME_MODE;
+      input.runtimeMode && isRuntimeMode(input.runtimeMode)
+        ? input.runtimeMode
+        : DEFAULT_RUNTIME_MODE;
     const interactionMode =
       input.interactionMode && isProviderInteractionMode(input.interactionMode)
         ? input.interactionMode
         : DEFAULT_PROVIDER_INTERACTION_MODE;
-    const modelSelection = createModelSelection(ProviderInstanceId.make(modelInstanceId), modelName);
+    const modelSelection = createModelSelection(
+      ProviderInstanceId.make(modelInstanceId),
+      modelName,
+    );
     const { project, thread } = yield* loadThreadProjectContext(threadId);
 
     const dispatch = (command: Parameters<typeof orchestration.dispatch>[0]): Promise<void> =>

@@ -15,7 +15,12 @@
  * it precedes (turn-on-a-missing-thread would otherwise race).
  */
 
-import { CommandId, MessageId, T3workMessageExternalResourceRef, ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  MessageId,
+  T3workMessageExternalResourceRef,
+  ThreadId,
+} from "@t3tools/contracts";
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION } from "@t3tools/project-recipes";
 import * as Schema from "effect/Schema";
 
@@ -78,7 +83,11 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     }
     if (kind === "thread.turn") {
       const p = payload as ThreadTurnPayload;
-      deps.registry.setPending(p.threadId, { runId: deps.runId, correlationId, kind: "thread.turn" });
+      deps.registry.setPending(p.threadId, {
+        runId: deps.runId,
+        correlationId,
+        kind: "thread.turn",
+      });
       await deps.recordPending?.({ threadId: p.threadId, correlationId, kind: "thread.turn" });
       await enqueue(() =>
         deps.dispatch({
@@ -157,7 +166,9 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     // ones as a system (user-visible) note. No turn.start, no pending.
     const p = payload as ThreadMessagePayload;
     await enqueueOneWay(() =>
-      deps.dispatch(messageUpsert(deps, p.threadId, p.recipient === "agent" ? "user" : "system", p.text)),
+      deps.dispatch(
+        messageUpsert(deps, p.threadId, p.recipient === "agent" ? "user" : "system", p.text),
+      ),
     );
   };
 

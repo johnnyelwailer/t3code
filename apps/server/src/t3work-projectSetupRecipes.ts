@@ -10,6 +10,11 @@ import {
   renderEditPluginModuleScript,
   renderEditPluginModuleWorkflow,
 } from "./t3work-projectSetupEditPluginRecipe.ts";
+import {
+  renderTypedRecipeModuleStarter,
+  renderTypedRecipeStarterReadme,
+  renderTypedWorkflowModuleStarter,
+} from "./t3work-projectSetupRecipeScaffolding.ts";
 
 function jsonFile(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
@@ -62,7 +67,8 @@ function renderCreateRecipeWorkflow(): string {
     '        sections: ["context-summary", "available-context-keys", "capabilities"],',
     "        capabilities: [",
     '          "Create a new recipe under .t3work/recipes/<recipe-id>.",',
-    '          "Author recipe.json, prompt.md, workflow.ts, and helper script files when needed.",',
+    '          "Author recipe.ts, <recipe-id>.workflow.ts, prompt.md, and helper script files when needed.",',
+    '          "Use defineRecipe + defineWorkflow so defaultAction and defaults are typed against the workflow contract.",',
     '          "Use project and ticket context signals to control where the recipe appears.",',
     '          "Build a multi-step workflow when a single kickoff prompt is not enough.",',
     "        ],",
@@ -93,38 +99,20 @@ function renderCreateRecipeWorkflow(): string {
 
 function renderCreateRecipeScript(): string {
   return [
-    "const STARTER_RECIPE_JSON = JSON.stringify(",
-    "  {",
-    '    id: "example-recipe",',
-    '    version: "0.1.0",',
-    '    scope: "project",',
-    '    displayName: "Example recipe",',
-    '    shortDescription: "Describe what the recipe does.",',
-    '    surfaces: ["workitem.detail.sidepanel"],',
-    '    prompt: "./prompt.md",',
-    "  },",
-    "  null,",
-    "  2,",
-    ') + "\\n";',
-    "",
-    "const STARTER_WORKFLOW_TS = [",
-    '  "export const steps = [",',
-    '  \"  { kind: \\\"agent\\\", id: \\\"kickoff\\\" },\",',
-    '  "];",',
-    '  "",',
-    '].join("\\n");',
-    "",
     "export async function prepareAuthoringWorkspace(_context, api) {",
-    '  await api.workspace.writeText("starter/recipe.json", STARTER_RECIPE_JSON);',
-    '  await api.workspace.writeText("starter/workflow.ts", STARTER_WORKFLOW_TS);',
+    '  await api.workspace.writeText("starter/recipe.ts", STARTER_RECIPE_TS);',
+    '  await api.workspace.writeText("starter/example-recipe.workflow.ts", STARTER_WORKFLOW_TS);',
     "  await api.workspace.writeText(",
     '    "starter/README.md",',
-    "    [",
-    '      "Use these starter files as a reference while creating a new recipe under ../<recipe-id>.",',
-    '      "Adjust recipe.json, prompt.md, workflow.ts, and any helper scripts to match the user\'s brief.",',
-    '    ].join("\\n") + "\\n",',
+    "    STARTER_README,",
     "  );",
     "}",
+    "",
+    "const STARTER_RECIPE_TS = " + JSON.stringify(renderTypedRecipeModuleStarter()) + ";",
+    "",
+    "const STARTER_WORKFLOW_TS = " + JSON.stringify(renderTypedWorkflowModuleStarter()) + ";",
+    "",
+    "const STARTER_README = " + JSON.stringify(renderTypedRecipeStarterReadme()) + ";",
     "",
   ].join("\n");
 }

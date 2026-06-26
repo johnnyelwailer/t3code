@@ -14,10 +14,8 @@ import {
 } from "./t3work-projectSetup.js";
 
 describe("resolveT3WorkProjectSetupProfileId", () => {
-  it("falls back to the default profile for unknown ids", () => {
-    expect(resolveT3WorkProjectSetupProfileId("unknown-profile")).toBe(
-      DEFAULT_T3WORK_PROJECT_SETUP_PROFILE_ID,
-    );
+  it("preserves unknown ids while surfacing fallback preferences", () => {
+    expect(resolveT3WorkProjectSetupProfileId("unknown-profile")).toBe("unknown-profile");
   });
 });
 
@@ -100,7 +98,9 @@ describe("renderT3WorkProjectSetupFiles", () => {
     expect(createRecipeWorkflow?.contents).toContain('kind: "script"');
     expect(createRecipeWorkflow?.contents).toContain('kind: "agent"');
     expect(createRecipeScript?.contents).toContain("prepareAuthoringWorkspace");
-    expect(createRecipeScript?.contents).toContain("starter/recipe.json");
+    expect(createRecipeScript?.contents).toContain("starter/recipe.ts");
+    expect(createRecipeScript?.contents).toContain("starter/example-recipe.workflow.ts");
+    expect(createRecipeScript?.contents).toContain("defineRecipe");
     expect(editRecipeManifest?.contents).toContain('"workflow": "./workflow.ts"');
     expect(editRecipePrompt?.contents).toContain("## bundled-recipe");
     expect(editRecipePrompt?.contents).toContain("./prompts/edit-recipe.md");

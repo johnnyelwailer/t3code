@@ -170,7 +170,9 @@ export const T3workWorkflowSchedulerLive = Layer.effect(
 
     const listSleeping = (): Promise<ReadonlyArray<SchedulerSleepingRun>> =>
       Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
-        rows.map(toSchedulerSleepingRun).filter((run): run is SchedulerSleepingRun => run !== undefined),
+        rows
+          .map(toSchedulerSleepingRun)
+          .filter((run): run is SchedulerSleepingRun => run !== undefined),
       );
 
     const resume = (runId: string, correlationId: string): Promise<void> => {

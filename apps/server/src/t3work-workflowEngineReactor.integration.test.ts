@@ -155,112 +155,112 @@ it.live(
   "workflow-engine reactor drives suspend→resume END TO END off domain events, with nobody manually resolving",
   () =>
     Effect.gen(function* () {
-        const orchestration = yield* OrchestrationEngineService;
-        const registry = yield* T3workWorkflowEngineRegistry;
+      const orchestration = yield* OrchestrationEngineService;
+      const registry = yield* T3workWorkflowEngineRegistry;
 
-        // Let the forked reactor + stub subscribe to the hot `streamDomainEvents` PubSub before
-        // any event is dispatched (subscribers created after a publish miss it).
-        yield* Effect.sleep(Duration.millis(100));
+      // Let the forked reactor + stub subscribe to the hot `streamDomainEvents` PubSub before
+      // any event is dispatched (subscribers created after a publish miss it).
+      yield* Effect.sleep(Duration.millis(100));
 
-        const runId = "reactor-run";
-        const launchThreadId = "reactor-launch";
-        const args = { prTitle: "Fix the billing rounding bug" };
+      const runId = "reactor-run";
+      const launchThreadId = "reactor-launch";
+      const args = { prTitle: "Fix the billing rounding bug" };
 
-        // Seed the project + launch thread: thread.create requires the project, and the askUser
-        // system message + the user reply require the launch thread to exist.
-        yield* orchestration.dispatch({
-          type: "project.create",
-          commandId: CommandId.make("reactor-project"),
+      // Seed the project + launch thread: thread.create requires the project, and the askUser
+      // system message + the user reply require the launch thread to exist.
+      yield* orchestration.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("reactor-project"),
+        projectId,
+        title: "Reactor Project",
+        workspaceRoot: "/tmp/reactor-project",
+        defaultModelSelection: modelSelection,
+        createdAt: ISO,
+      });
+      yield* orchestration.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("reactor-launch-thread"),
+        threadId: ThreadId.make(launchThreadId),
+        projectId,
+        title: "Launch thread",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdAt: ISO,
+      });
+
+      const dispatched: string[] = [];
+      const completed: unknown[] = [];
+      let seq = 0;
+      const dispatch = (command: OrchestrationCommand): Promise<void> => {
+        dispatched.push(command.type);
+        return Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
+      };
+
+      // ── 1. Launch: agent() dispatches thread.create + thread.turn.start, then suspends. ──
+      const launched = yield* Effect.promise(() =>
+        launchWorkflowRecipe({
+          runId,
+          workflowPath,
+          args,
+          runsRoot,
+          launchThreadId,
           projectId,
-          title: "Reactor Project",
-          workspaceRoot: "/tmp/reactor-project",
-          defaultModelSelection: modelSelection,
-          createdAt: ISO,
-        });
-        yield* orchestration.dispatch({
-          type: "thread.create",
-          commandId: CommandId.make("reactor-launch-thread"),
-          threadId: ThreadId.make(launchThreadId),
-          projectId,
-          title: "Launch thread",
           modelSelection,
           runtimeMode: "full-access",
           interactionMode: "default",
-          branch: null,
-          worktreePath: null,
-          createdAt: ISO,
-        });
-
-        const dispatched: string[] = [];
-        const completed: unknown[] = [];
-        let seq = 0;
-        const dispatch = (command: OrchestrationCommand): Promise<void> => {
-          dispatched.push(command.type);
-          return Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
-        };
-
-        // ── 1. Launch: agent() dispatches thread.create + thread.turn.start, then suspends. ──
-        const launched = yield* Effect.promise(() =>
-          launchWorkflowRecipe({
-            runId,
-            workflowPath,
-            args,
-            runsRoot,
-            launchThreadId,
-            projectId,
-            modelSelection,
-            runtimeMode: "full-access",
-            interactionMode: "default",
-            registry,
-            dispatch,
-            newId: () => `id-${(seq += 1)}`,
-            nowIso: () => ISO,
-            onComplete: async (output) => {
-              completed.push(output);
-            },
-          }),
-        );
-        assert.strictEqual(launched.status, "suspended");
-        assert.deepStrictEqual(dispatched.slice(0, 2), ["thread.create", "thread.turn.start"]);
-
-        // ── 2 + 3. The stub's turn-done events drive the REAL reactor: it assembles the delta
-        // text, resolves the agent turn, and the run advances to askUser → parks on user.input.
-        // Reaching this state proves the agent turn resolved purely from domain events. ──
-        yield* waitUntil(
-          () => registry.peekPending(launchThreadId)?.kind === "user.input",
-          "run to advance past agent() and suspend on askUser",
-        );
-        // Resuming fired the askUser escalation as a system message into the launch thread.
-        assert.isTrue(dispatched.includes("thread.message.upsert"));
-        // The run is parked (not yet completed) awaiting the user.
-        assert.isDefined(registry.getRun(runId));
-        assert.strictEqual(completed.length, 0);
-
-        // ── 4. A real user-message domain event lands on the launch thread. NOTHING here calls
-        // takePending/resume — the reactor must catch this event and resolve user.input. ──
-        yield* orchestration.dispatch({
-          type: "thread.message.upsert",
-          commandId: CommandId.make("reactor-user-reply"),
-          threadId: ThreadId.make(launchThreadId),
-          message: {
-            messageId: MessageId.make("reactor-user-reply-msg"),
-            role: "user",
-            text: '{"merge":true}',
-            turnId: null,
-            streaming: false,
+          registry,
+          dispatch,
+          newId: () => `id-${(seq += 1)}`,
+          nowIso: () => ISO,
+          onComplete: async (output) => {
+            completed.push(output);
           },
-          createdAt: ISO,
-        });
+        }),
+      );
+      assert.strictEqual(launched.status, "suspended");
+      assert.deepStrictEqual(dispatched.slice(0, 2), ["thread.create", "thread.turn.start"]);
 
-        yield* waitUntil(() => completed.length > 0, "run to complete after the user reply");
+      // ── 2 + 3. The stub's turn-done events drive the REAL reactor: it assembles the delta
+      // text, resolves the agent turn, and the run advances to askUser → parks on user.input.
+      // Reaching this state proves the agent turn resolved purely from domain events. ──
+      yield* waitUntil(
+        () => registry.peekPending(launchThreadId)?.kind === "user.input",
+        "run to advance past agent() and suspend on askUser",
+      );
+      // Resuming fired the askUser escalation as a system message into the launch thread.
+      assert.isTrue(dispatched.includes("thread.message.upsert"));
+      // The run is parked (not yet completed) awaiting the user.
+      assert.isDefined(registry.getRun(runId));
+      assert.strictEqual(completed.length, 0);
 
-        // ── Completed end to end with the schema-validated result; the run is unregistered. ──
-        assert.deepStrictEqual(completed[0], {
-          summary: "Low risk; well tested.",
-          merged: true,
-        });
-        assert.isUndefined(registry.getRun(runId));
-      }).pipe(Effect.provide(TestLayer)),
+      // ── 4. A real user-message domain event lands on the launch thread. NOTHING here calls
+      // takePending/resume — the reactor must catch this event and resolve user.input. ──
+      yield* orchestration.dispatch({
+        type: "thread.message.upsert",
+        commandId: CommandId.make("reactor-user-reply"),
+        threadId: ThreadId.make(launchThreadId),
+        message: {
+          messageId: MessageId.make("reactor-user-reply-msg"),
+          role: "user",
+          text: '{"merge":true}',
+          turnId: null,
+          streaming: false,
+        },
+        createdAt: ISO,
+      });
+
+      yield* waitUntil(() => completed.length > 0, "run to complete after the user reply");
+
+      // ── Completed end to end with the schema-validated result; the run is unregistered. ──
+      assert.deepStrictEqual(completed[0], {
+        summary: "Low risk; well tested.",
+        merged: true,
+      });
+      assert.isUndefined(registry.getRun(runId));
+    }).pipe(Effect.provide(TestLayer)),
 );
 
 afterAll(() => rmSync(runsRoot, { recursive: true, force: true }));

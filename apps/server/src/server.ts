@@ -351,13 +351,13 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(OpenCodeRuntimeLive),
   Layer.provideMerge(ServerSettingsLive),
   Layer.provideMerge(WorkspaceLayerLive),
-  Layer.provideMerge(ProjectFaviconResolverLive),
-  Layer.provideMerge(RepositoryIdentityResolverLive),
+  // Project favicon + repo identity share one provideMerge slot (the `pipe` arity is capped).
+  Layer.provideMerge(Layer.mergeAll(ProjectFaviconResolverLive, RepositoryIdentityResolverLive)),
   Layer.provideMerge(ServerEnvironmentLive),
   Layer.provideMerge(AuthLayerLive),
-  Layer.provideMerge(ServerSecretStore.layer),
   Layer.provideMerge(
     Layer.mergeAll(
+      ServerSecretStore.layer,
       CloudCliTokenManager.layer.pipe(Layer.provide(ServerSecretStore.layer)),
       CloudManagedEndpointRuntimeLive,
     ),

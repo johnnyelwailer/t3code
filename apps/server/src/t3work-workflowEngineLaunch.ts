@@ -118,7 +118,9 @@ export interface WorkflowRunController {
  * (which restores the pending ask instead) so a freshly launched and a restored run drive
  * forward through identical code.
  */
-export function createWorkflowRunController(input: LaunchWorkflowRecipeInput): WorkflowRunController {
+export function createWorkflowRunController(
+  input: LaunchWorkflowRecipeInput,
+): WorkflowRunController {
   const ref: WorkflowRef = {
     kind: "workflow",
     path: input.workflowPath,
@@ -190,7 +192,10 @@ export async function launchWorkflowRecipe(
 
   try {
     const status = await controller.settle(
-      await startWorkflow(controller.ref, input.args, { ...controller.options, runId: input.runId }),
+      await startWorkflow(controller.ref, input.args, {
+        ...controller.options,
+        runId: input.runId,
+      }),
     );
     return { runId: input.runId, status };
   } catch (error) {

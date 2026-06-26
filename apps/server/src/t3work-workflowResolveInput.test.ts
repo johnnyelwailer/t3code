@@ -75,7 +75,9 @@ describe("rejectWorkflowResolveValue", () => {
     const base = { pending: fieldedPending, correlationId: undefined, hasValue: true };
     expect(rejectWorkflowResolveValue({ ...base, value: { severity: "high" } })).toBeNull();
     expect(rejectWorkflowResolveValue({ ...base, value: "high" })).not.toBeNull();
-    expect(rejectWorkflowResolveValue({ ...base, value: { severity: "high", extra: 1 } })).not.toBeNull();
+    expect(
+      rejectWorkflowResolveValue({ ...base, value: { severity: "high", extra: 1 } }),
+    ).not.toBeNull();
     expect(rejectWorkflowResolveValue({ ...base, value: { severity: "medium" } })).not.toBeNull();
   });
 

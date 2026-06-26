@@ -42,7 +42,10 @@ import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,
 } from "./t3work-workflowEngineDurability.ts";
-import { createWorkflowRunController, launchWorkflowRecipe } from "./t3work-workflowEngineLaunch.ts";
+import {
+  createWorkflowRunController,
+  launchWorkflowRecipe,
+} from "./t3work-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 
 const workflowPath = fileURLToPath(
@@ -123,7 +126,9 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
       const agentAsk = registry.takePending(`${runId}:1`);
       assert.strictEqual(agentAsk?.kind, "thread.turn");
       yield* Effect.promise(() =>
-        registry.getRun(runId)!.resume(agentAsk!.correlationId, { summary: "Low risk; well tested." }),
+        registry
+          .getRun(runId)!
+          .resume(agentAsk!.correlationId, { summary: "Low risk; well tested." }),
       );
 
       // ── DB now holds a suspended run parked on the user escalation + journal rows ──
@@ -231,7 +236,9 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
       const agentAsk = restarted.takePending(`${runId}:1`);
       assert.strictEqual(agentAsk?.kind, "thread.turn");
       yield* Effect.promise(() =>
-        restarted.getRun(runId)!.resume(agentAsk!.correlationId, { summary: "Backoff looks safe." }),
+        restarted
+          .getRun(runId)!
+          .resume(agentAsk!.correlationId, { summary: "Backoff looks safe." }),
       );
 
       // The run re-suspended on askUser (in this uptime); resolve it to completion.

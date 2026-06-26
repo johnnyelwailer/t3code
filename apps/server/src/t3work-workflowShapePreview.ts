@@ -8,12 +8,7 @@
  * failure or an empty shape returns null here, so neither ever blocks the launch.
  */
 
-import {
-  CommandId,
-  MessageId,
-  type OrchestrationCommand,
-  ThreadId,
-} from "@t3tools/contracts";
+import { CommandId, MessageId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE } from "@t3tools/project-recipes";
 
 import { deriveWorkflowShape } from "@t3work/sdk";
