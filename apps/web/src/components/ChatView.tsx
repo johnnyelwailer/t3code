@@ -199,6 +199,7 @@ import {
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
+import type { ChatViewT3workExtensionProps } from "~/t3work/t3work-chatViewExtensions";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
@@ -332,14 +333,14 @@ const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
 
 type ChatViewProps =
-  | {
+  | ({
       environmentId: EnvironmentId;
       threadId: ThreadId;
       onDiffPanelOpen?: () => void;
       reserveTitleBarControlInset?: boolean;
       routeKind: "server";
       draftId?: never;
-    }
+    } & ChatViewT3workExtensionProps)
   | {
       environmentId: EnvironmentId;
       threadId: ThreadId;
@@ -986,6 +987,19 @@ function ChatViewContent(props: ChatViewProps) {
     reserveTitleBarControlInset = true,
   } = props;
   const draftId = routeKind === "draft" ? props.draftId : null;
+  const syntheticMessages = routeKind === "server" ? props.syntheticMessages : undefined;
+  const beforeDispatchTurnStart =
+    routeKind === "server" ? props.beforeDispatchTurnStart : undefined;
+  const dispatchTurnStartOverride =
+    routeKind === "server" ? props.dispatchTurnStartOverride : undefined;
+  const composerContextAttachmentSlot =
+    routeKind === "server" ? props.composerContextAttachmentSlot : undefined;
+  const composerContainerProps =
+    routeKind === "server" ? props.composerContainerProps : undefined;
+  const composerContainerOverlay =
+    routeKind === "server" ? props.composerContainerOverlay : undefined;
+  const onComposerContextAttachmentsConsumed =
+    routeKind === "server" ? props.onComposerContextAttachmentsConsumed : undefined;
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -2047,15 +2061,32 @@ function ChatViewContent(props: ChatViewProps) {
           });
 
     if (optimisticUserMessages.length === 0) {
-      return serverMessagesWithPreviewHandoff;
+      const baseMessages =
+        syntheticMessages && syntheticMessages.length > 0
+          ? [...syntheticMessages, ...serverMessagesWithPreviewHandoff]
+          : serverMessagesWithPreviewHandoff;
+      return baseMessages;
     }
     const serverIds = new Set(serverMessagesWithPreviewHandoff.map((message) => message.id));
     const pendingMessages = optimisticUserMessages.filter((message) => !serverIds.has(message.id));
     if (pendingMessages.length === 0) {
-      return serverMessagesWithPreviewHandoff;
+      const baseMessages =
+        syntheticMessages && syntheticMessages.length > 0
+          ? [...syntheticMessages, ...serverMessagesWithPreviewHandoff]
+          : serverMessagesWithPreviewHandoff;
+      return baseMessages;
     }
-    return [...serverMessagesWithPreviewHandoff, ...pendingMessages];
-  }, [attachmentPreviewHandoffByMessageId, displayServerMessages, optimisticUserMessages]);
+    const baseMessages =
+      syntheticMessages && syntheticMessages.length > 0
+        ? [...syntheticMessages, ...serverMessagesWithPreviewHandoff]
+        : serverMessagesWithPreviewHandoff;
+    return [...baseMessages, ...pendingMessages];
+  }, [
+    attachmentPreviewHandoffByMessageId,
+    displayServerMessages,
+    optimisticUserMessages,
+    syntheticMessages,
+  ]);
   const timelineEntries = useMemo(
     () =>
       deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
@@ -3683,6 +3714,9 @@ function ChatViewContent(props: ChatViewProps) {
     }
 
     sendInFlightRef.current = true;
+    if (beforeDispatchTurnStart) {
+      await beforeDispatchTurnStart();
+    }
     beginLocalDispatch({ preparingWorktree: Boolean(baseBranchForWorktree) });
 
     const composerImagesSnapshot = [...composerImages];
@@ -3863,6 +3897,31 @@ function ChatViewContent(props: ChatViewProps) {
             }
           : undefined;
       beginLocalDispatch({ preparingWorktree: false });
+      if (dispatchTurnStartOverride) {
+        const overrideResult = await dispatchTurnStartOverride({
+          threadId: threadIdForSend,
+          messageId: messageIdForSend,
+          messageText: outgoingMessageText,
+          modelSelection: ctxSelectedModelSelection,
+          titleSeed: title,
+          runtimeMode,
+          interactionMode,
+          createdAt: messageCreatedAt,
+          hasAttachments: turnAttachmentsResult.value.length > 0,
+        });
+        if (overrideResult === "resolved-input") {
+          sendInFlightRef.current = false;
+          resetLocalDispatch();
+          onComposerContextAttachmentsConsumed?.();
+          return;
+        }
+        if (overrideResult) {
+          sendInFlightRef.current = false;
+          resetLocalDispatch();
+          onComposerContextAttachmentsConsumed?.();
+          return;
+        }
+      }
       const startResult = await startThreadTurn({
         environmentId,
         input: {
@@ -4816,7 +4875,9 @@ function ChatViewContent(props: ChatViewProps) {
               ref={setComposerOverlayElement}
               data-chat-composer-overlay="true"
               className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
+              {...composerContainerProps}
             >
+              {composerContainerOverlay}
               <div
                 aria-hidden="true"
                 className="chat-composer-horizontal-inset pointer-events-none absolute inset-x-0 top-1.5 bottom-0 z-0 sm:top-2"
@@ -4828,6 +4889,7 @@ function ChatViewContent(props: ChatViewProps) {
               <div className="chat-composer-horizontal-inset">
                 <div className="pointer-events-auto relative z-10 isolate">
                   <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
+                  {composerContextAttachmentSlot}
                   <div className="relative z-10">
                     <ChatComposer
                       composerRef={composerRef}

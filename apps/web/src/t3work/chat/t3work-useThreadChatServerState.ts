@@ -1,11 +1,9 @@
 import { useMemo } from "react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH } from "@t3tools/project-recipes";
-import { useShallow } from "zustand/react/shallow";
 
 import { usePrimaryEnvironmentId } from "~/state/environments";
-import { selectProjectsAcrossEnvironments, useStore } from "~/store";
-import { createThreadSelectorByRef } from "~/storeSelectors";
+import { useProjects, useThread } from "~/state/entities";
 import { summarizeT3WorkServerThread } from "~/t3work/chat/t3work-threadDebug";
 import { buildThreadKickoffHistoryMessage } from "~/t3work/chat/t3work-threadKickoffHistoryMessage";
 import {
@@ -33,7 +31,7 @@ export function useThreadChatServerState({
   kickoffWorkflow,
 }: UseThreadChatServerStateInput) {
   const environmentId = usePrimaryEnvironmentId();
-  const liveProjects = useStore(useShallow(selectProjectsAcrossEnvironments));
+  const liveProjects = useProjects();
   const canonicalProjectId = useMemo(
     () => resolveCanonicalProjectIdForWorkspaceRoot(projectWorkspaceRoot, projectId, liveProjects),
     [liveProjects, projectId, projectWorkspaceRoot],
@@ -46,8 +44,8 @@ export function useThreadChatServerState({
     () => (environmentId ? scopeThreadRef(environmentId, threadId as never) : null),
     [environmentId, threadId],
   );
-  const serverThread = useStore(useMemo(() => createThreadSelectorByRef(threadRef), [threadRef]));
-  const hasServerThread = serverThread !== undefined;
+  const serverThread = useThread(threadRef);
+  const hasServerThread = serverThread !== null;
   const serverThreadSummary = summarizeT3WorkServerThread(serverThread);
   const serverMessageCount =
     typeof serverThreadSummary?.messageCount === "number" ? serverThreadSummary.messageCount : 0;

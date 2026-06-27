@@ -1,7 +1,6 @@
 import type {
   ClientOrchestrationCommand,
   ServerConfig,
-  ServerConfigStreamEvent,
   ServerProvider,
   ThreadId,
 } from "@t3tools/contracts";
@@ -69,10 +68,6 @@ export interface BackendApi {
   readonly atlassian: AtlassianBackendApi;
   readonly github: GitHubBackendApi;
   readonly projectWorkspace: ProjectWorkspaceBackendApi;
-  readonly subscribeConfig: (listener: (event: ServerConfigStreamEvent) => void) => () => void;
-  readonly subscribeLifecycle: (listener: (event: unknown) => void) => () => void;
-  readonly subscribeShell: (listener: (event: unknown) => void) => () => void;
-  readonly subscribeThread: (threadId: string, listener: (event: unknown) => void) => () => void;
 }
 
 export type LinkedRepositorySyncResult = {

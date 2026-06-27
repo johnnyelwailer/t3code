@@ -1,8 +1,4 @@
-import type {
-  ClientOrchestrationCommand,
-  ServerConfigStreamEvent,
-  ServerLifecycleStreamEvent,
-} from "@t3tools/contracts";
+import type { ClientOrchestrationCommand } from "@t3tools/contracts";
 import { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
 import { createMockAtlassianBackendApi } from "./t3work-mockBackendAtlassian";
 import { createMockGitHubBackendApi } from "./t3work-mockBackendGitHub";
@@ -23,10 +19,6 @@ function toMockPollResult<T>(value: T): T3workPollResult<T> {
 
 export function createMockBackend(): BackendApi {
   let state: BackendState = INITIAL_MOCK_BACKEND_STATE;
-  const configListeners = new Set<(event: ServerConfigStreamEvent) => void>();
-  const lifecycleListeners = new Set<(event: ServerLifecycleStreamEvent) => void>();
-  const shellListeners = new Set<(event: unknown) => void>();
-  const threadListeners = new Map<string, Set<(event: unknown) => void>>();
   const github = createMockGitHubBackendApi();
   const atlassian: T3workPollingBackend["atlassian"] = createMockAtlassianBackendApi({
     mockIntegrationProvider,
@@ -51,27 +43,9 @@ export function createMockBackend(): BackendApi {
     state = nextState;
   }
 
-  function emitLifecycleEvent(event: ServerLifecycleStreamEvent) {
-    for (const listener of lifecycleListeners) {
-      try {
-        listener(event);
-      } catch {
-        // ignore
-      }
-    }
-  }
+  function emitLifecycleEvent() {}
 
-  function emitThreadEvent(threadId: string, event: Record<string, unknown>) {
-    const set = threadListeners.get(threadId);
-    if (!set) return;
-    for (const listener of set) {
-      try {
-        listener(event);
-      } catch {
-        // ignore
-      }
-    }
-  }
+  function emitThreadEvent(_threadId: string, _event: Record<string, unknown>) {}
 
   emitMockWelcome(emitLifecycleEvent);
 
@@ -156,33 +130,6 @@ export function createMockBackend(): BackendApi {
         workspaceRoot: input.workspaceRoot,
         writtenFiles: input.files.map((file) => file.relativePath),
       }),
-    },
-
-    subscribeConfig(listener: (event: ServerConfigStreamEvent) => void) {
-      configListeners.add(listener);
-      return () => configListeners.delete(listener);
-    },
-
-    subscribeLifecycle(listener: (event: ServerLifecycleStreamEvent) => void) {
-      lifecycleListeners.add(listener);
-      return () => lifecycleListeners.delete(listener);
-    },
-
-    subscribeShell(listener: (event: unknown) => void) {
-      shellListeners.add(listener);
-      return () => shellListeners.delete(listener);
-    },
-
-    subscribeThread(threadId: string, listener: (event: unknown) => void) {
-      let set = threadListeners.get(threadId);
-      if (!set) {
-        set = new Set();
-        threadListeners.set(threadId, set);
-      }
-      set.add(listener);
-      return () => {
-        set?.delete(listener);
-      };
     },
   };
 }

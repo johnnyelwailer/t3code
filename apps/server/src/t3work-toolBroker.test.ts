@@ -9,7 +9,7 @@ import * as Stream from "effect/Stream";
 
 import { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectSetupScriptRunner } from "./project/Services/ProjectSetupScriptRunner.ts";
+import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { T3workToolBroker, T3WORK_CURRENT_VIEW_RESOURCE_URI } from "./t3work-toolBroker.ts";
 import {
@@ -511,13 +511,13 @@ describe("T3workToolBrokerLive", () => {
               } as unknown as Path.Path),
               Layer.succeed(SourceControlProviderRegistry, {
                 resolve: resolveProvider,
-              } as unknown as import("./sourceControl/SourceControlProviderRegistry.ts").SourceControlProviderRegistryShape),
+              } as unknown as import("./sourceControl/SourceControlProviderRegistry.ts").SourceControlProviderRegistry["Service"]),
               Layer.succeed(GitWorkflowService, {
                 createWorktree,
-              } as unknown as import("./git/GitWorkflowService.ts").GitWorkflowServiceShape),
+              } as unknown as import("./git/GitWorkflowService.ts").GitWorkflowService["Service"]),
               Layer.succeed(ProjectSetupScriptRunner, {
                 runForThread,
-              } as unknown as import("./project/Services/ProjectSetupScriptRunner.ts").ProjectSetupScriptRunnerShape),
+              } as unknown as import("./project/ProjectSetupScriptRunner.ts").ProjectSetupScriptRunner["Service"]),
             ),
           }),
         ),

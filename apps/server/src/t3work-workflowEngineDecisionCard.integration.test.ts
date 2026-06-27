@@ -46,7 +46,7 @@ import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEng
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { RepositoryIdentityResolverLive } from "./project/Layers/RepositoryIdentityResolver.ts";
+import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import { ServerConfig } from "./config.ts";
 import { launchWorkflowRecipe } from "./t3work-workflowEngineLaunch.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
@@ -70,7 +70,7 @@ const EngineLive = OrchestrationEngineLive.pipe(
   Layer.provide(OrchestrationProjectionPipelineLive),
   Layer.provide(OrchestrationEventStoreLive),
   Layer.provide(OrchestrationCommandReceiptRepositoryLive),
-  Layer.provide(RepositoryIdentityResolverLive),
+  Layer.provide(RepositoryIdentityResolver.layer),
   Layer.provideMerge(SqlitePersistenceMemory),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-workflow-decision-" })),
   Layer.provideMerge(NodeServices.layer),

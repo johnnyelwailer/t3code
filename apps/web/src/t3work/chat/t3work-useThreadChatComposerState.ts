@@ -3,8 +3,7 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 
 import { usePrimaryEnvironmentId } from "~/state/environments";
-import { useStore } from "~/store";
-import { createThreadSelectorByRef } from "~/storeSelectors";
+import { useThread } from "~/state/entities";
 import type { BackendApi } from "~/t3work/backend/t3work-types";
 import { prepareThreadContextAttachments } from "~/t3work/chat/t3work-prepareThreadContextAttachments";
 import { launchPendingRecipeWorkflowTurn } from "~/t3work/chat/t3work-recipeWorkflowLaunch";
@@ -31,8 +30,8 @@ export function useThreadChatComposerState(input: {
     () => (environmentId ? scopeThreadRef(environmentId, input.threadId as never) : null),
     [environmentId, input.threadId],
   );
-  const serverThread = useStore(useMemo(() => createThreadSelectorByRef(threadRef), [threadRef]));
-  const waitingForRecipeInput = isThreadWaitingForRecipeInput(serverThread);
+  const serverThread = useThread(threadRef);
+  const waitingForRecipeInput = isThreadWaitingForRecipeInput(serverThread ?? undefined);
 
   const pendingProjectContextCount = useT3WorkAddToChatStore(
     (state) => (state.pendingByProjectId[input.projectId] ?? []).length,

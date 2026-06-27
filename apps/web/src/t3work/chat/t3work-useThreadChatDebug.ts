@@ -1,13 +1,8 @@
 import { useEffect } from "react";
 
-import type { BackendApi } from "~/t3work/backend/t3work-types";
-import {
-  recordT3WorkThreadDebug,
-  summarizeT3WorkThreadEvent,
-} from "~/t3work/chat/t3work-threadDebug";
+import { recordT3WorkThreadDebug } from "~/t3work/chat/t3work-threadDebug";
 
 type ThreadChatDebugInput = {
-  backend: BackendApi | null | undefined;
   environmentId: string | null | undefined;
   projectId: string;
   threadId: string;
@@ -20,7 +15,6 @@ type ThreadChatDebugInput = {
 };
 
 export function useThreadChatDebug({
-  backend,
   environmentId,
   projectId,
   threadId,
@@ -54,40 +48,18 @@ export function useThreadChatDebug({
   ]);
 
   useEffect(() => {
-    if (!backend) {
-      recordT3WorkThreadDebug("thread-chat-view.subscribe-thread.skipped", {
-        reason: "missing-backend",
-        threadId,
-      });
-      return;
-    }
-
     if (!hasServerThread) {
-      recordT3WorkThreadDebug("thread-chat-view.subscribe-thread.skipped", {
+      recordT3WorkThreadDebug("thread-chat-view.thread-state.skipped", {
         reason: "missing-server-thread",
         threadId,
       });
       return;
     }
 
-    recordT3WorkThreadDebug("thread-chat-view.subscribe-thread.start", {
+    recordT3WorkThreadDebug("thread-chat-view.thread-state", {
       environmentId,
       threadId,
+      serverThread: serverThreadSummary,
     });
-
-    const unsubscribe = backend.subscribeThread(threadId, (event) => {
-      recordT3WorkThreadDebug("thread-chat-view.subscribe-thread.event", {
-        threadId,
-        event: summarizeT3WorkThreadEvent(event),
-      });
-    });
-
-    return () => {
-      recordT3WorkThreadDebug("thread-chat-view.subscribe-thread.stop", {
-        environmentId,
-        threadId,
-      });
-      unsubscribe();
-    };
-  }, [backend, environmentId, hasServerThread, threadId]);
+  }, [environmentId, hasServerThread, serverThreadSummary, threadId]);
 }

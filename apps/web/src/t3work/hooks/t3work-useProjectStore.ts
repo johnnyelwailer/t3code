@@ -1,11 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { useShallow } from "zustand/react/shallow";
-import {
-  selectProjectsAcrossEnvironments,
-  selectThreadsAcrossEnvironments,
-  useStore,
-} from "~/store";
+import { useMergedThreads } from "~/t3work/t3work-mergedThreads";
+import { useProjects } from "~/state/entities";
 import type { ViewState, ProjectThread, ProjectThreadDisplayMode } from "~/t3work/t3work-types";
 import { useProjectStoreActions } from "./t3work-useProjectStoreActions";
 import { useProjectStoreQueries } from "./t3work-useProjectStoreQueries";
@@ -37,8 +33,8 @@ export function useProjectStore() {
   );
   const [threads, setThreads] = useState<ProjectThread[]>([]);
   const [threadsHydrated, setThreadsHydrated] = useState(false);
-  const liveProjects = useStore(useShallow(selectProjectsAcrossEnvironments));
-  const liveThreads = useStore(useShallow(selectThreadsAcrossEnvironments));
+  const liveProjects = useProjects();
+  const liveThreads = useMergedThreads();
   useHydrateStoredProjects({
     setStoredProjects,
     setSelectedProjectId,

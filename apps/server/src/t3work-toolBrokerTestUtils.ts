@@ -6,7 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
-import { GitWorkflowService, type GitWorkflowServiceShape } from "./git/GitWorkflowService.ts";
+import { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import {
   OrchestrationEngineService,
   type OrchestrationEngineShape,
@@ -15,14 +15,8 @@ import {
   ProjectionSnapshotQuery,
   type ProjectionSnapshotQueryShape,
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import {
-  ProjectSetupScriptRunner,
-  type ProjectSetupScriptRunnerShape,
-} from "./project/Services/ProjectSetupScriptRunner.ts";
-import {
-  SourceControlProviderRegistry,
-  type SourceControlProviderRegistryShape,
-} from "./sourceControl/SourceControlProviderRegistry.ts";
+import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
+import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
 import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
 
@@ -82,9 +76,9 @@ const projectId = ProjectId.make("project-1");
 const stubStartChildServices = Layer.mergeAll(
   Layer.succeed(FileSystem.FileSystem, {} as FileSystem.FileSystem),
   Layer.succeed(Path.Path, {} as Path.Path),
-  Layer.succeed(GitWorkflowService, {} as GitWorkflowServiceShape),
-  Layer.succeed(SourceControlProviderRegistry, {} as SourceControlProviderRegistryShape),
-  Layer.succeed(ProjectSetupScriptRunner, {} as ProjectSetupScriptRunnerShape),
+  Layer.succeed(GitWorkflowService, {} as GitWorkflowService["Service"]),
+  Layer.succeed(SourceControlProviderRegistry, {} as SourceControlProviderRegistry["Service"]),
+  Layer.succeed(ProjectSetupScriptRunner, {} as ProjectSetupScriptRunner["Service"]),
 );
 
 const projectionQueryMock: ProjectionSnapshotQueryShape = {

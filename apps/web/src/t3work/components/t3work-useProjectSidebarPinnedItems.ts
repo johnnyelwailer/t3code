@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { useShallow } from "zustand/react/shallow";
 
-import { selectProjectsAcrossEnvironments, useStore } from "~/store";
+import { useProjects } from "~/state/entities";
 import type { Project } from "~/types";
 import { loadStoredProjects } from "~/t3work/hooks/t3work-projectStoreUtils";
 import {
@@ -143,7 +142,7 @@ export function useProjectSidebarPinnedItems(input: {
     unlinkedGitHubActivityItems,
   } = input;
   const pinnedSidebarItems = useT3WorkPinnedSidebarStore((state) => state.items);
-  const liveProjects = useStore(useShallow(selectProjectsAcrossEnvironments));
+  const liveProjects = useProjects();
 
   const ticketLookup = useMemo(() => buildProjectTicketLookup(projectTickets), [projectTickets]);
   const ticketThreadsById = useMemo(

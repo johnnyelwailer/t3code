@@ -1,7 +1,7 @@
-import { type ClientOrchestrationCommand, type ServerConfigStreamEvent } from "@t3tools/contracts";
+import { type ClientOrchestrationCommand } from "@t3tools/contracts";
 
 import { resolveInitialPrimaryEnvironmentDescriptor } from "~/environments/primary";
-import { getServerConfig } from "~/t3work/t3work-serverStateCompat";
+import { readPrimaryServerConfig } from "~/t3work/t3work-serverState";
 import { runT3workOrchestrationDispatch } from "~/t3work/t3work-orchestrationDispatch";
 import type { BackendApi, BackendState } from "./t3work-types";
 import {
@@ -26,8 +26,8 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
 
   const state: BackendState = {
     connectionStatus: "connecting",
-    serverConfig: getServerConfig(),
-    providers: getServerConfig()?.providers ?? [],
+    serverConfig: readPrimaryServerConfig(),
+    providers: readPrimaryServerConfig()?.providers ?? [],
     error: null,
   };
 
@@ -38,8 +38,8 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
 
       const nextState = state as Writable<BackendState>;
       nextState.connectionStatus = "connected";
-      nextState.serverConfig = getServerConfig();
-      nextState.providers = getServerConfig()?.providers ?? [];
+      nextState.serverConfig = readPrimaryServerConfig();
+      nextState.providers = readPrimaryServerConfig()?.providers ?? [];
       nextState.error = null;
     } catch (error) {
       const nextState = state as Writable<BackendState>;
@@ -127,18 +127,6 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     atlassian,
     github,
     projectWorkspace,
-    subscribeConfig(_listener: (event: ServerConfigStreamEvent) => void) {
-      return () => undefined;
-    },
-    subscribeLifecycle(_listener: (event: unknown) => void) {
-      return () => undefined;
-    },
-    subscribeShell(_listener: (event: unknown) => void) {
-      return () => undefined;
-    },
-    subscribeThread(_threadId: string, _listener: (event: unknown) => void) {
-      return () => undefined;
-    },
   };
 }
 

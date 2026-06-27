@@ -13,7 +13,6 @@ import {
 } from "@t3tools/project-recipes";
 
 import { readLocalApi } from "~/localApi";
-import { applySettingsUpdated, getServerConfig } from "~/t3work/t3work-serverStateCompat";
 
 const SIDECAR_COMPOSITION_PERSISTENCE_ERROR_SCOPE = "[SIDECAR_COMPOSITION]";
 
@@ -153,18 +152,6 @@ export async function hydrateStoredSidecarComposition(): Promise<SidecarPersonal
 
 let persistStoredSidecarPersonalizationQueue: Promise<void> = Promise.resolve();
 
-function applyOptimisticServerSidecarPersonalization(nextJson: string): void {
-  const currentServerConfig = getServerConfig();
-  if (!currentServerConfig) {
-    return;
-  }
-
-  applySettingsUpdated({
-    ...currentServerConfig.settings,
-    t3workStoredSidecarCompositionJson: nextJson,
-  });
-}
-
 export function persistStoredSidecarPersonalization(personalization: SidecarPersonalization): void {
   const localApi = readLocalApi();
   if (!localApi) {
@@ -172,7 +159,6 @@ export function persistStoredSidecarPersonalization(personalization: SidecarPers
   }
 
   const nextJson = encodeSidecarPersonalization(personalization);
-  applyOptimisticServerSidecarPersonalization(nextJson);
   persistStoredSidecarPersonalizationQueue = persistStoredSidecarPersonalizationQueue
     .catch(() => undefined)
     .then(async () => {

@@ -9,7 +9,7 @@ import * as Path from "effect/Path";
 import { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { ProjectSetupScriptRunner } from "./project/Services/ProjectSetupScriptRunner.ts";
+import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import {
   T3workToolBroker,

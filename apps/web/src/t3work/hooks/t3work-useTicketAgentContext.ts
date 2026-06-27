@@ -1,8 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { useShallow } from "zustand/react/shallow";
 
-import { selectProjectsAcrossEnvironments, useStore } from "~/store";
+import { useProjects } from "~/state/entities";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { useAgentContext } from "~/t3work/hooks/t3work-useAgentContext";
 import { useT3WorkPinnedSidebarStore } from "~/t3work/t3work-pinnedSidebarStore";
@@ -42,7 +41,7 @@ export function useTicketAgentContext(input: {
   const backend = useBackend();
   const { showAgentContextMenu, showAgentContextMenuAt } = useAgentContext();
   const pinnedSidebarItems = useT3WorkPinnedSidebarStore((state) => state.items);
-  const liveProjects = useStore(useShallow(selectProjectsAcrossEnvironments));
+  const liveProjects = useProjects();
   const { resolvedProjectId, pinnedProjectIds } = useMemo(
     () => resolveTicketAgentContextPinnedProjectState({ project, liveProjects }),
     [liveProjects, project],

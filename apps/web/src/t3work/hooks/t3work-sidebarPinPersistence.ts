@@ -5,7 +5,6 @@ import {
 } from "@t3tools/contracts";
 
 import { readLocalApi } from "~/localApi";
-import { applySettingsUpdated, getServerConfig } from "~/t3work/t3work-serverStateCompat";
 import type { T3WorkSidebarPinnedItem } from "~/t3work/t3work-sidebarPinningTypes";
 
 const SIDEBAR_PIN_PERSISTENCE_ERROR_SCOPE = "[SIDEBAR_PINS]";
@@ -103,7 +102,6 @@ export async function migrateLegacyStoredSidebarPinsToServer(): Promise<
     await localApi.server.updateSettings({
       t3workStoredSidebarPinsJson: nextJson,
     });
-    applyOptimisticServerSidebarPins(nextJson);
 
     const currentClientSettings = clientSettings ?? DEFAULT_CLIENT_SETTINGS;
     await localApi.persistence.setClientSettings({
@@ -121,18 +119,6 @@ export async function migrateLegacyStoredSidebarPinsToServer(): Promise<
 
 let persistStoredSidebarPinsQueue: Promise<void> = Promise.resolve();
 
-function applyOptimisticServerSidebarPins(nextJson: string): void {
-  const currentServerConfig = getServerConfig();
-  if (!currentServerConfig) {
-    return;
-  }
-
-  applySettingsUpdated({
-    ...currentServerConfig.settings,
-    t3workStoredSidebarPinsJson: nextJson,
-  });
-}
-
 export function persistStoredSidebarPins(items: ReadonlyArray<T3WorkSidebarPinnedItem>): void {
   const localApi = readLocalApi();
   if (!localApi) {
@@ -140,7 +126,6 @@ export function persistStoredSidebarPins(items: ReadonlyArray<T3WorkSidebarPinne
   }
 
   const nextJson = encodePinnedItems(items);
-  applyOptimisticServerSidebarPins(nextJson);
   persistStoredSidebarPinsQueue = persistStoredSidebarPinsQueue
     .catch(() => undefined)
     .then(async () => {

@@ -10,12 +10,6 @@ export type BundledT3WorkProfileId =
 
 export type T3WorkProfileId = string;
 
-export type LegacyT3WorkProfileId =
-  | "project-partner"
-  | "test-engineer"
-  | "requirements-engineer"
-  | "developer";
-
 export type T3WorkProfileAudience =
   | "mixed"
   | "qa"
@@ -51,7 +45,6 @@ export type T3WorkProfile = {
 
 export type T3WorkProfileResolutionSource =
   | "bundled"
-  | "legacy-alias"
   | "project-local"
   | "manifest-inline"
   | "fallback";
@@ -91,13 +84,6 @@ export type ResolveT3WorkProfileInput = {
 
 export const T3WORK_PROJECT_PROFILES_DIR = ".t3work/setup/profiles";
 export const T3WORK_PROJECT_PROFILE_MANIFEST_PATH = ".t3work/setup/profile.json";
-
-const LEGACY_PROFILE_ALIASES: Record<LegacyT3WorkProfileId, BundledT3WorkProfileId> = {
-  "project-partner": "product-partner",
-  "test-engineer": "qa-assistant",
-  "requirements-engineer": "product-partner",
-  developer: "engineering-copilot",
-};
 
 export const DEFAULT_T3WORK_PROFILE_ID: BundledT3WorkProfileId = "product-partner";
 
@@ -271,12 +257,6 @@ export function isBundledT3WorkProfileId(profileId: string): profileId is Bundle
   return profileId in T3WORK_PROFILES;
 }
 
-function resolveLegacyAlias(profileId: string): BundledT3WorkProfileId | undefined {
-  return profileId in LEGACY_PROFILE_ALIASES
-    ? LEGACY_PROFILE_ALIASES[profileId as LegacyT3WorkProfileId]
-    : undefined;
-}
-
 function buildResolution(
   profile: T3WorkProfile,
   source: T3WorkProfileResolutionSource,
@@ -298,10 +278,6 @@ export function resolveT3WorkProfile(input: ResolveT3WorkProfileInput = {}): T3W
   }
   if (isBundledT3WorkProfileId(requestedProfileId)) {
     return buildResolution(T3WORK_PROFILES[requestedProfileId], "bundled", requestedProfileId);
-  }
-  const legacyTarget = resolveLegacyAlias(requestedProfileId);
-  if (legacyTarget) {
-    return buildResolution(T3WORK_PROFILES[legacyTarget], "legacy-alias", requestedProfileId);
   }
   const projectLocalProfile = input.projectLocalProfiles?.[requestedProfileId];
   if (projectLocalProfile) {

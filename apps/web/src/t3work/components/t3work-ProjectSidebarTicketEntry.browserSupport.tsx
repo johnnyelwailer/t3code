@@ -37,10 +37,6 @@ const backend = {
   atlassian: {},
   github: {},
   projectWorkspace: {},
-  subscribeConfig: () => () => {},
-  subscribeLifecycle: () => () => {},
-  subscribeShell: () => () => {},
-  subscribeThread: () => () => {},
 } as unknown as BackendApi;
 
 function createTicket(id: string, displayId: string, title: string): ProjectTicket {

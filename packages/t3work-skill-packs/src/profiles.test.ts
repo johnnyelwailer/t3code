@@ -13,10 +13,10 @@ import {
 } from "./profiles.js";
 
 describe("resolveT3WorkProfileId", () => {
-  it("maps legacy setup profile ids onto the canonical bundled profiles", () => {
-    expect(resolveT3WorkProfileId("developer")).toBe("engineering-copilot");
-    expect(resolveT3WorkProfileId("requirements-engineer")).toBe("product-partner");
-    expect(resolveT3WorkProfileId("test-engineer")).toBe("qa-assistant");
+  it("resolves canonical bundled profile ids", () => {
+    expect(resolveT3WorkProfileId("engineering-copilot")).toBe("engineering-copilot");
+    expect(resolveT3WorkProfileId("product-partner")).toBe("product-partner");
+    expect(resolveT3WorkProfileId("qa-assistant")).toBe("qa-assistant");
   });
 
   it("lists bundled starter profiles with matcher-ready preference fields", () => {

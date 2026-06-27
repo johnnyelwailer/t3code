@@ -2,19 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DEFAULT_CLIENT_SETTINGS, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 
-const { mockApplySettingsUpdated, mockGetServerConfig, mockReadLocalApi } = vi.hoisted(() => ({
-  mockApplySettingsUpdated: vi.fn(),
-  mockGetServerConfig: vi.fn(),
+const { mockReadLocalApi } = vi.hoisted(() => ({
   mockReadLocalApi: vi.fn(),
 }));
 
 vi.mock("~/localApi", () => ({
   readLocalApi: mockReadLocalApi,
-}));
-
-vi.mock("~/rpc/serverState", () => ({
-  applySettingsUpdated: mockApplySettingsUpdated,
-  getServerConfig: mockGetServerConfig,
 }));
 
 import {
@@ -30,7 +23,6 @@ describe("sidecar composition persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadLocalApi.mockReturnValue(null);
-    mockGetServerConfig.mockReturnValue(null);
   });
 
   it("reads persisted sidecar composition from server settings", () => {
@@ -111,7 +103,6 @@ describe("sidecar composition persistence", () => {
         updateSettings,
       },
     });
-    mockGetServerConfig.mockReturnValue({ settings: DEFAULT_SERVER_SETTINGS });
 
     persistStoredSidecarPersonalization({
       composition: {
@@ -166,7 +157,6 @@ describe("sidecar composition persistence", () => {
         updateSettings,
       },
     });
-    mockGetServerConfig.mockReturnValue({ settings: DEFAULT_SERVER_SETTINGS });
 
     persistStoredSidecarComposition({
       sections: [
@@ -193,11 +183,6 @@ describe("sidecar composition persistence", () => {
         { sectionId: "quick-starts", collapsed: true },
         { sectionId: "recent-conversations", visible: false },
       ],
-    });
-    expect(mockApplySettingsUpdated).toHaveBeenCalledWith({
-      ...DEFAULT_SERVER_SETTINGS,
-      t3workStoredSidecarCompositionJson:
-        '{"composition":{"sections":[{"sectionId":"quick-starts","collapsed":true},{"sectionId":"recent-conversations","visible":false}]}}',
     });
   });
 });

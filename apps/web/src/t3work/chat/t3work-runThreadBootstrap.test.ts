@@ -46,10 +46,6 @@ function createBackend(): BackendApi {
         writtenFiles: [".t3work/context/misc/project-alpha/context/entrypoint.json"],
       })),
     },
-    subscribeConfig: vi.fn(() => () => undefined),
-    subscribeLifecycle: vi.fn(() => () => undefined),
-    subscribeShell: vi.fn(() => () => undefined),
-    subscribeThread: vi.fn(() => () => undefined),
   };
 }
 

@@ -189,10 +189,6 @@ function createBackend(input: {
     atlassian: atlassian as BackendApi["atlassian"],
     github: {} as BackendApi["github"],
     projectWorkspace: {} as BackendApi["projectWorkspace"],
-    subscribeConfig: () => () => undefined,
-    subscribeLifecycle: () => () => undefined,
-    subscribeShell: () => () => undefined,
-    subscribeThread: () => () => undefined,
   };
 }
 

@@ -2,19 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DEFAULT_CLIENT_SETTINGS, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 
-const { mockApplySettingsUpdated, mockGetServerConfig, mockReadLocalApi } = vi.hoisted(() => ({
-  mockApplySettingsUpdated: vi.fn(),
-  mockGetServerConfig: vi.fn(),
+const { mockReadLocalApi } = vi.hoisted(() => ({
   mockReadLocalApi: vi.fn(),
 }));
 
 vi.mock("~/localApi", () => ({
   readLocalApi: mockReadLocalApi,
-}));
-
-vi.mock("~/rpc/serverState", () => ({
-  applySettingsUpdated: mockApplySettingsUpdated,
-  getServerConfig: mockGetServerConfig,
 }));
 
 import {
@@ -32,7 +25,6 @@ describe("sidebar pin persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadLocalApi.mockReturnValue(null);
-    mockGetServerConfig.mockReturnValue(null);
   });
 
   it("reads persisted sidebar pins from server settings", () => {
@@ -117,14 +109,9 @@ describe("sidebar pin persistence", () => {
         updateSettings,
       },
     });
-    mockGetServerConfig.mockReturnValue({ settings: DEFAULT_SERVER_SETTINGS });
 
     await expect(migrateLegacyStoredSidebarPinsToServer()).resolves.toEqual([jiraPin]);
     expect(updateSettings).toHaveBeenCalledWith({
-      t3workStoredSidebarPinsJson: JSON.stringify([jiraPin]),
-    });
-    expect(mockApplySettingsUpdated).toHaveBeenCalledWith({
-      ...DEFAULT_SERVER_SETTINGS,
       t3workStoredSidebarPinsJson: JSON.stringify([jiraPin]),
     });
     expect(setClientSettings).toHaveBeenCalledWith({
@@ -133,7 +120,7 @@ describe("sidebar pin persistence", () => {
     });
   });
 
-  it("persists sidebar pins through server settings and updates server state optimistically", async () => {
+  it("persists sidebar pins through server settings", async () => {
     const jiraPin = buildTicketSidebarPinnedItem({
       projectId: "project-1",
       ticketId: "ticket-9",
@@ -147,7 +134,6 @@ describe("sidebar pin persistence", () => {
         updateSettings,
       },
     });
-    mockGetServerConfig.mockReturnValue({ settings: DEFAULT_SERVER_SETTINGS });
 
     persistStoredSidebarPins([jiraPin]);
 
@@ -155,10 +141,6 @@ describe("sidebar pin persistence", () => {
       expect(updateSettings).toHaveBeenCalledWith({
         t3workStoredSidebarPinsJson: JSON.stringify([jiraPin]),
       });
-    });
-    expect(mockApplySettingsUpdated).toHaveBeenCalledWith({
-      ...DEFAULT_SERVER_SETTINGS,
-      t3workStoredSidebarPinsJson: JSON.stringify([jiraPin]),
     });
   });
 });

@@ -3,9 +3,9 @@ import * as Schema from "effect/Schema";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 
-import type { GitWorkflowServiceShape } from "./git/GitWorkflowService.ts";
-import type { ProjectSetupScriptRunnerShape } from "./project/Services/ProjectSetupScriptRunner.ts";
-import type { SourceControlProviderRegistryShape } from "./sourceControl/SourceControlProviderRegistry.ts";
+import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
+import type { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
+import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import {
   HIDDEN_T3WORK_DIR,
   MANIFEST_FILE_NAME,
@@ -28,9 +28,9 @@ const decodeLinkedRepositoryManifest = Schema.decodeEffect(
 export type T3workStartChildServices = {
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
-  readonly sourceControlProviders: SourceControlProviderRegistryShape;
-  readonly gitWorkflow: GitWorkflowServiceShape;
-  readonly projectSetupScriptRunner: ProjectSetupScriptRunnerShape;
+  readonly sourceControlProviders: SourceControlProviderRegistry["Service"];
+  readonly gitWorkflow: GitWorkflowService["Service"];
+  readonly projectSetupScriptRunner: ProjectSetupScriptRunner["Service"];
 };
 
 export type T3workStartChildLinkedRepositoryServices = Pick<
