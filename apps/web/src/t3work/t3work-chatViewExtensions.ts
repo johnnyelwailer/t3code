@@ -29,7 +29,9 @@ export type ChatViewT3workExtensionProps = {
   readonly composerContainerProps?: HTMLAttributes<HTMLDivElement>;
   readonly composerContainerOverlay?: ReactNode;
   readonly composerContextAttachments?: ReadonlyArray<T3WorkContextAttachment>;
-  readonly prepareComposerContextAttachments?: () => Promise<ReadonlyArray<T3WorkContextAttachment>>;
+  readonly prepareComposerContextAttachments?: () => Promise<
+    ReadonlyArray<T3WorkContextAttachment>
+  >;
   readonly onComposerContextAttachmentsConsumed?: () => void;
   readonly onSubmitRecipeCardAction?: (action: {
     readonly cardId: string;

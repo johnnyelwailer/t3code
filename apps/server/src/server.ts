@@ -352,7 +352,9 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(ServerSettingsLive),
   Layer.provideMerge(WorkspaceLayerLive),
   // Project favicon + repo identity share one provideMerge slot (the `pipe` arity is capped).
-  Layer.provideMerge(Layer.mergeAll(ProjectFaviconResolver.layer, RepositoryIdentityResolver.layer)),
+  Layer.provideMerge(
+    Layer.mergeAll(ProjectFaviconResolver.layer, RepositoryIdentityResolver.layer),
+  ),
   Layer.provideMerge(ServerEnvironmentLive),
   Layer.provideMerge(AuthLayerLive),
   Layer.provideMerge(

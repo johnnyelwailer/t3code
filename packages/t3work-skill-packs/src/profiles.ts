@@ -271,7 +271,9 @@ function buildResolution(
   };
 }
 
-export function resolveT3WorkProfile(input: ResolveT3WorkProfileInput = {}): T3WorkProfileResolution {
+export function resolveT3WorkProfile(
+  input: ResolveT3WorkProfileInput = {},
+): T3WorkProfileResolution {
   const requestedProfileId = input.profileId?.trim();
   if (!requestedProfileId) {
     return buildResolution(T3WORK_PROFILES[DEFAULT_T3WORK_PROFILE_ID], "fallback");
@@ -283,7 +285,11 @@ export function resolveT3WorkProfile(input: ResolveT3WorkProfileInput = {}): T3W
   if (projectLocalProfile) {
     return buildResolution(projectLocalProfile, "project-local", requestedProfileId);
   }
-  if (input.manifest?.profileId === requestedProfileId && input.manifest.title && input.manifest.description) {
+  if (
+    input.manifest?.profileId === requestedProfileId &&
+    input.manifest.title &&
+    input.manifest.description
+  ) {
     const manifestProfile = parseT3WorkProfileDefinition(input.manifest, requestedProfileId);
     if (manifestProfile) {
       return buildResolution(manifestProfile, "manifest-inline", requestedProfileId);
@@ -367,7 +373,14 @@ export function parseT3WorkProfileDefinition(
   const title = typeof record.title === "string" ? record.title.trim() : "";
   const description = typeof record.description === "string" ? record.description.trim() : "";
   const style = record.communicationStyle;
-  if (!id || !title || !description || !style || typeof style !== "object" || Array.isArray(style)) {
+  if (
+    !id ||
+    !title ||
+    !description ||
+    !style ||
+    typeof style !== "object" ||
+    Array.isArray(style)
+  ) {
     return undefined;
   }
   const communicationStyle = style as T3WorkProfile["communicationStyle"];
@@ -380,9 +393,7 @@ export function parseT3WorkProfileDefinition(
     title,
     description,
     audience:
-      typeof record.audience === "string"
-        ? (record.audience as T3WorkProfileAudience)
-        : "mixed",
+      typeof record.audience === "string" ? (record.audience as T3WorkProfileAudience) : "mixed",
     communicationStyle,
     preferredArtifactKinds,
     defaultRecipeWeights:

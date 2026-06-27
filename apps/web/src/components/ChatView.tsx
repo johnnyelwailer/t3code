@@ -994,8 +994,7 @@ function ChatViewContent(props: ChatViewProps) {
     routeKind === "server" ? props.dispatchTurnStartOverride : undefined;
   const composerContextAttachmentSlot =
     routeKind === "server" ? props.composerContextAttachmentSlot : undefined;
-  const composerContainerProps =
-    routeKind === "server" ? props.composerContainerProps : undefined;
+  const composerContainerProps = routeKind === "server" ? props.composerContainerProps : undefined;
   const composerContainerOverlay =
     routeKind === "server" ? props.composerContainerOverlay : undefined;
   const onComposerContextAttachmentsConsumed =
