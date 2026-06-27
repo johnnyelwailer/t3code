@@ -49,6 +49,7 @@ const PersistedJiraApiAuth = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("oauth"),
     cloudId: Schema.String,
+    siteUrl: Schema.optional(Schema.String),
     accessToken: Schema.String,
     refreshToken: Schema.optional(Schema.String),
     expiresAt: Schema.optional(Schema.Number),
@@ -178,6 +179,7 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
     const nextAuth: JiraApiAuth = {
       kind: "oauth",
       cloudId: auth.cloudId,
+      ...(auth.siteUrl ? { siteUrl: auth.siteUrl } : {}),
       accessToken: token.accessToken,
       refreshToken: token.refreshToken,
       expiresAt: now + token.expiresIn * 1000,

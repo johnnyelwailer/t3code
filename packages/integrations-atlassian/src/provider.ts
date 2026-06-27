@@ -19,7 +19,7 @@ import {
   AtlassianNetworkError,
   type JiraIssue,
 } from "./client.ts";
-import { JiraApiClient, type JiraApiAuth } from "./jiraApi.ts";
+import { JiraApiClient, jiraCloudApiBaseUrl, type JiraApiAuth } from "./jiraApi.ts";
 import {
   normalizeAccount,
   normalizeIssue,
@@ -566,6 +566,13 @@ function normalizeSiteUrl(siteUrl: string): string {
   return withProtocol.endsWith("/") ? withProtocol.slice(0, -1) : withProtocol;
 }
 
+function displaySiteUrlForAuth(auth: JiraApiAuth): string {
+  if (auth.kind === "basic") {
+    return normalizeSiteUrl(auth.siteUrl);
+  }
+  return auth.siteUrl ? normalizeSiteUrl(auth.siteUrl) : jiraCloudApiBaseUrl(auth.cloudId);
+}
+
 function describeAccountError(
   siteUrl: string,
   authKind: JiraApiAuth["kind"],
@@ -606,10 +613,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         auth.kind === "basic" ? { ...auth, siteUrl: normalizeSiteUrl(auth.siteUrl) } : auth;
       this.clients.set(key, {
         client: new JiraApiClient(clientAuth),
-        siteUrl:
-          auth.kind === "oauth"
-            ? `https://api.atlassian.com/ex/jira/${auth.cloudId}`
-            : normalizeSiteUrl(auth.siteUrl),
+        siteUrl: displaySiteUrlForAuth(auth),
       });
     } else {
       const siteUrl = normalizeSiteUrl(auth.siteUrl);
@@ -633,10 +637,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         auth.kind === "basic" ? { ...auth, siteUrl: normalizeSiteUrl(auth.siteUrl) } : auth;
       provider.clients.set(key, {
         client: new JiraApiClient(clientAuth),
-        siteUrl:
-          auth.kind === "oauth"
-            ? `https://api.atlassian.com/ex/jira/${auth.cloudId}`
-            : normalizeSiteUrl(auth.siteUrl),
+        siteUrl: displaySiteUrlForAuth(auth),
       });
     }
     return provider;

@@ -40,6 +40,44 @@ describe("AtlassianIntegrationProvider", () => {
     ]);
   });
 
+  it("preserves OAuth accessible resource URLs while probing Jira through the REST API", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        accountId: "account-1",
+        displayName: "Test User",
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = AtlassianIntegrationProvider.fromMultipleAuths([
+      {
+        kind: "oauth",
+        cloudId: "cloud-123",
+        siteUrl: "https://example.atlassian.net/",
+        accessToken: "access-token",
+      },
+    ]);
+
+    const accounts = await provider.listAccounts();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.atlassian.com/ex/jira/cloud-123/rest/api/3/myself",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer access-token",
+        }),
+      }),
+    );
+    expect(accounts).toEqual([
+      {
+        id: "cloud-123",
+        provider: "atlassian",
+        label: "Test User",
+        accountUrl: "https://example.atlassian.net",
+      },
+    ]);
+  });
+
   it("surfaces authentication failures instead of returning an empty site list", async () => {
     globalThis.fetch = vi.fn(async () => new Response("Unauthorized", { status: 401 }));
 

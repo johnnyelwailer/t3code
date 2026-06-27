@@ -12,6 +12,33 @@ afterEach(() => {
 });
 
 describe("JiraApiClient", () => {
+  it("requests OAuth Jira Cloud APIs through the cloud proxy with the REST path", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        accountId: "account-1",
+        displayName: "Test User",
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      accessToken: "access-token",
+    });
+
+    await client.getMyself();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.atlassian.com/ex/jira/cloud-123/rest/api/3/myself",
+      expect.any(Object),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "https://api.atlassian.com/ex/jira/cloud-123",
+      expect.any(Object),
+    );
+  });
+
   it("aborts Jira requests that exceed the HTTP timeout", async () => {
     const timeoutController = new AbortController();
     const timeoutSignalSpy = vi

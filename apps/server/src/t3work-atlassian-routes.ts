@@ -91,6 +91,7 @@ export const t3workAtlassianConnectOAuthRouteLayer = HttpRouter.add(
     const auths: ReadonlyArray<JiraApiAuth> = input.auth.sites.map((site) => ({
       kind: "oauth",
       cloudId: site.id,
+      siteUrl: site.url,
       accessToken: input.auth.token.accessToken,
       refreshToken: input.auth.token.refreshToken,
       expiresAt,

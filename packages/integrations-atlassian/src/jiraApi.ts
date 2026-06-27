@@ -30,6 +30,7 @@ export type JiraApiAuth =
   | {
       readonly kind: "oauth";
       readonly cloudId: string;
+      readonly siteUrl?: string | undefined;
       readonly accessToken: string;
       readonly refreshToken?: string | undefined;
       readonly expiresAt?: number | undefined;
@@ -42,6 +43,10 @@ export type JiraApiAuth =
     };
 
 export const JIRA_API_TIMEOUT_MS = 10_000;
+
+export function jiraCloudApiBaseUrl(cloudId: string): string {
+  return `https://api.atlassian.com/ex/jira/${cloudId}`;
+}
 
 async function fetchWithJiraTimeout(url: string, init?: RequestInit): Promise<Response> {
   const abortController = new AbortController();
@@ -105,7 +110,7 @@ export class JiraApiClient {
 
   private get baseUrl(): string {
     if (this.auth.kind === "oauth") {
-      return `https://api.atlassian.com/ex/jira/${this.auth.cloudId}`;
+      return jiraCloudApiBaseUrl(this.auth.cloudId);
     }
     const trimmed = this.auth.siteUrl.trim();
     return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
@@ -121,7 +126,10 @@ export class JiraApiClient {
 
   private resolveUrl(pathOrUrl: string): { url: string; path: string } {
     const base = new URL(`${this.baseUrl}/`);
-    const resolved = new URL(pathOrUrl, base);
+    const resolved =
+      this.auth.kind === "oauth" && pathOrUrl.startsWith("/") && !pathOrUrl.startsWith("//")
+        ? new URL(pathOrUrl.replace(/^\/+/, ""), base)
+        : new URL(pathOrUrl, base);
     if (resolved.origin !== base.origin) {
       throw new AtlassianApiError({
         status: 400,
