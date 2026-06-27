@@ -14,6 +14,7 @@ import { cn } from "~/lib/utils";
 import { useAddToChatComposerDropTarget } from "~/t3work/hooks/t3work-useAddToChatComposerDropTarget";
 import {
   createDefaultT3workKickoffLaunchConfig,
+  getT3workKickoffProviderBlocker,
   useT3workKickoffComposerState,
   type T3workKickoffLaunchConfig,
 } from "~/t3work/t3work-kickoffLaunchConfig";
@@ -114,10 +115,13 @@ export const TicketKickoffComposer = forwardRef<
       setCursor(0);
     }, [isConnected, launchConfig, onSubmit, selectedRecipe, text]);
 
-    const canSend =
-      (Boolean(text.trim()) || Boolean(selectedRecipe)) &&
-      isConnected &&
-      Boolean(selectedProviderEntry);
+    const providerStatusMessage = getT3workKickoffProviderBlocker({
+      isConnected,
+      providerInstanceEntries,
+      selectedProviderEntry,
+    });
+    const canSend = (Boolean(text.trim()) || Boolean(selectedRecipe)) && !providerStatusMessage;
+    const providerPickerDisabled = !isConnected || providerInstanceEntries.length === 0;
 
     return (
       <form
@@ -177,9 +181,9 @@ export const TicketKickoffComposer = forwardRef<
               runtimeModeConfig={runtimeModeConfig}
               providerInstanceEntries={providerInstanceEntries}
               modelOptionsByInstance={modelOptionsByInstance}
-              selectedProviderEntry={selectedProviderEntry}
+              providerPickerDisabled={providerPickerDisabled}
+              providerStatusMessage={providerStatusMessage}
               showInteractionModeToggle={showInteractionModeToggle}
-              isConnected={isConnected}
               text={text}
               canSend={canSend}
               setSelectedInstanceId={setSelectedInstanceId}

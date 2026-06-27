@@ -10,9 +10,11 @@ import type {
 import { getProviderInteractionModeToggle } from "~/providerModels";
 import {
   deriveProviderInstanceEntries,
+  applyProviderInstanceSettings,
   sortProviderInstanceEntries,
   type ProviderInstanceEntry,
 } from "~/providerInstances";
+import { usePrimarySettings } from "~/hooks/useSettings";
 import { DEFAULT_T3WORK_THREAD_TOOL_IDS } from "~/t3work/t3work-threadToolContext";
 import { runtimeModeConfig } from "~/t3work/t3work-ticketKickoffRuntimeConfig";
 import type { T3workThreadToolId } from "~/t3work/t3work-types";
@@ -36,15 +38,41 @@ export function createDefaultT3workKickoffLaunchConfig(): T3workKickoffLaunchCon
   };
 }
 
+export function getT3workKickoffProviderBlocker(input: {
+  readonly isConnected: boolean;
+  readonly providerInstanceEntries: ReadonlyArray<ProviderInstanceEntry>;
+  readonly selectedProviderEntry: ProviderInstanceEntry | undefined;
+}): string | null {
+  if (!input.isConnected) return "Server is disconnected.";
+  if (input.providerInstanceEntries.length === 0) {
+    return "No providers are configured. Add or enable a provider in Settings.";
+  }
+  if (!input.selectedProviderEntry) return "Select a provider to start a chat.";
+  if (!input.selectedProviderEntry.enabled) {
+    return "Selected provider is disabled. Enable it in Settings.";
+  }
+  if (!input.selectedProviderEntry.isAvailable || input.selectedProviderEntry.status !== "ready") {
+    return "Selected provider is not ready. Check provider settings.";
+  }
+  return null;
+}
+
 export function useT3workKickoffComposerState(providers: ReadonlyArray<ServerProvider>) {
-  const availableProviders = useMemo(
+  const providerSettings = usePrimarySettings((settings) => ({
+    providerInstances: settings.providerInstances,
+    providers: settings.providers,
+  }));
+  const enabledAvailableProviders = useMemo(
     () =>
       providers.filter((provider) => provider.enabled && provider.availability !== "unavailable"),
     [providers],
   );
   const providerInstanceEntries = useMemo<ReadonlyArray<ProviderInstanceEntry>>(
-    () => sortProviderInstanceEntries(deriveProviderInstanceEntries(availableProviders)),
-    [availableProviders],
+    () =>
+      sortProviderInstanceEntries(
+        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), providerSettings),
+      ),
+    [providerSettings, providers],
   );
   const modelOptionsByInstance = useMemo(() => {
     const options = new Map();
@@ -93,7 +121,7 @@ export function useT3workKickoffComposerState(providers: ReadonlyArray<ServerPro
   }, [selectedModel, selectedProviderModels]);
 
   const showInteractionModeToggle = selectedProviderEntry
-    ? getProviderInteractionModeToggle(availableProviders, selectedProviderEntry.driverKind)
+    ? getProviderInteractionModeToggle(enabledAvailableProviders, selectedProviderEntry.driverKind)
     : true;
   const selectedToolIds: ReadonlyArray<T3workThreadToolId> = DEFAULT_T3WORK_THREAD_TOOL_IDS;
   const launchConfig = useMemo<T3workKickoffLaunchConfig>(

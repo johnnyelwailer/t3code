@@ -2,6 +2,8 @@ export const GITHUB_ACTIVITY_POLL_INTERVAL_MS = 60_000;
 export const GITHUB_ACTIVITY_CACHE_MAX_AGE_MS = 60_000;
 export const ATLASSIAN_RESOURCES_POLL_INTERVAL_MS = 90_000;
 export const ATLASSIAN_RESOURCES_CACHE_MAX_AGE_MS = 90_000;
+const POLL_RETRY_BASE_MS = 5_000;
+const POLL_RETRY_MAX_MS = 60_000;
 
 type PollingDelayInput = {
   readonly enabled: boolean;
@@ -16,6 +18,10 @@ type PollingDelayInput = {
 type BrowserPollController = {
   readonly dispose: () => void;
 };
+
+function nextPollRetryDelayMs(currentMs: number): number {
+  return Math.min(currentMs > 0 ? currentMs * 2 : POLL_RETRY_BASE_MS, POLL_RETRY_MAX_MS);
+}
 
 export function isPollingVisible(doc?: Pick<Document, "visibilityState">): boolean {
   return doc?.visibilityState !== "hidden";
@@ -53,6 +59,8 @@ export function startBrowserPolling(input: {
   const nav = typeof navigator === "undefined" ? undefined : navigator;
 
   let disposed = false;
+  let inFlight = false;
+  let retryDelayMs = 0;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const clearScheduledPoll = () => {
@@ -62,8 +70,11 @@ export function startBrowserPolling(input: {
     }
   };
 
-  const schedule = () => {
+  const schedule = (minimumDelayMs = 0) => {
     if (disposed) {
+      return;
+    }
+    if (inFlight) {
       return;
     }
 
@@ -85,22 +96,42 @@ export function startBrowserPolling(input: {
       return;
     }
 
-    timeoutId = setTimeout(() => {
-      timeoutId = null;
-      void Promise.resolve(input.poll()).finally(schedule);
-    }, delayMs);
+    timeoutId = setTimeout(
+      () => {
+        timeoutId = null;
+        inFlight = true;
+        const previousUpdatedAt = input.getUpdatedAt();
+        void Promise.resolve(input.poll())
+          .then(() => {
+            const nextUpdatedAt = input.getUpdatedAt();
+            if (nextUpdatedAt !== undefined && nextUpdatedAt !== previousUpdatedAt) {
+              retryDelayMs = 0;
+              return;
+            }
+            retryDelayMs = nextPollRetryDelayMs(retryDelayMs);
+          })
+          .catch(() => {
+            retryDelayMs = nextPollRetryDelayMs(retryDelayMs);
+          })
+          .finally(() => {
+            inFlight = false;
+            schedule(retryDelayMs);
+          });
+      },
+      Math.max(delayMs, minimumDelayMs),
+    );
   };
 
   const handleVisibilityChange = () => {
     if (isPollingVisible(doc)) {
-      schedule();
+      schedule(retryDelayMs);
       return;
     }
     clearScheduledPoll();
   };
 
   const handleOnline = () => {
-    schedule();
+    schedule(retryDelayMs);
   };
 
   if (doc) {
