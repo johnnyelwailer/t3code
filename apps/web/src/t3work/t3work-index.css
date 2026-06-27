@@ -785,3 +785,393 @@ label:has(> select#reasoning-effort) select {
 .dark .model-picker-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.15);
 }
+
+/* ----------------------------------------------------------------------------
+   Nexi AI onboarding ("Pick your working style") theme
+   Design source: Figma "Nexi AI" (light + dark). Brand tokens are scoped to
+   `.t3work-onboarding`; the profile-card classes fall back to app tokens
+   (`var(--card)` etc.) so they also render correctly when reused outside the
+   onboarding surface (e.g. the create-project wizard).
+---------------------------------------------------------------------------- */
+.t3work-onboarding {
+  --nx-bg: #faf8f6;
+  --nx-surface: #ffffff;
+  --nx-surface-muted: #ffffff;
+  --nx-border: #e8e1dd;
+  --nx-heading: #14111c;
+  --nx-body: #4d4d4d;
+  --nx-muted: #737373;
+  --nx-accent: #f05a0a;
+  --nx-accent-soft: rgba(240, 90, 10, 0.1);
+  --nx-indigo: #4c3cf6;
+  --nx-indigo-soft: rgba(76, 60, 246, 0.1);
+  --nx-success: #00bc7d;
+  --nx-chip: rgba(0, 0, 0, 0.06);
+  --nx-rail-from: rgba(247, 203, 237, 0.5);
+  --nx-rail-to: #faf8f6;
+}
+
+.dark .t3work-onboarding {
+  --nx-bg: #0d0b1f;
+  --nx-surface: #15122b;
+  --nx-surface-muted: #1a1733;
+  --nx-border: #2a2450;
+  --nx-heading: #f4f2ff;
+  --nx-body: #c9c3e6;
+  --nx-muted: #a7a1c3;
+  --nx-accent: #f05a0a;
+  --nx-accent-soft: rgba(240, 90, 10, 0.18);
+  --nx-indigo: #7b70ff;
+  --nx-indigo-soft: rgba(123, 112, 255, 0.16);
+  --nx-success: #22c55e;
+  --nx-chip: rgba(255, 255, 255, 0.08);
+  --nx-rail-from: rgba(76, 60, 246, 0.2);
+  --nx-rail-to: #0d0b1f;
+}
+
+/* Per-family icon-tile tints + bullet-dot colors (global so cards themed anywhere). */
+[data-nx-family="pink"] {
+  --nx-tile: rgba(247, 203, 237, 0.6);
+  --nx-dot: #8a2060;
+}
+[data-nx-family="lavender"] {
+  --nx-tile: rgba(229, 224, 255, 0.7);
+  --nx-dot: #1c1772;
+}
+[data-nx-family="indigo"] {
+  --nx-tile: rgba(76, 60, 246, 0.1);
+  --nx-dot: #4c3cf6;
+}
+[data-nx-family="deep"] {
+  --nx-tile: rgba(28, 23, 114, 0.08);
+  --nx-dot: #1c1772;
+}
+[data-nx-family="orange"] {
+  --nx-tile: rgba(240, 90, 10, 0.1);
+  --nx-dot: #8a3300;
+}
+.dark [data-nx-family="pink"] {
+  --nx-tile: rgba(247, 203, 237, 0.14);
+  --nx-dot: #f7a8df;
+}
+.dark [data-nx-family="lavender"] {
+  --nx-tile: rgba(229, 224, 255, 0.12);
+  --nx-dot: #b8b2ff;
+}
+.dark [data-nx-family="indigo"] {
+  --nx-tile: rgba(123, 112, 255, 0.18);
+  --nx-dot: #9a90ff;
+}
+.dark [data-nx-family="deep"] {
+  --nx-tile: rgba(123, 112, 255, 0.12);
+  --nx-dot: #b8b2ff;
+}
+.dark [data-nx-family="orange"] {
+  --nx-tile: rgba(240, 90, 10, 0.2);
+  --nx-dot: #ffb18a;
+}
+
+.nx-rail {
+  background: linear-gradient(146deg, var(--nx-rail-from) 0%, var(--nx-rail-to) 58%);
+  border-right: 1px solid var(--nx-border);
+}
+
+.nx-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nx-muted);
+}
+.nx-h1 {
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--nx-heading);
+}
+.nx-h2 {
+  font-size: 21px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--nx-heading);
+}
+.nx-sub {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--nx-body);
+}
+
+.nx-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  background: var(--nx-accent-soft);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--nx-accent);
+}
+.nx-brand-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  background: var(--nx-indigo-soft);
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--nx-indigo);
+}
+.nx-logo {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--nx-accent);
+  color: #fff;
+}
+.nx-version {
+  font-size: 12px;
+  color: var(--nx-muted);
+}
+.nx-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  border: 1px solid var(--nx-border);
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--nx-body);
+}
+.nx-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--nx-success);
+}
+
+.nx-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  border-radius: 16px;
+  border: 1px solid var(--nx-border);
+  background: var(--nx-surface);
+  padding: 0 14px;
+  color: var(--nx-muted);
+}
+.nx-search input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--nx-heading);
+}
+.nx-search input::placeholder {
+  color: var(--nx-muted);
+}
+
+.nx-tab {
+  border-radius: 9999px;
+  border: 1px solid var(--nx-border);
+  background: transparent;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--nx-muted);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+.nx-tab:hover {
+  color: var(--nx-heading);
+  border-color: color-mix(in srgb, var(--nx-accent) 35%, var(--nx-border));
+}
+.nx-tab[data-active="true"] {
+  background: var(--nx-accent);
+  border-color: var(--nx-accent);
+  color: #fff;
+}
+
+.nx-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nx-step-badge {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.nx-step-badge[data-state="active"] {
+  background: var(--nx-accent);
+  color: #fff;
+}
+.nx-step-badge[data-state="next"] {
+  background: var(--nx-indigo);
+  color: #fff;
+}
+.nx-step-badge[data-state="todo"] {
+  background: var(--nx-chip);
+  color: var(--nx-muted);
+}
+.nx-step-label {
+  font-size: 14px;
+  color: var(--nx-body);
+}
+.nx-step[data-state="active"] .nx-step-label {
+  color: var(--nx-heading);
+  font-weight: 500;
+}
+.nx-step[data-state="todo"] .nx-step-label {
+  color: var(--nx-muted);
+}
+
+.nx-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 44px;
+  border-radius: 16px;
+  background: var(--nx-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 20px;
+  cursor: pointer;
+  transition:
+    filter 0.15s ease,
+    opacity 0.15s ease;
+}
+.nx-cta:hover {
+  filter: brightness(1.05);
+}
+.nx-cta:disabled {
+  background: var(--nx-chip);
+  color: var(--nx-muted);
+  cursor: not-allowed;
+}
+.nx-skip {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--nx-body);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.nx-skip:hover {
+  color: var(--nx-heading);
+}
+
+/* Profile cards (fall back to app tokens when used outside `.t3work-onboarding`). */
+.nx-card {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--nx-border, var(--border));
+  background: var(--nx-surface, var(--card));
+  padding: 0;
+  text-align: left;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease,
+    background-color 0.2s ease;
+}
+.nx-card:hover {
+  border-color: color-mix(in srgb, var(--nx-accent, #f05a0a) 40%, var(--nx-border, var(--border)));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+.nx-card[data-selected="true"] {
+  border-color: var(--nx-accent, #f05a0a);
+  box-shadow:
+    0 0 0 1px var(--nx-accent, #f05a0a),
+    0 8px 24px color-mix(in srgb, var(--nx-accent, #f05a0a) 18%, transparent);
+}
+.nx-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--nx-accent, #f05a0a) 55%, transparent);
+}
+.nx-card-figure {
+  display: grid;
+  place-items: center;
+  flex: 0 0 33%;
+  align-self: stretch;
+  min-height: 132px;
+  padding: 12px;
+  background: var(--nx-tile, var(--muted));
+}
+.nx-card-img {
+  width: 80%;
+  max-width: 140px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  user-select: none;
+}
+.nx-card-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  padding: 20px 22px;
+}
+.nx-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--nx-heading, var(--foreground));
+}
+.nx-badge {
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: var(--nx-chip, rgba(0, 0, 0, 0.06));
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--nx-muted, var(--muted-foreground));
+  white-space: nowrap;
+}
+.nx-card-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--nx-body, var(--muted-foreground));
+}
+.nx-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nx-bullets li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--nx-muted, var(--muted-foreground));
+}
+.nx-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--nx-dot, var(--nx-accent, #f05a0a));
+  flex-shrink: 0;
+}
