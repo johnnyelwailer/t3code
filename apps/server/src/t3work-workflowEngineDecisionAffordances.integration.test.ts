@@ -1,3 +1,5 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test reads workflow fixtures + temp dir.
 /**
  * Real-path proof for the `boolean` and `form` askUser decision affordances (Epic 25 §askUser
@@ -12,10 +14,10 @@
  * with the STRUCTURED value → the run completes with the schema-validated reply.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -55,8 +57,8 @@ import {
 import { rejectWorkflowResolveValue } from "./t3work-workflowResolveInput.ts";
 
 const fixture = (name: string): string =>
-  fileURLToPath(new URL(`../__fixtures__/${name}`, import.meta.url));
-const runsRoot = mkdtempSync(join(tmpdir(), "t3work-decision-aff-"));
+  NodeURL.fileURLToPath(new URL(`../__fixtures__/${name}`, import.meta.url));
+const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-decision-aff-"));
 
 const projectId = ProjectId.make("proj-decision-aff");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
@@ -298,4 +300,4 @@ it.live(
     }).pipe(Effect.provide(TestLayer)),
 );
 
-afterAll(() => rmSync(runsRoot, { recursive: true, force: true }));
+afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));

@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ThreadId } from "@t3tools/contracts";
 

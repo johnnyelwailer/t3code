@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Deterministic canonical JSON + argument hashing for the workflow journal.
  *
@@ -22,7 +23,7 @@
  * and symbols; cyclic structures overflow the stack.
  */
 
-import { createHash } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 function canonicalizeNumber(value: number): string {
   if (!Number.isFinite(value)) {
@@ -124,7 +125,7 @@ export function canonicalJsonStringify(value: unknown, strict = false): string {
  */
 export function hashArgs(args: unknown): string {
   const normalized = args === undefined ? null : args;
-  return createHash("sha256").update(canonicalJsonStringify(normalized)).digest("hex");
+  return NodeCrypto.createHash("sha256").update(canonicalJsonStringify(normalized)).digest("hex");
 }
 
 /**

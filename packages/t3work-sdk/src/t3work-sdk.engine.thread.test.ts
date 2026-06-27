@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unsafe-optional-chaining -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Thread-model tests (Epic 25 §The thread model). Every verb reduces to a `sent`/`resolved`
  * pair on the Handle dispatch:

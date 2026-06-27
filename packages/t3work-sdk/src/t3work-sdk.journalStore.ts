@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The JournalStore seam (Epic 25 §Open question 2 — journal storage).
  *
@@ -21,7 +22,7 @@
  * commit barrier at the suspend boundary.
  */
 
-import { createRequire } from "node:module";
+import * as NodeModule from "node:module";
 
 import type { RunMeta } from "./t3work-sdk.journal.ts";
 import {
@@ -42,7 +43,7 @@ import {
   toWire,
 } from "./t3work-sdk.journalWriter.ts";
 
-const nodeRequire = createRequire(import.meta.url);
+const nodeRequire = NodeModule.createRequire(import.meta.url);
 const path = nodeRequire("node:path") as {
   readonly join: (...parts: ReadonlyArray<string>) => string;
 };

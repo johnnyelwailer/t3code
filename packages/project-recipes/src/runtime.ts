@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as Schema from "effect/Schema";
 
 import { ProjectRecipeWorkflowCollectInputRequest } from "./input.ts";

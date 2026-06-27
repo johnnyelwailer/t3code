@@ -151,20 +151,25 @@ export async function hydrateStoredSidecarComposition(): Promise<SidecarPersonal
 }
 
 let persistStoredSidecarPersonalizationQueue: Promise<void> = Promise.resolve();
+let persistSidecarPersonalizationJson: (json: string) => Promise<void> = async () => {};
+
+export function configureStoredSidecarPersonalizationPersister(
+  persister: (json: string) => Promise<void>,
+): () => void {
+  persistSidecarPersonalizationJson = persister;
+  return () => {
+    if (persistSidecarPersonalizationJson === persister) {
+      persistSidecarPersonalizationJson = async () => {};
+    }
+  };
+}
 
 export function persistStoredSidecarPersonalization(personalization: SidecarPersonalization): void {
-  const localApi = readLocalApi();
-  if (!localApi) {
-    return;
-  }
-
   const nextJson = encodeSidecarPersonalization(personalization);
   persistStoredSidecarPersonalizationQueue = persistStoredSidecarPersonalizationQueue
     .catch(() => undefined)
     .then(async () => {
-      await localApi.server.updateSettings({
-        t3workStoredSidecarCompositionJson: nextJson,
-      });
+      await persistSidecarPersonalizationJson(nextJson);
     })
     .catch((error) => {
       console.error(`${SIDECAR_COMPOSITION_PERSISTENCE_ERROR_SCOPE} persist failed`, error);

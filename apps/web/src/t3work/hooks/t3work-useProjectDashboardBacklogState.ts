@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import { useT3workPersistedRouteState } from "~/t3work/hooks/t3work-usePersistedRouteState";
 import {
   areProjectDashboardBacklogRouteSearchEqual,

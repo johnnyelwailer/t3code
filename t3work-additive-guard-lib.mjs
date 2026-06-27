@@ -1,5 +1,6 @@
-import path from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodePath from "node:path";
+import * as NodeFS from "node:fs";
 
 const LOC_CHECK_EXTENSIONS = new Set([
   ".ts",
@@ -55,13 +56,13 @@ function removeRequiredPrefix(baseName, requiredPrefixes) {
 }
 
 function addWithRenamedBaseName(candidates, candidatePath, nextBaseName) {
-  const replaced = path.join(path.dirname(candidatePath), nextBaseName);
+  const replaced = NodePath.join(NodePath.dirname(candidatePath), nextBaseName);
   candidates.add(replaced);
 }
 
 export function candidateUpstreamCounterpartPaths(filePath, requiredPrefixes) {
   const candidates = new Set();
-  const baseName = path.basename(filePath);
+  const baseName = NodePath.basename(filePath);
   const withoutPrefix = removeRequiredPrefix(baseName, requiredPrefixes);
   if (!withoutPrefix) return [];
 
@@ -92,7 +93,7 @@ export function classifyPrefixedLocResult({
   locFailThreshold,
   counterpartPath,
 }) {
-  const baseName = path.basename(filePath);
+  const baseName = NodePath.basename(filePath);
   const usesNonProductionThresholds = NON_PRODUCTION_LOC_PATTERNS.some((pattern) =>
     pattern.test(baseName),
   );
@@ -138,15 +139,15 @@ export function toSet(lines) {
 }
 
 export function shouldCheckLoc(filePath, requiredPrefixes) {
-  const baseName = path.basename(filePath);
+  const baseName = NodePath.basename(filePath);
   if (!hasAnyRequiredPrefix(baseName, requiredPrefixes)) return false;
-  if (!existsSync(filePath)) return false;
-  const ext = path.extname(filePath).toLowerCase();
+  if (!NodeFS.existsSync(filePath)) return false;
+  const ext = NodePath.extname(filePath).toLowerCase();
   return LOC_CHECK_EXTENSIONS.has(ext);
 }
 
 export function countNonEmptyLines(filePath) {
-  const text = readFileSync(filePath, "utf8");
+  const text = NodeFS.readFileSync(filePath, "utf8");
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())

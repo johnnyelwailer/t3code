@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persistStoredSidebarPins } from "~/t3work/hooks/t3work-sidebarPinPersistence";
 import type { T3WorkSidebarPinnedItem } from "~/t3work/t3work-sidebarPinningTypes";
 
 type T3WorkPinnedSidebarState = {
@@ -13,6 +12,19 @@ type T3WorkPinnedSidebarState = {
 
 function sortPinnedItems(items: ReadonlyArray<T3WorkSidebarPinnedItem>) {
   return [...items].sort((left, right) => right.pinnedAt.localeCompare(left.pinnedAt));
+}
+
+let persistPinnedItems: (items: ReadonlyArray<T3WorkSidebarPinnedItem>) => void = () => {};
+
+export function configurePinnedSidebarPersister(
+  persister: (items: ReadonlyArray<T3WorkSidebarPinnedItem>) => void,
+): () => void {
+  persistPinnedItems = persister;
+  return () => {
+    if (persistPinnedItems === persister) {
+      persistPinnedItems = () => {};
+    }
+  };
 }
 
 export const useT3WorkPinnedSidebarStore = create<T3WorkPinnedSidebarState>((set, get) => ({
@@ -29,7 +41,7 @@ export const useT3WorkPinnedSidebarStore = create<T3WorkPinnedSidebarState>((set
 
     const next = sortPinnedItems([item, ...current]);
     set({ items: next });
-    persistStoredSidebarPins(next);
+    persistPinnedItems(next);
   },
   unpinItem: (itemId) => {
     const current = get().items;
@@ -39,7 +51,7 @@ export const useT3WorkPinnedSidebarStore = create<T3WorkPinnedSidebarState>((set
     }
 
     set({ items: next });
-    persistStoredSidebarPins(next);
+    persistPinnedItems(next);
   },
   unpinItems: (itemIds) => {
     const itemIdSet = new Set(itemIds);
@@ -54,6 +66,6 @@ export const useT3WorkPinnedSidebarStore = create<T3WorkPinnedSidebarState>((set
     }
 
     set({ items: next });
-    persistStoredSidebarPins(next);
+    persistPinnedItems(next);
   },
 }));

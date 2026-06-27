@@ -39,7 +39,8 @@ export function T3workSystemTimelineRow(props: {
   const genericAttachments = getT3workRenderableAttachments(message);
   const showMessageText =
     message.text.length > 0 &&
-    !(workflowDecision && message.text.trim() === workflowDecision.question.trim());
+    !(workflowDecision && message.text.trim() === workflowDecision.question.trim()) &&
+    !workflowShape;
 
   return (
     <div className="flex flex-col items-start gap-1">

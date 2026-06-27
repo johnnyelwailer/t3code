@@ -1,10 +1,11 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Replay-drift tests: per-call args drift, call-identity drift (insertion), input-boundary
  * drift at seq 0, replay:never marker round-trips, and gap-drift when a journaled seq is
  * missing on resume. The core engine and journal tests live in their own files.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import * as NodeFS from "node:fs";
 
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -60,11 +61,11 @@ describe("durable workflow engine — replay drift", () => {
       { runsRoot, tools: demoTools },
     );
     const file = journalFilePath(runsRoot, runId);
-    const lines = readFileSync(file, "utf8").trim().split("\n");
+    const lines = NodeFS.readFileSync(file, "utf8").trim().split("\n");
     const first = JSON.parse(lines[0] ?? "{}") as { argsHash: string };
     first.argsHash = "f".repeat(64);
     lines[0] = JSON.stringify(first);
-    writeFileSync(file, `${lines.join("\n")}\n`);
+    NodeFS.writeFileSync(file, `${lines.join("\n")}\n`);
     const error = await resumeWorkflow(
       runId,
       twoTools,
@@ -150,11 +151,11 @@ describe("durable workflow engine — replay drift", () => {
     const runId = "gap-drift";
     await startWorkflow(twoTools, { prId: "PR-gap" }, { runsRoot, tools: demoTools, runId });
     const file = journalFilePath(runsRoot, runId);
-    const kept = readFileSync(file, "utf8")
+    const kept = NodeFS.readFileSync(file, "utf8")
       .trim()
       .split("\n")
       .filter((line) => (JSON.parse(line) as { seq: number }).seq !== 1);
-    writeFileSync(file, `${kept.join("\n")}\n`);
+    NodeFS.writeFileSync(file, `${kept.join("\n")}\n`);
     const error = await resumeWorkflow(
       runId,
       twoTools,

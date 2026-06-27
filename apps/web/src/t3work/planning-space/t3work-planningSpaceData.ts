@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Planning space data adapter (spec §10): maps backlog `ProjectTicket`s into
  * the scene's domain model. Encodes the real-data findings (§10.3):

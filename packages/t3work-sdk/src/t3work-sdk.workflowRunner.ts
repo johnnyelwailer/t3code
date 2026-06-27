@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Per-run plumbing: read the journal, build the tool/script handler contexts, run the
  * workflow body, and persist/verify the recorded inputs hash. The {@link executeRun}

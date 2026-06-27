@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Journal path helpers + run-metadata persistence for the durable-execution engine.
  *
@@ -11,12 +12,12 @@
  * `.t3work-runs/<run-id>/journal.jsonl` is the MVP on-disk shape the spec documents.
  */
 
-import { createRequire } from "node:module";
+import * as NodeModule from "node:module";
 
 import * as Schema from "effect/Schema";
 
-// `fs`/`path` via createRequire — see the note in t3work-sdk.journalWriter.ts.
-const nodeRequire = createRequire(import.meta.url);
+// `fs`/`path` via NodeModule.createRequire — see the note in t3work-sdk.journalWriter.ts.
+const nodeRequire = NodeModule.createRequire(import.meta.url);
 
 interface NodeFsModule {
   readonly writeFileSync: (path: string, data: string) => void;

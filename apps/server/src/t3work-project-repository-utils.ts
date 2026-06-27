@@ -1,4 +1,5 @@
-import * as OS from "node:os";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeOS from "node:os";
 import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 
@@ -71,10 +72,10 @@ export const normalizeT3workWorkspaceRoot = Effect.fn("normalizeT3workWorkspaceR
   const path = yield* Path.Path;
   const trimmed = workspaceRoot.trim();
   if (trimmed === "~") {
-    return OS.homedir();
+    return NodeOS.homedir();
   }
   if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
-    return path.join(OS.homedir(), trimmed.slice(2));
+    return path.join(NodeOS.homedir(), trimmed.slice(2));
   }
   return path.resolve(trimmed);
 });

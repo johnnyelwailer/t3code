@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeCrypto from "node:crypto";
 
 import { buildT3WorkProjectProfileManifest } from "@t3tools/t3work-skill-packs";
 
@@ -27,7 +28,7 @@ export type T3WorkProjectSetupWriteDecision = {
 };
 
 export function createT3WorkProjectSetupContentHash(contents: string): string {
-  return `sha256:${createHash("sha256").update(contents).digest("hex")}`;
+  return `sha256:${NodeCrypto.createHash("sha256").update(contents).digest("hex")}`;
 }
 
 export function buildT3WorkProjectAgentsManagedRefresh(profile: ProjectSetupProfileDefinition) {

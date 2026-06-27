@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { ChevronRightIcon, FolderIcon, SquarePenIcon } from "lucide-react";

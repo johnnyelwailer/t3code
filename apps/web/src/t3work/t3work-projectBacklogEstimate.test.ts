@@ -58,17 +58,17 @@ describe("project backlog estimate", () => {
     });
   });
 
-  it("renders bug estimates in hours", () => {
+  it("renders bug estimates in story points", () => {
     expect(
       getProjectTicketEstimatePresentation(
         createTicket({ id: "bug", issueType: "Bug", estimateValue: 1.5 }),
       ),
     ).toEqual({
-      label: "Hours",
+      label: "Story Points",
       editable: true,
       numericValue: 1.5,
       valueText: "1.5",
-      valueSuffix: "H",
+      valueSuffix: "SP",
     });
   });
 

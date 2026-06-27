@@ -25,13 +25,13 @@
  * corruption still fails loud.
  */
 
-import { createRequire } from "node:module";
+import * as NodeModule from "node:module";
 
 import * as Schema from "effect/Schema";
 
 import type { PrimitiveKind } from "./t3work-sdk.types.ts";
 
-const nodeRequire = createRequire(import.meta.url);
+const nodeRequire = NodeModule.createRequire(import.meta.url);
 interface NodeFsModule {
   readonly existsSync: (path: string) => boolean;
   readonly readFileSync: (path: string, encoding: "utf8") => string;

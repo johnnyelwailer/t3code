@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DEFAULT_CLIENT_SETTINGS, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
@@ -11,6 +12,7 @@ vi.mock("~/localApi", () => ({
 }));
 
 import {
+  configureStoredSidecarPersonalizationPersister,
   persistStoredSidecarPersonalization,
   readStoredSidecarPersonalizationFromClientSettings,
   readStoredSidecarPersonalizationFromServerSettings,
@@ -95,14 +97,8 @@ describe("sidecar composition persistence", () => {
   });
 
   it("round-trips item personalization fields through the shared settings key", async () => {
-    const updateSettings = vi.fn().mockResolvedValue(undefined);
-
-    mockReadLocalApi.mockReturnValue({
-      persistence: {},
-      server: {
-        updateSettings,
-      },
-    });
+    const persistJson = vi.fn().mockResolvedValue(undefined);
+    const resetPersister = configureStoredSidecarPersonalizationPersister(persistJson);
 
     persistStoredSidecarPersonalization({
       composition: {
@@ -120,17 +116,15 @@ describe("sidecar composition persistence", () => {
     });
 
     await vi.waitFor(() => {
-      expect(updateSettings).toHaveBeenCalledWith({
-        t3workStoredSidecarCompositionJson:
-          '{"composition":{"sections":[{"sectionId":"quick-starts","collapsed":true}]},"itemHides":{"quick-starts":["recipe-2"]},"itemPins":{"quick-starts":["recipe-3"]},"itemOrderOverrides":{"quick-starts":["recipe-4","recipe-3"]}}',
-      });
+      expect(persistJson).toHaveBeenCalledWith(
+        '{"composition":{"sections":[{"sectionId":"quick-starts","collapsed":true}]},"itemHides":{"quick-starts":["recipe-2"]},"itemPins":{"quick-starts":["recipe-3"]},"itemOrderOverrides":{"quick-starts":["recipe-4","recipe-3"]}}',
+      );
     });
 
     expect(
       readStoredSidecarPersonalizationFromServerSettings({
         ...DEFAULT_SERVER_SETTINGS,
-        t3workStoredSidecarCompositionJson:
-          updateSettings.mock.calls[0]?.[0]?.t3workStoredSidecarCompositionJson,
+        t3workStoredSidecarCompositionJson: persistJson.mock.calls[0]?.[0],
       }),
     ).toEqual({
       composition: {
@@ -146,17 +140,12 @@ describe("sidecar composition persistence", () => {
         "quick-starts": ["recipe-4", "recipe-3"],
       },
     });
+    resetPersister();
   });
 
   it("round-trips persisted sidecar composition through the server settings seam", async () => {
-    const updateSettings = vi.fn().mockResolvedValue(undefined);
-
-    mockReadLocalApi.mockReturnValue({
-      persistence: {},
-      server: {
-        updateSettings,
-      },
-    });
+    const persistJson = vi.fn().mockResolvedValue(undefined);
+    const resetPersister = configureStoredSidecarPersonalizationPersister(persistJson);
 
     persistStoredSidecarComposition({
       sections: [
@@ -166,17 +155,15 @@ describe("sidecar composition persistence", () => {
     });
 
     await vi.waitFor(() => {
-      expect(updateSettings).toHaveBeenCalledWith({
-        t3workStoredSidecarCompositionJson:
-          '{"composition":{"sections":[{"sectionId":"quick-starts","collapsed":true},{"sectionId":"recent-conversations","visible":false}]}}',
-      });
+      expect(persistJson).toHaveBeenCalledWith(
+        '{"composition":{"sections":[{"sectionId":"quick-starts","collapsed":true},{"sectionId":"recent-conversations","visible":false}]}}',
+      );
     });
 
     expect(
       readStoredSidecarCompositionFromServerSettings({
         ...DEFAULT_SERVER_SETTINGS,
-        t3workStoredSidecarCompositionJson:
-          updateSettings.mock.calls[0]?.[0]?.t3workStoredSidecarCompositionJson,
+        t3workStoredSidecarCompositionJson: persistJson.mock.calls[0]?.[0],
       }),
     ).toEqual({
       sections: [
@@ -184,5 +171,6 @@ describe("sidecar composition persistence", () => {
         { sectionId: "recent-conversations", visible: false },
       ],
     });
+    resetPersister();
   });
 });

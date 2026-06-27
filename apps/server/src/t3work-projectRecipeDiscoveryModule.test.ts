@@ -1,3 +1,5 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - test harness reads a fixture workspace + temp dir.
 /**
  * Proves the recipe-authoring vertical slice (Epic 16): a recipe hand-authored as a typed
@@ -16,10 +18,10 @@
  * `Inputs`. These `@ts-expect-error`s are enforced by `tsgo` (apps/server typechecks its tests).
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -34,18 +36,23 @@ import { discoverProjectRecipes } from "./t3work-projectRecipeDiscovery.ts";
 import { launchWorkflowRecipe } from "./t3work-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 
-const fixtureRoot = join(dirname(fileURLToPath(import.meta.url)), "../__fixtures__");
-const workspaceRoot = mkdtempSync(join(fixtureRoot, "t3work-recipe-module-workspace-"));
-const runsRoot = mkdtempSync(join(tmpdir(), "t3work-recipe-module-"));
+const fixtureRoot = NodePath.join(
+  NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
+  "../__fixtures__",
+);
+const workspaceRoot = NodeFS.mkdtempSync(
+  NodePath.join(fixtureRoot, "t3work-recipe-module-workspace-"),
+);
+const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-recipe-module-"));
 afterAll(() => {
-  rmSync(workspaceRoot, { recursive: true, force: true });
-  rmSync(runsRoot, { recursive: true, force: true });
+  NodeFS.rmSync(workspaceRoot, { recursive: true, force: true });
+  NodeFS.rmSync(runsRoot, { recursive: true, force: true });
 });
 
-const recipeRoot = join(workspaceRoot, ".t3work", "recipes", "example-pr-review");
-mkdirSync(recipeRoot, { recursive: true });
-writeFileSync(
-  join(recipeRoot, "example-pr-review.workflow.ts"),
+const recipeRoot = NodePath.join(workspaceRoot, ".t3work", "recipes", "example-pr-review");
+NodeFS.mkdirSync(recipeRoot, { recursive: true });
+NodeFS.writeFileSync(
+  NodePath.join(recipeRoot, "example-pr-review.workflow.ts"),
   `
 import { Schema } from "effect";
 
@@ -82,8 +89,8 @@ const decision = await thread.askUser(\`Merge "\${input.prTitle}"?\\n\\n\${revie
 return { summary: review.summary, merged: decision.merge };
 `,
 );
-writeFileSync(
-  join(recipeRoot, "recipe.ts"),
+NodeFS.writeFileSync(
+  NodePath.join(recipeRoot, "recipe.ts"),
   `
 import { defineRecipe, defineWorkflow } from "@t3work/sdk";
 

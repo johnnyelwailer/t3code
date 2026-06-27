@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { PlanningNodeKind, PlanningSpaceCtx } from "./t3work-planningSpaceControllerTypes";
 import type { PlanningSpaceControllerRefs } from "./t3work-usePlanningSpaceControllerRefs";
 import type { PlanningSpaceViewModel } from "./t3work-planningSpaceViewModel";

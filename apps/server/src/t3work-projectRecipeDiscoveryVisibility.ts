@@ -1,9 +1,10 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import { pathToFileURL } from "node:url";
+import * as NodeURL from "node:url";
 import { queryableToReadonlyArray } from "@t3tools/project-context";
 import {
   matchRecipes,
@@ -66,7 +67,7 @@ const evaluateVisibleModule = Effect.fn("evaluateVisibleModule")(function* (inpu
     yield* Effect.serviceOption(T3workToolBroker),
     () => NoopT3workToolBroker,
   );
-  const moduleUrl = pathToFileURL(input.modulePath);
+  const moduleUrl = NodeURL.pathToFileURL(input.modulePath);
   moduleUrl.searchParams.set("v", String(yield* Clock.currentTimeMillis));
   const imported = (yield* Effect.tryPromise(() => import(moduleUrl.toString()))) as {
     readonly visible?: (

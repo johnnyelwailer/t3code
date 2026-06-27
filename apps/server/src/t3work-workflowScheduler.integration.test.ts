@@ -1,3 +1,5 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - scheduler durability test reads a workflow fixture + temp dir.
 /**
  * Scheduler durability acceptance (Epic 27 §The scheduler service — the load-bearing slice).
@@ -16,10 +18,10 @@
  * downtime catch-up guarantee).
  */
 
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
 import { assert, it } from "@effect/vitest";
 import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
@@ -53,11 +55,11 @@ import {
   type WorkflowSchedulerClock,
 } from "./t3work-workflowScheduler.ts";
 
-const workflowPath = fileURLToPath(
+const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3work-exampleTimer.workflow.ts", import.meta.url),
 );
-const runsRoot = mkdtempSync(join(tmpdir(), "t3work-scheduler-"));
-afterAll(() => rmSync(runsRoot, { recursive: true, force: true }));
+const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-scheduler-"));
+afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
 
 const projectId = ProjectId.make("proj-scheduler");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
@@ -257,7 +259,7 @@ schedulerLayer("workflow scheduler — DB-backed clock park survives a restart",
       assert.isNull(finalRow.pendingCorrelationId);
       assert.isUndefined(registry.getRun(runId)); // completed runs are unregistered
       assert.isFalse(manual.armedDelay() !== undefined); // no timer remains
-      assert.isFalse(existsSync(join(runsRoot, runId))); // NO local-disk journal
+      assert.isFalse(NodeFS.existsSync(NodePath.join(runsRoot, runId))); // NO local-disk journal
     }),
   );
 

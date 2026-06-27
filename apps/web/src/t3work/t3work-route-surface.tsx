@@ -12,6 +12,7 @@ import {
   type T3workRouteSearch,
 } from "~/t3work/t3work-routeState";
 import { readActiveThreadIdFromView } from "~/t3work/t3work-types";
+import { Route as RootRoute } from "~/routes/__root";
 
 import "~/t3work/t3work-index.css";
 
@@ -28,8 +29,6 @@ function resolveWsBaseUrl(): string {
 
   return "ws://localhost:3773";
 }
-
-type AuthState = "checking" | "authenticated" | "unauthenticated";
 
 function buildRouteSearch(
   search: T3workRouteSearch,
@@ -50,7 +49,9 @@ function buildRouteSearch(
 
 export function T3workRouteSurface() {
   const [backend] = useState(() => createT3Backend(resolveWsBaseUrl()));
-  const [authState, setAuthState] = useState<AuthState>("checking");
+  const { authGateState } = RootRoute.useRouteContext();
+  const authenticated =
+    authGateState.status === "authenticated" || authGateState.status === "hosted-static";
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useSearch({
@@ -65,54 +66,36 @@ export function T3workRouteSurface() {
   const viewTicketId = view?.type === "ticket" ? view.ticketId : null;
 
   useEffect(() => {
-    let cancelled = false;
-    const checkSession = async () => {
-      try {
-        const response = await fetch("/api/auth/session", { credentials: "include" });
-        const session = (await response.json().catch(() => null)) as {
-          authenticated?: boolean;
-        } | null;
-        if (cancelled) return;
-        setAuthState(session?.authenticated ? "authenticated" : "unauthenticated");
-      } catch {
-        if (cancelled) return;
-        setAuthState("unauthenticated");
-      }
-    };
-
-    void checkSession();
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
-
-  useEffect(() => {
-    if (authState !== "authenticated") {
+    if (!authenticated) {
       return;
     }
     void backend.connect();
     return () => {
       void backend.disconnect();
     };
-  }, [authState, backend]);
+  }, [authenticated, backend]);
 
   useEffect(() => {
     recordT3WorkThreadDebug("route-surface.state", {
       pathname,
-      authState,
+      authState: authGateState.status,
       isCreateRoute,
       viewType,
       viewProjectId,
       viewThreadId,
       viewTicketId,
     });
-  }, [authState, isCreateRoute, pathname, viewProjectId, viewThreadId, viewTicketId, viewType]);
+  }, [
+    authGateState.status,
+    isCreateRoute,
+    pathname,
+    viewProjectId,
+    viewThreadId,
+    viewTicketId,
+    viewType,
+  ]);
 
-  if (authState === "checking") {
-    return <div className="flex min-h-0 flex-1 items-center justify-center bg-background" />;
-  }
-
-  if (authState === "unauthenticated") {
+  if (!authenticated) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center bg-background p-6">
         <div className="w-full max-w-xl rounded-lg border border-border/70 bg-card/30 p-8 shadow-sm/5">

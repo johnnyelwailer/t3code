@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectTicket } from "~/t3work/t3work-types";
 import { readLocalApi } from "~/localApi";
 export { buildPinnedOnlyMyActivityFeed } from "./t3work-projectSidebarPinnedOnlyFeed";

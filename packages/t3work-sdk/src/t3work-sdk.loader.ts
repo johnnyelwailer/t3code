@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The `.workflow.ts` loader (Epic 25 §Static-extraction rules). This is the loader — it
  * transpiles, statically extracts `meta`, and executes the body. It is **not** a sandbox
@@ -27,8 +28,8 @@
  * workflows are in scope.
  */
 
-import { createRequire } from "node:module";
-import { createContext, runInContext } from "node:vm";
+import * as NodeModule from "node:module";
+import * as NodeVM from "node:vm";
 
 import type * as TsApi from "typescript";
 
@@ -41,7 +42,7 @@ import {
 } from "./t3work-sdk.transpile.ts";
 import { deterministicGlobals, hostSource } from "./t3work-sdk.workflowGlobals.ts";
 
-const nodeRequire = createRequire(import.meta.url);
+const nodeRequire = NodeModule.createRequire(import.meta.url);
 
 let cachedTs: typeof TsApi | undefined;
 function loadTypescript(): typeof TsApi {
@@ -131,10 +132,10 @@ export function extractMeta(
     Schema: schema,
   };
   context["globalThis"] = context;
-  createContext(context);
+  NodeVM.createContext(context);
   let result: unknown;
   try {
-    result = runInContext(prepared.metaScript, context, { filename: source.absolutePath });
+    result = NodeVM.runInContext(prepared.metaScript, context, { filename: source.absolutePath });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new WorkflowLoadError(
@@ -167,8 +168,8 @@ export async function runWorkflowBody(
 ): Promise<unknown> {
   const context: Record<string, unknown> = { ...globals };
   context["globalThis"] = context;
-  createContext(context);
-  const completion = runInContext(prepared.bodyScript, context, {
+  NodeVM.createContext(context);
+  const completion = NodeVM.runInContext(prepared.bodyScript, context, {
     filename: source.absolutePath,
   }) as Promise<unknown>;
   return await completion;

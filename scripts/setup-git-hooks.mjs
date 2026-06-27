@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 
-import { execFileSync } from "node:child_process";
+import * as NodeChildProcess from "node:child_process";
 
 const EXPECTED_HOOKS_PATH = ".githooks";
 

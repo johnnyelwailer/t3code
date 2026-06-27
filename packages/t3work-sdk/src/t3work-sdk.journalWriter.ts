@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Wire-encoding for the durable journal plus the fs append primitive.
  *
@@ -8,12 +9,12 @@
  * Stage-1 durability only; stage-2 atomic-rename lives behind a separate epic.
  */
 
-import { createRequire } from "node:module";
+import * as NodeModule from "node:module";
 
 import type { JournalEntry } from "./t3work-sdk.journalReader.ts";
 import type { PrimitiveKind } from "./t3work-sdk.types.ts";
 
-const nodeRequire = createRequire(import.meta.url);
+const nodeRequire = NodeModule.createRequire(import.meta.url);
 interface NodeFsModule {
   readonly openSync: (path: string, flags: string) => number;
   readonly writeSync: (fd: number, data: string) => number;

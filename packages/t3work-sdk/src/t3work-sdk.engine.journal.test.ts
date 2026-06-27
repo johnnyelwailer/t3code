@@ -1,10 +1,11 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Journal-correctness tests: void result envelope round-trip, JournalSerializeError on
  * non-JSON results, JournalSchemaError when a recorded result no longer decodes against
  * the result schema, torn-tail recovery, and the unregistered-script dispatch guard.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import * as NodeFS from "node:fs";
 
 import * as Schema from "effect/Schema";
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -136,11 +137,11 @@ describe("durable workflow engine — journal", () => {
       { runsRoot, tools: demoTools },
     );
     const file = journalFilePath(runsRoot, runId);
-    const lines = readFileSync(file, "utf8").trim().split("\n");
+    const lines = NodeFS.readFileSync(file, "utf8").trim().split("\n");
     const first = JSON.parse(lines[0] ?? "{}") as Record<string, unknown>;
     first["result"] = { v: { approved: 1, missing: true } };
     lines[0] = JSON.stringify(first);
-    writeFileSync(file, `${lines.join("\n")}\n`);
+    NodeFS.writeFileSync(file, `${lines.join("\n")}\n`);
     const error = await resumeWorkflow(
       runId,
       twoTools,
@@ -162,11 +163,11 @@ describe("durable workflow engine — journal", () => {
       { runsRoot, tools: demoTools },
     );
     const file = journalFilePath(runsRoot, runId);
-    const fullText = readFileSync(file, "utf8");
+    const fullText = NodeFS.readFileSync(file, "utf8");
     expect(fullText.trim().split("\n").length).toBe(2);
     expect(fullText.endsWith("\n")).toBe(true);
     const torn = '{"seq":3,"callId":"3:tool:demo.approve",';
-    writeFileSync(file, `${fullText}${torn}`);
+    NodeFS.writeFileSync(file, `${fullText}${torn}`);
     const warnings: string[] = [];
     const journal = readJournal(file, (msg) => warnings.push(msg));
     expect(journal.size).toBe(2);
@@ -175,7 +176,7 @@ describe("durable workflow engine — journal", () => {
     expect(warnings[0]).toContain(file);
     const allLines = `${fullText}${torn}`.trim().split("\n");
     const corrupted = ["{not-json", ...allLines.slice(1)].join("\n");
-    writeFileSync(file, `${corrupted}\n`);
+    NodeFS.writeFileSync(file, `${corrupted}\n`);
     expect(() => readJournal(file, () => {})).toThrow(/Corrupt journal entry/);
   });
 

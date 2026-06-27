@@ -1,27 +1,28 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-import { createRequire } from "node:module";
-import { cwd } from "node:process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeAsyncHooks from "node:async_hooks";
+import * as NodeModule from "node:module";
+import * as NodeProcess from "node:process";
+import * as NodeURL from "node:url";
 
 import * as Schema from "effect/Schema";
 
 import type { WorkflowRuntime, WorkflowSdkRegistry } from "./t3work-sdk.types.ts";
 
 const REGISTRY_SYMBOL = Symbol.for("@t3work/sdk/registry");
-const CURRENT_MODULE_FILE = fileURLToPath(import.meta.url);
+const CURRENT_MODULE_FILE = NodeURL.fileURLToPath(import.meta.url);
 // `defineWorkflow` lives in the sibling dispatch module, so its frame sits between this
 // file and the true caller. Skip it too — otherwise a relative workflow path resolves
 // against the SDK rather than the file (or workflow body) that called `defineWorkflow`.
 const DISPATCH_MODULE_FILE = CURRENT_MODULE_FILE.replace(/\.internal\.ts$/, ".ts");
 const SDK_FRAME_FILES = new Set([CURRENT_MODULE_FILE, DISPATCH_MODULE_FILE]);
-const nodeRequire = createRequire(import.meta.url);
+const nodeRequire = NodeModule.createRequire(import.meta.url);
 
 type NodeFsModule = {
   readonly existsSync: (path: string) => boolean;
   readonly statSync: (path: string) => { readonly isFile: () => boolean };
 };
 
-export const runtimeStorage = new AsyncLocalStorage<WorkflowRuntime>();
+export const runtimeStorage = new NodeAsyncHooks.AsyncLocalStorage<WorkflowRuntime>();
 
 export function getRegistry(): WorkflowSdkRegistry {
   const scope = globalThis as typeof globalThis & {
@@ -60,7 +61,7 @@ export function duplicateRegistrationError(kind: string, id: string): Error {
 }
 
 function normalizeFilePath(fileName: string): string {
-  return fileName.startsWith("file://") ? fileURLToPath(fileName) : fileName;
+  return fileName.startsWith("file://") ? NodeURL.fileURLToPath(fileName) : fileName;
 }
 
 function findCallerFilePath(): string | undefined {
@@ -129,7 +130,7 @@ export function resolveWorkflowAbsolutePath(displayPath: string): {
   readonly callerFilePath?: string;
 } {
   if (displayPath.startsWith("file://")) {
-    return { absolutePath: fileURLToPath(displayPath) };
+    return { absolutePath: NodeURL.fileURLToPath(displayPath) };
   }
 
   if (isAbsoluteFilePath(displayPath)) {
@@ -138,10 +139,10 @@ export function resolveWorkflowAbsolutePath(displayPath: string): {
 
   const callerFilePath = findCallerFilePath();
   const baseUrl = callerFilePath
-    ? new URL(".", pathToFileURL(callerFilePath))
-    : pathToFileURL(`${cwd()}/`);
+    ? new URL(".", NodeURL.pathToFileURL(callerFilePath))
+    : NodeURL.pathToFileURL(`${NodeProcess.cwd()}/`);
   return {
-    absolutePath: fileURLToPath(new URL(displayPath, baseUrl)),
+    absolutePath: NodeURL.fileURLToPath(new URL(displayPath, baseUrl)),
     ...(callerFilePath ? { callerFilePath } : {}),
   };
 }

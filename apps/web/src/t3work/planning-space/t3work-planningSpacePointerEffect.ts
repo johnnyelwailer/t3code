@@ -171,6 +171,5 @@ export function usePlanningSpacePointerEffect(ctxRef: MutableRefObject<PlanningS
       stage.removeEventListener("contextmenu", onContextMenuEvent);
       window.removeEventListener("keydown", onKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c.engineReady, c.grouping, c.vm.layout, c.vm.data]);
 }

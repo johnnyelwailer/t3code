@@ -1,4 +1,5 @@
-import { Buffer, isUtf8 } from "node:buffer";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeBuffer from "node:buffer";
 import * as Effect from "effect/Effect";
 import type { VcsProcessShape } from "./t3work-vcsProcessShape.ts";
 import { buildContentsPath, runJsonObject } from "./t3work-github-routes-pr-api.ts";
@@ -56,7 +57,7 @@ function fetchRepositoryFileVersion(input: {
 
       const raw = encoded.replace(/\n/g, "");
       const buffer = Buffer.from(raw, "base64");
-      if (isUtf8(buffer)) {
+      if (NodeBuffer.isUtf8(buffer)) {
         return {
           path: input.path,
           ref: input.ref,

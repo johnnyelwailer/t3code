@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
 import { describe, expect, it } from "vite-plus/test";
 
 import { AtlassianIntegrationProvider } from "./provider.ts";
@@ -18,17 +19,17 @@ const describeLive = RUN_LIVE_TESTS ? describe : describe.skip;
 function resolveAuthFilePath(): string {
   return (
     process.env.T3WORK_ATLASSIAN_LIVE_AUTH_PATH ??
-    `${homedir()}/.t3/dev/secrets/t3work-atlassian-auths.bin`
+    `${NodeOS.homedir()}/.t3/dev/secrets/t3work-atlassian-auths.bin`
   );
 }
 
 function loadLiveAuth(): JiraApiAuth {
   const authFilePath = resolveAuthFilePath();
-  if (!existsSync(authFilePath)) {
+  if (!NodeFS.existsSync(authFilePath)) {
     throw new Error(`Missing Atlassian auth file: ${authFilePath}`);
   }
 
-  const parsed = JSON.parse(readFileSync(authFilePath, "utf8")) as PersistedAuths;
+  const parsed = JSON.parse(NodeFS.readFileSync(authFilePath, "utf8")) as PersistedAuths;
   const requestedAccountId = process.env.T3WORK_ATLASSIAN_LIVE_ACCOUNT_ID?.trim();
   const entry = requestedAccountId
     ? parsed.auths?.find((candidate) => candidate.accountId === requestedAccountId)

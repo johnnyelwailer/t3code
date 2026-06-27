@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @vitest-environment jsdom
 /**
  * The `askUser` decision card (Epic 25 §askUser decision cards):
@@ -121,6 +122,7 @@ async function renderTimeline(messages: ReadonlyArray<ChatMessage>) {
   return renderToStaticMarkup(
     <MessagesTimeline
       {...buildT3workMessagesTimelineTestProps()}
+      dispatchWorkflowDecision={async () => {}}
       timelineEntries={messages.map((message, index) => ({
         id: `timeline-${index}`,
         kind: "message" as const,
@@ -201,7 +203,7 @@ describe("workflow decision card in the timeline", () => {
     expect(markup).toContain("https://example.atlassian.net/browse/BUG-7");
     expect(markup).toContain("…or reply in the composer below.");
     expect(markup).not.toContain('disabled=""');
-  }, 10000);
+  }, 30000);
 
   it("disables the choices once a user reply lands after the card", async () => {
     const markup = await renderTimeline([

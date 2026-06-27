@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Shared test fixtures for the durable-execution engine test suite. Keeps the per-test
  * counters and the SDK tool/script/workflow definitions in one file so the test files
@@ -5,9 +6,9 @@
  * compliance) all import the same setup.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import * as Schema from "effect/Schema";
 
@@ -250,7 +251,7 @@ export const e2eReviewWorkflow = defineWorkflow<typeof E2eReviewWorkflow>(
   "./__fixtures__/t3work-sdk.e2eReview.workflow.ts",
 );
 
-export const runsRoot = mkdtempSync(join(tmpdir(), "t3work-engine-"));
+export const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-engine-"));
 export function cleanupRunsRoot(): void {
-  rmSync(runsRoot, { recursive: true, force: true });
+  NodeFS.rmSync(runsRoot, { recursive: true, force: true });
 }

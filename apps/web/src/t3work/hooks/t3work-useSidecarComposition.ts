@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import {
   resolveSidecarComposition,
@@ -8,6 +8,7 @@ import {
 
 import { useServerConfig } from "~/t3work/t3work-serverState";
 import {
+  configureStoredSidecarPersonalizationPersister,
   persistStoredSidecarPersonalization,
   readStoredSidecarPersonalizationFromServerSettings,
 } from "~/t3work/hooks/t3work-sidecarCompositionPersistence";
@@ -18,6 +19,9 @@ import {
   updateSectionItemMap,
   updateSectionState,
 } from "~/t3work/hooks/t3work-sidecarCompositionState";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { serverEnvironment } from "~/state/server";
+import { useAtomCommand } from "~/state/use-atom-command";
 
 export function useT3workSidecarComposition(input: {
   bundledDefault: SidecarComposition;
@@ -25,10 +29,27 @@ export function useT3workSidecarComposition(input: {
   projectDefault?: SidecarComposition | undefined;
 }) {
   const serverConfig = useServerConfig();
+  const environmentId = usePrimaryEnvironmentId();
+  const updateServerSettings = useAtomCommand(serverEnvironment.updateSettings, {
+    label: "t3work.sidecar.updateSettings",
+  });
   const personalization = useMemo(
     () => readStoredSidecarPersonalizationFromServerSettings(serverConfig?.settings),
     [serverConfig?.settings.t3workStoredSidecarCompositionJson],
   );
+
+  useEffect(() => {
+    if (environmentId === null) {
+      return;
+    }
+    return configureStoredSidecarPersonalizationPersister(async (nextJson) => {
+      await updateServerSettings({
+        environmentId,
+        input: { patch: { t3workStoredSidecarCompositionJson: nextJson } },
+      });
+    });
+  }, [environmentId, updateServerSettings]);
+
   const composition = useMemo(
     () =>
       resolveSidecarComposition({

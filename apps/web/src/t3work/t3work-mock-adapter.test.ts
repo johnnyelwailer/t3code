@@ -1,3 +1,5 @@
+/* oxlint-disable unicorn/prefer-array-find -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { readLocalApi } from "~/localApi";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { sourceControlEnvironment } from "~/state/sourceControl";
+import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 import { asT3workPollingBackend } from "~/t3work/backend/t3work-pollingBackend";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import {
   groupGitHubActivityByWorkItem,
-  parseGitHubHostFromDiscovery,
-  parseOptionString,
   toGitHubWorkActivityItems,
   type GitHubWorkActivityItem,
 } from "~/t3work/t3work-githubActivity";
@@ -24,6 +24,7 @@ import {
   GITHUB_ACTIVITY_POLL_INTERVAL_MS,
   startBrowserPolling,
 } from "./t3work-integrationPolling";
+import { resolveProjectGitHubActivityDiscovery } from "./t3work-useProjectGitHubActivityDiscovery";
 
 type UseProjectGitHubActivityOptions = {
   readonly project: ProjectShellProject;
@@ -37,6 +38,10 @@ export function useProjectGitHubActivity({
   enabled = true,
 }: UseProjectGitHubActivityOptions) {
   const backend = asT3workPollingBackend(useBackend());
+  const environmentId = usePrimaryEnvironmentId();
+  const discoverSourceControl = useAtomQueryRunner(sourceControlEnvironment.discovery, {
+    reportFailure: false,
+  });
   const cacheKey = useMemo(
     () =>
       `github:projectActivity:${project.id}:${project.source.externalProjectKey ?? "none"}:${project.title}:${normalizeCacheList(linkedRepositoryUrls)}`,
@@ -87,19 +92,14 @@ export function useProjectGitHubActivity({
         // Prefer cached metadata and avoid rediscovering source control on every poll cycle.
         let resolvedHost = cachedRecord?.value.host ?? host;
         let discoveredAccount = cachedRecord?.value.account ?? account;
-        if (!resolvedHost || resolvedHost === "github.com") {
-          const localApi = readLocalApi();
-          if (localApi) {
-            const discovery = await localApi.server.discoverSourceControl();
-            resolvedHost = parseGitHubHostFromDiscovery(discovery);
-            const githubProvider = discovery.sourceControlProviders.find(
-              (provider) => provider.kind === "github",
-            );
-            discoveredAccount = githubProvider
-              ? parseOptionString(githubProvider.auth.account)
-              : discoveredAccount;
-          }
-        }
+        const discovery = await resolveProjectGitHubActivityDiscovery({
+          environmentId,
+          discoverSourceControl,
+          host: resolvedHost,
+          account: discoveredAccount,
+        });
+        resolvedHost = discovery.host;
+        discoveredAccount = discovery.account;
 
         const response = await backend.github.pollInbox({
           host: resolvedHost,
@@ -183,6 +183,8 @@ export function useProjectGitHubActivity({
     project.source.externalProjectKey,
     project.title,
     account,
+    discoverSourceControl,
+    environmentId,
     host,
   ]);
 

@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @effect-diagnostics nodeBuiltinImport:off - test harness reads a workflow fixture + temp dir.
 /**
  * Proves a recipe's `.workflow.ts` runs end-to-end through the REAL launch path
@@ -9,10 +10,10 @@
  * launching thread.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
 import { type OrchestrationCommand, ProjectId } from "@t3tools/contracts";
 import { ProviderInstanceId } from "@t3tools/contracts";
@@ -22,11 +23,11 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 import { launchWorkflowRecipe } from "./t3work-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 
-const workflowPath = fileURLToPath(
+const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3work-exampleReview.workflow.ts", import.meta.url),
 );
-const runsRoot = mkdtempSync(join(tmpdir(), "t3work-launch-"));
-afterAll(() => rmSync(runsRoot, { recursive: true, force: true }));
+const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-launch-"));
+afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
 
 describe("launchWorkflowRecipe — real launch path", () => {
   it("dispatches orchestration commands, parks on each ask, and completes when replies land", async () => {

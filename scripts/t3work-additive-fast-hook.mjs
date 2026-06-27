@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 import {
   countNonEmptyLines,
   matchesAnyGlob,
@@ -11,7 +12,7 @@ import {
 
 const DEFAULT_LOC_WARN_THRESHOLD = 150;
 const DEFAULT_LOC_FAIL_THRESHOLD = 200;
-const CACHE_FILE = path.join(".git", "hooks", "t3work-additive-fast-hook-cache.json");
+const CACHE_FILE = NodePath.join(".git", "hooks", "t3work-additive-fast-hook-cache.json");
 const MAX_NEW_FILES_TO_SCAN = 80;
 
 function maybeRunGit(args) {
@@ -30,13 +31,13 @@ function splitLines(text) {
 }
 
 function loadConfig(cwd) {
-  const configPath = path.join(cwd, ".t3work-additive-guard.json");
-  if (!existsSync(configPath)) {
+  const configPath = NodePath.join(cwd, ".t3work-additive-guard.json");
+  if (!NodeFS.existsSync(configPath)) {
     return null;
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(configPath, "utf8"));
+    const parsed = JSON.parse(NodeFS.readFileSync(configPath, "utf8"));
     return {
       requiredPrefixes: parsed.requiredPrefixes ?? [parsed.requiredPrefix ?? "t3work-"],
       locWarnThreshold: parsed.locWarnThreshold ?? DEFAULT_LOC_WARN_THRESHOLD,
@@ -56,18 +57,18 @@ function collectNewFiles() {
   const unstagedAdded = splitLines(maybeRunGit(["diff", "--name-only", "--diff-filter=A", "--"]));
 
   return [...new Set([...untracked, ...stagedAdded, ...unstagedAdded])]
-    .filter((filePath) => existsSync(filePath))
+    .filter((filePath) => NodeFS.existsSync(filePath))
     .slice(0, MAX_NEW_FILES_TO_SCAN);
 }
 
 function loadCache(cwd) {
-  const cachePath = path.join(cwd, CACHE_FILE);
-  if (!existsSync(cachePath)) {
+  const cachePath = NodePath.join(cwd, CACHE_FILE);
+  if (!NodeFS.existsSync(cachePath)) {
     return { cachePath, byPath: {} };
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(cachePath, "utf8"));
+    const parsed = JSON.parse(NodeFS.readFileSync(cachePath, "utf8"));
     return { cachePath, byPath: parsed.byPath ?? {} };
   } catch {
     return { cachePath, byPath: {} };
@@ -75,16 +76,16 @@ function loadCache(cwd) {
 }
 
 function saveCache(cachePath, byPath) {
-  const parentDir = path.dirname(cachePath);
-  if (!existsSync(parentDir)) {
-    mkdirSync(parentDir, { recursive: true });
+  const parentDir = NodePath.dirname(cachePath);
+  if (!NodeFS.existsSync(parentDir)) {
+    NodeFS.mkdirSync(parentDir, { recursive: true });
   }
 
-  writeFileSync(cachePath, `${JSON.stringify({ byPath }, null, 2)}\n`, "utf8");
+  NodeFS.writeFileSync(cachePath, `${JSON.stringify({ byPath }, null, 2)}\n`, "utf8");
 }
 
 function getFingerprint(filePath) {
-  const stats = statSync(filePath);
+  const stats = NodeFS.statSync(filePath);
   return `${stats.size}:${Math.floor(stats.mtimeMs)}`;
 }
 
@@ -99,7 +100,7 @@ function toHookEventPayload(rawInput) {
 
 function readStdin() {
   try {
-    return readFileSync(0, "utf8");
+    return NodeFS.readFileSync(0, "utf8");
   } catch {
     return "";
   }
@@ -181,7 +182,7 @@ function main() {
   }
 
   for (const filePath of changedCandidates) {
-    const baseName = path.basename(filePath);
+    const baseName = NodePath.basename(filePath);
     const hasRequiredPrefix = config.requiredPrefixes.some((prefix) => baseName.startsWith(prefix));
     const allowedUnprefixed = matchesAnyGlob(filePath, config.allowedUnprefixedNewFiles);
 

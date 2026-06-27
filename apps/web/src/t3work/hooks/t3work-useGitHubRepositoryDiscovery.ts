@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { readLocalApi } from "~/localApi";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { sourceControlEnvironment } from "~/state/sourceControl";
+import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import {
   normalizeCacheList,
@@ -24,6 +27,10 @@ export function useGitHubRepositoryDiscovery({
   linkedRepositoryUrls: ReadonlyArray<string>;
 }) {
   const backend = useBackend();
+  const environmentId = usePrimaryEnvironmentId();
+  const discoverSourceControl = useAtomQueryRunner(sourceControlEnvironment.discovery, {
+    reportFailure: false,
+  });
   const authCache = readIntegrationCache<GitHubAuthCache>("github:auth")?.value;
   const discoveryCacheKey = useMemo(
     () =>
@@ -110,15 +117,25 @@ export function useGitHubRepositoryDiscovery({
     const run = async () => {
       setLoadingAuth(true);
       try {
-        const api = readLocalApi();
-        if (!api) {
+        if (environmentId === null) {
           if (!cancelled) {
             setAuthStatus("unknown");
-            setAuthDetail("Local API is unavailable.");
+            setAuthDetail("Server environment is unavailable.");
           }
           return;
         }
-        const discovery = await api.server.discoverSourceControl();
+        const discoveryResult = await discoverSourceControl({
+          environmentId,
+          input: {},
+        });
+        if (AsyncResult.isFailure(discoveryResult)) {
+          if (!cancelled) {
+            setAuthStatus("unknown");
+            setAuthDetail("Failed to inspect GitHub auth.");
+          }
+          return;
+        }
+        const discovery = discoveryResult.value;
         if (cancelled) return;
         const auth = parseGitHubAuth(discovery);
         writeIntegrationCache("github:auth", {
@@ -147,7 +164,7 @@ export function useGitHubRepositoryDiscovery({
     return () => {
       cancelled = true;
     };
-  }, [discoverSuggestions, enabled]);
+  }, [discoverSourceControl, discoverSuggestions, enabled, environmentId]);
 
   const visibleSuggestedUrls = useMemo(
     () => suggestedUrls.filter((url) => !linkedRepositoryUrls.includes(url)),

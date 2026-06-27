@@ -111,7 +111,6 @@ export function usePlanningSpaceEngineEffects(ctxRef: MutableRefObject<PlanningS
       engine.stop();
       c.engineRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

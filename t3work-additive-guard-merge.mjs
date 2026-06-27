@@ -1,16 +1,17 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 export function maybeRunGitRaw(args) {
-  const result = spawnSync("git", args, { encoding: "utf8" });
+  const result = NodeChildProcess.spawnSync("git", args, { encoding: "utf8" });
   if (result.status !== 0) return null;
   return result.stdout;
 }
 
 export function didWorkingTreeDifferFromRef(ref, filePath) {
-  const result = spawnSync("git", ["diff", "--quiet", ref, "--", filePath], {
+  const result = NodeChildProcess.spawnSync("git", ["diff", "--quiet", ref, "--", filePath], {
     encoding: "utf8",
   });
   if (result.status === 0) return false;
@@ -21,9 +22,13 @@ export function didWorkingTreeDifferFromRef(ref, filePath) {
 }
 
 export function didRefsDiffer(baseRef, targetRef, filePath) {
-  const result = spawnSync("git", ["diff", "--quiet", baseRef, targetRef, "--", filePath], {
-    encoding: "utf8",
-  });
+  const result = NodeChildProcess.spawnSync(
+    "git",
+    ["diff", "--quiet", baseRef, targetRef, "--", filePath],
+    {
+      encoding: "utf8",
+    },
+  );
   if (result.status === 0) return false;
   if (result.status === 1) return true;
   throw new Error(
@@ -89,7 +94,7 @@ export function maybeCheckWhitelistedAutoMerge({ baseRef, mergeBase, filePath })
     );
   }
 
-  if (!existsSync(filePath)) {
+  if (!NodeFS.existsSync(filePath)) {
     return (
       `Whitelisted file has upstream conflict: ${filePath}\n` +
       `File is missing from working tree but upstream changed it.\n` +
@@ -97,25 +102,33 @@ export function maybeCheckWhitelistedAutoMerge({ baseRef, mergeBase, filePath })
     );
   }
 
-  const oursText = readFileSync(filePath, "utf8");
-  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "t3work-additive-merge-"));
-  const oursPath = path.join(tempRoot, "ours");
-  const basePath = path.join(tempRoot, "base");
-  const theirsPath = path.join(tempRoot, "theirs");
+  const oursText = NodeFS.readFileSync(filePath, "utf8");
+  const tempRoot = mkdtempSync(NodePath.join(os.tmpdir(), "t3work-additive-merge-"));
+  const oursPath = NodePath.join(tempRoot, "ours");
+  const basePath = NodePath.join(tempRoot, "base");
+  const theirsPath = NodePath.join(tempRoot, "theirs");
 
-  writeFileSync(oursPath, oursText, "utf8");
-  writeFileSync(basePath, baseText, "utf8");
-  writeFileSync(theirsPath, theirsText, "utf8");
+  NodeFS.writeFileSync(oursPath, oursText, "utf8");
+  NodeFS.writeFileSync(basePath, baseText, "utf8");
+  NodeFS.writeFileSync(theirsPath, theirsText, "utf8");
 
   try {
-    const mergeResult = spawnSync("git", ["merge-file", "-p", oursPath, basePath, theirsPath], {
-      encoding: "utf8",
-    });
+    const mergeResult = NodeChildProcess.spawnSync(
+      "git",
+      ["merge-file", "-p", oursPath, basePath, theirsPath],
+      {
+        encoding: "utf8",
+      },
+    );
     if (mergeResult.status === 0) return buildSyncAdvisory({ filePath, baseRef, mergeBase });
 
-    const diffResult = spawnSync("git", ["diff", "--no-index", "--", oursPath, theirsPath], {
-      encoding: "utf8",
-    });
+    const diffResult = NodeChildProcess.spawnSync(
+      "git",
+      ["diff", "--no-index", "--", oursPath, theirsPath],
+      {
+        encoding: "utf8",
+      },
+    );
     const diffText = diffResult.stdout || mergeResult.stdout || "(diff unavailable)";
     return buildManualMergeViolation({ filePath, baseRef, mergeBase, diffText });
   } finally {

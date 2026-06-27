@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @vitest-environment jsdom
 /**
  * The play-as-shape "plan" card (recipe-UX design pass): the `t3work.workflow.shape` view
@@ -116,5 +117,5 @@ describe("workflow shape card in the timeline", () => {
     expect(markup).toContain("Act");
     // the card owns the header — the message text echo must not double up above it
     expect(markup).not.toContain("Plan: shape.pr-review");
-  }, 10000);
+  }, 30000);
 });

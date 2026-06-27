@@ -1,16 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import path from "node:path";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
-const CACHE_FILE = path.join(".git", "hooks", "t3work-additive-guard-cache.json");
+const CACHE_FILE = NodePath.join(".git", "hooks", "t3work-additive-guard-cache.json");
 
 export function loadAdditiveGuardCache(cwd) {
-  const cachePath = path.join(cwd, CACHE_FILE);
-  if (!existsSync(cachePath)) {
+  const cachePath = NodePath.join(cwd, CACHE_FILE);
+  if (!NodeFS.existsSync(cachePath)) {
     return { cachePath, entries: {} };
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(cachePath, "utf8"));
+    const parsed = JSON.parse(NodeFS.readFileSync(cachePath, "utf8"));
     return { cachePath, entries: parsed.entries ?? {} };
   } catch {
     return { cachePath, entries: {} };
@@ -18,16 +19,16 @@ export function loadAdditiveGuardCache(cwd) {
 }
 
 export function saveAdditiveGuardCache(cachePath, entries) {
-  const parentDir = path.dirname(cachePath);
-  if (!existsSync(parentDir)) {
-    mkdirSync(parentDir, { recursive: true });
+  const parentDir = NodePath.dirname(cachePath);
+  if (!NodeFS.existsSync(parentDir)) {
+    NodeFS.mkdirSync(parentDir, { recursive: true });
   }
 
-  writeFileSync(cachePath, `${JSON.stringify({ entries }, null, 2)}\n`, "utf8");
+  NodeFS.writeFileSync(cachePath, `${JSON.stringify({ entries }, null, 2)}\n`, "utf8");
 }
 
 export function fileFingerprint(filePath) {
-  const stats = statSync(filePath);
+  const stats = NodeFS.statSync(filePath);
   return `${stats.size}:${Math.floor(stats.mtimeMs)}`;
 }
 

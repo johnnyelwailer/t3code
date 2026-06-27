@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Load a `.workflow.ts`, build the body globals (tools/scripts trees + the 25.3 primitive
  * set), run it against a runtime, and decode its result. Shared by the top-level run and by
@@ -8,7 +9,7 @@
  * LOC ceiling.
  */
 
-import { createRequire } from "node:module";
+import * as NodeModule from "node:module";
 
 import * as Schema from "effect/Schema";
 
@@ -31,7 +32,7 @@ import { withWorkflowRuntime } from "./t3work-sdk.ts";
 import type * as T from "./t3work-sdk.types.ts";
 import { buildWorkflowGlobals } from "./t3work-sdk.workflowGlobals.ts";
 
-const nodeRequire = createRequire(import.meta.url);
+const nodeRequire = NodeModule.createRequire(import.meta.url);
 const fs = nodeRequire("node:fs") as { readonly readFileSync: (p: string, e: "utf8") => string };
 
 const defaultBroker: MessageBroker = {

@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The composition workflow-body primitives bound as globals: the black-boxed `parallel` /
  * `pipeline` / `workflow`, the durable timer `wait`, the `budget` accumulator, and the
@@ -12,7 +13,7 @@
  * primitive is the journal boundary (a documented Stage-1 tradeoff).
  */
 
-import { setTimeout as sleep } from "node:timers/promises";
+import * as NodeTimersPromises from "node:timers/promises";
 
 import { WorkflowError } from "./t3work-sdk.errors.ts";
 import type { WorkflowBudget } from "./t3work-sdk.primitiveTypes.ts";
@@ -124,7 +125,7 @@ export function createWorkflowPrimitives(deps: WorkflowPrimitivesDeps): Workflow
       decodeRecorded: (recorded) => recorded as { readonly deadline: number },
     });
     const remaining = deadline - deps.hostNow();
-    if (remaining > 0) await sleep(remaining);
+    if (remaining > 0) await NodeTimersPromises.setTimeout(remaining);
   };
 
   const budget: WorkflowBudget = {

@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Recipe-module discovery (Epic 16 §Plugin Modules): load a project-local `recipe.ts` — a typed
  * `defineRecipe(...)` plugin module — and map it onto the SAME {@link ProjectRecipeDiscovered}
@@ -17,7 +18,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import { pathToFileURL } from "node:url";
+import * as NodeURL from "node:url";
 
 import { queryableToReadonlyArray } from "@t3tools/project-context";
 import {
@@ -98,7 +99,7 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
   }) {
     const pathService = yield* Path.Path;
 
-    const moduleUrl = pathToFileURL(input.modulePath);
+    const moduleUrl = NodeURL.pathToFileURL(input.modulePath);
     moduleUrl.searchParams.set("v", String(yield* Clock.currentTimeMillis));
     const imported = (yield* Effect.tryPromise(() => import(moduleUrl.toString()))) as {
       readonly default?: AnyRecipeRef;

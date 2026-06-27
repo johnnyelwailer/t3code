@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeCrypto from "node:crypto";
 
 export type T3workPollEnvelope = {
   readonly enabled: true;
@@ -21,7 +22,7 @@ function normalizeFingerprint(value: unknown): string | undefined {
 }
 
 export function createT3workPollFingerprint(value: unknown): string {
-  return `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+  return `sha256:${NodeCrypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 }
 
 export function toT3workPollResult<T>(value: T, poll: T3workPollEnvelope): T3workPollResult<T> {

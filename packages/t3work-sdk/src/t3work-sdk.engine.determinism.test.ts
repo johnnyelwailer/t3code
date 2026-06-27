@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Deterministic-globals tests: the journaled `Date`/`Math.random`/`crypto.randomUUID`
  * round-trip (a resume replays the recorded value, not a fresh wall-clock/entropy read),
@@ -6,7 +7,7 @@
  * banning here — Stage-1 has no sandbox (trust model: "trusted project code").
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import * as NodeFS from "node:fs";
 
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -88,11 +89,11 @@ describe("durable workflow engine — deterministic globals", () => {
     // (a) args drift: tamper the recorded argsHash of the first now() call.
     const argsRun = await startWorkflow(nowWorkflow, {}, { runsRoot, tools: demoTools });
     const argsFile = journalFilePath(runsRoot, argsRun.runId);
-    const argsLines = readFileSync(argsFile, "utf8").trim().split("\n");
+    const argsLines = NodeFS.readFileSync(argsFile, "utf8").trim().split("\n");
     const argsEntry = JSON.parse(argsLines[0] ?? "{}") as { argsHash: string };
     argsEntry.argsHash = "f".repeat(64);
     argsLines[0] = JSON.stringify(argsEntry);
-    writeFileSync(argsFile, `${argsLines.join("\n")}\n`);
+    NodeFS.writeFileSync(argsFile, `${argsLines.join("\n")}\n`);
     const argsErr = await resumeWorkflow(
       argsRun.runId,
       nowWorkflow,
@@ -106,11 +107,11 @@ describe("durable workflow engine — deterministic globals", () => {
     // (b) call-identity drift: tamper the recorded kind so it no longer matches "now".
     const callRun = await startWorkflow(nowWorkflow, {}, { runsRoot, tools: demoTools });
     const callFile = journalFilePath(runsRoot, callRun.runId);
-    const callLines = readFileSync(callFile, "utf8").trim().split("\n");
+    const callLines = NodeFS.readFileSync(callFile, "utf8").trim().split("\n");
     const callEntry = JSON.parse(callLines[0] ?? "{}") as { kind: string };
     callEntry.kind = "random";
     callLines[0] = JSON.stringify(callEntry);
-    writeFileSync(callFile, `${callLines.join("\n")}\n`);
+    NodeFS.writeFileSync(callFile, `${callLines.join("\n")}\n`);
     const callErr = await resumeWorkflow(
       callRun.runId,
       nowWorkflow,

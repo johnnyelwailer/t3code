@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @effect-diagnostics nodeBuiltinImport:off - durability test reads a workflow fixture + temp dir.
 /**
  * Durability acceptance (Epic 25 §Open question 2). The whole point: a run parked on a
@@ -15,10 +16,10 @@
  * is ever written.
  */
 
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
 import { assert, it } from "@effect/vitest";
 import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
@@ -48,11 +49,11 @@ import {
 } from "./t3work-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 
-const workflowPath = fileURLToPath(
+const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3work-exampleReview.workflow.ts", import.meta.url),
 );
-const runsRoot = mkdtempSync(join(tmpdir(), "t3work-durable-"));
-afterAll(() => rmSync(runsRoot, { recursive: true, force: true }));
+const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-durable-"));
+afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
 
 const projectId = ProjectId.make("proj-durable");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
@@ -166,7 +167,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
       assert.strictEqual(finalRow.status, "completed");
       assert.isNull(finalRow.pendingCorrelationId);
       assert.isUndefined(restarted.getRun(runId)); // completed runs are unregistered
-      assert.isFalse(existsSync(join(runsRoot, runId))); // NO local-disk journal
+      assert.isFalse(NodeFS.existsSync(NodePath.join(runsRoot, runId))); // NO local-disk journal
     }),
   );
 
@@ -250,7 +251,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
 
       assert.deepStrictEqual(completed[0], { summary: "Backoff looks safe.", merged: false });
       assert.strictEqual(Option.getOrThrow(yield* repo.getById({ runId })).status, "completed");
-      assert.isFalse(existsSync(join(runsRoot, runId)));
+      assert.isFalse(NodeFS.existsSync(NodePath.join(runsRoot, runId)));
     }),
   );
 });

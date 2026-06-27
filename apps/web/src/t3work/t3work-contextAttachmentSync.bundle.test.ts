@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const backendHarness = vi.hoisted(() => ({

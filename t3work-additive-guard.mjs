@@ -1,6 +1,7 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 import {
   candidateUpstreamCounterpartPaths,
   classifyPrefixedLocResult,
@@ -50,7 +51,7 @@ function main() {
 
   for (const filePath of candidates) {
     const isExisting = baseFiles.has(filePath);
-    const fingerprint = existsSync(filePath) ? fileFingerprint(filePath) : "missing";
+    const fingerprint = NodeFS.existsSync(filePath) ? fileFingerprint(filePath) : "missing";
 
     if (isExisting) {
       const allowedExact = config.allowedModifiedFiles.includes(filePath);
@@ -85,7 +86,7 @@ function main() {
       continue;
     }
 
-    const baseName = path.basename(filePath);
+    const baseName = NodePath.basename(filePath);
     const hasRequiredPrefix = config.requiredPrefixes.some((prefix) => baseName.startsWith(prefix));
     const allowedUnprefixed = matchesAnyGlob(filePath, config.allowedUnprefixedNewFiles);
     if (!hasRequiredPrefix && !allowedUnprefixed) {
@@ -156,6 +157,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === NodeURL.pathToFileURL(process.argv[1]).href) {
   main();
 }

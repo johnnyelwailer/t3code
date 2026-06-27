@@ -1,3 +1,4 @@
+/* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The play-as-shape "plan" card (recipe-UX design pass) — renders the `t3work.workflow.shape`
  * view a recipe-launch system message carries: a distinct bordered card showing WHAT THE RECIPE

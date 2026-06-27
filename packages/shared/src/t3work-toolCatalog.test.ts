@@ -1,5 +1,6 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @effect-diagnostics nodeBuiltinImport:off
-import { readFileSync } from "node:fs";
+import * as NodeFS from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -14,7 +15,7 @@ const CATALOG_DOC_PATH = new URL(
 );
 
 function readDocumentedToolIds(): ReadonlyArray<string> {
-  const doc = readFileSync(CATALOG_DOC_PATH, "utf8");
+  const doc = NodeFS.readFileSync(CATALOG_DOC_PATH, "utf8");
   return [
     ...new Set([...doc.matchAll(/t3work\.[a-z0-9_.]+/g)].map((match) => match[0])),
   ].toSorted();

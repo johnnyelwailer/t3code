@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The global environment a workflow body (and the meta-extraction head) sees in its
  * `vm.Script` context.
@@ -10,7 +11,7 @@
  * or isolated-vm) is the real sandbox if/when untrusted workflows are in scope.
  */
 
-import { randomInt, randomUUID } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
@@ -73,7 +74,7 @@ export function makeJournaledMath(source: Pick<DeterministicSource, "random">): 
   return Object.assign(Object.create(Math) as typeof Math, { random: () => source.random() });
 }
 
-/** `crypto` with a journaled `randomUUID()`. The override is what the determinism contract
+/** `crypto` with a journaled `NodeCrypto.randomUUID()`. The override is what the determinism contract
  * needs; other host-crypto members pass through if the realm exposes them enumerably. */
 export function makeJournaledCrypto(
   source: Pick<DeterministicSource, "uuid">,
@@ -100,8 +101,8 @@ export function deterministicGlobals(source: DeterministicSource): Record<string
 export function hostSource(): DeterministicSource {
   return {
     now: () => DateTime.nowUnsafe().epochMilliseconds,
-    random: () => randomInt(2 ** 32) / 2 ** 32,
-    uuid: () => randomUUID(),
+    random: () => NodeCrypto.randomInt(2 ** 32) / 2 ** 32,
+    uuid: () => NodeCrypto.randomUUID(),
   };
 }
 

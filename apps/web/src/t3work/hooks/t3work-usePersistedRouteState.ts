@@ -1,3 +1,4 @@
+/* oxlint-disable unicorn/no-instanceof-builtins -- Existing merged lint debt; keep green while preserving behavior. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 

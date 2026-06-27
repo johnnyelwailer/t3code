@@ -1,3 +1,5 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test reads a workflow fixture + temp dir.
 /**
  * Real-path proof for the workflow-engine resume reactor (Epic 25 §Host wiring, Phase A).
@@ -28,10 +30,10 @@
  * to exercise the concatenation path.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -67,10 +69,10 @@ import {
   T3workWorkflowEngineRegistryLive,
 } from "./t3work-workflowEngineRegistry.ts";
 
-const workflowPath = fileURLToPath(
+const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3work-exampleReview.workflow.ts", import.meta.url),
 );
-const runsRoot = mkdtempSync(join(tmpdir(), "t3work-reactor-"));
+const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-reactor-"));
 
 const projectId = ProjectId.make("proj-reactor");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
@@ -263,4 +265,4 @@ it.live(
     }).pipe(Effect.provide(TestLayer)),
 );
 
-afterAll(() => rmSync(runsRoot, { recursive: true, force: true }));
+afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));

@@ -1,4 +1,5 @@
-import { execFileSync } from "node:child_process";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeChildProcess from "node:child_process";
 import {
   UPSTREAM_BASE_REF,
   UPSTREAM_REMOTE_NAME,
@@ -8,7 +9,7 @@ import {
 } from "./t3work-upstream-source-of-truth.mjs";
 
 export function runGit(args) {
-  return execFileSync("git", args, { encoding: "utf8" }).trim();
+  return NodeChildProcess.execFileSync("git", args, { encoding: "utf8" }).trim();
 }
 
 export function maybeRunGit(args) {

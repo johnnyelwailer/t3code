@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Composition-primitive tests. Each primitive gets a round-trip (run → resume returns the
  * recorded result, the tool/script/sleep/sub does NOT re-fire) and, where it journals, a drift
@@ -6,7 +7,7 @@
  * test, where it routes through the broker.)
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import * as NodeFS from "node:fs";
 
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -47,12 +48,12 @@ function patchJournalLine(
   seq: number,
   mutate: (entry: Record<string, unknown>) => void,
 ): void {
-  const lines = readFileSync(file, "utf8").trim().split("\n");
+  const lines = NodeFS.readFileSync(file, "utf8").trim().split("\n");
   const index = lines.findIndex((line) => (JSON.parse(line) as { seq: number }).seq === seq);
   const entry = JSON.parse(lines[index] ?? "{}") as Record<string, unknown>;
   mutate(entry);
   lines[index] = JSON.stringify(entry);
-  writeFileSync(file, `${lines.join("\n")}\n`);
+  NodeFS.writeFileSync(file, `${lines.join("\n")}\n`);
 }
 
 beforeEach(resetCounters);

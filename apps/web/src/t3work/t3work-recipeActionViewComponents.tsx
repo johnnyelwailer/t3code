@@ -1,3 +1,4 @@
+/* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ReactNode } from "react";
 import {
   ArrowRight,

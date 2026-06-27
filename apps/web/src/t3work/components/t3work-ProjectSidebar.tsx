@@ -58,8 +58,8 @@ export function ProjectSidebar({
     async (event: React.MouseEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
-      const insideProjectHeader = target.closest(".group/project-header");
-      const insideTicket = target.closest(".group/ticket");
+      const insideProjectHeader = target.closest(".group\\/project-header");
+      const insideTicket = target.closest(".group\\/ticket-card, .group\\/pinned-ticket");
       if (insideProjectHeader || insideTicket) return;
 
       event.preventDefault();

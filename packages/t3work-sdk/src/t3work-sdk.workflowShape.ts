@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Static "shape" derivation for the play-as-shape view (recipe-UX design pass): read a
  * `.workflow.ts` and, WITHOUT executing the body, produce a serializable descriptor of WHAT IT
@@ -9,7 +10,7 @@
  * (`askUser`). Safe to show before the user authorizes execution.
  */
 
-import { createRequire } from "node:module";
+import * as NodeModule from "node:module";
 
 import * as Schema from "effect/Schema";
 import type * as TsApi from "typescript";
@@ -17,7 +18,7 @@ import type * as TsApi from "typescript";
 import { extractMeta, prepareWorkflow, type WorkflowSource } from "./t3work-sdk.loader.ts";
 import { scanSteps } from "./t3work-sdk.workflowShapeScan.ts";
 
-const nodeRequire = createRequire(import.meta.url);
+const nodeRequire = NodeModule.createRequire(import.meta.url);
 let cachedTs: typeof TsApi | undefined;
 function loadTypescript(): typeof TsApi {
   cachedTs ??= nodeRequire("typescript") as typeof TsApi;

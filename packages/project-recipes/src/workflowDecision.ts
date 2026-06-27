@@ -21,9 +21,7 @@ export const ProjectRecipeWorkflowDecisionAffordance = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal("boolean"),
-    labels: Schema.optional(
-      Schema.Struct({ true: Schema.String, false: Schema.String }),
-    ),
+    labels: Schema.optional(Schema.Struct({ true: Schema.String, false: Schema.String })),
   }),
   Schema.Struct({
     kind: Schema.Literal("form"),
@@ -56,8 +54,7 @@ export const ProjectRecipeWorkflowDecisionPayload = Schema.Struct({
   correlationId: Schema.String,
   workflowRunId: Schema.optional(Schema.String),
 });
-export type ProjectRecipeWorkflowDecisionPayload =
-  typeof ProjectRecipeWorkflowDecisionPayload.Type;
+export type ProjectRecipeWorkflowDecisionPayload = typeof ProjectRecipeWorkflowDecisionPayload.Type;
 
 export const isProjectRecipeWorkflowDecisionPayload = Schema.is(
   ProjectRecipeWorkflowDecisionPayload,

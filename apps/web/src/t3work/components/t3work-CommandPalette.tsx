@@ -1,5 +1,11 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { sourceControlEnvironment } from "~/state/sourceControl";
+import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
+import { readLocalApi } from "~/localApi";
 import { useServerKeybindings } from "~/t3work/t3work-serverState";
 import { useCommandPaletteStore } from "~/t3work/t3work-commandPaletteStore";
 import type { ProjectThread } from "~/t3work/t3work-types";
@@ -37,7 +43,6 @@ import {
   parseGitHubHostFromDiscovery,
   toGitHubWorkActivityItems,
 } from "~/t3work/t3work-githubActivity";
-import { readLocalApi } from "~/localApi";
 import {
   normalizeCacheList,
   readIntegrationCache,
@@ -98,6 +103,10 @@ export function T3workCommandPalette(props: T3workCommandPaletteProps) {
   } = props;
 
   const backend = useBackend();
+  const environmentId = usePrimaryEnvironmentId();
+  const discoverSourceControl = useAtomQueryRunner(sourceControlEnvironment.discovery, {
+    reportFailure: false,
+  });
   const openNativeAddProject = useCommandPaletteStore((store) => store.openAddProject);
   const keybindings = useServerKeybindings();
   const [query, setQuery] = useState("");
@@ -142,14 +151,14 @@ export function T3workCommandPalette(props: T3workCommandPaletteProps) {
       }
 
       let host = cached?.host ?? "github.com";
-      const localApi = readLocalApi();
-      if (localApi) {
-        try {
-          const discovery = await localApi.server.discoverSourceControl();
-          host = parseGitHubHostFromDiscovery(discovery);
-        } catch {
-          host = "github.com";
-        }
+      if (environmentId !== null) {
+        const discoveryResult = await discoverSourceControl({
+          environmentId,
+          input: {},
+        });
+        host = AsyncResult.isSuccess(discoveryResult)
+          ? parseGitHubHostFromDiscovery(discoveryResult.value)
+          : "github.com";
       }
 
       const results = await Promise.all(
@@ -200,7 +209,7 @@ export function T3workCommandPalette(props: T3workCommandPaletteProps) {
     return () => {
       cancelled = true;
     };
-  }, [backend, open, projects]);
+  }, [backend, discoverSourceControl, environmentId, open, projects]);
 
   const currentView = viewStack.at(-1) ?? null;
 

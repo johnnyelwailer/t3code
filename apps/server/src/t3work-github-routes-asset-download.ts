@@ -1,4 +1,5 @@
-import { Buffer } from "node:buffer";
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeBuffer from "node:buffer";
 
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";

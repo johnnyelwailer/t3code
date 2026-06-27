@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectRecipeKickoffProgram } from "@t3tools/project-recipes";
 
 import { buildRecipeAuthoringKickoffMessage } from "~/t3work/t3work-recipeQuickStartAuthoring";

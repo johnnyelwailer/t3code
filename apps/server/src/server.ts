@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import { EnvironmentHttpApi } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -408,6 +409,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     Layer.provide(environmentAuthenticatedAuthLayer),
   ),
   assetRouteLayer,
+  t3workAtlassianAccountsRouteLayer,
   t3workAtlassianAssetRouteLayer,
   t3workAtlassianAssetContentRouteLayer,
   t3workAtlassianBacklogRouteLayer,

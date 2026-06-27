@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Static shape derivation (play-as-shape view). `deriveWorkflowShape` reads a `.workflow.ts`
  * and, WITHOUT executing the body, produces its phase strip (from `meta.phases`) plus an
@@ -7,16 +8,18 @@
  *   • labels come from the prompt's first line / the tool path (best-effort).
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeURL from "node:url";
 
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveWorkflowShape } from "./t3work-sdk.index.ts";
 
 function fixtureSource(relative: string) {
-  const absolutePath = fileURLToPath(new URL(`./__fixtures__/${relative}`, import.meta.url));
-  return { absolutePath, sourceText: readFileSync(absolutePath, "utf8") };
+  const absolutePath = NodeURL.fileURLToPath(
+    new URL(`./__fixtures__/${relative}`, import.meta.url),
+  );
+  return { absolutePath, sourceText: NodeFS.readFileSync(absolutePath, "utf8") };
 }
 
 describe("deriveWorkflowShape", () => {

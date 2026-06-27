@@ -114,15 +114,10 @@ describe("useT3workSidecarComposition", () => {
 
     hookValue.hideItem("quick-starts", "recipe-2");
     expect(mockPersistStoredSidecarPersonalization).toHaveBeenLastCalledWith({
-      composition: {
-        sections: [
-          { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
-        ],
-      },
       itemHides: {
         "quick-starts": ["recipe-2"],
       },
+      itemPins: undefined,
     });
 
     mockUseServerConfig.mockReturnValue({
@@ -144,15 +139,7 @@ describe("useT3workSidecarComposition", () => {
     const pinnedHookValue = renderHookValue();
     pinnedHookValue.pinItem("quick-starts", "recipe-3");
     expect(mockPersistStoredSidecarPersonalization).toHaveBeenLastCalledWith({
-      composition: {
-        sections: [
-          { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
-        ],
-      },
-      itemHides: {
-        "quick-starts": ["recipe-2"],
-      },
+      itemHides: undefined,
       itemPins: {
         "quick-starts": ["recipe-3"],
       },
@@ -177,12 +164,7 @@ describe("useT3workSidecarComposition", () => {
     const unpinnedHookValue = renderHookValue();
     unpinnedHookValue.unpinItem("quick-starts", "recipe-3");
     expect(mockPersistStoredSidecarPersonalization).toHaveBeenLastCalledWith({
-      composition: {
-        sections: [
-          { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
-        ],
-      },
+      itemPins: undefined,
     });
   });
 });

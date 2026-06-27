@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-inline-schema-compile -- Existing merged lint debt; keep green while preserving behavior. */
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 

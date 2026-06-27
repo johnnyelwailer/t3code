@@ -1,3 +1,4 @@
+/* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
 import { MessageSquare } from "lucide-react";
 import {
   T3SurfaceCard,

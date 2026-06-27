@@ -94,6 +94,7 @@ import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import {
   t3workAtlassianAssetRouteLayer,
   t3workAtlassianAssetContentRouteLayer,
+  t3workAtlassianAccountsRouteLayer,
   t3workAtlassianBacklogRouteLayer,
   t3workAtlassianConnectBasicRouteLayer,
   t3workAtlassianConnectOAuthRouteLayer,
@@ -402,6 +403,7 @@ export const makeT3workRoutesLayer = Layer.mergeAll(
     Layer.provide(environmentAuthenticatedAuthLayer),
   ),
   assetRouteLayer,
+  t3workAtlassianAccountsRouteLayer,
   t3workAtlassianAssetRouteLayer,
   t3workAtlassianAssetContentRouteLayer,
   t3workAtlassianBacklogRouteLayer,

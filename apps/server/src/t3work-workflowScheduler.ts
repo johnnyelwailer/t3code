@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @effect-diagnostics globalTimers:off -- the scheduler is the one component that bridges real
 // wall-clock time to the engine: it owns a single host timer (injectable for tests) armed for
 // the soonest deadline, not an Effect fiber sleep. Workflow bodies still read the journaled
@@ -30,7 +31,7 @@
  * keeps replay deterministic while still being time-driven.
  */
 
-import { clearTimeout, setTimeout } from "node:timers";
+import * as NodeTimers from "node:timers";
 
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
