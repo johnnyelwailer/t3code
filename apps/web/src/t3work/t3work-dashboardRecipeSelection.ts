@@ -19,7 +19,9 @@ export function buildProjectDashboardSelectedRecipe(input: {
     input.recipe,
     input.customization,
   );
-  const dashboardAction = resolveT3workDashboardRecipeAction(resolvedRecipe.workflow.recipeId);
+  const dashboardAction = resolvedRecipe.workflow
+    ? resolveT3workDashboardRecipeAction(resolvedRecipe.workflow.recipeId)
+    : null;
   const actionOutcome = dashboardAction ? input.runDashboardRecipeAction(dashboardAction) : null;
 
   if (dashboardAction && actionOutcome?.applied !== true) {
