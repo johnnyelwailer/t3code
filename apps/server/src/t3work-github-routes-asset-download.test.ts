@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
-import type { VcsProcessOutput, VcsProcessShape } from "./vcs/VcsProcess.ts";
+import type { VcsProcessOutput, VcsProcessShape } from "./t3work-vcsProcessShape.ts";
 import { downloadGitHubAsset } from "./t3work-github-routes-asset-download.ts";
 
 function processOutput(stdout: string): VcsProcessOutput {

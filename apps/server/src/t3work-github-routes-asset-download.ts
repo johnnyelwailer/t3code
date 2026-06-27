@@ -12,7 +12,7 @@ import type {
 } from "./t3work-github-routes-asset-types.ts";
 import { readTrimmedString } from "./t3work-github-routes-shared.ts";
 import { toT3workError } from "./t3work-project-repository-utils.ts";
-import type { VcsProcessShape } from "./vcs/VcsProcess.ts";
+import type { VcsProcessShape } from "./t3work-vcsProcessShape.ts";
 
 const MAX_GITHUB_ASSET_BYTES = 25_000_000;
 const GITHUB_ASSET_TIMEOUT_MS = 20_000;

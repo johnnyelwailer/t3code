@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import type { VcsProcessShape } from "./vcs/VcsProcess.ts";
+import type { VcsProcessShape } from "./t3work-vcsProcessShape.ts";
 import { enrichPullRequestState } from "./t3work-github-routes-pr.ts";
 import type {
   GitHubInboxAttempt,

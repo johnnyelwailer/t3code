@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import * as Effect from "effect/Effect";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
-import type { VcsProcessOutput, VcsProcessShape } from "./vcs/VcsProcess.ts";
+import type { VcsProcessOutput, VcsProcessShape } from "./t3work-vcsProcessShape.ts";
 import { loadPullRequestContext } from "./t3work-github-routes-pr-context.ts";
 
 function processOutput(stdout: string): VcsProcessOutput {

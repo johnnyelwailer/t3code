@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 
 import type { VcsError } from "@t3tools/contracts";
 
-import type { VcsProcessShape } from "./vcs/VcsProcess.ts";
+import type { VcsProcessShape } from "./t3work-vcsProcessShape.ts";
 
 export function encodeRepositoryPath(repository: string): string {
   return repository

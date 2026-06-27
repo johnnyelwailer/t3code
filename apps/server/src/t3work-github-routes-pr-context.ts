@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import type { VcsError } from "@t3tools/contracts";
 
 import { T3workAtlassianError } from "./t3work-atlassian-http.ts";
-import type { VcsProcessShape } from "./vcs/VcsProcess.ts";
+import type { VcsProcessShape } from "./t3work-vcsProcessShape.ts";
 import type {
   GitHubPullRequestContextCommit,
   GitHubPullRequestContextDetails,

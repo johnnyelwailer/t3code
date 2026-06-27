@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import type { VcsProcessShape } from "./vcs/VcsProcess.ts";
+import type { VcsProcessShape } from "./t3work-vcsProcessShape.ts";
 import { parseLinkedRepositoryName } from "./t3work-github-routes-suggestions.ts";
 import type {
   GitHubInboxAttempt,
@@ -23,7 +23,7 @@ export function loadLinkedPullRequestsAttempt(input: {
 
   return Effect.forEach(
     repositoryNames,
-    (repository) =>
+    (repository): Effect.Effect<ReadonlyArray<GitHubInboxItem>, never, never> =>
       input.vcs
         .run({
           operation: "t3work.github.repo-prs",
