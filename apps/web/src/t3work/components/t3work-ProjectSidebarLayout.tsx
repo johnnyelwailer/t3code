@@ -158,6 +158,8 @@ export function ProjectSidebarLayout({
               onCreateThread={onCreateThread}
               onDeleteThread={onDeleteThread}
               onRenameThread={onRenameThread}
+              onRenameProject={onRenameProject}
+              onDeleteProject={onDeleteProject}
             />
           </div>
         </div>

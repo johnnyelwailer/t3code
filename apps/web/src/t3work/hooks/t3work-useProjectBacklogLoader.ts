@@ -176,5 +176,5 @@ export function useProjectBacklogLoader(input: {
     backgroundSyncPending,
   ]);
 
-  return { loading, error, loadBacklog };
+  return { loading, error, hasLoaded: pollingUpdatedAt !== null, loadBacklog };
 }

@@ -3,6 +3,8 @@ import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 
 import { BackendProvider, createT3Backend } from "~/t3work/backend/t3work-index";
 import { App as T3workApp } from "~/t3work/t3work-App";
+import { T3workAddLocalWorkspaceProvider } from "~/t3work/components/t3work-addLocalWorkspaceContext";
+import { useOpenAddProjectCommandPalette } from "~/commandPaletteContext";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { recordT3WorkThreadDebug } from "~/t3work/chat/t3work-threadDebug";
 import {
@@ -64,6 +66,7 @@ export function T3workRouteSurface() {
   const viewProjectId = view?.projectId ?? null;
   const viewThreadId = readActiveThreadIdFromView(view);
   const viewTicketId = view?.type === "ticket" ? view.ticketId : null;
+  const openAddProjectCommandPalette = useOpenAddProjectCommandPalette();
 
   useEffect(() => {
     if (!authenticated) {
@@ -121,57 +124,59 @@ export function T3workRouteSurface() {
 
   return (
     <BackendProvider backend={backend}>
-      <T3workApp
-        view={view}
-        dashboardMode={search.projectView ?? "my-work"}
-        showCreate={isCreateRoute}
-        reopenInitialSetup={search.setup === "welcome"}
-        onCreateOpenChange={(open) => {
-          void navigate({
-            to: open ? "/t3work/new" : "/t3work",
-            search: buildRouteSearch(search),
-          });
-        }}
-        onOpenHome={() => {
-          void navigate({ to: "/t3work", search: buildRouteSearch(search) });
-        }}
-        onOpenSettings={() => {
-          void navigate({ to: "/settings" });
-        }}
-        onOpenDashboard={(projectId, dashboardMode, embeddedThreadId) => {
-          void navigate({
-            to: "/t3work/projects/$projectId",
-            params: { projectId },
-            search: buildRouteSearch(search, {
-              projectView: dashboardMode,
-              chatThreadId: embeddedThreadId ?? null,
-            }),
-          });
-        }}
-        onOpenTicket={(projectId, ticketId, embeddedThreadId) => {
-          void navigate({
-            to: "/t3work/projects/$projectId/tickets/$ticketId",
-            params: { projectId, ticketId },
-            search: buildRouteSearch(search, {
-              chatThreadId: embeddedThreadId ?? null,
-            }),
-          });
-        }}
-        onOpenThread={(projectId, threadId) => {
-          void navigate({
-            to: "/t3work/projects/$projectId/threads/$threadId",
-            params: { projectId, threadId },
-            search: buildRouteSearch(search),
-          });
-        }}
-        onProjectCreated={(project: ProjectShellProject) => {
-          void navigate({
-            to: "/t3work/projects/$projectId",
-            params: { projectId: project.id },
-            search: buildRouteSearch(search),
-          });
-        }}
-      />
+      <T3workAddLocalWorkspaceProvider openAddLocalWorkspace={openAddProjectCommandPalette}>
+        <T3workApp
+          view={view}
+          dashboardMode={search.projectView ?? "my-work"}
+          showCreate={isCreateRoute}
+          reopenInitialSetup={search.setup === "welcome"}
+          onCreateOpenChange={(open) => {
+            void navigate({
+              to: open ? "/t3work/new" : "/t3work",
+              search: buildRouteSearch(search),
+            });
+          }}
+          onOpenHome={() => {
+            void navigate({ to: "/t3work", search: buildRouteSearch(search) });
+          }}
+          onOpenSettings={() => {
+            void navigate({ to: "/settings" });
+          }}
+          onOpenDashboard={(projectId, dashboardMode, embeddedThreadId) => {
+            void navigate({
+              to: "/t3work/projects/$projectId",
+              params: { projectId },
+              search: buildRouteSearch(search, {
+                projectView: dashboardMode,
+                chatThreadId: embeddedThreadId ?? null,
+              }),
+            });
+          }}
+          onOpenTicket={(projectId, ticketId, embeddedThreadId) => {
+            void navigate({
+              to: "/t3work/projects/$projectId/tickets/$ticketId",
+              params: { projectId, ticketId },
+              search: buildRouteSearch(search, {
+                chatThreadId: embeddedThreadId ?? null,
+              }),
+            });
+          }}
+          onOpenThread={(projectId, threadId) => {
+            void navigate({
+              to: "/t3work/projects/$projectId/threads/$threadId",
+              params: { projectId, threadId },
+              search: buildRouteSearch(search),
+            });
+          }}
+          onProjectCreated={(project: ProjectShellProject) => {
+            void navigate({
+              to: "/t3work/projects/$projectId",
+              params: { projectId: project.id },
+              search: buildRouteSearch(search),
+            });
+          }}
+        />
+      </T3workAddLocalWorkspaceProvider>
     </BackendProvider>
   );
 }

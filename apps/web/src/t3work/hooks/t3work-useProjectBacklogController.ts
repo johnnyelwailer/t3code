@@ -19,7 +19,7 @@ export function useProjectBacklogController(input: {
   readonly setBacklogState: Dispatch<SetStateAction<ProjectBacklogState>>;
   readonly onSelectionChange?: (selection: BacklogSelectionInput) => void;
 }) {
-  const { loading, error, loadBacklog } = useProjectBacklogLoader(input);
+  const { loading, error, hasLoaded, loadBacklog } = useProjectBacklogLoader(input);
 
   const { updateAssignee, updateEstimate, createSubtask } = createProjectBacklogControllerActions({
     backend: input.backend,
@@ -59,6 +59,7 @@ export function useProjectBacklogController(input: {
   return {
     loading,
     error,
+    hasLoaded,
     searchAssignableUsers,
     updateAssignee,
     updateEstimate,

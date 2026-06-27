@@ -5,6 +5,7 @@ import type { ProjectKickoffThreadInput } from "~/t3work/t3work-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 import { ProjectDashboardKickoffAside } from "~/t3work/t3work-ProjectDashboardKickoffAside";
 import { T3workDashboardRecipeActionProvider } from "~/t3work/t3work-dashboardRecipeActions";
+import { useProjectWorkspaceAutoSync } from "~/t3work/hooks/t3work-useProjectWorkspaceAutoSync";
 import { ResizableRightSidebarLayout } from "~/t3work/t3work-ResizableRightSidebarLayout";
 import { T3workDashboardRecipeViewProvider } from "~/t3work/t3work-dashboardRecipeViewContext";
 import { getProjectDashboardRightSidebarCollapsedStorageKey } from "~/t3work/t3work-rightSidebarPersistence";
@@ -39,6 +40,18 @@ export function AppDashboardPane({
   onKickoffProjectThread: (input: ProjectKickoffThreadInput) => void;
   renderDashboard: (project: ProjectShellProject) => React.ReactNode;
 }) {
+  useProjectWorkspaceAutoSync({
+    project,
+    projectThreads,
+    uiState: {
+      surface: "dashboard-shell",
+      activeDashboardMode,
+      activeThreadId,
+      activeThreadStatus: activeThread?.status ?? null,
+      visibleThreadCount: projectThreads.length,
+    },
+  });
+
   useEffect(() => {
     if (!activeThread) {
       return;

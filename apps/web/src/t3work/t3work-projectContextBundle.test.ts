@@ -89,4 +89,67 @@ describe("buildProjectContextBundle", () => {
       ],
     });
   });
+
+  it("does not publish an empty work-items index before tickets are known", () => {
+    const bundle = buildProjectContextBundle({
+      project: createProject(),
+      linkedRepositoryUrls: ["https://github.com/example/project-alpha"],
+      visibleContext: {
+        uiState: { surface: "dashboard-shell", visibleThreadCount: 1 },
+      },
+    });
+
+    expect(
+      bundle.files.some((file) => file.relativePath === ".t3work/context/work-items/index.json"),
+    ).toBe(false);
+    expect(
+      JSON.parse(
+        bundle.files.find((file) => file.relativePath === ".t3work/context/entrypoint.json")
+          ?.contents ?? "{}",
+      ).paths,
+    ).not.toHaveProperty("workItemsIndex");
+  });
+
+  it("writes visible UI, thread, and GitHub activity context", () => {
+    const bundle = buildProjectContextBundle({
+      project: createProject(),
+      linkedRepositoryUrls: ["https://github.com/example/project-alpha"],
+      projectTickets: [createTicket("PROJ-1")],
+      visibleContext: {
+        projectThreads: [
+          {
+            id: "thread-1",
+            projectId: "Project Alpha",
+            title: "Kickoff",
+            messageCount: 2,
+            lastMessageAt: "2026-05-18T13:00:00.000Z",
+            createdAt: "2026-05-18T12:30:00.000Z",
+            status: "idle",
+          },
+        ],
+        githubActivityItems: [
+          {
+            id: "gh-1",
+            repository: "example/project-alpha",
+            reason: "review-requested",
+            subjectTitle: "PROJ-1 Add feature",
+            workItemKey: "PROJ-1",
+          },
+        ],
+        uiState: { surface: "my-work", viewMode: "kanban" },
+      },
+    });
+
+    expect(
+      bundle.files.some((file) => file.relativePath === ".t3work/context/threads/index.json"),
+    ).toBe(true);
+    expect(
+      bundle.files.some(
+        (file) => file.relativePath === ".t3work/context/github/activity/index.json",
+      ),
+    ).toBe(true);
+    expect(
+      bundle.files.some((file) => file.relativePath === ".t3work/context/ui/visible-state.json"),
+    ).toBe(true);
+  });
 });

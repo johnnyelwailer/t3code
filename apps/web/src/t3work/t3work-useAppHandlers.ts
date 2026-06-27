@@ -13,6 +13,7 @@ import type {
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 import type { ViewState } from "~/t3work/t3work-types";
 import { enqueueThreadKickoffAttachments } from "~/t3work/t3work-enqueueThreadKickoffAttachments";
+import { useLocalWorkspaceCommands } from "~/t3work/hooks/t3work-useLocalWorkspaceCommands";
 import {
   createTicketKickoffThread,
   deleteAppThread,
@@ -49,6 +50,11 @@ export function useAppHandlers({
   const backend = useBackend();
   const { addToChatFromRequest } = useAddToChat();
   const { deleteThread: deleteLiveThread } = useThreadActions();
+  const { handleDeleteProject, handleRenameProject } = useLocalWorkspaceCommands({
+    store,
+    activeView,
+    onOpenHome,
+  });
 
   const handleSelectProject = useCallback(
     (projectId: string) => {
@@ -174,15 +180,6 @@ export function useAppHandlers({
     [onOpenTicket, store],
   );
 
-  const handleDeleteProject = useCallback(
-    (projectId: string) => {
-      const deletedWasActive = activeView?.projectId === projectId;
-      store.deleteProject(projectId);
-      deletedWasActive && onOpenHome?.();
-    },
-    [activeView, onOpenHome, store],
-  );
-
   const handleDeleteThread = useCallback(
     (threadId: string) =>
       deleteAppThread({
@@ -210,6 +207,7 @@ export function useAppHandlers({
     handleCreateTicketThreadFromSidebar,
     handleThreadKickoffConsumed: store.markThreadKickoffConsumed,
     handleDeleteProject,
+    handleRenameProject,
     handleDeleteThread,
   };
 }

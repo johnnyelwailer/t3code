@@ -135,7 +135,7 @@ import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
-import { ChevronDownIcon, TriangleAlertIcon, WifiOffIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronLeftIcon, TriangleAlertIcon, WifiOffIcon } from "lucide-react";
 import { cn, randomHex } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -200,6 +200,7 @@ import {
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import type { ChatViewT3workExtensionProps } from "~/t3work/t3work-chatViewExtensions";
+import { appendContextAttachmentsToPrompt } from "~/t3work/chat/t3work-prepareThreadContextAttachments";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
@@ -994,6 +995,10 @@ function ChatViewContent(props: ChatViewProps) {
     routeKind === "server" ? props.dispatchTurnStartOverride : undefined;
   const composerContextAttachmentSlot =
     routeKind === "server" ? props.composerContextAttachmentSlot : undefined;
+  const composerContextAttachments =
+    routeKind === "server" ? props.composerContextAttachments : undefined;
+  const prepareComposerContextAttachments =
+    routeKind === "server" ? props.prepareComposerContextAttachments : undefined;
   const composerContainerProps = routeKind === "server" ? props.composerContainerProps : undefined;
   const composerContainerOverlay =
     routeKind === "server" ? props.composerContainerOverlay : undefined;
@@ -1003,6 +1008,11 @@ function ChatViewContent(props: ChatViewProps) {
     routeKind === "server" ? props.onSubmitRecipeCardAction : undefined;
   const dispatchWorkflowDecision =
     routeKind === "server" ? props.dispatchWorkflowDecision : undefined;
+  const onBack = routeKind === "server" ? props.onBack : undefined;
+  const headerAccessory = routeKind === "server" ? props.headerAccessory : undefined;
+  const hideHeader = routeKind === "server" ? props.hideHeader : false;
+  const hideBranchToolbar = routeKind === "server" ? props.hideBranchToolbar : false;
+  const minimalComposer = routeKind === "server" ? props.minimalComposer : false;
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -3650,7 +3660,8 @@ function ChatViewContent(props: ChatViewProps) {
       elementContextCount:
         composerElementContexts.length +
         composerPreviewAnnotations.length +
-        composerReviewComments.length,
+        composerReviewComments.length +
+        (composerContextAttachments?.length ?? 0),
     });
     if (showPlanFollowUpPrompt && activeProposedPlan) {
       const followUp = resolvePlanFollowUpSubmission({
@@ -3737,6 +3748,25 @@ function ChatViewContent(props: ChatViewProps) {
       messageTextWithPreviewAnnotations,
       composerReviewCommentsSnapshot,
     );
+    const contextAttachmentsResult = await settlePromise(async () =>
+      prepareComposerContextAttachments ? await prepareComposerContextAttachments() : [],
+    );
+    if (contextAttachmentsResult._tag === "Failure") {
+      sendInFlightRef.current = false;
+      resetLocalDispatch();
+      if (!isAtomCommandInterrupted(contextAttachmentsResult)) {
+        const error = squashAtomCommandFailure(contextAttachmentsResult);
+        setThreadError(
+          threadIdForSend,
+          error instanceof Error ? error.message : "Failed to prepare attached context.",
+        );
+      }
+      return;
+    }
+    const messageTextWithT3workContext = appendContextAttachmentsToPrompt(
+      messageTextForSend,
+      contextAttachmentsResult.value,
+    );
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
     const outgoingMessageText = formatOutgoingPrompt({
@@ -3744,7 +3774,7 @@ function ChatViewContent(props: ChatViewProps) {
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+      text: messageTextWithT3workContext || IMAGE_ONLY_BOOTSTRAP_PROMPT,
     });
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
@@ -4771,43 +4801,60 @@ function ChatViewContent(props: ChatViewProps) {
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
       >
         {/* Top bar */}
-        <header
-          data-chat-header
-          className={cn(
-            "border-b border-border transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none",
-            isElectron
-              ? cn(
-                  "workspace-topbar drag-region relative px-3 sm:px-5",
-                  reserveTitleBarControlInset &&
-                    !inlineRightPanelOwnsTitleBar &&
-                    "wco:pr-[var(--workspace-native-controls-inset)]",
-                )
-              : "workspace-topbar pl-[calc(env(safe-area-inset-left)+0.75rem)] pr-[calc(env(safe-area-inset-right)+0.75rem)] sm:pl-[calc(env(safe-area-inset-left)+1.25rem)] sm:pr-[calc(env(safe-area-inset-right)+1.25rem)]",
-            COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-          )}
-        >
-          {!rightPanelOpen ? panelLayoutControls : null}
-          <ChatHeader
-            activeThreadEnvironmentId={activeThread.environmentId}
-            activeThreadId={activeThread.id}
-            {...(routeKind === "draft" && draftId ? { draftId } : {})}
-            activeThreadTitle={activeThread.title}
-            activeProjectName={activeProject?.title}
-            openInCwd={gitCwd}
-            activeProjectScripts={activeProject?.scripts}
-            preferredScriptId={
-              activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
-            }
-            keybindings={keybindings}
-            availableEditors={availableEditors}
-            rightPanelOpen={rightPanelOpen}
-            gitCwd={gitCwd}
-            onRunProjectScript={runProjectScript}
-            onAddProjectScript={saveProjectScript}
-            onUpdateProjectScript={updateProjectScript}
-            onDeleteProjectScript={deleteProjectScript}
-          />
-        </header>
+        {hideHeader ? null : (
+          <header
+            data-chat-header
+            className={cn(
+              "border-b border-border transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none",
+              isElectron
+                ? cn(
+                    "workspace-topbar drag-region relative px-3 sm:px-5",
+                    reserveTitleBarControlInset &&
+                      !inlineRightPanelOwnsTitleBar &&
+                      "wco:pr-[var(--workspace-native-controls-inset)]",
+                  )
+                : "workspace-topbar pl-[calc(env(safe-area-inset-left)+0.75rem)] pr-[calc(env(safe-area-inset-right)+0.75rem)] sm:pl-[calc(env(safe-area-inset-left)+1.25rem)] sm:pr-[calc(env(safe-area-inset-right)+1.25rem)]",
+              COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+            )}
+          >
+            {!rightPanelOpen ? panelLayoutControls : null}
+            {onBack ? (
+              <button
+                type="button"
+                className="[-webkit-app-region:no-drag] inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                onClick={onBack}
+                aria-label="Back"
+              >
+                <ChevronLeftIcon className="size-4" />
+              </button>
+            ) : null}
+            <ChatHeader
+              activeThreadEnvironmentId={activeThread.environmentId}
+              activeThreadId={activeThread.id}
+              {...(routeKind === "draft" && draftId ? { draftId } : {})}
+              activeThreadTitle={activeThread.title}
+              activeProjectName={activeProject?.title}
+              openInCwd={gitCwd}
+              activeProjectScripts={activeProject?.scripts}
+              preferredScriptId={
+                activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
+              }
+              keybindings={keybindings}
+              availableEditors={availableEditors}
+              rightPanelOpen={rightPanelOpen}
+              gitCwd={gitCwd}
+              onRunProjectScript={runProjectScript}
+              onAddProjectScript={saveProjectScript}
+              onUpdateProjectScript={updateProjectScript}
+              onDeleteProjectScript={deleteProjectScript}
+            />
+            {headerAccessory ? (
+              <div className="[-webkit-app-region:no-drag] flex shrink-0 items-center gap-1">
+                {headerAccessory}
+              </div>
+            ) : null}
+          </header>
+        )}
 
         {/* Error banner */}
         <ProviderStatusBanner status={activeProviderStatus} />
@@ -4877,7 +4924,11 @@ function ChatViewContent(props: ChatViewProps) {
             <div
               ref={setComposerOverlayElement}
               data-chat-composer-overlay="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
+              data-chat-composer-minimal={minimalComposer ? "true" : undefined}
+              className={cn(
+                "pointer-events-none absolute inset-x-0 bottom-0 z-20",
+                minimalComposer ? "pt-1" : "pt-1.5 sm:pt-2",
+              )}
               {...composerContainerProps}
             >
               {composerContainerOverlay}
@@ -4976,7 +5027,7 @@ function ChatViewContent(props: ChatViewProps) {
                     : "pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:pb-[calc(env(safe-area-inset-bottom)+1rem)]",
                 )}
               >
-                {isGitRepo && (
+                {isGitRepo && !hideBranchToolbar && (
                   <div className="pointer-events-auto">
                     <BranchToolbar
                       environmentId={activeThread.environmentId}

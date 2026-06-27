@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { SidebarMenuSubButton } from "~/t3work/components/ui/t3work-sidebar";
 import { GitHubActivityInlineList } from "~/t3work/t3work-GitHubActivityViews";
 import {
@@ -20,6 +20,7 @@ type ProjectSidebarDashboardNavProps = {
   myWorkExpanded: boolean;
   myWorkThreadCount: number;
   pinnedItemCount?: number;
+  myWorkAutoExpandSignal?: number;
   onMyWorkExpandedChange: (expanded: boolean) => void;
   onSelectBacklog: () => void;
   onSelectMyWork: () => void;
@@ -35,12 +36,21 @@ type ProjectSidebarDashboardNavProps = {
   githubActivityLastCheckedAt?: number;
 };
 
+export function shouldAutoExpandMyWorkForPin(input: {
+  previousSignal: number;
+  nextSignal: number;
+  myWorkExpanded: boolean;
+}) {
+  return !input.myWorkExpanded && input.nextSignal > input.previousSignal;
+}
+
 export function ProjectSidebarDashboardNav({
   backlogState,
   myWorkState,
   myWorkExpanded,
   myWorkThreadCount,
   pinnedItemCount = 0,
+  myWorkAutoExpandSignal = pinnedItemCount,
   onMyWorkExpandedChange,
   onSelectBacklog,
   onSelectMyWork,
@@ -82,6 +92,21 @@ export function ProjectSidebarDashboardNav({
   const showPinnedSectionDivider =
     pinnedItemCount > 0 && (showMyWorkThreads || showCurrentIssuesSection || showGitHubSection);
   const showMyWorkSection = myWorkExpanded && hasMyWorkChildren;
+  const previousAutoExpandSignalRef = useRef(myWorkAutoExpandSignal);
+
+  useEffect(() => {
+    const previousSignal = previousAutoExpandSignalRef.current;
+    previousAutoExpandSignalRef.current = myWorkAutoExpandSignal;
+    if (
+      shouldAutoExpandMyWorkForPin({
+        previousSignal,
+        nextSignal: myWorkAutoExpandSignal,
+        myWorkExpanded,
+      })
+    ) {
+      onMyWorkExpandedChange(true);
+    }
+  }, [myWorkAutoExpandSignal, myWorkExpanded, onMyWorkExpandedChange]);
 
   return (
     <>

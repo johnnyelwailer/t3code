@@ -7,6 +7,7 @@ import type { ProjectRowProps } from "./t3work-projectSidebarProjectRowTypes";
 
 type ProjectSidebarProjectThreadSectionProps = {
   projectId: string;
+  workspaceRoot: string | null;
   view: ProjectRowProps["view"];
   visibleThreads: ReadonlyArray<ProjectRowProps["projectThreads"][number]>;
   hasOverflowingThreads: boolean;
@@ -19,6 +20,7 @@ type ProjectSidebarProjectThreadSectionProps = {
 
 export function ProjectSidebarProjectThreadSection({
   projectId,
+  workspaceRoot,
   view,
   visibleThreads,
   hasOverflowingThreads,
@@ -35,6 +37,7 @@ export function ProjectSidebarProjectThreadSection({
           key={thread.id}
           thread={thread}
           state={getSidebarThreadState({ view, threadId: thread.id })}
+          workspacePath={workspaceRoot}
           onSelect={() => onSelectThread(projectId, thread.id)}
           onDelete={() => onDeleteThread(thread.id)}
           onRename={(newTitle) => onRenameThread(thread.id, newTitle)}
