@@ -36,6 +36,11 @@ export function CreateProjectDialogFooter({
       loadingSource={bootstrapping}
       loadingProjects={loadingProjects}
       onConnectBasic={() => void setup.loadAccountsWithBasic({ siteUrl, email, apiToken })}
+      oauthLoading={
+        oauth.state.kind === "opening" ||
+        oauth.state.kind === "waiting" ||
+        oauth.state.kind === "exchanging"
+      }
       onConnectOAuth={() => void oauth.startOAuth()}
       onBack={() => {
         runT3workViewTransition(

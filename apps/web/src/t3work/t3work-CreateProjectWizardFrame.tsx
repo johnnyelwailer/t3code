@@ -107,6 +107,7 @@ export function CreateProjectWizardFooter({
   canCreateProject,
   loadingSource,
   loadingProjects,
+  oauthLoading,
   onConnectBasic,
   onConnectOAuth,
   onBack,
@@ -121,6 +122,7 @@ export function CreateProjectWizardFooter({
   canCreateProject: boolean;
   loadingSource?: boolean;
   loadingProjects: boolean;
+  oauthLoading?: boolean;
   onConnectBasic?: () => void;
   onConnectOAuth?: () => void;
   onBack: () => void;
@@ -137,11 +139,12 @@ export function CreateProjectWizardFooter({
       {step === "source" ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button
-            className="w-full sm:w-auto"
+            className="w-full justify-center gap-2 sm:w-auto"
             variant="outline"
             onClick={onConnectOAuth}
-            disabled={loadingSource || !onConnectOAuth}
+            disabled={loadingSource || oauthLoading || !onConnectOAuth}
           >
+            {oauthLoading ? <Loader2 className="size-4 animate-spin" /> : null}
             Connect with OAuth
           </Button>
           <Button
