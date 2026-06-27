@@ -15,12 +15,13 @@
  * consuming a `seq` (the composition primitive is the journal boundary — a Stage-1 tradeoff).
  */
 
-import { canonicalJsonError, hashArgs } from "./t3work-sdk.canonicalJson.ts";
-import { JournalSchemaError, JournalSerializeError } from "./t3work-sdk.errors.ts";
 import { createHandleDispatch, type HandleDispatch } from "./t3work-sdk.handles.ts";
 import type { JournalSink } from "./t3work-sdk.journalStore.ts";
 import type { JournalEntry, ResolvedEntry } from "./t3work-sdk.journalReader.ts";
-import { assertJournalMatch, gapDrift } from "./t3work-sdk.replayDrift.ts";
+import {
+  createDurableCallDeterministic,
+  createDurableCallPrimitive,
+} from "./t3work-sdk.durableRuntimePrimitive.ts";
 import { createToolScriptCalls } from "./t3work-sdk.toolScriptCalls.ts";
 import type * as T from "./t3work-sdk.types.ts";
 import { hostSource } from "./t3work-sdk.workflowGlobals.ts";
@@ -101,92 +102,17 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
     }
   };
 
-  const decodeRecorded = async <R>(
-    call: T.PrimitiveCall<R>,
-    recorded: unknown,
-    atSeq: number,
-  ): Promise<R> => {
-    if (call.decodeRecorded === undefined) return recorded as R;
-    try {
-      return await call.decodeRecorded(recorded);
-    } catch (error) {
-      throw new JournalSchemaError({
-        seq: atSeq,
-        kind: call.kind,
-        refId: call.refId,
-        cause: error,
-      });
-    }
+  const primitiveSeat = {
+    journal: config.journal,
+    writer: config.writer,
+    filePath: config.filePath,
+    nowIso: config.nowIso,
+    maxRecordedSeq,
+    isBlackBoxed: () => blackBoxDepth > 0,
+    takeSeq: () => (seq += 1),
   };
-
-  const callPrimitive = async <R>(call: T.PrimitiveCall<R>): Promise<R> => {
-    if (blackBoxDepth > 0) return await call.exec();
-    seq += 1;
-    const currentSeq = seq;
-    const argsHash = hashArgs(call.args);
-    const isNever = call.replay === "never";
-    const recorded = config.journal.get(currentSeq);
-
-    if (recorded !== undefined) {
-      assertJournalMatch(currentSeq, recorded, call.kind, call.refId, argsHash, config.filePath);
-      // A matched `script-never` marker always re-runs (its result was never recorded).
-      if (isNever) return await call.exec();
-      return await decodeRecorded(call, recorded.result, currentSeq);
-    }
-
-    if (currentSeq <= maxRecordedSeq) gapDrift(currentSeq, call.kind, call.refId, config.filePath);
-
-    // Past the recorded frontier → execute live and journal.
-    const result = await call.exec();
-    const startedAt = config.nowIso();
-    const endedAt = config.nowIso();
-    const callId = `${currentSeq}:${call.kind}:${call.refId}`;
-    const baseEntry = { seq: currentSeq, callId, refId: call.refId, argsHash, startedAt, endedAt };
-
-    if (isNever) {
-      // Typed marker: occupy the seq, record no result (the script always re-runs).
-      config.writer.append({ ...baseEntry, kind: "script-never", result: undefined });
-      return result;
-    }
-
-    // Validate the result is canonical-JSON-encodable BEFORE writing (void → void envelope).
-    const serializeError = result === undefined ? undefined : canonicalJsonError(result);
-    if (serializeError !== undefined) {
-      throw new JournalSerializeError({
-        seq: currentSeq,
-        kind: call.kind,
-        refId: call.refId,
-        cause: serializeError,
-      });
-    }
-    config.writer.append({ ...baseEntry, kind: call.kind, result });
-    return result;
-  };
-
-  // Synchronous journaled dispatch for the wall-clock/entropy primitives: Date.now() /
-  // Math.random() / crypto.randomUUID() are synchronous, so they share the seq counter,
-  // journal, and drift rules of `callPrimitive` but run inline (no schema decode on replay).
-  const callDeterministic = <R extends number | string>(
-    kind: "now" | "random" | "uuid",
-    exec: () => R,
-  ): R => {
-    if (blackBoxDepth > 0) return exec();
-    seq += 1;
-    const at = seq;
-    const argsHash = hashArgs(null);
-    const recorded = config.journal.get(at);
-    if (recorded !== undefined) {
-      assertJournalMatch(at, recorded, kind, kind, argsHash, config.filePath);
-      return recorded.result as R;
-    }
-    if (at <= maxRecordedSeq) gapDrift(at, kind, kind, config.filePath);
-    const result = exec();
-    const ts = config.nowIso();
-    config.writer.append({
-      seq: at, callId: `${at}:${kind}:${kind}`, kind, refId: kind, argsHash, result, startedAt: ts, endedAt: ts,
-    });
-    return result;
-  };
+  const callPrimitive = createDurableCallPrimitive(primitiveSeat);
+  const callDeterministic = createDurableCallDeterministic(primitiveSeat);
 
   const now = (): number => callDeterministic("now", host.now);
   const random = (): number => callDeterministic("random", host.random);
@@ -203,15 +129,29 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
   // Handle-pattern dispatch shares this runtime's `seq` seat, so a sent entry's seq — and
   // thus its correlationId — interleaves deterministically with the other primitive calls.
   const handles = createHandleDispatch({
-    runId: config.runId ?? "run", filePath: config.filePath, nowIso: config.nowIso,
-    isBlackBoxed: () => blackBoxDepth > 0, takeSeq: () => (seq += 1), maxRecordedSeq,
-    recordedAt: (atSeq) => config.journal.get(atSeq), resolvedFor: (cid) => resolved.get(cid),
-    writer: config.writer, setResolved: (entry) => resolved.set(entry.correlationId, entry),
+    runId: config.runId ?? "run",
+    filePath: config.filePath,
+    nowIso: config.nowIso,
+    isBlackBoxed: () => blackBoxDepth > 0,
+    takeSeq: () => (seq += 1),
+    maxRecordedSeq,
+    recordedAt: (atSeq) => config.journal.get(atSeq),
+    resolvedFor: (cid) => resolved.get(cid),
+    writer: config.writer,
+    setResolved: (entry) => resolved.set(entry.correlationId, entry),
   });
 
   return {
-    callTool: toolScript.callTool, callScript: toolScript.callScript, callPrimitive,
-    now, random, uuid, currentSeq: () => seq, runBlackBoxed,
-    spentAgentTokens: () => spentAgentTokens, hostNow: host.now, handles,
+    callTool: toolScript.callTool,
+    callScript: toolScript.callScript,
+    callPrimitive,
+    now,
+    random,
+    uuid,
+    currentSeq: () => seq,
+    runBlackBoxed,
+    spentAgentTokens: () => spentAgentTokens,
+    hostNow: host.now,
+    handles,
   };
 }

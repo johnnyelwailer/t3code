@@ -66,6 +66,8 @@
     "docs/t3work-additive-whitelist.md",
     "docs/t3work-company-agentic-shell-handoff.md",
     "apps/web/src/routes/t3work.tsx",
+    "apps/web/src/store.ts",
+    "apps/web/src/storeSelectors.ts",
     "apps/web/src/types/*.d.ts",
     "packages/integrations-atlassian/**",
     "packages/integrations-core/**",
@@ -78,6 +80,8 @@
     ".githooks/pre-commit",
     "scripts/setup-git-hooks.mjs",
     "scripts/lib/additive-guard-core.mjs",
+    "scripts/lib/additive-guard-cache.mjs",
+    "scripts/lib/additive-guard-config.mjs",
     "scripts/lib/sync-upstream-core.mjs"
   ]
 }

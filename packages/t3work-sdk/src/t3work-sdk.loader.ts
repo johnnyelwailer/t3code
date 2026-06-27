@@ -83,8 +83,11 @@ export interface PreparedWorkflow {
 export function prepareWorkflow(source: WorkflowSource): PreparedWorkflow {
   const ts = loadTypescript();
   const sourceFile = ts.createSourceFile(
-    source.absolutePath, source.sourceText,
-    ts.ScriptTarget.Latest, /* setParentNodes */ true, ts.ScriptKind.TS,
+    source.absolutePath,
+    source.sourceText,
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+    ts.ScriptKind.TS,
   );
 
   const metaStatement = findMetaStatement(ts, sourceFile);
@@ -96,10 +99,15 @@ export function prepareWorkflow(source: WorkflowSource): PreparedWorkflow {
 
   // Head = source up to and including the meta statement, with imports + export modifiers
   // blanked, wrapped so it returns the meta object.
-  const headSpans = collectBlankSpans(ts, sourceFile, { includeMeta: false, metaStatement })
-    .filter((span) => span.start < metaStatement.end);
+  const headSpans = collectBlankSpans(ts, sourceFile, { includeMeta: false, metaStatement }).filter(
+    (span) => span.start < metaStatement.end,
+  );
   const headText = blankSpans(source.sourceText.slice(0, metaStatement.end), headSpans);
-  const metaScript = transpile(ts, `(() => {\n${headText}\nreturn meta;\n})()`, source.absolutePath);
+  const metaScript = transpile(
+    ts,
+    `(() => {\n${headText}\nreturn meta;\n})()`,
+    source.absolutePath,
+  );
 
   // Body = whole file with imports, export modifiers, and the meta statement blanked,
   // wrapped in an async IIFE so top-level await + the body's `return` are legal.
@@ -113,8 +121,15 @@ export function prepareWorkflow(source: WorkflowSource): PreparedWorkflow {
  * Run the meta-extraction script in a context that exposes `Schema` (the one allowlisted
  * pure value import) and nothing else from the engine. Returns the `meta` literal.
  */
-export function extractMeta(prepared: PreparedWorkflow, source: WorkflowSource, schema: unknown): WorkflowMeta {
-  const context: Record<string, unknown> = { ...deterministicGlobals(hostSource()), Schema: schema };
+export function extractMeta(
+  prepared: PreparedWorkflow,
+  source: WorkflowSource,
+  schema: unknown,
+): WorkflowMeta {
+  const context: Record<string, unknown> = {
+    ...deterministicGlobals(hostSource()),
+    Schema: schema,
+  };
   context["globalThis"] = context;
   createContext(context);
   let result: unknown;
@@ -127,11 +142,15 @@ export function extractMeta(prepared: PreparedWorkflow, source: WorkflowSource, 
     );
   }
   if (result === null || typeof result !== "object") {
-    throw new WorkflowLoadError(`Workflow '${source.absolutePath}' \`meta\` did not evaluate to an object.`);
+    throw new WorkflowLoadError(
+      `Workflow '${source.absolutePath}' \`meta\` did not evaluate to an object.`,
+    );
   }
   const meta = result as WorkflowMeta;
   if (typeof meta.name !== "string" || meta.name.length === 0) {
-    throw new WorkflowLoadError(`Workflow '${source.absolutePath}' \`meta.name\` must be a non-empty string.`);
+    throw new WorkflowLoadError(
+      `Workflow '${source.absolutePath}' \`meta.name\` must be a non-empty string.`,
+    );
   }
   return meta;
 }
@@ -149,6 +168,8 @@ export async function runWorkflowBody(
   const context: Record<string, unknown> = { ...globals };
   context["globalThis"] = context;
   createContext(context);
-  const completion = runInContext(prepared.bodyScript, context, { filename: source.absolutePath }) as Promise<unknown>;
+  const completion = runInContext(prepared.bodyScript, context, {
+    filename: source.absolutePath,
+  }) as Promise<unknown>;
   return await completion;
 }

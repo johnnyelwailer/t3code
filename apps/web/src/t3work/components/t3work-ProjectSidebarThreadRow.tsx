@@ -118,7 +118,9 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
         {statusPill && (
           <span
             className={`inline-flex size-1.5 shrink-0 rounded-full ${statusPill.dotClass} ${statusPill.pulse ? "animate-pulse" : ""}`}
-            title={statusPill.detail ? `${statusPill.label} ${statusPill.detail}` : statusPill.label}
+            title={
+              statusPill.detail ? `${statusPill.label} ${statusPill.detail}` : statusPill.label
+            }
           />
         )}
         {isRenaming ? (

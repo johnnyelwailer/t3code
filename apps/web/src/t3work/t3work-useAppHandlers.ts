@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { usePrimaryEnvironmentId } from "~/environments/primary";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThreadActions } from "~/hooks/useThreadActions";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";

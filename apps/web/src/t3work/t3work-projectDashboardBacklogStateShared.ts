@@ -110,32 +110,25 @@ export function parseVisibleProjectBacklogTableColumns(
 }
 
 export const routeSearchKeys = [
-  "q", "focus", "assignee", "assigneeScope", "issueTypes", "view",
-  "group", "sort", "dir", "board", "sprint", "jiraFilter",
+  "q",
+  "focus",
+  "assignee",
+  "assigneeScope",
+  "issueTypes",
+  "view",
+  "group",
+  "sort",
+  "dir",
+  "board",
+  "sprint",
+  "jiraFilter",
 ] as const;
 
-function normalizeRouteString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  return value.trim().length > 0 ? value.trim() : undefined;
-}
-
-export function parseRouteEnum<TValue extends string>(
-  value: unknown,
-  allowedValues: ReadonlySet<TValue>,
-): TValue | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  return allowedValues.has(value as TValue) ? (value as TValue) : undefined;
-}
-
-export function parsePersistedSelection(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
-}
+export { parseProjectDashboardBacklogRouteSearch } from "./t3work-projectDashboardBacklogRouteSearchParse";
+export {
+  parsePersistedSelection,
+  parseRouteEnum,
+} from "./t3work-projectDashboardBacklogStateRouteUtils";
 
 export function createDefaultProjectDashboardBacklogState(): ProjectDashboardBacklogState {
   return {
@@ -154,68 +147,4 @@ export function createDefaultProjectDashboardBacklogState(): ProjectDashboardBac
 
 export function getProjectDashboardBacklogStorageKey(projectId: string): string {
   return `t3work:project-backlog-state:v1:${projectId}`;
-}
-
-export function parseProjectDashboardBacklogRouteSearch(
-  search: Record<string, unknown>,
-): ProjectDashboardBacklogRouteSearch {
-  const parsed: ProjectDashboardBacklogRouteSearch = {};
-
-  if (typeof search.q === "string") {
-    parsed.q = search.q;
-  }
-
-  const focus = parseRouteEnum(search.focus, projectBacklogFocusFilterValues);
-  if (focus !== undefined) {
-    parsed.focus = focus;
-  }
-
-  if (typeof search.assignee === "string") {
-    parsed.assignee = search.assignee;
-  }
-
-  if (typeof search.assigneeScope === "string") {
-    parsed.assigneeScope = search.assigneeScope;
-  }
-
-  if (typeof search.issueTypes === "string") {
-    parsed.issueTypes = search.issueTypes;
-  }
-
-  const view = parseRouteEnum(search.view, projectBacklogViewModeValues);
-  if (view !== undefined) {
-    parsed.view = view;
-  }
-
-  const group = parseRouteEnum(search.group, projectBacklogTableGroupByValues);
-  if (group !== undefined) {
-    parsed.group = group;
-  }
-
-  const sort = parseRouteEnum(search.sort, projectBacklogTableSortByValues);
-  if (sort !== undefined) {
-    parsed.sort = sort;
-  }
-
-  const dir = parseRouteEnum(search.dir, projectBacklogTableSortDirectionValues);
-  if (dir !== undefined) {
-    parsed.dir = dir;
-  }
-
-  const board = normalizeRouteString(search.board);
-  if (board !== undefined) {
-    parsed.board = board;
-  }
-
-  const sprint = normalizeRouteString(search.sprint);
-  if (sprint !== undefined) {
-    parsed.sprint = sprint;
-  }
-
-  const jiraFilter = normalizeRouteString(search.jiraFilter);
-  if (jiraFilter !== undefined) {
-    parsed.jiraFilter = jiraFilter;
-  }
-
-  return parsed;
 }

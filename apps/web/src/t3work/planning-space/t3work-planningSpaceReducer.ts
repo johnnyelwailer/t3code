@@ -16,10 +16,7 @@ import {
 import { groupOf, itemOf } from "./t3work-planningSpaceReducerHelpers";
 import { reducePlanningPointerUp } from "./t3work-planningSpaceReducerPointerUp";
 
-export function reducePlanningEvent(
-  state: InteractionState,
-  event: PlanningEvent,
-): ReduceResult {
+export function reducePlanningEvent(state: InteractionState, event: PlanningEvent): ReduceResult {
   switch (event.type) {
     case "pointerDown": {
       return {

@@ -33,14 +33,7 @@ describe("cursor-anchored zoom", () => {
     const cursor = { x: 412, y: 188 };
     const anchor = unprojectAtStoryPlane(camera, VIEWPORT, cursor.x, cursor.y);
     for (let i = 0; i < 60; i++) {
-      camera = cursorAnchoredZoom(
-        camera,
-        VIEWPORT,
-        cursor.x,
-        cursor.y,
-        -120,
-        -3200,
-      );
+      camera = cursorAnchoredZoom(camera, VIEWPORT, cursor.x, cursor.y, -120, -3200);
       const projected = projectPoint(camera, VIEWPORT, anchor, Z_STORY);
       expect(Math.abs(projected.x - cursor.x)).toBeLessThan(1);
       expect(Math.abs(projected.y - cursor.y)).toBeLessThan(1);
@@ -82,10 +75,7 @@ describe("pinch zoom", () => {
     const { pinchZoom } = await import("./t3work-planningSpaceScene");
     const camera: PlanningCamera = { x: 0, y: 0, z: -200 };
     const before = scaleForPlane(camera.z, Z_STORY);
-    const after = scaleForPlane(
-      pinchZoom(camera, VIEWPORT, 400, 300, 1.5, -3200).z,
-      Z_STORY,
-    );
+    const after = scaleForPlane(pinchZoom(camera, VIEWPORT, 400, 300, 1.5, -3200).z, Z_STORY);
     expect(after / before).toBeCloseTo(1.5, 5);
   });
 
@@ -168,10 +158,7 @@ describe("masonry packing", () => {
           const rb = rects[b];
           if (!ra || !rb) throw new Error("missing rect");
           const overlaps =
-            ra.left < rb.right &&
-            rb.left < ra.right &&
-            ra.top < rb.bottom &&
-            rb.top < ra.bottom;
+            ra.left < rb.right && rb.left < ra.right && ra.top < rb.bottom && rb.top < ra.bottom;
           expect(overlaps).toBe(false);
         }
       }
@@ -196,10 +183,7 @@ describe("masonry packing", () => {
         const current = sorted[i];
         const previous = sorted[i - 1];
         if (!current || !previous) throw new Error("missing frame");
-        const gap =
-          current.centerY -
-          current.height / 2 -
-          (previous.centerY + previous.height / 2);
+        const gap = current.centerY - current.height / 2 - (previous.centerY + previous.height / 2);
         expect(gap).toBeCloseTo(FRAME_GAP, 5);
       }
     }
@@ -270,9 +254,7 @@ describe("planningBandChromeChanged", () => {
 describe("hour ladder sanity", () => {
   it("ladder is strictly increasing", () => {
     for (let i = 1; i < HOUR_STEPS_SECONDS.length; i++) {
-      expect(HOUR_STEPS_SECONDS[i] ?? 0).toBeGreaterThan(
-        HOUR_STEPS_SECONDS[i - 1] ?? Infinity,
-      );
+      expect(HOUR_STEPS_SECONDS[i] ?? 0).toBeGreaterThan(HOUR_STEPS_SECONDS[i - 1] ?? Infinity);
     }
   });
 });

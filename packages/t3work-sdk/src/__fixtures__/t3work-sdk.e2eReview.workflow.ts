@@ -35,6 +35,8 @@ const planned = await thread.askAgent(`draft a rollout plan for a ${classified.r
 });
 
 const Decision = Schema.Struct({ approved: Schema.Boolean });
-const decision = await thread.askUser(`Approve this plan?\n\n${planned.plan}`, { schema: Decision });
+const decision = await thread.askUser(`Approve this plan?\n\n${planned.plan}`, {
+  schema: Decision,
+});
 
 return { risk: classified.risk, plan: planned.plan, approved: decision.approved };

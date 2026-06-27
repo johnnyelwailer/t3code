@@ -56,10 +56,7 @@ interface Cluster {
  * cluster in it (extent-aware packing — fixed grids were rejected after real
  * data showed cluster sizes 1–8, spec §10.3).
  */
-function layoutClusters(
-  clusters: ReadonlyArray<Cluster>,
-  headerZone: number,
-): GroupingLayout {
+function layoutClusters(clusters: ReadonlyArray<Cluster>, headerZone: number): GroupingLayout {
   const frames = new Map<string, PackedFrame>();
   const anchors = new Map<string, WorldPoint>();
   let rowTop = 0;
@@ -67,8 +64,7 @@ function layoutClusters(
     const row = clusters.slice(start, start + CLUSTERS_PER_ROW);
     let rowHeight = 0;
     row.forEach((cluster, column) => {
-      const anchorX =
-        (column - (CLUSTERS_PER_ROW - 1) / 2) * CLUSTER_SPACING_X;
+      const anchorX = (column - (CLUSTERS_PER_ROW - 1) / 2) * CLUSTER_SPACING_X;
       anchors.set(cluster.key, { x: anchorX, y: rowTop });
       const items = cluster.stories.map((story) => ({
         id: story.id,
@@ -90,9 +86,7 @@ function layoutClusters(
     anchors,
     zones: new Map(),
     bounds:
-      allFrames.length > 0
-        ? boundsOfFrames(allFrames)
-        : { minX: 0, maxX: 0, minY: 0, maxY: 0 },
+      allFrames.length > 0 ? boundsOfFrames(allFrames) : { minX: 0, maxX: 0, minY: 0, maxY: 0 },
   };
 }
 
@@ -112,9 +106,7 @@ export const SPRINT_ZONE_CENTER_X = 1240;
 export const SPRINT_ZONE_COLUMN_OFFSETS = [-490, 0, 490] as const;
 
 /** by-sprint: two zones — in-sprint left, context/outside right (§4). */
-export function layoutBySprint(
-  stories: ReadonlyArray<LayoutStory>,
-): GroupingLayout {
+export function layoutBySprint(stories: ReadonlyArray<LayoutStory>): GroupingLayout {
   const frames = new Map<string, PackedFrame>();
   const zones = new Map<string, ZoneRect>();
   const startY = 0;
@@ -131,8 +123,7 @@ export function layoutBySprint(
     zones.set(key, {
       centerX,
       top: startY - 90,
-      width:
-        SPRINT_ZONE_COLUMN_OFFSETS.length * 490 + FRAME_WIDTH_BUDGET / 2 + 80,
+      width: SPRINT_ZONE_COLUMN_OFFSETS.length * 490 + FRAME_WIDTH_BUDGET / 2 + 80,
       height: packed.totalHeight + 170,
     });
   }
@@ -142,9 +133,7 @@ export function layoutBySprint(
     anchors: new Map(),
     zones,
     bounds:
-      allFrames.length > 0
-        ? boundsOfFrames(allFrames)
-        : { minX: 0, maxX: 0, minY: 0, maxY: 0 },
+      allFrames.length > 0 ? boundsOfFrames(allFrames) : { minX: 0, maxX: 0, minY: 0, maxY: 0 },
   };
 }
 
@@ -159,14 +148,11 @@ export function layoutByOwner(
   const clusters: Cluster[] = keys.map((ownerKey) => ({
     key: ownerKey,
     stories: stories.filter((s) =>
-      ownerKey === UNASSIGNED_OWNER_KEY
-        ? s.ownerId === null
-        : s.ownerId === ownerKey,
+      ownerKey === UNASSIGNED_OWNER_KEY ? s.ownerId === null : s.ownerId === ownerKey,
     ),
   }));
   return layoutClusters(clusters, OWNER_HEADER_ZONE);
 }
-
 
 export {
   ALL_TILE_GAP,

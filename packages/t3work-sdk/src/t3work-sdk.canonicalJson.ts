@@ -44,7 +44,8 @@ function canonicalizeArray(value: ReadonlyArray<unknown>, strict: boolean): stri
 function assertPlainObject(value: object): void {
   const proto = Object.getPrototypeOf(value) as object | null;
   if (proto !== null && proto !== Object.prototype) {
-    const name = (proto.constructor as { readonly name?: string } | undefined)?.name ?? "non-plain object";
+    const name =
+      (proto.constructor as { readonly name?: string } | undefined)?.name ?? "non-plain object";
     throw new TypeError(
       `Cannot encode a ${name} as a workflow result; return a plain JSON object (Map/Set/class instances are not canonical JSON).`,
     );
@@ -64,7 +65,9 @@ function canonicalizeObject(value: Readonly<Record<string, unknown>>, strict: bo
     }
   }
   const sorted = keys.filter((key) => value[key] !== undefined).toSorted();
-  const entries = sorted.map((key) => `${JSON.stringify(key)}:${canonicalJsonStringify(value[key], strict)}`);
+  const entries = sorted.map(
+    (key) => `${JSON.stringify(key)}:${canonicalJsonStringify(value[key], strict)}`,
+  );
   return `{${entries.join(",")}}`;
 }
 

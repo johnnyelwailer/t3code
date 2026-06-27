@@ -117,7 +117,9 @@ export async function executeRun<O>(opts: {
       ...(opts.options.launchThreadId === undefined
         ? {}
         : { launchThreadId: opts.options.launchThreadId }),
-      ...(opts.options.defaultModel === undefined ? {} : { defaultModel: opts.options.defaultModel }),
+      ...(opts.options.defaultModel === undefined
+        ? {}
+        : { defaultModel: opts.options.defaultModel }),
     });
     return { kind: "completed", output: result as O };
   } catch (error) {

@@ -77,7 +77,9 @@ export function readPersistedT3WorkProjectSetupState(
     return {
       profileId: typeof parsed?.profileId === "string" ? parsed.profileId : undefined,
       enabledSkillPackIds: Array.isArray(parsed?.enabledSkillPackIds)
-        ? parsed.enabledSkillPackIds.filter((entry: unknown): entry is string => typeof entry === "string")
+        ? parsed.enabledSkillPackIds.filter(
+            (entry: unknown): entry is string => typeof entry === "string",
+          )
         : undefined,
       managedFileHashes: toManagedFileHashes(parsed?.managedFileHashes),
     };

@@ -161,7 +161,8 @@ function buildSystemTimelineEntry(text: string) {
       role: "system" as const,
       text,
       createdAt: MESSAGE_CREATED_AT,
-      completedAt: MESSAGE_CREATED_AT,
+      updatedAt: MESSAGE_CREATED_AT,
+      turnId: null,
       streaming: false,
     },
   };

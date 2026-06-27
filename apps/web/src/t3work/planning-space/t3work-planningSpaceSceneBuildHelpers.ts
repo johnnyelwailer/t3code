@@ -20,7 +20,10 @@ export function isResolved(
   return resolvedStatuses.has(ticket.status.trim().toLowerCase());
 }
 
-export function ownerOf(ticket: ProjectTicket): { ownerId: string | null; ownerName: string | null } {
+export function ownerOf(ticket: ProjectTicket): {
+  ownerId: string | null;
+  ownerName: string | null;
+} {
   const name = ticket.assignee?.trim() || null;
   return { ownerId: ticket.assigneeAccountId ?? name, ownerName: name };
 }

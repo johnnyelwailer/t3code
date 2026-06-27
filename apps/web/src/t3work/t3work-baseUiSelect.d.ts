@@ -113,5 +113,3 @@ declare module "@base-ui/react/select" {
     const GroupLabel: React.ComponentType<GroupLabel.Props>;
   }
 }
-
-export {};

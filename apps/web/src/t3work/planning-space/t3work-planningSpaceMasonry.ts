@@ -4,12 +4,7 @@
  * out of t3work-planningSpaceScene.ts.
  */
 
-import {
-  FOCAL,
-  type PlanningCamera,
-  type Viewport,
-  Z_STORY,
-} from "./t3work-planningSpaceScene";
+import { FOCAL, type PlanningCamera, type Viewport, Z_STORY } from "./t3work-planningSpaceScene";
 
 /**
  * Story frame sizing (§3.4): a deterministic function of subtask count, using
@@ -122,8 +117,7 @@ export function orderEpicsByAffinity(
   neighborhood: number = 4,
 ): string[] {
   const remaining = [...epicIds].sort(
-    (a, b) =>
-      (storyCountByEpic.get(b) ?? 0) - (storyCountByEpic.get(a) ?? 0) || a.localeCompare(b),
+    (a, b) => (storyCountByEpic.get(b) ?? 0) - (storyCountByEpic.get(a) ?? 0) || a.localeCompare(b),
   );
   const ordered: string[] = [];
   while (remaining.length > 0) {

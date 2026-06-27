@@ -91,7 +91,9 @@ export const ProjectBacklogTableVirtualRowView = memo(function ProjectBacklogTab
             />
           ) : (
             (() => {
-              const parentTicket = contextByTicketId.get(virtualRow.row.ticket.id)?.ancestors.at(-1);
+              const parentTicket = contextByTicketId
+                .get(virtualRow.row.ticket.id)
+                ?.ancestors.at(-1);
 
               return (
                 <ProjectBacklogTableRowView

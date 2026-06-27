@@ -101,9 +101,9 @@ export function readOwnedWorkspaceRoots(
 
 export function readLiveProjectRoots(project: Project): ReadonlyArray<string> {
   const roots = new Set<string>();
-  const cwd = normalizeWorkspaceRootPath(project.cwd);
+  const workspaceRoot = normalizeWorkspaceRootPath(project.workspaceRoot);
   const repositoryRoot = normalizeWorkspaceRootPath(project.repositoryIdentity?.rootPath);
-  if (cwd) roots.add(cwd);
+  if (workspaceRoot) roots.add(workspaceRoot);
   if (repositoryRoot) roots.add(repositoryRoot);
   return [...roots];
 }

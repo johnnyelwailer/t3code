@@ -60,11 +60,7 @@ export function PlanningSpaceRail({
         onClick={onToggle}
         className="absolute -top-6 left-1/2 flex h-6 w-12 -translate-x-1/2 items-center justify-center text-[11px] text-muted-foreground opacity-0 transition-opacity duration-200 hover:text-foreground hover:opacity-100 group-hover/rail:opacity-100 focus-visible:opacity-100"
       >
-        {open ? (
-          <ChevronDown className="size-4" />
-        ) : (
-          <ChevronUp className="size-4" />
-        )}
+        {open ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
       </button>
       <div className="flex gap-1 overflow-x-auto bg-gradient-to-t from-background via-background/90 to-transparent px-3 pb-1.5 pt-2">
         {roleGroups.flatMap((group, groupIndex) => [
@@ -91,68 +87,68 @@ export function PlanningSpaceRail({
             />
           ) : null,
           ...group.owners.map((owner) => {
-          const color = ownerColor(owner.id);
-          const ownerCapacity = ownerCapacities?.get(owner.id) ?? capacitySeconds;
-          const ratio = ownerCapacity > 0 ? owner.loadSeconds / ownerCapacity : 0;
-          const over = ratio > 1;
-          const arcLength = Math.min(ratio, 1) * ARC_CIRCUMFERENCE;
-          const isSpotlit = spotlightOwnerId === owner.id;
-          const capacitySource = ownerCapacities?.has(owner.id)
-            ? "Tempo availability for the sprint window"
-            : "default capacity";
-          return (
-            <div
-              key={owner.id}
-              data-dock={owner.id}
-              className={`flex w-14 shrink-0 cursor-pointer flex-col items-center rounded-md pb-0.5 transition-transform ${
-                lifted ? "-translate-y-1.5" : ""
-              } ${isSpotlit ? "bg-accent/60" : "hover:bg-accent/40"}`}
-              title={`${owner.name} — assigned ${formatHours(owner.loadSeconds)}, remaining ${formatHours(owner.remainingSeconds)}, ${formatHours(ownerCapacity)} available (${capacitySource}). Click to spotlight, drag onto an item to assign.`}
-            >
-              <span className="relative flex size-10 items-center justify-center">
-                <svg width="40" height="40" className="absolute inset-0" aria-hidden="true">
-                  <circle
-                    cx="20"
-                    cy="20"
-                    r={ARC_RADIUS}
-                    fill="none"
-                    strokeWidth="2.5"
-                    className="stroke-border"
-                  />
-                  <circle
-                    cx="20"
-                    cy="20"
-                    r={ARC_RADIUS}
-                    fill="none"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    stroke={over ? "#ef4444" : "#10b981"}
-                    strokeDasharray={`${arcLength} ${ARC_CIRCUMFERENCE}`}
-                    transform="rotate(-90 20 20)"
-                    style={{ transition: "stroke-dasharray .4s, stroke .4s" }}
-                  />
-                </svg>
-                <span
-                  className={`flex size-6 items-center justify-center rounded-full text-[8.5px] font-medium text-background ${
-                    isSpotlit ? "ring-2 ring-primary ring-offset-1" : ""
-                  }`}
-                  style={{ background: color }}
-                >
-                  {initialsOf(owner.name)}
-                </span>
-              </span>
-              <span className="max-w-13 truncate text-[8.5px] text-foreground/85">
-                {owner.name.split(" ")[0]}
-              </span>
-              <span
-                className={`text-[7.5px] tabular-nums ${
-                  over ? "text-red-500" : "text-muted-foreground"
-                }`}
+            const color = ownerColor(owner.id);
+            const ownerCapacity = ownerCapacities?.get(owner.id) ?? capacitySeconds;
+            const ratio = ownerCapacity > 0 ? owner.loadSeconds / ownerCapacity : 0;
+            const over = ratio > 1;
+            const arcLength = Math.min(ratio, 1) * ARC_CIRCUMFERENCE;
+            const isSpotlit = spotlightOwnerId === owner.id;
+            const capacitySource = ownerCapacities?.has(owner.id)
+              ? "Tempo availability for the sprint window"
+              : "default capacity";
+            return (
+              <div
+                key={owner.id}
+                data-dock={owner.id}
+                className={`flex w-14 shrink-0 cursor-pointer flex-col items-center rounded-md pb-0.5 transition-transform ${
+                  lifted ? "-translate-y-1.5" : ""
+                } ${isSpotlit ? "bg-accent/60" : "hover:bg-accent/40"}`}
+                title={`${owner.name} — assigned ${formatHours(owner.loadSeconds)}, remaining ${formatHours(owner.remainingSeconds)}, ${formatHours(ownerCapacity)} available (${capacitySource}). Click to spotlight, drag onto an item to assign.`}
               >
-                {formatHours(owner.loadSeconds)}/{formatHours(ownerCapacity)}
-              </span>
-            </div>
-          );
+                <span className="relative flex size-10 items-center justify-center">
+                  <svg width="40" height="40" className="absolute inset-0" aria-hidden="true">
+                    <circle
+                      cx="20"
+                      cy="20"
+                      r={ARC_RADIUS}
+                      fill="none"
+                      strokeWidth="2.5"
+                      className="stroke-border"
+                    />
+                    <circle
+                      cx="20"
+                      cy="20"
+                      r={ARC_RADIUS}
+                      fill="none"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      stroke={over ? "#ef4444" : "#10b981"}
+                      strokeDasharray={`${arcLength} ${ARC_CIRCUMFERENCE}`}
+                      transform="rotate(-90 20 20)"
+                      style={{ transition: "stroke-dasharray .4s, stroke .4s" }}
+                    />
+                  </svg>
+                  <span
+                    className={`flex size-6 items-center justify-center rounded-full text-[8.5px] font-medium text-background ${
+                      isSpotlit ? "ring-2 ring-primary ring-offset-1" : ""
+                    }`}
+                    style={{ background: color }}
+                  >
+                    {initialsOf(owner.name)}
+                  </span>
+                </span>
+                <span className="max-w-13 truncate text-[8.5px] text-foreground/85">
+                  {owner.name.split(" ")[0]}
+                </span>
+                <span
+                  className={`text-[7.5px] tabular-nums ${
+                    over ? "text-red-500" : "text-muted-foreground"
+                  }`}
+                >
+                  {formatHours(owner.loadSeconds)}/{formatHours(ownerCapacity)}
+                </span>
+              </div>
+            );
           }),
         ])}
         <div

@@ -8,8 +8,9 @@ export function makeLiveProject(overrides: Partial<Project> = {}): Project {
   return {
     id: ProjectId.make("live-project"),
     environmentId: "env-local" as EnvironmentId,
-    name: "Loose workspace",
-    cwd: "/workspace/loose",
+    title: "Loose workspace",
+    workspaceRoot: "/workspace/loose",
+    repositoryIdentity: null,
     defaultModelSelection: null,
     scripts: [],
     createdAt: "2026-05-03T00:00:00.000Z",

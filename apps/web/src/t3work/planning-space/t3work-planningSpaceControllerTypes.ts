@@ -17,7 +17,10 @@ import type {
 import type { GroupingLayout } from "./t3work-planningSpaceLayout";
 import type { InteractionState, PlanningItemRef } from "./t3work-planningSpaceInteractions";
 import type { PlanningSpaceEngine } from "./t3work-planningSpaceRenderer";
-import type { PlanningSpaceGrouping, PlanningSpaceMutations } from "./t3work-planningSpaceViewConstants";
+import type {
+  PlanningSpaceGrouping,
+  PlanningSpaceMutations,
+} from "./t3work-planningSpaceViewConstants";
 import type { PlanningSpaceViewModel } from "./t3work-planningSpaceViewModel";
 import type { PlanningSpaceHandlers } from "./t3work-planningSpaceHandlers";
 
@@ -47,7 +50,10 @@ export interface PlanningSpaceCtx {
   leaderRef: MutableRefObject<SVGLineElement | null>;
   epicDetailRef: MutableRefObject<string | null>;
   contextMenuRef: MutableRefObject<boolean>;
-  zoomToggleRef: MutableRefObject<{ id: string; camera: { x: number; y: number; z: number } } | null>;
+  zoomToggleRef: MutableRefObject<{
+    id: string;
+    camera: { x: number; y: number; z: number };
+  } | null>;
   gaugeMarkerRef: MutableRefObject<HTMLDivElement | null>;
   setAllModeRef: MutableRefObject<(value: boolean) => void>;
   allModeRef: MutableRefObject<boolean>;

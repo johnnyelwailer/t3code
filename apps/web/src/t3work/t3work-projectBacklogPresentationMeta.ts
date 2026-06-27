@@ -5,9 +5,7 @@ import type {
 import { planningSpaceEnabled } from "~/t3work/planning-space/t3work-planningSpaceFlag";
 
 /** Table and planning-space fill the dashboard content area edge-to-edge. */
-export function isProjectBacklogImmersiveViewMode(
-  viewMode: ProjectBacklogViewMode,
-): boolean {
+export function isProjectBacklogImmersiveViewMode(viewMode: ProjectBacklogViewMode): boolean {
   return viewMode === "table" || viewMode === "planning-space";
 }
 
@@ -16,9 +14,7 @@ export const projectBacklogViewModes: ReadonlyArray<{
   label: string;
 }> = [
   { value: "table", label: "Table" },
-  ...(planningSpaceEnabled
-    ? [{ value: "planning-space", label: "Planning space" } as const]
-    : []),
+  ...(planningSpaceEnabled ? [{ value: "planning-space", label: "Planning space" } as const] : []),
   { value: "hierarchy", label: "Hierarchy" },
   { value: "planning", label: "Planning lanes" },
   { value: "ownership", label: "Ownership" },

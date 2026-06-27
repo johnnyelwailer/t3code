@@ -10,17 +10,30 @@ import {
   layoutByOwner,
   layoutBySprint,
 } from "./t3work-planningSpaceLayout";
-import {
-  FRAME_WIDTH_BUDGET,
-  type PackedFrame,
-} from "./t3work-planningSpaceScene";
+import { FRAME_WIDTH_BUDGET, type PackedFrame } from "./t3work-planningSpaceScene";
 
 /** Mirrors a real sprint's verified shape: 21 epics, clusters of 1–8, subtasks 0–6. */
 function realisticStories(): LayoutStory[] {
   const stories: LayoutStory[] = [];
   const owners = [
-    "AM", "GW", "CW", "UE", "PJ", "AH", "AZ", "MA", "CR", "BM",
-    "SB", "ML", "ME", "MJ", "MG", "DB", "AS", "YP",
+    "AM",
+    "GW",
+    "CW",
+    "UE",
+    "PJ",
+    "AH",
+    "AZ",
+    "MA",
+    "CR",
+    "BM",
+    "SB",
+    "ML",
+    "ME",
+    "MJ",
+    "MG",
+    "DB",
+    "AS",
+    "YP",
   ];
   const clusterSizes = [8, 5, 4, 3, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
   let storyIndex = 0;
@@ -107,18 +120,12 @@ describe("layoutBySprint", () => {
   it("sizes each zone to contain all of its stories", () => {
     const layout = layoutBySprint(stories);
     for (const [key, zone] of layout.zones) {
-      const members = stories.filter((s) =>
-        key === "sprint" ? s.inSprint : !s.inSprint,
-      );
+      const members = stories.filter((s) => (key === "sprint" ? s.inSprint : !s.inSprint));
       for (const story of members) {
         const frame = layout.frames.get(story.id);
         if (!frame) throw new Error("missing frame");
-        expect(frame.centerY + frame.height / 2).toBeLessThanOrEqual(
-          zone.top + zone.height,
-        );
-        expect(Math.abs(frame.centerX - zone.centerX)).toBeLessThanOrEqual(
-          zone.width / 2,
-        );
+        expect(frame.centerY + frame.height / 2).toBeLessThanOrEqual(zone.top + zone.height);
+        expect(Math.abs(frame.centerX - zone.centerX)).toBeLessThanOrEqual(zone.width / 2);
       }
     }
   });

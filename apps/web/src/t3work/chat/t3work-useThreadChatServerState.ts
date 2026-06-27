@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { scopeThreadRef } from "@t3tools/client-runtime";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH } from "@t3tools/project-recipes";
 import { useShallow } from "zustand/react/shallow";
 
-import { usePrimaryEnvironmentId } from "~/environments/primary";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import { selectProjectsAcrossEnvironments, useStore } from "~/store";
 import { createThreadSelectorByRef } from "~/storeSelectors";
 import { summarizeT3WorkServerThread } from "~/t3work/chat/t3work-threadDebug";

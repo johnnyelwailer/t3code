@@ -105,10 +105,7 @@ export function computeTempoUserCapacity(input: {
   const inRange = input.scheduleDays.filter(
     (day) => day.date >= input.from && day.date <= input.to,
   );
-  const requiredSeconds = inRange.reduce(
-    (sum, day) => sum + Math.max(0, day.requiredSeconds),
-    0,
-  );
+  const requiredSeconds = inRange.reduce((sum, day) => sum + Math.max(0, day.requiredSeconds), 0);
   const workingDates = new Set(
     inRange.filter((day) => day.requiredSeconds > 0).map((day) => day.date),
   );

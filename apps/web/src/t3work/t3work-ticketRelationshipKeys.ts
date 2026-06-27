@@ -15,7 +15,7 @@ export type RelationshipKeyGroups = {
 
 function normalizeKey(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
-  const trimmed = value.trim().replace(/[\"“”]/g, "");
+  const trimmed = value.trim().replace(/["“”]/g, "");
   return trimmed.length > 0 ? trimmed : undefined;
 }
 

@@ -40,10 +40,7 @@ export function ProjectBacklogOverviewAssigneeFilter({
   const statusText = `${options.length} assignee option${options.length === 1 ? "" : "s"}`;
   const showScopeOptions = value !== PROJECT_BACKLOG_ASSIGNEE_FILTER_ALL;
 
-  function toggleScope(
-    scopeKey: ProjectBacklogAssigneeFilterScopeKey,
-    checked: boolean,
-  ): void {
+  function toggleScope(scopeKey: ProjectBacklogAssigneeFilterScopeKey, checked: boolean): void {
     const enabledCount = projectBacklogAssigneeFilterScopeOptions.filter(
       (option) => scope[option.value],
     ).length;

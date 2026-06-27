@@ -13,7 +13,7 @@ import {
 } from "@t3tools/project-recipes";
 
 import { readLocalApi } from "~/localApi";
-import { applySettingsUpdated, getServerConfig } from "~/rpc/serverState";
+import { applySettingsUpdated, getServerConfig } from "~/t3work/t3work-serverStateCompat";
 
 const SIDECAR_COMPOSITION_PERSISTENCE_ERROR_SCOPE = "[SIDECAR_COMPOSITION]";
 

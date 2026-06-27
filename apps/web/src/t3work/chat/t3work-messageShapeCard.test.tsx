@@ -13,6 +13,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
 
+import { buildT3workMessagesTimelineTestProps } from "~/t3work/chat/t3work-messagesTimelineTestProps";
+
 import type { ChatMessage } from "~/types";
 
 vi.mock("@legendapp/list/react", async () => {
@@ -54,7 +56,8 @@ function shapeMessage(id: string): ChatMessage {
     text: "Plan: shape.pr-review",
     streaming: false,
     createdAt: "2026-06-14T00:00:00.000Z",
-    completedAt: "2026-06-14T00:00:00.000Z",
+    updatedAt: "2026-06-14T00:00:00.000Z",
+    turnId: null,
     t3workExt: {
       visibleToUser: true,
       attachments: [
@@ -83,32 +86,13 @@ async function renderTimeline(messages: ReadonlyArray<ChatMessage>) {
   const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
   return renderToStaticMarkup(
     <MessagesTimeline
-      isWorking={false}
-      activeTurnInProgress={false}
-      activeTurnId={null}
-      activeTurnStartedAt={null}
-      listRef={createRef<LegendListRef | null>()}
+      {...buildT3workMessagesTimelineTestProps()}
       timelineEntries={messages.map((message, index) => ({
         id: `timeline-${index}`,
         kind: "message" as const,
         createdAt: message.createdAt,
         message,
       }))}
-      completionDividerBeforeEntryId={null}
-      completionSummary={null}
-      turnDiffSummaryByAssistantMessageId={new Map()}
-      routeThreadKey="environment-local:thread-1"
-      onOpenTurnDiff={() => {}}
-      revertTurnCountByUserMessageId={new Map()}
-      onRevertUserMessage={() => {}}
-      isRevertingCheckpoint={false}
-      onImageExpand={() => {}}
-      activeThreadEnvironmentId={EnvironmentId.make("environment-local")}
-      markdownCwd={undefined}
-      resolvedTheme="light"
-      timestampFormat="locale"
-      workspaceRoot={undefined}
-      onIsAtEndChange={() => {}}
     />,
   );
 }

@@ -105,7 +105,6 @@ export interface BuildPlanningSceneOptions {
   readonly currentUser?: PlanningCurrentUserIdentity;
 }
 
-
 function normalizeIdentityValue(value: string | undefined): string | undefined {
   const normalized = value?.trim().toLocaleLowerCase();
   return normalized && normalized.length > 0 ? normalized : undefined;
@@ -133,11 +132,8 @@ export function sortPlanningOwners(
     if (leftIsCurrent !== rightIsCurrent) {
       return leftIsCurrent ? -1 : 1;
     }
-    return (
-      right.loadSeconds - left.loadSeconds || left.name.localeCompare(right.name)
-    );
+    return right.loadSeconds - left.loadSeconds || left.name.localeCompare(right.name);
   });
 }
-
 
 export { buildPlanningSceneData } from "./t3work-planningSpaceSceneBuild";

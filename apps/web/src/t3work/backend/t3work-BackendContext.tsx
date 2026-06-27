@@ -1,6 +1,9 @@
 import { createContext, useContext } from "react";
-import { useServerConfig } from "~/rpc/serverState";
-import { getWsConnectionUiState, useWsConnectionStatus } from "~/rpc/wsConnectionState";
+import { useServerConfig } from "~/t3work/t3work-serverStateCompat";
+import {
+  getWsConnectionUiState,
+  useWsConnectionStatus,
+} from "~/t3work/t3work-wsConnectionStateCompat";
 import type { BackendApi, BackendState } from "./t3work-types";
 
 export const BackendContext = createContext<BackendApi | null>(null);

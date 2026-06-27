@@ -90,7 +90,7 @@ export function normalizeRecipeManifest(raw: RawProjectRecipeManifest): ProjectR
             return Schema.decodeUnknownSync(ProjectRecipeKickoffProgram)(raw.kickoff);
           } catch (error) {
             const detail = error instanceof Error ? error.message : String(error);
-            throw new Error(`Recipe manifest kickoff is invalid: ${detail}`);
+            throw new Error(`Recipe manifest kickoff is invalid: ${detail}`, { cause: error });
           }
         })()
       : undefined;

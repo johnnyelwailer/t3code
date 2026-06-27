@@ -15,8 +15,8 @@ function makeLiveProject(overrides: Partial<Project> = {}): Project {
   return {
     id: ProjectId.make("live-project"),
     environmentId: "env-local" as EnvironmentId,
-    name: "Live project",
-    cwd: "/workspace/saved",
+    title: "Live project",
+    workspaceRoot: "/workspace/saved",
     repositoryIdentity: null,
     defaultModelSelection: null,
     createdAt: "2026-05-01T00:00:00.000Z",

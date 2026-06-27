@@ -42,13 +42,9 @@ export const PLANNING_SPACE_FIXTURE_PEOPLE: ReadonlyArray<{
 /** Back-compat alias for earlier story imports. */
 export const planningSpaceFixturePeople = PLANNING_SPACE_FIXTURE_PEOPLE;
 
-export const PLANNING_SPACE_FIXTURE_OWNER_ROLES: ReadonlyMap<string, string> =
-  new Map(
-    PLANNING_SPACE_FIXTURE_PEOPLE.map((person) => [
-      `acc-${person.name}`,
-      person.role,
-    ]),
-  );
+export const PLANNING_SPACE_FIXTURE_OWNER_ROLES: ReadonlyMap<string, string> = new Map(
+  PLANNING_SPACE_FIXTURE_PEOPLE.map((person) => [`acc-${person.name}`, person.role]),
+);
 
 interface FixtureStory {
   readonly key: string;
@@ -143,14 +139,18 @@ const STORIES: ReadonlyArray<FixtureStory> = [
     assignee: "Silvan Rentsch",
     inSprint: true,
     subtasks: [
-      { title: "iOS: Pentest-Findings umsetzen", assignee: "Ruben Fankhauser", hours: 2 * H, resolved: true },
+      {
+        title: "iOS: Pentest-Findings umsetzen",
+        assignee: "Ruben Fankhauser",
+        hours: 2 * H,
+        resolved: true,
+      },
       { title: "Android/KMP: Pentest-Findings umsetzen", assignee: "Silvan Rentsch", hours: 8 * H },
     ],
   },
   {
     key: "FLT-20171",
-    title:
-      "Dokumentation technische Grundlagen für alternative Anmelde-Methoden",
+    title: "Dokumentation technische Grundlagen für alternative Anmelde-Methoden",
     epicKey: "EP-133",
     type: "Story",
     assignee: "Aline Lüscher",
@@ -192,8 +192,7 @@ const STORIES: ReadonlyArray<FixtureStory> = [
   },
   {
     key: "FLT-20338",
-    title:
-      "iOS: Scanner-Lizenzschlüssel aktualisiert sich nicht aus Remote-Config",
+    title: "iOS: Scanner-Lizenzschlüssel aktualisiert sich nicht aus Remote-Config",
     epicKey: "EP-640",
     type: "Bug",
     assignee: "Levin Kradolfer",
@@ -214,8 +213,7 @@ const STORIES: ReadonlyArray<FixtureStory> = [
   },
   {
     key: "FLT-20537",
-    title:
-      "Web Beobachtung: Ein Benutzer wird gelöscht -> Bereich Chat ist nicht mehr verfügbar",
+    title: "Web Beobachtung: Ein Benutzer wird gelöscht -> Bereich Chat ist nicht mehr verfügbar",
     epicKey: "EP-510",
     type: "Bug",
     assignee: null,
@@ -262,7 +260,12 @@ const STORIES: ReadonlyArray<FixtureStory> = [
       { title: "Frontend Review", assignee: "Ivana Jucker", hours: 2 * H, resolved: true },
       { title: "Backend-Mock", assignee: "Jonah Bieri", hours: 6 * H, resolved: true },
       { title: "Backend-Mock Review", assignee: "Selina Egger", hours: 6 * H, resolved: true },
-      { title: "Karten-Backend Umsetzung", assignee: "Cyrill Hauri", hours: 16 * H, resolved: true },
+      {
+        title: "Karten-Backend Umsetzung",
+        assignee: "Cyrill Hauri",
+        hours: 16 * H,
+        resolved: true,
+      },
       { title: "Testing", assignee: "Mara Castellan", hours: 4 * H },
     ],
   },
@@ -289,12 +292,31 @@ const STORIES: ReadonlyArray<FixtureStory> = [
     assignee: "Basil Wirthlin",
     inSprint: false,
     subtasks: [
-      { title: "Karten-Grundgerüst Restrukturierung der bestehenden Read-Only-Karte", assignee: "Basil Wirthlin", hours: 12 * H, resolved: true },
-      { title: "Karten-Restrukturierung mit neuem Event-Sourcing-Teil", assignee: "Basil Wirthlin", hours: 16 * H, resolved: true },
-      { title: "Neue Karte Vorbereitung und Deployment", assignee: "Mattia Neuhaus", hours: 12 * H, resolved: true },
+      {
+        title: "Karten-Grundgerüst Restrukturierung der bestehenden Read-Only-Karte",
+        assignee: "Basil Wirthlin",
+        hours: 12 * H,
+        resolved: true,
+      },
+      {
+        title: "Karten-Restrukturierung mit neuem Event-Sourcing-Teil",
+        assignee: "Basil Wirthlin",
+        hours: 16 * H,
+        resolved: true,
+      },
+      {
+        title: "Neue Karte Vorbereitung und Deployment",
+        assignee: "Mattia Neuhaus",
+        hours: 12 * H,
+        resolved: true,
+      },
       { title: "Karten-Routing Integration", assignee: "Basil Wirthlin", hours: 20 * H },
       { title: "Karten-Review und Besprechung", assignee: "Diego Tanner", hours: 16 * H },
-      { title: "Altes Routing von Fachlogik räumen (nur Build bleibt)", assignee: "Basil Wirthlin", hours: 2 * H },
+      {
+        title: "Altes Routing von Fachlogik räumen (nur Build bleibt)",
+        assignee: "Basil Wirthlin",
+        hours: 2 * H,
+      },
     ],
   },
   {
@@ -305,10 +327,30 @@ const STORIES: ReadonlyArray<FixtureStory> = [
     assignee: "Ivana Jucker",
     inSprint: false,
     subtasks: [
-      { title: 'Hauptscreen "Hilfe" implementieren', assignee: "Ivana Jucker", hours: 12 * H, resolved: true },
-      { title: 'Hauptscreen "Modal" implementieren', assignee: "Ivana Jucker", hours: 12 * H, resolved: true },
-      { title: "Seitenleiste implementieren", assignee: "Ivana Jucker", hours: 8 * H, resolved: true },
-      { title: "Permalink-Komponente implementieren", assignee: "Ivana Jucker", hours: 2 * H, resolved: true },
+      {
+        title: 'Hauptscreen "Hilfe" implementieren',
+        assignee: "Ivana Jucker",
+        hours: 12 * H,
+        resolved: true,
+      },
+      {
+        title: 'Hauptscreen "Modal" implementieren',
+        assignee: "Ivana Jucker",
+        hours: 12 * H,
+        resolved: true,
+      },
+      {
+        title: "Seitenleiste implementieren",
+        assignee: "Ivana Jucker",
+        hours: 8 * H,
+        resolved: true,
+      },
+      {
+        title: "Permalink-Komponente implementieren",
+        assignee: "Ivana Jucker",
+        hours: 2 * H,
+        resolved: true,
+      },
       { title: '"Hilfe" im Dialog-Header implementieren', assignee: "Ivana Jucker", hours: 4 * H },
     ],
   },
@@ -320,9 +362,18 @@ const STORIES: ReadonlyArray<FixtureStory> = [
     assignee: "Ruben Fankhauser",
     inSprint: false,
     subtasks: [
-      { title: "KMP: Besatzung durch System anpassen", assignee: "Levin Kradolfer", hours: 12 * H, resolved: true },
+      {
+        title: "KMP: Besatzung durch System anpassen",
+        assignee: "Levin Kradolfer",
+        hours: 12 * H,
+        resolved: true,
+      },
       { title: "iOS: Besatzung durch System anpassen", assignee: "Ruben Fankhauser", hours: 2 * H },
-      { title: "Android: Besatzung durch System anpassen", assignee: "Silvan Rentsch", hours: 2 * H },
+      {
+        title: "Android: Besatzung durch System anpassen",
+        assignee: "Silvan Rentsch",
+        hours: 2 * H,
+      },
       { title: "QA: Besatzung durch System anpassen", assignee: "Tabea Schwander", hours: 4 * H },
     ],
   },
@@ -335,9 +386,7 @@ const STORIES: ReadonlyArray<FixtureStory> = [
     inSprint: false,
     resolved: true,
     ownHours: 8 * H,
-    subtasks: [
-      { title: "Reviews + Hinterfragen", assignee: "Diego Tanner", hours: 3 * H },
-    ],
+    subtasks: [{ title: "Reviews + Hinterfragen", assignee: "Diego Tanner", hours: 3 * H }],
   },
 ];
 
@@ -390,12 +439,8 @@ export function planningSpaceFixtureTickets(): ProjectTicket[] {
             assigneeAccountId: `acc-${story.assignee}`,
           }
         : {}),
-      ...(story.ownHours !== undefined
-        ? { timeOriginalEstimateSeconds: story.ownHours }
-        : {}),
-      ...(story.description !== undefined
-        ? { description: story.description }
-        : {}),
+      ...(story.ownHours !== undefined ? { timeOriginalEstimateSeconds: story.ownHours } : {}),
+      ...(story.description !== undefined ? { description: story.description } : {}),
       ...(story.inSprint
         ? {
             sprintId: PLANNING_SPACE_FIXTURE_SPRINT_ID,

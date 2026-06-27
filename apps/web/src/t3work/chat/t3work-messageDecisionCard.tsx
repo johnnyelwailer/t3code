@@ -132,9 +132,7 @@ export function T3workWorkflowDecisionCard(props: {
     <div className="rounded-lg border border-primary/35 bg-background/65 px-4 py-3">
       <div className="mb-2 flex items-center gap-1.5 text-primary">
         <CircleHelpIcon className="size-3.5" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide">
-          Needs your input
-        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide">Needs your input</span>
       </div>
       <p className="text-sm leading-6 text-foreground">{decision.question}</p>
 

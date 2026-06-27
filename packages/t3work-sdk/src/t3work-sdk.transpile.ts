@@ -70,7 +70,10 @@ export function collectBlankSpans(
     }
   }
   if (options.includeMeta) {
-    spans.push({ start: options.metaStatement.getStart(sourceFile), end: options.metaStatement.end });
+    spans.push({
+      start: options.metaStatement.getStart(sourceFile),
+      end: options.metaStatement.end,
+    });
   }
   return spans;
 }

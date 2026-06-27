@@ -127,10 +127,7 @@ export type AtlassianAssignableUser = {
 
 export type AtlassianIssueStatusLane = "todo" | "inProgress" | "review" | "done";
 
-export type {
-  TempoCapacityResponse,
-  TempoUserCapacity,
-} from "./t3work-atlassianTempoTypes";
+export type { TempoCapacityResponse, TempoUserCapacity } from "./t3work-atlassianTempoTypes";
 
 export interface AtlassianBackendApi {
   readonly getTempoCapacity: (input: {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { usePrimaryEnvironmentId } from "~/environments/primary";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import { ScrollArea } from "~/t3work/components/ui/t3work-scroll-area";
 import type { BackendApi } from "~/t3work/backend/t3work-types";
 import type { ProjectThread, T3workThreadToolId } from "~/t3work/t3work-types";

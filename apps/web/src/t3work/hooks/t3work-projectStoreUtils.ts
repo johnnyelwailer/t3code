@@ -93,20 +93,20 @@ function dedupeProjects(projects: ProjectShellProject[]): ProjectShellProject[] 
 function synthesizeLooseWorkspaceProject(project: Project): ProjectShellProject {
   const createdAt = project.createdAt ?? new Date().toISOString();
   const updatedAt = project.updatedAt ?? createdAt;
-  const title = project.name.trim() || project.cwd;
+  const title = project.title.trim() || project.workspaceRoot;
   return {
     id: project.id as never,
     title,
     source: {
       provider: "local",
       externalProjectId: project.id,
-      externalProjectKey: project.name,
+      externalProjectKey: project.title,
       raw: {
         environmentId: project.environmentId,
       },
     },
     workspace: {
-      rootPath: project.cwd,
+      rootPath: project.workspaceRoot,
       createdAt,
     },
     createdAt,

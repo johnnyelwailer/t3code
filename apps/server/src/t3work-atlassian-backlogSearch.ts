@@ -63,9 +63,7 @@ function toJqlTextTerm(query: string): string {
 }
 
 export function searchT3workAtlassianBacklog(input: T3workAtlassianBacklogSearchInput) {
-  return input.mode === "offline"
-    ? searchOfflineBacklogCache(input)
-    : searchLiveBacklog(input);
+  return input.mode === "offline" ? searchOfflineBacklogCache(input) : searchLiveBacklog(input);
 }
 
 export function searchOfflineBacklogCache(input: T3workAtlassianBacklogSearchInput) {

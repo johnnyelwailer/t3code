@@ -140,5 +140,4 @@ export interface ReduceResult {
   readonly intents: ReadonlyArray<PlanningIntent>;
 }
 
-
 export { reducePlanningEvent } from "./t3work-planningSpaceReducer";

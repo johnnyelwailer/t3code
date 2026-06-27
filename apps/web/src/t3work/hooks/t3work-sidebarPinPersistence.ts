@@ -5,7 +5,7 @@ import {
 } from "@t3tools/contracts";
 
 import { readLocalApi } from "~/localApi";
-import { applySettingsUpdated, getServerConfig } from "~/rpc/serverState";
+import { applySettingsUpdated, getServerConfig } from "~/t3work/t3work-serverStateCompat";
 import type { T3WorkSidebarPinnedItem } from "~/t3work/t3work-sidebarPinningTypes";
 
 const SIDEBAR_PIN_PERSISTENCE_ERROR_SCOPE = "[SIDEBAR_PINS]";

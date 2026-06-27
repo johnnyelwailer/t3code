@@ -15,7 +15,10 @@ export function PlanningSpacePanels({ c }: { c: PlanningSpaceController }) {
     <>
       {detailStory ? (
         <>
-          <svg className="pointer-events-none absolute inset-0 z-20 h-full w-full" aria-hidden="true">
+          <svg
+            className="pointer-events-none absolute inset-0 z-20 h-full w-full"
+            aria-hidden="true"
+          >
             <line
               ref={c.leaderRef}
               stroke="#7c89ff"
@@ -41,7 +44,11 @@ export function PlanningSpacePanels({ c }: { c: PlanningSpaceController }) {
                 c.setDetailItem(null);
               },
               onOpenSubtask: (subtaskId) => {
-                const item: PlanningItemRef = { kind: "subtask", storyId: detailStory.id, subtaskId };
+                const item: PlanningItemRef = {
+                  kind: "subtask",
+                  storyId: detailStory.id,
+                  subtaskId,
+                };
                 c.machineState.current = { ...c.machineState.current, detail: item };
                 c.setDetailItem(item);
               },
@@ -63,7 +70,8 @@ export function PlanningSpacePanels({ c }: { c: PlanningSpaceController }) {
                   `${detailStory.key} ${inSprint ? "committed to sprint" : "moved out of sprint"}`,
                 );
               },
-              onFrameEpic: () => c.handlers.frameGroup({ kind: "epic", epicId: detailStory.epicId }),
+              onFrameEpic: () =>
+                c.handlers.frameGroup({ kind: "epic", epicId: detailStory.epicId }),
               onRevealInSpace: () => {
                 const frame = vm.layout.frames.get(detailStory.id);
                 const engine = c.engineRef.current;

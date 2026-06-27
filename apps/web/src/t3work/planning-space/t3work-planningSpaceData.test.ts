@@ -2,11 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { ProjectTicket } from "~/t3work/t3work-types";
 
-import {
-  NO_EPIC_ID,
-  buildPlanningSceneData,
-  sortPlanningOwners,
-} from "./t3work-planningSpaceData";
+import { NO_EPIC_ID, buildPlanningSceneData, sortPlanningOwners } from "./t3work-planningSpaceData";
 
 const SPRINT = "3185";
 
@@ -178,16 +174,12 @@ describe("buildPlanningSceneData", () => {
 
   it("honors the selected sprint id when sprintState is future (planning-day default)", () => {
     const futureSprint = realisticFixture().map((ticket) =>
-      ticket.sprintId === SPRINT
-        ? { ...ticket, sprintState: "future" as const }
-        : ticket,
+      ticket.sprintId === SPRINT ? { ...ticket, sprintState: "future" as const } : ticket,
     );
     const planned = buildPlanningSceneData(futureSprint, { sprintId: SPRINT });
     const withoutSelection = buildPlanningSceneData(futureSprint);
     expect(planned.stories.find((s) => s.id === "ST-1")?.inSprint).toBe(true);
-    expect(withoutSelection.stories.find((s) => s.id === "ST-1")?.inSprint).toBe(
-      false,
-    );
+    expect(withoutSelection.stories.find((s) => s.id === "ST-1")?.inSprint).toBe(false);
     expect(planned.owners.some((owner) => owner.id === "acc-se")).toBe(true);
   });
 

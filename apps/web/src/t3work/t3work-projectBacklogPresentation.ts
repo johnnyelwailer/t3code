@@ -142,9 +142,9 @@ export function buildVisibleBacklogHierarchy(
     }
   }
 
-  const visibleTickets = [...tickets.filter((ticket) => visibleTicketIds.has(ticket.id))].sort(
-    compareProjectBacklogTickets,
-  );
+  const visibleTickets = tickets
+    .filter((ticket) => visibleTicketIds.has(ticket.id))
+    .sort(compareProjectBacklogTickets);
 
   return {
     visibleTickets,

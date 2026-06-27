@@ -1,5 +1,5 @@
-import { scopeThreadRef } from "@t3tools/client-runtime";
-import type { usePrimaryEnvironmentId } from "~/environments/primary";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import { enqueueThreadKickoffAttachments } from "~/t3work/t3work-enqueueThreadKickoffAttachments";
 import type { AddToChatPayloadInput } from "~/t3work/t3work-addToChatUtils";
 import { buildJiraWorkItemSummary } from "~/t3work/t3work-jiraContextMetadata";

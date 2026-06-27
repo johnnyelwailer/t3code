@@ -128,8 +128,7 @@ export function usePlanningSpaceViewModel(
     return matches;
   }, [data.stories, textFilter, stateFilters, spotlight]);
 
-  const filtersActive =
-    textFilter.trim().length > 0 || stateFilters.size > 0 || spotlight !== null;
+  const filtersActive = textFilter.trim().length > 0 || stateFilters.size > 0 || spotlight !== null;
 
   const layout: GroupingLayout = useMemo(() => {
     const layoutStories = data.stories
@@ -176,10 +175,7 @@ export function usePlanningSpaceViewModel(
     return names;
   }, [data.owners]);
 
-  const epicById = useMemo(
-    () => new Map(data.epics.map((epic) => [epic.id, epic])),
-    [data.epics],
-  );
+  const epicById = useMemo(() => new Map(data.epics.map((epic) => [epic.id, epic])), [data.epics]);
 
   return {
     data,

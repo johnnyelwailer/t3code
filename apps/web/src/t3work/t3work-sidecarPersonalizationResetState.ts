@@ -27,7 +27,7 @@ function removeItemId(
   itemId: string,
 ) {
   const nextItemIds = (itemMap?.[sectionId] ?? []).filter((candidate) => candidate !== itemId);
-  const next = { ...(itemMap ?? {}) };
+  const next = { ...itemMap };
   if (nextItemIds.length > 0) {
     next[sectionId] = nextItemIds;
   } else {

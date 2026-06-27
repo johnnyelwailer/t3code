@@ -67,9 +67,13 @@ function buildHierarchyOrderedRows({
       (sortIndexByTicketId.get(right) ?? Number.MAX_SAFE_INTEGER) ||
     rowsByTicketId
       .get(left)!
-      .ticket.ref.displayId.localeCompare(rowsByTicketId.get(right)!.ticket.ref.displayId, undefined, {
-        numeric: true,
-      });
+      .ticket.ref.displayId.localeCompare(
+        rowsByTicketId.get(right)!.ticket.ref.displayId,
+        undefined,
+        {
+          numeric: true,
+        },
+      );
 
   const output: ProjectBacklogTableRow[] = [];
   const visited = new Set<string>();

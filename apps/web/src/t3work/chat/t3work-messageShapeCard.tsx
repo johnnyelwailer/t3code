@@ -73,9 +73,7 @@ function groupSteps(shape: ProjectRecipeWorkflowShapePayload) {
   const titles = shape.phases.map((phase) => phase.title);
   const groups: Array<{ title: string | null; steps: ProjectRecipeWorkflowShapePayload["steps"] }> =
     [];
-  const leading = shape.steps.filter(
-    (step) => step.phase === null || !titles.includes(step.phase),
-  );
+  const leading = shape.steps.filter((step) => step.phase === null || !titles.includes(step.phase));
   if (leading.length > 0) groups.push({ title: null, steps: leading });
   for (const title of titles) {
     const steps = shape.steps.filter((step) => step.phase === title);
@@ -104,11 +102,7 @@ function StepRow({ step }: { step: ProjectRecipeWorkflowShapePayload["steps"][nu
   );
 }
 
-export function T3workWorkflowShapeCard({
-  shape,
-}: {
-  shape: ProjectRecipeWorkflowShapePayload;
-}) {
+export function T3workWorkflowShapeCard({ shape }: { shape: ProjectRecipeWorkflowShapePayload }) {
   const groups = groupSteps(shape);
   return (
     <div className="rounded-lg border border-primary/35 bg-background/65 px-4 py-3">

@@ -120,13 +120,18 @@ export function createThreadPrimitives(deps: {
     });
   };
 
-  const denied = (cap: string, verb: string): (() => never) => () => {
-    throw new PermissionDeniedError(
-      `'${verb}' requires the '${cap}' capability. Add '${cap}' to this workflow's meta.capabilities.`,
-    );
-  };
+  const denied =
+    (cap: string, verb: string): (() => never) =>
+    () => {
+      throw new PermissionDeniedError(
+        `'${verb}' requires the '${cap}' capability. Add '${cap}' to this workflow's meta.capabilities.`,
+      );
+    };
 
-  const withThreadModel = <R>(o: AskOpts<R> | undefined, threadModel: ModelSelection | undefined): AskOpts<R> => {
+  const withThreadModel = <R>(
+    o: AskOpts<R> | undefined,
+    threadModel: ModelSelection | undefined,
+  ): AskOpts<R> => {
     const model = o?.model ?? threadModel;
     return { ...o, ...(model === undefined ? {} : { model }) };
   };
@@ -146,7 +151,7 @@ export function createThreadPrimitives(deps: {
 
   const spawnThread = (opts?: SpawnThreadOpts): Thread => {
     const model = opts?.model ?? deps.defaultModel;
-    const args = { ...(opts?.name === undefined ? {} : { name: opts.name }) };
+    const args = opts?.name === undefined ? {} : { name: opts.name };
     const threadId = dispatch.sendOneWay({
       kind: "thread.create",
       refId: "thread.create",
@@ -173,7 +178,9 @@ export function createThreadPrimitives(deps: {
 
   return {
     thread:
-      deps.launchThreadId === undefined ? undefined : makeThread(deps.launchThreadId, deps.defaultModel),
+      deps.launchThreadId === undefined
+        ? undefined
+        : makeThread(deps.launchThreadId, deps.defaultModel),
     spawnThread,
     agent,
   };

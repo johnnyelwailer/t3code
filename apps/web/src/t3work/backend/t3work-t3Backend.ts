@@ -1,8 +1,8 @@
 import { type ClientOrchestrationCommand, type ServerConfigStreamEvent } from "@t3tools/contracts";
-import { readEnvironmentApi } from "~/environmentApi";
-import { getPrimaryKnownEnvironment } from "~/environments/primary";
-import { getPrimaryEnvironmentConnection } from "~/environments/runtime";
-import { getServerConfig } from "~/rpc/serverState";
+
+import { resolveInitialPrimaryEnvironmentDescriptor } from "~/environments/primary";
+import { getServerConfig } from "~/t3work/t3work-serverStateCompat";
+import { runT3workOrchestrationDispatch } from "~/t3work/t3work-orchestrationDispatch";
 import type { BackendApi, BackendState } from "./t3work-types";
 import {
   createAtlassianBackendApi,
@@ -24,20 +24,6 @@ import type {
 export function createT3Backend(wsBaseUrl: string): BackendApi {
   const httpBaseUrl = resolveHttpBaseUrl(wsBaseUrl);
 
-  function readPrimaryOrThrow() {
-    const environmentId = getPrimaryKnownEnvironment()?.environmentId;
-    if (!environmentId) {
-      throw new Error("Primary environment is not available.");
-    }
-
-    const api = readEnvironmentApi(environmentId);
-    if (!api) {
-      throw new Error("Primary environment API is not available.");
-    }
-
-    return api;
-  }
-
   const state: BackendState = {
     connectionStatus: "connecting",
     serverConfig: getServerConfig(),
@@ -48,7 +34,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
   async function connect() {
     try {
       resolveWsUrl(wsBaseUrl);
-      await getPrimaryEnvironmentConnection().ensureBootstrapped();
+      await resolveInitialPrimaryEnvironmentDescriptor();
 
       const nextState = state as Writable<BackendState>;
       nextState.connectionStatus = "connected";
@@ -68,8 +54,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
   }
 
   async function dispatch(command: ClientOrchestrationCommand) {
-    const api = readPrimaryOrThrow();
-    await api.orchestration.dispatchCommand(command);
+    await runT3workOrchestrationDispatch(command);
   }
 
   async function listThreadPlacements(input: Parameters<BackendApi["listThreadPlacements"]>[0]) {
@@ -142,19 +127,17 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     atlassian,
     github,
     projectWorkspace,
-    subscribeConfig(listener: (event: ServerConfigStreamEvent) => void) {
-      return getPrimaryEnvironmentConnection().client.server.subscribeConfig(listener);
+    subscribeConfig(_listener: (event: ServerConfigStreamEvent) => void) {
+      return () => undefined;
     },
-    subscribeLifecycle(listener: (event: unknown) => void) {
-      return getPrimaryEnvironmentConnection().client.server.subscribeLifecycle(listener as never);
+    subscribeLifecycle(_listener: (event: unknown) => void) {
+      return () => undefined;
     },
-    subscribeShell(listener: (event: unknown) => void) {
-      const api = readPrimaryOrThrow();
-      return api.orchestration.subscribeShell(listener as never);
+    subscribeShell(_listener: (event: unknown) => void) {
+      return () => undefined;
     },
-    subscribeThread(threadId: string, listener: (event: unknown) => void) {
-      const api = readPrimaryOrThrow();
-      return api.orchestration.subscribeThread({ threadId: threadId as never }, listener as never);
+    subscribeThread(_threadId: string, _listener: (event: unknown) => void) {
+      return () => undefined;
     },
   };
 }

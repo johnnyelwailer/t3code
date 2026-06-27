@@ -1,4 +1,5 @@
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import type { ComponentType } from "react";
 import ChatView from "~/components/ChatView";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { ThreadPendingChat } from "~/t3work/chat/t3work-threadPendingChat";
@@ -10,6 +11,8 @@ import { useThreadChatTurnToolContext } from "~/t3work/chat/t3work-useThreadChat
 import { ThreadKickoffPlaceholder } from "~/t3work/chat/t3work-threadKickoffPlaceholder";
 import { ContextAttachmentStrip } from "~/t3work/components/t3work-ContextAttachmentChip";
 import type { T3workKickoffWorkflow, T3workThreadToolId } from "~/t3work/t3work-types";
+
+const T3workChatView = ChatView as ComponentType<Record<string, unknown>>;
 
 export interface ThreadChatViewProps {
   threadId: string;
@@ -159,7 +162,7 @@ export function ThreadChatView({
               {...(kickoffWorkflow ? { workflow: kickoffWorkflow } : {})}
             />
           ) : null}
-          <ChatView
+          <T3workChatView
             environmentId={environmentId}
             threadId={threadId as never}
             routeKind="server"

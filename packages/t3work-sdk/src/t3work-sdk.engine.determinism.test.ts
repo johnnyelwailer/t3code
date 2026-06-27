@@ -29,7 +29,11 @@ afterAll(cleanupRunsRoot);
 
 describe("durable workflow engine — deterministic globals", () => {
   it("binds the error-class globals and satisfies instanceof Error inside the body", async () => {
-    const { result } = await startWorkflow(errorGlobalsWorkflow, {}, { runsRoot, tools: demoTools });
+    const { result } = await startWorkflow(
+      errorGlobalsWorkflow,
+      {},
+      { runsRoot, tools: demoTools },
+    );
     expect(result).toEqual({
       workflowErrorIsError: true, // WorkflowError extends the injected host Error
       cancelledIsCancelled: true, // CancelledError is bound and matches itself
@@ -53,7 +57,11 @@ describe("durable workflow engine — deterministic globals", () => {
   });
 
   it("journals Math.random() and replays the recorded floats; Math.floor passes through", async () => {
-    const { runId, result } = await startWorkflow(randomWorkflow, {}, { runsRoot, tools: demoTools });
+    const { runId, result } = await startWorkflow(
+      randomWorkflow,
+      {},
+      { runsRoot, tools: demoTools },
+    );
     expect(result.a).toBeGreaterThanOrEqual(0);
     expect(result.a).toBeLessThan(1);
     expect(result.b).not.toBe(result.a); // two independent journaled draws
@@ -86,7 +94,10 @@ describe("durable workflow engine — deterministic globals", () => {
     argsLines[0] = JSON.stringify(argsEntry);
     writeFileSync(argsFile, `${argsLines.join("\n")}\n`);
     const argsErr = await resumeWorkflow(
-      argsRun.runId, nowWorkflow, {}, { runsRoot, tools: demoTools },
+      argsRun.runId,
+      nowWorkflow,
+      {},
+      { runsRoot, tools: demoTools },
     ).catch((e: unknown) => e);
     expect(argsErr).toBeInstanceOf(ReplayDriftError);
     expect((argsErr as ReplayDriftError).seq).toBe(1);
@@ -101,7 +112,10 @@ describe("durable workflow engine — deterministic globals", () => {
     callLines[0] = JSON.stringify(callEntry);
     writeFileSync(callFile, `${callLines.join("\n")}\n`);
     const callErr = await resumeWorkflow(
-      callRun.runId, nowWorkflow, {}, { runsRoot, tools: demoTools },
+      callRun.runId,
+      nowWorkflow,
+      {},
+      { runsRoot, tools: demoTools },
     ).catch((e: unknown) => e);
     expect(callErr).toBeInstanceOf(ReplayDriftError);
     expect((callErr as ReplayDriftError).reason).toBe("call");

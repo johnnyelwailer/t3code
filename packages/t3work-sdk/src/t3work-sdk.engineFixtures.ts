@@ -78,7 +78,10 @@ export function resolveTurnsBy(
     const text = envelopeText(envelope);
     for (const [match, reply] of lookup) {
       if (text.includes(match)) {
-        return { kind: "resolve", reply: typeof reply === "string" ? reply : JSON.stringify(reply) };
+        return {
+          kind: "resolve",
+          reply: typeof reply === "string" ? reply : JSON.stringify(reply),
+        };
       }
     }
     return { kind: "defer" };

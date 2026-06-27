@@ -1,7 +1,7 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useServerKeybindings } from "~/rpc/serverState";
-import { useCommandPaletteStore } from "~/commandPaletteStore";
+import { useServerKeybindings } from "~/t3work/t3work-serverStateCompat";
+import { useCommandPaletteStore } from "~/t3work/t3work-commandPaletteStore";
 import type { ProjectThread } from "~/t3work/t3work-types";
 import {
   Command,

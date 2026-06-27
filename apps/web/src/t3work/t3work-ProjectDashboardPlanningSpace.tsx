@@ -31,9 +31,15 @@ export function ProjectDashboardPlanningSpace({
   currentUserDisplayName?: string | undefined;
   canCreateSubtasks: boolean;
   shellClass?: string | undefined;
-  onUpdateAssignee: (ticket: ProjectTicket, assignee: AtlassianAssignableUser | null) => Promise<void>;
+  onUpdateAssignee: (
+    ticket: ProjectTicket,
+    assignee: AtlassianAssignableUser | null,
+  ) => Promise<void>;
   onUpdateEstimate: (ticket: ProjectTicket, estimateValue: number | null) => Promise<void>;
-  onCreateSubtask: (ticket: ProjectTicket, subtask: ProjectBacklogSubtaskCreateInput) => Promise<void>;
+  onCreateSubtask: (
+    ticket: ProjectTicket,
+    subtask: ProjectBacklogSubtaskCreateInput,
+  ) => Promise<void>;
   onTicketContextMenu: (event: MouseEvent, ticket: ProjectTicket) => void;
 }) {
   const ticketById = (id: string) => filteredTickets.find((t) => t.id === id);

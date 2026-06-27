@@ -31,10 +31,7 @@ function PlanningSpaceFixtureView({ sprintId }: { sprintId?: string }) {
     };
   };
 
-  const updateTicket = (
-    ticketId: string,
-    patch: (ticket: ProjectTicket) => ProjectTicket,
-  ) => {
+  const updateTicket = (ticketId: string, patch: (ticket: ProjectTicket) => ProjectTicket) => {
     setTickets((current) =>
       current.map((ticket) => (ticket.id === ticketId ? patch(ticket) : ticket)),
     );

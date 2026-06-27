@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { useServerConfig } from "~/rpc/serverState";
+import { useServerConfig } from "~/t3work/t3work-serverStateCompat";
 import { hydrateStoredSidebarNavPreferences } from "~/t3work/hooks/t3work-sidebarNavPreferencesPersistence";
 import {
   migrateLegacyStoredSidebarPinsToServer,

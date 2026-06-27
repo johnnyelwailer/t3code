@@ -43,7 +43,9 @@ afterAll(cleanupRunsRoot);
 describe("durable workflow engine — journal", () => {
   it("journals + replays a tool whose handler returns undefined (void result)", async () => {
     const { runId, result } = await startWorkflow(
-      voidResultWorkflow, { note: "hello" }, { runsRoot, tools: demoTools },
+      voidResultWorkflow,
+      { note: "hello" },
+      { runsRoot, tools: demoTools },
     );
     expect(result).toEqual({ ok: true });
     expect(counters.noopCalls).toBe(1);
@@ -52,7 +54,10 @@ describe("durable workflow engine — journal", () => {
     expect(journal.get(1)).toMatchObject({ seq: 1, kind: "tool", refId: "demo.noop" });
     expect(journal.get(1)?.result).toBeUndefined();
     const resumed = await resumeWorkflow(
-      runId, voidResultWorkflow, { note: "hello" }, { runsRoot, tools: demoTools },
+      runId,
+      voidResultWorkflow,
+      { note: "hello" },
+      { runsRoot, tools: demoTools },
     );
     expect(resumed.result).toEqual({ ok: true });
     expect(counters.noopCalls).toBe(1);
@@ -60,7 +65,9 @@ describe("durable workflow engine — journal", () => {
 
   it("raises JournalSerializeError when a handler returns a non-JSON value", async () => {
     const error = await startWorkflow(
-      bigintResultWorkflow, {}, { runsRoot, tools: demoTools },
+      bigintResultWorkflow,
+      {},
+      { runsRoot, tools: demoTools },
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(JournalSerializeError);
     const serr = error as JournalSerializeError;
@@ -106,8 +113,12 @@ describe("durable workflow engine — journal", () => {
       const writer = createStoreSink(new FsJournalStore(runsRoot), `strict-${tool.id}`);
       try {
         const runtime = createDurableWorkflowRuntime({
-          journal: new Map(), writer, toolCtx: ctx, scriptCtx: { ...ctx },
-          scriptNames: new Map(), filePath: "/dev/null",
+          journal: new Map(),
+          writer,
+          toolCtx: ctx,
+          scriptCtx: { ...ctx },
+          scriptNames: new Map(),
+          filePath: "/dev/null",
           nowIso: () => "1970-01-01T00:00:00.000Z",
         });
         const error = await runtime.callTool(tool, {}).catch((e: unknown) => e);
@@ -119,7 +130,11 @@ describe("durable workflow engine — journal", () => {
   });
 
   it("raises JournalSchemaError when a recorded result fails to re-decode", async () => {
-    const { runId } = await startWorkflow(twoTools, { prId: "PR-schema" }, { runsRoot, tools: demoTools });
+    const { runId } = await startWorkflow(
+      twoTools,
+      { prId: "PR-schema" },
+      { runsRoot, tools: demoTools },
+    );
     const file = journalFilePath(runsRoot, runId);
     const lines = readFileSync(file, "utf8").trim().split("\n");
     const first = JSON.parse(lines[0] ?? "{}") as Record<string, unknown>;
@@ -127,7 +142,10 @@ describe("durable workflow engine — journal", () => {
     lines[0] = JSON.stringify(first);
     writeFileSync(file, `${lines.join("\n")}\n`);
     const error = await resumeWorkflow(
-      runId, twoTools, { prId: "PR-schema" }, { runsRoot, tools: demoTools },
+      runId,
+      twoTools,
+      { prId: "PR-schema" },
+      { runsRoot, tools: demoTools },
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(JournalSchemaError);
     const jse = error as JournalSchemaError;
@@ -138,7 +156,11 @@ describe("durable workflow engine — journal", () => {
   });
 
   it("drops a torn final journal line with a warning but rejects mid-file corruption", async () => {
-    const { runId } = await startWorkflow(twoTools, { prId: "PR-torn" }, { runsRoot, tools: demoTools });
+    const { runId } = await startWorkflow(
+      twoTools,
+      { prId: "PR-torn" },
+      { runsRoot, tools: demoTools },
+    );
     const file = journalFilePath(runsRoot, runId);
     const fullText = readFileSync(file, "utf8");
     expect(fullText.trim().split("\n").length).toBe(2);
@@ -176,8 +198,12 @@ describe("durable workflow engine — journal", () => {
       // greetScript is real but the runtime's scriptNames map is empty — reaching
       // callScript with this ref simulates a start/resume registration mismatch.
       const runtime = createDurableWorkflowRuntime({
-        journal: new Map(), writer, toolCtx, scriptCtx,
-        scriptNames: new Map(), filePath: "/dev/null",
+        journal: new Map(),
+        writer,
+        toolCtx,
+        scriptCtx,
+        scriptNames: new Map(),
+        filePath: "/dev/null",
         nowIso: () => "1970-01-01T00:00:00.000Z",
       });
       const error = await runtime.callScript(greetScript, { name: "x" }).catch((e: unknown) => e);

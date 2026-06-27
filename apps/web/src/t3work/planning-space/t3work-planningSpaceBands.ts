@@ -39,9 +39,7 @@ export function planningBandChromeBucket(band: number): number {
 }
 
 export function planningBandChromeChanged(prev: number, next: number): boolean {
-  return (
-    (prev < 5) !== (next < 5) || planningBandChromeBucket(prev) !== planningBandChromeBucket(next)
-  );
+  return prev < 5 !== next < 5 || planningBandChromeBucket(prev) !== planningBandChromeBucket(next);
 }
 
 export function planningGaugeActiveLabel(band: number): string {

@@ -11,23 +11,19 @@ import {
   type Viewport,
   type WorldPoint,
   Z_STORY,
-  bandForScale,
   cursorAnchoredZoom,
-  fitCameraToBounds,
   pinchZoom,
   scaleForPlane,
   unprojectAtStoryPlane,
 } from "./t3work-planningSpaceScene";
 import {
-  CAMERA_LERP,
   type EdgePaintCache,
   type EngineEdge,
   type EngineNode,
   type EngineNodeKind,
   createEngineNode,
-  paintPlanningEdges,
-  paintPlanningNodes,
 } from "./t3work-planningSpaceRendererPaint";
+import { paintPlanningSpaceFrame } from "./t3work-planningSpaceRendererFrame";
 
 export type { EngineEdge, EngineNodeKind } from "./t3work-planningSpaceRendererPaint";
 
@@ -128,7 +124,14 @@ export class PlanningSpaceEngine {
   }
 
   pinchZoomAt(centerX: number, centerY: number, ratio: number): void {
-    this.cameraTarget = pinchZoom(this.cameraTarget, this.viewport(), centerX, centerY, ratio, this.zMinValue);
+    this.cameraTarget = pinchZoom(
+      this.cameraTarget,
+      this.viewport(),
+      centerX,
+      centerY,
+      ratio,
+      this.zMinValue,
+    );
   }
 
   setCameraTarget(camera: PlanningCamera): void {
@@ -199,30 +202,24 @@ export class PlanningSpaceEngine {
   private frame(): void {
     const viewport = this.viewport();
     if (viewport.width === 0) return;
-    if (this.fitRequest) {
-      this.cameraTarget = fitCameraToBounds(this.fitRequest, viewport);
-      this.zMinValue = Math.min(this.zMinValue, this.cameraTarget.z - 60);
-    }
-    this.camera = {
-      x: this.camera.x + (this.cameraTarget.x - this.camera.x) * CAMERA_LERP,
-      y: this.camera.y + (this.cameraTarget.y - this.camera.y) * CAMERA_LERP,
-      z: this.camera.z + (this.cameraTarget.z - this.camera.z) * CAMERA_LERP,
-    };
-    const storyScale = scaleForPlane(this.camera.z, Z_STORY);
-    const globalBand = bandForScale(storyScale);
-    if (globalBand !== this.lastGlobalBand) {
-      this.lastGlobalBand = globalBand;
-      this.onBandChange?.(globalBand);
-    }
-    paintPlanningNodes({
-      nodes: this.nodes.values(),
-      camera: this.camera,
+    const painted = paintPlanningSpaceFrame({
       viewport,
-      storyScale,
-      globalBand,
+      fitRequest: this.fitRequest,
+      camera: this.camera,
+      cameraTarget: this.cameraTarget,
+      zMinValue: this.zMinValue,
+      nodes: this.nodes.values(),
+      nodesById: this.nodes,
+      edges: this.edges,
+      edgePaint: this.edgePaint,
       dimmedIds: this.dimmedIds,
+      lastGlobalBand: this.lastGlobalBand,
+      onBandChange: this.onBandChange,
     });
-    paintPlanningEdges({ edges: this.edges, nodes: this.nodes, edgePaint: this.edgePaint });
+    this.camera = painted.camera;
+    this.cameraTarget = painted.cameraTarget;
+    this.zMinValue = painted.zMinValue;
+    this.lastGlobalBand = painted.lastGlobalBand;
     for (const listener of this.frameListeners) {
       listener();
     }

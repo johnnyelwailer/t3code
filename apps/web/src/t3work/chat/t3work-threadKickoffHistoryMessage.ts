@@ -25,7 +25,8 @@ export function buildThreadKickoffHistoryMessage(input: {
     role: "system",
     text: trimmedMessage,
     createdAt: input.createdAt,
-    completedAt: input.createdAt,
+    updatedAt: input.createdAt,
+    turnId: null,
     streaming: false,
   };
 }

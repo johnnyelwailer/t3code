@@ -48,7 +48,11 @@ export interface WorkflowShape {
 export function deriveWorkflowShape(source: WorkflowSource): WorkflowShape {
   const ts = loadTypescript();
   const sf = ts.createSourceFile(
-    source.absolutePath, source.sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS,
+    source.absolutePath,
+    source.sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
   );
   const { steps, phaseTitles } = scanSteps(ts, sf);
 

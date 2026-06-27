@@ -94,7 +94,12 @@ export class JournalSerializeError extends WorkflowError {
   readonly seq: number;
   readonly kind: string;
   readonly refId: string;
-  constructor(opts: { readonly seq: number; readonly kind: string; readonly refId: string; readonly cause: unknown }) {
+  constructor(opts: {
+    readonly seq: number;
+    readonly kind: string;
+    readonly refId: string;
+    readonly cause: unknown;
+  }) {
     const reason = opts.cause instanceof Error ? opts.cause.message : String(opts.cause);
     super(
       `Cannot journal the result of ${opts.kind} '${opts.refId}' at seq ${opts.seq}: the value is not canonical-JSON-encodable (${reason}). The side effect already ran, so this seq may re-execute on resume. Return a JSON-serializable value from the handler.`,
@@ -116,7 +121,12 @@ export class JournalSchemaError extends WorkflowError {
   readonly seq: number;
   readonly kind: string;
   readonly refId: string;
-  constructor(opts: { readonly seq: number; readonly kind: string; readonly refId: string; readonly cause: unknown }) {
+  constructor(opts: {
+    readonly seq: number;
+    readonly kind: string;
+    readonly refId: string;
+    readonly cause: unknown;
+  }) {
     const reason = opts.cause instanceof Error ? opts.cause.message : String(opts.cause);
     super(
       `Recorded result for ${opts.kind} '${opts.refId}' at seq ${opts.seq} does not match the current result schema: ${reason}. The journal is corrupt or schema-incompatible with this version of the workflow; this is distinct from replay drift.`,
@@ -148,7 +158,13 @@ export class ReplayDriftError extends WorkflowError {
   readonly observed: ReplayDriftFacet;
   /** Absolute path of the `.workflow.ts` whose body diverged, when the engine knows it. */
   readonly filePath?: string;
-  constructor(opts: { readonly seq: number; readonly reason: ReplayDriftReason; readonly expected: ReplayDriftFacet; readonly observed: ReplayDriftFacet; readonly filePath?: string }) {
+  constructor(opts: {
+    readonly seq: number;
+    readonly reason: ReplayDriftReason;
+    readonly expected: ReplayDriftFacet;
+    readonly observed: ReplayDriftFacet;
+    readonly filePath?: string;
+  }) {
     super(formatReplayDrift(opts));
     this.name = "ReplayDriftError";
     this.seq = opts.seq;
@@ -160,9 +176,17 @@ export class ReplayDriftError extends WorkflowError {
 }
 
 const formatFacet = (facet: ReplayDriftFacet): string =>
-  Object.entries(facet).map(([k, v]) => `${k}=${v}`).join(", ");
+  Object.entries(facet)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(", ");
 
-function formatReplayDrift(opts: { readonly seq: number; readonly reason: ReplayDriftReason; readonly expected: ReplayDriftFacet; readonly observed: ReplayDriftFacet; readonly filePath?: string }): string {
+function formatReplayDrift(opts: {
+  readonly seq: number;
+  readonly reason: ReplayDriftReason;
+  readonly expected: ReplayDriftFacet;
+  readonly observed: ReplayDriftFacet;
+  readonly filePath?: string;
+}): string {
   // Spec doc 25 §"How replay works" promises drift errors cite the file and the seq.
   // Line/column carry-through is deferred (it needs a per-statement source map); the
   // absolute path plus seq is the cheap, already-known locator.

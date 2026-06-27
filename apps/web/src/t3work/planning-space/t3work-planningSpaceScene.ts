@@ -66,11 +66,7 @@ export function unprojectAtStoryPlane(
  */
 export const ZOOM_DELTA_FACTOR = 0.00045;
 
-export function zoomedZ(
-  camZ: number,
-  wheelDeltaY: number,
-  zMin: number,
-): number {
+export function zoomedZ(camZ: number, wheelDeltaY: number, zMin: number): number {
   const distance = FOCAL + Z_STORY - camZ;
   const next = camZ - wheelDeltaY * distance * ZOOM_DELTA_FACTOR;
   return Math.max(zMin, Math.min(Z_CAMERA_MAX, next));
@@ -115,10 +111,7 @@ export function pinchZoom(
   const anchor = unprojectAtStoryPlane(camera, viewport, centerX, centerY);
   const clamped = Math.max(0.2, Math.min(5, ratio));
   const distance = FOCAL + Z_STORY - camera.z;
-  const z = Math.max(
-    zMin,
-    Math.min(Z_CAMERA_MAX, FOCAL + Z_STORY - distance / clamped),
-  );
+  const z = Math.max(zMin, Math.min(Z_CAMERA_MAX, FOCAL + Z_STORY - distance / clamped));
   const scale = scaleForPlane(z, Z_STORY);
   return {
     x: anchor.x - (centerX - viewport.width / 2) / scale,
@@ -126,7 +119,6 @@ export function pinchZoom(
     z,
   };
 }
-
 
 export {
   BAND_THRESHOLDS,

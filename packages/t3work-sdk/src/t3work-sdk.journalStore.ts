@@ -97,9 +97,11 @@ export function createStoreSink(store: JournalStore, runId: string): JournalSink
   let tail: Promise<void> = Promise.resolve();
   let failure: unknown;
   const chain = (op: () => Promise<void>): void => {
-    tail = tail.then(() => (failure === undefined ? op() : undefined)).catch((error) => {
-      if (failure === undefined) failure = error;
-    });
+    tail = tail
+      .then(() => (failure === undefined ? op() : undefined))
+      .catch((error) => {
+        if (failure === undefined) failure = error;
+      });
   };
   return {
     append: (entry) => chain(() => store.appendEntry(runId, entry)),

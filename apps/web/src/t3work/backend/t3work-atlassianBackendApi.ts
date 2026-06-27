@@ -160,4 +160,3 @@ export function createAtlassianBackendApi(httpBaseUrl: string): AtlassianBackend
     ...createAtlassianIssueOpsApi(post),
   };
 }
-

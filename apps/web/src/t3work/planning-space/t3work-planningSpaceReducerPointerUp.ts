@@ -50,10 +50,7 @@ export function reducePlanningPointerUp(
       const item = state.assignTarget;
       return {
         state: { ...cleared, assignTarget: null },
-        intents: [
-          { type: "assign", item, ownerId: group.ownerId },
-          { type: "assignModeEnd" },
-        ],
+        intents: [{ type: "assign", item, ownerId: group.ownerId }, { type: "assignModeEnd" }],
       };
     }
     // Epics are places: clicking one flies into its cluster (stories +

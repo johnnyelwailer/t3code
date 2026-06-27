@@ -71,9 +71,7 @@ describe("renderT3WorkProjectSetupFiles", () => {
     expect(agents?.contents).toContain(T3WORK_PROJECT_CONTEXT_ENTRYPOINT_PATH);
     expect(agents?.contents).toContain("prefer a read-only subagent");
     expect(agents?.contents).toContain("offer to save it as a one-click play");
-    expect(agents?.contents).toContain(
-      "do it in a separate thread scoped to the right repository",
-    );
+    expect(agents?.contents).toContain("do it in a separate thread scoped to the right repository");
     expect(agents?.contents).toContain("surface that thread as a link");
     expect(agents?.contents).toContain("Offer first");
     expect(agents?.managedRefresh?.knownContentHashes?.length).toBeGreaterThan(0);

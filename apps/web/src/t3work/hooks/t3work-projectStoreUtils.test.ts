@@ -26,8 +26,8 @@ function makeLiveProject(overrides: Partial<Project> = {}): Project {
   return {
     id: ProjectId.make("live-project"),
     environmentId: "env-local" as EnvironmentId,
-    name: "Loose workspace",
-    cwd: "/workspace/loose",
+    title: "Loose workspace",
+    workspaceRoot: "/workspace/loose",
     defaultModelSelection: null,
     scripts: [],
     createdAt: "2026-05-03T00:00:00.000Z",
@@ -64,7 +64,7 @@ describe("deriveLooseWorkspaceProjects", () => {
   it("does not duplicate a live workspace that already backs a saved project", () => {
     const looseWorkspaceProjects = deriveLooseWorkspaceProjects(
       [makeStoredProject()],
-      [makeLiveProject({ cwd: "/workspace/saved" })],
+      [makeLiveProject({ workspaceRoot: "/workspace/saved" })],
     );
 
     expect(looseWorkspaceProjects).toEqual([]);
@@ -80,7 +80,7 @@ describe("deriveLooseWorkspaceProjects", () => {
           },
         }),
       ],
-      [makeLiveProject({ cwd: "/workspace/saved" })],
+      [makeLiveProject({ workspaceRoot: "/workspace/saved" })],
     );
 
     expect(looseWorkspaceProjects).toEqual([]);
@@ -106,7 +106,7 @@ describe("deriveLooseWorkspaceProjects", () => {
           },
         }),
       ],
-      [makeLiveProject({ cwd: "/workspace/references/repo" })],
+      [makeLiveProject({ workspaceRoot: "/workspace/references/repo" })],
     );
 
     expect(looseWorkspaceProjects).toEqual([]);
@@ -132,7 +132,7 @@ describe("deriveLooseWorkspaceProjects", () => {
           },
         }),
       ],
-      [makeLiveProject({ cwd: "/workspace/references/repo" })],
+      [makeLiveProject({ workspaceRoot: "/workspace/references/repo" })],
     );
 
     expect(looseWorkspaceProjects).toEqual([]);
@@ -150,7 +150,7 @@ describe("deriveLooseWorkspaceProjects", () => {
           },
         }),
       ],
-      [makeLiveProject({ cwd: "/Users/tester/workspace/saved" })],
+      [makeLiveProject({ workspaceRoot: "/Users/tester/workspace/saved" })],
     );
 
     expect(looseWorkspaceProjects).toEqual([]);
@@ -170,7 +170,7 @@ describe("deriveLooseWorkspaceProjects", () => {
       [
         makeLiveProject({
           id: ProjectId.make("live-project"),
-          cwd: "/Users/tester/.t3code/t3work/projects/IES NG",
+          workspaceRoot: "/Users/tester/.t3code/t3work/projects/IES NG",
         }),
       ],
     );
@@ -201,7 +201,7 @@ describe("deriveLooseWorkspaceProjects", () => {
       ],
       [
         makeLiveProject({
-          cwd: "/workspace/references/repo/apps/web",
+          workspaceRoot: "/workspace/references/repo/apps/web",
           repositoryIdentity: {
             canonicalKey: "github.com/acme/repo",
             locator: {

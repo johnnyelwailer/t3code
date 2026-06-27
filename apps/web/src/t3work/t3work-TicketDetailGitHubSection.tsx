@@ -56,14 +56,19 @@ export function TicketDetailGitHubSection({
         ? { lastCheckedAt: githubActivityLastCheckedAt }
         : {})}
       onItemContextMenu={(event, item) => {
-        openGitHubActivityAgentContextMenu(event, ticket ?? null, item, {
-          ...(githubHost ? { fallbackHost: githubHost } : {}),
-        });
+        openGitHubActivityAgentContextMenu(
+          event,
+          ticket ?? null,
+          item,
+          githubHost ? { fallbackHost: githubHost } : {},
+        );
       }}
       getItemDragCapabilities={(item) =>
-        getGitHubActivityAgentContext(ticket ?? null, item, {
-          ...(githubHost ? { fallbackHost: githubHost } : {}),
-        })
+        getGitHubActivityAgentContext(
+          ticket ?? null,
+          item,
+          githubHost ? { fallbackHost: githubHost } : {},
+        )
       }
       {...(githubActivityLoading ? { loading: githubActivityLoading } : {})}
       {...(githubActivityWarning ? { warning: githubActivityWarning } : {})}

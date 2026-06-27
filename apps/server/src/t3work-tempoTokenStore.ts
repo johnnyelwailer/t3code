@@ -25,13 +25,15 @@ export const loadTempoToken = Effect.gen(function* () {
   if (envToken) return envToken;
   const fileSystem = yield* FileSystem.FileSystem;
   const secretPath = yield* tempoTokenSecretPath;
-  const persisted = yield* fileSystem.readFileString(secretPath).pipe(
-    Effect.catch((cause) =>
-      cause.reason._tag === "NotFound"
-        ? Effect.succeed(null)
-        : Effect.fail(toAtlassianError("Failed to load the persisted Tempo token.")(cause)),
-    ),
-  );
+  const persisted = yield* fileSystem
+    .readFileString(secretPath)
+    .pipe(
+      Effect.catch((cause) =>
+        cause.reason._tag === "NotFound"
+          ? Effect.succeed(null)
+          : Effect.fail(toAtlassianError("Failed to load the persisted Tempo token.")(cause)),
+      ),
+    );
   const token = persisted?.trim();
   return token && token.length > 0 ? token : null;
 });
@@ -42,9 +44,7 @@ export function saveTempoToken(token: string | null) {
     const serverConfig = yield* ServerConfig;
     const secretPath = yield* tempoTokenSecretPath;
     if (!token || token.trim().length === 0) {
-      yield* fileSystem
-        .remove(secretPath)
-        .pipe(Effect.catch(() => Effect.void));
+      yield* fileSystem.remove(secretPath).pipe(Effect.catch(() => Effect.void));
       return;
     }
     yield* fileSystem

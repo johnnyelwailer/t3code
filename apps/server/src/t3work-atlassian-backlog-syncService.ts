@@ -79,10 +79,7 @@ export function kickT3workAtlassianBacklogBackgroundSync(input: T3workAtlassianB
   );
 }
 
-function runBacklogSyncWalk(
-  input: T3workAtlassianBacklogSyncRequest,
-  isSuperseded: () => boolean,
-) {
+function runBacklogSyncWalk(input: T3workAtlassianBacklogSyncRequest, isSuperseded: () => boolean) {
   return Effect.gen(function* () {
     const identity = {
       provider: input.account.provider,

@@ -18,7 +18,10 @@ const SCHEMA_INSTRUCTION =
  * and the retry loop fires. */
 function coerceJson(reply: unknown): unknown {
   if (typeof reply !== "string") return reply;
-  const unfenced = reply.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const unfenced = reply
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
   try {
     return JSON.parse(unfenced);
   } catch {
@@ -50,7 +53,10 @@ export function planAskRender(input: {
   // never renders a card.
   const affordance =
     kind === "user.input"
-      ? schemaToAffordance(schema, input.labels === undefined ? undefined : { labels: input.labels })
+      ? schemaToAffordance(
+          schema,
+          input.labels === undefined ? undefined : { labels: input.labels },
+        )
       : undefined;
   const choice = affordance?.kind === "choice" ? affordance : undefined;
   const rendered = affordance !== undefined && affordance.kind !== "text";

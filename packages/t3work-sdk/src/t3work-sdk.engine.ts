@@ -27,10 +27,7 @@
 import { randomUUID } from "node:crypto";
 
 import { hashArgs } from "./t3work-sdk.canonicalJson.ts";
-import {
-  WorkflowError,
-  WorkflowRunNotFoundError,
-} from "./t3work-sdk.errors.ts";
+import { WorkflowError, WorkflowRunNotFoundError } from "./t3work-sdk.errors.ts";
 import { defaultRunsRoot, FsJournalStore, type JournalStore } from "./t3work-sdk.journalStore.ts";
 import type * as T from "./t3work-sdk.types.ts";
 import type { WorkflowRunOptions } from "./t3work-sdk.types.ts";
@@ -73,7 +70,10 @@ export interface SuspendedResult {
   readonly correlationId: string;
 }
 
-function toRunResult<O>(runId: string, outcome: RunOutcome<O>): WorkflowRunResult<O> | SuspendedResult {
+function toRunResult<O>(
+  runId: string,
+  outcome: RunOutcome<O>,
+): WorkflowRunResult<O> | SuspendedResult {
   return outcome.kind === "suspended"
     ? { runId, suspended: true, correlationId: outcome.correlationId }
     : { runId, result: outcome.output };

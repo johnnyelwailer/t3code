@@ -6,7 +6,7 @@ import {
   type SidecarPersonalization,
 } from "@t3tools/project-recipes";
 
-import { useServerConfig } from "~/rpc/serverState";
+import { useServerConfig } from "~/t3work/t3work-serverStateCompat";
 import {
   persistStoredSidecarPersonalization,
   readStoredSidecarPersonalizationFromServerSettings,

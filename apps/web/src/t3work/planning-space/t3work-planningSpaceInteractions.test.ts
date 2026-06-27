@@ -137,12 +137,8 @@ describe("group anchors (§6.1)", () => {
   });
 
   it("double-click frames the group", () => {
-    const { intents } = run([
-      { type: "doubleClick", hit: { type: "epicTile", epicId: "E1" } },
-    ]);
-    expect(intents).toEqual([
-      { type: "frameGroup", group: { kind: "epic", epicId: "E1" } },
-    ]);
+    const { intents } = run([{ type: "doubleClick", hit: { type: "epicTile", epicId: "E1" } }]);
+    expect(intents).toEqual([{ type: "frameGroup", group: { kind: "epic", epicId: "E1" } }]);
   });
 
   it("single-click on an epic anchor flies into the cluster, never spotlights", () => {
@@ -151,17 +147,13 @@ describe("group anchors (§6.1)", () => {
       { type: "pointerDown", hit: epic, x: 0, y: 0 },
       { type: "pointerUp", hit: epic, worldX: 0, worldY: 0, drop: DROP_EPIC },
     ]);
-    expect(intents).toEqual([
-      { type: "frameGroup", group: { kind: "epic", epicId: "E2" } },
-    ]);
+    expect(intents).toEqual([{ type: "frameGroup", group: { kind: "epic", epicId: "E2" } }]);
     expect(state.spotlight).toBeNull();
   });
 
   it("double-click on an item emits the quick-zoom intent", () => {
     const { intents } = run([{ type: "doubleClick", hit: frameHit }]);
-    expect(intents).toEqual([
-      { type: "frameItem", item: { kind: "story", storyId: "S1" } },
-    ]);
+    expect(intents).toEqual([{ type: "frameItem", item: { kind: "story", storyId: "S1" } }]);
   });
 });
 
@@ -204,12 +196,7 @@ describe("escape ladder (§6.7)", () => {
       state = result.state;
       steps.push(...result.intents.map((intent) => intent.type));
     }
-    expect(steps).toEqual([
-      "personDragEnd",
-      "closeDetail",
-      "assignModeEnd",
-      "spotlightClear",
-    ]);
+    expect(steps).toEqual(["personDragEnd", "closeDetail", "assignModeEnd", "spotlightClear"]);
     expect(reducePlanningEvent(state, { type: "escape" }).intents).toEqual([]);
   });
 });
@@ -234,10 +221,7 @@ describe("background clicks", () => {
       ],
       state,
     );
-    expect(intents.map((i) => i.type).sort()).toEqual([
-      "assignModeEnd",
-      "closeDetail",
-    ]);
+    expect(intents.map((i) => i.type).sort()).toEqual(["assignModeEnd", "closeDetail"]);
     expect(after.detail).toBeNull();
     expect(after.assignTarget).toBeNull();
   });

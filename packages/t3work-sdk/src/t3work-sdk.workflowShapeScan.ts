@@ -16,9 +16,29 @@ const MAX_LABEL = 100;
 
 /** read-ish verb prefixes — a tool/script whose last name segment starts with one is `read`. */
 const READ_VERBS = [
-  "get", "list", "read", "fetch", "search", "find", "query", "load", "view", "show",
-  "describe", "count", "check", "lookup", "has", "is", "exists", "scan", "inspect",
-  "summar", "classif", "poll", "diff",
+  "get",
+  "list",
+  "read",
+  "fetch",
+  "search",
+  "find",
+  "query",
+  "load",
+  "view",
+  "show",
+  "describe",
+  "count",
+  "check",
+  "lookup",
+  "has",
+  "is",
+  "exists",
+  "scan",
+  "inspect",
+  "summar",
+  "classif",
+  "poll",
+  "diff",
 ];
 
 function truncate(text: string): string {

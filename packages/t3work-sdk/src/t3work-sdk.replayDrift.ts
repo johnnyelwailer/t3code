@@ -41,7 +41,12 @@ export function assertJournalMatch(
 
 /** Throw the "gap" drift: a `seq` at or below the recorded frontier with no journal entry
  * means the body skipped a call the original run made. */
-export function gapDrift(seq: number, kind: string, refId: string, filePath: string | undefined): never {
+export function gapDrift(
+  seq: number,
+  kind: string,
+  refId: string,
+  filePath: string | undefined,
+): never {
   throw new ReplayDriftError({
     seq,
     reason: "call",

@@ -49,7 +49,10 @@ export function usePlanningSpacePointerEffect(ctxRef: MutableRefObject<PlanningS
       if (!c.machineState.current.pointer) return;
       c.userNavigated.current = true;
       const rect = stage.getBoundingClientRect();
-      const world = engine.unprojectAtStoryPlane(event.clientX - rect.left, event.clientY - rect.top);
+      const world = engine.unprojectAtStoryPlane(
+        event.clientX - rect.left,
+        event.clientY - rect.top,
+      );
       c.handlers.dispatch({
         type: "pointerMove",
         x: event.clientX,
@@ -100,7 +103,10 @@ export function usePlanningSpacePointerEffect(ctxRef: MutableRefObject<PlanningS
       }
       if (!c.machineState.current.pointer) return;
       const rect = stage.getBoundingClientRect();
-      const world = engine.unprojectAtStoryPlane(event.clientX - rect.left, event.clientY - rect.top);
+      const world = engine.unprojectAtStoryPlane(
+        event.clientX - rect.left,
+        event.clientY - rect.top,
+      );
       g.clearDropHot();
       c.handlers.dispatch({
         type: "pointerUp",

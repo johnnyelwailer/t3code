@@ -31,11 +31,7 @@ export {
   releaseNotesWrite,
   t3workThreadWrite,
 } from "./t3work-sdk.groups.ts";
-export {
-  createStoreSink,
-  defaultRunsRoot,
-  FsJournalStore,
-} from "./t3work-sdk.journalStore.ts";
+export { createStoreSink, defaultRunsRoot, FsJournalStore } from "./t3work-sdk.journalStore.ts";
 export { buildJournalMaps, insertWireEntry } from "./t3work-sdk.journalReader.ts";
 export { toResolvedWire, toWire } from "./t3work-sdk.journalWriter.ts";
 export { models } from "./t3work-sdk.models.ts";

@@ -161,7 +161,7 @@ describe("resolveProjectSidebarPinnedItems", () => {
     const liveProjects = [
       {
         id: "live-project",
-        cwd: "/workspace/alpha",
+        workspaceRoot: "/workspace/alpha",
         repositoryIdentity: { rootPath: "/workspace/alpha" },
       } as Project,
     ];

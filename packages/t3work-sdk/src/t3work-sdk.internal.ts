@@ -51,7 +51,7 @@ export async function decodeWithSchema<Value>(
   try {
     return await (Schema.decodeUnknownPromise(schema as never)(input) as Promise<Value>);
   } catch (error) {
-    throw new Error(`${message}: ${formatError(error)}`);
+    throw new Error(`${message}: ${formatError(error)}`, { cause: error });
   }
 }
 

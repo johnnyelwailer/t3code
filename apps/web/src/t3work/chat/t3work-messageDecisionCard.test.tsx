@@ -16,6 +16,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
 
+import { buildT3workMessagesTimelineTestProps } from "~/t3work/chat/t3work-messagesTimelineTestProps";
+
 import {
   findActiveWorkflowInputMessageId,
   T3workWorkflowDecisionCard,
@@ -69,7 +71,8 @@ function decisionMessage(id: string): ChatMessage {
     text: QUESTION,
     streaming: false,
     createdAt: "2026-06-09T00:00:00.000Z",
-    completedAt: "2026-06-09T00:00:00.000Z",
+    updatedAt: "2026-06-09T00:00:00.000Z",
+    turnId: null,
     t3workExt: {
       visibleToUser: true,
       status: "waiting-for-input",
@@ -108,6 +111,8 @@ function userReply(id: string, text: string): ChatMessage {
     text,
     streaming: false,
     createdAt: "2026-06-09T00:00:01.000Z",
+    updatedAt: "2026-06-09T00:00:01.000Z",
+    turnId: null,
   };
 }
 
@@ -115,33 +120,13 @@ async function renderTimeline(messages: ReadonlyArray<ChatMessage>) {
   const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
   return renderToStaticMarkup(
     <MessagesTimeline
-      isWorking={false}
-      activeTurnInProgress={false}
-      activeTurnId={null}
-      activeTurnStartedAt={null}
-      listRef={createRef<LegendListRef | null>()}
+      {...buildT3workMessagesTimelineTestProps()}
       timelineEntries={messages.map((message, index) => ({
         id: `timeline-${index}`,
         kind: "message" as const,
         createdAt: message.createdAt,
         message,
       }))}
-      completionDividerBeforeEntryId={null}
-      completionSummary={null}
-      turnDiffSummaryByAssistantMessageId={new Map()}
-      routeThreadKey="environment-local:thread-1"
-      onOpenTurnDiff={() => {}}
-      revertTurnCountByUserMessageId={new Map()}
-      onRevertUserMessage={() => {}}
-      isRevertingCheckpoint={false}
-      onImageExpand={() => {}}
-      activeThreadEnvironmentId={EnvironmentId.make("environment-local")}
-      markdownCwd={undefined}
-      resolvedTheme="light"
-      timestampFormat="locale"
-      workspaceRoot={undefined}
-      onIsAtEndChange={() => {}}
-      onResolveWorkflowDecision={async () => {}}
     />,
   );
 }
@@ -172,9 +157,7 @@ async function clickButton(container: HTMLElement, label: string) {
 /** Set a controlled input/select value the way React's synthetic onChange expects. */
 async function setControlValue(element: HTMLInputElement | HTMLSelectElement, value: string) {
   const proto =
-    element instanceof HTMLSelectElement
-      ? HTMLSelectElement.prototype
-      : HTMLInputElement.prototype;
+    element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
   await act(async () => {
     setter?.call(element, value);
@@ -235,9 +218,9 @@ describe("findActiveWorkflowInputMessageId", () => {
   const entry = (message: ChatMessage) => ({ kind: "message" as const, message });
 
   it("returns the latest unanswered waiting-for-input message", () => {
-    expect(
-      findActiveWorkflowInputMessageId([entry(decisionMessage("message-decision-1"))]),
-    ).toBe("message-decision-1");
+    expect(findActiveWorkflowInputMessageId([entry(decisionMessage("message-decision-1"))])).toBe(
+      "message-decision-1",
+    );
   });
 
   it("returns null once a user reply lands after it", () => {

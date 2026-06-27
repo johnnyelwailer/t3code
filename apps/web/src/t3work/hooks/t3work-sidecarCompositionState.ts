@@ -35,7 +35,7 @@ export function updateSectionItemMap(
   sectionId: string,
   nextItemIds: ReadonlyArray<string> | undefined,
 ): Readonly<Record<string, ReadonlyArray<string>>> | undefined {
-  const nextItemMap = { ...(itemMap ?? {}) };
+  const nextItemMap = { ...itemMap };
 
   if (!nextItemIds || nextItemIds.length === 0) {
     delete nextItemMap[sectionId];

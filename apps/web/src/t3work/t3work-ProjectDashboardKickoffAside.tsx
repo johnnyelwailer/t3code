@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { usePrimaryEnvironmentId } from "~/environments/primary";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { ScrollArea } from "~/t3work/components/ui/t3work-scroll-area";
 import { useProjectDashboardInjectedContextAttachments } from "~/t3work/hooks/t3work-useProjectDashboardInjectedContextAttachments";

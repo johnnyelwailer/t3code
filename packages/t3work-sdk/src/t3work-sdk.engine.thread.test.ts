@@ -51,7 +51,8 @@ afterAll(cleanupRunsRoot);
 type AnyResult<O> = WorkflowRunResult<O> | SuspendedResult;
 const isSuspended = <O>(r: AnyResult<O>): r is SuspendedResult => "suspended" in r;
 function completed<O>(r: AnyResult<O>): O {
-  if (isSuspended(r)) throw new Error(`expected a completed run, got SuspendedResult (${r.correlationId})`);
+  if (isSuspended(r))
+    throw new Error(`expected a completed run, got SuspendedResult (${r.correlationId})`);
   return r.result;
 }
 
@@ -81,13 +82,20 @@ describe("durable workflow engine — Thread model", () => {
     expect(bySeq.size).toBe(4);
     expect(byCorrelation.size).toBe(2); // the two turns resolved
 
-    const resumed = await resumeWorkflow(run.runId, agentPrimitiveWorkflow, { topic: "cats" }, base);
+    const resumed = await resumeWorkflow(
+      run.runId,
+      agentPrimitiveWorkflow,
+      { topic: "cats" },
+      base,
+    );
     expect(completed(resumed)).toEqual({ summary: "cats are fine", sentiment: "positive" });
     expect(broker.sent).toHaveLength(4); // NOT re-fired on replay
   });
 
   it("spawns a thread, awaits a schema-typed turn, and posts a follow-up to that thread", async () => {
-    const broker = createMockBroker(resolveTurnsBy([["summarize the thread", { summary: "all green" }]]));
+    const broker = createMockBroker(
+      resolveTurnsBy([["summarize the thread", { summary: "all green" }]]),
+    );
     const base = { runsRoot, tools: [], broker } as const;
     const run = await startWorkflow(childSpawnWorkflow, {}, base);
     expect(completed(run)).toEqual({ summary: "all green" });
@@ -127,7 +135,12 @@ describe("durable workflow engine — Thread model", () => {
     });
     expect(wrote).toBe(true);
 
-    const resumed = await resumeWorkflow(run.runId, askResponseWorkflow, { question: "ship it?" }, base);
+    const resumed = await resumeWorkflow(
+      run.runId,
+      askResponseWorkflow,
+      { question: "ship it?" },
+      base,
+    );
     expect(completed(resumed)).toEqual({ answer: "approved" });
     expect(broker.sent).toHaveLength(1); // the sent entry replayed, broker untouched
   });
@@ -202,7 +215,11 @@ describe("durable workflow engine — Thread model", () => {
     expect(bySeq.get(2)).toMatchObject({ kind: "thread.message", phase: "sent" });
     expect(bySeq.get(3)).toMatchObject({ kind: "thread.message", phase: "sent" });
     expect(byCorrelation.size).toBe(0); // no replies, nothing to resolve
-    expect(broker.sent.map((e) => e.kind)).toEqual(["thread.create", "thread.message", "thread.message"]);
+    expect(broker.sent.map((e) => e.kind)).toEqual([
+      "thread.create",
+      "thread.message",
+      "thread.message",
+    ]);
   });
 
   it("throws PermissionDeniedError when askUser is called without the 'user' capability", async () => {

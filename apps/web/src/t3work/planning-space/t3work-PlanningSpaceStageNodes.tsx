@@ -122,7 +122,10 @@ export function PlanningSpaceStageNodes({ c }: { c: PlanningSpaceController }) {
                   borderColor: `${color}66`,
                 }}
               >
-                <span className="line-clamp-2 text-[12px] font-medium leading-snug" style={{ color }}>
+                <span
+                  className="line-clamp-2 text-[12px] font-medium leading-snug"
+                  style={{ color }}
+                >
                   {epic.title}
                 </span>
                 <span className="mt-auto text-[10.5px] tabular-nums text-muted-foreground">
@@ -134,7 +137,9 @@ export function PlanningSpaceStageNodes({ c }: { c: PlanningSpaceController }) {
                     className="h-full"
                     style={{
                       width: `${
-                        epic.storyIds.length > 0 ? (epic.readyCount / epic.storyIds.length) * 100 : 0
+                        epic.storyIds.length > 0
+                          ? (epic.readyCount / epic.storyIds.length) * 100
+                          : 0
                       }%`,
                       background: color,
                     }}

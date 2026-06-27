@@ -69,7 +69,6 @@ export function areProjectBacklogTableGroupsEqual(
   );
 }
 
-
 export function getProjectBacklogTableExpandableTicketIds(
   rows: readonly ProjectBacklogTableRow[],
 ): ReadonlySet<string> {

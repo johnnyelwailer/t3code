@@ -46,7 +46,7 @@ describe("resolveCanonicalProjectId", () => {
           createdAt: "2026-05-01T00:00:00.000Z",
         },
       }),
-      [makeLiveProject({ id: ProjectId.make("live-saved"), cwd: "/workspace/saved" })],
+      [makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" })],
     );
 
     expect(canonicalProjectId).toBe(ProjectId.make("live-saved"));
@@ -71,7 +71,12 @@ describe("resolveCanonicalProjectId", () => {
           },
         },
       }),
-      [makeLiveProject({ id: ProjectId.make("live-linked"), cwd: "/workspace/references/repo" })],
+      [
+        makeLiveProject({
+          id: ProjectId.make("live-linked"),
+          workspaceRoot: "/workspace/references/repo",
+        }),
+      ],
     );
 
     expect(canonicalProjectId).toBe(ProjectId.make("live-linked"));
@@ -99,7 +104,7 @@ describe("resolveCanonicalProjectId", () => {
       [
         makeLiveProject({
           id: ProjectId.make("live-linked"),
-          cwd: "/workspace/references/repo/apps/web",
+          workspaceRoot: "/workspace/references/repo/apps/web",
           repositoryIdentity: {
             canonicalKey: "github.com/acme/repo",
             locator: {
@@ -122,7 +127,7 @@ describe("resolveCanonicalProjectIdForWorkspaceRoot", () => {
     const canonicalProjectId = resolveCanonicalProjectIdForWorkspaceRoot(
       "/workspace/saved/",
       "stored-project",
-      [makeLiveProject({ id: ProjectId.make("live-saved"), cwd: "/workspace/saved" })],
+      [makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" })],
     );
 
     expect(canonicalProjectId).toBe(ProjectId.make("live-saved"));
@@ -141,7 +146,7 @@ describe("resolveStoredProjectId", () => {
           },
         }),
       ],
-      [makeLiveProject({ id: ProjectId.make("live-saved"), cwd: "/workspace/saved" })],
+      [makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" })],
     );
 
     expect(resolvedProjectId).toBe("stored-project");
@@ -169,7 +174,12 @@ describe("resolveStoredProjectId", () => {
           },
         }),
       ],
-      [makeLiveProject({ id: ProjectId.make("live-linked"), cwd: "/workspace/references/repo" })],
+      [
+        makeLiveProject({
+          id: ProjectId.make("live-linked"),
+          workspaceRoot: "/workspace/references/repo",
+        }),
+      ],
     );
 
     expect(resolvedProjectId).toBe("stored-project");
@@ -200,7 +210,7 @@ describe("resolveStoredProjectId", () => {
       [
         makeLiveProject({
           id: ProjectId.make("live-linked"),
-          cwd: "/workspace/references/repo/apps/web",
+          workspaceRoot: "/workspace/references/repo/apps/web",
           repositoryIdentity: {
             canonicalKey: "github.com/acme/repo",
             locator: {
@@ -230,7 +240,12 @@ describe("resolveStoredProjectId", () => {
           },
         }),
       ],
-      [makeLiveProject({ id: ProjectId.make("live-saved"), cwd: "/Users/tester/workspace/saved" })],
+      [
+        makeLiveProject({
+          id: ProjectId.make("live-saved"),
+          workspaceRoot: "/Users/tester/workspace/saved",
+        }),
+      ],
     );
 
     expect(resolvedProjectId).toBe("stored-project");
@@ -248,7 +263,7 @@ describe("remapProjectThreadToStoredProject", () => {
       }),
     ];
     const liveProjects = [
-      makeLiveProject({ id: ProjectId.make("live-saved"), cwd: "/workspace/saved" }),
+      makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
     ];
     const localThread = makeProjectThread({
       projectId: ProjectId.make("live-saved"),
@@ -370,7 +385,7 @@ describe("remapProjectThreadToStoredProject", () => {
       }),
     ];
     const liveProjects = [
-      makeLiveProject({ id: ProjectId.make("live-saved"), cwd: "/workspace/saved" }),
+      makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
     ];
 
     expect(
@@ -430,7 +445,7 @@ describe("remapProjectThreadToStoredProject", () => {
       }),
     ];
     const liveProjects = [
-      makeLiveProject({ id: ProjectId.make("live-saved"), cwd: "/workspace/saved" }),
+      makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
     ];
 
     expect(

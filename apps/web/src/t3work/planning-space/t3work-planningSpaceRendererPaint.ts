@@ -150,7 +150,8 @@ export function paintPlanningNodes(input: {
     if (node.inner) {
       // Epic labels must stay clearly readable however far out (§3.2).
       const frameBand = node.kind === "frame" ? band : globalBand;
-      const inflate = node.kind === "epic" ? epicCounterScale(scale) : counterScale(frameBand, scale);
+      const inflate =
+        node.kind === "epic" ? epicCounterScale(scale) : counterScale(frameBand, scale);
       const innerTransform = `translate(-50%, -50%) scale(${inflate.toFixed(4)})`;
       if (innerTransform !== node.lastInnerTransform) {
         node.lastInnerTransform = innerTransform;

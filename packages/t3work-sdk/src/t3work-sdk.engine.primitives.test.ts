@@ -88,13 +88,17 @@ describe("durable workflow engine — composition primitives", () => {
   });
 
   it("runs a sub-workflow as one entry; the child does not re-execute on resume", async () => {
-    const { runId, result } = completed(await startWorkflow(subParentWorkflow, { name: "sub" }, base));
+    const { runId, result } = completed(
+      await startWorkflow(subParentWorkflow, { name: "sub" }, base),
+    );
     expect(result).toEqual({ greeting: "hi sub", upper: "HI SUB" });
     expect(counters.greetCalls).toBe(1); // the child's script call ran once, black-boxed
     const journal = readJournal(journalFilePath(runsRoot, runId));
     expect(journal.size).toBe(1);
     expect(journal.get(1)).toMatchObject({ kind: "workflow", refId: "workflow" });
-    const resumed = completed(await resumeWorkflow(runId, subParentWorkflow, { name: "sub" }, base));
+    const resumed = completed(
+      await resumeWorkflow(runId, subParentWorkflow, { name: "sub" }, base),
+    );
     expect(resumed.result).toEqual(result);
     expect(counters.greetCalls).toBe(1); // child not re-run
   });

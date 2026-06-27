@@ -33,13 +33,13 @@ export function mapLiveThreadToProjectThread(
     messageCount: thread.messages.length,
     lastMessageAt: thread.latestTurn?.completedAt ?? thread.updatedAt ?? thread.createdAt,
     createdAt: thread.createdAt,
-    status: thread.error
+    status: thread.session?.lastError
       ? "error"
-      : thread.session?.status === "running" || thread.session?.status === "connecting"
+      : thread.session?.status === "running" || thread.session?.status === "starting"
         ? "running"
         : thread.session?.status === "error"
           ? "error"
-          : thread.session?.status === "closed" || thread.archivedAt
+          : thread.session?.status === "stopped" || thread.archivedAt
             ? "completed"
             : "idle",
     // A clock-parked routine (Epic 27): carry the server-computed wake instant so the sidebar

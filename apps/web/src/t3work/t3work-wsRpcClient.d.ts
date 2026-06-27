@@ -32,5 +32,3 @@ declare module "../rpc/wsRpcClient" {
     readonly orchestration: EnvironmentApi["orchestration"];
   }
 }
-
-export {};

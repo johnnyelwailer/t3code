@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 
-import { usePrimaryEnvironmentId } from "~/environments/primary";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useStore } from "~/store";
 import { createThreadSelectorByRef } from "~/storeSelectors";
 import type { BackendApi } from "~/t3work/backend/t3work-types";

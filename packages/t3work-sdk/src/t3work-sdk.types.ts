@@ -12,11 +12,7 @@ export type {
   RecipeRef,
   RecipeTechnicalDepth,
 } from "./t3work-sdk.recipeTypes.ts";
-export type {
-  PrimitiveCall,
-  PrimitiveKind,
-  WorkflowRuntime,
-} from "./t3work-sdk.runtimeTypes.ts";
+export type { PrimitiveCall, PrimitiveKind, WorkflowRuntime } from "./t3work-sdk.runtimeTypes.ts";
 
 export type EngineCapability = "thread" | "child" | "user" | "script" | "ui" | "workflow";
 export type IntegrationMethod = (...args: ReadonlyArray<unknown>) => Promise<unknown>;
@@ -130,20 +126,40 @@ export interface RegisteredWorkflowToolsTree {}
 export interface RegisteredWorkflowScriptsTree {}
 
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
-type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (value: infer I) => void ? I : never;
-type SnakeToCamelCase<Value extends string> = Value extends `${infer Head}_${infer Tail}` ? `${Head}${Capitalize<SnakeToCamelCase<Tail>>}` : Value;
-type DotPathTree<Path extends string, Value> = Path extends `${infer Head}.${infer Tail}` ? { [K in SnakeToCamelCase<Head>]: DotPathTree<Tail, Value> } : { [K in SnakeToCamelCase<Path>]: Value };
+type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
+  value: infer I,
+) => void
+  ? I
+  : never;
+type SnakeToCamelCase<Value extends string> = Value extends `${infer Head}_${infer Tail}`
+  ? `${Head}${Capitalize<SnakeToCamelCase<Tail>>}`
+  : Value;
+type DotPathTree<Path extends string, Value> = Path extends `${infer Head}.${infer Tail}`
+  ? { [K in SnakeToCamelCase<Head>]: DotPathTree<Tail, Value> }
+  : { [K in SnakeToCamelCase<Path>]: Value };
 
-export type ToolTreeFromRefs<TRefs extends readonly unknown[]> = [TRefs[number]] extends [never] ? {} : Simplify<
-    UnionToIntersection<TRefs[number] extends infer TRef ? TRef extends { readonly id: infer Id extends string } ? DotPathTree<Id, TRef> : never : never>
-  >;
+export type ToolTreeFromRefs<TRefs extends readonly unknown[]> = [TRefs[number]] extends [never]
+  ? {}
+  : Simplify<
+      UnionToIntersection<
+        TRefs[number] extends infer TRef
+          ? TRef extends { readonly id: infer Id extends string }
+            ? DotPathTree<Id, TRef>
+            : never
+          : never
+      >
+    >;
 
 export type ScriptTreeFromRecord<TScripts extends Record<string, AnyScriptRef>> = {
   readonly [K in keyof TScripts]: TScripts[K];
 };
 
-export type WorkflowInputs<TModule> = TModule extends { Inputs: Schema.Schema<infer V> } ? V : unknown;
-export type WorkflowOutputs<TModule> = TModule extends { Outputs: Schema.Schema<infer V> } ? V : unknown;
+export type WorkflowInputs<TModule> = TModule extends { Inputs: Schema.Schema<infer V> }
+  ? V
+  : unknown;
+export type WorkflowOutputs<TModule> = TModule extends { Outputs: Schema.Schema<infer V> }
+  ? V
+  : unknown;
 
 export type AnyToolGroupRef = ToolGroupRef<string>;
 export type AnyToolRef = ToolRef<unknown, unknown, string, AnyToolGroupRef>;

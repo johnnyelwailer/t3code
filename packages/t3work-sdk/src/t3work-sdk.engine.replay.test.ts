@@ -31,9 +31,16 @@ afterAll(cleanupRunsRoot);
 
 describe("durable workflow engine — replay drift", () => {
   it("throws ReplayDriftError at the input boundary (seq 0) when resume args differ", async () => {
-    const { runId } = await startWorkflow(twoTools, { prId: "PR-args-1" }, { runsRoot, tools: demoTools });
+    const { runId } = await startWorkflow(
+      twoTools,
+      { prId: "PR-args-1" },
+      { runsRoot, tools: demoTools },
+    );
     const error = await resumeWorkflow(
-      runId, twoTools, { prId: "PR-args-2" }, { runsRoot, tools: demoTools },
+      runId,
+      twoTools,
+      { prId: "PR-args-2" },
+      { runsRoot, tools: demoTools },
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ReplayDriftError);
     const drift = error as ReplayDriftError;
@@ -47,7 +54,11 @@ describe("durable workflow engine — replay drift", () => {
   });
 
   it("throws a per-call args ReplayDriftError when a recorded argsHash no longer matches", async () => {
-    const { runId } = await startWorkflow(twoTools, { prId: "PR-tamper" }, { runsRoot, tools: demoTools });
+    const { runId } = await startWorkflow(
+      twoTools,
+      { prId: "PR-tamper" },
+      { runsRoot, tools: demoTools },
+    );
     const file = journalFilePath(runsRoot, runId);
     const lines = readFileSync(file, "utf8").trim().split("\n");
     const first = JSON.parse(lines[0] ?? "{}") as { argsHash: string };
@@ -55,7 +66,10 @@ describe("durable workflow engine — replay drift", () => {
     lines[0] = JSON.stringify(first);
     writeFileSync(file, `${lines.join("\n")}\n`);
     const error = await resumeWorkflow(
-      runId, twoTools, { prId: "PR-tamper" }, { runsRoot, tools: demoTools },
+      runId,
+      twoTools,
+      { prId: "PR-tamper" },
+      { runsRoot, tools: demoTools },
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ReplayDriftError);
     const drift = error as ReplayDriftError;
@@ -65,9 +79,16 @@ describe("durable workflow engine — replay drift", () => {
   });
 
   it("throws ReplayDriftError when a call is inserted before an existing one", async () => {
-    const { runId } = await startWorkflow(twoTools, { prId: "PR-insert" }, { runsRoot, tools: demoTools });
+    const { runId } = await startWorkflow(
+      twoTools,
+      { prId: "PR-insert" },
+      { runsRoot, tools: demoTools },
+    );
     const error = await resumeWorkflow(
-      runId, insertedWorkflow, { prId: "PR-insert" }, { runsRoot, tools: demoTools },
+      runId,
+      insertedWorkflow,
+      { prId: "PR-insert" },
+      { runsRoot, tools: demoTools },
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ReplayDriftError);
     const drift = error as ReplayDriftError;
@@ -80,7 +101,9 @@ describe("durable workflow engine — replay drift", () => {
 
   it("journals normal scripts but re-runs replay:never scripts on resume", async () => {
     const { runId, result } = await startWorkflow(
-      scriptWorkflow, { name: "Ada" }, { runsRoot, tools: [], scripts: demoScripts },
+      scriptWorkflow,
+      { name: "Ada" },
+      { runsRoot, tools: [], scripts: demoScripts },
     );
     expect(result).toEqual({ greeting: "hi Ada", ticket: "ticket-1" });
     const journal = readJournal(journalFilePath(runsRoot, runId));
@@ -89,7 +112,10 @@ describe("durable workflow engine — replay drift", () => {
     expect(journal.get(2)).toMatchObject({ seq: 2, kind: "script-never", refId: "freshTicket" });
     expect(journal.get(2)?.result).toBeUndefined();
     const resumed = await resumeWorkflow(
-      runId, scriptWorkflow, { name: "Ada" }, { runsRoot, tools: [], scripts: demoScripts },
+      runId,
+      scriptWorkflow,
+      { name: "Ada" },
+      { runsRoot, tools: [], scripts: demoScripts },
     );
     expect(resumed.result).toEqual({ greeting: "hi Ada", ticket: "ticket-2" });
     expect(readJournal(journalFilePath(runsRoot, runId)).size).toBe(2);
@@ -97,7 +123,9 @@ describe("durable workflow engine — replay drift", () => {
 
   it("round-trips the script-never marker and drifts when the never-script is removed", async () => {
     const { runId, result } = await startWorkflow(
-      neverMarkerBaseWorkflow, { name: "Ada" }, { runsRoot, tools: [], scripts: demoScripts },
+      neverMarkerBaseWorkflow,
+      { name: "Ada" },
+      { runsRoot, tools: [], scripts: demoScripts },
     );
     expect(result).toEqual({ greeting: "hi Ada", ticket: "ticket-1", farewell: "bye Ada" });
     const journal = readJournal(journalFilePath(runsRoot, runId));
@@ -105,7 +133,10 @@ describe("durable workflow engine — replay drift", () => {
     expect(journal.get(2)).toMatchObject({ kind: "script-never", refId: "freshTicket" });
     expect(journal.get(3)).toMatchObject({ kind: "script", refId: "farewell" });
     const error = await resumeWorkflow(
-      runId, neverMarkerRemovedWorkflow, { name: "Ada" }, { runsRoot, tools: [], scripts: demoScripts },
+      runId,
+      neverMarkerRemovedWorkflow,
+      { name: "Ada" },
+      { runsRoot, tools: [], scripts: demoScripts },
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ReplayDriftError);
     const drift = error as ReplayDriftError;
@@ -119,11 +150,16 @@ describe("durable workflow engine — replay drift", () => {
     const runId = "gap-drift";
     await startWorkflow(twoTools, { prId: "PR-gap" }, { runsRoot, tools: demoTools, runId });
     const file = journalFilePath(runsRoot, runId);
-    const kept = readFileSync(file, "utf8").trim().split("\n")
+    const kept = readFileSync(file, "utf8")
+      .trim()
+      .split("\n")
       .filter((line) => (JSON.parse(line) as { seq: number }).seq !== 1);
     writeFileSync(file, `${kept.join("\n")}\n`);
     const error = await resumeWorkflow(
-      runId, twoTools, { prId: "PR-gap" }, { runsRoot, tools: demoTools },
+      runId,
+      twoTools,
+      { prId: "PR-gap" },
+      { runsRoot, tools: demoTools },
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ReplayDriftError);
     const drift = error as ReplayDriftError;
