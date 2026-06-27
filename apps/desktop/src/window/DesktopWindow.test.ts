@@ -29,6 +29,7 @@ import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
+import { ATLASSIAN_OAUTH_POPUP_HEIGHT, ATLASSIAN_OAUTH_POPUP_WIDTH } from "@t3tools/integrations-atlassian";
 import * as DesktopWindow from "./DesktopWindow.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 
@@ -342,6 +343,49 @@ describe("DesktopWindow", () => {
 
         assert.isTrue(prevented);
         assert.deepEqual(openedExternalUrls, ["https://accounts.microsoft.com/oauth"]);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("keeps Atlassian OAuth popups in the desktop shell", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const openedExternalUrls: unknown[] = [];
+      let windowOpenHandler:
+        | ((details: { url: string; frameName?: string }) => {
+            action: "allow" | "deny";
+            overrideBrowserWindowOptions?: Electron.BrowserWindowConstructorOptions;
+          })
+        | undefined;
+      fakeWindow.window.webContents.setWindowOpenHandler = vi.fn((handler) => {
+        windowOpenHandler = handler;
+      }) as typeof fakeWindow.window.webContents.setWindowOpenHandler;
+
+      const layer = makeTestLayer({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+        openedExternalUrls,
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.handleBackendReady;
+
+        if (!windowOpenHandler) {
+          return yield* Effect.die("setWindowOpenHandler was not registered");
+        }
+
+        const authUrl =
+          "https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=abc";
+        const result = windowOpenHandler({ url: authUrl, frameName: "atlassian-oauth" });
+
+        assert.equal(result.action, "allow");
+        assert.equal(result.overrideBrowserWindowOptions?.width, ATLASSIAN_OAUTH_POPUP_WIDTH);
+        assert.equal(result.overrideBrowserWindowOptions?.height, ATLASSIAN_OAUTH_POPUP_HEIGHT);
+        assert.equal(openedExternalUrls.length, 0);
       }).pipe(Effect.provide(layer));
     }),
   );

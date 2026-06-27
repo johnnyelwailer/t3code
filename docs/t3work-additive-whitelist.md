@@ -29,6 +29,10 @@ Prefix policy:
   - Use `ditto` on macOS when copying the Electron app bundle so dev launcher rebuilds preserve bundle symlinks and avoid locale copy failures.
 - `apps/desktop/scripts/dev-electron.mjs`
   - Serialize desktop Electron dev supervision with a PID lock, orphan cleanup, and Vite readiness checks so restarts do not race stale processes or an unavailable dev server.
+- `apps/desktop/src/window/DesktopWindow.ts`
+  - Allow Atlassian OAuth `window.open` popups inside Electron instead of delegating them to the system browser.
+- `apps/desktop/src/window/DesktopWindow.test.ts`
+  - Cover in-app OAuth popup handling in the desktop shell.
 - `apps/web/vite.config.ts`
   - Add dev proxy/defaults and compile-time constants used by migrated t3work route.
 - `apps/web/src/routeTree.gen.ts`

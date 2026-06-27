@@ -1,17 +1,22 @@
 import { ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE } from "~/t3work/components/t3work-atlassianOAuthCallbackMessage";
+import {
+  ATLASSIAN_OAUTH_POPUP_FRAME_NAME,
+  ATLASSIAN_OAUTH_POPUP_HEIGHT,
+  ATLASSIAN_OAUTH_POPUP_WIDTH,
+} from "@t3tools/integrations-atlassian";
 
-const OAUTH_POPUP_WIDTH = 500;
-const OAUTH_POPUP_HEIGHT = 600;
 const POLL_INTERVAL_MS = 500;
 
+export { ATLASSIAN_OAUTH_POPUP_FRAME_NAME };
+
+export function buildOAuthPopupFeatures(): string {
+  const left = Math.round(window.screenX + (window.outerWidth - ATLASSIAN_OAUTH_POPUP_WIDTH) / 2);
+  const top = Math.round(window.screenY + (window.outerHeight - ATLASSIAN_OAUTH_POPUP_HEIGHT) / 2);
+  return `width=${ATLASSIAN_OAUTH_POPUP_WIDTH},height=${ATLASSIAN_OAUTH_POPUP_HEIGHT},left=${left},top=${top}`;
+}
+
 export function openOAuthPopup(url: string): WindowProxy | null {
-  const left = Math.round(window.screenX + (window.outerWidth - OAUTH_POPUP_WIDTH) / 2);
-  const top = Math.round(window.screenY + (window.outerHeight - OAUTH_POPUP_HEIGHT) / 2);
-  return window.open(
-    url,
-    "atlassian-oauth",
-    `width=${OAUTH_POPUP_WIDTH},height=${OAUTH_POPUP_HEIGHT},left=${left},top=${top},noopener,noreferrer`,
-  );
+  return window.open(url, ATLASSIAN_OAUTH_POPUP_FRAME_NAME, buildOAuthPopupFeatures());
 }
 
 export function waitForOAuthCallback(

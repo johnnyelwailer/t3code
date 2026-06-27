@@ -19,6 +19,12 @@ import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import { MENU_ACTION_CHANNEL } from "../ipc/channels.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 
+import {
+  ATLASSIAN_OAUTH_POPUP_HEIGHT,
+  ATLASSIAN_OAUTH_POPUP_WIDTH,
+  isAtlassianOAuthPopupRequest,
+} from "@t3tools/integrations-atlassian";
+
 const TITLEBAR_HEIGHT = 40;
 const TITLEBAR_COLOR = "#01000000"; // #00000000 does not work correctly on Linux
 const TITLEBAR_LIGHT_SYMBOL_COLOR = "#1f2937";
@@ -279,7 +285,25 @@ export const make = Effect.gen(function* () {
       void runPromise(electronMenu.popupTemplate({ window, template: menuTemplate }));
     });
 
-    window.webContents.setWindowOpenHandler(({ url }) => {
+    window.webContents.setWindowOpenHandler(({ url, frameName }) => {
+      if (isAtlassianOAuthPopupRequest({ url, frameName })) {
+        return {
+          action: "allow",
+          overrideBrowserWindowOptions: {
+            parent: window,
+            width: ATLASSIAN_OAUTH_POPUP_WIDTH,
+            height: ATLASSIAN_OAUTH_POPUP_HEIGHT,
+            show: true,
+            autoHideMenuBar: true,
+            webPreferences: {
+              contextIsolation: true,
+              nodeIntegration: false,
+              sandbox: true,
+            },
+          },
+        };
+      }
+
       if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
         void runPromise(electronShell.openExternal(url));
       }
