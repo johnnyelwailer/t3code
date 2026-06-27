@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "t3code-web",
+      "runtimeExecutable": "C:\\git\\t3code\\scripts\\preview-dev.cmd",
+      "runtimeArgs": [],
+      "port": 5734,
+      "autoPort": false
+    },
+    {
       "name": "biwak",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
