@@ -78,8 +78,8 @@ describe("shouldShowThreadKickoffPlaceholder", () => {
   it("keeps recipe workflow metadata on quick starts for structured kickoff rendering", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot"),
-      profileId: "engineering-copilot",
+      project: createProject("developer"),
+      profileId: "developer",
       selectedWorkLabel: "PROJ-123",
       resourceKind: "ticket",
       availableContextKeys: ["project.summary", "ticket.summary"],
@@ -96,8 +96,8 @@ describe("shouldShowThreadKickoffPlaceholder", () => {
   it("treats recipe workflows with a wait-for-kickoff-input step as guided launches", () => {
     const createRecipe = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("engineering-copilot"),
-      profileId: "engineering-copilot",
+      project: createProject("developer"),
+      profileId: "developer",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {

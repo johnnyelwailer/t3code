@@ -134,12 +134,12 @@ describe("project ticket status", () => {
   });
 
   it("hides requirements-only statuses for non-RE kanban profiles", () => {
-    expect(isProjectTicketKanbanStatusVisibleForProfile("Accepted", "product-partner")).toBe(true);
-    expect(isProjectTicketKanbanStatusVisibleForProfile("Accepted", "engineering-copilot")).toBe(
+    expect(isProjectTicketKanbanStatusVisibleForProfile("Accepted", "product-owner")).toBe(true);
+    expect(isProjectTicketKanbanStatusVisibleForProfile("Accepted", "developer")).toBe(
       false,
     );
-    expect(isProjectTicketKanbanStatusVisibleForProfile("Accepted", "qa-assistant")).toBe(false);
-    expect(isProjectTicketKanbanStatusVisibleForProfile("In Test", "engineering-copilot")).toBe(
+    expect(isProjectTicketKanbanStatusVisibleForProfile("Accepted", "test-manager")).toBe(false);
+    expect(isProjectTicketKanbanStatusVisibleForProfile("In Test", "developer")).toBe(
       true,
     );
 
@@ -149,7 +149,7 @@ describe("project ticket status", () => {
         createTicket({ id: "accepted", status: "Accepted" }),
         createTicket({ id: "in-test", status: "In Test" }),
       ],
-      { profileId: "engineering-copilot" },
+      { profileId: "developer" },
     );
     const productColumns = buildProjectTicketKanbanColumns(
       [
@@ -157,7 +157,7 @@ describe("project ticket status", () => {
         createTicket({ id: "accepted", status: "Accepted" }),
         createTicket({ id: "in-test", status: "In Test" }),
       ],
-      { profileId: "product-partner" },
+      { profileId: "product-owner" },
     );
 
     expect(engineeringColumns.map((column) => column.title)).toEqual(["To Do", "In Test"]);

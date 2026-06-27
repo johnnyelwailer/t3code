@@ -100,7 +100,7 @@ describe("TicketKickoffPanel", () => {
   it("renders conversations as compact list entries without a misleading zero count", () => {
     const markup = renderToStaticMarkup(
       <TicketKickoffPanel
-        profileId="engineering-copilot"
+        profileId="developer"
         projectId="project-1"
         issueThreads={[
           {

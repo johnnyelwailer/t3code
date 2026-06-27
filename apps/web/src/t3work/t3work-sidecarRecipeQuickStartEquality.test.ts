@@ -26,8 +26,8 @@ describe("areQuickStartsEqual", () => {
   it("treats rebuilt quick starts with equivalent action-view context as equal", () => {
     const first = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -39,8 +39,8 @@ describe("areQuickStartsEqual", () => {
     });
     const second = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -57,8 +57,8 @@ describe("areQuickStartsEqual", () => {
   it("detects real action-view context changes when the current view summary changes", () => {
     const first = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -70,8 +70,8 @@ describe("areQuickStartsEqual", () => {
     });
     const second = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {

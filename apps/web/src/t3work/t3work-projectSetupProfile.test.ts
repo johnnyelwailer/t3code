@@ -31,9 +31,9 @@ describe("t3work project setup profile helpers", () => {
     });
 
     window.localStorage.removeItem(T3WORK_PROJECT_SETUP_PROFILE_STORAGE_KEY);
-    expect(readT3workProjectSetupProfile()).toBe("product-partner");
+    expect(readT3workProjectSetupProfile()).toBe("product-owner");
 
-    writeT3workProjectSetupProfile("engineering-copilot");
-    expect(readT3workProjectSetupProfile()).toBe("engineering-copilot");
+    writeT3workProjectSetupProfile("developer");
+    expect(readT3workProjectSetupProfile()).toBe("developer");
   });
 });
