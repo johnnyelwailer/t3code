@@ -2,6 +2,8 @@ import * as Schema from "effect/Schema";
 
 import type { ExternalResourceRef } from "@t3tools/project-context";
 import { ProjectRecipeKickoffProgram } from "./kickoff.ts";
+import { isRecipeSignalPredicateSatisfied, RecipeSignalPredicate } from "./recipePredicates.ts";
+import type { RecipeMatchSignals } from "./recipeSignals.ts";
 import { RecipeSurface } from "./surface.ts";
 
 export { RecipeSurface };
@@ -28,6 +30,8 @@ export const RecipeApplicability = Schema.Struct({
   brevities: Schema.optional(Schema.Array(RecipeBrevity)),
   guidanceStyles: Schema.optional(Schema.Array(RecipeGuidanceStyle)),
   detailDensities: Schema.optional(Schema.Array(RecipeDetailDensity)),
+  // Typed signal predicates for bundled-recipe visibility. Missing signals are not satisfied.
+  visiblePredicates: Schema.optional(RecipeSignalPredicate),
 });
 export type RecipeApplicability = typeof RecipeApplicability.Type;
 
@@ -93,6 +97,8 @@ export type RecipeMatchInput = {
   readonly enabledSkillPacks: ReadonlyArray<string>;
   readonly profile: RecipeProfileContext;
   readonly availableContextKeys?: ReadonlyArray<string>;
+  // Precomputed render-context signals (catalog in recipeSignals.ts).
+  readonly signals?: RecipeMatchSignals;
 };
 
 export type RecipeMatchResult = {
@@ -273,6 +279,10 @@ export function isRecipeApplicable(recipe: Recipe, input: RecipeMatchInput): boo
     recipe.appliesTo.jiraIssueTypes.length > 0 &&
     (!input.jiraIssueType || !recipe.appliesTo.jiraIssueTypes.includes(input.jiraIssueType))
   ) {
+    return false;
+  }
+
+  if (!isRecipeSignalPredicateSatisfied(recipe.appliesTo.visiblePredicates, input.signals)) {
     return false;
   }
 
