@@ -103,7 +103,7 @@ export function maybeCheckWhitelistedAutoMerge({ baseRef, mergeBase, filePath })
   }
 
   const oursText = NodeFS.readFileSync(filePath, "utf8");
-  const tempRoot = mkdtempSync(NodePath.join(os.tmpdir(), "t3work-additive-merge-"));
+  const tempRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-additive-merge-"));
   const oursPath = NodePath.join(tempRoot, "ours");
   const basePath = NodePath.join(tempRoot, "base");
   const theirsPath = NodePath.join(tempRoot, "theirs");
@@ -132,6 +132,6 @@ export function maybeCheckWhitelistedAutoMerge({ baseRef, mergeBase, filePath })
     const diffText = diffResult.stdout || mergeResult.stdout || "(diff unavailable)";
     return buildManualMergeViolation({ filePath, baseRef, mergeBase, diffText });
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
+    NodeFS.rmSync(tempRoot, { recursive: true, force: true });
   }
 }
