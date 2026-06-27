@@ -111,6 +111,60 @@ describe("createTicketKickoffThread", () => {
       ],
     });
   });
+
+  it("queues generated ticket context directly on the created kickoff thread", async () => {
+    const thread = createProjectThread();
+    const addToChatFromRequest = vi.fn(async () => undefined);
+
+    await createTicketKickoffThread({
+      addToChatFromRequest,
+      backend: {} as never,
+      onOpenTicket: vi.fn(),
+      store: {
+        resolveProjectId: vi.fn(() => "project-1"),
+        createThreadForTicket: vi.fn(() => thread),
+        allProjects: [
+          {
+            id: "project-1",
+            title: "Project One",
+            workspace: { rootPath: "/tmp/project-one" },
+          },
+        ],
+        getTicketsForProject: vi.fn(() => [
+          {
+            id: "ticket-9",
+            status: "In Progress",
+            ref: {
+              displayId: "PROJ-9",
+              title: "Investigate context sync",
+              type: "Bug",
+            },
+          },
+        ]),
+      } as never,
+      threadInput: {
+        projectId: "project-from-route",
+        ticketId: "ticket-9",
+        ticketDisplayId: "PROJ-9",
+        kickoffMessage: "Investigate the regression",
+        kickoffModelSelection: { instanceId: "codex" as any, model: "gpt-5.4" },
+        kickoffRuntimeMode: "full-access",
+        kickoffInteractionMode: "default",
+        selectedToolIds: [],
+        kickoffContextAttachments: [],
+        githubActivityItems: [],
+      },
+    });
+
+    expect(addToChatFromRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: "project-1",
+        targetLabel: "PROJ-9 Investigate context sync",
+        projectWorkspaceRoot: "/tmp/project-one",
+      }),
+      { type: "thread", threadId: "thread-1" },
+    );
+  });
 });
 
 describe("openEmbeddedProjectThread", () => {

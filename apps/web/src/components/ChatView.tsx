@@ -200,6 +200,7 @@ import {
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import type { ChatViewT3workExtensionProps } from "~/t3work/t3work-chatViewExtensions";
+import { appendContextAttachmentsToPrompt } from "~/t3work/chat/t3work-prepareThreadContextAttachments";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
@@ -994,6 +995,10 @@ function ChatViewContent(props: ChatViewProps) {
     routeKind === "server" ? props.dispatchTurnStartOverride : undefined;
   const composerContextAttachmentSlot =
     routeKind === "server" ? props.composerContextAttachmentSlot : undefined;
+  const composerContextAttachments =
+    routeKind === "server" ? props.composerContextAttachments : undefined;
+  const prepareComposerContextAttachments =
+    routeKind === "server" ? props.prepareComposerContextAttachments : undefined;
   const composerContainerProps = routeKind === "server" ? props.composerContainerProps : undefined;
   const composerContainerOverlay =
     routeKind === "server" ? props.composerContainerOverlay : undefined;
@@ -3650,7 +3655,8 @@ function ChatViewContent(props: ChatViewProps) {
       elementContextCount:
         composerElementContexts.length +
         composerPreviewAnnotations.length +
-        composerReviewComments.length,
+        composerReviewComments.length +
+        (composerContextAttachments?.length ?? 0),
     });
     if (showPlanFollowUpPrompt && activeProposedPlan) {
       const followUp = resolvePlanFollowUpSubmission({
@@ -3737,6 +3743,25 @@ function ChatViewContent(props: ChatViewProps) {
       messageTextWithPreviewAnnotations,
       composerReviewCommentsSnapshot,
     );
+    const contextAttachmentsResult = await settlePromise(async () =>
+      prepareComposerContextAttachments ? await prepareComposerContextAttachments() : [],
+    );
+    if (contextAttachmentsResult._tag === "Failure") {
+      sendInFlightRef.current = false;
+      resetLocalDispatch();
+      if (!isAtomCommandInterrupted(contextAttachmentsResult)) {
+        const error = squashAtomCommandFailure(contextAttachmentsResult);
+        setThreadError(
+          threadIdForSend,
+          error instanceof Error ? error.message : "Failed to prepare attached context.",
+        );
+      }
+      return;
+    }
+    const messageTextWithT3workContext = appendContextAttachmentsToPrompt(
+      messageTextForSend,
+      contextAttachmentsResult.value,
+    );
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
     const outgoingMessageText = formatOutgoingPrompt({
@@ -3744,7 +3769,7 @@ function ChatViewContent(props: ChatViewProps) {
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+      text: messageTextWithT3workContext || IMAGE_ONLY_BOOTSTRAP_PROMPT,
     });
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({

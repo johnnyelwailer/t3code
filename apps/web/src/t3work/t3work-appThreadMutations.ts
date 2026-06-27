@@ -96,7 +96,7 @@ export async function createTicketKickoffThread(input: {
           ...(progress?.reportProgress ? { onProgress: progress.reportProgress } : {}),
         }),
     },
-    { type: "kickoff", projectId: resolvedProjectId, ticketId: threadInput.ticketId },
+    { type: "thread", threadId: thread.id },
   );
 
   return thread.id;
