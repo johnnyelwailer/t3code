@@ -7,6 +7,7 @@ import {
   purgeLegacyProjectBacklogLocalCache,
   type BacklogSelectionInput,
 } from "./t3work-projectBacklogCache";
+import { useProjectWorkspaceAutoSync } from "./t3work-useProjectWorkspaceAutoSync";
 import {
   buildProjectBacklogSelection,
   createProjectBacklogState,
@@ -84,6 +85,10 @@ export function useProjectBacklog(
   });
   const controllerRef = useRef(controller);
   controllerRef.current = controller;
+  useProjectWorkspaceAutoSync({
+    project,
+    ...(controller.hasLoaded ? { projectTickets: backlogState.tickets } : {}),
+  });
 
   const selectBoard = useCallback(
     (boardId: string) => controllerRef.current.selectBoard(boardId),
@@ -140,6 +145,7 @@ export function useProjectBacklog(
     selectedFilterId: backlogState.selectedFilterId,
     loading: controller.loading,
     error: controller.error,
+    hasLoaded: controller.hasLoaded,
     selectBoard,
     selectSprint,
     selectFilter,

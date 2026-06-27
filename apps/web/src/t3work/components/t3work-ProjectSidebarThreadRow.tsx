@@ -15,6 +15,7 @@ interface ThreadRowProps {
   thread: ProjectThread;
   variant?: "default" | "issue";
   state: SidebarItemState;
+  workspacePath?: string | null;
   onSelect: () => void;
   onDelete: () => void;
   onRename: (newTitle: string) => void;
@@ -26,6 +27,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     thread,
     variant = "default",
     state,
+    workspacePath = null,
     onSelect,
     onDelete,
     onRename,
@@ -45,6 +47,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
       const action = await api.contextMenu.show(
         [
           { id: "rename", label: "Rename thread" },
+          { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
           { id: "delete", label: "Delete", destructive: true },
         ],
@@ -70,9 +73,13 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
         }
       } else if (action === "copy-thread-id") {
         void navigator.clipboard.writeText(thread.id);
+      } else if (action === "copy-path") {
+        if (workspacePath) {
+          void navigator.clipboard.writeText(workspacePath);
+        }
       }
     },
-    [onDelete, thread],
+    [onDelete, thread, workspacePath],
   );
 
   const handleContextMenu = useCallback(

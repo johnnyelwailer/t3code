@@ -9,7 +9,10 @@ import {
 import type { BackendApi, ProjectWorkspaceContextFile } from "~/t3work/backend/t3work-types";
 import { compactJson, dedupeDirectoryBundleFiles } from "~/t3work/t3work-contextDirectoryBundle";
 import { buildProjectContextEntryPoint } from "~/t3work/t3work-contextCachePaths";
-import { buildProjectContextBundle } from "~/t3work/t3work-projectContextBundle";
+import {
+  buildProjectContextBundle,
+  type ProjectVisibleWorkspaceContext,
+} from "~/t3work/t3work-projectContextBundle";
 import { isWorkProject } from "~/t3work/t3work-isWorkProject";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 
@@ -18,7 +21,8 @@ const syncStateByWorkspaceRoot = new Map<string, { signature: string; promise?: 
 function buildProjectWorkspaceSyncSignature(input: {
   project: ProjectShellProject;
   linkedRepositoryUrls: ReadonlyArray<string>;
-  projectTickets: ReadonlyArray<ProjectTicket>;
+  projectTickets?: ReadonlyArray<ProjectTicket>;
+  visibleContext?: ProjectVisibleWorkspaceContext;
   setupProfileId: string;
 }): string {
   return JSON.stringify({
@@ -30,22 +34,25 @@ function buildProjectWorkspaceSyncSignature(input: {
     setupProfileId: input.setupProfileId,
     linkedRepositoryUrls: [...input.linkedRepositoryUrls].toSorted(),
     projectTickets: input.projectTickets
-      .map((ticket) => `${ticket.id}:${ticket.ref.displayId}:${ticket.updatedAt}:${ticket.status}`)
+      ?.map((ticket) => `${ticket.id}:${ticket.ref.displayId}:${ticket.updatedAt}:${ticket.status}`)
       .toSorted(),
+    visibleContext: input.visibleContext,
   });
 }
 
 export function buildProjectWorkspaceSyncFiles(input: {
   project: ProjectShellProject;
   linkedRepositoryUrls: ReadonlyArray<string>;
-  projectTickets: ReadonlyArray<ProjectTicket>;
+  projectTickets?: ReadonlyArray<ProjectTicket>;
+  visibleContext?: ProjectVisibleWorkspaceContext;
   setupProfileId?: string;
 }): ReadonlyArray<ProjectWorkspaceContextFile> {
   const setupProfileId = resolveT3WorkProjectSetupProfileId(input.setupProfileId);
   const bundle = buildProjectContextBundle({
     project: input.project,
     linkedRepositoryUrls: input.linkedRepositoryUrls,
-    projectTickets: input.projectTickets,
+    ...(input.projectTickets ? { projectTickets: input.projectTickets } : {}),
+    ...(input.visibleContext ? { visibleContext: input.visibleContext } : {}),
   });
   const baseEntryPoint = bundle.files.find(
     (file) => file.relativePath === T3WORK_PROJECT_CONTEXT_ENTRYPOINT_PATH,
@@ -78,7 +85,8 @@ async function runProjectWorkspaceSync(input: {
   backend: BackendApi;
   project: ProjectShellProject;
   linkedRepositoryUrls: ReadonlyArray<string>;
-  projectTickets: ReadonlyArray<ProjectTicket>;
+  projectTickets?: ReadonlyArray<ProjectTicket>;
+  visibleContext?: ProjectVisibleWorkspaceContext;
   setupProfileId?: string;
   ensureBootstrap?: boolean;
 }): Promise<void> {
@@ -105,7 +113,8 @@ async function runProjectWorkspaceSync(input: {
     files: buildProjectWorkspaceSyncFiles({
       project: input.project,
       linkedRepositoryUrls: input.linkedRepositoryUrls,
-      projectTickets: input.projectTickets,
+      ...(input.projectTickets ? { projectTickets: input.projectTickets } : {}),
+      ...(input.visibleContext ? { visibleContext: input.visibleContext } : {}),
       setupProfileId,
     }),
   });
@@ -115,7 +124,8 @@ export function syncProjectWorkspaceContext(input: {
   backend: BackendApi;
   project: ProjectShellProject;
   linkedRepositoryUrls: ReadonlyArray<string>;
-  projectTickets: ReadonlyArray<ProjectTicket>;
+  projectTickets?: ReadonlyArray<ProjectTicket>;
+  visibleContext?: ProjectVisibleWorkspaceContext;
   setupProfileId?: string;
   ensureBootstrap?: boolean;
 }): Promise<void> {
@@ -128,7 +138,8 @@ export function syncProjectWorkspaceContext(input: {
   const signature = buildProjectWorkspaceSyncSignature({
     project: input.project,
     linkedRepositoryUrls: input.linkedRepositoryUrls,
-    projectTickets: input.projectTickets,
+    ...(input.projectTickets ? { projectTickets: input.projectTickets } : {}),
+    ...(input.visibleContext ? { visibleContext: input.visibleContext } : {}),
     setupProfileId,
   });
   const existing = syncStateByWorkspaceRoot.get(workspaceRoot);
@@ -137,14 +148,28 @@ export function syncProjectWorkspaceContext(input: {
   }
 
   const promise = runProjectWorkspaceSync({
-    ...input,
+    backend: input.backend,
+    project: input.project,
+    linkedRepositoryUrls: input.linkedRepositoryUrls,
+    ...(input.projectTickets ? { projectTickets: input.projectTickets } : {}),
+    ...(input.visibleContext ? { visibleContext: input.visibleContext } : {}),
+    ...(input.ensureBootstrap !== undefined ? { ensureBootstrap: input.ensureBootstrap } : {}),
     setupProfileId,
-  }).finally(() => {
-    const current = syncStateByWorkspaceRoot.get(workspaceRoot);
-    if (current?.promise === promise) {
-      syncStateByWorkspaceRoot.set(workspaceRoot, { signature });
-    }
   });
+  promise.then(
+    () => {
+      const current = syncStateByWorkspaceRoot.get(workspaceRoot);
+      if (current?.promise === promise) {
+        syncStateByWorkspaceRoot.set(workspaceRoot, { signature });
+      }
+    },
+    () => {
+      const current = syncStateByWorkspaceRoot.get(workspaceRoot);
+      if (current?.promise === promise) {
+        syncStateByWorkspaceRoot.delete(workspaceRoot);
+      }
+    },
+  );
   syncStateByWorkspaceRoot.set(workspaceRoot, { signature, promise });
   return promise;
 }

@@ -1,7 +1,7 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { ChevronRightIcon, FolderIcon, SquarePenIcon } from "lucide-react";
+import { ChevronRightIcon, FolderIcon } from "lucide-react";
 import { useMemo } from "react";
 import { ProjectFavicon } from "~/components/ProjectFavicon";
 import type {
@@ -10,12 +10,11 @@ import type {
   ThreadStatusPill,
   ViewState,
 } from "~/t3work/t3work-types";
-import { readActiveThreadIdFromView } from "~/t3work/t3work-types";
 import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
 import { SidebarMenuButton, SidebarMenuSub } from "~/t3work/components/ui/t3work-sidebar";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3work/components/ui/t3work-tooltip";
 import { ThreadRow } from "./t3work-ProjectSidebarThreadRow";
+import { LocalWorkspaceSidebarRowActions } from "./t3work-LocalWorkspaceSidebarRowActions";
 import { buildProjectSidebarAddToChatRequest } from "./t3work-projectSidebarAddToChatRequests";
 import { sortThreads } from "./t3work-projectSidebarShared";
 import {
@@ -23,6 +22,7 @@ import {
   getSidebarStandaloneButtonClassName,
   getSidebarThreadState,
 } from "./t3work-projectSidebarItemState";
+import { useLocalWorkspaceRowState } from "./t3work-useLocalWorkspaceRowState";
 
 type LocalWorkspaceSidebarRowProps = {
   project: ProjectShellProject;
@@ -37,6 +37,8 @@ type LocalWorkspaceSidebarRowProps = {
   onCreateThread: (projectId: string) => string;
   onDeleteThread: (threadId: string) => void;
   onRenameThread: (threadId: string, newTitle: string) => void;
+  onRenameProject: (id: string, newTitle: string) => void;
+  onDeleteProject: (id: string) => void;
 };
 
 function readWorkspaceEnvironmentId(project: ProjectShellProject): EnvironmentId | null {
@@ -61,6 +63,8 @@ export function LocalWorkspaceSidebarRow({
   onCreateThread,
   onDeleteThread,
   onRenameThread,
+  onRenameProject,
+  onDeleteProject,
 }: LocalWorkspaceSidebarRowProps) {
   const environmentId = readWorkspaceEnvironmentId(project);
   const workspaceRoot = project.workspace?.rootPath ?? null;
@@ -80,9 +84,38 @@ export function LocalWorkspaceSidebarRow({
   const hiddenThreadCount = Math.max(0, sortedProjectThreads.length - visibleThreads.length);
   const projectState = getSidebarProjectState({ view, projectId: project.id });
 
+  const {
+    isRenaming,
+    renameTitle,
+    renameInputRef,
+    setRenameTitle,
+    handleContextMenu,
+    handleOpenMenu,
+    handleRenameSubmit,
+    handleRenameKeyDown,
+  } = useLocalWorkspaceRowState({
+    project,
+    threadCount: projectThreads.length,
+    onRenameProject,
+    onDeleteProject,
+  });
+
+  const handleNewThread = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    const threadId = onCreateThread(project.id);
+    await addToChatFromRequest(
+      buildProjectSidebarAddToChatRequest({
+        project,
+        projectTickets: [],
+        linkedRepositoryUrls,
+      }),
+      { type: "thread", threadId },
+    );
+  };
+
   return (
     <>
-      <div className="group/project-header relative">
+      <div className="group/project-header relative" onContextMenu={handleContextMenu}>
         <SidebarMenuButton
           size="sm"
           className={`gap-2 px-2 py-1.5 pr-8 text-left group-hover/project-header:bg-accent group-hover/project-header:text-foreground group-focus-within/project-header:bg-accent group-focus-within/project-header:text-foreground max-sm:pr-14 cursor-pointer ${getSidebarStandaloneButtonClassName(
@@ -115,39 +148,28 @@ export function LocalWorkspaceSidebarRow({
             <FolderIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
           )}
 
-          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground/90">
-            {project.title}
-          </span>
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              className="min-w-0 flex-1 truncate text-xs bg-transparent outline-none border border-ring rounded px-0.5"
+              value={renameTitle}
+              onChange={(event) => setRenameTitle(event.target.value)}
+              onKeyDown={handleRenameKeyDown}
+              onBlur={handleRenameSubmit}
+              onClick={(event) => event.stopPropagation()}
+            />
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground/90">
+              {project.title}
+            </span>
+          )}
         </SidebarMenuButton>
 
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <div className="pointer-events-none absolute top-1 right-1.5 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100 group-focus-within/project-header:pointer-events-auto group-focus-within/project-header:opacity-100">
-                <button
-                  type="button"
-                  aria-label={`Create new thread in ${project.title}`}
-                  className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-                  onClick={async (event) => {
-                    event.stopPropagation();
-                    const threadId = onCreateThread(project.id);
-                    await addToChatFromRequest(
-                      buildProjectSidebarAddToChatRequest({
-                        project,
-                        projectTickets: [],
-                        linkedRepositoryUrls,
-                      }),
-                      { type: "thread", threadId },
-                    );
-                  }}
-                >
-                  <SquarePenIcon className="size-3.5" />
-                </button>
-              </div>
-            }
-          />
-          <TooltipPopup side="top">New thread</TooltipPopup>
-        </Tooltip>
+        <LocalWorkspaceSidebarRowActions
+          projectTitle={project.title}
+          onNewThread={handleNewThread}
+          onOpenMenu={handleOpenMenu}
+        />
       </div>
 
       {expanded ? (
@@ -157,6 +179,7 @@ export function LocalWorkspaceSidebarRow({
               key={thread.id}
               thread={thread}
               state={getSidebarThreadState({ view, threadId: thread.id })}
+              workspacePath={workspaceRoot}
               onSelect={() => onSelectThread(project.id, thread.id)}
               onDelete={() => onDeleteThread(thread.id)}
               onRename={(newTitle) => onRenameThread(thread.id, newTitle)}

@@ -11,8 +11,10 @@ import { useProjectBacklogRemoteSearch } from "~/t3work/hooks/t3work-useProjectB
 import { useProjectDashboardBacklogState } from "~/t3work/hooks/t3work-useProjectDashboardBacklogState";
 import { useProjectDashboardBacklogTableState } from "~/t3work/hooks/t3work-useProjectDashboardBacklogTableState";
 import { useProjectDashboardBacklogCapacity } from "~/t3work/hooks/t3work-useProjectDashboardBacklogCapacity";
+import { useProjectWorkspaceAutoSync } from "~/t3work/hooks/t3work-useProjectWorkspaceAutoSync";
 import { ProjectDashboardBacklogContent } from "~/t3work/t3work-ProjectDashboardBacklogContent";
 import { ProjectDashboardBacklogOverviewSection } from "~/t3work/t3work-ProjectDashboardBacklogOverviewSection";
+import { buildProjectDashboardBacklogVisibleSyncState } from "~/t3work/t3work-projectDashboardBacklogVisibleSync";
 import { isProjectBacklogImmersiveViewMode } from "~/t3work/t3work-projectBacklogPresentationMeta";
 
 export function ProjectDashboardBacklogView({
@@ -45,6 +47,7 @@ export function ProjectDashboardBacklogView({
     savedFilters,
     loading,
     error,
+    hasLoaded,
     searchAssignableUsers,
     updateAssignee,
     updateEstimate,
@@ -116,6 +119,14 @@ export function ProjectDashboardBacklogView({
     selectedSprintId: backlogState.sprintId,
     enabled: backlogState.viewMode === "planning-space",
     projectAccountId: project.source.accountId,
+  });
+  useProjectWorkspaceAutoSync({
+    project,
+    ...(hasLoaded ? { projectTickets: tickets } : {}),
+    uiState: buildProjectDashboardBacklogVisibleSyncState({
+      backlogState,
+      visibleWorkItemCount: filteredTickets.length,
+    }),
   });
 
   const overview = (

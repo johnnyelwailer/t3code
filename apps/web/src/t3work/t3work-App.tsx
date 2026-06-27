@@ -89,6 +89,7 @@ export function App({
     handleThreadKickoffConsumed,
     handleDeleteProject,
     handleDeleteThread,
+    handleRenameProject,
   } = useAppHandlers({
     store,
     activeView: resolvedView,
@@ -144,7 +145,7 @@ export function App({
             onOpenSettings={onOpenSettings}
             onManageProjectRepositories={setManageRepositoriesProjectId}
             onDeleteProject={handleDeleteProject}
-            onRenameProject={store.renameProject}
+            onRenameProject={handleRenameProject}
             onCreateThread={handleCreateThread}
             onCreateTicketThread={handleCreateTicketThreadFromSidebar}
             onDeleteThread={handleDeleteThread}

@@ -24,6 +24,7 @@ import {
   buildBundledRecipeTemplateValues,
   renderPromptTemplate,
 } from "~/t3work/t3work-sidecarRecipeTemplates";
+import { buildT3workSidecarRecipeInputKey } from "~/t3work/t3work-sidecarRecipeInputKey";
 import { areQuickStartsEqual } from "~/t3work/t3work-sidecarRecipeQuickStartEquality";
 import type {
   T3workSidecarRecipeInput,
@@ -134,21 +135,23 @@ export function useT3workSidecarRecipeQuickStarts(
     readonly backend: BackendApi | null;
   },
 ): ReadonlyArray<T3workSidecarRecipeQuickStart> {
-  const fallbackQuickStarts = useMemo(() => buildT3workSidecarRecipeQuickStarts(input), [input]);
+  const inputKey = buildT3workSidecarRecipeInputKey(input);
+  const fallbackQuickStarts = useMemo(() => buildT3workSidecarRecipeQuickStarts(input), [inputKey]);
   const [quickStarts, setQuickStarts] =
     useState<ReadonlyArray<T3workSidecarRecipeQuickStart>>(fallbackQuickStarts);
   const workspaceRoot = input.project.workspace?.rootPath;
-  const availableContextKey = (input.availableContextKeys ?? []).join("\u0000");
-  const availableIntegrationsKey = (input.availableIntegrations ?? []).join("\u0000");
-  const contextAttachmentsKey = (input.contextAttachments ?? [])
-    .map((attachment) =>
-      [attachment.id, attachment.kind, attachment.label, attachment.jiraIssueType ?? ""].join(
-        "\u0001",
-      ),
-    )
-    .join("\u0000");
-  const linkedResourcesKey = JSON.stringify(input.linkedResources ?? []);
-  const ticketContextKey = JSON.stringify(input.ticketContext ?? null);
+  const discoveryRequest = useMemo(
+    () =>
+      workspaceRoot
+        ? buildProjectRecipeDiscoveryRequest({
+            ...input,
+            workspaceRoot,
+          })
+        : null,
+    [inputKey, workspaceRoot],
+  );
+  const backend = input.backend;
+  const limit = input.limit;
 
   useEffect(() => {
     const setQuickStartsIfChanged = (
@@ -161,16 +164,12 @@ export function useT3workSidecarRecipeQuickStarts(
 
     setQuickStartsIfChanged(fallbackQuickStarts);
 
-    if (!input.backend || !workspaceRoot) {
+    if (!backend || !discoveryRequest) {
       return;
     }
 
-    const discoveryRequest = buildProjectRecipeDiscoveryRequest({
-      ...input,
-      workspaceRoot,
-    });
     let cancelled = false;
-    void input.backend.projectWorkspace
+    void backend.projectWorkspace
       .discoverRecipes(discoveryRequest)
       .then((response) => {
         if (cancelled) {
@@ -183,11 +182,11 @@ export function useT3workSidecarRecipeQuickStarts(
         const discoveredQuickStarts = mapDiscoveredRecipesToQuickStarts(
           response.recipes,
           discoveryRequest.context.surface,
-          input.limit,
+          limit,
           discoveryRequest.context,
         );
         setQuickStartsIfChanged(
-          mergeSidecarRecipeQuickStarts(discoveredQuickStarts, fallbackQuickStarts, input.limit),
+          mergeSidecarRecipeQuickStarts(discoveredQuickStarts, fallbackQuickStarts, limit),
         );
       })
       .catch(() => {
@@ -199,16 +198,7 @@ export function useT3workSidecarRecipeQuickStarts(
     return () => {
       cancelled = true;
     };
-  }, [
-    availableContextKey,
-    contextAttachmentsKey,
-    availableIntegrationsKey,
-    linkedResourcesKey,
-    ticketContextKey,
-    fallbackQuickStarts,
-    input,
-    workspaceRoot,
-  ]);
+  }, [backend, discoveryRequest, fallbackQuickStarts, limit]);
 
   return quickStarts;
 }

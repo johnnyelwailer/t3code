@@ -127,4 +127,36 @@ describe("syncProjectWorkspaceContext", () => {
     expect(backendHarness.bootstrapWorkspace).toHaveBeenCalledTimes(1);
     expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(1);
   });
+
+  it("retries the same payload after a failed write", async () => {
+    const backendHarness = createBackendHarness();
+    backendHarness.writeContextFiles
+      .mockRejectedValueOnce(new Error("disk unavailable"))
+      .mockResolvedValueOnce({
+        workspaceRoot: "/tmp/project-alpha",
+        writtenFiles: [],
+      });
+    const backend = {
+      projectWorkspace: {
+        bootstrapWorkspace: backendHarness.bootstrapWorkspace,
+        discoverRecipes: vi.fn(async () => ({
+          workspaceRoot: "/tmp/project-alpha",
+          hasProjectLocalRecipes: false,
+          recipes: [],
+        })),
+        writeContextFiles: backendHarness.writeContextFiles,
+      },
+    } as unknown as BackendApi;
+    const input = {
+      backend,
+      project: createProject(),
+      linkedRepositoryUrls: ["https://github.com/example/project-alpha"],
+      projectTickets: [createTicket("PROJ-1")],
+    };
+
+    await expect(syncProjectWorkspaceContext(input)).rejects.toThrow("disk unavailable");
+    await syncProjectWorkspaceContext(input);
+
+    expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(2);
+  });
 });

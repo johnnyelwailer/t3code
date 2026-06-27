@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import * as NodeChildProcess from "node:child_process";
 import {
   UPSTREAM_BASE_REF,
   UPSTREAM_REMOTE_NAME,
@@ -12,7 +12,7 @@ function runGit(args, options = {}) {
   try {
     const execOptions = { encoding: "utf8" };
     if (stdio === "inherit") execOptions.stdio = "inherit";
-    const output = execFileSync("git", args, execOptions);
+    const output = NodeChildProcess.execFileSync("git", args, execOptions);
     if (output === null) return "";
     return output.trim();
   } catch (error) {

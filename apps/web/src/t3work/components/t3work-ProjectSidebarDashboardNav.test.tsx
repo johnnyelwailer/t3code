@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import { ProjectSidebarDashboardNav } from "./t3work-ProjectSidebarDashboardNav";
+import {
+  ProjectSidebarDashboardNav,
+  shouldAutoExpandMyWorkForPin,
+} from "./t3work-ProjectSidebarDashboardNav";
 
 const inactiveState = { isSelected: false, isOpen: false };
 
@@ -57,6 +60,30 @@ describe("ProjectSidebarDashboardNav", () => {
 
     expect(markup).toContain("Collapse my work");
     expect(markup).toContain("Pinned items");
+  });
+
+  it("auto-expands collapsed My Work only when the pin signal increases", () => {
+    expect(
+      shouldAutoExpandMyWorkForPin({
+        previousSignal: 0,
+        nextSignal: 1,
+        myWorkExpanded: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldAutoExpandMyWorkForPin({
+        previousSignal: 1,
+        nextSignal: 1,
+        myWorkExpanded: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldAutoExpandMyWorkForPin({
+        previousSignal: 0,
+        nextSignal: 1,
+        myWorkExpanded: true,
+      }),
+    ).toBe(false);
   });
 
   it("hides my activity feed content when the feed is disabled", () => {

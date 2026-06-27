@@ -94,6 +94,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
           myWorkExpanded={state.myWorkExpanded}
           myWorkThreadCount={showMyActivityFeed ? state.myWorkThreads.length : 0}
           pinnedItemCount={visiblePinnedItems.length}
+          myWorkAutoExpandSignal={pinnedItems.length}
           onMyWorkExpandedChange={state.setMyWorkExpanded}
           onSelectBacklog={() => onSelectProjectDashboardMode(project.id, "backlog")}
           onSelectMyWork={() => {
@@ -103,6 +104,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
           backlogContent={
             <ProjectSidebarDashboardThreadList
               projectId={project.id}
+              workspaceRoot={project.workspace?.rootPath ?? null}
               threads={state.backlogThreads}
               view={view}
               onSelectThread={onSelectThread}
@@ -114,6 +116,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
             showMyActivityFeed ? (
               <ProjectSidebarDashboardThreadList
                 projectId={project.id}
+                workspaceRoot={project.workspace?.rootPath ?? null}
                 threads={state.myWorkThreads}
                 view={view}
                 onSelectThread={onSelectThread}
@@ -182,6 +185,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
       {expanded && showProjectThreads && (
         <ProjectSidebarProjectThreadSection
           projectId={project.id}
+          workspaceRoot={project.workspace?.rootPath ?? null}
           view={view}
           visibleThreads={state.visibleThreads}
           hasOverflowingThreads={state.hasOverflowingThreads}

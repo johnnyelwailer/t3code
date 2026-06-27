@@ -9,6 +9,7 @@ import { useProjectDashboardMyWorkRecipeSupport } from "~/t3work/hooks/t3work-us
 import { useProjectGitHubActivity } from "~/t3work/hooks/t3work-useProjectGitHubActivity";
 import { useProjectKanbanStatusMutation } from "~/t3work/hooks/t3work-useProjectKanbanStatusMutation";
 import { useProjectMyWorkState } from "~/t3work/hooks/t3work-useProjectMyWorkState";
+import { useProjectWorkspaceAutoSync } from "~/t3work/hooks/t3work-useProjectWorkspaceAutoSync";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 
 export function ProjectDashboardMyWorkView({
@@ -95,6 +96,30 @@ export function ProjectDashboardMyWorkView({
     setShowGitHubActivity,
     setSelectedPriority,
     setSelectedStatus,
+  });
+  useProjectWorkspaceAutoSync({
+    project,
+    ...(tickets.length > 0 || jiraLastCheckedAt !== undefined ? { projectTickets: tickets } : {}),
+    githubActivityItems: githubActivity.activityItems,
+    ...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {}),
+    ...(githubActivity.lastCheckedAt !== undefined
+      ? { githubLastCheckedAt: githubActivity.lastCheckedAt }
+      : {}),
+    uiState: {
+      surface: "my-work",
+      query,
+      viewMode,
+      groupMode,
+      statusCategory,
+      showGitHubActivity,
+      hiddenKanbanColumnIds,
+      excludedTypeKeys,
+      selectedPriority,
+      selectedStatus,
+      tableSortBy,
+      tableSortDirection,
+      visibleWorkItemCount: filteredWorkItems.length,
+    },
   });
 
   return (

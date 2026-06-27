@@ -1,8 +1,8 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeURL from "node:url";
 
-const desktopDir = NodePath.dirname(fileURLToPath(import.meta.url));
+const desktopDir = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
 const mainBundlePath = NodePath.join(desktopDir, "..", "dist-electron", "main.cjs");
 const integrationsAtlassianPath = NodePath.join(
   desktopDir,

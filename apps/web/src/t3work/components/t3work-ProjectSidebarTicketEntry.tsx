@@ -112,6 +112,7 @@ export function TicketSidebarEntry({
   });
   const rowRef = useAutoScrollIntoView<HTMLAnchorElement>(ticketState.isOpen);
   const threadTree = useMemo(() => buildProjectSidebarThreadTree(ticketThreads), [ticketThreads]);
+  const workspaceRoot = project.workspace?.rootPath ?? null;
 
   const renderThreadBranch = (thread: ProjectThread): React.ReactNode => {
     const childThreads = threadTree.childThreadsByParentId.get(thread.id) ?? [];
@@ -123,6 +124,7 @@ export function TicketSidebarEntry({
           thread={thread}
           variant="issue"
           state={threadState}
+          workspacePath={workspaceRoot}
           onSelect={() => onSelectThread(projectId, thread.id)}
           onDelete={() => onDeleteThread(thread.id)}
           onRename={(newTitle) => onRenameThread(thread.id, newTitle)}

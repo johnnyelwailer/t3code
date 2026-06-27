@@ -5,6 +5,7 @@ import { getSidebarThreadState } from "./t3work-projectSidebarItemState";
 
 type ProjectSidebarDashboardThreadListProps = {
   projectId: string;
+  workspaceRoot: string | null;
   threads: ReadonlyArray<ProjectThread>;
   view: ViewState | null;
   onSelectThread: (projectId: string, threadId: string) => void;
@@ -14,6 +15,7 @@ type ProjectSidebarDashboardThreadListProps = {
 
 export function ProjectSidebarDashboardThreadList({
   projectId,
+  workspaceRoot,
   threads,
   view,
   onSelectThread,
@@ -32,6 +34,7 @@ export function ProjectSidebarDashboardThreadList({
           thread={thread}
           variant="issue"
           state={getSidebarThreadState({ view, threadId: thread.id })}
+          workspacePath={workspaceRoot}
           onSelect={() => onSelectThread(projectId, thread.id)}
           onDelete={() => onDeleteThread(thread.id)}
           onRename={(newTitle) => onRenameThread(thread.id, newTitle)}
