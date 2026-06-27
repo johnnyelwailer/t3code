@@ -1,0 +1,62 @@
+name: Deploy to Azure Container Apps
+
+# Builds the T3 Code server image in ACR and rolls the Container App to the new
+# tag. Auth uses Azure OIDC (federated credentials) — no stored cloud secrets.
+#
+# Required repository configuration:
+#   Secrets:   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+#   Variables: ACR_NAME, ACR_LOGIN_SERVER, IMAGE_REPOSITORY,
+#              AZURE_RESOURCE_GROUP, AZURE_CONTAINERAPP_NAME
+#
+# The OIDC principal needs: AcrPush on the registry and Contributor (or
+# Container Apps Contributor) on the resource group.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/server/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/deploy-azure.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push image (ACR Tasks)
+        run: |
+          az acr build \
+            --registry "${{ vars.ACR_NAME }}" \
+            --image "${{ vars.IMAGE_REPOSITORY }}:${{ github.sha }}" \
+            --image "${{ vars.IMAGE_REPOSITORY }}:latest" \
+            --file apps/server/Dockerfile \
+            .
+
+      - name: Update Container App
+        run: |
+          az containerapp update \
+            --name "${{ vars.AZURE_CONTAINERAPP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ vars.ACR_LOGIN_SERVER }}/${{ vars.IMAGE_REPOSITORY }}:${{ github.sha }}"
