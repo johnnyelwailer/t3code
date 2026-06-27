@@ -15,7 +15,6 @@ import { Route as PairRouteImport } from './routes/pair'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as T3workNewRouteImport } from './routes/t3work.new'
-import { Route as T3workOauthCallbackRouteImport } from './routes/t3work-oauth.callback'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
 import { Route as SettingsProvidersRouteImport } from './routes/settings.providers'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
@@ -23,6 +22,7 @@ import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
 import { Route as SettingsDiagnosticsRouteImport } from './routes/settings.diagnostics'
 import { Route as SettingsConnectionsRouteImport } from './routes/settings.connections'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
+import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as T3workProjectsProjectIdRouteImport } from './routes/t3work.projects.$projectId'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
@@ -57,11 +57,6 @@ const T3workNewRoute = T3workNewRouteImport.update({
   id: '/new',
   path: '/new',
   getParentRoute: () => T3workRoute,
-} as any)
-const T3workOauthCallbackRoute = T3workOauthCallbackRouteImport.update({
-  id: '/t3work-oauth/callback',
-  path: '/t3work-oauth/callback',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsSourceControlRoute = SettingsSourceControlRouteImport.update({
   id: '/source-control',
@@ -98,6 +93,11 @@ const SettingsArchivedRoute = SettingsArchivedRouteImport.update({
   path: '/archived',
   getParentRoute: () => SettingsRoute,
 } as any)
+const OauthCallbackRoute = OauthCallbackRouteImport.update({
+  id: '/oauth/callback',
+  path: '/oauth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const T3workProjectsProjectIdRoute = T3workProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
@@ -132,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3work': typeof T3workRouteWithChildren
+  '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
@@ -139,7 +140,6 @@ export interface FileRoutesByFullPath {
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
-  '/t3work-oauth/callback': typeof T3workOauthCallbackRoute
   '/t3work/new': typeof T3workNewRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -151,6 +151,7 @@ export interface FileRoutesByTo {
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3work': typeof T3workRouteWithChildren
+  '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
@@ -158,7 +159,6 @@ export interface FileRoutesByTo {
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
-  '/t3work-oauth/callback': typeof T3workOauthCallbackRoute
   '/t3work/new': typeof T3workNewRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -173,6 +173,7 @@ export interface FileRoutesById {
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3work': typeof T3workRouteWithChildren
+  '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
@@ -180,7 +181,6 @@ export interface FileRoutesById {
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
-  '/t3work-oauth/callback': typeof T3workOauthCallbackRoute
   '/t3work/new': typeof T3workNewRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -196,6 +196,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/settings'
     | '/t3work'
+    | '/oauth/callback'
     | '/settings/archived'
     | '/settings/connections'
     | '/settings/diagnostics'
@@ -203,7 +204,6 @@ export interface FileRouteTypes {
     | '/settings/keybindings'
     | '/settings/providers'
     | '/settings/source-control'
-    | '/t3work-oauth/callback'
     | '/t3work/new'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
@@ -215,6 +215,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/settings'
     | '/t3work'
+    | '/oauth/callback'
     | '/settings/archived'
     | '/settings/connections'
     | '/settings/diagnostics'
@@ -222,7 +223,6 @@ export interface FileRouteTypes {
     | '/settings/keybindings'
     | '/settings/providers'
     | '/settings/source-control'
-    | '/t3work-oauth/callback'
     | '/t3work/new'
     | '/'
     | '/$environmentId/$threadId'
@@ -236,6 +236,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/settings'
     | '/t3work'
+    | '/oauth/callback'
     | '/settings/archived'
     | '/settings/connections'
     | '/settings/diagnostics'
@@ -243,7 +244,6 @@ export interface FileRouteTypes {
     | '/settings/keybindings'
     | '/settings/providers'
     | '/settings/source-control'
-    | '/t3work-oauth/callback'
     | '/t3work/new'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
@@ -258,7 +258,7 @@ export interface RootRouteChildren {
   PairRoute: typeof PairRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   T3workRoute: typeof T3workRouteWithChildren
-  T3workOauthCallbackRoute: typeof T3workOauthCallbackRoute
+  OauthCallbackRoute: typeof OauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -304,13 +304,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/t3work/new'
       preLoaderRoute: typeof T3workNewRouteImport
       parentRoute: typeof T3workRoute
-    }
-    '/t3work-oauth/callback': {
-      id: '/t3work-oauth/callback'
-      path: '/t3work-oauth/callback'
-      fullPath: '/t3work-oauth/callback'
-      preLoaderRoute: typeof T3workOauthCallbackRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/settings/source-control': {
       id: '/settings/source-control'
@@ -360,6 +353,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/archived'
       preLoaderRoute: typeof SettingsArchivedRouteImport
       parentRoute: typeof SettingsRoute
+    }
+    '/oauth/callback': {
+      id: '/oauth/callback'
+      path: '/oauth/callback'
+      fullPath: '/oauth/callback'
+      preLoaderRoute: typeof OauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/t3work/projects/$projectId': {
       id: '/t3work/projects/$projectId'
@@ -473,7 +473,7 @@ const rootRouteChildren: RootRouteChildren = {
   PairRoute: PairRoute,
   SettingsRoute: SettingsRouteWithChildren,
   T3workRoute: T3workRouteWithChildren,
-  T3workOauthCallbackRoute: T3workOauthCallbackRoute,
+  OauthCallbackRoute: OauthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
