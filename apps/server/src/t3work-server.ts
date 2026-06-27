@@ -38,6 +38,12 @@ import * as GitLabCli from "./sourceControl/GitLabCli.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import { ProviderInstanceRegistryHydrationLive } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
+import * as McpHttpServer from "./mcp/McpHttpServer.ts";
+import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
+import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
+import * as PreviewManager from "./preview/Manager.ts";
+import * as PortScanner from "./preview/PortScanner.ts";
+import * as ProcessRunner from "./processRunner.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
@@ -86,7 +92,6 @@ import {
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import {
-  t3workAtlassianAccountsRouteLayer,
   t3workAtlassianAssetRouteLayer,
   t3workAtlassianAssetContentRouteLayer,
   t3workAtlassianBacklogRouteLayer,
@@ -99,7 +104,17 @@ import {
 import { t3workAtlassianOAuthExchangeRouteLayer } from "./t3work-atlassian-oauth-routes.ts";
 import { t3workTempoRouteLayer } from "./t3work-tempo-routes.ts";
 import { t3workProjectWorkspaceBootstrapRouteLayer } from "./t3work-project-repository-routes.ts";
+import { t3workProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3work-project-workspace-recipe-routes.ts";
 import { t3workProjectWorkspaceWriteContextFilesRouteLayer } from "./t3work-project-workspace-write-routes.ts";
+import {
+  t3workThreadRecipeWorkflowLaunchRouteLayer,
+  t3workThreadWorkflowResolveInputRouteLayer,
+} from "./t3work-thread-recipe-workflow-routes.ts";
+import { t3workThreadPlacementRouteLayer } from "./t3work-thread-placement-routes.ts";
+import { t3workThreadToolContextRouteLayer } from "./t3work-thread-tool-context-routes.ts";
+import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
+import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
+import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
 import {
   t3workGitHubAssetRouteLayer,
   t3workGitHubInboxRouteLayer,
@@ -244,7 +259,17 @@ const CheckpointingLayerLive = Layer.empty.pipe(
   Layer.provideMerge(CheckpointStore.layer.pipe(Layer.provide(VcsDriverRegistryLayerLive))),
 );
 
-const TerminalLayerLive = TerminalManager.layer.pipe(Layer.provide(PtyAdapterLive));
+const PortScannerLayerLive = PortScanner.layer.pipe(Layer.provide(ProcessRunner.layer));
+
+const TerminalLayerLive = TerminalManager.layer.pipe(
+  Layer.provide(PtyAdapterLive),
+  Layer.provide(PortScannerLayerLive),
+);
+
+const PreviewLayerLive = Layer.empty.pipe(
+  Layer.provideMerge(PreviewManager.layer),
+  Layer.provideMerge(PortScannerLayerLive),
+);
 
 const WorkspaceEntriesLayerLive = WorkspaceEntries.layer.pipe(
   Layer.provide(WorkspacePaths.layer),
@@ -302,11 +327,17 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(VcsLayerLive),
   Layer.provideMerge(ProviderRuntimeLayerLive),
-  Layer.provideMerge(TerminalLayerLive),
+  Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive)),
   Layer.provideMerge(PersistenceLayerLive),
   Layer.provideMerge(WorkflowEngineDurabilityLive),
   Layer.provideMerge(Keybindings.layer),
   Layer.provideMerge(ProviderRegistryLive),
+  Layer.provideMerge(
+    T3workToolBrokerLive.pipe(
+      Layer.provideMerge(T3workThreadToolContextStoreLive),
+      Layer.provide(OrchestrationLayerLive),
+    ),
+  ),
   // The instance registry is the new routing keystone — text generation,
   // adapter lookup, and runtime ingestion all resolve `ProviderInstanceId`
   // through this layer. Built-in drivers come from `BUILT_IN_DRIVERS`;
@@ -327,8 +358,12 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(OpenCodeRuntimeLive),
   Layer.provideMerge(ServerSettings.layer),
   Layer.provideMerge(WorkspaceLayerLive),
-  Layer.provideMerge(ProjectFaviconResolver.layer),
-  Layer.provideMerge(RepositoryIdentityResolver.layer),
+  Layer.provideMerge(
+    Layer.mergeAll(
+      ProjectFaviconResolver.layer.pipe(Layer.provide(WorkspacePaths.layer)),
+      RepositoryIdentityResolver.layer,
+    ),
+  ),
   Layer.provideMerge(ServerEnvironment.layer),
   Layer.provideMerge(AuthLayerLive),
   // Cloud relay/token services share one provideMerge slot (the `pipe` arity is capped):
@@ -381,11 +416,17 @@ export const makeT3workRoutesLayer = Layer.mergeAll(
   t3workGitHubPullRequestContextRouteLayer,
   t3workTempoRouteLayer,
   t3workProjectWorkspaceBootstrapRouteLayer,
+  t3workProjectWorkspaceDiscoverRecipesRouteLayer,
+  t3workThreadPlacementRouteLayer,
+  t3workThreadRecipeWorkflowLaunchRouteLayer,
+  t3workThreadWorkflowResolveInputRouteLayer,
+  t3workThreadToolContextRouteLayer,
   t3workProjectWorkspaceWriteContextFilesRouteLayer,
   otlpTracesProxyRouteLayer,
   staticAndDevRouteLayer,
   websocketRpcRouteLayer,
-).pipe(Layer.provide(browserApiCorsLayer));
+  McpHttpServer.layer.pipe(Layer.provide(McpSessionRegistry.layer)),
+).pipe(Layer.provide(PreviewAutomationBroker.layer), Layer.provide(browserApiCorsLayer));
 
 export const makeT3workServerLayer = Layer.unwrap(
   Effect.gen(function* () {
@@ -480,6 +521,7 @@ export const makeT3workServerLayer = Layer.unwrap(
       httpListeningLayer,
       runtimeStateLayer,
       tailscaleServeLayer,
+      T3workWorkflowEngineReactorLive,
     );
 
     return serverApplicationLayer.pipe(
