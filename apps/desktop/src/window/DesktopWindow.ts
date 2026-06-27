@@ -23,7 +23,7 @@ import {
   ATLASSIAN_OAUTH_POPUP_HEIGHT,
   ATLASSIAN_OAUTH_POPUP_WIDTH,
   isAtlassianOAuthPopupRequest,
-} from "@t3tools/integrations-atlassian";
+} from "@t3tools/integrations-atlassian/oauthPopup";
 
 const TITLEBAR_HEIGHT = 40;
 const TITLEBAR_COLOR = "#01000000"; // #00000000 does not work correctly on Linux

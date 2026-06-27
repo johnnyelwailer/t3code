@@ -29,7 +29,10 @@ import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
-import { ATLASSIAN_OAUTH_POPUP_HEIGHT, ATLASSIAN_OAUTH_POPUP_WIDTH } from "@t3tools/integrations-atlassian";
+import {
+  ATLASSIAN_OAUTH_POPUP_HEIGHT,
+  ATLASSIAN_OAUTH_POPUP_WIDTH,
+} from "@t3tools/integrations-atlassian/oauthPopup";
 import * as DesktopWindow from "./DesktopWindow.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 

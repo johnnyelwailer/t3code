@@ -1,5 +1,12 @@
 export const ATLASSIAN_OAUTH_CALLBACK_PATH = "/oauth/callback";
 
+export function isAtlassianOAuthCallbackPath(pathname: string): boolean {
+  return (
+    pathname === ATLASSIAN_OAUTH_CALLBACK_PATH ||
+    pathname.startsWith(`${ATLASSIAN_OAUTH_CALLBACK_PATH}/`)
+  );
+}
+
 export function isHttpOrigin(origin: string): boolean {
   return origin.startsWith("http://") || origin.startsWith("https://");
 }

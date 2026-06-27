@@ -37,6 +37,7 @@ import { syncBrowserChromeTheme } from "../hooks/useTheme";
 import { configureClientTracing } from "../observability/clientTracing";
 import { resolveInitialServerAuthGateState } from "../environments/primary";
 import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
+import { isAtlassianOAuthCallbackPath } from "../t3work/hooks/t3work-atlassianOAuthRedirect";
 import { useT3workWorkMode } from "../t3work/t3work-workMode";
 import { shellEnvironment } from "../state/shell";
 import { useAtomValue } from "@effect/atom-react";
@@ -55,6 +56,14 @@ import {
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
+    if (isAtlassianOAuthCallbackPath(location.pathname)) {
+      return {
+        authGateState: {
+          status: "hosted-static",
+        } as const,
+      };
+    }
+
     if (location.pathname === "/pair" && hasHostedPairingRequest(new URL(window.location.href))) {
       return {
         authGateState: {
@@ -101,7 +110,8 @@ function RootRouteView() {
       workMode === "t3work" &&
       !isT3workRoute &&
       !pathname.startsWith("/settings") &&
-      !pathname.startsWith("/pair")
+      !pathname.startsWith("/pair") &&
+      !isAtlassianOAuthCallbackPath(pathname)
     ) {
       void navigate({ to: "/t3work" });
     }
@@ -120,7 +130,7 @@ function RootRouteView() {
     };
   }, [pathname]);
 
-  if (pathname === "/pair") {
+  if (pathname === "/pair" || isAtlassianOAuthCallbackPath(pathname)) {
     return (
       <>
         <DocumentTitleSync />
