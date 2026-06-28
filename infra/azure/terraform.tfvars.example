@@ -1,0 +1,35 @@
+# Copy to terraform.tfvars (gitignored) and adjust. Secrets are better supplied
+# via environment, e.g. TF_VAR_provider_secrets, or a CI secret store.
+
+location    = "westeurope"
+name_prefix = "t3code"
+environment = "prod"
+
+# Image to deploy. CI overrides image_tag with the git SHA.
+image_repository = "t3code-server"
+image_tag        = "latest"
+
+# Compute (single stateful replica).
+cpu    = 1.0
+memory = "2Gi"
+
+# Persistent state. Premium (FileStorage) recommended for SQLite reliability.
+storage_account_tier = "Premium"
+file_share_quota_gb  = 100
+
+# Optional: restrict public ingress to known networks. Empty = open (bearer token only).
+# allowed_ip_cidrs = ["203.0.113.0/24"]
+
+# Provider API keys -> Key Vault -> container env vars.
+# Leave empty to log in interactively instead (az containerapp exec -> codex login),
+# which persists on the /data volume.
+# provider_secrets = {
+#   OPENAI_API_KEY    = "sk-..."
+#   ANTHROPIC_API_KEY = "sk-ant-..."
+#   CURSOR_API_KEY    = "..."
+# }
+
+# Optional OTLP export.
+# otlp_traces_url  = "https://otlp.example.com/v1/traces"
+# otlp_metrics_url = "https://otlp.example.com/v1/metrics"
+log_level = "Info"

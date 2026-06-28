@@ -1,0 +1,43 @@
+# Build context is the repository root (docker build -f apps/server/Dockerfile .)
+# Keep the context small and deterministic; pnpm reinstalls inside the image.
+
+# Dependencies & package manager state
+**/node_modules
+.pnpm-store
+**/.pnpm
+
+# VCS / vendored reference repos
+.git
+.github
+.repos
+
+# Build outputs (rebuilt inside the image)
+**/dist
+**/dist-electron
+**/.vite-plus
+**/build
+apps/web/dist
+apps/server/dist
+
+# Other app targets not needed by the server image
+apps/desktop
+apps/mobile
+apps/marketing
+
+# Infra / CI artifacts
+infra/azure/.terraform
+infra/azure/**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+
+# Local env & secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Editor / OS noise
+**/.DS_Store
+**/.vscode
+**/*.log
+**/coverage
+**/.turbo
