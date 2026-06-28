@@ -181,6 +181,102 @@ describe("T3workToolBroker allowed tool groups", () => {
     expect(result.content[0]?.text).toContain("requires group 'view.state'");
   });
 
+  it("allows Jira draft mutation tools when the recipe declares mutation.draft", async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const broker = yield* T3workToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId,
+          toolContext: {
+            surface: "t3work",
+            tools: [
+              {
+                id: "t3work.work_item.assignee.draft_update",
+                label: "Draft work item assignee update",
+                capabilities: ["write"],
+              },
+            ],
+            state: {
+              view: {
+                kind: "thread",
+                ticketDisplayId: "PROJ-42",
+              },
+            },
+          },
+          allowedToolGroups: ["mutation.draft"],
+        });
+
+        return yield* binding!.callTool({
+          server: "t3work",
+          tool: "t3work.work_item.assignee.draft_update",
+          arguments: {
+            assignee_account_id: "abc-123",
+            assignee_display_name: "Pat Jones",
+          },
+        });
+      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      ok: true,
+      draftMutation: {
+        kind: "jira-work-item-draft",
+        target: {
+          provider: "jira",
+          issueIdOrKey: "PROJ-42",
+        },
+        field: "assignee",
+        patch: {
+          assigneeAccountId: "abc-123",
+          assigneeDisplayName: "Pat Jones",
+        },
+        status: "draft",
+        commitPolicy: {
+          requiresUserApproval: true,
+          commitSurface: "t3work-ui",
+        },
+      },
+    });
+  });
+
+  it("rejects Jira draft mutation tools when the recipe omits mutation.draft", async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const broker = yield* T3workToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId,
+          toolContext: {
+            surface: "t3work",
+            tools: [
+              {
+                id: "t3work.work_item.estimate.draft_update",
+                label: "Draft work item estimate update",
+                capabilities: ["write"],
+              },
+            ],
+            state: {
+              view: {
+                kind: "thread",
+                ticketDisplayId: "PROJ-42",
+              },
+            },
+          },
+          allowedToolGroups: ["view.state"],
+        });
+
+        return yield* binding!.callTool({
+          server: "t3work",
+          tool: "t3work.work_item.estimate.draft_update",
+          arguments: { estimate_value: 3, estimate_mode: "hours" },
+        });
+      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("requires group 'mutation.draft'");
+  });
+
   it("binds visibility in no-thread read-only mode", async () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {

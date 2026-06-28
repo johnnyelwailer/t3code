@@ -1,5 +1,14 @@
 # AGENTS.md
 
+## Git / PR Policy
+
+**HARD RULE — NEVER target upstream `pingdotgg/t3code`.**
+
+- **NEVER** open, update, merge, or create pull requests against upstream `pingdotgg/t3code` (or any `pingdotgg/*` upstream remote).
+- All work stays on the user's fork and local branches (`origin`, feature branches).
+- Only commit and push to the user's fork (`origin`) unless the user explicitly instructs otherwise.
+- Closing mistaken upstream PRs is OK; creating or updating them is forbidden.
+
 ## Task Completion Requirements
 
 - `vp check` and `vp run typecheck` must pass before considering tasks completed.

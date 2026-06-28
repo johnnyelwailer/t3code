@@ -8,6 +8,7 @@ import { useBackend } from "~/t3work/backend/t3work-index";
 import { useAgentContext } from "~/t3work/hooks/t3work-useAgentContext";
 import { TicketDetailGitHubSection } from "~/t3work/t3work-TicketDetailGitHubSection";
 import type { TicketDetailMainColumnProps } from "~/t3work/t3work-TicketDetailMainColumn.types";
+import { TicketDetailDraftDocumentReview } from "~/t3work/t3work-TicketDetailDraftDocumentReview";
 import {
   buildParentContextMenuData,
   createSectionContextMenuHandler,
@@ -130,6 +131,14 @@ export function TicketDetailMainColumn({
         {...(githubActivityWarning ? { githubActivityWarning } : {})}
         {...(githubHost ? { githubHost } : {})}
         {...(githubAccount ? { githubAccount } : {})}
+      />
+
+      <TicketDetailDraftDocumentReview
+        projectId={projectId}
+        issueIdOrKey={displayId}
+        {...(descriptionMarkdown ? { descriptionMarkdown } : {})}
+        {...(descriptionHtml ? { descriptionHtml } : {})}
+        {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
       />
 
       {loading ? (

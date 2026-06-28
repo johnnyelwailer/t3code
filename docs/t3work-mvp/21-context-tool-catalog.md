@@ -58,6 +58,33 @@ This means many "read" tools should not duplicate cached context files. Prefer c
 attachments when the agent needs the current project, work item, GitHub activity, or
 artifact bundle.
 
+Current project workspace sync behavior:
+
+- project metadata and linked repository URLs are written for work projects with a managed
+  workspace root
+- loaded Jira/backlog resources are written as per-item files plus `work-items/index.json`
+  only after the relevant view reports loaded data; pre-load empty arrays are not published
+- visible project thread lists are written when project, dashboard, ticket, or standalone
+  thread routes are opened
+- visible backlog and my-work state is written from the mounted dashboard views; my-work also
+  writes loaded GitHub activity when available
+- `.t3work/context/entrypoint.json`, `.t3work/context/manifest.json`, and
+  `.t3work/context/.sync-commit.json` record paths and sync/commit timestamps for readers
+
+Sync is best-effort but durable while the relevant UI state is mounted. Requests are
+debounced per workspace root, repeated payloads are coalesced, and a newer payload replaces
+any older queued payload before it writes. Writes are serialized per workspace root, so an
+older in-flight write is followed by the latest queued payload instead of racing it. Failed
+writes move the internal sync state to `failed`, reject the first attempt for logging, and
+retry with bounded backoff while the route/view remains mounted; remounting or changing the
+input enqueues again and resumes the attempt. The server writes each file through a temp file
+and rename, then writes the commit marker last.
+
+Known limits: the client does not read the existing on-disk files before each render, failed
+sync status is currently internal/log-only, and the commit marker is a batch completion hint
+rather than a transactional directory swap. If the app is closed before a retry succeeds, the
+next mount/input change is what resumes the write.
+
 Read tools are still useful when they do one of these:
 
 - refresh or resync the context cache
@@ -500,11 +527,16 @@ remains planned catalog scope.
 result vocabulary aligned with Copilot session tooling:
 
 - `name` for the child session title
+- required `execution_scope` (`metarepo` or `repository`)
 - optional `kickoff_prompt`
 - optional `kickoff_mode` (`plan`, `interactive`, `autopilot`)
 - optional `model` and `reasoning_effort`
-- optional `repo_full_name` for linked-repository worktree handoffs
+- `repo_full_name` required for `repository` scope and forbidden for `metarepo` scope
 - result metadata including `project_session_id`, navigation hint, and repo/worktree details
+
+`metarepo` means the project workspace that holds project context, references, recipes,
+skills, and cross-repository synthesis. `repository` means a linked implementation
+repository and always runs in a dedicated worktree.
 
 The first live slice creates project-level child sessions with durable parent/child
 activity cards. Visual parent-thread or work-item attachment metadata remains planned.

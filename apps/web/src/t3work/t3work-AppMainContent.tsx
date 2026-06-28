@@ -17,6 +17,7 @@ import { AppThreadPane } from "~/t3work/t3work-AppThreadPane";
 import { isHomeProjectId } from "~/t3work/t3work-homeProject";
 import { useThreadResolutionDebug } from "~/t3work/t3work-useThreadResolutionDebug";
 import { useHomeProjectChat, useSyncActiveChatTarget } from "./t3work-AppMainContentShell";
+import { useProjectWorkspaceAutoSync } from "~/t3work/hooks/t3work-useProjectWorkspaceAutoSync";
 
 type MainContentProps = {
   view: ViewState | null;
@@ -116,6 +117,18 @@ export function AppMainContent({
   const resolvedThread = activeThreadId
     ? (threadProjectThreads.find((candidate) => candidate.id === activeThreadId) ?? null)
     : null;
+  const viewProject = view
+    ? (allProjects.find((candidate) => candidate.id === view.projectId) ?? null)
+    : null;
+  const workspaceSyncProject = threadProject ?? viewProject ?? homeProject;
+  const workspaceSyncProjectThreads = workspaceSyncProject
+    ? getThreadsForProject(workspaceSyncProject.id)
+    : [];
+
+  useProjectWorkspaceAutoSync({
+    project: workspaceSyncProject,
+    projectThreads: workspaceSyncProjectThreads,
+  });
 
   useThreadResolutionDebug({
     routeProjectId: view?.projectId ?? null,
@@ -168,7 +181,7 @@ export function AppMainContent({
     );
   }
 
-  const project = allProjects.find((candidate) => candidate.id === view.projectId);
+  const project = viewProject;
   if (!project) return homeBrowser;
 
   if (view.type === "dashboard") {

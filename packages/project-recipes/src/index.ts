@@ -1,4 +1,6 @@
 export * from "./recipe.ts";
+export * from "./recipePredicates.ts";
+export * from "./recipeSignals.ts";
 export * from "./kickoff.ts";
 export * from "./discovery.ts";
 export * from "./input.ts";

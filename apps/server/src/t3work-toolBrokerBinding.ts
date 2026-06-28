@@ -18,6 +18,10 @@ import {
   resourceResult,
 } from "./t3work-toolBrokerHelpers.ts";
 import { buildBindingState, permissionMessage } from "./t3work-toolBrokerBindingPermissions.ts";
+import {
+  callT3workDraftMutationToolEffect,
+  isT3workDraftMutationTool,
+} from "./t3work-toolBrokerDraftMutationEffect.ts";
 import { callT3workRenameTool } from "./t3work-toolBrokerBindingRename.ts";
 
 type CreateBindingInput<
@@ -93,6 +97,9 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
       return foldResult(input.setBacklogAssigneeFilter(mode), okResult, (message) =>
         errorResult(`Failed to update backlog assignee filter: ${message}`),
       );
+    }
+    if (isT3workDraftMutationTool(tool)) {
+      return callT3workDraftMutationToolEffect({ tool, toolArgs, readView: input.readView });
     }
     if (tool !== "t3work.view.read") {
       return Effect.succeed(errorResult(`Tool '${tool}' is not implemented in this runtime.`));

@@ -1,8 +1,10 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AppMainContent } from "./t3work-AppMainContent";
+
+const useProjectWorkspaceAutoSyncMock = vi.fn();
 
 vi.mock("~/t3work/backend/t3work-index", () => ({
   useBackendState: () => ({
@@ -29,6 +31,10 @@ vi.mock("~/t3work/t3work-AppMainContentHomeEmptyState", () => ({
 
 vi.mock("~/t3work/t3work-useThreadResolutionDebug", () => ({
   useThreadResolutionDebug: () => {},
+}));
+
+vi.mock("~/t3work/hooks/t3work-useProjectWorkspaceAutoSync", () => ({
+  useProjectWorkspaceAutoSync: (input: unknown) => useProjectWorkspaceAutoSyncMock(input),
 }));
 
 vi.mock("./t3work-AppMainContentShell", () => ({
@@ -67,6 +73,51 @@ const looseProjectThread = {
 };
 
 describe("AppMainContent", () => {
+  beforeEach(() => {
+    useProjectWorkspaceAutoSyncMock.mockClear();
+  });
+
+  it("passes standalone thread routes to workspace auto-sync", () => {
+    renderToStaticMarkup(
+      <AppMainContent
+        view={{
+          type: "thread",
+          projectId: looseProject.id,
+          threadId: looseProjectThread.id,
+        }}
+        activeDashboardMode="my-work"
+        selectedProjectId={null}
+        projects={[]}
+        allProjects={[looseProject]}
+        getThreadsForProject={(projectId) =>
+          projectId === looseProject.id ? [looseProjectThread] : []
+        }
+        onOpenTicket={() => {}}
+        onOpenThread={() => {}}
+        onOpenFullThread={() => {}}
+        onOpenEmbeddedThread={() => {}}
+        onKickoffProjectThread={() => {}}
+        onKickoffTicketThread={() => {}}
+        onThreadKickoffConsumed={() => {}}
+        onThreadDisplayModeChange={() => {}}
+        onBackToDashboard={() => {}}
+        onCreate={() => {}}
+        onInlineProjectCreated={() => {}}
+        renderDashboard={(project) => <div>dashboard:{project.title}</div>}
+        renderTicketDetail={(project, ticketId, activeThreadId) => (
+          <div>
+            ticket:{project.id}:{ticketId}:{activeThreadId ?? "none"}
+          </div>
+        )}
+      />,
+    );
+
+    expect(useProjectWorkspaceAutoSyncMock).toHaveBeenCalledWith({
+      project: looseProject,
+      projectThreads: [looseProjectThread],
+    });
+  });
+
   it("renders a ticket route for a loose workspace project", () => {
     const markup = renderToStaticMarkup(
       <AppMainContent

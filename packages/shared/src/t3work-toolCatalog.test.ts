@@ -24,6 +24,15 @@ function readDocumentedToolIds(): ReadonlyArray<string> {
 describe("t3work-toolCatalog", () => {
   it("lists the implemented tools in catalog order", () => {
     expect(listImplementedT3workToolCatalogEntries().map((tool) => tool.id)).toEqual([
+      "t3work.backlog.set_assignee_filter",
+      "t3work.backlog.item.assignee.draft_update",
+      "t3work.backlog.item.estimate.draft_update",
+      "t3work.backlog.item.subtask.draft_create",
+      "t3work.work_item.assignee.draft_update",
+      "t3work.work_item.estimate.draft_update",
+      "t3work.work_item.status.draft_update",
+      "t3work.work_item.description.draft_update",
+      "t3work.work_item.comment.draft_create",
       "t3work.view.read",
       "t3work.thread.rename",
       "t3work.thread.start_child",

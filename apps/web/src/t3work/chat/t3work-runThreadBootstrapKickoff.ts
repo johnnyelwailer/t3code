@@ -65,6 +65,14 @@ type RunThreadBootstrapKickoffInput = {
   onInitialUserMessageSent: (() => void) | undefined;
 };
 
+type WorkflowBackedRecipe = T3workKickoffWorkflow & { readonly workflowPath: string };
+
+function hasWorkflowLaunchPath(
+  workflow: T3workKickoffWorkflow | undefined,
+): workflow is WorkflowBackedRecipe {
+  return workflow?.kind === "recipe" && typeof workflow.workflowPath === "string";
+}
+
 function finalizeThreadBootstrapKickoff(input: {
   environmentId: string;
   threadId: string;
@@ -105,7 +113,7 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
     preparedContextAttachments,
   );
 
-  if (input.kickoffWorkflow?.kind === "recipe") {
+  if (hasWorkflowLaunchPath(input.kickoffWorkflow)) {
     await dispatchThreadBootstrapCreateWithRecovery({
       backend: input.backend,
       action: input.action,

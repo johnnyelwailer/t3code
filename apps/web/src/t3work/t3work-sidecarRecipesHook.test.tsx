@@ -56,24 +56,49 @@ function QuickStartProbe({
   backend,
   project,
   renderToken,
+  epicMode = false,
+  includeKnownEmptyRelationships = false,
 }: {
   backend: BackendApi;
   project: ProjectShellProject;
   renderToken: number;
+  epicMode?: boolean;
+  includeKnownEmptyRelationships?: boolean;
 }) {
   const quickStarts = useT3workSidecarRecipeQuickStarts({
     backend,
-    surface: "project.dashboard",
+    surface: epicMode ? "workitem.detail.sidepanel" : "project.dashboard",
     project: { ...project },
     profileId: "product-partner",
-    selectedWorkLabel: project.title,
-    dashboardMode: "backlog",
-    currentViewSummary: {
-      itemCount: 4,
-      bugCount: 1,
-      primaryBugLabel: "IES-1234",
-    },
-    availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
+    selectedWorkLabel: epicMode ? "PROJ-100" : project.title,
+    selectedWorkTitle: epicMode ? "Platform epic" : undefined,
+    ...(epicMode
+      ? {
+          resourceKind: "ticket" as const,
+          jiraIssueType: "Epic",
+          ...(includeKnownEmptyRelationships
+            ? {
+                ticketContext: {
+                  relationships: {
+                    childKeys: [],
+                    referenceKeys: [],
+                    blockedByKeys: [],
+                    blockingKeys: [],
+                  },
+                },
+              }
+            : {}),
+          availableContextKeys: ["project.summary", "ticket.summary"],
+        }
+      : {
+          dashboardMode: "backlog" as const,
+          currentViewSummary: {
+            itemCount: 4,
+            bugCount: 1,
+            primaryBugLabel: "IES-1234",
+          },
+          availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
+        }),
   });
 
   return (
@@ -124,6 +149,37 @@ describe("useT3workSidecarRecipeQuickStarts", () => {
 
     await act(async () => {
       mountedRoots.pop()?.unmount();
+    });
+  });
+
+  it("does not add relationship-gated quick starts after background enrichment", async () => {
+    const backend = createMockBackend();
+    const project = createProject();
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<QuickStartProbe backend={backend} project={project} renderToken={1} epicMode />);
+    });
+
+    expect(host.textContent).not.toContain("tshirt-size-epic");
+
+    await act(async () => {
+      root.render(
+        <QuickStartProbe
+          backend={backend}
+          project={project}
+          renderToken={2}
+          epicMode
+          includeKnownEmptyRelationships
+        />,
+      );
+    });
+
+    expect(host.textContent).not.toContain("tshirt-size-epic");
+
+    await act(async () => {
+      root.unmount();
     });
   });
 });

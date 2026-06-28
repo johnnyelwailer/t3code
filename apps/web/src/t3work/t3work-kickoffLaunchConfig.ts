@@ -19,6 +19,11 @@ import { DEFAULT_T3WORK_THREAD_TOOL_IDS } from "~/t3work/t3work-threadToolContex
 import { runtimeModeConfig } from "~/t3work/t3work-ticketKickoffRuntimeConfig";
 import type { T3workThreadToolId } from "~/t3work/t3work-types";
 
+type ProviderSettingsSnapshot = {
+  readonly providerInstances: Record<string, { readonly enabled?: boolean } | undefined>;
+  readonly providers: Record<string, { readonly enabled?: boolean } | undefined>;
+};
+
 export type T3workKickoffLaunchConfig = {
   readonly selection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
@@ -40,11 +45,15 @@ export function createDefaultT3workKickoffLaunchConfig(): T3workKickoffLaunchCon
 
 export function getT3workKickoffProviderBlocker(input: {
   readonly isConnected: boolean;
+  readonly hasConfiguredProviders?: boolean;
   readonly providerInstanceEntries: ReadonlyArray<ProviderInstanceEntry>;
   readonly selectedProviderEntry: ProviderInstanceEntry | undefined;
 }): string | null {
   if (!input.isConnected) return "Server is disconnected.";
   if (input.providerInstanceEntries.length === 0) {
+    if (input.hasConfiguredProviders) {
+      return "Loading provider status...";
+    }
     return "No providers are configured. Add or enable a provider in Settings.";
   }
   if (!input.selectedProviderEntry) return "Select a provider to start a chat.";
@@ -57,11 +66,25 @@ export function getT3workKickoffProviderBlocker(input: {
   return null;
 }
 
+export function hasConfiguredProviderSettings(settings: ProviderSettingsSnapshot): boolean {
+  for (const instance of Object.values(settings.providerInstances)) {
+    if (instance && (instance.enabled ?? true)) return true;
+  }
+  for (const provider of Object.values(settings.providers)) {
+    if (provider?.enabled) return true;
+  }
+  return false;
+}
+
 export function useT3workKickoffComposerState(providers: ReadonlyArray<ServerProvider>) {
   const providerSettings = usePrimarySettings((settings) => ({
     providerInstances: settings.providerInstances,
     providers: settings.providers,
   }));
+  const hasConfiguredProviders = useMemo(
+    () => hasConfiguredProviderSettings(providerSettings),
+    [providerSettings],
+  );
   const enabledAvailableProviders = useMemo(
     () =>
       providers.filter((provider) => provider.enabled && provider.availability !== "unavailable"),
@@ -144,6 +167,7 @@ export function useT3workKickoffComposerState(providers: ReadonlyArray<ServerPro
     interactionMode,
     launchConfig,
     modelOptionsByInstance,
+    hasConfiguredProviders,
     providerInstanceEntries,
     runtimeMode,
     runtimeOption: runtimeModeConfig[runtimeMode],

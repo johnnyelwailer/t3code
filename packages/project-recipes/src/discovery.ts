@@ -199,3 +199,59 @@ export type DiscoverProjectRecipesResponse = {
   readonly hasProjectLocalRecipes: boolean;
   readonly recipes: ReadonlyArray<ProjectRecipeDiscovered>;
 };
+
+export type ManagedProjectRecipeSourceKind = "recipe-json" | "recipe-module";
+
+export type ManagedProjectRecipe = {
+  readonly id: string;
+  readonly version: string;
+  readonly displayName: string;
+  readonly shortDescription: string;
+  readonly icon?: string;
+  readonly surfaces: ReadonlyArray<RecipeSurface>;
+  readonly rank?: number | string;
+  readonly active: boolean;
+  readonly sourceKind: ManagedProjectRecipeSourceKind;
+  readonly editable: boolean;
+  readonly deletable: boolean;
+  readonly recipePath: string;
+  readonly sourcePath: string;
+  readonly promptPath?: string;
+  readonly prompt?: string;
+  readonly workflowPath?: string;
+  readonly actionViewPath?: string;
+};
+
+export type ListManagedProjectRecipesRequest = {
+  readonly workspaceRoot: string;
+};
+
+export type ListManagedProjectRecipesResponse = {
+  readonly workspaceRoot: string;
+  readonly hasProjectLocalRecipes: boolean;
+  readonly recipes: ReadonlyArray<ManagedProjectRecipe>;
+};
+
+export type UpdateManagedProjectRecipeRequest = {
+  readonly workspaceRoot: string;
+  readonly recipePath: string;
+  readonly active?: boolean;
+  readonly displayName?: string;
+  readonly shortDescription?: string;
+  readonly prompt?: string;
+};
+
+export type UpdateManagedProjectRecipeResponse = {
+  readonly workspaceRoot: string;
+  readonly recipe: ManagedProjectRecipe;
+};
+
+export type DeleteManagedProjectRecipeRequest = {
+  readonly workspaceRoot: string;
+  readonly recipePath: string;
+};
+
+export type DeleteManagedProjectRecipeResponse = {
+  readonly workspaceRoot: string;
+  readonly deletedRecipePath: string;
+};

@@ -35,14 +35,6 @@ export default function Action() {
 export const CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW = `
 export default function Action({ ctx }) {
   const dashboardMode = ctx.surfaceState?.dashboardMode;
-  const surfaceTarget =
-    ctx.surface === "workitem.detail.sidepanel"
-      ? "this ticket"
-      : dashboardMode === "my-work"
-        ? "my work"
-        : dashboardMode === "backlog"
-          ? "this backlog"
-          : "this view";
   const description =
     ctx.surface === "workitem.detail.sidepanel"
       ? "Let the agent handle repeatable ticket work: draft a handoff, check QA gaps, or trace blockers."
@@ -54,7 +46,7 @@ export default function Action({ ctx }) {
 
   return (
     <RecipeAction
-      title={"Create a recipe for " + surfaceTarget}
+      title="Create a recipe for this view"
       icon="sparkles"
       description={description}
     />
@@ -124,7 +116,7 @@ export default function Action({ ctx }) {
 
   return (
     <RecipeAction
-      title="Prioritize {{currentViewLabel}}"
+      title="Prioritize pending work"
       icon="list-todo"
     >
       <FieldList
@@ -264,7 +256,7 @@ export default function Action({ ctx }) {
 
   return (
     <RecipeAction
-      title="Unblock {{selectedWorkLabel}}"
+      title="Unblock this item"
       icon="arrow-up-right"
       eyebrow="Primary blocker"
       description="Identify the blocker that is actually constraining progress, recommend the next move to clear it, and give a fallback if it stays blocked."
@@ -318,6 +310,44 @@ export default function Action() {
         label="Extra focus"
         placeholder="Optional subsystem, risk, or dependency"
         promptTemplate="Pay extra attention to {{value}}."
+      />
+    </RecipeAction>
+  );
+}
+`;
+
+export const TSHIRT_SIZE_EPIC_ACTION_VIEW = `
+export default function Action() {
+  return (
+    <RecipeAction
+      title="T-shirt-size this epic"
+      icon="ruler"
+      description="Combine Jira scope, related work, code evidence, and unknowns into an XS/S/M/L/XL estimate."
+    >
+      <LaunchOptionGroup
+        name="sizingLens"
+        label="Sizing lens"
+        defaultValue="evidence"
+        options={[
+          {
+            value: "evidence",
+            label: "Evidence-based",
+            promptText:
+              "Ground the size in Jira details, linked work, code implementation status, acceptance criteria, and unknowns before naming a size.",
+          },
+          {
+            value: "gut",
+            label: "Gut check",
+            promptText:
+              "Lead with a fast gut size, then briefly justify it from the epic scope.",
+          },
+          {
+            value: "comparative",
+            label: "Comparative",
+            promptText:
+              "Compare against similar past epics or stories when available, and explain where this epic is smaller, larger, or riskier.",
+          },
+        ]}
       />
     </RecipeAction>
   );

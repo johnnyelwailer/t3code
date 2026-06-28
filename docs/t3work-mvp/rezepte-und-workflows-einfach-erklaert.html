@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rezepte & Abläufe in T3 Work - einfach erklärt</title>
+    <style>
+      :root {
+        --bg: #0b0d12;
+        --bg-soft: #11141b;
+        --panel: #151922;
+        --panel-2: #1b2030;
+        --line: #252c3b;
+        --text: #eef2f8;
+        --muted: #a7b0c2;
+        --dim: #737d91;
+        --blue: #80c7ff;
+        --purple: #c3a1ff;
+        --green: #7ee3b5;
+        --amber: #ffd08a;
+        --pink: #f7a8d8;
+        --red: #ff8a8a;
+        --sans:
+          -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+        --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 20% 0%, rgba(128, 199, 255, 0.12), transparent 34rem),
+          radial-gradient(circle at 90% 10%, rgba(195, 161, 255, 0.1), transparent 30rem), var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: #dbe7ff;
+        background: rgba(255, 255, 255, 0.045);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 1px 6px;
+      }
+      .page {
+        max-width: 1220px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 270px minmax(0, 1fr);
+      }
+      nav {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow: auto;
+        padding: 30px 18px;
+        border-right: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(17, 20, 27, 0.92), rgba(11, 13, 18, 0.86));
+        backdrop-filter: blur(10px);
+      }
+      nav h4 {
+        margin: 20px 8px 8px;
+        color: var(--dim);
+        font-size: 11px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+      }
+      nav a {
+        display: block;
+        color: var(--muted);
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-size: 13px;
+      }
+      nav a:hover {
+        color: var(--text);
+        background: var(--panel);
+        text-decoration: none;
+      }
+      nav a.sub {
+        padding-left: 20px;
+        color: var(--dim);
+      }
+      main {
+        max-width: 900px;
+        padding: 0 50px 120px;
+      }
+      header.hero {
+        padding: 86px 0 44px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 42px;
+      }
+      .eyebrow {
+        color: var(--purple);
+        font-size: 12px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        margin-bottom: 14px;
+      }
+      h1 {
+        margin: 0 0 18px;
+        font-size: 48px;
+        line-height: 1.06;
+        letter-spacing: -0.04em;
+        background: linear-gradient(90deg, #fff, #d9e5f8 58%, var(--blue));
+        color: transparent;
+        -webkit-background-clip: text;
+        background-clip: text;
+      }
+      .lead {
+        font-size: 20px;
+        color: var(--muted);
+        max-width: 66ch;
+        margin: 0;
+      }
+      h2 {
+        font-size: 29px;
+        line-height: 1.2;
+        margin: 58px 0 12px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+      h3 {
+        font-size: 21px;
+        margin: 34px 0 8px;
+        color: #dce6f5;
+      }
+      h4 {
+        margin: 0 0 8px;
+        font-size: 15px;
+        color: #dce6f5;
+      }
+      p {
+        margin: 10px 0;
+      }
+      ul,
+      ol {
+        padding-left: 22px;
+        margin: 10px 0;
+      }
+      li {
+        margin: 5px 0;
+      }
+      .num {
+        color: var(--dim);
+        font-weight: 400;
+        margin-right: 10px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin: 18px 0;
+      }
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .card,
+      .callout {
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.025));
+        border-radius: 16px;
+        padding: 18px 20px;
+      }
+      .card p {
+        color: var(--muted);
+        margin-bottom: 0;
+      }
+      .callout {
+        margin: 20px 0;
+        border-left: 4px solid var(--blue);
+      }
+      .callout.green {
+        border-left-color: var(--green);
+      }
+      .callout.amber {
+        border-left-color: var(--amber);
+      }
+      .callout.pink {
+        border-left-color: var(--pink);
+      }
+      .label {
+        display: inline-block;
+        font-size: 11px;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--dim);
+        margin-bottom: 6px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 9px;
+        font-size: 12px;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.035);
+      }
+      .pill.blue {
+        color: var(--blue);
+        border-color: rgba(128, 199, 255, 0.35);
+      }
+      .pill.green {
+        color: var(--green);
+        border-color: rgba(126, 227, 181, 0.35);
+      }
+      .pill.amber {
+        color: var(--amber);
+        border-color: rgba(255, 208, 138, 0.35);
+      }
+      .pill.purple {
+        color: var(--purple);
+        border-color: rgba(195, 161, 255, 0.35);
+      }
+      .pill.pink {
+        color: var(--pink);
+        border-color: rgba(247, 168, 216, 0.35);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        margin: 16px 0;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 11px 12px;
+        vertical-align: top;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--dim);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      td {
+        color: var(--muted);
+      }
+      td b {
+        color: var(--text);
+      }
+      figure.diagram {
+        margin: 24px 0;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(17, 20, 27, 0.72);
+        overflow-x: auto;
+      }
+      figure.diagram figcaption {
+        text-align: center;
+        color: var(--dim);
+        font-size: 13px;
+        margin-top: 16px;
+      }
+      svg {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        margin: 0 auto;
+      }
+      svg text {
+        font-family: var(--sans);
+        fill: var(--text);
+      }
+      svg .small {
+        font-size: 12px;
+        fill: var(--muted);
+      }
+      svg .tiny {
+        font-size: 11px;
+        fill: var(--dim);
+      }
+      svg .box {
+        fill: #151922;
+        stroke: #2b3448;
+      }
+      svg .blue {
+        fill: rgba(128, 199, 255, 0.1);
+        stroke: var(--blue);
+      }
+      svg .purple {
+        fill: rgba(195, 161, 255, 0.1);
+        stroke: var(--purple);
+      }
+      svg .green {
+        fill: rgba(126, 227, 181, 0.1);
+        stroke: var(--green);
+      }
+      svg .amber {
+        fill: rgba(255, 208, 138, 0.1);
+        stroke: var(--amber);
+      }
+      svg .pink {
+        fill: rgba(247, 168, 216, 0.1);
+        stroke: var(--pink);
+      }
+      svg .red {
+        fill: rgba(255, 138, 138, 0.1);
+        stroke: var(--red);
+      }
+      svg .arrow {
+        stroke: var(--muted);
+        stroke-width: 1.6;
+        fill: none;
+        marker-end: url(#arrow);
+      }
+      svg .arrow-blue {
+        stroke: var(--blue);
+        stroke-width: 1.8;
+        fill: none;
+        marker-end: url(#arrow-blue);
+      }
+      svg .dash {
+        stroke-dasharray: 5 5;
+      }
+      .story {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr);
+        gap: 14px;
+        margin: 14px 0;
+      }
+      .avatar {
+        width: 54px;
+        height: 54px;
+        border-radius: 16px;
+        display: grid;
+        place-items: center;
+        color: var(--bg);
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--blue), var(--purple));
+      }
+      .quote {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px 16px;
+        color: var(--muted);
+      }
+      .quote b {
+        color: var(--text);
+      }
+      .example-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .example {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 14px;
+        padding: 16px;
+      }
+      .example .title {
+        color: var(--text);
+        font-weight: 700;
+        margin-bottom: 5px;
+      }
+      .example .outcome {
+        color: var(--green);
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      .footer-note {
+        color: var(--dim);
+        font-size: 13px;
+        margin-top: 42px;
+      }
+      @media (max-width: 980px) {
+        .page {
+          display: flex;
+          flex-direction: column;
+        }
+        main {
+          order: 1;
+        }
+        nav {
+          order: 2;
+          position: static;
+          height: auto;
+          border-right: 0;
+          border-top: 1px solid var(--line);
+          border-bottom: 0;
+        }
+        main {
+          padding: 0 24px 80px;
+        }
+        .grid,
+        .grid.three,
+        .example-list {
+          grid-template-columns: 1fr;
+        }
+        h1 {
+          font-size: 38px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute">
+      <defs>
+        <marker
+          id="arrow"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0,0 L10,5 L0,10 z" fill="#a7b0c2" />
+        </marker>
+        <marker
+          id="arrow-blue"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0,0 L10,5 L0,10 z" fill="#80c7ff" />
+        </marker>
+      </defs>
+    </svg>
+
+    <div class="page">
+      <nav>
+        <h4>Inhalt</h4>
+        <a href="#kurz">Kurzfassung</a>
+        <a href="#alltag">1 · Alltagsbild</a>
+        <a href="#bausteine">2 · Die vier Bausteine</a>
+        <a href="#rezepte">3 · Was ist ein Rezept?</a>
+        <a href="#ablaeufe">4 · Was ist ein Ablauf?</a>
+        <a href="#hintergrund">5 · Hintergrund-Abläufe</a>
+        <a href="#seitenleiste">6 · Was sieht man links?</a>
+        <a href="#beispiele">7 · Beispiele</a>
+        <a class="sub" href="#tshirt">T-Shirt-Größen</a>
+        <a class="sub" href="#triage">Triage</a>
+        <a class="sub" href="#release">Release-Vorbereitung</a>
+        <a class="sub" href="#daily">Tägliche Zusammenfassung</a>
+        <a href="#kanban">8 · Kanban: Ready for Agent</a>
+        <a class="sub" href="#kanban-geschichte">Geschichte</a>
+        <a class="sub" href="#kanban-ablauf">Ablauf</a>
+        <a class="sub" href="#kanban-regeln">Regeln</a>
+        <a href="#nutzen">9 · Warum das wichtig ist</a>
+        <a href="#zusammenfassung">10 · Zusammenfassung</a>
+      </nav>
+
+      <main>
+        <header class="hero">
+          <div class="eyebrow">T3 Work · ohne Technik erklärt</div>
+          <h1>Rezepte &amp; Abläufe, ganz einfach.</h1>
+          <p class="lead">
+            Stell dir T3 Work wie eine Werkstatt mit wiederverwendbaren Arbeitsanweisungen vor: Du
+            klickst auf ein Rezept, und ein digitaler Assistent erledigt den passenden Ablauf -
+            sichtbar, nachvollziehbar und immer am richtigen Arbeitselement.
+          </p>
+        </header>
+
+        <section id="kurz">
+          <h2><span class="num">0</span>Kurzfassung</h2>
+          <div class="grid">
+            <div class="card">
+              <h4>Ein Rezept ist ein Knopf</h4>
+              <p>
+                Zum Beispiel: „Schätze dieses Epic“, „Bereite Review vor“ oder „Fasse meine offenen
+                Aufgaben zusammen“. Du musst keinen perfekten Prompt schreiben.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Ein Ablauf ist die Arbeit dahinter</h4>
+              <p>
+                Der Ablauf kann Informationen sammeln, nachfragen, warten, einen Agenten starten und
+                am Ende ein sichtbares Ergebnis ablegen.
+              </p>
+            </div>
+          </div>
+          <div class="callout green">
+            <span class="label">Merksatz</span>
+            <p>
+              <b>Rezept = Was du anklickst.</b><br />
+              <b>Ablauf = Was danach Schritt für Schritt passiert.</b><br />
+              <b>Thread = Wo du zusiehst, nachliest und antwortest.</b>
+            </p>
+          </div>
+        </section>
+
+        <section id="alltag">
+          <h2><span class="num">1</span>Ein Alltagsbild</h2>
+          <p>
+            Denk an eine Küche. Ein Rezept sagt nicht nur „Koch etwas Gutes“, sondern: Welche
+            Zutaten braucht man? Wann muss man umrühren? Wann wartet man? Wann fragt man, ob es
+            scharf sein darf?
+          </p>
+          <p>
+            Genau so funktionieren Rezepte in T3 Work. Sie geben einem Agenten nicht einfach einen
+            Wunsch mit, sondern einen klaren Arbeitsrahmen.
+          </p>
+
+          <figure class="diagram">
+            <svg viewBox="0 0 780 330" width="780" aria-label="Alltagsbild: Küche und T3 Work">
+              <rect class="box" x="20" y="36" width="170" height="86" rx="14" />
+              <text x="105" y="68" text-anchor="middle" font-size="15" font-weight="700">
+                Küchen-Rezept
+              </text>
+              <text x="105" y="92" text-anchor="middle" class="small">Zutaten, Schritte,</text>
+              <text x="105" y="110" text-anchor="middle" class="small">Wartezeiten</text>
+
+              <rect class="blue" x="305" y="36" width="170" height="86" rx="14" />
+              <text x="390" y="68" text-anchor="middle" font-size="15" font-weight="700">
+                T3-Rezept
+              </text>
+              <text x="390" y="92" text-anchor="middle" class="small">Kontext, Ziel,</text>
+              <text x="390" y="110" text-anchor="middle" class="small">passender Ablauf</text>
+
+              <rect class="green" x="590" y="36" width="170" height="86" rx="14" />
+              <text x="675" y="68" text-anchor="middle" font-size="15" font-weight="700">
+                Ergebnis
+              </text>
+              <text x="675" y="92" text-anchor="middle" class="small">Schätzung, Plan,</text>
+              <text x="675" y="110" text-anchor="middle" class="small">Plan, Zusammenfassung</text>
+
+              <path class="arrow-blue" d="M190 79 L305 79" />
+              <path class="arrow-blue" d="M475 79 L590 79" />
+
+              <rect class="purple" x="148" y="196" width="486" height="74" rx="18" />
+              <text x="391" y="225" text-anchor="middle" font-size="16" font-weight="700">
+                Der Thread ist die Arbeitsfläche
+              </text>
+              <text x="391" y="249" text-anchor="middle" class="small">
+                Hier siehst du Fortschritt, Fragen, Entscheidungen und Ergebnisse.
+              </text>
+
+              <path class="arrow" d="M390 122 L390 196" />
+            </svg>
+            <figcaption>
+              Ein Rezept macht wiederholbare Arbeit klickbar. Der Thread macht sie sichtbar.
+            </figcaption>
+          </figure>
+        </section>
+
+        <section id="bausteine">
+          <h2><span class="num">2</span>Die vier Bausteine - ohne Fachwörter</h2>
+          <div class="grid">
+            <div class="card">
+              <h4>1. Kontext</h4>
+              <p>
+                Was ist gerade gemeint? Ein Epic, ein Bug, ein Änderungsvorschlag, ein Kommentar,
+                ein Sprint?
+              </p>
+            </div>
+            <div class="card">
+              <h4>2. Werkzeuge</h4>
+              <p>
+                Was darf getan werden? Aufgaben lesen, Änderungen prüfen, einen Kommentar schreiben,
+                einen Vorschlag vorbereiten.
+              </p>
+            </div>
+            <div class="card">
+              <h4>3. Ablauf</h4>
+              <p>
+                Welche Schritte passieren in welcher Reihenfolge? Erst lesen, dann schätzen, dann
+                nachfragen, dann speichern.
+              </p>
+            </div>
+            <div class="card">
+              <h4>4. Darstellung</h4>
+              <p>
+                Wie sieht das Ergebnis aus? Karte, Liste, Entscheidung, Bericht, Plan oder kleines
+                Dashboard.
+              </p>
+            </div>
+          </div>
+
+          <figure class="diagram">
+            <svg viewBox="0 0 760 350" width="760" aria-label="Vier Bausteine">
+              <rect class="blue" x="56" y="58" width="150" height="76" rx="14" />
+              <text x="131" y="88" text-anchor="middle" font-size="15" font-weight="700">
+                Kontext
+              </text>
+              <text x="131" y="112" text-anchor="middle" class="small">„Dieses Epic“</text>
+
+              <rect class="amber" x="226" y="58" width="150" height="76" rx="14" />
+              <text x="301" y="88" text-anchor="middle" font-size="15" font-weight="700">
+                Werkzeuge
+              </text>
+              <text x="301" y="112" text-anchor="middle" class="small">Aufgaben, Änderungen</text>
+
+              <rect class="purple" x="396" y="58" width="150" height="76" rx="14" />
+              <text x="471" y="88" text-anchor="middle" font-size="15" font-weight="700">
+                Ablauf
+              </text>
+              <text x="471" y="112" text-anchor="middle" class="small">Schrittfolge</text>
+
+              <rect class="green" x="566" y="58" width="150" height="76" rx="14" />
+              <text x="641" y="88" text-anchor="middle" font-size="15" font-weight="700">
+                Darstellung
+              </text>
+              <text x="641" y="112" text-anchor="middle" class="small">Karte/Bericht</text>
+
+              <path class="arrow" d="M206 96 L226 96" />
+              <path class="arrow" d="M376 96 L396 96" />
+              <path class="arrow" d="M546 96 L566 96" />
+
+              <rect class="box" x="172" y="218" width="416" height="82" rx="18" />
+              <text x="380" y="250" text-anchor="middle" font-size="17" font-weight="700">
+                Rezept
+              </text>
+              <text x="380" y="276" text-anchor="middle" class="small">
+                verbindet diese Bausteine zu einem klickbaren Vorschlag
+              </text>
+
+              <path class="arrow-blue" d="M131 134 C131 185, 240 184, 268 218" />
+              <path class="arrow-blue" d="M301 134 C301 182, 335 184, 352 218" />
+              <path class="arrow-blue" d="M471 134 C471 182, 425 184, 408 218" />
+              <path class="arrow-blue" d="M641 134 C641 185, 520 184, 492 218" />
+            </svg>
+            <figcaption>Ein Rezept bündelt Kontext, Werkzeuge, Ablauf und Darstellung.</figcaption>
+          </figure>
+        </section>
+
+        <section id="rezepte">
+          <h2><span class="num">3</span>Was ist ein Rezept?</h2>
+          <p>
+            Ein Rezept ist ein Vorschlag, der im richtigen Moment auftaucht. Auf einem Epic könnte
+            „T-Shirt-Größe schätzen“ erscheinen. Auf einem Bug könnte „Reproduktion prüfen“
+            erscheinen. Auf einem Änderungsvorschlag könnte „Review-Zusammenfassung erstellen“
+            erscheinen.
+          </p>
+          <p>
+            Wichtig: Rezepte sollen nicht heimlich entstehen. Wenn ein Ablauf nützlich und
+            wiederholbar war, kann T3 Work anbieten: „Möchtest du daraus einen Knopf für das nächste
+            Mal machen?“
+          </p>
+
+          <div class="story">
+            <div class="avatar">PM</div>
+            <div class="quote">
+              <b>Produktmanagerin:</b> „Ich möchte nicht jedes Mal erklären, wie wir Epics grob
+              einschätzen. Ich will einen Knopf: Schätze dieses Epic wie immer.“
+            </div>
+          </div>
+          <div class="story">
+            <div class="avatar">T3</div>
+            <div class="quote">
+              <b>T3 Work:</b> „Dann machen wir daraus ein Rezept. Es liest die Beschreibung, schaut
+              auf ähnliche Arbeit, schlägt XS/S/M/L/XL vor und fragt bei Unsicherheit nach.“
+            </div>
+          </div>
+        </section>
+
+        <section id="ablaeufe">
+          <h2><span class="num">4</span>Was ist ein Ablauf?</h2>
+          <p>
+            Ein Ablauf ist die Schritt-für-Schritt-Arbeit hinter einem Rezept. Er kann sofort
+            laufen, anhalten, auf eine Antwort warten oder später weitermachen.
+          </p>
+
+          <figure class="diagram">
+            <svg viewBox="0 0 800 310" width="800" aria-label="Ablauf als Schrittfolge">
+              <rect class="box" x="28" y="90" width="120" height="62" rx="12" />
+              <text x="88" y="116" text-anchor="middle" font-weight="700">Start</text>
+              <text x="88" y="136" text-anchor="middle" class="small">Klick</text>
+
+              <rect class="blue" x="188" y="90" width="120" height="62" rx="12" />
+              <text x="248" y="116" text-anchor="middle" font-weight="700">Lesen</text>
+              <text x="248" y="136" text-anchor="middle" class="small">Kontext holen</text>
+
+              <rect class="purple" x="348" y="90" width="120" height="62" rx="12" />
+              <text x="408" y="116" text-anchor="middle" font-weight="700">Denken</text>
+              <text x="408" y="136" text-anchor="middle" class="small">Agent arbeitet</text>
+
+              <rect class="amber" x="508" y="90" width="120" height="62" rx="12" />
+              <text x="568" y="116" text-anchor="middle" font-weight="700">Fragen</text>
+              <text x="568" y="136" text-anchor="middle" class="small">wenn nötig</text>
+
+              <rect class="green" x="668" y="90" width="104" height="62" rx="12" />
+              <text x="720" y="116" text-anchor="middle" font-weight="700">Ergebnis</text>
+              <text x="720" y="136" text-anchor="middle" class="small">speichern</text>
+
+              <path class="arrow-blue" d="M148 121 L188 121" />
+              <path class="arrow-blue" d="M308 121 L348 121" />
+              <path class="arrow-blue" d="M468 121 L508 121" />
+              <path class="arrow-blue" d="M628 121 L668 121" />
+
+              <rect class="pink" x="240" y="218" width="320" height="54" rx="14" />
+              <text x="400" y="240" text-anchor="middle" font-weight="700">
+                Der Ablauf darf warten
+              </text>
+              <text x="400" y="260" text-anchor="middle" class="small">
+                auf dich, auf Montagmorgen oder auf eine Statusänderung
+              </text>
+              <path class="arrow dash" d="M568 152 C568 200, 490 200, 450 218" />
+            </svg>
+            <figcaption>
+              Ein Ablauf ist nicht nur ein Prompt. Er ist ein kleiner Arbeitsprozess.
+            </figcaption>
+          </figure>
+        </section>
+
+        <section id="hintergrund">
+          <h2><span class="num">5</span>Abläufe im Hintergrund</h2>
+          <p>
+            Manche Abläufe sollen nicht sofort fertig sein. Sie sollen warten: bis morgen, bis
+            Montag, bis eine Aufgabe ihren Status ändert oder bis jemand eine Entscheidung trifft.
+          </p>
+          <p>
+            In der Oberfläche sieht man das nicht als abstraktes „Automations-Menü“, sondern als
+            normalen Thread in der Seitenleiste. Er schläft, wacht auf, schreibt kurz, was passiert
+            ist, und schläft wieder.
+          </p>
+
+          <div class="callout amber">
+            <span class="label">Beispiel</span>
+            <p>
+              „Jeden Montagmorgen: Finde alle neuen Bugs, sortiere sie grob, markiere die riskanten
+              und frage mich nur bei den unklaren Fällen.“
+            </p>
+          </div>
+        </section>
+
+        <section id="seitenleiste">
+          <h2><span class="num">6</span>Was sieht man links in der Seitenleiste?</h2>
+          <p>
+            Threads hängen dort, wo sie hingehören. Ein Projekt-Thread hängt am Projekt. Ein
+            Aufgaben-Thread hängt unter der Aufgabe. Wenn ein Rezept einen Agenten startet,
+            erscheint dessen Arbeit als neuer Unter-Thread unter genau dieser Aufgabe.
+          </p>
+
+          <figure class="diagram">
+            <svg
+              viewBox="0 0 620 400"
+              width="620"
+              aria-label="Seitenleiste mit verschachtelten Threads"
+            >
+              <rect class="box" x="32" y="24" width="556" height="344" rx="18" />
+              <text x="60" y="58" font-size="16" font-weight="700">Projekt: Mobile App</text>
+
+              <rect class="box" x="60" y="88" width="500" height="34" rx="8" />
+              <text x="80" y="110" font-size="13">Projekt-Thread: Sprint-Zusammenfassung</text>
+
+              <rect class="box" x="60" y="136" width="500" height="34" rx="8" />
+              <text x="80" y="158" font-size="13">Board-Thread: Wöchentliche Triage</text>
+
+              <rect class="blue" x="60" y="196" width="500" height="50" rx="10" />
+              <text x="80" y="216" font-size="14" font-weight="700">
+                APP-421 · Login per Passkey
+              </text>
+              <text x="80" y="236" class="small">Status: Ready for Agent</text>
+
+              <rect class="purple" x="86" y="256" width="474" height="34" rx="8" />
+              <text x="106" y="278" font-size="13">Rezept-Thread: Agent starten</text>
+
+              <rect class="green" x="118" y="300" width="442" height="34" rx="8" />
+              <text x="138" y="322" font-size="13">
+                Agent-Thread: Umsetzung in eigenem Arbeitsbereich
+              </text>
+            </svg>
+            <figcaption>Der Nutzer sieht die Arbeit direkt bei der passenden Aufgabe.</figcaption>
+          </figure>
+        </section>
+
+        <section id="beispiele">
+          <h2><span class="num">7</span>Weitere Beispiele für Rezepte</h2>
+          <p>
+            Rezepte sind besonders stark, wenn Teams eine Aufgabe immer wieder ähnlich erledigen,
+            aber trotzdem Kontext und Urteil brauchen.
+          </p>
+
+          <div class="example-list">
+            <div class="example" id="tshirt">
+              <div class="pill purple">Product / Planning</div>
+              <div class="title">T-Shirt-Größe für ein Epic schätzen</div>
+              <p>
+                Das Rezept liest ein Epic, sucht ähnliche frühere Arbeit, prüft offene Fragen und
+                schlägt eine Größe vor: XS, S, M, L oder XL.
+              </p>
+              <div class="outcome">
+                Ergebnis: „Vorschlag: L, weil API-Änderung + Migration + UI-Anpassung.“
+              </div>
+            </div>
+
+            <div class="example">
+              <div class="pill blue">Engineering</div>
+              <div class="title">Akzeptanzkriterien ergänzen</div>
+              <p>
+                Das Rezept nimmt eine grobe Story und macht daraus klare, prüfbare Kriterien: Was
+                muss am Ende sichtbar funktionieren?
+              </p>
+              <div class="outcome">Ergebnis: Checkliste in der Aufgabe, bereit für Refinement.</div>
+            </div>
+
+            <div class="example" id="triage">
+              <div class="pill amber">Support / Bugs</div>
+              <div class="title">Bug-Triage vorbereiten</div>
+              <p>
+                Das Rezept sortiert neue Bugs nach Risiko, Duplikaten, betroffenen Kunden und
+                möglicher Zuständigkeit.
+              </p>
+              <div class="outcome">
+                Ergebnis: „3 kritisch, 7 normal, 2 wahrscheinlich Duplikate.“
+              </div>
+            </div>
+
+            <div class="example">
+              <div class="pill green">Team Lead</div>
+              <div class="title">Blocker im Sprint finden</div>
+              <p>
+                Das Rezept schaut auf Aufgaben ohne Bewegung, offene Reviews und fehlende Antworten
+                und markiert, wo Hilfe gebraucht wird.
+              </p>
+              <div class="outcome">Ergebnis: kurze Liste mit empfohlenen nächsten Schritten.</div>
+            </div>
+
+            <div class="example" id="release">
+              <div class="pill pink">Release</div>
+              <div class="title">Release-Vorbereitung</div>
+              <p>
+                Das Rezept sammelt offene Änderungsvorschläge, riskante Aufgaben, fehlende Tests und
+                wichtige Änderungen für die Release-Notizen.
+              </p>
+              <div class="outcome">Ergebnis: Release-Checkliste + Entwurf der Release Notes.</div>
+            </div>
+
+            <div class="example" id="daily">
+              <div class="pill blue">Persönlich</div>
+              <div class="title">Tägliche „Was braucht mich?“-Liste</div>
+              <p>
+                Das Rezept findet Aufgaben, Kommentare, Reviews und Entscheidungen, bei denen deine
+                Antwort gerade der Engpass ist.
+              </p>
+              <div class="outcome">Ergebnis: eine priorisierte Morgenliste statt 20 Tabs.</div>
+            </div>
+          </div>
+
+          <h3>Beispiel genauer: T-Shirt-Größen für Epics</h3>
+          <p>
+            Ein gutes Schätz-Rezept ersetzt nicht das Teamurteil. Es bereitet es vor. Es hilft,
+            schneller und einheitlicher ins Gespräch zu kommen.
+          </p>
+
+          <figure class="diagram">
+            <svg viewBox="0 0 820 360" width="820" aria-label="T-Shirt-Schätzung Ablauf">
+              <rect class="blue" x="34" y="76" width="140" height="72" rx="14" />
+              <text x="104" y="106" text-anchor="middle" font-weight="700">Epic lesen</text>
+              <text x="104" y="128" text-anchor="middle" class="small">Ziel + Umfang</text>
+
+              <rect class="purple" x="216" y="76" width="140" height="72" rx="14" />
+              <text x="286" y="106" text-anchor="middle" font-weight="700">Vergleichen</text>
+              <text x="286" y="128" text-anchor="middle" class="small">ähnliche Arbeit</text>
+
+              <rect class="amber" x="398" y="76" width="140" height="72" rx="14" />
+              <text x="468" y="106" text-anchor="middle" font-weight="700">Risiken finden</text>
+              <text x="468" y="128" text-anchor="middle" class="small">unklare Stellen</text>
+
+              <rect class="pink" x="580" y="76" width="140" height="72" rx="14" />
+              <text x="650" y="106" text-anchor="middle" font-weight="700">Nachfragen</text>
+              <text x="650" y="128" text-anchor="middle" class="small">falls nötig</text>
+
+              <rect class="green" x="308" y="238" width="204" height="70" rx="16" />
+              <text x="410" y="266" text-anchor="middle" font-weight="700">Vorschlag</text>
+              <text x="410" y="288" text-anchor="middle" class="small">
+                M / L / XL + Begründung
+              </text>
+
+              <path class="arrow-blue" d="M174 112 L216 112" />
+              <path class="arrow-blue" d="M356 112 L398 112" />
+              <path class="arrow-blue" d="M538 112 L580 112" />
+              <path class="arrow" d="M650 148 C650 215, 505 214, 462 238" />
+              <path class="arrow" d="M468 148 C468 198, 440 210, 420 238" />
+              <path class="arrow" d="M286 148 C286 212, 342 220, 370 238" />
+            </svg>
+            <figcaption>
+              Das Rezept liefert eine begründete Startschätzung, keine endgültige Wahrheit.
+            </figcaption>
+          </figure>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Größe</th>
+                <th>Typische Bedeutung</th>
+                <th>Beispiel</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>XS</b></td>
+                <td>Sehr klein, kaum Risiko</td>
+                <td>Text ändern, kleine UI-Korrektur</td>
+              </tr>
+              <tr>
+                <td><b>S</b></td>
+                <td>Klein, klar begrenzt</td>
+                <td>ein Formularfeld, ein Validierungsfall</td>
+              </tr>
+              <tr>
+                <td><b>M</b></td>
+                <td>Normaler Umfang</td>
+                <td>neuer Filter mit UI + Datenquelle</td>
+              </tr>
+              <tr>
+                <td><b>L</b></td>
+                <td>Mehrere Teile, Abstimmung nötig</td>
+                <td>neuer Flow mit Backend, UI und Tests</td>
+              </tr>
+              <tr>
+                <td><b>XL</b></td>
+                <td>Groß oder unsicher</td>
+                <td>neuer Integrationsbereich, Migration, offene Produktfragen</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="callout">
+            <span class="label">Gute Ausgabe</span>
+            <p>
+              „Ich schlage <b>L</b> vor. Gründe: Es betrifft UI, Berechtigungen und eine bestehende
+              API. Risiko: unklar, ob alte Kundenpfade kompatibel bleiben müssen. Wenn die
+              Kompatibilität wegfällt, wäre es eher <b>M</b>.“
+            </p>
+          </div>
+        </section>
+
+        <section id="kanban">
+          <h2><span class="num">8</span>Kanban: „Ready for Agent“</h2>
+          <p>
+            Jetzt zum konkreten Zukunftsbild: Ein Team möchte eine Kanban-Spalte haben, in der
+            Aufgaben liegen, die ein Agent selbstständig anfangen darf.
+          </p>
+
+          <h3 id="kanban-geschichte">8.1 · Die Geschichte</h3>
+          <div class="story">
+            <div class="avatar">Dev</div>
+            <div class="quote">
+              <b>Entwickler:</b> „Wenn eine Aufgabe sauber beschrieben ist und in
+              <b>Ready for Agent</b> liegt, soll ein Agent loslegen. Aber bitte isoliert,
+              nachvollziehbar und unter der Aufgabe sichtbar.“
+            </div>
+          </div>
+          <div class="story">
+            <div class="avatar">T3</div>
+            <div class="quote">
+              <b>T3 Work:</b> „Ich beobachte diese Spalte, starte pro Aufgabe einen eigenen Agenten
+              in einem eigenen Arbeitsbereich und lege den neuen Thread direkt unter der Aufgabe
+              ab.“
+            </div>
+          </div>
+
+          <h3 id="kanban-ablauf">8.2 · Der Ablauf</h3>
+          <figure class="diagram">
+            <svg viewBox="0 0 860 520" width="860" aria-label="Ready for Agent Kanban Ablauf">
+              <rect class="box" x="26" y="36" width="130" height="432" rx="16" />
+              <text x="91" y="66" text-anchor="middle" font-weight="700">Kanban</text>
+
+              <rect class="box" x="42" y="96" width="98" height="44" rx="10" />
+              <text x="91" y="123" text-anchor="middle" class="small">Backlog</text>
+              <rect class="amber" x="42" y="166" width="98" height="54" rx="10" />
+              <text x="91" y="188" text-anchor="middle" class="small">Ready for</text>
+              <text x="91" y="206" text-anchor="middle" class="small">Agent</text>
+              <rect class="blue" x="42" y="250" width="98" height="54" rx="10" />
+              <text x="91" y="272" text-anchor="middle" class="small">In Arbeit</text>
+              <text x="91" y="290" text-anchor="middle" class="small">Agent</text>
+              <rect class="purple" x="42" y="334" width="98" height="44" rx="10" />
+              <text x="91" y="361" text-anchor="middle" class="small">Review</text>
+              <rect class="green" x="42" y="408" width="98" height="44" rx="10" />
+              <text x="91" y="435" text-anchor="middle" class="small">Fertig</text>
+
+              <rect class="purple" x="210" y="150" width="160" height="82" rx="16" />
+              <text x="290" y="180" text-anchor="middle" font-weight="700">Beobachter</text>
+              <text x="290" y="202" text-anchor="middle" class="small">läuft im Hintergrund</text>
+              <text x="290" y="220" text-anchor="middle" class="tiny">
+                „Gibt es neue Aufgaben?“
+              </text>
+
+              <rect class="blue" x="420" y="150" width="160" height="82" rx="16" />
+              <text x="500" y="180" text-anchor="middle" font-weight="700">Aufgabe sichern</text>
+              <text x="500" y="202" text-anchor="middle" class="small">Status wechseln</text>
+              <text x="500" y="220" text-anchor="middle" class="tiny">
+                damit nichts doppelt läuft
+              </text>
+
+              <rect class="green" x="630" y="150" width="178" height="82" rx="16" />
+              <text x="719" y="180" text-anchor="middle" font-weight="700">Agent starten</text>
+              <text x="719" y="202" text-anchor="middle" class="small">eigener Arbeitsbereich</text>
+              <text x="719" y="220" text-anchor="middle" class="tiny">eigener Arbeitsbereich</text>
+
+              <rect class="pink" x="420" y="306" width="160" height="82" rx="16" />
+              <text x="500" y="336" text-anchor="middle" font-weight="700">Thread anzeigen</text>
+              <text x="500" y="358" text-anchor="middle" class="small">unter der Aufgabe</text>
+              <text x="500" y="376" text-anchor="middle" class="tiny">Fortschritt sichtbar</text>
+
+              <rect class="green" x="630" y="306" width="178" height="82" rx="16" />
+              <text x="719" y="336" text-anchor="middle" font-weight="700">Ergebnis</text>
+              <text x="719" y="358" text-anchor="middle" class="small">Vorschlag oder Frage</text>
+              <text x="719" y="376" text-anchor="middle" class="tiny">Aufgabe nach Review</text>
+
+              <path class="arrow-blue" d="M140 193 L210 191" />
+              <path class="arrow-blue" d="M370 191 L420 191" />
+              <path class="arrow-blue" d="M580 191 L630 191" />
+              <path class="arrow" d="M719 232 L719 268 C719 292, 610 292, 560 320" />
+              <path class="arrow" d="M580 347 L630 347" />
+              <path class="arrow-blue dash" d="M630 365 C330 470, 150 366, 140 356" />
+              <text x="338" y="462" text-anchor="middle" class="tiny">
+                Kanban-Status zeigt immer den aktuellen Stand
+              </text>
+            </svg>
+            <figcaption>
+              Die Spalte „Ready for Agent“ wird zu einem Startsignal für kontrollierte
+              Agentenarbeit.
+            </figcaption>
+          </figure>
+
+          <h3 id="kanban-regeln">8.3 · Einfache Regeln, damit es sicher bleibt</h3>
+          <div class="grid">
+            <div class="card">
+              <h4>Nur klare Aufgaben</h4>
+              <p>
+                Ein Agent startet nur, wenn Beschreibung, Ziel und Akzeptanzkriterien ausreichend
+                klar sind.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Erst sichern, dann arbeiten</h4>
+              <p>
+                Die Aufgabe wird sofort auf „In Arbeit (Agent)“ gestellt, damit kein zweiter Agent
+                dasselbe nimmt.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Immer isoliert</h4>
+              <p>
+                Der Agent arbeitet in einem getrennten Arbeitsbereich, damit nichts
+                durcheinandergerät.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Immer sichtbar</h4>
+              <p>
+                Der Agent schreibt in einen Thread direkt unter der Aufgabe. Nichts verschwindet in
+                einem Hintergrundsystem.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Bei Unsicherheit fragen</h4>
+              <p>
+                Wenn Produktentscheidung, Risiko oder Berechtigung unklar ist, hält der Ablauf an
+                und fragt.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Review bleibt menschlich</h4>
+              <p>
+                Am Ende entsteht ein Änderungsvorschlag oder ein Plan. Das Team entscheidet, ob es
+                übernommen wird.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section id="nutzen">
+          <h2><span class="num">9</span>Warum das wichtig ist</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Heute oft</th>
+                <th>Mit Rezepten & Abläufen</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Jeder schreibt andere Prompts.</td>
+                <td><b>Einheitliche Knöpfe</b> für wiederkehrende Arbeit.</td>
+              </tr>
+              <tr>
+                <td>Agentenarbeit ist schwer wiederzufinden.</td>
+                <td>
+                  <b>Threads hängen an der Aufgabe</b>, also dort, wo die Arbeit besprochen wird.
+                </td>
+              </tr>
+              <tr>
+                <td>Hintergrundarbeit ist unsichtbar.</td>
+                <td><b>Schlafende Threads</b> zeigen, was wann wieder aufwacht.</td>
+              </tr>
+              <tr>
+                <td>Schätzungen und Triage starten bei Null.</td>
+                <td><b>Rezepte liefern Vorschläge</b>, die das Team prüfen und anpassen kann.</td>
+              </tr>
+              <tr>
+                <td>Automatisierung wirkt riskant.</td>
+                <td>
+                  <b>Kleine kontrollierte Abläufe</b> mit klaren Stopps und sichtbaren Ergebnissen.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="zusammenfassung">
+          <h2><span class="num">10</span>Zusammenfassung</h2>
+          <div class="grid">
+            <div class="card">
+              <h4>Rezepte</h4>
+              <p>
+                Klickbare Vorschläge für wiederkehrende Arbeit: schätzen, triagieren, vorbereiten,
+                zusammenfassen.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Abläufe</h4>
+              <p>
+                Die Arbeit dahinter: lesen, handeln, warten, fragen, Agent starten, Ergebnis
+                speichern.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Threads</h4>
+              <p>
+                Die sichtbare Spur der Arbeit. Antworten, Entscheidungen und Ergebnisse bleiben am
+                passenden Ort.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Kanban-Agent</h4>
+              <p>
+                Eine Spalte wie „Ready for Agent“ kann zum kontrollierten Startsignal für
+                Agentenarbeit werden.
+              </p>
+            </div>
+          </div>
+          <div class="callout green">
+            <span class="label">Noch kürzer</span>
+            <p>
+              T3 Work macht Agentenarbeit nicht magisch, sondern <b>organisiert</b>: als
+              wiederverwendbare Rezepte, sichtbare Abläufe und Threads direkt bei der Arbeit.
+            </p>
+          </div>
+          <p class="footer-note">
+            Diese Datei ist die nicht-technische deutsche Variante von
+            <code>recipes-and-workflows-explained.html</code>.
+          </p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

@@ -36,7 +36,7 @@ function buildRecipeExpressionContext(
         : "project work";
   const surfaceAuthoringLabel =
     context.surface === "workitem.detail.sidepanel"
-      ? selectedWorkLabel
+      ? "this work item"
       : dashboardMode === "my-work"
         ? "my work view"
         : dashboardMode === "backlog"
@@ -85,6 +85,8 @@ function buildRecipeExpressionContext(
     ticketRemainingEstimateHours: formatTemplateHours(context.workitem?.remainingEstimateHours),
     blockedByCount: String(context.workitem?.relationships?.blockedByKeys.length ?? 0),
     blockingCount: String(context.workitem?.relationships?.blockingKeys.length ?? 0),
+    childCount: String(context.workitem?.relationships?.childKeys.length ?? 0),
+    hasChildren: String((context.workitem?.relationships?.childKeys.length ?? 0) > 0),
     linkedPullRequestCount: String(context.workitem?.github?.pullRequestCount ?? 0),
     openPullRequestCount: String(context.workitem?.github?.openPullRequestCount ?? 0),
     draftPullRequestCount: String(context.workitem?.github?.draftPullRequestCount ?? 0),
@@ -115,7 +117,7 @@ export function evaluateExpression(
   const expressionContext = buildRecipeExpressionContext(context);
   const evaluator = new Function(
     "ctx",
-    `const { surface, project, workitem, linkedResources, artifacts, contextAttachments, surfaceState, profile, enabledSkillPacks, schema, availableContextKeys, projectTitle, selectedWorkLabel, selectedWorkTitle, jiraIssueType, ticketStatus, ticketAssignee, ticketAssigneeRelation, ticketEstimatePoints, ticketOriginalEstimateHours, ticketRemainingEstimateHours, blockedByCount, blockingCount, linkedPullRequestCount, openPullRequestCount, draftPullRequestCount, mergedPullRequestCount, reviewRequestedPullRequestCount, githubCommentCount, githubReviewCommentCount, currentViewLabel, surfaceAuthoringLabel, currentViewSummarySuffix, dashboardMode, attachedItemCount, attachedWorkitemCount, attachedBugLabel, currentViewItemCount, currentViewBugCount, currentViewPrimaryItemLabel, currentViewPrimaryBugLabel } = ctx; return (${expression});`,
+    `const { surface, project, workitem, linkedResources, artifacts, contextAttachments, surfaceState, profile, enabledSkillPacks, schema, availableContextKeys, projectTitle, selectedWorkLabel, selectedWorkTitle, jiraIssueType, ticketStatus, ticketAssignee, ticketAssigneeRelation, ticketEstimatePoints, ticketOriginalEstimateHours, ticketRemainingEstimateHours, blockedByCount, blockingCount, childCount, hasChildren, linkedPullRequestCount, openPullRequestCount, draftPullRequestCount, mergedPullRequestCount, reviewRequestedPullRequestCount, githubCommentCount, githubReviewCommentCount, currentViewLabel, surfaceAuthoringLabel, currentViewSummarySuffix, dashboardMode, attachedItemCount, attachedWorkitemCount, attachedBugLabel, currentViewItemCount, currentViewBugCount, currentViewPrimaryItemLabel, currentViewPrimaryBugLabel } = ctx; return (${expression});`,
   ) as (ctx: Readonly<Record<string, unknown>>) => unknown;
   return evaluator(expressionContext);
 }
