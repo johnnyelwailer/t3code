@@ -11,6 +11,7 @@ import * as FileSystem from "effect/FileSystem";
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 import {
   WORK_ITEMS_INDEX_PATH,
+  collectWorkItemTicketAliases,
   normalizeTicketKey,
   parseWorkItemsIndex,
   type WorkItemsIndex,
@@ -59,6 +60,37 @@ function findIndexedItem(index: WorkItemsIndex, normalizedKey: string) {
   );
 }
 
+function findIndexedWorkItem(input: {
+  readonly index: WorkItemsIndex;
+  readonly normalizedKey: string;
+  readonly summaryByRelativePath: ReadonlyMap<string, Record<string, unknown> | undefined>;
+}) {
+  const direct = findIndexedItem(input.index, input.normalizedKey);
+  if (direct?.ticketEntryPointRelativePath) {
+    return direct;
+  }
+
+  for (const item of input.index.workItems ?? []) {
+    if (!item.relativePath) {
+      continue;
+    }
+    const aliases = new Set<string>();
+    if (typeof item.key === "string") {
+      aliases.add(normalizeTicketKey(item.key));
+    }
+    for (const alias of collectWorkItemTicketAliases(
+      input.summaryByRelativePath.get(item.relativePath)?.ticket,
+    )) {
+      aliases.add(alias);
+    }
+    if (aliases.has(input.normalizedKey)) {
+      return item;
+    }
+  }
+
+  return undefined;
+}
+
 export function loadT3workContextRefreshScope(input: {
   readonly workspaceRoot: string;
   readonly requestedKey: string;
@@ -81,7 +113,29 @@ export function loadT3workContextRefreshScope(input: {
     if (!index) {
       return yield* Effect.fail("Failed to read project work-item context index.");
     }
-    const indexedItem = findIndexedItem(index, normalizedKey);
+    const summaryByRelativePath = new Map<string, Record<string, unknown> | undefined>();
+    for (const item of index.workItems ?? []) {
+      if (!item.relativePath) {
+        continue;
+      }
+      const summaryPath = yield* workspacePaths.resolveRelativePathWithinRoot({
+        workspaceRoot: input.workspaceRoot,
+        relativePath: item.relativePath,
+      });
+      summaryByRelativePath.set(
+        item.relativePath,
+        parseJsonObject(
+          yield* fileSystem
+            .readFileString(summaryPath.absolutePath)
+            .pipe(Effect.orElseSucceed(() => "")),
+        ),
+      );
+    }
+    const indexedItem = findIndexedWorkItem({
+      index,
+      normalizedKey,
+      summaryByRelativePath,
+    });
     if (!indexedItem?.ticketEntryPointRelativePath) {
       return yield* Effect.fail(
         `ticket_key '${input.requestedKey}' is outside current project scope.`,

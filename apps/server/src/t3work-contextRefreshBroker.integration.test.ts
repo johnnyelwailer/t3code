@@ -13,7 +13,9 @@ import {
 import {
   makeContextRefreshTestWorkspace,
   registerContextRefreshTestCleanup,
+  writeContextRefreshTestJson,
 } from "./t3work-contextRefreshTestFixtures.ts";
+import { buildJiraTicketEntryPoint } from "@t3tools/project-context/t3workContextPaths";
 
 registerContextRefreshTestCleanup();
 
@@ -150,6 +152,70 @@ describe("T3workToolBroker refresh_context_bundle integration", () => {
       ok: true,
       status: "already_synced",
       entryPointRelativePath: refreshedContent.entryPointRelativePath,
+    });
+  });
+
+  it("resolves bound thread context displayId when refresh_context_bundle omits ticket_key", async () => {
+    const { root, project } = makeContextRefreshTestWorkspace();
+    writeContextRefreshTestJson(root, ".t3work/context/work-items/ac-91.json", {
+      ticket: {
+        id: "10001",
+        ref: { id: "10001", displayId: "AC-91" },
+      },
+    });
+    writeContextRefreshTestJson(root, ".t3work/context/work-items/index.json", {
+      workItems: [
+        {
+          key: "ac-91",
+          relativePath: ".t3work/context/work-items/ac-91.json",
+          ticketEntryPointRelativePath: buildJiraTicketEntryPoint(project.id, "ac-91"),
+        },
+      ],
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const broker = yield* T3workToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId,
+          toolContext: createThreadToolContext({
+            tools: [
+              {
+                id: "t3work.work_item.refresh_context_bundle",
+                label: "Refresh work item context bundle",
+                capabilities: ["write"],
+              },
+            ],
+            view: {
+              projectId: project.id,
+              workspaceRoot: root,
+              ticketId: "10001",
+              ticketDisplayId: "AC-91",
+            },
+          }),
+          allowedToolGroups: ["artifact.rw"],
+        });
+
+        return yield* binding!.callTool({
+          server: "t3work",
+          tool: "t3work.work_item.refresh_context_bundle",
+          arguments: {},
+        });
+      }).pipe(
+        Effect.provide(
+          makeBrokerLayerWithLiveContextRefresh(orchestrationMock, {
+            contextRefreshLayerPrefix: "t3work-broker-context-refresh-bound-",
+          }),
+        ),
+      ),
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      ok: true,
+      status: "synced",
+      ticketKey: "AC-91",
+      projectId: project.id,
     });
   });
 });

@@ -4,11 +4,13 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 
+import { buildJiraTicketEntryPoint } from "@t3tools/project-context/t3workContextPaths";
 import { loadT3workContextRefreshScope } from "./t3work-contextRefreshScope.ts";
 import {
   makeContextRefreshScopeTestLayer,
   makeContextRefreshTestWorkspace,
   registerContextRefreshTestCleanup,
+  writeContextRefreshTestJson,
 } from "./t3work-contextRefreshTestFixtures.ts";
 
 registerContextRefreshTestCleanup();
@@ -44,4 +46,34 @@ it.effect("loadT3workContextRefreshScope accepts matching project_id", () =>
     assert.equal(scope.project.id, project.id);
     assert.equal(scope.canonicalKey, "ac-91");
   }).pipe(Effect.provide(makeContextRefreshScopeTestLayer())),
+);
+
+it.effect(
+  "loadT3workContextRefreshScope resolves numeric ticket ids via work-item summary aliases",
+  () =>
+    Effect.gen(function* () {
+      const { root, project } = makeContextRefreshTestWorkspace({ projectId: "project-1" });
+      writeContextRefreshTestJson(root, ".t3work/context/work-items/proj-7.json", {
+        ticket: {
+          id: "10001",
+          ref: { id: "10001", displayId: "PROJ-7" },
+        },
+      });
+      writeContextRefreshTestJson(root, ".t3work/context/work-items/index.json", {
+        workItems: [
+          {
+            key: "PROJ-7",
+            relativePath: ".t3work/context/work-items/proj-7.json",
+            ticketEntryPointRelativePath: buildJiraTicketEntryPoint(project.id, "PROJ-7"),
+          },
+        ],
+      });
+      const scope = yield* loadT3workContextRefreshScope({
+        workspaceRoot: root,
+        requestedKey: "10001",
+        projectId: project.id,
+        force: false,
+      });
+      assert.equal(scope.canonicalKey, "PROJ-7");
+    }).pipe(Effect.provide(makeContextRefreshScopeTestLayer())),
 );

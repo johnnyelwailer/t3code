@@ -5,6 +5,7 @@ import type { T3workContextRefreshServiceShape } from "./t3work-contextRefreshSe
 import { errorResult, okResult } from "./t3work-toolBrokerHelpers.ts";
 import type { T3workTurnToolContext } from "./t3work-toolBroker.ts";
 import {
+  readBoundTicketKey,
   readForceRefreshArg,
   readTicketKeyArg,
   readToolContextView,
@@ -58,7 +59,7 @@ export function callT3workWorkItemRefreshContextBundleEffect(input: {
       return errorResult("Current project workspace is unavailable for context sync.");
     }
 
-    const requestedKey = readTicketKeyArg(input.toolArgs) ?? view.ticketId?.trim() ?? "";
+    const requestedKey = readTicketKeyArg(input.toolArgs) ?? readBoundTicketKey(view);
     if (requestedKey.length === 0) {
       return errorResult("ticket_key is required when no current work item is bound.");
     }

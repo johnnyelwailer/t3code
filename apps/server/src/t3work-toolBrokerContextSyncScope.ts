@@ -4,11 +4,19 @@ import { T3WORK_WORK_ITEMS_INDEX_PATH as WORK_ITEMS_INDEX_PATH } from "@t3tools/
 type WorkItemsIndex = {
   readonly workItems?: ReadonlyArray<{
     readonly key?: string;
+    readonly relativePath?: string;
     readonly availability?: string;
     readonly ticketEntryPointRelativePath?: string;
     readonly fullBundleRootRelativePath?: string;
     readonly updatedAt?: string;
   }>;
+};
+
+type ToolContextView = {
+  readonly projectId?: string;
+  readonly workspaceRoot?: string;
+  readonly ticketId?: string;
+  readonly ticketDisplayId?: string;
 };
 
 export function readTicketKeyArg(toolArgs: unknown): string | undefined {
@@ -30,11 +38,7 @@ export function readForceRefreshArg(toolArgs: unknown): boolean {
   return value === true || fallback === true;
 }
 
-export function readToolContextView(input: T3workTurnToolContext): {
-  projectId?: string;
-  workspaceRoot?: string;
-  ticketId?: string;
-} {
+export function readToolContextView(input: T3workTurnToolContext): ToolContextView {
   if (!input.state || typeof input.state !== "object") {
     return {};
   }
@@ -46,12 +50,42 @@ export function readToolContextView(input: T3workTurnToolContext): {
     readonly projectId?: unknown;
     readonly workspaceRoot?: unknown;
     readonly ticketId?: unknown;
+    readonly ticketDisplayId?: unknown;
   };
   return {
     ...(typeof record.projectId === "string" ? { projectId: record.projectId } : {}),
     ...(typeof record.workspaceRoot === "string" ? { workspaceRoot: record.workspaceRoot } : {}),
     ...(typeof record.ticketId === "string" ? { ticketId: record.ticketId } : {}),
+    ...(typeof record.ticketDisplayId === "string"
+      ? { ticketDisplayId: record.ticketDisplayId }
+      : {}),
   };
+}
+
+export function readBoundTicketKey(view: ToolContextView): string {
+  const displayId = view.ticketDisplayId?.trim() ?? "";
+  if (displayId.length > 0) {
+    return displayId;
+  }
+  return view.ticketId?.trim() ?? "";
+}
+
+export function collectWorkItemTicketAliases(ticket: unknown): ReadonlyArray<string> {
+  if (!ticket || typeof ticket !== "object") {
+    return [];
+  }
+  const record = ticket as Record<string, unknown>;
+  const ref =
+    record.ref && typeof record.ref === "object"
+      ? (record.ref as Record<string, unknown>)
+      : undefined;
+  const aliases = new Set<string>();
+  for (const value of [record.id, ref?.id, ref?.displayId]) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      aliases.add(normalizeTicketKey(value));
+    }
+  }
+  return [...aliases];
 }
 
 export function normalizeTicketKey(value: string): string {

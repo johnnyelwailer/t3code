@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  collectWorkItemTicketAliases,
   normalizeTicketKey,
   parseWorkItemsIndex,
+  readBoundTicketKey,
   readTicketKeyArg,
   readToolContextView,
   readForceRefreshArg,
@@ -47,14 +49,35 @@ describe("t3work-toolBrokerContextSyncScope", () => {
           view: {
             projectId: "project-1",
             workspaceRoot: "/tmp/workspace",
-            ticketId: "PROJ-9",
+            ticketId: "10001",
+            ticketDisplayId: "PROJ-9",
           },
         },
       }),
     ).toEqual({
       projectId: "project-1",
       workspaceRoot: "/tmp/workspace",
-      ticketId: "PROJ-9",
+      ticketId: "10001",
+      ticketDisplayId: "PROJ-9",
     });
+  });
+
+  it("prefers ticketDisplayId over numeric ticketId for bound work-item refresh", () => {
+    expect(
+      readBoundTicketKey({
+        ticketId: "10001",
+        ticketDisplayId: "PROJ-7",
+      }),
+    ).toBe("PROJ-7");
+    expect(readBoundTicketKey({ ticketId: "10001" })).toBe("10001");
+  });
+
+  it("collects work-item ticket aliases from summary JSON", () => {
+    expect(
+      collectWorkItemTicketAliases({
+        id: "10001",
+        ref: { id: "10001", displayId: "PROJ-7" },
+      }),
+    ).toEqual(["10001", "PROJ-7"]);
   });
 });

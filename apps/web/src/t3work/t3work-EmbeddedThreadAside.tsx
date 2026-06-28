@@ -64,6 +64,7 @@ export function EmbeddedThreadAside({
             ? { selectedToolIds: thread.selectedToolIds }
             : {})}
           {...((ticketId ?? thread.ticketId) ? { ticketId: ticketId ?? thread.ticketId } : {})}
+          {...(thread.ticketDisplayId ? { ticketDisplayId: thread.ticketDisplayId } : {})}
           embeddedMode
           onInitialUserMessageSent={() => onThreadKickoffConsumed(thread.id)}
         />

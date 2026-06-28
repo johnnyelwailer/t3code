@@ -15,6 +15,7 @@ export function useThreadChatTurnToolContext(input: {
   readonly selectedToolIds: ReadonlyArray<T3workThreadToolId> | undefined;
   readonly threadId: string;
   readonly ticketId: string | undefined;
+  readonly ticketDisplayId: string | undefined;
   readonly title: string;
 }) {
   return useMemo(
@@ -30,6 +31,7 @@ export function useThreadChatTurnToolContext(input: {
         threadTitle: input.title,
         displayMode: input.embeddedMode ? "embedded" : "thread",
         ...(input.ticketId ? { ticketId: input.ticketId } : {}),
+        ...(input.ticketDisplayId ? { ticketDisplayId: input.ticketDisplayId } : {}),
         ...(input.selectedToolIds !== undefined ? { selectedToolIds: input.selectedToolIds } : {}),
       }),
     [
@@ -43,6 +45,7 @@ export function useThreadChatTurnToolContext(input: {
       input.selectedToolIds,
       input.threadId,
       input.ticketId,
+      input.ticketDisplayId,
       input.title,
     ],
   );

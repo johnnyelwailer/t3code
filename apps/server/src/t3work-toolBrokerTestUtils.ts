@@ -24,6 +24,7 @@ export function createThreadToolContext(input: {
     threadId: ThreadId;
     threadTitle: string;
     ticketId: string;
+    ticketDisplayId?: string;
     displayMode: "thread" | "embedded";
   }>;
 }) {
