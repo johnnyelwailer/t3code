@@ -74,6 +74,7 @@
     "dist:desktop:win:arm64": "node scripts/build-desktop-artifact.ts --platform win --target nsis --arch arm64",
     "dist:desktop:win:x64": "node scripts/build-desktop-artifact.ts --platform win --target nsis --arch x64",
     "release:smoke": "node scripts/release-smoke.ts",
+    "setup:upstream": "node scripts/t3work-setup-upstream-remote.mjs",
     "sync:upstream:status": "node scripts/t3work-sync-upstream-fork.mjs status",
     "sync:upstream:main": "node scripts/t3work-sync-upstream-fork.mjs sync-main",
     "sync:upstream:main:push": "node scripts/t3work-sync-upstream-fork.mjs sync-main --push-origin",
