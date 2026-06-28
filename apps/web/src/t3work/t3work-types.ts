@@ -114,6 +114,9 @@ export type ViewState =
       threadId: string;
     };
 
+/** Parent views that can host an embedded project thread (sidebar chat). */
+export type EmbeddedThreadParentView = Extract<ViewState, { embeddedThreadId?: string }>;
+
 export function readActiveThreadIdFromView(view: ViewState | null): string | null {
   if (!view) {
     return null;

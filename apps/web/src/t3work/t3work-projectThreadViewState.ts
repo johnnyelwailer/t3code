@@ -1,5 +1,9 @@
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 import type { ProjectThread, ProjectThreadDisplayMode, ViewState } from "~/t3work/t3work-types";
+import {
+  embeddedThreadIdFromParentView,
+  mergeEmbeddedThreadIdFromStore,
+} from "~/t3work/t3work-viewStateMerge";
 import type { useProjectStore } from "~/t3work/hooks/t3work-useProjectStore";
 
 export type { ProjectThreadDisplayMode } from "~/t3work/t3work-types";
@@ -71,7 +75,6 @@ export function isEmbeddedProjectThread(
   return Boolean(thread?.ticketId || thread?.dashboardMode);
 }
 
-/** Prefer route view, but keep store embeddedThreadId until URL navigation catches up. */
 export function mergeRouteAndStoreView(
   routeView: ViewState | null | undefined,
   storeView: ViewState | null,
@@ -84,40 +87,10 @@ export function mergeRouteAndStoreView(
     return routeView;
   }
 
-  if (
-    routeView.type === "dashboard" &&
-    storeView.type === "dashboard" &&
-    !routeView.embeddedThreadId &&
-    storeView.embeddedThreadId
-  ) {
-    return { ...routeView, embeddedThreadId: storeView.embeddedThreadId };
-  }
-
-  if (
-    routeView.type === "ticket" &&
-    storeView.type === "ticket" &&
-    routeView.ticketId === storeView.ticketId &&
-    !routeView.embeddedThreadId &&
-    storeView.embeddedThreadId
-  ) {
-    return { ...routeView, embeddedThreadId: storeView.embeddedThreadId };
-  }
-
-  return routeView;
+  return mergeEmbeddedThreadIdFromStore(routeView, storeView);
 }
 
-export function embeddedThreadIdForDashboardModeSwitch(
-  activeView: ViewState | null,
-  resolvedProjectId: string,
-): string | undefined {
-  if (
-    activeView?.projectId === resolvedProjectId &&
-    (activeView.type === "dashboard" || activeView.type === "ticket")
-  ) {
-    return activeView.embeddedThreadId;
-  }
-  return undefined;
-}
+export { embeddedThreadIdFromParentView as embeddedThreadIdForDashboardModeSwitch } from "~/t3work/t3work-viewStateMerge";
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
 type OnOpenDashboard =
@@ -141,6 +114,6 @@ export function selectProjectDashboardMode(input: {
   onOpenDashboard?.(
     resolvedProjectId,
     dashboardMode,
-    embeddedThreadIdForDashboardModeSwitch(activeView, resolvedProjectId) ?? null,
+    embeddedThreadIdFromParentView(activeView, resolvedProjectId) ?? null,
   );
 }
