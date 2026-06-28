@@ -63,6 +63,7 @@ export function ProjectSidebarLayout({
   onSelectThread,
   onToggleExpand,
   onCreateProject,
+  onManageProjectRecipes,
   onManageProjectRepositories,
   onDeleteProject,
   onRenameProject,
@@ -133,6 +134,7 @@ export function ProjectSidebarLayout({
               onSelectThread={onSelectThread}
               onToggleExpand={onToggleExpand}
               onCreateProject={onCreateProject}
+              onManageProjectRecipes={onManageProjectRecipes}
               onManageProjectRepositories={onManageProjectRepositories}
               onDeleteProject={onDeleteProject}
               onRenameProject={onRenameProject}

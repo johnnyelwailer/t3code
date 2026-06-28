@@ -52,4 +52,16 @@ describe("t3work route state", () => {
       threadId: "thread-123",
     });
   });
+
+  it("parses the recipe manager page route with an embedded chat thread", () => {
+    expect(
+      parseT3workViewFromPath("/t3work/projects/acme/recipes", {
+        chatThreadId: "thread-123",
+      }),
+    ).toEqual({
+      type: "recipes",
+      projectId: "acme",
+      embeddedThreadId: "thread-123",
+    });
+  });
 });

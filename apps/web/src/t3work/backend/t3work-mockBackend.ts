@@ -126,6 +126,18 @@ export function createMockBackend(): BackendApi {
         hasProjectLocalRecipes: false,
         recipes: [],
       }),
+      listManagedRecipes: async (input) => ({
+        workspaceRoot: input.workspaceRoot,
+        hasProjectLocalRecipes: false,
+        recipes: [],
+      }),
+      updateManagedRecipe: async () => {
+        throw new Error("Mock project recipe management is not available.");
+      },
+      deleteManagedRecipe: async (input) => ({
+        workspaceRoot: input.workspaceRoot,
+        deletedRecipePath: input.recipePath,
+      }),
       writeContextFiles: async (input) => ({
         workspaceRoot: input.workspaceRoot,
         writtenFiles: input.files.map((file) => file.relativePath),

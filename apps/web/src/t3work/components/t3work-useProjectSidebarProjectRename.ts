@@ -6,11 +6,16 @@ import { showProjectContextMenu } from "./t3work-projectSidebarProjectRow.helper
 export function useProjectSidebarProjectRename({
   project,
   onDeleteProject,
+  onManageProjectRecipes,
   onManageProjectRepositories,
   onRenameProject,
 }: Pick<
   ProjectRowProps,
-  "project" | "onDeleteProject" | "onManageProjectRepositories" | "onRenameProject"
+  | "project"
+  | "onDeleteProject"
+  | "onManageProjectRecipes"
+  | "onManageProjectRepositories"
+  | "onRenameProject"
 >) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameTitle, setRenameTitle] = useState(project.title);
@@ -34,12 +39,13 @@ export function useProjectSidebarProjectRename({
         clientY: event.clientY,
         projectId: project.id,
         projectTitle: project.title,
+        onManageProjectRecipes,
         onManageProjectRepositories,
         onDeleteProject,
         onBeginRename: beginRename,
       });
     },
-    [beginRename, onDeleteProject, onManageProjectRepositories, project],
+    [beginRename, onDeleteProject, onManageProjectRecipes, onManageProjectRepositories, project],
   );
 
   const handleOpenMenu = useCallback(
@@ -52,12 +58,13 @@ export function useProjectSidebarProjectRename({
         clientY: Math.round(rect.bottom),
         projectId: project.id,
         projectTitle: project.title,
+        onManageProjectRecipes,
         onManageProjectRepositories,
         onDeleteProject,
         onBeginRename: beginRename,
       });
     },
-    [beginRename, onDeleteProject, onManageProjectRepositories, project],
+    [beginRename, onDeleteProject, onManageProjectRecipes, onManageProjectRepositories, project],
   );
 
   const handleRenameSubmit = useCallback(() => {

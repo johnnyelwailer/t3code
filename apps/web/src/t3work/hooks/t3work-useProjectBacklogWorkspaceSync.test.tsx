@@ -123,6 +123,32 @@ describe("useProjectBacklog workspace sync", () => {
           hasProjectLocalRecipes: false,
           recipes: [],
         })),
+        listManagedRecipes: vi.fn(async () => ({
+          workspaceRoot: "/tmp/project-1-backlog-sync-test",
+          hasProjectLocalRecipes: false,
+          recipes: [],
+        })),
+        updateManagedRecipe: vi.fn(async (input) => ({
+          workspaceRoot: input.workspaceRoot,
+          recipe: {
+            id: "test-recipe",
+            version: "0.1.0",
+            displayName: input.displayName ?? "Test recipe",
+            shortDescription: input.shortDescription ?? "Test recipe.",
+            surfaces: ["workitem.detail.sidepanel"] as const,
+            active: input.active ?? true,
+            sourceKind: "recipe-json" as const,
+            editable: true,
+            deletable: true,
+            recipePath: input.recipePath,
+            sourcePath: `${input.recipePath}/recipe.json`,
+            ...(input.prompt ? { prompt: input.prompt } : {}),
+          },
+        })),
+        deleteManagedRecipe: vi.fn(async (input) => ({
+          workspaceRoot: input.workspaceRoot,
+          deletedRecipePath: input.recipePath,
+        })),
         writeContextFiles,
         refreshWorkItemContext: vi.fn(async (input) => ({
           ok: true,

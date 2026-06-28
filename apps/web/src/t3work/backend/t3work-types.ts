@@ -7,10 +7,16 @@ import type {
 import type {
   DiscoverProjectRecipesRequest,
   DiscoverProjectRecipesResponse,
+  DeleteManagedProjectRecipeRequest,
+  DeleteManagedProjectRecipeResponse,
   LaunchProjectRecipeWorkflowRequest,
   LaunchProjectRecipeWorkflowResponse,
+  ListManagedProjectRecipesRequest,
+  ListManagedProjectRecipesResponse,
   SubmitProjectRecipeCardActionRequest,
   SubmitProjectRecipeCardActionResponse,
+  UpdateManagedProjectRecipeRequest,
+  UpdateManagedProjectRecipeResponse,
 } from "@t3tools/project-recipes";
 import type { AtlassianBackendApi } from "./t3work-atlassianBackendTypes";
 import type { GitHubBackendApi } from "./t3work-githubBackendTypes";
@@ -135,6 +141,15 @@ export interface ProjectWorkspaceBackendApi {
   readonly discoverRecipes: (
     input: DiscoverProjectRecipesRequest,
   ) => Promise<DiscoverProjectRecipesResponse>;
+  readonly listManagedRecipes: (
+    input: ListManagedProjectRecipesRequest,
+  ) => Promise<ListManagedProjectRecipesResponse>;
+  readonly updateManagedRecipe: (
+    input: UpdateManagedProjectRecipeRequest,
+  ) => Promise<UpdateManagedProjectRecipeResponse>;
+  readonly deleteManagedRecipe: (
+    input: DeleteManagedProjectRecipeRequest,
+  ) => Promise<DeleteManagedProjectRecipeResponse>;
   readonly writeContextFiles: (input: {
     readonly workspaceRoot: string;
     readonly files: ReadonlyArray<ProjectWorkspaceContextFile>;

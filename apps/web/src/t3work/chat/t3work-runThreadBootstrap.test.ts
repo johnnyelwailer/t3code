@@ -68,6 +68,31 @@ function createBackend(): BackendApi {
         includedCount: 0,
         skippedCount: 0,
       })),
+      listManagedRecipes: vi.fn(async () => ({
+        workspaceRoot: "/tmp/project-alpha",
+        hasProjectLocalRecipes: false,
+        recipes: [],
+      })),
+      updateManagedRecipe: vi.fn(async () => ({
+        workspaceRoot: "/tmp/project-alpha",
+        recipe: {
+          id: "recipe",
+          version: "1.0.0",
+          displayName: "Recipe",
+          shortDescription: "Recipe",
+          surfaces: ["project.dashboard.backlog"],
+          active: true,
+          sourceKind: "recipe-json",
+          editable: true,
+          deletable: true,
+          recipePath: "/tmp/project-alpha/.t3work/recipes/recipe",
+          sourcePath: "/tmp/project-alpha/.t3work/recipes/recipe/recipe.json",
+        },
+      })),
+      deleteManagedRecipe: vi.fn(async () => ({
+        workspaceRoot: "/tmp/project-alpha",
+        deletedRecipePath: "/tmp/project-alpha/.t3work/recipes/recipe",
+      })),
     },
   };
 }
