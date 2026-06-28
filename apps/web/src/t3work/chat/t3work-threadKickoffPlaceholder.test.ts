@@ -10,7 +10,7 @@ import {
 import { buildT3workSidecarRecipeQuickStarts } from "~/t3work/t3work-sidecarRecipes";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-function createProject(profileId: string): ProjectShellProject {
+function createProject(profileId: string, workspaceRoot?: string): ProjectShellProject {
   return {
     id: "project-alpha" as ProjectShellProject["id"],
     title: "Project Alpha",
@@ -23,6 +23,14 @@ function createProject(profileId: string): ProjectShellProject {
         },
       },
     },
+    ...(workspaceRoot
+      ? {
+          workspace: {
+            rootPath: workspaceRoot,
+            createdAt: "2026-05-01T00:00:00.000Z",
+          },
+        }
+      : {}),
     createdAt: "2026-05-01T00:00:00.000Z",
     updatedAt: "2026-05-01T00:00:00.000Z",
   };
@@ -75,25 +83,24 @@ describe("shouldShowThreadKickoffPlaceholder", () => {
     ).toBe(false);
   });
 
-  it("keeps recipe workflow metadata on quick starts for structured kickoff rendering", () => {
+  it("keeps workflow metadata only for workflow-backed quick starts", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot"),
+      project: createProject("engineering-copilot", "/tmp/project-alpha"),
       profileId: "engineering-copilot",
       selectedWorkLabel: "PROJ-123",
       resourceKind: "ticket",
       availableContextKeys: ["project.summary", "ticket.summary"],
     });
 
-    expect(quickStarts[0]?.workflow).toMatchObject({
+    expect(quickStarts.find((recipe) => recipe.id === "create-recipe")?.workflow).toMatchObject({
       kind: "recipe",
-      title: quickStarts[0]?.title,
-      description: quickStarts[0]?.description,
       source: "bundled",
+      workflowPath: "/tmp/project-alpha/.t3work/recipes/create-recipe/workflow.ts",
     });
   });
 
-  it("treats recipe workflows with a wait-for-kickoff-input step as guided launches", () => {
+  it("does not treat prompt-only quick starts as guided workflow launches", () => {
     const createRecipe = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("engineering-copilot"),
@@ -108,7 +115,8 @@ describe("shouldShowThreadKickoffPlaceholder", () => {
       availableContextKeys: ["project.summary"],
     }).find((recipe) => recipe.id === "create-contextual-recipe");
 
-    expect(isWaitingForKickoffInput(createRecipe?.workflow, false)).toBe(true);
+    expect(createRecipe?.workflow).toBeUndefined();
+    expect(isWaitingForKickoffInput(createRecipe?.workflow, false)).toBe(false);
     expect(isWaitingForKickoffInput(createRecipe?.workflow, true)).toBe(false);
   });
 

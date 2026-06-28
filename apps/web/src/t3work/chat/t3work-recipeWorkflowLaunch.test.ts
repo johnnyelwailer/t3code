@@ -38,6 +38,8 @@ const TEST_WORKFLOW: T3workKickoffWorkflow = {
   description: "Design a contextual recipe for the current surface.",
   source: "bundled",
   surface: "project.dashboard.backlog",
+  recipePath: "/tmp/project-alpha/.t3work/recipes/create-contextual-recipe",
+  workflowPath: "/tmp/project-alpha/.t3work/recipes/create-contextual-recipe/workflow.ts",
 };
 
 describe("launchPendingRecipeWorkflowTurn", () => {
@@ -90,6 +92,39 @@ describe("launchPendingRecipeWorkflowTurn", () => {
         runtimeMode: "full-access",
         interactionMode: "default",
         hasAttachments: true,
+      }),
+    ).resolves.toBe(false);
+
+    expect(backend.launchRecipeWorkflow).not.toHaveBeenCalled();
+  });
+
+  it("falls back when recipe metadata has no workflow path", async () => {
+    const backend = createBackend();
+    const promptOnlyWorkflow: T3workKickoffWorkflow = {
+      kind: "recipe",
+      recipeId: TEST_WORKFLOW.recipeId,
+      ...(TEST_WORKFLOW.recipeVersion ? { recipeVersion: TEST_WORKFLOW.recipeVersion } : {}),
+      ...(TEST_WORKFLOW.kickoff ? { kickoff: TEST_WORKFLOW.kickoff } : {}),
+      title: TEST_WORKFLOW.title,
+      description: TEST_WORKFLOW.description,
+      source: TEST_WORKFLOW.source,
+      surface: TEST_WORKFLOW.surface,
+    };
+
+    await expect(
+      launchPendingRecipeWorkflowTurn({
+        backend: backend as BackendApi,
+        threadId: "thread-1",
+        kickoffPending: false,
+        kickoffWorkflow: promptOnlyWorkflow,
+        hasServerLaunchActivity: false,
+        kickoffMessage: "Build me a recipe for backlog risk hotspots.",
+        titleSeed: "Create a recipe for this context",
+        createdAt: "2026-05-27T18:00:00.000Z",
+        modelSelection: { instanceId: "codex" as never, model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        hasAttachments: false,
       }),
     ).resolves.toBe(false);
 

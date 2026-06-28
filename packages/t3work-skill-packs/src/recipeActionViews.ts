@@ -35,14 +35,6 @@ export default function Action() {
 export const CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW = `
 export default function Action({ ctx }) {
   const dashboardMode = ctx.surfaceState?.dashboardMode;
-  const surfaceTarget =
-    ctx.surface === "workitem.detail.sidepanel"
-      ? "this ticket"
-      : dashboardMode === "my-work"
-        ? "my work"
-        : dashboardMode === "backlog"
-          ? "this backlog"
-          : "this view";
   const description =
     ctx.surface === "workitem.detail.sidepanel"
       ? "Let the agent handle repeatable ticket work: draft a handoff, check QA gaps, or trace blockers."
@@ -54,7 +46,7 @@ export default function Action({ ctx }) {
 
   return (
     <RecipeAction
-      title={"Create a recipe for " + surfaceTarget}
+      title="Create a recipe for this view"
       icon="sparkles"
       description={description}
     />
@@ -124,7 +116,7 @@ export default function Action({ ctx }) {
 
   return (
     <RecipeAction
-      title="Prioritize {{currentViewLabel}}"
+      title="Prioritize pending work"
       icon="list-todo"
     >
       <FieldList
@@ -264,7 +256,7 @@ export default function Action({ ctx }) {
 
   return (
     <RecipeAction
-      title="Unblock {{selectedWorkLabel}}"
+      title="Unblock this item"
       icon="arrow-up-right"
       eyebrow="Primary blocker"
       description="Identify the blocker that is actually constraining progress, recommend the next move to clear it, and give a fallback if it stays blocked."
@@ -330,7 +322,7 @@ export default function Action() {
     <RecipeAction
       title="T-shirt-size this epic"
       icon="ruler"
-      description="Produce an XS/S/M/L/XL estimate with rationale, confidence, and the main risk drivers."
+      description="Combine Jira scope, related work, code evidence, and unknowns into an XS/S/M/L/XL estimate."
     >
       <LaunchOptionGroup
         name="sizingLens"
@@ -341,7 +333,7 @@ export default function Action() {
             value: "evidence",
             label: "Evidence-based",
             promptText:
-              "Ground the size in scope, acceptance criteria, and known unknowns before naming a size.",
+              "Ground the size in Jira details, linked work, code implementation status, acceptance criteria, and unknowns before naming a size.",
           },
           {
             value: "gut",
@@ -353,7 +345,7 @@ export default function Action() {
             value: "comparative",
             label: "Comparative",
             promptText:
-              "Compare against similar past epics when available, and size relative to them.",
+              "Compare against similar past epics or stories when available, and explain where this epic is smaller, larger, or riskier.",
           },
         ]}
       />

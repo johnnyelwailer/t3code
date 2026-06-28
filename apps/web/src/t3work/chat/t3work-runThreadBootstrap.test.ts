@@ -340,6 +340,57 @@ describe("runThreadBootstrap", () => {
     });
   });
 
+  it("runs prompt-only recipe kickoffs as a normal agent turn", async () => {
+    const backend = createBackend();
+    const promptOnlyWorkflow: T3workKickoffWorkflow = {
+      kind: "recipe",
+      recipeId: "tshirt-size-epic",
+      recipeVersion: "0.1.0",
+      title: "T-shirt-size this epic",
+      description: "Estimate the selected epic.",
+      source: "bundled",
+      surface: "workitem.detail.sidepanel",
+      allowedToolGroups: ["integration.read", "artifact.rw", "ui.render"],
+    };
+
+    await runThreadBootstrap({
+      backend,
+      environmentId: "env-1",
+      threadId: "thread-3b",
+      projectTitle: "Project Alpha",
+      projectWorkspaceRoot: "/tmp/project-alpha",
+      canonicalProjectId: "project-alpha",
+      title: "T-shirt-size this epic",
+      initialUserMessage: "T-shirt-size PROJ-100 using Jira, code, and precedent work.",
+      kickoffModelSelection: { instanceId: "codex" as any, model: "gpt-5.4" },
+      kickoffRuntimeMode: "full-access",
+      kickoffInteractionMode: "default",
+      kickoffWorkflow: promptOnlyWorkflow,
+      toolContext: TEST_TOOL_CONTEXT,
+      createdAt: "2026-05-19T12:00:00.000Z",
+      shouldEnsureProject: false,
+      action: "kickoff",
+      state: {
+        threadId: "thread-3b",
+        projectEnsured: false,
+        threadCreateSent: false,
+        kickoffSent: false,
+      },
+      onInitialUserMessageSent: undefined,
+    });
+
+    expect(backend.launchRecipeWorkflow).not.toHaveBeenCalled();
+    expect(backend.dispatchCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "thread.turn.start",
+        threadId: "thread-3b",
+        message: expect.objectContaining({
+          text: "T-shirt-size PROJ-100 using Jira, code, and precedent work.",
+        }),
+      }),
+    );
+  });
+
   it("continues recipe launch when retrying after the thread already exists", async () => {
     const backend = createBackend();
     vi.mocked(backend.dispatchCommand).mockRejectedValueOnce(

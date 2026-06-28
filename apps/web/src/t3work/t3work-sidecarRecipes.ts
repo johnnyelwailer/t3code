@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { matchRecipes } from "@t3tools/project-recipes";
+import { buildRecipeMatchSignalsFromRenderContext, matchRecipes } from "@t3tools/project-recipes";
 import {
   getBundledT3WorkRecipe,
   getT3WorkProfile,
@@ -24,7 +24,7 @@ import {
   buildBundledRecipeTemplateValues,
   renderPromptTemplate,
 } from "~/t3work/t3work-sidecarRecipeTemplates";
-import { buildT3workSidecarRecipeInputKey } from "~/t3work/t3work-sidecarRecipeInputKey";
+import { buildT3workSidecarRecipeMembershipKey } from "~/t3work/t3work-sidecarRecipeInputKey";
 import { areQuickStartsEqual } from "~/t3work/t3work-sidecarRecipeQuickStartEquality";
 import type {
   T3workSidecarRecipeInput,
@@ -54,10 +54,7 @@ export function buildT3workSidecarRecipeQuickStarts(
   const availableContextKeys = buildAvailableContextKeys(input);
   const templateValues = buildBundledRecipeTemplateValues(input);
   const launchContext = buildT3workActionRecipeLaunchContext(renderContext);
-  const epicHasChildren =
-    input.jiraIssueType && input.jiraIssueType.toLowerCase() === "epic"
-      ? (input.ticketContext?.relationships?.childKeys?.length ?? 0) > 0
-      : undefined;
+  const signals = buildRecipeMatchSignalsFromRenderContext(renderContext);
   const matches = matchRecipes(listBundledT3WorkRecipes(), {
     activeProject: input.project,
     selectedResource: null,
@@ -70,7 +67,7 @@ export function buildT3workSidecarRecipeQuickStarts(
     enabledSkillPacks,
     profile: toRecipeProfileContext(profile),
     availableContextKeys,
-    ...(epicHasChildren !== undefined ? { epicHasChildren } : {}),
+    signals,
   }).filter((result) => result.missingContext.length === 0);
 
   return buildPinnedQuickStartSelection(matches, input.limit ?? 5).map((result) => {
@@ -92,30 +89,31 @@ export function buildT3workSidecarRecipeQuickStarts(
       templateValues,
     );
 
+    const workflow = localBundledRecipePath
+      ? {
+          kind: "recipe" as const,
+          recipeId: result.recipe.id,
+          ...(bundledRecipe?.version ? { recipeVersion: bundledRecipe.version } : {}),
+          title: renderedTitle,
+          description: renderedDescription,
+          source: "bundled" as const,
+          surface: resolvedSurface,
+          reason: result.reason,
+          launchContext,
+          recipePath: localBundledRecipePath,
+          workflowPath: `${localBundledRecipePath}/workflow.ts`,
+          ...(bundledRecipe?.allowedToolGroups
+            ? { allowedToolGroups: bundledRecipe.allowedToolGroups }
+            : {}),
+        }
+      : undefined;
+
     const quickStart: T3workSidecarRecipeQuickStart = {
       id: result.recipe.id,
       title: renderedTitle,
       description: renderedDescription,
       prompt: renderedPrompt,
-      workflow: {
-        kind: "recipe",
-        recipeId: result.recipe.id,
-        ...(bundledRecipe?.version ? { recipeVersion: bundledRecipe.version } : {}),
-        ...(result.recipe.kickoff ? { kickoff: result.recipe.kickoff } : {}),
-        title: renderedTitle,
-        description: renderedDescription,
-        source: "bundled",
-        surface: resolvedSurface,
-        reason: result.reason,
-        launchContext,
-        ...(localBundledRecipePath ? { recipePath: localBundledRecipePath } : {}),
-        ...(localBundledRecipePath
-          ? { workflowPath: `${localBundledRecipePath}/workflow.ts` }
-          : {}),
-        ...(bundledRecipe?.allowedToolGroups
-          ? { allowedToolGroups: bundledRecipe.allowedToolGroups }
-          : {}),
-      },
+      ...(workflow ? { workflow } : {}),
     };
 
     if (bundledRecipe?.composerGuidance) {
@@ -140,8 +138,11 @@ export function useT3workSidecarRecipeQuickStarts(
     readonly backend: BackendApi | null;
   },
 ): ReadonlyArray<T3workSidecarRecipeQuickStart> {
-  const inputKey = buildT3workSidecarRecipeInputKey(input);
-  const fallbackQuickStarts = useMemo(() => buildT3workSidecarRecipeQuickStarts(input), [inputKey]);
+  const membershipKey = buildT3workSidecarRecipeMembershipKey(input);
+  const fallbackQuickStarts = useMemo(
+    () => buildT3workSidecarRecipeQuickStarts(input),
+    [membershipKey],
+  );
   const [quickStarts, setQuickStarts] =
     useState<ReadonlyArray<T3workSidecarRecipeQuickStart>>(fallbackQuickStarts);
   const workspaceRoot = input.project.workspace?.rootPath;
@@ -153,7 +154,7 @@ export function useT3workSidecarRecipeQuickStarts(
             workspaceRoot,
           })
         : null,
-    [inputKey, workspaceRoot],
+    [membershipKey, workspaceRoot],
   );
   const backend = input.backend;
   const limit = input.limit;

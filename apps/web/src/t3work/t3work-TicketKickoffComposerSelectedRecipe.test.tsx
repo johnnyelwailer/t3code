@@ -10,7 +10,7 @@ describe("TicketKickoffComposerSelectedRecipe", () => {
         selectedRecipe={{
           recipe: {
             id: "unblock-blocked-ticket",
-            title: "Unblock IES-9242",
+            title: "Unblock this item",
             description: "Pick the next move that will reopen progress.",
             composerGuidance: {
               helperText: "Add any context that could change the recommendation.",
@@ -19,7 +19,7 @@ describe("TicketKickoffComposerSelectedRecipe", () => {
             workflow: {
               kind: "recipe",
               recipeId: "unblock-blocked-ticket",
-              title: "Unblock IES-9242",
+              title: "Unblock this item",
               description: "Pick the next move that will reopen progress.",
               source: "bundled",
               surface: "workitem.detail.sidepanel",
@@ -41,7 +41,7 @@ describe("TicketKickoffComposerSelectedRecipe", () => {
     );
 
     expect(markup).toContain("Selected action");
-    expect(markup).toContain("Unblock IES-9242");
+    expect(markup).toContain("Unblock this item");
     expect(markup).toContain("Pick the next move that will reopen progress.");
     expect(markup).toContain("Extra focus: handoff risk");
     expect(markup).not.toContain("Add any context that could change the recommendation.");

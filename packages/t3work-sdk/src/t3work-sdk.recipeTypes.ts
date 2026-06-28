@@ -5,6 +5,24 @@ export type RecipeBrevity = "short" | "balanced" | "detailed";
 export type RecipeGuidanceStyle = "guided" | "balanced" | "expert";
 export type RecipeDetailDensity = "guided" | "balanced" | "expert";
 
+export type RecipeSignalScalar = string | number | boolean;
+
+export type RecipeSignalComparisonSpec = {
+  readonly signal: string;
+  readonly eq?: RecipeSignalScalar;
+  readonly neq?: RecipeSignalScalar;
+  readonly gt?: number;
+  readonly gte?: number;
+  readonly lt?: number;
+  readonly lte?: number;
+};
+
+export type RecipeSignalPredicateSpec =
+  | RecipeSignalComparisonSpec
+  | { readonly all: ReadonlyArray<RecipeSignalPredicateSpec> }
+  | { readonly any: ReadonlyArray<RecipeSignalPredicateSpec> }
+  | { readonly not: RecipeSignalPredicateSpec };
+
 export interface RecipeApplicabilitySpec {
   readonly resourceKinds?: ReadonlyArray<string>;
   readonly projectSourceKinds?: ReadonlyArray<string>;
@@ -15,6 +33,7 @@ export interface RecipeApplicabilitySpec {
   readonly brevities?: ReadonlyArray<RecipeBrevity>;
   readonly guidanceStyles?: ReadonlyArray<RecipeGuidanceStyle>;
   readonly detailDensities?: ReadonlyArray<RecipeDetailDensity>;
+  readonly visiblePredicates?: RecipeSignalPredicateSpec;
 }
 
 export interface RecipeRef<Inputs = unknown, Outputs = unknown> {

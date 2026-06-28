@@ -45,7 +45,7 @@ export function buildBundledRecipeTemplateValues(
         : "project work";
   const surfaceAuthoringLabel =
     input.surface === "workitem.detail.sidepanel"
-      ? input.selectedWorkLabel
+      ? "this work item"
       : input.dashboardMode === "my-work"
         ? "my work view"
         : input.dashboardMode === "backlog"

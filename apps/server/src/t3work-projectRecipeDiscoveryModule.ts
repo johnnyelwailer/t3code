@@ -22,6 +22,7 @@ import * as NodeURL from "node:url";
 
 import { queryableToReadonlyArray } from "@t3tools/project-context";
 import {
+  buildRecipeMatchSignalsFromRenderContext,
   matchRecipes,
   type ProjectRecipeDiscovered,
   type ProjectRecipeRenderContext,
@@ -69,6 +70,7 @@ function buildMatchInput(context: ProjectRecipeRenderContext): RecipeMatchInput 
     enabledSkillPacks: context.enabledSkillPacks,
     profile: context.profile,
     availableContextKeys: queryableToReadonlyArray(context.availableContextKeys),
+    signals: buildRecipeMatchSignalsFromRenderContext(context),
   };
 }
 

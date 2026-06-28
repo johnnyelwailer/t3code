@@ -1,4 +1,5 @@
 import type { Recipe } from "@t3tools/project-recipes";
+import { recipeSignalPredicates } from "@t3tools/project-recipes";
 
 import {
   CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
@@ -201,7 +202,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "create-contextual-recipe",
     title: "Create a recipe for this view",
-    manifestDisplayName: "Create a recipe for {{surfaceAuthoringLabel}}",
+    manifestDisplayName: "Create a recipe for this view",
     shortDescription:
       "Draft a reusable quick action based on what is visible here, with optional setup fields or show/hide rules.",
     actionViewTemplate: CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
@@ -250,7 +251,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "explain-selected-work",
     title: "Explain this simply",
-    manifestDisplayName: "Explain {{selectedWorkLabel}}",
+    manifestDisplayName: "Explain this simply",
     shortDescription: "Summarize the selected work with user impact, checks, and open questions.",
     actionViewTemplate: EXPLAIN_SELECTED_WORK_ACTION_VIEW,
     surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
@@ -268,7 +269,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "review-acceptance-criteria",
     title: "Review acceptance criteria",
-    manifestDisplayName: "Review acceptance criteria for {{selectedWorkLabel}}",
+    manifestDisplayName: "Review acceptance criteria",
     shortDescription: "Call out ambiguity, missing testability notes, and follow-up questions.",
     actionViewTemplate: REVIEW_ACCEPTANCE_CRITERIA_ACTION_VIEW,
     surfaces: ["workitem.detail.sidepanel"],
@@ -295,7 +296,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "create-qa-test-plan",
     title: "Create QA test plan",
-    manifestDisplayName: "Create QA plan for {{selectedWorkLabel}}",
+    manifestDisplayName: "Create QA test plan",
     shortDescription: "Build a test matrix with regression, smoke, and edge-case coverage.",
     surfaces: ["workitem.detail.sidepanel"],
     promptTemplate:
@@ -365,7 +366,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "prioritize-pending-work",
     title: "Prioritize pending work",
-    manifestDisplayName: "Prioritize {{currentViewLabel}}{{currentViewSummarySuffix}}",
+    manifestDisplayName: "Prioritize pending work",
     shortDescription:
       "Rank the {{currentViewLabel}} in front of you by urgency, unblock value, and user impact.",
     actionViewTemplate: PRIORITIZE_PENDING_WORK_ACTION_VIEW,
@@ -450,7 +451,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "shape-next-backlog-slice",
     title: "Shape the next backlog slice",
-    manifestDisplayName: "Shape the next backlog slice{{currentViewSummarySuffix}}",
+    manifestDisplayName: "Shape the next backlog slice",
     shortDescription:
       "Pick the next 1-3 backlog items to pull forward and explain why they beat the rest.",
     actionViewTemplate: SHAPE_NEXT_BACKLOG_SLICE_ACTION_VIEW,
@@ -477,7 +478,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "unblock-my-work",
     title: "Unblock my work",
-    manifestDisplayName: "Unblock my work{{currentViewSummarySuffix}}",
+    manifestDisplayName: "Unblock my work",
     shortDescription:
       "Find the single unblock, clarification, or handoff that will move your current work fastest.",
     actionViewTemplate: UNBLOCK_MY_WORK_ACTION_VIEW,
@@ -558,7 +559,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "technical-implementation-plan",
     title: "Draft implementation plan",
-    manifestDisplayName: "Draft implementation plan for {{selectedWorkLabel}}",
+    manifestDisplayName: "Draft implementation plan",
     shortDescription: "Map impacted areas, sequencing, risks, and verification for implementation.",
     actionViewTemplate: TECHNICAL_IMPLEMENTATION_PLAN_ACTION_VIEW,
     surfaces: ["workitem.detail.sidepanel"],
@@ -588,7 +589,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "address-linked-pr-feedback",
     title: "Address linked PR feedback",
-    manifestDisplayName: "Address linked PR feedback for {{selectedWorkLabel}}",
+    manifestDisplayName: "Address linked PR feedback",
     shortDescription:
       "Turn the open review requests and comments on linked PRs into the next safest code changes.",
     surfaces: ["workitem.detail.sidepanel"],
@@ -617,8 +618,8 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   }),
   createBundledRecipe({
     id: "unblock-blocked-ticket",
-    title: "Unblock blocked ticket",
-    manifestDisplayName: "Unblock {{selectedWorkLabel}}",
+    title: "Unblock this item",
+    manifestDisplayName: "Unblock this item",
     shortDescription: "Pick the next move that will reopen progress.",
     composerGuidance: {
       helperText: "Add any context that could change the recommendation.",
@@ -648,7 +649,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "re-scope-ticket-overrun",
     title: "Re-scope overrun ticket",
-    manifestDisplayName: "Re-scope {{selectedWorkLabel}}",
+    manifestDisplayName: "Re-scope overrun ticket",
     shortDescription:
       "Compare the remaining time to the original estimate and decide whether to split, defer, or finish as-is.",
     surfaces: ["workitem.detail.sidepanel"],
@@ -674,7 +675,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "release-handoff-checklist",
     title: "Prepare release handoff",
-    manifestDisplayName: "Prepare release handoff for {{selectedWorkLabel}}",
+    manifestDisplayName: "Prepare release handoff",
     shortDescription: "Summarize what changed, what to verify, and what could block rollout.",
     surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
     promptTemplate:
@@ -701,7 +702,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "prepare-post-merge-closeout",
     title: "Prepare post-merge closeout",
-    manifestDisplayName: "Close out {{selectedWorkLabel}} after merge",
+    manifestDisplayName: "Prepare post-merge closeout",
     shortDescription:
       "Map the Jira, QA, and communication steps still needed now that linked code is merged.",
     surfaces: ["workitem.detail.sidepanel"],
@@ -727,7 +728,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "support-escalation-summary",
     title: "Create escalation summary",
-    manifestDisplayName: "Create escalation summary for {{selectedWorkLabel}}",
+    manifestDisplayName: "Create escalation summary",
     shortDescription:
       "Summarize customer impact, reproduction details, and the best escalation path.",
     surfaces: ["workitem.detail.sidepanel"],
@@ -755,22 +756,36 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "tshirt-size-epic",
     title: "T-shirt-size this epic",
-    manifestDisplayName: "T-shirt-size {{selectedWorkLabel}}",
+    manifestDisplayName: "T-shirt-size this epic",
     shortDescription:
       "Estimate the epic effort as XS/S/M/L/XL with rationale, confidence, and the main risk drivers.",
     actionViewTemplate: TSHIRT_SIZE_EPIC_ACTION_VIEW,
     surfaces: ["workitem.detail.sidepanel", "project.dashboard.backlog"],
     promptTemplate:
-      "T-shirt-size the epic {{selectedWorkLabel}}. First confirm the epic (title, key, and any existing children/stories). Then produce a single T-shirt size (XS, S, M, L, or XL) with a short rationale grounded in the epic's scope, acceptance criteria, and known unknowns. Note your confidence (low/medium/high) and the main risk drivers that could move the size up. If the epic has no stories or subtasks yet, recommend running the shape-next-backlog-slice recipe to decompose it before implementation. Persist the estimate as a durable estimation-notes artifact.",
+      "T-shirt-size the epic {{selectedWorkLabel}} as a multi-source estimate. First confirm the selected epic/story details (key, title, status, owner, acceptance criteria, and any existing children). Then inspect all available evidence before sizing: child stories/subtasks, linked or precedent stories and epics, attached Jira context, related GitHub/PR activity, and the current codebase implementation state where the workspace or linked repositories are available. Produce one size (XS, S, M, L, or XL) with confidence (low/medium/high), an evidence table grouped by Jira scope, code/implementation status, precedent comparisons, and unknowns, plus the main risk drivers that could move the size up. Call out missing acceptance criteria or data you could not inspect. If the epic has no stories or subtasks yet, recommend running the shape-next-backlog-slice recipe to decompose it before implementation. Persist the estimate as a durable estimation-notes artifact.",
     icon: "ruler",
     appliesTo: {
       jiraIssueTypes: ["Epic"],
-      // Surface preferentially when the epic is un-sized (no children yet). Stays
-      // visible when epicHasChildren is unknown (e.g. backlog dashboard surface).
-      requiresNoChildren: true,
+      // Prefer epics with no child stories yet; unknown child signals wait for enrichment.
+      visiblePredicates: recipeSignalPredicates.workitemHasNoChildren,
     },
     requiredContext: [
       { key: "ticket.summary", description: "Epic summary" },
+      {
+        key: "ticket.relationship.children",
+        description: "Child stories, subtasks, or decomposition status",
+        optional: true,
+      },
+      {
+        key: "ticket.relationship.linked",
+        description: "Related or precedent Jira work",
+        optional: true,
+      },
+      {
+        key: "ticket.github.pull-request",
+        description: "Linked GitHub/PR implementation evidence",
+        optional: true,
+      },
       {
         key: "ticket.context.pre-implementation",
         description: "Epic is still before implementation or PR work starts",

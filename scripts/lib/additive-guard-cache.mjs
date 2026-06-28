@@ -1,11 +1,25 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-const CACHE_FILE = NodePath.join(".git", "hooks", "t3work-additive-guard-cache.json");
+const CACHE_FILE_NAME = "t3work-additive-guard-cache.json";
+
+function resolveAdditiveGuardCachePath(cwd) {
+  const result = NodeChildProcess.spawnSync(
+    "git",
+    ["rev-parse", "--git-path", NodePath.join("hooks", CACHE_FILE_NAME)],
+    { cwd, encoding: "utf8" },
+  );
+  if (result.status === 0) {
+    return result.stdout.trim();
+  }
+
+  return NodePath.join(cwd, ".git", "hooks", CACHE_FILE_NAME);
+}
 
 export function loadAdditiveGuardCache(cwd) {
-  const cachePath = NodePath.join(cwd, CACHE_FILE);
+  const cachePath = resolveAdditiveGuardCachePath(cwd);
   if (!NodeFS.existsSync(cachePath)) {
     return { cachePath, entries: {} };
   }
