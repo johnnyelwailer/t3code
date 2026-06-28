@@ -41,8 +41,7 @@ const makeRouteHttpTestLayer = (prefix: string) =>
 const runRouteHttpTest = <A, E, R>(prefix: string, effect: Effect.Effect<A, E, R>) =>
   Effect.runPromise(
     Effect.scoped(effect).pipe(
-      Effect.provide(makeRouteHttpTestLayer(prefix)),
-      Effect.provide(NodeServices.layer),
+      Effect.provide(Layer.mergeAll(makeRouteHttpTestLayer(prefix), NodeServices.layer)),
     ) as Effect.Effect<A, E, never>,
   );
 

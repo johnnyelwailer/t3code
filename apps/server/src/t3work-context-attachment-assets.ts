@@ -10,7 +10,8 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import { hashT3workContextBytes } from "./t3work-context-blob-store.ts";
+import { readT3workContextAttachments } from "./t3work-context-attachment-parse.ts";
+import { hashT3workContextBytes } from "./t3work-context-blob-store-utils.ts";
 
 type AssetProvider = {
   readonly downloadAsset: (
@@ -24,76 +25,6 @@ export type T3workContextAttachmentIndexInfo = {
   readonly downloadedCount: number;
   readonly failedCount: number;
 };
-
-type Attachment = {
-  readonly id?: string;
-  readonly filename: string;
-  readonly mimeType?: string;
-  readonly content?: string;
-  readonly thumbnail?: string;
-  readonly size?: number;
-};
-
-function readAttachments(snapshot: ResourceSnapshot): Attachment[] {
-  const attachments = (snapshot.fields as Record<string, unknown>).attachments;
-  if (!Array.isArray(attachments)) {
-    return [];
-  }
-  return attachments.flatMap((value) => {
-    if (!value || typeof value !== "object") {
-      return [];
-    }
-    const record = value as Record<string, unknown>;
-    const filename = typeof record.filename === "string" ? record.filename : undefined;
-    const id = typeof record.id === "string" ? record.id : undefined;
-    if (!filename && !id) {
-      return [];
-    }
-    return [
-      {
-        ...(id ? { id } : {}),
-        filename: sanitizeAttachmentFileName(
-          filename ?? id!,
-          typeof record.mimeType === "string" ? record.mimeType : undefined,
-        ),
-        ...(typeof record.mimeType === "string" ? { mimeType: record.mimeType } : {}),
-        ...(typeof record.content === "string" ? { content: record.content } : {}),
-        ...(typeof record.thumbnail === "string" ? { thumbnail: record.thumbnail } : {}),
-        ...(typeof record.size === "number" ? { size: record.size } : {}),
-      },
-    ];
-  });
-}
-
-function sanitizeAttachmentFileName(filename: string, mimeType?: string): string {
-  const extension =
-    filename.match(/\.[a-z0-9]{1,12}$/i)?.[0]?.toLowerCase() ?? inferExtension(mimeType);
-  const base = (
-    extension && filename.endsWith(extension) ? filename.slice(0, -extension.length) : filename
-  )
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-  return `${base.length > 0 ? base : "attachment"}${extension}`;
-}
-
-function inferExtension(mimeType?: string): string {
-  switch (mimeType?.toLowerCase()) {
-    case "application/json":
-      return ".json";
-    case "application/pdf":
-      return ".pdf";
-    case "image/jpeg":
-      return ".jpg";
-    case "image/png":
-      return ".png";
-    case "text/plain":
-      return ".txt";
-    default:
-      return "";
-  }
-}
 
 export function buildT3workContextAttachmentAssets(input: {
   readonly provider: AssetProvider;
@@ -111,7 +42,7 @@ export function buildT3workContextAttachmentAssets(input: {
     for (const [ticketKey, snapshot] of input.snapshotsByKey) {
       const indexRelativePath = buildJiraTicketAttachmentsIndexPath(input.projectId, ticketKey);
       const entries: unknown[] = [];
-      for (const attachment of readAttachments(snapshot)) {
+      for (const attachment of readT3workContextAttachments(snapshot)) {
         const sourceUrl = attachment.content?.trim() || attachment.thumbnail?.trim();
         if (!sourceUrl) {
           continue;

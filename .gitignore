@@ -27,6 +27,7 @@ __screenshots__/
 squashfs-root/
 .vercel
 .gstack/
+.githooks/t3work-additive-guard-cache.json
 apps/server/.t3work/
 apps/server/__fixtures__/t3work-timer-e2e-*/
 apps/server/__fixtures__/t3work-context-refresh-e2e-*/
