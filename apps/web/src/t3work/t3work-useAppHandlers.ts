@@ -14,6 +14,7 @@ import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeS
 import type { ViewState } from "~/t3work/t3work-types";
 import { enqueueThreadKickoffAttachments } from "~/t3work/t3work-enqueueThreadKickoffAttachments";
 import { useLocalWorkspaceCommands } from "~/t3work/hooks/t3work-useLocalWorkspaceCommands";
+import { embeddedThreadIdForDashboardModeSwitch } from "~/t3work/t3work-projectThreadViewState";
 import {
   createTicketKickoffThread,
   deleteAppThread,
@@ -69,9 +70,9 @@ export function useAppHandlers({
     (projectId: string, dashboardMode: ProjectDashboardMode) => {
       const resolvedProjectId = store.resolveProjectId(projectId);
       store.selectProject(resolvedProjectId);
-      onOpenDashboard?.(resolvedProjectId, dashboardMode);
+      onOpenDashboard?.(resolvedProjectId, dashboardMode, embeddedThreadIdForDashboardModeSwitch(activeView, resolvedProjectId) ?? null);
     },
-    [onOpenDashboard, store],
+    [activeView, onOpenDashboard, store],
   );
 
   const handleSelectTicket = useCallback(

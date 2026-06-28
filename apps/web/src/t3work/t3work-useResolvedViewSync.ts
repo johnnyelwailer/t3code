@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { mergeRouteAndStoreView } from "~/t3work/t3work-projectThreadViewState";
 import { useProjectStore } from "~/t3work/hooks/t3work-useProjectStore";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 import type { ViewState } from "~/t3work/t3work-types";
@@ -58,4 +59,12 @@ export function useResolvedViewSync({
 
     store.setView(resolvedView);
   }, [activeDashboardMode, onOpenDashboard, onOpenThread, onOpenTicket, resolvedView, store, view]);
+}
+
+
+export function useMergedRouteAndStoreView(
+  routeView: ViewState | null | undefined,
+  storeView: ViewState | null,
+) {
+  return useMemo(() => mergeRouteAndStoreView(routeView, storeView), [routeView, storeView]);
 }

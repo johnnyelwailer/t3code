@@ -69,3 +69,51 @@ export function isEmbeddedProjectThread(
 ): boolean {
   return Boolean(thread?.ticketId || thread?.dashboardMode);
 }
+
+/** Prefer route view, but keep store embeddedThreadId until URL navigation catches up. */
+export function mergeRouteAndStoreView(
+  routeView: ViewState | null | undefined,
+  storeView: ViewState | null,
+): ViewState | null {
+  if (!routeView) {
+    return storeView;
+  }
+
+  if (!storeView || routeView.projectId !== storeView.projectId) {
+    return routeView;
+  }
+
+  if (
+    routeView.type === "dashboard" &&
+    storeView.type === "dashboard" &&
+    !routeView.embeddedThreadId &&
+    storeView.embeddedThreadId
+  ) {
+    return { ...routeView, embeddedThreadId: storeView.embeddedThreadId };
+  }
+
+  if (
+    routeView.type === "ticket" &&
+    storeView.type === "ticket" &&
+    routeView.ticketId === storeView.ticketId &&
+    !routeView.embeddedThreadId &&
+    storeView.embeddedThreadId
+  ) {
+    return { ...routeView, embeddedThreadId: storeView.embeddedThreadId };
+  }
+
+  return routeView;
+}
+
+export function embeddedThreadIdForDashboardModeSwitch(
+  activeView: ViewState | null,
+  resolvedProjectId: string,
+): string | undefined {
+  if (
+    activeView?.projectId === resolvedProjectId &&
+    (activeView.type === "dashboard" || activeView.type === "ticket")
+  ) {
+    return activeView.embeddedThreadId;
+  }
+  return undefined;
+}

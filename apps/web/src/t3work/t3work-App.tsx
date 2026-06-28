@@ -10,7 +10,7 @@ import { AppOverlays } from "~/t3work/t3work-AppOverlays";
 import { T3workLeftSidebarDesktopToggle } from "~/t3work/t3work-LeftSidebarDesktopToggle";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 import { useAppHandlers } from "~/t3work/t3work-useAppHandlers";
-import { useResolvedViewSync } from "~/t3work/t3work-useResolvedViewSync";
+import { useMergedRouteAndStoreView, useResolvedViewSync } from "~/t3work/t3work-useResolvedViewSync";
 import { useHydratePinnedSidebarItems } from "~/t3work/hooks/t3work-useHydratePinnedSidebarItems";
 
 type AppProps = {
@@ -59,7 +59,7 @@ export function App({
 
   const showCreate = showCreateProp ?? showCreateInternal;
   const setShowCreate = onCreateOpenChange ?? setShowCreateInternal;
-  const activeView = view ?? store.view;
+  const activeView = useMergedRouteAndStoreView(view, store.view);
   const resolvedView = useMemo(() => {
     if (!activeView) {
       return activeView;
