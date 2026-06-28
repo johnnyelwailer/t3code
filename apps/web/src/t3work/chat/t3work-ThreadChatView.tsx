@@ -29,6 +29,7 @@ export interface ThreadChatViewProps {
   initialRuntimeMode?: RuntimeMode;
   initialInteractionMode?: ProviderInteractionMode;
   ticketId?: string;
+  ticketDisplayId?: string;
   selectedToolIds?: ReadonlyArray<T3workThreadToolId>;
   onInitialUserMessageSent?: () => void;
 }
@@ -51,6 +52,7 @@ export function ThreadChatView({
   initialRuntimeMode,
   initialInteractionMode,
   ticketId,
+  ticketDisplayId,
   selectedToolIds,
   onInitialUserMessageSent,
 }: ThreadChatViewProps) {
@@ -84,6 +86,7 @@ export function ThreadChatView({
     selectedToolIds,
     threadId,
     ticketId,
+    ticketDisplayId,
     title,
   });
 
@@ -131,6 +134,7 @@ export function ThreadChatView({
     backend,
     projectId,
     threadId,
+    ...(ticketId ? { ticketId } : {}),
     turnToolContext,
     kickoffPending,
     kickoffWorkflow,

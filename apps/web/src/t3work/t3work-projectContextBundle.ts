@@ -1,8 +1,10 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { T3WORK_CONTEXT_AVAILABILITY_SUMMARY } from "@t3tools/project-context/t3workContextAvailability";
 
 import {
   buildContextManifestPath,
   buildContextMetadataPath,
+  buildJiraTicketCacheRoot,
   buildJiraTicketEntryPoint,
   buildProjectContextCacheRoot,
   buildProjectContextEntryPoint,
@@ -48,15 +50,23 @@ export function buildProjectContextBundle(input: {
   const workItems = input.projectTickets?.map((ticket) => {
     const ticketKey = resolveTicketContextKey(ticket);
     const relativePath = `${root}/work-items/${sanitizePathSegment(ticketKey)}.json`;
+    const fullBundleRootRelativePath = buildJiraTicketCacheRoot(input.project.id, ticketKey);
+    const ticketEntryPointRelativePath = buildJiraTicketEntryPoint(input.project.id, ticketKey);
     write(relativePath, {
       ticket,
       summaryItems: buildJiraWorkItemSummary(ticket).summaryItems,
-      ticketEntryPointRelativePath: buildJiraTicketEntryPoint(input.project.id, ticketKey),
+      ticketEntryPointRelativePath,
+      availability: T3WORK_CONTEXT_AVAILABILITY_SUMMARY,
+      loadableOnDemand: true,
+      fullBundleRootRelativePath,
     });
     return {
       key: ticketKey,
       relativePath,
-      ticketEntryPointRelativePath: buildJiraTicketEntryPoint(input.project.id, ticketKey),
+      ticketEntryPointRelativePath,
+      fullBundleRootRelativePath,
+      availability: T3WORK_CONTEXT_AVAILABILITY_SUMMARY,
+      loadableOnDemand: true,
       updatedAt: ticket.updatedAt,
     };
   });
@@ -86,6 +96,11 @@ export function buildProjectContextBundle(input: {
     syncedAt: new Date().toISOString(),
     projectId: input.project.id,
     entryPointRelativePath: entryPoint,
+    contextAvailabilityGuide: {
+      summary: "Lightweight work-item JSON under work-items/*.json; full bundles load on demand.",
+      full: "Rich per-item trees under jira/<project>/items/<key>/ after refresh.",
+      onDemandTool: "t3work.work_item.refresh_context_bundle",
+    },
     ...(workItems ? { workItemCount: workItems.length } : {}),
   });
   const entryPointPaths = {
@@ -118,6 +133,11 @@ export function buildProjectContextBundle(input: {
     kind: "project",
     label: input.project.title,
     summaryItems,
+    contextAvailabilityGuide: {
+      summary: "work-items/*.json",
+      full: "jira/<project>/items/<key>/",
+      onDemandTool: "t3work.work_item.refresh_context_bundle",
+    },
     paths: entryPointPaths,
   });
 

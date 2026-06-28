@@ -1,4 +1,5 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { T3WORK_CONTEXT_AVAILABILITY_FULL } from "@t3tools/project-context/t3workContextAvailability";
 
 import type { AddToChatPayloadProgressUpdate } from "~/t3work/t3work-addToChatUtils";
 import type { BackendApi } from "~/t3work/backend/t3work-types";
@@ -102,6 +103,8 @@ export async function buildTicketContextBundle(input: {
     write(buildContextManifestPath(nodeRoot), {
       kind: "jira-work-item-context-manifest",
       syncedAt,
+      availability: T3WORK_CONTEXT_AVAILABILITY_FULL,
+      bundleDepth: "full",
       key: node.key,
       title: node.ticket?.ref.title ?? node.snapshot?.ref.title ?? node.key,
       sourceUpdatedAt: node.ticket?.updatedAt ?? node.snapshot?.ref.updatedAt ?? null,
@@ -117,6 +120,8 @@ export async function buildTicketContextBundle(input: {
     });
     write(entryPoint, {
       kind: "jira-work-item",
+      availability: T3WORK_CONTEXT_AVAILABILITY_FULL,
+      bundleDepth: "full",
       key: node.key,
       label: node.ticket
         ? `${resolveTicketContextKey(node.ticket)} ${node.ticket.ref.title}`
