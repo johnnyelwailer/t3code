@@ -2,112 +2,18 @@ import {
   type AddToChatPayloadInput,
   type AddToChatPayloadProgressUpdate,
   buildContextAttachment,
-  compactJson,
-  isDirectoryBundlePayload,
-  sanitizeForFileName,
   type AddToChatRequest,
 } from "~/t3work/t3work-addToChatUtils";
 import type { BackendApi } from "~/t3work/backend/t3work-types";
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
-import { persistDirectoryBundleToWorkspace } from "~/t3work/t3work-contextDirectoryBundlePersist";
-import { T3WORK_PROJECT_CONTEXT_ROOT } from "~/t3work/t3work-projectSetup";
 import {
   buildInitialSyncProgressUpdate,
   buildSyncProgressAttachment,
-  buildWriteProgressUpdate,
 } from "~/t3work/t3work-contextAttachmentSyncProgress";
+import { persistContextAttachmentPayload } from "~/t3work/t3work-contextAttachmentSyncPersist";
 
 const attachmentRequestById = new Map<string, AddToChatRequest>();
 const attachmentSyncPromiseById = new Map<string, Promise<T3WorkContextAttachment>>();
-
-function buildFallbackSnapshotPath(request: AddToChatRequest): string {
-  return [
-    T3WORK_PROJECT_CONTEXT_ROOT,
-    "misc",
-    sanitizeForFileName(request.projectId),
-    sanitizeForFileName(request.dedupeKey ?? request.kind ?? request.targetLabel),
-    "entrypoint.json",
-  ].join("/");
-}
-
-async function persistPayload(input: {
-  backend?: BackendApi;
-  request: AddToChatRequest;
-  payload: unknown;
-  onProgress?:
-    | ((input: { update: AddToChatPayloadProgressUpdate; relativePath?: string }) => void)
-    | undefined;
-  startedAt: string;
-}): Promise<string | undefined> {
-  if (!input.request.projectWorkspaceRoot) {
-    throw new Error("Attached context requires a managed project workspace.");
-  }
-  if (!input.backend) {
-    throw new Error("Attached context backend is unavailable.");
-  }
-
-  if (isDirectoryBundlePayload(input.payload)) {
-    const directoryBundle = input.payload;
-    input.onProgress?.({
-      update: buildWriteProgressUpdate({
-        request: input.request,
-        payload: directoryBundle,
-        startedAt: input.startedAt,
-        completedCount: 0,
-        activeIndex: 0,
-      }),
-    });
-    let completed = 0;
-    await persistDirectoryBundleToWorkspace({
-      backend: input.backend,
-      workspaceRoot: input.request.projectWorkspaceRoot,
-      payload: directoryBundle,
-      onProgress: (progress) => {
-        completed = progress.completedCount;
-        input.onProgress?.({
-          update: buildWriteProgressUpdate({
-            request: input.request,
-            payload: directoryBundle,
-            startedAt: input.startedAt,
-            completedCount: completed,
-            ...(completed < directoryBundle.files.length
-              ? { activeIndex: progress.activeIndex }
-              : {}),
-          }),
-        });
-      },
-    });
-    return undefined;
-  }
-
-  const relativePath = buildFallbackSnapshotPath(input.request);
-  input.onProgress?.({
-    update: buildWriteProgressUpdate({
-      request: input.request,
-      payload: input.payload,
-      relativePath,
-      startedAt: input.startedAt,
-      completedCount: 0,
-      activeIndex: 0,
-    }),
-    relativePath,
-  });
-  await input.backend.projectWorkspace.writeContextFiles({
-    workspaceRoot: input.request.projectWorkspaceRoot,
-    files: [{ relativePath, contents: compactJson(input.payload) }],
-  });
-  input.onProgress?.({
-    update: buildWriteProgressUpdate({
-      request: input.request,
-      payload: input.payload,
-      relativePath,
-      startedAt: input.startedAt,
-      completedCount: 1,
-    }),
-    relativePath,
-  });
-  return relativePath;
-}
 
 export function registerContextAttachmentRequest(id: string, request: AddToChatRequest): void {
   attachmentRequestById.set(id, request);
@@ -162,7 +68,7 @@ export async function syncContextAttachmentFromRequest(input: {
             reportProgress: (update: AddToChatPayloadProgressUpdate) => emitProgress(update),
           } satisfies AddToChatPayloadInput)
         : input.request.payload;
-    const relativePath = await persistPayload({
+    const relativePath = await persistContextAttachmentPayload({
       ...(input.backend ? { backend: input.backend } : {}),
       request: input.request,
       payload,

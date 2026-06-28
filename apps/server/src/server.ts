@@ -107,9 +107,10 @@ import { t3workTempoRouteLayer } from "./t3work-tempo-routes.ts";
 import { t3workProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3work-project-workspace-recipe-routes.ts";
 import { t3workProjectWorkspaceWriteContextFilesRouteLayer } from "./t3work-project-workspace-write-routes.ts";
 import {
-  t3workContextSyncCompleteRouteLayer,
-  t3workContextSyncQueueRouteLayer,
-} from "./t3work-context-sync-routes.ts";
+  t3workProjectWorkspaceRefreshProjectContextRouteLayer,
+  t3workProjectWorkspaceRefreshWorkItemContextRouteLayer,
+  t3workProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
+} from "./t3work-context-refresh-routes.ts";
 import {
   t3workThreadRecipeWorkflowLaunchRouteLayer,
   t3workThreadWorkflowResolveInputRouteLayer,
@@ -123,7 +124,7 @@ import { t3workProjectWorkspaceBootstrapRouteLayer } from "./t3work-project-repo
 import { t3workThreadPlacementRouteLayer } from "./t3work-thread-placement-routes.ts";
 import { t3workThreadToolContextRouteLayer } from "./t3work-thread-tool-context-routes.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
-import { T3workContextSyncQueueLive } from "./t3work-contextSyncQueue.ts";
+import { T3workContextRefreshServiceLive } from "./t3work-contextRefreshService.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
 import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowSchedulerLive } from "./t3work-workflowScheduler.ts";
@@ -345,7 +346,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(
     T3workToolBrokerLive.pipe(
       Layer.provideMerge(T3workThreadToolContextStoreLive),
-      Layer.provideMerge(T3workContextSyncQueueLive),
+      Layer.provideMerge(T3workContextRefreshServiceLive),
       Layer.provide(OrchestrationLayerLive),
     ),
   ),
@@ -435,9 +436,10 @@ export const makeRoutesLayer = Layer.mergeAll(
   t3workThreadRecipeWorkflowLaunchRouteLayer,
   t3workThreadWorkflowResolveInputRouteLayer,
   t3workThreadToolContextRouteLayer,
-  t3workContextSyncQueueRouteLayer,
-  t3workContextSyncCompleteRouteLayer,
   t3workProjectWorkspaceWriteContextFilesRouteLayer,
+  t3workProjectWorkspaceRefreshProjectContextRouteLayer,
+  t3workProjectWorkspaceRefreshWorkItemContextRouteLayer,
+  t3workProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
   otlpTracesProxyRouteLayer,
   staticAndDevRouteLayer,
   websocketRpcRouteLayer,

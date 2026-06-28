@@ -69,10 +69,23 @@ Current project workspace sync behavior:
   `fullBundleRootRelativePath` pointing at the rich tree location under
   `.t3work/context/jira/<project>/items/<key>/`
 - full per-item bundles are **not** written during workspace auto-sync; agents load them on
-  demand through `t3work.work_item.refresh_context_bundle`, which uses the same
-  `buildTicketContextBundle` + `persistDirectoryBundleToWorkspace` path as add-to-chat
-- when a connected t3work client is open for the thread, the server queues the sync request and
-  the web client drains it by calling `ensureFullWorkItemContextBundle`
+  demand through `t3work.work_item.refresh_context_bundle`
+- `refresh_context_bundle` is server-owned: it checks freshness, fetches the root item plus
+  direct links/children, writes the full bundle and commit marker, then starts depth-prioritized
+  background expansion for indirect links
+- the same refresh path is exposed over HTTP at
+  `POST /api/t3work/project/workspace/context-refresh/work-item` for web add-to-chat and
+  other clients that need a managed-workspace refresh without rebuilding bundles in the browser
+- Jira add-to-chat for work items calls the server refresh route and attaches lightweight
+  file references to server-written entrypoints instead of building directory bundles in the
+  browser
+- ticket-detail slice add-to-chat (description, comments, attachments, relationships, parent)
+  uses `POST /api/t3work/project/workspace/context-refresh/work-item-slice` to refresh the
+  work-item tree when needed and write `items/<key>/focus/<slice>.json` server-side
+- server-side context cache uses content-addressed blobs (CAS) with SQLite metadata; background
+  refresh pauses on disk `hardStop` or `softPressure` budgets and may purge cold cache entries
+  before resuming
+- incomplete background expansion jobs are persisted durably and resumed on server startup
 - visible project thread lists are written when project, dashboard, ticket, or standalone
   thread routes are opened
 - visible backlog and my-work state is written from the mounted dashboard views; my-work also
@@ -95,6 +108,9 @@ sync status is currently internal/log-only, and the commit marker is a batch com
 rather than a transactional directory swap. If the app is closed before a retry succeeds, the
 next mount/input change is what resumes the write. On-demand full sync requires a connected
 t3work web client to drain the server queue; without it the tool may return `sync_pending`.
+Ticket detail section slices (description, comments, attachments, GitHub activity) are still
+assembled client-side for the visible UI; only the full work-item bundle refresh is
+server-owned today.
 
 Read tools are still useful when they do one of these:
 
@@ -177,6 +193,11 @@ Notes:
 - `open_dashboard_mode` is a view-state tool. It switches between backlog and my-work.
 - `open_linked_repository_manager` opens existing UI, not a hidden mutation.
 - `create_context_bound_thread` creates a thread under the current project or view.
+- `t3work.project.refresh_context_bundle` is implemented. It rebuilds the lightweight
+  project context bundle (`work-items/index.json` plus summary JSON) from the current backlog
+  cache or provider, writes through `T3workContextRefreshService`, and returns
+  `availability: "summary"`. The broker tool and HTTP route
+  `POST /api/t3work/project/workspace/context-refresh/project` share the same service.
 
 ## Backlog View Tools
 
@@ -375,9 +396,30 @@ from the attached work-item context bundle. Dedicated read tools are for refresh
 view state, or individual assets that are not already present in text form.
 
 `t3work.work_item.refresh_context_bundle` is implemented. It validates `ticket_key` against
-the on-disk `work-items/index.json` for the current project workspace, enqueues a full sync
-for the connected client when needed, and returns the ticket entrypoint path with
-`availability: "full"` once the rich bundle is on disk.
+the on-disk `work-items/index.json` for the current project workspace, rebuilds only when
+missing/stale unless `force: true` is passed, and returns the ticket entrypoint path with
+`availability: "full"` only after the direct bundle is fully written. Background expansion
+uses depth as the primary priority: depth 1 before depth 2, depth 2 before depth 3, and so on.
+The broker tool and HTTP route share `T3workContextRefreshService`; structured server logs
+record refresh status, included/skipped counts, queue depth, budget pauses, supersede events,
+and startup job resume.
+
+### Bundle schema alignment (server vs web)
+
+Server-owned refresh (`buildT3workWorkItemContextBundle` on the server) and the legacy
+browser builder (`buildTicketContextBundle` on web) intentionally differ on a few manifest
+fields while sharing paths and availability enums from `@t3tools/project-context`:
+
+| Field             | Server refresh                              | Web legacy builder                                                 | Notes                                                                                                                |
+| ----------------- | ------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `bundleDepth`     | `direct` (root) / `node` (expanded)         | `full`                                                             | Server depth tracks graph expansion; web marks client-built trees as fully materialized.                             |
+| `contextScope`    | omitted                                     | root manifest + entrypoint only                                    | Selection summary (parent chain, skipped relations, GitHub count) is client-only today.                              |
+| `github-activity` | omitted                                     | `items/<key>/github-activity/index.json` when activity is supplied | GitHub activity in full bundles is still assembled in the browser; server refresh does not fetch inbox activity yet. |
+| `focus/*.json`    | written for ticket-detail slice add-to-chat | omitted on full work-item refresh only                             | Slice add-to-chat uses `context-refresh/work-item-slice` to write focus entrypoints server-side.                     |
+
+Agents should treat `availability: "full"` plus a server-written entrypoint as authoritative
+for on-demand work-item refresh. Summary project bundles use `availability: "summary"` until
+`t3work.work_item.refresh_context_bundle` loads the rich tree.
 
 View-state tools:
 
@@ -581,8 +623,11 @@ Start from existing code paths:
 
 - `t3work-agentContext.ts` already defines add-to-chat style capabilities.
 - `t3work-contextAttachmentSync.ts` writes context attachments into the managed workspace.
-- `t3work-contextDirectoryBundlePersist.ts` and `t3work-ensureFullWorkItemContextBundle.ts`
-  share bundle persistence between add-to-chat and on-demand agent sync.
+- `T3workContextRefreshService` owns on-demand server refresh; Jira work-item add-to-chat calls
+  `refreshWorkItemContextBundle` → HTTP `context-refresh/work-item` and attaches server-written
+  entrypoint references without browser bundle building.
+- Ticket-detail slice add-to-chat calls `refreshTicketDetailContextBundle` → HTTP
+  `context-refresh/work-item-slice` and attaches server-written focus entrypoints.
 - `t3work-contextAttachmentSyncPlan.ts` already models sync plans and freshness progress.
 - `t3work-threadToolContext.ts` already defines a small thread tool context.
 - `ProjectDashboardBacklogView` owns backlog view state and handlers.
@@ -606,4 +651,24 @@ view/element registers tools
 -> tool dispatcher validates scope
 -> read/view-state/draft mutation store updates
 -> UI re-renders from normal state
+```
+
+### Manual validation (context refresh)
+
+1. Open a managed t3work project with Jira linked and a ticket in the sidebar.
+2. Start or focus a project chat thread, right-click a ticket, and choose **Add to chat**.
+3. Confirm the attachment shows a server entrypoint under
+   `.t3work/context/jira/<project>/items/<key>/entrypoint.json` and no long browser-side
+   file-write progress for the bundle body.
+4. In server logs, confirm `t3work.contextRefresh refresh started/finished` with
+   `includedCount` / `skippedCount` and optional `backgroundQueued`.
+5. Re-add the same ticket without `force` and confirm `already_synced` / cached progress text.
+6. Restart the server with an in-flight background job and confirm
+   `t3work.contextRefresh background resume on startup` in logs.
+
+Live script (mock Jira, no paid API):
+
+```bash
+node scripts/t3work-context-refresh-e2e-workspace.mjs
+T3WORK_PAIRING_TOKEN=<token> node scripts/t3work-context-refresh-e2e-live.mjs
 ```

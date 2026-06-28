@@ -1,12 +1,13 @@
 import type { T3workTurnToolContext } from "./t3work-toolBroker.ts";
-
-const WORK_ITEMS_INDEX_PATH = ".t3work/context/work-items/index.json";
+import { T3WORK_WORK_ITEMS_INDEX_PATH as WORK_ITEMS_INDEX_PATH } from "@t3tools/project-context/t3workContextPaths";
 
 type WorkItemsIndex = {
   readonly workItems?: ReadonlyArray<{
     readonly key?: string;
     readonly availability?: string;
     readonly ticketEntryPointRelativePath?: string;
+    readonly fullBundleRootRelativePath?: string;
+    readonly updatedAt?: string;
   }>;
 };
 
@@ -18,6 +19,15 @@ export function readTicketKeyArg(toolArgs: unknown): string | undefined {
   return typeof ticketKey === "string" && ticketKey.trim().length > 0
     ? ticketKey.trim()
     : undefined;
+}
+
+export function readForceRefreshArg(toolArgs: unknown): boolean {
+  if (!toolArgs || typeof toolArgs !== "object" || Array.isArray(toolArgs)) {
+    return false;
+  }
+  const value = (toolArgs as { readonly force?: unknown; readonly force_refresh?: unknown }).force;
+  const fallback = (toolArgs as { readonly force_refresh?: unknown }).force_refresh;
+  return value === true || fallback === true;
 }
 
 export function readToolContextView(input: T3workTurnToolContext): {

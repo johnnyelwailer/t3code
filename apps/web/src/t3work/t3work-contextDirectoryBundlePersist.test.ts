@@ -15,8 +15,6 @@ function createBackend(): BackendApi {
         recipes: [],
       })),
       writeContextFiles,
-      listContextSyncQueue: vi.fn(async () => ({ requests: [] })),
-      completeContextSync: vi.fn(async () => ({ ok: true })),
     },
   } as unknown as BackendApi;
 }

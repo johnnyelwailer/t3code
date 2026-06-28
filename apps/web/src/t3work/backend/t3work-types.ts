@@ -95,17 +95,34 @@ export type ProjectWorkspaceWriteContextFilesResult = {
   readonly writtenFiles: ReadonlyArray<string>;
 };
 
-export type ProjectWorkspaceContextSyncRequest = {
-  readonly id: string;
-  readonly threadId: string;
+export type ProjectWorkspaceRefreshWorkItemContextResult = {
+  readonly ok: boolean;
+  readonly status: "already_synced" | "synced";
   readonly projectId: string;
-  readonly workspaceRoot: string;
   readonly ticketKey: string;
-  readonly createdAt: string;
+  readonly availability: "full";
+  readonly entryPointRelativePath: string;
+  readonly manifestRelativePath: string;
+  readonly includedCount: number;
+  readonly skippedCount: number;
+  readonly backgroundJobId?: string;
+  readonly backgroundTargetDepth?: number;
+  readonly backgroundQueued?: number;
 };
 
-export type ProjectWorkspaceListContextSyncQueueResult = {
-  readonly requests: ReadonlyArray<ProjectWorkspaceContextSyncRequest>;
+export type ProjectWorkspaceRefreshWorkItemSliceContextResult = {
+  readonly ok: boolean;
+  readonly status: "already_synced" | "synced";
+  readonly projectId: string;
+  readonly ticketKey: string;
+  readonly focusKind: string;
+  readonly availability: "full";
+  readonly focusEntryPointRelativePath: string;
+  readonly entryPointRelativePath: string;
+  readonly attachmentIndexRelativePath?: string;
+  readonly includedCount: number;
+  readonly skippedCount: number;
+  readonly backgroundQueued?: number;
 };
 
 export interface ProjectWorkspaceBackendApi {
@@ -122,13 +139,21 @@ export interface ProjectWorkspaceBackendApi {
     readonly workspaceRoot: string;
     readonly files: ReadonlyArray<ProjectWorkspaceContextFile>;
   }) => Promise<ProjectWorkspaceWriteContextFilesResult>;
-  readonly listContextSyncQueue: (input: {
-    readonly threadId: string;
-  }) => Promise<ProjectWorkspaceListContextSyncQueueResult>;
-  readonly completeContextSync: (input: {
-    readonly threadId: string;
-    readonly requestId: string;
-  }) => Promise<{ readonly ok: boolean }>;
+  readonly refreshWorkItemContext: (input: {
+    readonly workspaceRoot: string;
+    readonly projectId: string;
+    readonly ticketKey: string;
+    readonly force?: boolean;
+  }) => Promise<ProjectWorkspaceRefreshWorkItemContextResult>;
+  readonly refreshWorkItemSliceContext: (input: {
+    readonly workspaceRoot: string;
+    readonly projectId: string;
+    readonly ticketKey: string;
+    readonly focusKind: string;
+    readonly focusLabel: string;
+    readonly summaryItems: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+    readonly force?: boolean;
+  }) => Promise<ProjectWorkspaceRefreshWorkItemSliceContextResult>;
 }
 
 export type {

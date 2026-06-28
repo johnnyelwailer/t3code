@@ -120,6 +120,10 @@ import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
+import {
+  NoopT3workContextRefreshService,
+  T3workContextRefreshService,
+} from "./t3work-contextRefreshService.ts";
 
 const defaultProjectId = ProjectId.make("project-default");
 const defaultThreadId = ThreadId.make("thread-default");
@@ -395,6 +399,7 @@ const buildAppUnderTest = (options?: {
       SqlitePersistenceMemory,
       T3workWorkflowEngineRegistryLive,
       T3workThreadToolContextStoreLive,
+      Layer.succeed(T3workContextRefreshService, NoopT3workContextRefreshService),
       WorkflowRunRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory)),
       WorkflowJournalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
       Layer.mock(VcsProcess.VcsProcess)({

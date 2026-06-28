@@ -7,7 +7,8 @@ import { buildGitHubActivityDisplay } from "~/t3work/t3work-githubActivityDispla
 import { buildGitHubActivityContextBundle } from "~/t3work/t3work-githubActivityContextPayload";
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
 import { buildGitHubPullRequestRemoteAssetBundle } from "~/t3work/t3work-githubPullRequestContextAssets";
-import { buildTicketContextBundle } from "~/t3work/t3work-ticketContextBundle";
+import { refreshWorkItemContextBundle } from "~/t3work/t3work-refreshWorkItemContextBundle";
+import { buildJiraWorkItemSummary } from "~/t3work/t3work-jiraContextMetadata";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 
 function isPullRequestActivity(item: GitHubWorkActivityItem): boolean {
@@ -84,13 +85,12 @@ export function createGitHubActivityAddToChatRequest(input: {
       }
 
       const linkedTicketBundle =
-        input.backend && input.linkedWorkItem && input.projectTickets
-          ? await buildTicketContextBundle({
+        input.backend && input.linkedWorkItem
+          ? await refreshWorkItemContextBundle({
               backend: input.backend,
               project: input.project,
               ticket: input.linkedWorkItem,
-              projectTickets: input.projectTickets,
-              githubActivityItems: input.githubActivityItems ?? [],
+              summaryItems: buildJiraWorkItemSummary(input.linkedWorkItem).summaryItems,
               ...(payloadInput?.reportProgress ? { onProgress: payloadInput.reportProgress } : {}),
             })
           : undefined;

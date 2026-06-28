@@ -8,7 +8,8 @@ import type {
   ProjectWorkspaceContextFile,
   ProjectWorkspaceBackendApi,
   ProjectWorkspaceBootstrapResult,
-  ProjectWorkspaceListContextSyncQueueResult,
+  ProjectWorkspaceRefreshWorkItemContextResult,
+  ProjectWorkspaceRefreshWorkItemSliceContextResult,
   ProjectWorkspaceWriteContextFilesResult,
 } from "./t3work-types";
 import type { GitHubAssetDownloadRequest, GitHubDownloadedAsset } from "./t3work-githubAssetTypes";
@@ -81,22 +82,30 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
         input,
       );
     },
-    listContextSyncQueue(input: {
-      readonly threadId: string;
-    }): Promise<ProjectWorkspaceListContextSyncQueueResult> {
-      return postJson<typeof input, ProjectWorkspaceListContextSyncQueueResult>(
+    refreshWorkItemContext(input: {
+      readonly workspaceRoot: string;
+      readonly projectId: string;
+      readonly ticketKey: string;
+      readonly force?: boolean;
+    }): Promise<ProjectWorkspaceRefreshWorkItemContextResult> {
+      return postJson<typeof input, ProjectWorkspaceRefreshWorkItemContextResult>(
         httpBaseUrl,
-        "/api/t3work/project/workspace/context-sync/queue",
+        "/api/t3work/project/workspace/context-refresh/work-item",
         input,
       );
     },
-    completeContextSync(input: {
-      readonly threadId: string;
-      readonly requestId: string;
-    }): Promise<{ ok: boolean }> {
-      return postJson<typeof input, { ok: boolean }>(
+    refreshWorkItemSliceContext(input: {
+      readonly workspaceRoot: string;
+      readonly projectId: string;
+      readonly ticketKey: string;
+      readonly focusKind: string;
+      readonly focusLabel: string;
+      readonly summaryItems: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+      readonly force?: boolean;
+    }): Promise<ProjectWorkspaceRefreshWorkItemSliceContextResult> {
+      return postJson<typeof input, ProjectWorkspaceRefreshWorkItemSliceContextResult>(
         httpBaseUrl,
-        "/api/t3work/project/workspace/context-sync/complete",
+        "/api/t3work/project/workspace/context-refresh/work-item-slice",
         input,
       );
     },

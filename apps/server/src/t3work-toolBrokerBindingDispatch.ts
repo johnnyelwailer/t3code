@@ -17,8 +17,12 @@ import {
   callT3workDraftMutationToolEffect,
   isT3workDraftMutationTool,
 } from "./t3work-toolBrokerDraftMutationEffect.ts";
-import { callT3workWorkItemRefreshContextBundleEffect } from "./t3work-toolBrokerContextSync.ts";
+import {
+  callT3workProjectRefreshContextBundleEffect,
+  callT3workWorkItemRefreshContextBundleEffect,
+} from "./t3work-toolBrokerContextSync.ts";
 import { callT3workRenameTool } from "./t3work-toolBrokerBindingRename.ts";
+import type { T3workContextRefreshServiceShape } from "./t3work-contextRefreshService.ts";
 
 export function dispatchT3workToolCall(input: {
   state: BindingState;
@@ -28,11 +32,12 @@ export function dispatchT3workToolCall(input: {
   toolArgs: unknown;
   threadId?: ThreadId;
   toolContext?: T3workTurnToolContext;
-  readView: () => Effect.Effect<unknown, unknown>;
+  readView: () => Effect.Effect<unknown, string>;
   renameThread?: (title: string) => Effect.Effect<unknown, unknown>;
   renameThreadResult?: (title: string) => unknown;
-  startChild?: (arguments_: unknown) => Effect.Effect<unknown, unknown>;
-  setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, unknown>;
+  startChild?: (arguments_: unknown) => Effect.Effect<unknown, string>;
+  setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, string>;
+  refreshContextBundle?: T3workContextRefreshServiceShape;
 }): ReturnType<T3workToolBinding["callTool"]> {
   const { server, tool, toolArgs, state } = input;
   if (server !== T3WORK_MCP_SERVER_NAME) {
@@ -78,14 +83,26 @@ export function dispatchT3workToolCall(input: {
   if (isT3workDraftMutationTool(tool)) {
     return callT3workDraftMutationToolEffect({ tool, toolArgs, readView: input.readView });
   }
+  if (tool === "t3work.project.refresh_context_bundle") {
+    if (!input.threadId || !input.toolContext || !input.refreshContextBundle) {
+      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
+    }
+    return callT3workProjectRefreshContextBundleEffect({
+      threadId: input.threadId,
+      toolArgs,
+      toolContext: input.toolContext,
+      refreshService: input.refreshContextBundle,
+    });
+  }
   if (tool === "t3work.work_item.refresh_context_bundle") {
-    if (!input.threadId || !input.toolContext) {
+    if (!input.threadId || !input.toolContext || !input.refreshContextBundle) {
       return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
     }
     return callT3workWorkItemRefreshContextBundleEffect({
       threadId: input.threadId,
       toolArgs,
       toolContext: input.toolContext,
+      refreshService: input.refreshContextBundle,
     });
   }
   if (tool !== "t3work.view.read") {

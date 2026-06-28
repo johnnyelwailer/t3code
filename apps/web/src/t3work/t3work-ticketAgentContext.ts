@@ -1,7 +1,6 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { BackendApi } from "~/t3work/backend/t3work-types";
-import type { AddToChatPayloadInput } from "~/t3work/t3work-addToChatUtils";
 import {
   buildAddToChatAgentContextCapabilities,
   type AgentContextCapabilities,
@@ -10,7 +9,7 @@ import { createGitHubActivityAddToChatRequest } from "~/t3work/t3work-githubActi
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
 import { buildJiraWorkItemSummary } from "~/t3work/t3work-jiraContextMetadata";
 import type { T3WorkSidebarPinActionState } from "~/t3work/t3work-sidebarPinningTypes";
-import { buildTicketContextBundle } from "~/t3work/t3work-ticketContextBundle";
+import { buildWorkItemAddToChatPayload } from "~/t3work/components/t3work-projectSidebarAddToChatRequests";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 
 export function buildTicketAgentContextCapabilities(
@@ -23,7 +22,7 @@ export function buildTicketAgentContextCapabilities(
   },
   options?: { sidebarPin?: T3WorkSidebarPinActionState },
 ): AgentContextCapabilities {
-  const { backend, project, ticket, projectTickets, githubActivityItems } = input;
+  const { backend, project, ticket } = input;
   const jiraSummary = buildJiraWorkItemSummary(ticket);
 
   return buildAddToChatAgentContextCapabilities(
@@ -40,15 +39,7 @@ export function buildTicketAgentContextCapabilities(
         ? { jiraIssueTypeIconUrl: jiraSummary.jiraIssueTypeIconUrl }
         : {}),
       summaryItems: jiraSummary.summaryItems,
-      payload: (payloadInput?: AddToChatPayloadInput) =>
-        buildTicketContextBundle({
-          backend,
-          project,
-          ticket,
-          projectTickets,
-          githubActivityItems,
-          ...(payloadInput?.reportProgress ? { onProgress: payloadInput.reportProgress } : {}),
-        }),
+      payload: buildWorkItemAddToChatPayload({ backend, project, ticket }),
     },
     ...(options?.sidebarPin ? [{ sidebarPin: options.sidebarPin }] : []),
   );

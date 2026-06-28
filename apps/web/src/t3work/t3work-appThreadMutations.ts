@@ -1,7 +1,6 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { enqueueThreadKickoffAttachments } from "~/t3work/t3work-enqueueThreadKickoffAttachments";
-import type { AddToChatPayloadInput } from "~/t3work/t3work-addToChatUtils";
 import { buildJiraWorkItemSummary } from "~/t3work/t3work-jiraContextMetadata";
 import type { TicketKickoffThreadInput } from "~/t3work/t3work-kickoffTypes";
 import { useT3WorkPinnedSidebarStore } from "~/t3work/t3work-pinnedSidebarStore";
@@ -12,7 +11,7 @@ import {
   isEmbeddedProjectThread,
 } from "~/t3work/t3work-projectThreadViewState";
 import { buildTicketSidebarPinnedItem } from "~/t3work/t3work-sidebarPinningTypes";
-import { buildTicketContextBundle } from "~/t3work/t3work-ticketContextBundle";
+import { buildWorkItemAddToChatPayload } from "~/t3work/components/t3work-projectSidebarAddToChatRequests";
 import type { ViewState } from "~/t3work/t3work-types";
 import type { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
 import type { useBackend } from "~/t3work/backend/t3work-index";
@@ -72,7 +71,6 @@ export async function createTicketKickoffThread(input: {
   if (!backend || !project || !ticket) return thread.id;
 
   const jiraSummary = buildJiraWorkItemSummary(ticket);
-  const projectTickets = store.getTicketsForProject(resolvedProjectId);
   await addToChatFromRequest(
     {
       projectId: resolvedProjectId,
@@ -86,15 +84,7 @@ export async function createTicketKickoffThread(input: {
         ? { jiraIssueTypeIconUrl: jiraSummary.jiraIssueTypeIconUrl }
         : {}),
       summaryItems: jiraSummary.summaryItems,
-      payload: (progress?: AddToChatPayloadInput) =>
-        buildTicketContextBundle({
-          backend,
-          project,
-          ticket,
-          projectTickets,
-          githubActivityItems: threadInput.githubActivityItems,
-          ...(progress?.reportProgress ? { onProgress: progress.reportProgress } : {}),
-        }),
+      payload: buildWorkItemAddToChatPayload({ backend, project, ticket }),
     },
     { type: "thread", threadId: thread.id },
   );

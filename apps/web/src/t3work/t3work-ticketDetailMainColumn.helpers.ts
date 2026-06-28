@@ -8,7 +8,7 @@ import {
   type AgentContextCapabilities,
 } from "~/t3work/t3work-agentContext";
 import type { BackendApi } from "~/t3work/backend/t3work-types";
-import { buildTicketDetailContextBundle } from "~/t3work/t3work-ticketDetailContextBundle";
+import { refreshTicketDetailContextBundle } from "~/t3work/t3work-refreshTicketDetailContextBundle";
 import type { TicketDetailContextTarget } from "~/t3work/t3work-ticketDetailContextBundle";
 import { normalizeTicketAttachments } from "~/t3work/t3work-ticketAttachmentUtils";
 import {
@@ -65,16 +65,13 @@ export function createSectionContextMenuHandler(input: {
         dedupeKey: resolvedDedupeKey,
         ...(summaryItems ? { summaryItems } : {}),
         payload: (progress?: AddToChatPayloadInput) =>
-          buildTicketDetailContextBundle({
+          refreshTicketDetailContextBundle({
             backend: input.backend as BackendApi,
             project: input.project,
             ticket: input.ticket as ProjectTicket,
-            projectTickets: input.projectTickets,
-            githubActivityItems: input.githubActivityItems,
             target,
             targetLabel,
             ...(summaryItems ? { summaryItems } : {}),
-            primarySnapshot: input.snapshot,
             ...(progress?.reportProgress ? { onProgress: progress.reportProgress } : {}),
           }),
       }),

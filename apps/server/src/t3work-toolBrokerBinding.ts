@@ -9,9 +9,10 @@ import {
   type T3workToolBinding,
   type T3workTurnToolContext,
 } from "./t3work-toolBroker.ts";
-import { TOOL_SPECS, foldResource, okResult, resourceResult } from "./t3work-toolBrokerHelpers.ts";
+import { TOOL_SPECS, foldResource, resourceResult } from "./t3work-toolBrokerHelpers.ts";
 import { buildBindingState, permissionMessage } from "./t3work-toolBrokerBindingPermissions.ts";
 import { dispatchT3workToolCall } from "./t3work-toolBrokerBindingDispatch.ts";
+import type { T3workContextRefreshServiceShape } from "./t3work-contextRefreshService.ts";
 
 type CreateBindingInput<
   TRenameError = never,
@@ -32,6 +33,7 @@ type CreateBindingInput<
   readonly setBacklogAssigneeFilter?: (
     mode: "current-user",
   ) => Effect.Effect<unknown, TBacklogAssigneeFilterError>;
+  readonly refreshContextBundle?: T3workContextRefreshServiceShape;
 };
 
 function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogAssigneeFilterError>(
@@ -42,6 +44,8 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
     TBacklogAssigneeFilterError
   >,
 ) {
+  const toErrorMessage = (cause: unknown) =>
+    cause instanceof Error ? cause.message : String(cause);
   const state = buildBindingState({
     availableToolIds: input.availableToolIds,
     ...(input.allowedToolGroups ? { allowedToolGroups: input.allowedToolGroups } : {}),
@@ -57,13 +61,22 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
       toolArgs,
       ...(input.threadId ? { threadId: input.threadId } : {}),
       ...(input.toolContext ? { toolContext: input.toolContext } : {}),
-      readView: input.readView,
+      readView: () => input.readView().pipe(Effect.mapError(toErrorMessage)),
       ...(input.renameThread ? { renameThread: input.renameThread } : {}),
       ...(input.renameThreadResult ? { renameThreadResult: input.renameThreadResult } : {}),
-      ...(input.startChild ? { startChild: input.startChild } : {}),
-      ...(input.setBacklogAssigneeFilter
-        ? { setBacklogAssigneeFilter: input.setBacklogAssigneeFilter }
+      ...(input.startChild
+        ? {
+            startChild: (arguments_: unknown) =>
+              input.startChild!(arguments_).pipe(Effect.mapError(toErrorMessage)),
+          }
         : {}),
+      ...(input.setBacklogAssigneeFilter
+        ? {
+            setBacklogAssigneeFilter: (mode: "current-user") =>
+              input.setBacklogAssigneeFilter!(mode).pipe(Effect.mapError(toErrorMessage)),
+          }
+        : {}),
+      ...(input.refreshContextBundle ? { refreshContextBundle: input.refreshContextBundle } : {}),
     });
 
   const readResource: T3workToolBinding["readResource"] = ({ server, uri }) => {

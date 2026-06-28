@@ -135,6 +135,32 @@ export const IMPLEMENTED_T3WORK_TOOL_CATALOG = {
             "Optional Jira issue key in the current project. Defaults to the bound work item for this thread.",
           minLength: 1,
         },
+        force: {
+          type: "boolean",
+          description: "When true, rebuild even if the existing full bundle is fresh.",
+        },
+      },
+    },
+  },
+  "t3work.project.refresh_context_bundle": {
+    id: "t3work.project.refresh_context_bundle",
+    label: "Refresh project context bundle",
+    title: "Refresh project context bundle",
+    description:
+      "Rebuild and persist the lightweight project context bundle (work-items index and summary JSON) for the current project workspace.",
+    capabilities: ["write"],
+    kind: "read",
+    surfaces: ["project", "thread"],
+    status: "implemented",
+    defaultEnabled: false,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        force: {
+          type: "boolean",
+          description: "When true, rebuild even if the existing project bundle is fresh.",
+        },
       },
     },
   },

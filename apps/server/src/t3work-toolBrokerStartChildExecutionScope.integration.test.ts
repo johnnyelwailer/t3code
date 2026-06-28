@@ -28,6 +28,10 @@ import {
   REFERENCES_DIR_NAME,
 } from "./t3work-project-repository-utils.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
+import {
+  NoopT3workContextRefreshService,
+  T3workContextRefreshService,
+} from "./t3work-contextRefreshService.ts";
 import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
 import {
   OrchestrationEngineService,
@@ -227,6 +231,7 @@ function createEvalHarness() {
       Layer.mergeAll(
         Layer.succeed(ProjectionSnapshotQuery, projectionQueryMock),
         Layer.succeed(OrchestrationEngineService, orchestrationMock),
+        Layer.succeed(T3workContextRefreshService, NoopT3workContextRefreshService),
         T3workThreadToolContextStoreLive,
         gitWorkflowLayer,
         gitVcsLayer,

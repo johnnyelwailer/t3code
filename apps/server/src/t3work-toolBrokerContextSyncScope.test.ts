@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   normalizeTicketKey,
   parseWorkItemsIndex,
   readTicketKeyArg,
   readToolContextView,
+  readForceRefreshArg,
 } from "./t3work-toolBrokerContextSyncScope.ts";
 
 describe("t3work-toolBrokerContextSyncScope", () => {
@@ -12,6 +13,12 @@ describe("t3work-toolBrokerContextSyncScope", () => {
     expect(readTicketKeyArg({ ticket_key: " proj-12 " })).toBe("proj-12");
     expect(readTicketKeyArg({ ticket_key: "" })).toBeUndefined();
     expect(readTicketKeyArg(null)).toBeUndefined();
+  });
+
+  it("reads force refresh from tool args", () => {
+    expect(readForceRefreshArg({ force: true })).toBe(true);
+    expect(readForceRefreshArg({ force_refresh: true })).toBe(true);
+    expect(readForceRefreshArg({ force: false })).toBe(false);
   });
 
   it("normalizes ticket keys for comparison", () => {
@@ -34,6 +41,8 @@ describe("t3work-toolBrokerContextSyncScope", () => {
   it("reads project workspace from tool context view", () => {
     expect(
       readToolContextView({
+        surface: "t3work",
+        tools: [],
         state: {
           view: {
             projectId: "project-1",
