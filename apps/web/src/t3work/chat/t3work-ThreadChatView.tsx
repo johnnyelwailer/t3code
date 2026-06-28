@@ -1,5 +1,5 @@
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
-import ChatView from "~/components/ChatView";
+import { ThreadChatViewActive } from "~/t3work/chat/t3work-ThreadChatViewActive";
 import { useBackend } from "~/t3work/backend/t3work-index";
 import { ThreadPendingChat } from "~/t3work/chat/t3work-threadPendingChat";
 import { useThreadBootstrap } from "~/t3work/chat/t3work-useThreadBootstrap";
@@ -18,7 +18,7 @@ export interface ThreadChatViewProps {
   projectWorkspaceRoot?: string;
   title: string;
   onBack?: () => void;
-  headerAccessory?: React.ReactNode;
+  titleBarControlsAccessory?: React.ReactNode;
   hideHeader?: boolean;
   embeddedMode?: boolean;
   kickoffMessage?: string;
@@ -41,7 +41,7 @@ export function ThreadChatView({
   projectWorkspaceRoot,
   title,
   onBack,
-  headerAccessory,
+  titleBarControlsAccessory,
   hideHeader = false,
   embeddedMode = false,
   kickoffMessage,
@@ -153,37 +153,29 @@ export function ThreadChatView({
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
       {hasServerThread ? (
-        <>
-          {showKickoffPlaceholder && kickoffMessage ? (
-            <ThreadKickoffPlaceholder
-              message={kickoffMessage}
-              hasServerThread={hasServerThread}
-              {...(kickoffPending !== undefined ? { kickoffPending } : {})}
-              {...(kickoffWorkflow ? { workflow: kickoffWorkflow } : {})}
-            />
-          ) : null}
-          <ChatView
-            environmentId={environmentId}
-            threadId={threadId as never}
-            routeKind="server"
-            {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
-            {...(onBack ? { onBack } : {})}
-            {...(headerAccessory ? { headerAccessory } : {})}
-            hideHeader={hideHeader || embeddedMode}
-            hideBranchToolbar={embeddedMode}
-            minimalComposer={embeddedMode}
-            beforeDispatchTurnStart={prepareTurnStart}
-            dispatchTurnStartOverride={dispatchTurnStartOverride}
-            composerContextAttachmentSlot={contextAttachmentSlot}
-            composerContainerProps={composerDropTarget.composerContainerProps}
-            composerContainerOverlay={composerDropTarget.composerContainerOverlay}
-            composerContextAttachments={contextAttachments}
-            prepareComposerContextAttachments={prepareComposerContextAttachments}
-            onComposerContextAttachmentsConsumed={clearThreadAttachments}
-            onSubmitRecipeCardAction={submitRecipeCardAction}
-            dispatchWorkflowDecision={resolveWorkflowDecision}
-          />
-        </>
+        <ThreadChatViewActive
+          environmentId={environmentId}
+          threadId={threadId}
+          {...(kickoffHistoryMessage ? { kickoffHistoryMessage } : {})}
+          {...(onBack ? { onBack } : {})}
+          {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
+          hideHeader={hideHeader}
+          embeddedMode={embeddedMode}
+          showKickoffPlaceholder={showKickoffPlaceholder}
+          {...(kickoffMessage ? { kickoffMessage } : {})}
+          hasServerThread={hasServerThread}
+          {...(kickoffPending !== undefined ? { kickoffPending } : {})}
+          {...(kickoffWorkflow ? { kickoffWorkflow } : {})}
+          prepareTurnStart={prepareTurnStart}
+          dispatchTurnStartOverride={dispatchTurnStartOverride}
+          contextAttachmentSlot={contextAttachmentSlot}
+          composerDropTarget={composerDropTarget}
+          contextAttachments={contextAttachments}
+          prepareComposerContextAttachments={prepareComposerContextAttachments}
+          clearThreadAttachments={clearThreadAttachments}
+          submitRecipeCardAction={submitRecipeCardAction}
+          resolveWorkflowDecision={resolveWorkflowDecision}
+        />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {showKickoffPlaceholder && kickoffMessage ? (
