@@ -123,6 +123,11 @@ describe("createT3workTurnToolContext", () => {
           label: "Start child session",
           capabilities: ["write"],
         },
+        {
+          id: "t3work.work_item.refresh_context_bundle",
+          label: "Refresh work item context bundle",
+          capabilities: ["write"],
+        },
       ],
       state: {
         view: {
@@ -146,7 +151,8 @@ describe("createT3workTurnToolContext", () => {
       threadId: "thread-1",
       threadTitle: "Kickoff",
       displayMode: "embedded",
-      ticketId: "ticket-1",
+      ticketId: "10001",
+      ticketDisplayId: "PROJ-7",
       selectedToolIds: [
         "t3work.view.read",
         "t3work.view.read",
@@ -183,7 +189,8 @@ describe("createT3workTurnToolContext", () => {
           threadId: "thread-1",
           threadTitle: "Kickoff",
           displayMode: "embedded",
-          ticketId: "ticket-1",
+          ticketId: "10001",
+          ticketDisplayId: "PROJ-7",
         },
       },
     });

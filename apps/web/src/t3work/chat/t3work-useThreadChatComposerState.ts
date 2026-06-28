@@ -20,6 +20,7 @@ export function useThreadChatComposerState(input: {
   backend: BackendApi | null | undefined;
   projectId: string;
   threadId: string;
+  ticketId?: string;
   turnToolContext: T3workTurnToolContext | undefined;
   kickoffPending: boolean | undefined;
   kickoffWorkflow: T3workKickoffWorkflow | undefined;

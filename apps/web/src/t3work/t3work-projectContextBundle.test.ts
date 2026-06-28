@@ -78,6 +78,8 @@ describe("buildProjectContextBundle", () => {
       workItems: [
         {
           key: "PROJ-1",
+          availability: "summary",
+          loadableOnDemand: true,
           ticketEntryPointRelativePath:
             ".t3work/context/jira/project-alpha/items/proj-1/entrypoint.json",
         },

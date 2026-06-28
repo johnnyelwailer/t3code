@@ -8,6 +8,8 @@ import type {
   ProjectWorkspaceContextFile,
   ProjectWorkspaceBackendApi,
   ProjectWorkspaceBootstrapResult,
+  ProjectWorkspaceRefreshWorkItemContextResult,
+  ProjectWorkspaceRefreshWorkItemSliceContextResult,
   ProjectWorkspaceWriteContextFilesResult,
 } from "./t3work-types";
 import type { GitHubAssetDownloadRequest, GitHubDownloadedAsset } from "./t3work-githubAssetTypes";
@@ -77,6 +79,33 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       return postJson<typeof input, ProjectWorkspaceWriteContextFilesResult>(
         httpBaseUrl,
         "/api/t3work/project/workspace/context-files",
+        input,
+      );
+    },
+    refreshWorkItemContext(input: {
+      readonly workspaceRoot: string;
+      readonly projectId: string;
+      readonly ticketKey: string;
+      readonly force?: boolean;
+    }): Promise<ProjectWorkspaceRefreshWorkItemContextResult> {
+      return postJson<typeof input, ProjectWorkspaceRefreshWorkItemContextResult>(
+        httpBaseUrl,
+        "/api/t3work/project/workspace/context-refresh/work-item",
+        input,
+      );
+    },
+    refreshWorkItemSliceContext(input: {
+      readonly workspaceRoot: string;
+      readonly projectId: string;
+      readonly ticketKey: string;
+      readonly focusKind: string;
+      readonly focusLabel: string;
+      readonly summaryItems: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+      readonly force?: boolean;
+    }): Promise<ProjectWorkspaceRefreshWorkItemSliceContextResult> {
+      return postJson<typeof input, ProjectWorkspaceRefreshWorkItemSliceContextResult>(
+        httpBaseUrl,
+        "/api/t3work/project/workspace/context-refresh/work-item-slice",
         input,
       );
     },

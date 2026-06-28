@@ -108,6 +108,11 @@ import { t3workProjectWorkspaceBootstrapRouteLayer } from "./t3work-project-repo
 import { t3workProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3work-project-workspace-recipe-routes.ts";
 import { t3workProjectWorkspaceWriteContextFilesRouteLayer } from "./t3work-project-workspace-write-routes.ts";
 import {
+  t3workProjectWorkspaceRefreshProjectContextRouteLayer,
+  t3workProjectWorkspaceRefreshWorkItemContextRouteLayer,
+  t3workProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
+} from "./t3work-context-refresh-routes.ts";
+import {
   t3workThreadRecipeWorkflowLaunchRouteLayer,
   t3workThreadWorkflowResolveInputRouteLayer,
 } from "./t3work-thread-recipe-workflow-routes.ts";
@@ -115,6 +120,7 @@ import { t3workThreadPlacementRouteLayer } from "./t3work-thread-placement-route
 import { t3workThreadToolContextRouteLayer } from "./t3work-thread-tool-context-routes.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
+import { T3workContextRefreshServiceLive } from "./t3work-contextRefreshService.ts";
 import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
 import {
   t3workGitHubAssetRouteLayer,
@@ -336,6 +342,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(
     T3workToolBrokerLive.pipe(
       Layer.provideMerge(T3workThreadToolContextStoreLive),
+      Layer.provideMerge(T3workContextRefreshServiceLive),
       Layer.provide(OrchestrationLayerLive),
     ),
   ),
@@ -424,6 +431,9 @@ export const makeT3workRoutesLayer = Layer.mergeAll(
   t3workThreadWorkflowResolveInputRouteLayer,
   t3workThreadToolContextRouteLayer,
   t3workProjectWorkspaceWriteContextFilesRouteLayer,
+  t3workProjectWorkspaceRefreshProjectContextRouteLayer,
+  t3workProjectWorkspaceRefreshWorkItemContextRouteLayer,
+  t3workProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
   otlpTracesProxyRouteLayer,
   staticAndDevRouteLayer,
   websocketRpcRouteLayer,
