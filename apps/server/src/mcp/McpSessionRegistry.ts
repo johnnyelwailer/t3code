@@ -8,6 +8,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import { HttpServer } from "effect/unstable/http";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import { readT3workToolBinding } from "../t3work-toolBrokerSessionRegistry.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpProviderSession from "./McpProviderSession.ts";
 
@@ -109,12 +110,17 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       const rawToken = yield* crypto.randomBytes(32).pipe(Effect.map(tokenFromBytes), Effect.orDie);
       const tokenHash = yield* hashToken(rawToken);
       const expiresAt = issuedAt + maximumLifetimeMs;
+      const threadId = ThreadId.make(request.threadId);
+      const capabilities = new Set<McpInvocationContext.McpCapability>(["preview"]);
+      if (readT3workToolBinding(threadId)) {
+        capabilities.add("t3work");
+      }
       const scope: McpInvocationContext.McpInvocationScope = {
         environmentId,
-        threadId: ThreadId.make(request.threadId),
+        threadId,
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
-        capabilities: new Set(["preview"]),
+        capabilities,
         issuedAt,
         expiresAt,
       };

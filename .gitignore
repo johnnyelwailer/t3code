@@ -36,6 +36,7 @@ apps/desktop/.dev-electron-supervisor.pid
 apps/server/~/.t3code/
 ~/.t3code/
 .t3work-runs/
+.githooks/t3work-additive-guard-cache.json
 node_modules/
 .alchemy/
 *.log

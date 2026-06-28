@@ -24,11 +24,13 @@ import { buildPrelaunchView } from "./t3work-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
 import { buildThreadWorkspaceView } from "./t3work-toolBrokerViewWorkspace.ts";
+import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
 
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;
   const contextStore = yield* T3workThreadToolContextStore;
+  const contextRefresh = yield* T3workContextRefreshService;
   const fileSystem = Option.getOrUndefined(yield* Effect.serviceOption(FileSystem.FileSystem));
   const path = Option.getOrUndefined(yield* Effect.serviceOption(Path.Path));
   const gitWorkflow = Option.getOrUndefined(yield* Effect.serviceOption(GitWorkflowService));
@@ -174,6 +176,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
 
       return createT3workThreadToolBinding({
         threadId,
+        toolContext: resolvedToolContext,
         availableToolIds: toolIds,
         allowedToolGroups,
         readView: () => loadThreadView(threadId, resolvedToolContext),
@@ -181,6 +184,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
         renameThreadResult: (title) => ({ ok: true, threadId, title }),
         startChild: (toolArgs) => startChildThread(threadId, toolArgs),
         setBacklogAssigneeFilter: (mode) => setBacklogAssigneeFilter(resolvedToolContext, mode),
+        refreshContextBundle: contextRefresh,
       });
     });
 

@@ -183,7 +183,7 @@ ABC-12
 No auto-attach yet.
 
 ```text
-ABC-123 
+ABC-123
 ```
 
 Resolve and attach if project-scoped match is unique.

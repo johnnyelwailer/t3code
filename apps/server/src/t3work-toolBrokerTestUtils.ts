@@ -1,26 +1,23 @@
-import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
-
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Path from "effect/Path";
-
-import { GitWorkflowService } from "./git/GitWorkflowService.ts";
+import { ThreadId } from "@t3tools/contracts";
 import {
-  OrchestrationEngineService,
-  type OrchestrationEngineShape,
-} from "./orchestration/Services/OrchestrationEngine.ts";
-import {
-  ProjectionSnapshotQuery,
-  type ProjectionSnapshotQueryShape,
-} from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
-import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
-import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
+  DEFAULT_T3WORK_THREAD_TOOL_IDS,
+  listImplementedT3workToolCatalogEntries,
+} from "@t3tools/project-context/t3workToolCatalog";
+
+export {
+  makeBrokerLayer,
+  makeBrokerLayerWithLiveContextRefresh,
+  makeBrokerLayerWithOptions,
+} from "./t3work-toolBrokerTestLayers.ts";
 
 export const threadId = ThreadId.make("thread-1");
+
+export const DEFAULT_THREAD_TOOL_ALLOWED_GROUPS = [
+  "integration.read",
+  "view.state",
+  "thread.handoff",
+  "artifact.rw",
+] as const;
 
 type TestToolContextTool = {
   id: string;
@@ -28,8 +25,20 @@ type TestToolContextTool = {
   capabilities: ReadonlyArray<"read" | "write">;
 };
 
+const IMPLEMENTED_TOOL_BY_ID = new Map(
+  listImplementedT3workToolCatalogEntries().map((tool) => [tool.id, tool]),
+);
+
+export function defaultThreadToolDescriptors(): ReadonlyArray<TestToolContextTool> {
+  return DEFAULT_T3WORK_THREAD_TOOL_IDS.flatMap((toolId) => {
+    const tool = IMPLEMENTED_TOOL_BY_ID.get(toolId);
+    return tool ? [{ id: tool.id, label: tool.label, capabilities: [...tool.capabilities] }] : [];
+  });
+}
+
 export function createThreadToolContext(input: {
   readonly tools: ReadonlyArray<TestToolContextTool>;
+  readonly allowedToolGroups?: ReadonlyArray<string>;
   readonly view?: Partial<{
     kind: "thread";
     projectId: string;
@@ -54,8 +63,28 @@ export function createThreadToolContext(input: {
         threadTitle: "Original title",
         ...input.view,
       },
+      ...(input.allowedToolGroups
+        ? {
+            kickoff: {
+              workflow: {
+                allowedToolGroups: [...input.allowedToolGroups],
+              },
+            },
+          }
+        : {}),
     },
   };
+}
+
+export function createDefaultThreadToolContext(input?: {
+  readonly allowedToolGroups?: ReadonlyArray<string>;
+  readonly view?: Parameters<typeof createThreadToolContext>[0]["view"];
+}) {
+  return createThreadToolContext({
+    tools: defaultThreadToolDescriptors(),
+    allowedToolGroups: input?.allowedToolGroups ?? [...DEFAULT_THREAD_TOOL_ALLOWED_GROUPS],
+    ...(input?.view ? { view: input.view } : {}),
+  });
 }
 
 export function joinPosix(...segments: ReadonlyArray<string>): string {
@@ -71,93 +100,3 @@ export function dirnamePosix(value: string): string {
   const lastSlashIndex = normalized.lastIndexOf("/");
   return lastSlashIndex <= 0 ? "/" : normalized.slice(0, lastSlashIndex);
 }
-
-const projectId = ProjectId.make("project-1");
-const stubStartChildServices = Layer.mergeAll(
-  Layer.succeed(FileSystem.FileSystem, {} as FileSystem.FileSystem),
-  Layer.succeed(Path.Path, {} as Path.Path),
-  Layer.succeed(GitWorkflowService, {} as GitWorkflowService["Service"]),
-  Layer.succeed(SourceControlProviderRegistry, {} as SourceControlProviderRegistry["Service"]),
-  Layer.succeed(ProjectSetupScriptRunner, {} as ProjectSetupScriptRunner["Service"]),
-);
-
-const projectionQueryMock: ProjectionSnapshotQueryShape = {
-  getCommandReadModel: () => Effect.die("unused"),
-  getSnapshot: () => Effect.die("unused"),
-  getShellSnapshot: () => Effect.die("unused"),
-  getArchivedShellSnapshot: () => Effect.die("unused"),
-  getSnapshotSequence: () => Effect.die("unused"),
-  getCounts: () => Effect.die("unused"),
-  getActiveProjectByWorkspaceRoot: () => Effect.die("unused"),
-  getProjectShellById: () =>
-    Effect.succeed(
-      Option.some({
-        id: projectId,
-        title: "Project One",
-        workspaceRoot: "/workspace/project-1",
-        repositoryIdentity: null,
-        defaultModelSelection: null,
-        scripts: [],
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      }),
-    ),
-  getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),
-  getThreadCheckpointContext: () => Effect.die("unused"),
-  getFullThreadDiffContext: () => Effect.die("unused"),
-  getThreadShellById: () => Effect.die("unused"),
-  getThreadDetailById: () =>
-    Effect.succeed(
-      Option.some({
-        id: threadId,
-        projectId,
-        title: "Original title",
-        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4-mini" },
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        branch: null,
-        worktreePath: null,
-        latestTurn: null,
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-        archivedAt: null,
-        deletedAt: null,
-        messages: [],
-        proposedPlans: [],
-        activities: [],
-        checkpoints: [],
-        session: null,
-      }),
-    ),
-};
-
-export const makeBrokerLayer = (orchestrationMock: OrchestrationEngineShape) =>
-  makeBrokerLayerWithOptions(orchestrationMock);
-
-export const makeBrokerLayerWithOptions = (
-  orchestrationMock: OrchestrationEngineShape,
-  options: {
-    readonly includeStartChildServices?: boolean;
-    readonly startChildServicesLayer?: Layer.Layer<
-      | FileSystem.FileSystem
-      | Path.Path
-      | GitWorkflowService
-      | SourceControlProviderRegistry
-      | ProjectSetupScriptRunner,
-      never,
-      never
-    >;
-  } = {},
-) =>
-  T3workToolBrokerLive.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        Layer.succeed(ProjectionSnapshotQuery, projectionQueryMock),
-        Layer.succeed(OrchestrationEngineService, orchestrationMock),
-        T3workThreadToolContextStoreLive,
-        ...(options.includeStartChildServices === false
-          ? []
-          : [options.startChildServicesLayer ?? stubStartChildServices]),
-      ),
-    ),
-  );

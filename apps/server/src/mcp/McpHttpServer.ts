@@ -22,6 +22,7 @@ import {
   PreviewSnapshotToolkit,
   PreviewStandardToolkit,
 } from "./toolkits/preview/tools.ts";
+import { T3workMcpToolkitRegistrationLive } from "../t3work-mcpToolkit.ts";
 
 const unauthorized = HttpServerResponse.jsonUnsafe(
   {
@@ -206,6 +207,7 @@ const PreviewSnapshotRegistrationLive = Layer.effectDiscard(registerPreviewSnaps
 export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewStandardToolkitRegistrationLive,
   PreviewSnapshotRegistrationLive,
+  T3workMcpToolkitRegistrationLive,
 );
 
 const McpTransportLive = McpServer.layerHttp({

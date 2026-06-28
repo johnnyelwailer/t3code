@@ -55,7 +55,13 @@
     "packages/contracts/src/settings.ts",
     "packages/contracts/src/settings.test.ts",
     "packages/shared/src/model.test.ts",
-    "packages/project-context/src/index.ts"
+    "packages/project-context/src/index.ts",
+    "apps/server/src/mcp/McpHttpServer.ts",
+    "apps/server/src/mcp/McpInvocationContext.ts",
+    "apps/server/src/mcp/McpSessionRegistry.ts",
+    "apps/server/src/provider/Layers/ProviderService.ts",
+    "docs/t3work-mvp/13-resource-references.md",
+    "docs/t3work-mvp/21-context-tool-catalog.md"
   ],
   "allowedUnprefixedNewFiles": [
     ".t3work-additive-guard.json",
@@ -85,6 +91,7 @@
     "scripts/lib/additive-guard-core.mjs",
     "scripts/lib/additive-guard-cache.mjs",
     "scripts/lib/additive-guard-config.mjs",
-    "scripts/lib/sync-upstream-core.mjs"
+    "scripts/lib/sync-upstream-core.mjs",
+    ".cursor/**"
   ]
 }
