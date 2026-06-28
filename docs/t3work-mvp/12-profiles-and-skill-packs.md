@@ -9,8 +9,9 @@ Profiles and skill packs make that explicit.
 
 Profiles are configuration, not a hardcoded product enum.
 
-`t3work` may ship bundled starter profiles, but users and projects should be able to add,
-clone, edit, and replace profiles freely. Runtime behavior must never depend on checks
+`t3work` may ship bundled starter profiles as seed configuration, but profiles themselves
+are fully configuration-based. Users and projects should be able to add, clone, edit, and
+replace profiles freely without code changes. Runtime behavior must never depend on checks
 like `profile.id === "engineering-copilot"` or `profile.title === "QA Assistant"`.
 All ranking, visibility, and presentation logic should derive from the profile's lower-
 level preference fields.
@@ -65,8 +66,56 @@ Examples:
 - Engineering
 - Release
 
-A project can enable multiple skill packs. A user can select one default profile for how
-they want the agent to communicate.
+A project can enable multiple skill packs. A project can also select multiple profiles
+when a user plays more than one role in that project. One selected profile is always the
+primary profile; it controls communication style and priority defaults. Additional
+selected profiles contribute role coverage, recipe affinity, skill-pack suggestions,
+artifact preferences, and surface composition.
+
+Example:
+
+```json
+{
+  "primaryProfileId": "product-partner",
+  "profileIds": ["product-partner", "engineering-copilot"]
+}
+```
+
+This means the assistant should speak primarily like a product partner, while still
+surfacing engineering recipes, artifacts, and project views.
+
+### Profile Set
+
+The runtime should resolve a selected profile set into one effective profile at the
+configuration boundary, so downstream recipe ranking and surface code can continue to
+consume a single `T3WorkProfile`-shaped object.
+
+Profile-set rules:
+
+- `primaryProfileId` must be one of `profileIds`.
+- If only one profile is selected, that profile is both selected and primary.
+- If legacy config only has `profileId`, treat it as `{ primaryProfileId: profileId,
+  profileIds: [profileId] }`.
+- Communication style comes from the primary profile unless a later explicit user setting
+  overrides it.
+- Scalar priority fields that affect wording or density come from the primary profile.
+- Arrays such as `preferredArtifactKinds`, `defaultActionFamilies`, and
+  `recommendedSkillPackIds` are merged by stable union, preserving selected-profile order
+  and de-duplicating entries.
+- `defaultRecipeWeights` are merged with primary profile weights taking precedence on
+  conflicts. Secondary profile weights may still introduce recipes absent from the
+  primary profile.
+- `sidecarSections` start from the primary profile's order and append missing sections
+  from secondary profiles.
+- `hideImplementationComplexity` should follow the primary profile for communication, but
+  capability and recipe visibility should not be hidden solely because the primary profile
+  is non-technical.
+
+The effective profile may use a synthetic id such as
+`profile-set:product-partner+engineering-copilot`, but that id is generated and not a new
+persisted custom profile. Persist selected profile ids and the primary id instead. Only
+persist a generated custom profile when the user explicitly edits and saves the merged
+configuration as its own profile.
 
 ## Package
 
@@ -125,6 +174,15 @@ type T3WorkProfile = {
   preferredArtifactKinds: string[];
   defaultActionFamilies?: string[];
   defaultRecipeWeights: Record<string, number>;
+};
+```
+
+Project setup stores profile selection separately from profile definitions:
+
+```ts
+type T3WorkProjectProfileSelection = {
+  primaryProfileId: string;
+  profileIds: string[];
 };
 ```
 
@@ -308,7 +366,8 @@ Example recommendation inputs:
 
 Confirm screen should show:
 
-- selected profile
+- selected profiles
+- primary profile
 - enabled skill packs
 - top recipes that will appear first
 - mutation safety policy
@@ -319,10 +378,22 @@ Profile selection should be a normal setup step, not hidden in settings.
 
 Use existing T3 primitives:
 
-- cards for profile choices
+- multi-select cards for profile choices
 - badges for skill pack categories
 - select/menu for compact profile switching
 - settings rows for later edits
+
+Project setup should keep the flow simple:
+
+1. Let the user select one or more profiles from the normal profile card grid.
+2. If exactly one profile is selected, continue with that profile as primary.
+3. If multiple profiles are selected, show a short review step listing the selected
+   profiles, with remove controls and a primary-profile choice.
+4. The primary choice should be explicit but lightweight, for example radio buttons inside
+   the selected-profile review list.
+
+The second step exists only for multi-select. Do not force all users through a heavier
+profile composition screen.
 
 Users should also be able to clone a starter profile into a custom profile and edit its
 preferences without leaving the normal setup/settings flow.
@@ -330,9 +401,11 @@ preferences without leaving the normal setup/settings flow.
 Project overview should show enabled skill packs as quiet badges near the project source
 badges.
 
-GitHub PR and review surfaces should also expose the active profile as a lightweight mode
-switch. Switching profiles should immediately rerank actions, adjust explanation density,
-and change guided-vs-expert defaults without forcing the user to reopen chat.
+GitHub PR and review surfaces should also expose the active primary profile as a
+lightweight mode switch. Switching the primary profile should immediately rerank actions,
+adjust explanation density, and change guided-vs-expert defaults without forcing the user
+to reopen chat. Secondary selected profiles should remain available as project role
+coverage unless the user removes them from project settings.
 
 That mode switch should operate on the selected profile configuration's preferences. It
 must not special-case named starter profiles.
