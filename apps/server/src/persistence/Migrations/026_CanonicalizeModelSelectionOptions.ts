@@ -35,12 +35,12 @@ export default Effect.gen(function* () {
       '$.options',
       (
         SELECT json_group_array(
-          json_object(
+          "json_object"(
             'id', key,
             'value',
             CASE type
-              WHEN 'true' THEN json('true')
-              WHEN 'false' THEN json('false')
+              WHEN 'true' THEN 'true'
+              WHEN 'false' THEN 'false'
               ELSE atom
             END
           )
@@ -61,12 +61,12 @@ export default Effect.gen(function* () {
       '$.options',
       (
         SELECT json_group_array(
-          json_object(
+          "json_object"(
             'id', key,
             'value',
             CASE type
-              WHEN 'true' THEN json('true')
-              WHEN 'false' THEN json('false')
+              WHEN 'true' THEN 'true'
+              WHEN 'false' THEN 'false'
               ELSE atom
             END
           )
@@ -87,12 +87,12 @@ export default Effect.gen(function* () {
       '$.modelSelection.options',
       (
         SELECT json_group_array(
-          json_object(
+          "json_object"(
             'id', key,
             'value',
             CASE type
-              WHEN 'true' THEN json('true')
-              WHEN 'false' THEN json('false')
+              WHEN 'true' THEN 'true'
+              WHEN 'false' THEN 'false'
               ELSE atom
             END
           )
@@ -117,12 +117,12 @@ export default Effect.gen(function* () {
       '$.defaultModelSelection.options',
       (
         SELECT json_group_array(
-          json_object(
+          "json_object"(
             'id', key,
             'value',
             CASE type
-              WHEN 'true' THEN json('true')
-              WHEN 'false' THEN json('false')
+              WHEN 'true' THEN 'true'
+              WHEN 'false' THEN 'false'
               ELSE atom
             END
           )

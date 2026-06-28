@@ -6,6 +6,12 @@ resource "random_string" "suffix" {
   special = false
 }
 
+resource "random_password" "postgres_admin" {
+  count   = var.enable_postgresql ? 1 : 0
+  length  = 24
+  special = true
+}
+
 locals {
   base_name = "${var.name_prefix}-${var.environment}"
   suffix    = random_string.suffix.result
@@ -14,6 +20,7 @@ locals {
   acr_name     = substr("${var.name_prefix}${var.environment}acr${local.suffix}", 0, 50)
   storage_name = substr("${var.name_prefix}${var.environment}st${local.suffix}", 0, 24)
   kv_name      = substr("${var.name_prefix}-${var.environment}-kv-${local.suffix}", 0, 24)
+  pg_name      = substr("${var.name_prefix}-${var.environment}-pg-${local.suffix}", 0, 63)
 
   is_premium_storage = var.storage_account_tier == "Premium"
 
@@ -32,6 +39,53 @@ locals {
     var.otlp_traces_url == "" ? {} : { T3CODE_OTLP_TRACES_URL = var.otlp_traces_url },
     var.otlp_metrics_url == "" ? {} : { T3CODE_OTLP_METRICS_URL = var.otlp_metrics_url },
   )
+}
+
+resource "azurerm_postgresql_flexible_server" "main" {
+  count = var.enable_postgresql ? 1 : 0
+
+  name                          = local.pg_name
+  resource_group_name           = azurerm_resource_group.main.name
+  location                      = azurerm_resource_group.main.location
+  version                       = var.postgres_version
+  administrator_login           = var.postgres_admin_username
+  administrator_password        = random_password.postgres_admin[0].result
+  sku_name                      = var.postgres_sku_name
+  storage_mb                    = var.postgres_storage_mb
+  backup_retention_days         = var.postgres_backup_retention_days
+  public_network_access_enabled = true
+
+  lifecycle {
+    # Imported servers may have an assigned zone that Azure disallows changing
+    # in-place without specific HA choreography. Keep this rollout focused on
+    # app cutover and ignore zone drift.
+    ignore_changes = [
+      zone,
+      administrator_password,
+    ]
+  }
+
+  tags = var.tags
+}
+
+resource "azurerm_postgresql_flexible_server_database" "app" {
+  count = var.enable_postgresql ? 1 : 0
+
+  name      = var.postgres_database_name
+  server_id = azurerm_postgresql_flexible_server.main[0].id
+  charset   = "UTF8"
+  collation = "en_US.utf8"
+}
+
+# Allows Azure-hosted workloads (including Container Apps) to reach the DB over
+# public networking while we keep the initial deployment simple.
+resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_services" {
+  count = var.enable_postgresql ? 1 : 0
+
+  name             = "allow-azure-services"
+  server_id        = azurerm_postgresql_flexible_server.main[0].id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
 }
 
 # -----------------------------------------------------------------------------
@@ -148,6 +202,16 @@ resource "azurerm_key_vault_secret" "provider" {
   depends_on = [azurerm_role_assignment.kv_deployer]
 }
 
+resource "azurerm_key_vault_secret" "database_url" {
+  count = var.enable_postgresql ? 1 : 0
+
+  name  = "database-url"
+  value = "postgresql://${urlencode(var.postgres_admin_username)}:${urlencode(random_password.postgres_admin[0].result)}@${azurerm_postgresql_flexible_server.main[0].fqdn}:5432/${urlencode(var.postgres_database_name)}?sslmode=require"
+
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.kv_deployer]
+}
+
 # -----------------------------------------------------------------------------
 # Container Apps Environment + persistent storage mount
 # -----------------------------------------------------------------------------
@@ -198,6 +262,15 @@ resource "azurerm_container_app" "main" {
     }
   }
 
+  dynamic "secret" {
+    for_each = var.enable_postgresql ? [1] : []
+    content {
+      name                = "database-url"
+      key_vault_secret_id = azurerm_key_vault_secret.database_url[0].versionless_id
+      identity            = azurerm_user_assigned_identity.app.id
+    }
+  }
+
   template {
     # Stateful: SQLite + WebSocket + spawned child processes. Exactly one replica.
     min_replicas = 1
@@ -232,12 +305,22 @@ resource "azurerm_container_app" "main" {
         name  = "T3CODE_HOME"
         value = "/data"
       }
+      dynamic "env" {
+        for_each = var.enable_postgresql ? [1] : []
+        content {
+          name        = "DATABASE_URL"
+          secret_name = "database-url"
+        }
+      }
       # SQLite WAL relies on shared-memory mmap that Azure Files SMB does not
-      # support (surfaces as "database is locked"). The single-replica app does
-      # not need WAL concurrency, so use the rollback journal on the SMB mount.
-      env {
-        name  = "T3CODE_SQLITE_JOURNAL_MODE"
-        value = "DELETE"
+      # support (surfaces as "database is locked"). Keep this override only
+      # while SQLite remains the active database backend.
+      dynamic "env" {
+        for_each = var.enable_postgresql ? [] : [1]
+        content {
+          name  = "T3CODE_SQLITE_JOURNAL_MODE"
+          value = "DELETE"
+        }
       }
       env {
         name  = "T3CODE_NO_BROWSER"

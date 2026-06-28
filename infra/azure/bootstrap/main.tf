@@ -21,7 +21,7 @@ provider "azurerm" {
 variable "location" {
   description = "Azure region for the Terraform state storage."
   type        = string
-  default     = "westeurope"
+  default     = "switzerlandnorth"
 }
 
 variable "name_prefix" {

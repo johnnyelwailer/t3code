@@ -51,17 +51,21 @@ terraform output backend_config   # copy values into ../backend.hcl
 ```bash
 cd infra/azure
 # update backend.hcl with bootstrap output if needed
-cp terraform.tfvars.example terraform.tfvars   # adjust region/names/secrets
+# terraform.prod.tfvars is committed and non-secret.
+# Keep secrets outside git via TF_VAR_provider_secrets or CI.
 
 terraform init -backend-config=backend.hcl
-terraform apply
+terraform apply -var-file=terraform.prod.tfvars
 ```
+
+Defaults now target `switzerlandnorth` with PostgreSQL enabled in
+`terraform.prod.tfvars`.
 
 Provider keys are sensitive — prefer environment injection over the tfvars file:
 
 ```bash
 export TF_VAR_provider_secrets='{"OPENAI_API_KEY":"sk-...","ANTHROPIC_API_KEY":"sk-ant-..."}'
-terraform apply
+terraform apply -var-file=terraform.prod.tfvars
 ```
 
 The first apply pushes no image; the Container App will fail to pull until CI
@@ -102,6 +106,76 @@ codex login      # or: claude /login, agent login, opencode auth login
 ```
 
 Credentials are written under `/data` and survive restarts.
+
+## PostgreSQL Cutover Checklist
+
+Use this sequence for production cutover in Switzerland North.
+
+1. Prepare Terraform variables
+
+```bash
+cd infra/azure
+# confirm: terraform.prod.tfvars has the expected production settings
+```
+
+2. Review resource changes before apply
+
+```bash
+terraform plan
+```
+
+3. Apply infrastructure changes
+
+```bash
+terraform apply
+```
+
+Use the committed var-file explicitly:
+
+```bash
+terraform plan -var-file=terraform.prod.tfvars
+terraform apply -var-file=terraform.prod.tfvars
+```
+
+4. Verify PostgreSQL provisioning outputs
+
+```bash
+terraform output postgresql_fqdn
+terraform output postgresql_database_name
+```
+
+5. Deploy latest server image
+
+```bash
+az acr build -r "$(terraform output -raw acr_name)" \
+  -t t3code-server:latest -f ../../apps/server/Dockerfile ../..
+```
+
+6. Confirm startup and migrations
+
+```bash
+az containerapp logs show -n "$(terraform output -raw container_app_name)" \
+  -g "$(terraform output -raw resource_group_name)" --follow --tail 300
+```
+
+7. Smoke test
+
+- Open the app URL from `terraform output app_url`
+- Pair with the startup token
+- Create a thread and send a test turn
+- Restart the Container App and confirm session/auth artifacts still persist under `/data`
+
+8. Observe for 24h
+
+- No `database is locked` startup failures
+- No migration failures
+- Stable websocket session behavior
+
+### Rollback
+
+If cutover fails, set `enable_postgresql = false` in `terraform.prod.tfvars`,
+run `terraform apply -var-file=terraform.prod.tfvars`, and redeploy. This
+restores SQLite-on-fileshare behavior.
 
 ## Hardening (later)
 

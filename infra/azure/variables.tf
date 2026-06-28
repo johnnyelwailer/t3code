@@ -1,7 +1,7 @@
 variable "location" {
   description = "Azure region for all resources."
   type        = string
-  default     = "westeurope"
+  default     = "switzerlandnorth"
 }
 
 variable "name_prefix" {
@@ -58,6 +58,51 @@ variable "memory" {
   description = "Memory allocated to the container (e.g. 2Gi). Must pair with cpu per ACA rules."
   type        = string
   default     = "2Gi"
+}
+
+# -----------------------------------------------------------------------------
+# PostgreSQL (optional)
+# -----------------------------------------------------------------------------
+variable "enable_postgresql" {
+  description = "When true, provisions Azure Database for PostgreSQL Flexible Server and injects DATABASE_URL into the container app."
+  type        = bool
+  default     = false
+}
+
+variable "postgres_version" {
+  description = "PostgreSQL major version."
+  type        = string
+  default     = "16"
+}
+
+variable "postgres_sku_name" {
+  description = "Flexible Server SKU name (for example B_Standard_B1ms for low-cost burstable)."
+  type        = string
+  default     = "B_Standard_B1ms"
+}
+
+variable "postgres_storage_mb" {
+  description = "Provisioned storage in MB for PostgreSQL Flexible Server."
+  type        = number
+  default     = 32768
+}
+
+variable "postgres_database_name" {
+  description = "Application database name created inside PostgreSQL Flexible Server."
+  type        = string
+  default     = "t3code"
+}
+
+variable "postgres_admin_username" {
+  description = "PostgreSQL admin username for the flexible server."
+  type        = string
+  default     = "t3admin"
+}
+
+variable "postgres_backup_retention_days" {
+  description = "Automated backup retention period in days for PostgreSQL Flexible Server."
+  type        = number
+  default     = 7
 }
 
 # -----------------------------------------------------------------------------

@@ -42,3 +42,13 @@ output "logs_command" {
   description = "Command to stream container logs (includes the bearer token printed at startup)."
   value       = "az containerapp logs show -n ${azurerm_container_app.main.name} -g ${azurerm_resource_group.main.name} --follow --tail 200"
 }
+
+output "postgresql_fqdn" {
+  description = "PostgreSQL server FQDN when enable_postgresql=true."
+  value       = var.enable_postgresql ? azurerm_postgresql_flexible_server.main[0].fqdn : null
+}
+
+output "postgresql_database_name" {
+  description = "Application PostgreSQL database name when enable_postgresql=true."
+  value       = var.enable_postgresql ? azurerm_postgresql_flexible_server_database.app[0].name : null
+}

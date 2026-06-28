@@ -652,8 +652,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: () =>
       sql`
         SELECT
-          (SELECT COUNT(*) FROM projection_projects) AS "projectCount",
-          (SELECT COUNT(*) FROM projection_threads) AS "threadCount"
+          (SELECT CAST(COUNT(*) AS INTEGER) FROM projection_projects) AS "projectCount",
+          (SELECT CAST(COUNT(*) AS INTEGER) FROM projection_threads) AS "threadCount"
       `,
   });
 

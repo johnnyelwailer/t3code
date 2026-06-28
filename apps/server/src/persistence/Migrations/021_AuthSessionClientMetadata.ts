@@ -4,9 +4,23 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
-  const pairingLinkColumns = yield* sql<{ readonly name: string }>`
-    PRAGMA table_info(auth_pairing_links)
-  `;
+  const postgres = yield* sql<{ readonly version: string }>`SELECT version() AS version`.pipe(
+    Effect.map(() => true),
+    Effect.orElseSucceed(() => false),
+  );
+
+  const tableColumns = (tableName: string) =>
+    postgres
+      ? sql<{ readonly name: string }>`
+          SELECT column_name AS name
+          FROM information_schema.columns
+          WHERE table_name = ${tableName}
+        `
+      : sql<{ readonly name: string }>`
+          PRAGMA table_info(${sql.literal(tableName)})
+        `;
+
+  const pairingLinkColumns = yield* tableColumns("auth_pairing_links");
   if (!pairingLinkColumns.some((column) => column.name === "label")) {
     yield* sql`
       ALTER TABLE auth_pairing_links
@@ -14,9 +28,7 @@ export default Effect.gen(function* () {
     `;
   }
 
-  const sessionColumns = yield* sql<{ readonly name: string }>`
-    PRAGMA table_info(auth_sessions)
-  `;
+  const sessionColumns = yield* tableColumns("auth_sessions");
 
   if (!sessionColumns.some((column) => column.name === "client_label")) {
     yield* sql`

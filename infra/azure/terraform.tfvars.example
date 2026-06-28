@@ -1,7 +1,8 @@
-# Copy to terraform.tfvars (gitignored) and adjust. Secrets are better supplied
-# via environment, e.g. TF_VAR_provider_secrets, or a CI secret store.
+# Template values only.
+# For shared production defaults, use the committed terraform.prod.tfvars.
+# Keep secrets out of git (TF_VAR_provider_secrets or CI secret store).
 
-location    = "westeurope"
+location    = "switzerlandnorth"
 name_prefix = "t3code"
 environment = "prod"
 
@@ -13,9 +14,19 @@ image_tag        = "latest"
 cpu    = 1.0
 memory = "2Gi"
 
-# Persistent state. Premium (FileStorage) recommended for SQLite reliability.
-storage_account_tier = "Premium"
-file_share_quota_gb  = 100
+# Persistent filesystem state for T3 home (auth/session artifacts, logs).
+# PostgreSQL is the relational database, so keep Azure Files minimal and cheap.
+storage_account_tier = "Standard"
+file_share_quota_gb  = 20
+
+# PostgreSQL cutover (recommended for Azure reliability).
+enable_postgresql          = true
+postgres_version           = "16"
+postgres_sku_name          = "B_Standard_B1ms"
+postgres_storage_mb        = 32768
+postgres_database_name     = "t3code"
+postgres_admin_username    = "t3admin"
+postgres_backup_retention_days = 7
 
 # Optional: restrict public ingress to known networks. Empty = open (bearer token only).
 # allowed_ip_cidrs = ["203.0.113.0/24"]

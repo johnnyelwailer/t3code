@@ -5,7 +5,7 @@ export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
   yield* sql`
-    INSERT OR IGNORE INTO projection_pending_approvals (
+    INSERT INTO projection_pending_approvals (
       request_id,
       thread_id,
       turn_id,
@@ -37,6 +37,7 @@ export default Effect.gen(function* () {
         AND json_extract(payload_json, '$.requestId') IS NOT NULL
     ) AS requested
     WHERE requested.row_number = 1
+    ON CONFLICT (request_id) DO NOTHING
   `;
 
   yield* sql`

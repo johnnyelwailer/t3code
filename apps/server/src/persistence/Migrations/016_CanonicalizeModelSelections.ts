@@ -13,7 +13,7 @@ export default Effect.gen(function* () {
     UPDATE projection_projects
     SET default_model_selection_json = CASE
       WHEN default_model IS NULL THEN NULL
-      ELSE json_object(
+      ELSE "json_object"(
         'provider',
         CASE
           WHEN lower(default_model) LIKE '%claude%' THEN 'claudeAgent'
@@ -33,7 +33,7 @@ export default Effect.gen(function* () {
 
   yield* sql`
     UPDATE projection_threads
-    SET model_selection_json = json_object(
+    SET model_selection_json = "json_object"(
       'provider',
       COALESCE(
         (
@@ -77,7 +77,7 @@ export default Effect.gen(function* () {
           payload_json,
           '$.defaultModelSelection',
           json_patch(
-            json_object(
+            "json_object"(
               'provider',
               CASE
                 WHEN json_extract(payload_json, '$.defaultProvider') IS NOT NULL
@@ -105,12 +105,12 @@ export default Effect.gen(function* () {
                   ) = 'claudeAgent'
                   THEN CASE
                     WHEN json_type(payload_json, '$.defaultModelOptions.claudeAgent') IS NOT NULL
-                    THEN json_object(
+                    THEN "json_object"(
                       'options',
                       json(json_extract(payload_json, '$.defaultModelOptions.claudeAgent'))
                     )
                     WHEN json_type(payload_json, '$.defaultModelOptions.codex') IS NOT NULL
-                    THEN json_object(
+                    THEN "json_object"(
                       'options',
                       json(json_extract(payload_json, '$.defaultModelOptions.codex'))
                     )
@@ -118,19 +118,19 @@ export default Effect.gen(function* () {
                   END
                   ELSE CASE
                     WHEN json_type(payload_json, '$.defaultModelOptions.codex') IS NOT NULL
-                    THEN json_object(
+                    THEN "json_object"(
                       'options',
                       json(json_extract(payload_json, '$.defaultModelOptions.codex'))
                     )
                     WHEN json_type(payload_json, '$.defaultModelOptions.claudeAgent') IS NOT NULL
-                    THEN json_object(
+                    THEN "json_object"(
                       'options',
                       json(json_extract(payload_json, '$.defaultModelOptions.claudeAgent'))
                     )
                     ELSE '{}'
                   END
                 END
-              ELSE json_object(
+              ELSE "json_object"(
                 'options',
                 json(json_extract(payload_json, '$.defaultModelOptions'))
               )
@@ -154,7 +154,7 @@ export default Effect.gen(function* () {
         payload_json,
         '$.modelSelection',
         json_patch(
-          json_object(
+          "json_object"(
             'provider',
             CASE
               WHEN json_extract(payload_json, '$.provider') IS NOT NULL
@@ -182,12 +182,12 @@ export default Effect.gen(function* () {
               ) = 'claudeAgent'
               THEN CASE
                 WHEN json_type(payload_json, '$.modelOptions.claudeAgent') IS NOT NULL
-                THEN json_object(
+                THEN "json_object"(
                   'options',
                   json(json_extract(payload_json, '$.modelOptions.claudeAgent'))
                 )
                 WHEN json_type(payload_json, '$.modelOptions.codex') IS NOT NULL
-                THEN json_object(
+                THEN "json_object"(
                   'options',
                   json(json_extract(payload_json, '$.modelOptions.codex'))
                 )
@@ -195,19 +195,19 @@ export default Effect.gen(function* () {
               END
               ELSE CASE
                 WHEN json_type(payload_json, '$.modelOptions.codex') IS NOT NULL
-                THEN json_object(
+                THEN "json_object"(
                   'options',
                   json(json_extract(payload_json, '$.modelOptions.codex'))
                 )
                 WHEN json_type(payload_json, '$.modelOptions.claudeAgent') IS NOT NULL
-                THEN json_object(
+                THEN "json_object"(
                   'options',
                   json(json_extract(payload_json, '$.modelOptions.claudeAgent'))
                 )
                 ELSE '{}'
               END
             END
-            ELSE json_object('options', json(json_extract(payload_json, '$.modelOptions')))
+            ELSE "json_object"('options', json(json_extract(payload_json, '$.modelOptions')))
           END
         )
       ),
@@ -226,7 +226,7 @@ export default Effect.gen(function* () {
     SET payload_json = json_set(
       payload_json,
       '$.modelSelection',
-      json(json_object('provider', 'codex', 'model', 'gpt-5.4'))
+      json("json_object"('provider', 'codex', 'model', 'gpt-5.4'))
     )
     WHERE event_type = 'thread.created'
       AND json_type(payload_json, '$.modelSelection') IS NULL

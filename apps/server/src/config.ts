@@ -51,6 +51,7 @@ export interface ServerDerivedPaths {
 export class ServerConfig extends Context.Service<
   ServerConfig,
   ServerDerivedPaths & {
+    readonly databaseUrl?: string | undefined;
     readonly logLevel: LogLevel.LogLevel;
     readonly traceMinLevel: LogLevel.LogLevel;
     readonly traceTimingEnabled: boolean;
@@ -156,6 +157,7 @@ const makeTest = Effect.fn("ServerConfig.makeTest")(function* (
   yield* ensureServerDirectories(derivedPaths);
 
   return ServerConfig.of({
+    databaseUrl: undefined,
     logLevel: "Error",
     traceMinLevel: "Info",
     traceTimingEnabled: true,

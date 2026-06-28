@@ -1,326 +1,515 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>T3 Code — Containerization &amp; Azure Architecture</title>
-<style>
-  :root {
-    --bg: #0b1020;
-    --bg-soft: #121a33;
-    --panel: #16203d;
-    --panel-2: #1c2950;
-    --border: #2b3a66;
-    --text: #e8ecf8;
-    --muted: #9aa7cc;
-    --accent: #4f7cff;
-    --accent-2: #38d0c4;
-    --azure: #2f6fed;
-    --amber: #f5a524;
-    --green: #2bbf7a;
-    --pink: #e056a0;
-    --shadow: 0 10px 30px rgba(0,0,0,.35);
-    --radius: 14px;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
-    background: radial-gradient(1200px 800px at 80% -10%, #1a2547 0%, var(--bg) 55%) fixed;
-    color: var(--text);
-    line-height: 1.5;
-  }
-  header {
-    padding: 40px 32px 24px;
-    max-width: 1200px;
-    margin: 0 auto;
-  }
-  .eyebrow {
-    text-transform: uppercase;
-    letter-spacing: .18em;
-    font-size: 12px;
-    color: var(--accent-2);
-    font-weight: 700;
-  }
-  h1 {
-    margin: 8px 0 6px;
-    font-size: 32px;
-    font-weight: 800;
-  }
-  header p { color: var(--muted); max-width: 760px; margin: 0; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>T3 Code — Containerization &amp; Azure Architecture</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --bg-soft: #121a33;
+        --panel: #16203d;
+        --panel-2: #1c2950;
+        --border: #2b3a66;
+        --text: #e8ecf8;
+        --muted: #9aa7cc;
+        --accent: #4f7cff;
+        --accent-2: #38d0c4;
+        --azure: #2f6fed;
+        --amber: #f5a524;
+        --green: #2bbf7a;
+        --pink: #e056a0;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        --radius: 14px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        background: radial-gradient(1200px 800px at 80% -10%, #1a2547 0%, var(--bg) 55%) fixed;
+        color: var(--text);
+        line-height: 1.5;
+      }
+      header {
+        padding: 40px 32px 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        font-size: 12px;
+        color: var(--accent-2);
+        font-weight: 700;
+      }
+      h1 {
+        margin: 8px 0 6px;
+        font-size: 32px;
+        font-weight: 800;
+      }
+      header p {
+        color: var(--muted);
+        max-width: 760px;
+        margin: 0;
+      }
 
-  main { max-width: 1200px; margin: 0 auto; padding: 8px 32px 64px; }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 8px 32px 64px;
+      }
 
-  .section-title {
-    display: flex; align-items: center; gap: 10px;
-    margin: 36px 0 16px; font-size: 18px; font-weight: 700;
-  }
-  .section-title .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+      .section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 36px 0 16px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .section-title .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
 
-  /* Flow diagram */
-  .flow {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  .lane {
-    background: linear-gradient(180deg, var(--panel) 0%, var(--bg-soft) 100%);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 18px 20px;
-    box-shadow: var(--shadow);
-  }
-  .lane h3 {
-    margin: 0 0 4px; font-size: 14px; letter-spacing: .04em;
-    text-transform: uppercase; color: var(--muted);
-  }
-  .nodes { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
-  .node {
-    flex: 1 1 200px;
-    min-width: 180px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 16px;
-    position: relative;
-  }
-  .node .ico { font-size: 22px; }
-  .node .name { font-weight: 700; margin: 6px 0 2px; }
-  .node .desc { font-size: 13px; color: var(--muted); }
-  .node.az { border-color: #2f6fed55; box-shadow: inset 0 0 0 1px #2f6fed22; }
-  .badge {
-    position: absolute; top: 10px; right: 12px;
-    font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
-    color: var(--accent-2); font-weight: 700;
-  }
-  .arrow {
-    text-align: center; color: var(--accent); font-size: 22px; margin: -4px 0;
-  }
-  .arrow small { display:block; color: var(--muted); font-size: 11px; letter-spacing:.05em; }
+      /* Flow diagram */
+      .flow {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+      .lane {
+        background: linear-gradient(180deg, var(--panel) 0%, var(--bg-soft) 100%);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        box-shadow: var(--shadow);
+      }
+      .lane h3 {
+        margin: 0 0 4px;
+        font-size: 14px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .nodes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: stretch;
+      }
+      .node {
+        flex: 1 1 200px;
+        min-width: 180px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 16px;
+        position: relative;
+      }
+      .node .ico {
+        font-size: 22px;
+      }
+      .node .name {
+        font-weight: 700;
+        margin: 6px 0 2px;
+      }
+      .node .desc {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .node.az {
+        border-color: #2f6fed55;
+        box-shadow: inset 0 0 0 1px #2f6fed22;
+      }
+      .badge {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent-2);
+        font-weight: 700;
+      }
+      .arrow {
+        text-align: center;
+        color: var(--accent);
+        font-size: 22px;
+        margin: -4px 0;
+      }
+      .arrow small {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.05em;
+      }
 
-  /* Cards grid */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 16px;
-  }
-  .card {
-    background: linear-gradient(180deg, var(--panel) 0%, var(--bg-soft) 100%);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 18px 20px;
-    box-shadow: var(--shadow);
-  }
-  .card h4 { margin: 0 0 8px; display:flex; align-items:center; gap:8px; font-size:15px; }
-  .card ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
-  .card li { margin: 4px 0; }
-  .pill {
-    display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px;
-    background:#2f6fed22; color:#9fc0ff; border:1px solid #2f6fed44; margin-left:auto;
-  }
+      /* Cards grid */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: linear-gradient(180deg, var(--panel) 0%, var(--bg-soft) 100%);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        box-shadow: var(--shadow);
+      }
+      .card h4 {
+        margin: 0 0 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 15px;
+      }
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+      .card li {
+        margin: 4px 0;
+      }
+      .pill {
+        display: inline-block;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #2f6fed22;
+        color: #9fc0ff;
+        border: 1px solid #2f6fed44;
+        margin-left: auto;
+      }
 
-  /* Build stages */
-  .stages { display:grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; }
-  .stage {
-    background: var(--panel-2); border:1px solid var(--border); border-radius:12px; padding:16px 18px;
-  }
-  .stage h4 { margin:0 0 8px; font-size:14px; }
-  .stage code { color:#9fc0ff; }
-  .stage ul { margin:0; padding-left:18px; font-size:13px; color:var(--muted); }
-  .stage-arrow { display:flex; align-items:center; color:var(--accent); font-size:26px; }
+      /* Build stages */
+      .stages {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 14px;
+        align-items: stretch;
+      }
+      .stage {
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+      }
+      .stage h4 {
+        margin: 0 0 8px;
+        font-size: 14px;
+      }
+      .stage code {
+        color: #9fc0ff;
+      }
+      .stage ul {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .stage-arrow {
+        display: flex;
+        align-items: center;
+        color: var(--accent);
+        font-size: 26px;
+      }
 
-  table { width:100%; border-collapse: collapse; font-size: 13.5px; }
-  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); }
-  th { color: var(--muted); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:.06em; }
-  td code { color:#9fc0ff; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13.5px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+      }
+      td code {
+        color: #9fc0ff;
+      }
 
-  footer { max-width:1200px; margin:0 auto; padding: 0 32px 48px; color:var(--muted); font-size:12px; }
-  .legend { display:flex; gap:18px; flex-wrap:wrap; margin-top:8px; }
-  .legend span { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
-  .swatch { width:12px; height:12px; border-radius:3px; }
+      footer {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 32px 48px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .legend {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .legend span {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+      }
 
-  @media (max-width: 720px) {
-    .stages { grid-template-columns: 1fr; }
-    .stage-arrow { transform: rotate(90deg); justify-content:center; }
-  }
-</style>
-</head>
-<body>
-<header>
-  <div class="eyebrow">T3 Code · Cloud Deployment</div>
-  <h1>Containerization &amp; Azure Architecture</h1>
-  <p>How the T3 Code server (with the web client bundled in) is packaged as a Docker image and
-     run on Azure Container Apps as a single, stateful, secure replica.</p>
-</header>
+      @media (max-width: 720px) {
+        .stages {
+          grid-template-columns: 1fr;
+        }
+        .stage-arrow {
+          transform: rotate(90deg);
+          justify-content: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="eyebrow">T3 Code · Cloud Deployment</div>
+      <h1>Containerization &amp; Azure Architecture</h1>
+      <p>
+        How the T3 Code server (with the web client bundled in) is packaged as a Docker image and
+        run on Azure Container Apps as a single, stateful, secure replica.
+      </p>
+    </header>
 
-<main>
-  <!-- ================= REQUEST / RUNTIME FLOW ================= -->
-  <div class="section-title"><span class="dot"></span>End-to-end deployment flow</div>
-  <div class="flow">
-
-    <div class="lane">
-      <h3>1 · Build &amp; Publish</h3>
-      <div class="nodes">
-        <div class="node">
-          <div class="ico">👩‍💻</div>
-          <div class="name">Developer / GitHub</div>
-          <div class="desc">Push to <code>main</code> triggers CI</div>
+    <main>
+      <!-- ================= REQUEST / RUNTIME FLOW ================= -->
+      <div class="section-title"><span class="dot"></span>End-to-end deployment flow</div>
+      <div class="flow">
+        <div class="lane">
+          <h3>1 · Build &amp; Publish</h3>
+          <div class="nodes">
+            <div class="node">
+              <div class="ico">👩‍💻</div>
+              <div class="name">Developer / GitHub</div>
+              <div class="desc">Push to <code>main</code> triggers CI</div>
+            </div>
+            <div class="node az">
+              <span class="badge">Azure</span>
+              <div class="ico">⚙️</div>
+              <div class="name">GitHub Actions → <code>az acr build</code></div>
+              <div class="desc">OIDC federated login, no stored credentials</div>
+            </div>
+            <div class="node az">
+              <span class="badge">Azure</span>
+              <div class="ico">📦</div>
+              <div class="name">Container Registry (ACR)</div>
+              <div class="desc">Stores <code>t3code-server</code> image</div>
+            </div>
+          </div>
         </div>
-        <div class="node az">
-          <span class="badge">Azure</span>
-          <div class="ico">⚙️</div>
-          <div class="name">GitHub Actions → <code>az acr build</code></div>
-          <div class="desc">OIDC federated login, no stored credentials</div>
+
+        <div class="arrow">↓<small>image pulled via managed identity (AcrPull)</small></div>
+
+        <div class="lane">
+          <h3>2 · Runtime Environment</h3>
+          <div class="nodes">
+            <div class="node az">
+              <span class="badge">Azure</span>
+              <div class="ico">🌐</div>
+              <div class="name">Container Apps Environment</div>
+              <div class="desc">Managed Kubernetes-backed host</div>
+            </div>
+            <div class="node az">
+              <span class="badge">Azure</span>
+              <div class="ico">🚀</div>
+              <div class="name">Container App — 1 replica</div>
+              <div class="desc">HTTPS + WebSocket ingress on <code>:3773</code></div>
+            </div>
+            <div class="node az">
+              <span class="badge">Azure</span>
+              <div class="ico">📊</div>
+              <div class="name">Log Analytics</div>
+              <div class="desc">Centralized logs &amp; startup pairing token</div>
+            </div>
+          </div>
         </div>
-        <div class="node az">
-          <span class="badge">Azure</span>
-          <div class="ico">📦</div>
-          <div class="name">Container Registry (ACR)</div>
-          <div class="desc">Stores <code>t3code-server</code> image</div>
+
+        <div class="arrow">
+          ↓<small>the running container connects to state, secrets &amp; agents</small>
+        </div>
+
+        <div class="lane">
+          <h3>3 · State, Secrets &amp; Agents</h3>
+          <div class="nodes">
+            <div class="node az">
+              <span class="badge">Azure</span>
+              <div class="ico">💾</div>
+              <div class="name">Azure Files share → <code>/data</code></div>
+              <div class="desc">SQLite state, provider auth dirs (persistent)</div>
+            </div>
+            <div class="node az">
+              <span class="badge">Azure</span>
+              <div class="ico">🔐</div>
+              <div class="name">Key Vault</div>
+              <div class="desc">Provider API keys injected as env vars</div>
+            </div>
+            <div class="node">
+              <div class="ico">🤖</div>
+              <div class="name">Provider CLIs</div>
+              <div class="desc">codex · claude · cursor · opencode in <code>/workspace</code></div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="arrow">↓<small>image pulled via managed identity (AcrPull)</small></div>
-
-    <div class="lane">
-      <h3>2 · Runtime Environment</h3>
-      <div class="nodes">
-        <div class="node az">
-          <span class="badge">Azure</span>
-          <div class="ico">🌐</div>
-          <div class="name">Container Apps Environment</div>
-          <div class="desc">Managed Kubernetes-backed host</div>
+      <!-- ================= IMAGE BUILD ================= -->
+      <div class="section-title"><span class="dot"></span>Multi-stage Docker image</div>
+      <div class="stages">
+        <div class="stage">
+          <h4>🏗️ Stage 1 · builder <span class="pill">node:24-bookworm</span></h4>
+          <ul>
+            <li>Installs only the <code>web</code> + <code>server</code> workspace subgraph</li>
+            <li>Compiles native modules (node-pty, fff-node) against glibc</li>
+            <li>Builds web client + server bundle (<code>vp run --filter t3 build</code>)</li>
+            <li>Produces a pruned production tree via <code>pnpm deploy --prod</code></li>
+          </ul>
         </div>
-        <div class="node az">
-          <span class="badge">Azure</span>
-          <div class="ico">🚀</div>
-          <div class="name">Container App — 1 replica</div>
-          <div class="desc">HTTPS + WebSocket ingress on <code>:3773</code></div>
-        </div>
-        <div class="node az">
-          <span class="badge">Azure</span>
-          <div class="ico">📊</div>
-          <div class="name">Log Analytics</div>
-          <div class="desc">Centralized logs &amp; startup pairing token</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="arrow">↓<small>the running container connects to state, secrets &amp; agents</small></div>
-
-    <div class="lane">
-      <h3>3 · State, Secrets &amp; Agents</h3>
-      <div class="nodes">
-        <div class="node az">
-          <span class="badge">Azure</span>
-          <div class="ico">💾</div>
-          <div class="name">Azure Files share → <code>/data</code></div>
-          <div class="desc">SQLite state, provider auth dirs (persistent)</div>
-        </div>
-        <div class="node az">
-          <span class="badge">Azure</span>
-          <div class="ico">🔐</div>
-          <div class="name">Key Vault</div>
-          <div class="desc">Provider API keys injected as env vars</div>
-        </div>
-        <div class="node">
-          <div class="ico">🤖</div>
-          <div class="name">Provider CLIs</div>
-          <div class="desc">codex · claude · cursor · opencode in <code>/workspace</code></div>
+        <div class="stage-arrow">→</div>
+        <div class="stage">
+          <h4>📦 Stage 2 · runtime <span class="pill">node:24-bookworm-slim</span></h4>
+          <ul>
+            <li>Slim glibc base + <code>git</code>, <code>curl</code>, CA certs</li>
+            <li>Installs provider CLIs: codex, claude-code, opencode, cursor-agent</li>
+            <li>Copies only <code>dist/</code> + pruned <code>node_modules/</code></li>
+            <li>
+              Headless <code>serve</code> on <code>:3773</code>, state on <code>/data</code> volume
+            </li>
+          </ul>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- ================= IMAGE BUILD ================= -->
-  <div class="section-title"><span class="dot"></span>Multi-stage Docker image</div>
-  <div class="stages">
-    <div class="stage">
-      <h4>🏗️ Stage 1 · builder <span class="pill">node:24-bookworm</span></h4>
-      <ul>
-        <li>Installs only the <code>web</code> + <code>server</code> workspace subgraph</li>
-        <li>Compiles native modules (node-pty, fff-node) against glibc</li>
-        <li>Builds web client + server bundle (<code>vp run --filter t3 build</code>)</li>
-        <li>Produces a pruned production tree via <code>pnpm deploy --prod</code></li>
-      </ul>
-    </div>
-    <div class="stage-arrow">→</div>
-    <div class="stage">
-      <h4>📦 Stage 2 · runtime <span class="pill">node:24-bookworm-slim</span></h4>
-      <ul>
-        <li>Slim glibc base + <code>git</code>, <code>curl</code>, CA certs</li>
-        <li>Installs provider CLIs: codex, claude-code, opencode, cursor-agent</li>
-        <li>Copies only <code>dist/</code> + pruned <code>node_modules/</code></li>
-        <li>Headless <code>serve</code> on <code>:3773</code>, state on <code>/data</code> volume</li>
-      </ul>
-    </div>
-  </div>
+      <!-- ================= KEY CHARACTERISTICS ================= -->
+      <div class="section-title"><span class="dot"></span>Key design characteristics</div>
+      <div class="grid">
+        <div class="card">
+          <h4>🔒 Stateful, single replica</h4>
+          <ul>
+            <li>SQLite + WebSocket + spawned child processes</li>
+            <li><code>min = max = 1</code> — no horizontal scaling</li>
+            <li>Rollback journal mode for Azure Files SMB compatibility</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>💾 Persistence model</h4>
+          <ul>
+            <li><code>/data</code> (Azure Files): state, secrets, provider logins</li>
+            <li><code>/workspace</code>: ephemeral, repos cloned per session</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>🛡️ Identity &amp; secrets</h4>
+          <ul>
+            <li>User-assigned managed identity — no passwords in config</li>
+            <li>AcrPull for image, Key Vault Secrets User for API keys</li>
+            <li>OIDC federation for CI (no long-lived credentials)</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>🌍 Access control</h4>
+          <ul>
+            <li>Public HTTPS ingress gated by a bearer pairing token</li>
+            <li>Optional IP allowlist (<code>allowed_ip_cidrs</code>)</li>
+            <li>TLS 1.2+, insecure connections rejected</li>
+          </ul>
+        </div>
+      </div>
 
-  <!-- ================= KEY CHARACTERISTICS ================= -->
-  <div class="section-title"><span class="dot"></span>Key design characteristics</div>
-  <div class="grid">
-    <div class="card">
-      <h4>🔒 Stateful, single replica</h4>
-      <ul>
-        <li>SQLite + WebSocket + spawned child processes</li>
-        <li><code>min = max = 1</code> — no horizontal scaling</li>
-        <li>Rollback journal mode for Azure Files SMB compatibility</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4>💾 Persistence model</h4>
-      <ul>
-        <li><code>/data</code> (Azure Files): state, secrets, provider logins</li>
-        <li><code>/workspace</code>: ephemeral, repos cloned per session</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4>🛡️ Identity &amp; secrets</h4>
-      <ul>
-        <li>User-assigned managed identity — no passwords in config</li>
-        <li>AcrPull for image, Key Vault Secrets User for API keys</li>
-        <li>OIDC federation for CI (no long-lived credentials)</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4>🌍 Access control</h4>
-      <ul>
-        <li>Public HTTPS ingress gated by a bearer pairing token</li>
-        <li>Optional IP allowlist (<code>allowed_ip_cidrs</code>)</li>
-        <li>TLS 1.2+, insecure connections rejected</li>
-      </ul>
-    </div>
-  </div>
+      <!-- ================= RESOURCE INVENTORY ================= -->
+      <div class="section-title">
+        <span class="dot"></span>Provisioned Azure resources (Terraform)
+      </div>
+      <div class="card" style="overflow: auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Resource</th>
+              <th>Azure type</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Resource Group</td>
+              <td><code>rg-t3code-*</code></td>
+              <td>Logical container for all resources</td>
+            </tr>
+            <tr>
+              <td>Managed Identity</td>
+              <td><code>id-t3code-*</code></td>
+              <td>Image pull + Key Vault access</td>
+            </tr>
+            <tr>
+              <td>Container Registry</td>
+              <td>ACR (Standard)</td>
+              <td>Stores the server image</td>
+            </tr>
+            <tr>
+              <td>Container Apps Env</td>
+              <td><code>cae-t3code-*</code></td>
+              <td>Managed runtime host</td>
+            </tr>
+            <tr>
+              <td>Container App</td>
+              <td><code>ca-t3code-*</code></td>
+              <td>The running T3 Code server</td>
+            </tr>
+            <tr>
+              <td>Storage Account + File Share</td>
+              <td>Azure Files</td>
+              <td>Persistent <code>/data</code> mount</td>
+            </tr>
+            <tr>
+              <td>Key Vault</td>
+              <td>RBAC-enabled</td>
+              <td>Provider API key secrets</td>
+            </tr>
+            <tr>
+              <td>Log Analytics</td>
+              <td>PerGB2018</td>
+              <td>Logs &amp; observability (OTLP optional)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
 
-  <!-- ================= RESOURCE INVENTORY ================= -->
-  <div class="section-title"><span class="dot"></span>Provisioned Azure resources (Terraform)</div>
-  <div class="card" style="overflow:auto;">
-    <table>
-      <thead>
-        <tr><th>Resource</th><th>Azure type</th><th>Purpose</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>Resource Group</td><td><code>rg-t3code-*</code></td><td>Logical container for all resources</td></tr>
-        <tr><td>Managed Identity</td><td><code>id-t3code-*</code></td><td>Image pull + Key Vault access</td></tr>
-        <tr><td>Container Registry</td><td>ACR (Standard)</td><td>Stores the server image</td></tr>
-        <tr><td>Container Apps Env</td><td><code>cae-t3code-*</code></td><td>Managed runtime host</td></tr>
-        <tr><td>Container App</td><td><code>ca-t3code-*</code></td><td>The running T3 Code server</td></tr>
-        <tr><td>Storage Account + File Share</td><td>Azure Files</td><td>Persistent <code>/data</code> mount</td></tr>
-        <tr><td>Key Vault</td><td>RBAC-enabled</td><td>Provider API key secrets</td></tr>
-        <tr><td>Log Analytics</td><td>PerGB2018</td><td>Logs &amp; observability (OTLP optional)</td></tr>
-      </tbody>
-    </table>
-  </div>
-</main>
-
-<footer>
-  <div class="legend">
-    <span><span class="swatch" style="background:#2f6fed"></span>Azure-managed service</span>
-    <span><span class="swatch" style="background:#1c2950"></span>Application component</span>
-  </div>
-  <p style="margin-top:12px;">T3 Code — minimal web GUI for coding agents. Single stateful replica on Azure Container Apps,
-     provisioned with Terraform and built via multi-stage Docker. Diagram for customer reference.</p>
-</footer>
-</body>
+    <footer>
+      <div class="legend">
+        <span><span class="swatch" style="background: #2f6fed"></span>Azure-managed service</span>
+        <span><span class="swatch" style="background: #1c2950"></span>Application component</span>
+      </div>
+      <p style="margin-top: 12px">
+        T3 Code — minimal web GUI for coding agents. Single stateful replica on Azure Container
+        Apps, provisioned with Terraform and built via multi-stage Docker. Diagram for customer
+        reference.
+      </p>
+    </footer>
+  </body>
 </html>
