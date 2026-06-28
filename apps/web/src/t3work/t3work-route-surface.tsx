@@ -104,7 +104,7 @@ export function T3workRouteSurface() {
         <div className="w-full max-w-xl rounded-lg border border-border/70 bg-card/30 p-8 shadow-sm/5">
           <h2 className="text-xl font-semibold">Authentication required</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            This environment requires pairing before opening T3 Work threads.
+            This environment requires pairing before opening Nexi AI threads.
           </p>
           <div className="mt-6 flex items-center gap-2">
             <button

@@ -48,13 +48,10 @@ export function T3workSetupWelcomeSurface({ onCreate }: { onCreate: () => void }
         style={{ borderBottom: "1px solid var(--nx-border)" }}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span className="nx-logo">
-            <Sparkles className="size-4" />
-          </span>
+          <img className="nx-logo" src="/nexi-logo.png" alt="Nexi AI" />
           <span className="truncate text-sm font-semibold" style={{ color: "var(--nx-heading)" }}>
-            t3work
+            Nexi AI
           </span>
-          <span className="nx-brand-badge">Nexi AI</span>
         </div>
         {APP_STAGE_LABEL ? <span className="nx-version">{APP_STAGE_LABEL}</span> : null}
       </header>
@@ -66,7 +63,7 @@ export function T3workSetupWelcomeSurface({ onCreate }: { onCreate: () => void }
               <Sparkles className="size-3.5" />
               Setup wizard
             </span>
-            <h1 className="nx-h1 max-w-[16rem]">Bring your Jira work into t3work.</h1>
+            <h1 className="nx-h1 max-w-[16rem]">Bring your Jira work into Nexi AI.</h1>
             <p className="nx-sub max-w-[18rem]">
               Connect Jira, choose how Nexi AI should support your team and start with guided
               project setup.

@@ -93,7 +93,7 @@ function ProjectBrowserEmpty({
         })}
       >
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-        <span className="text-sm font-medium text-muted-foreground/70">Set up t3work</span>
+        <span className="text-sm font-medium text-muted-foreground/70">Set up Nexi AI</span>
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
         <div

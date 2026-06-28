@@ -34,12 +34,12 @@ const makeWorkspacePath = (title: string): string => {
   const platform: string = maybeProcess.process?.platform ?? "browser";
   const base =
     platform === "darwin"
-      ? `${home}/Library/Application Support/T3 Code/t3work/projects`
+      ? `${home}/Library/Application Support/Nexi AI/t3work/projects`
       : platform === "win32"
-        ? `${home}/AppData/Roaming/T3 Code/t3work/projects`
+        ? `${home}/AppData/Roaming/Nexi AI/t3work/projects`
         : platform === "browser"
           ? `${home}/.t3code/t3work/projects`
-          : `${home}/.config/T3 Code/t3work/projects`;
+          : `${home}/.config/Nexi AI/t3work/projects`;
   return `${base}/${normalizeWorkspaceDirectoryName(title)}`;
 };
 

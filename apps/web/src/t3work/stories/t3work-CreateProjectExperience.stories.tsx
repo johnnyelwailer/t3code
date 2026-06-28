@@ -206,7 +206,7 @@ function CreateProjectExperienceStory({ autoAdvance = false }: { autoAdvance?: b
                   {step === "confirm" ? (
                     <section className="space-y-6">
                       <div className="space-y-2">
-                        <h3 className="text-sm font-semibold">How should t3work work with you?</h3>
+                        <h3 className="text-sm font-semibold">How should Nexi AI work with you?</h3>
                         <p className="text-xs text-muted-foreground">
                           This Storybook step keeps setup local so you can judge the transition
                           without backend noise.

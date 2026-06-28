@@ -45,7 +45,7 @@ export function ConfirmStep({
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold">How should t3work work with you?</h3>
+            <h3 className="text-sm font-semibold">How should Nexi AI work with you?</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Choose the default tone for this project workspace.
             </p>

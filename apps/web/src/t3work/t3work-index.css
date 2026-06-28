@@ -923,13 +923,12 @@ label:has(> select#reasoning-effort) select {
   color: var(--nx-indigo);
 }
 .nx-logo {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--nx-accent);
-  color: #fff;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 .nx-version {
   font-size: 12px;

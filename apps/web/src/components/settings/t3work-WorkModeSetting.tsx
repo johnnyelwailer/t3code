@@ -95,7 +95,7 @@ export function T3workWorkModeSetting() {
           <div className="space-y-1">
             <h4 className="text-sm font-medium">Default project setup</h4>
             <p className="text-xs text-muted-foreground">
-              Choose the default profile used when t3work creates a managed project workspace.
+              Choose the default profile used when Nexi AI creates a managed project workspace.
             </p>
           </div>
           <Select

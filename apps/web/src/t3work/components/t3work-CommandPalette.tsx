@@ -443,7 +443,7 @@ export function T3workCommandPalette(props: T3workCommandPaletteProps) {
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandDialogPopup
-        aria-label="T3 Work search"
+        aria-label="Nexi AI search"
         className="overflow-hidden p-0"
         finalFocus={() => false}
         onBackdropPointerDown={() => {
@@ -452,7 +452,7 @@ export function T3workCommandPalette(props: T3workCommandPaletteProps) {
       >
         <Command
           key={isSubmenu ? "submenu" : "root"}
-          aria-label="T3 Work command palette"
+          aria-label="Nexi AI command palette"
           autoHighlight="always"
           mode="none"
           onItemHighlighted={(value) => {

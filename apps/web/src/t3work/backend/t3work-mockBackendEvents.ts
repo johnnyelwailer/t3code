@@ -163,7 +163,7 @@ export function emitMockWelcome(
       type: "welcome",
       payload: {
         version: "0.0.24",
-        appName: "T3 Work",
+        appName: "Nexi AI",
         environmentId: "mock-env",
         authDescriptor: { requiresAuth: false, method: "none" },
       },
