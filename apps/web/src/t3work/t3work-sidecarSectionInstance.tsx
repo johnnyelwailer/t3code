@@ -1,5 +1,5 @@
 /* oxlint-disable react/no-unstable-nested-components -- Existing merged lint debt; keep green while preserving behavior. */
-import { startTransition } from "react";
+import { startTransition, type ReactNode } from "react";
 import {
   isSidecarItemPinned,
   resolveSidecarSectionItemOrder,
@@ -26,7 +26,10 @@ import {
   mergeT3workSidecarSectionProps,
   runT3workSidecarDeclaredAction,
 } from "~/t3work/t3work-sidecarSectionShellHelpers";
-import { getT3workSidecarSectionComponent } from "~/t3work/t3work-sidecarSectionRegistry";
+import {
+  getT3workSidecarSectionComponent,
+  resolveT3workSidecarSectionIsEmpty,
+} from "~/t3work/t3work-sidecarSectionRegistry";
 import type { SidecarSectionHost } from "~/t3work/t3work-sidecarSectionHost";
 import type { useRunT3workDeterministicWorkflowLaunch } from "~/t3work/t3work-inlineRecipeLaunch";
 import {
@@ -103,6 +106,63 @@ export function T3workSidecarSectionInstance({
       });
     });
   };
+  const mergedSectionProps = mergeT3workSidecarSectionProps(resolveSectionProps?.(definition.id), {
+    orderItemIds: (itemIds: ReadonlyArray<string>) =>
+      resolveSidecarSectionItemOrder({
+        itemIds,
+        personalization: sectionItemPersonalization,
+      }),
+    wrapItem: (item: unknown, content: ReactNode) => {
+      const itemId = getT3workSidecarItemId(item);
+      const itemLabel = getT3workSidecarItemLabel(item);
+      const sourcePath = getT3workSidecarItemSourcePath(item);
+      if (!itemId) {
+        return content;
+      }
+      const itemResetLaunch = buildT3workSidecarItemResetLaunch({
+        surface,
+        sectionId: definition.id,
+        itemId,
+        itemTitle: itemLabel,
+        personalization,
+      });
+
+      return (
+        <T3workSidecarSectionItemMenu
+          entries={buildT3workSidecarItemMenuEntries({
+            pinned: isSidecarItemPinned({
+              itemId,
+              personalization: sectionItemPersonalization,
+            }),
+            onPinItem: () => pinItem(definition.id, itemId),
+            onUnpinItem: () => unpinItem(definition.id, itemId),
+            ...(sourcePath ? { editSourcePath: sourcePath } : {}),
+            onEditItem: (targetPath) => {
+              void host.launchRecipe("edit-plugin-module", { targetPath });
+            },
+            showCustomizeItem: itemResetLaunch !== null,
+            onCustomizeItem: itemResetLaunch
+              ? () => {
+                  startTransition(() => {
+                    void runWorkflowLaunch(itemResetLaunch);
+                  });
+                }
+              : undefined,
+            onHideItem: () => hideItem(definition.id, itemId),
+            declaredActions: definition.itemActions?.(item),
+            onRunDeclaredAction: (action) => runDeclaredAction(action, itemId),
+          })}
+          label={itemLabel}
+        >
+          {content}
+        </T3workSidecarSectionItemMenu>
+      );
+    },
+  });
+
+  if (resolveT3workSidecarSectionIsEmpty(definition.component, mergedSectionProps) === true) {
+    return null;
+  }
 
   return (
     <T3workSidecarSectionFrame
@@ -131,66 +191,7 @@ export function T3workSidecarSectionInstance({
       })}
     >
       <T3workSidecarSectionErrorBoundary fallback={fallback}>
-        {SectionComponent ? (
-          <SectionComponent
-            host={host}
-            props={mergeT3workSidecarSectionProps(resolveSectionProps?.(definition.id), {
-              orderItemIds: (itemIds) =>
-                resolveSidecarSectionItemOrder({
-                  itemIds,
-                  personalization: sectionItemPersonalization,
-                }),
-              wrapItem: (item, content) => {
-                const itemId = getT3workSidecarItemId(item);
-                const itemLabel = getT3workSidecarItemLabel(item);
-                const sourcePath = getT3workSidecarItemSourcePath(item);
-                if (!itemId) {
-                  return content;
-                }
-                const itemResetLaunch = buildT3workSidecarItemResetLaunch({
-                  surface,
-                  sectionId: definition.id,
-                  itemId,
-                  itemTitle: itemLabel,
-                  personalization,
-                });
-
-                return (
-                  <T3workSidecarSectionItemMenu
-                    entries={buildT3workSidecarItemMenuEntries({
-                      pinned: isSidecarItemPinned({
-                        itemId,
-                        personalization: sectionItemPersonalization,
-                      }),
-                      onPinItem: () => pinItem(definition.id, itemId),
-                      onUnpinItem: () => unpinItem(definition.id, itemId),
-                      ...(sourcePath ? { editSourcePath: sourcePath } : {}),
-                      onEditItem: (targetPath) => {
-                        void host.launchRecipe("edit-plugin-module", { targetPath });
-                      },
-                      showCustomizeItem: itemResetLaunch !== null,
-                      onCustomizeItem: itemResetLaunch
-                        ? () => {
-                            startTransition(() => {
-                              void runWorkflowLaunch(itemResetLaunch);
-                            });
-                          }
-                        : undefined,
-                      onHideItem: () => hideItem(definition.id, itemId),
-                      declaredActions: definition.itemActions?.(item),
-                      onRunDeclaredAction: (action) => runDeclaredAction(action, itemId),
-                    })}
-                    label={itemLabel}
-                  >
-                    {content}
-                  </T3workSidecarSectionItemMenu>
-                );
-              },
-            })}
-          />
-        ) : (
-          fallback
-        )}
+        {SectionComponent ? <SectionComponent host={host} props={mergedSectionProps} /> : fallback}
       </T3workSidecarSectionErrorBoundary>
     </T3workSidecarSectionFrame>
   );

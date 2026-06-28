@@ -40,14 +40,14 @@ Profiles affect:
 - mutation safety posture
 - follow-up suggestions
 - surface defaults such as summary-first vs diff-first emphasis
-- **sidecar section composition** — which
-  [sidecar sections](./19-workspace-miniapps.md#sidecar-sections) are visible by default,
-  in what order, and which are collapsed; the profile sets the starting point (e.g., a
-  QA profile leads with Open Bugs + QA Quick Starts; an engineering profile leads with
-  Open Pull Requests). Profile defaults are the second layer in the override stack
-  `bundled defaults → profile defaults → project config → user overrides`; the user can
-  override per workspace via the context-menu hide / pin / reorder actions
-  ([Epic 19 — Context menus](./19-workspace-miniapps.md#context-menus))
+- **sidecar section composition** — section **order and collapse** in the
+  [sidecar](./19-workspace-miniapps.md#sidecar-sections); all profiles share the same
+  section id catalog (Filters, Quick actions, QA, Refinement, Planning, Engineering,
+  Delivery, Customize, Recent). A QA profile may reorder to surface QA earlier; an
+  engineering profile may collapse Customize. Profile defaults are the second layer in
+  the override stack `bundled defaults → profile defaults → project config → user
+  overrides`; the user can override per workspace via the context-menu hide / pin /
+  reorder actions ([Epic 19 — Context menus](./19-workspace-miniapps.md#context-menus))
 
 ### Skill Pack
 

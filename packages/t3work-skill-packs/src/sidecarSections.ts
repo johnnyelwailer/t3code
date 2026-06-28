@@ -4,6 +4,12 @@ import {
   type SidecarSectionDefinition,
 } from "@t3tools/project-recipes";
 
+const SIDECAR_SURFACES = [
+  "project.dashboard.backlog",
+  "project.dashboard.myWork",
+  "workitem.detail.sidepanel",
+] as const;
+
 function isBacklogAssigneeQuickStart(
   item: unknown,
 ): item is { readonly id: string; readonly workflow: { readonly surface: string } } {
@@ -21,18 +27,31 @@ function isBacklogAssigneeQuickStart(
   );
 }
 
+function defineTopicRecipeListSection(input: {
+  readonly id: string;
+  readonly title: string;
+  readonly shortDescription: string;
+}): SidecarSectionDefinition {
+  return defineSidecarSection({
+    id: input.id,
+    version: "1.0.0",
+    title: input.title,
+    shortDescription: input.shortDescription,
+    surfaces: [...SIDECAR_SURFACES],
+    component: "recipe-list",
+    allowedToolGroups: ["view.state", "thread.handoff"],
+    defaults: { collapsed: false, visible: true },
+  });
+}
+
 const BUNDLED_SIDECAR_SECTIONS: ReadonlyArray<SidecarSectionDefinition> = [
   defineSidecarSection({
-    id: "quick-starts",
+    id: "filters",
     version: "1.0.0",
-    title: "Quick starts",
-    shortDescription: "Recipes matched to the active view.",
-    surfaces: [
-      "project.dashboard.backlog",
-      "project.dashboard.myWork",
-      "workitem.detail.sidepanel",
-    ],
-    component: "quick-starts",
+    title: "Filters",
+    shortDescription: "Narrow what you see on the board.",
+    surfaces: [...SIDECAR_SURFACES],
+    component: "inline-filters",
     allowedToolGroups: ["view.state", "thread.handoff"],
     itemActions: (item) =>
       isBacklogAssigneeQuickStart(item)
@@ -50,28 +69,68 @@ const BUNDLED_SIDECAR_SECTIONS: ReadonlyArray<SidecarSectionDefinition> = [
         : [],
     defaults: { collapsed: false, visible: true },
   }),
+  defineTopicRecipeListSection({
+    id: "quick-actions",
+    title: "Quick actions",
+    shortDescription: "Simple conversation starters for the active view.",
+  }),
+  defineTopicRecipeListSection({
+    id: "qa",
+    title: "QA",
+    shortDescription: "Verification and acceptance workflows.",
+  }),
+  defineTopicRecipeListSection({
+    id: "refinement",
+    title: "Refinement",
+    shortDescription: "Shape stories, epics, and backlog slices.",
+  }),
+  defineTopicRecipeListSection({
+    id: "planning",
+    title: "Planning",
+    shortDescription: "Sprint fit, capacity, and commitment helpers.",
+  }),
+  defineTopicRecipeListSection({
+    id: "engineering",
+    title: "Engineering",
+    shortDescription: "Implementation planning and technical guidance.",
+  }),
+  defineTopicRecipeListSection({
+    id: "delivery",
+    title: "Delivery",
+    shortDescription: "Unblock, handoff, and coordination moves.",
+  }),
+  defineTopicRecipeListSection({
+    id: "customize",
+    title: "Customize",
+    shortDescription: "Author or edit project-local recipes and plugins.",
+  }),
   defineSidecarSection({
-    id: "recent-conversations",
+    id: "recent",
     version: "1.0.0",
-    title: "Recent conversations",
+    title: "Recent",
     shortDescription: "Resume or revisit recent thread activity.",
-    surfaces: [
-      "project.dashboard.backlog",
-      "project.dashboard.myWork",
-      "workitem.detail.sidepanel",
-    ],
+    surfaces: [...SIDECAR_SURFACES],
     component: "recent-conversations",
-    defaults: { collapsed: false, visible: true },
+    defaults: { collapsed: true, visible: true },
   }),
 ];
 
-export const DEFAULT_SIDECAR_COMPOSITION: SidecarComposition = {
-  sections: BUNDLED_SIDECAR_SECTIONS.map((section) => ({
-    sectionId: section.id,
-    ...(section.defaults?.visible !== undefined ? { visible: section.defaults.visible } : {}),
-    ...(section.defaults?.collapsed !== undefined ? { collapsed: section.defaults.collapsed } : {}),
-  })),
+export const DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION: SidecarComposition = {
+  sections: [
+    { sectionId: "filters" },
+    { sectionId: "quick-actions" },
+    { sectionId: "qa" },
+    { sectionId: "refinement" },
+    { sectionId: "planning" },
+    { sectionId: "engineering" },
+    { sectionId: "delivery" },
+    { sectionId: "customize" },
+    { sectionId: "recent", collapsed: true },
+  ],
 };
+
+export const DEFAULT_SIDECAR_COMPOSITION: SidecarComposition =
+  DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION;
 
 export function listBundledSidecarSections(): ReadonlyArray<SidecarSectionDefinition> {
   return BUNDLED_SIDECAR_SECTIONS;

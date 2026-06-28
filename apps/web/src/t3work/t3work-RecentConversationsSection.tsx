@@ -15,6 +15,20 @@ export type RecentConversationsSectionProps = {
   readonly shell?: T3workSidecarSectionShellProps<ProjectThread> | undefined;
 };
 
+function isRecentConversationsSectionProps(
+  props: unknown,
+): props is RecentConversationsSectionProps {
+  return typeof props === "object" && props !== null && "threads" in props;
+}
+
+export function resolveRecentConversationsSectionIsEmpty(props: unknown): boolean {
+  if (!isRecentConversationsSectionProps(props)) {
+    return true;
+  }
+
+  return (props.threads?.length ?? 0) === 0;
+}
+
 export function T3workRecentConversationsSection({
   host,
   props,
@@ -28,6 +42,10 @@ export function T3workRecentConversationsSection({
     getItemId: (thread) => thread.id,
     shell: sectionProps?.shell,
   });
+
+  if (orderedThreads.length === 0) {
+    return null;
+  }
 
   return (
     <T3workRecentConversations

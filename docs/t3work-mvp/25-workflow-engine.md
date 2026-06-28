@@ -895,7 +895,7 @@ a richer handle with `status$`, `cancel()`, and `.result: Promise<O>`.
 
 There is no string-keyed action registry on the recipe; views fire workflows directly via
 the imported ref. The recipe's `defaultAction` is the only binding the launcher needs
-statically — it's what the Quick Starts card / `/<slashAlias>` selection runs.
+statically — it's what a `recipe-list` sidecar card / `/<slashAlias>` selection runs.
 
 Sub-workflow invocation from inside another workflow body uses the `workflow()` global
 with a typed `WorkflowRef`:

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 import { usePublishT3workDashboardRecipeViewSummary } from "~/t3work/t3work-dashboardRecipeViewContext";
 import { buildBacklogRecipeViewSummary } from "~/t3work/t3work-dashboardRecipeSummary";
+import { hasBacklogViewFiltersActive } from "~/t3work/t3work-dashboardRecipeFilterOutcomes";
 import {
   buildProjectBacklogOwnershipGroups,
   buildProjectBacklogPlanningLanes,
@@ -71,7 +72,14 @@ export function useProjectDashboardBacklogDerivedData(
       hierarchyPresentation: buildVisibleBacklogHierarchy(allTickets, filteredTickets),
       planningLanes: buildProjectBacklogPlanningLanes(filteredTickets),
       ownershipGroups: buildProjectBacklogOwnershipGroups(filteredTickets),
-      recipeViewSummary: buildBacklogRecipeViewSummary(filteredTickets),
+      recipeViewSummary: {
+        ...buildBacklogRecipeViewSummary(filteredTickets),
+        viewFiltersActive: hasBacklogViewFiltersActive({
+          query,
+          focusFilter,
+          assigneeFilter: assigneeFilter ?? "",
+        }),
+      },
     };
   }, [
     assigneeFilter,

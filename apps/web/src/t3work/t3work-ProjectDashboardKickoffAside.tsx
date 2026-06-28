@@ -5,10 +5,13 @@ import { ScrollArea } from "~/t3work/components/ui/t3work-scroll-area";
 import { useProjectDashboardInjectedContextAttachments } from "~/t3work/hooks/t3work-useProjectDashboardInjectedContextAttachments";
 import type { ProjectDashboardKickoffAsideProps } from "~/t3work/t3work-ProjectDashboardKickoffAsideTypes";
 import { EmbeddedThreadAside } from "~/t3work/t3work-EmbeddedThreadAside";
-import { readProjectSetupProfileIdFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
+import {
+  readProjectSetupProfileIdFromProject,
+  readProjectSidecarCompositionFromProject,
+} from "~/t3work/hooks/t3work-createProjectBootstrap";
+import { resolveT3workKickoffSectionProps } from "~/t3work/t3work-sidecarKickoffSectionProps";
 import { ProjectDashboardKickoffComposer } from "~/t3work/t3work-ProjectDashboardKickoffComposer";
 import { T3workSidecarComposition } from "~/t3work/t3work-SidecarComposition";
-import { useRunT3workDashboardRecipeAction } from "~/t3work/t3work-dashboardRecipeActions";
 import { buildProjectDashboardSelectedRecipe } from "~/t3work/t3work-dashboardRecipeSelection";
 import { buildT3workSelectedRecipeKickoffLaunch } from "~/t3work/t3work-recipeQuickStartLaunch";
 import { useT3workDashboardRecipeViewSummary } from "~/t3work/t3work-dashboardRecipeViewContext";
@@ -29,8 +32,8 @@ export function ProjectDashboardKickoffAside({
 }: ProjectDashboardKickoffAsideProps) {
   const backend = useBackend();
   const environmentId = usePrimaryEnvironmentId();
-  const runDashboardRecipeAction = useRunT3workDashboardRecipeAction();
   const profileId = readProjectSetupProfileIdFromProject(project);
+  const projectDefault = readProjectSidecarCompositionFromProject(project);
   const { clearInjectedContextAttachments, injectedContextAttachments, removeContextAttachment } =
     useProjectDashboardInjectedContextAttachments(project.id);
   const currentViewSummary = useT3workDashboardRecipeViewSummary();
@@ -92,7 +95,6 @@ export function ProjectDashboardKickoffAside({
         buildProjectDashboardSelectedRecipe({
           recipe,
           ...(customization ? { customization } : {}),
-          runDashboardRecipeAction,
         }),
       createThread: ({ kickoffMessage, kickoffWorkflow, launchConfig }) =>
         onKickoffThread(
@@ -134,23 +136,16 @@ export function ProjectDashboardKickoffAside({
         <T3workSidecarComposition
           surface={sidecarSurface}
           profileId={profileId}
+          projectDefault={projectDefault}
           host={sidecarHost}
-          resolveSectionProps={(sectionId) => {
-            if (sectionId === "quick-starts") {
-              return {
-                recipeInput: quickStartRecipeInput,
-                ...(selectedRecipe?.recipe.id
-                  ? { selectedRecipeId: selectedRecipe.recipe.id }
-                  : {}),
-              };
-            }
-
-            if (sectionId === "recent-conversations") {
-              return { threads: projectThreads };
-            }
-
-            return undefined;
-          }}
+          resolveSectionProps={(sectionId) =>
+            resolveT3workKickoffSectionProps({
+              sectionId,
+              recipeInput: quickStartRecipeInput,
+              ...(selectedRecipe?.recipe.id ? { selectedRecipeId: selectedRecipe.recipe.id } : {}),
+              recentThreads: projectThreads,
+            })
+          }
         />
       </ScrollArea>
 

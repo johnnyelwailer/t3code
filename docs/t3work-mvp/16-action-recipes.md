@@ -77,6 +77,8 @@ export default defineRecipe({
   version: "0.1.0",
   scope: "project",
   surfaces: ["workitem.detail.sidepanel"],
+  // Required: which sidecar topic section groups this recipe (see Epic 19).
+  topic: "qa",
 
   // Metadata is derived from context in code, not via {{ }} expressions.
   displayName: (ctx) => `Create QA plan for ${ctx.workitem?.displayId ?? "selected work"}`,
@@ -446,6 +448,51 @@ workspace directory. A project-local recipe whose id matches a bundled one inher
 bundled visibility/rank unless it declares its own. The long-term goal is a single
 discovery path over a single recipe type, regardless of source.
 
+Every recipe — bundled or project-local — **must** declare `topic` so sidecar composition
+can bucket matched actions into the correct section
+([Epic 19 — Topic catalog](./19-workspace-miniapps.md#topic-catalog)). Profile
+`sidecarSections` controls section **order and collapse only**; it does not gate which
+topics exist.
+
+#### Bundled catalog disposition
+
+Main-branch bundled recipes are being reorganized from a single Quick Starts monolith into
+topic-grouped sections. Disposition key:
+
+- **KEEP** — ship in default catalog and surfaces
+- **PACK** — bundled but skill-pack / profile gated
+- **META** — authoring tools (`create-recipe`, `edit-plugin-module`), not end-user defaults
+- **DEFER** — remove from default surfaces; reintroduce via project-local or when signals proven
+
+| Recipe                          | Class       | Topic         | Surfaces           | Disposition        |
+| ------------------------------- | ----------- | ------------- | ------------------ | ------------------ |
+| `show-only-assigned-to-me`      | View action | `filters`     | backlog            | **KEEP**           |
+| `clear-filters`                 | View action | `filters`     | dashboard          | **KEEP**           |
+| `focus-needs-my-action`         | Hybrid      | `filters`     | dashboard          | **KEEP**           |
+| `explain-selected-work`         | Chat        | `quick-actions` | dashboard + ticket | **KEEP**           |
+| `review-acceptance-criteria`    | Chat        | `qa`          | ticket             | **KEEP**           |
+| `tshirt-size-epic`              | Chat        | `refinement`  | ticket + backlog   | **KEEP**           |
+| `shape-next-backlog-slice`      | Chat        | `refinement`  | backlog            | **KEEP**           |
+| `create-qa-test-plan`           | Chat        | `qa`          | ticket             | **PACK**           |
+| `technical-implementation-plan` | Chat        | `engineering` | ticket             | **PACK**           |
+| `unblock-blocked-ticket`        | Chat        | `delivery`    | ticket             | **PACK**           |
+| `prioritize-pending-work`       | Chat        | `planning`    | dashboard          | **DEFER→planning** |
+| `create-contextual-recipe`      | Meta        | `customize`   | dashboard + ticket | **META**           |
+| `create-recipe`                 | Meta        | `customize`   | dashboard + ticket | **META**           |
+| `edit-plugin-module`            | Meta        | `customize`   | dashboard + ticket | **META**           |
+
+**Filters note:** `show-only-assigned-to-me` duplicates backlog filter-bar assignee
+narrowing. Keep it in the sidecar for now; long-term it may move to filter chips once chip
+UX is validated. Do not remove without updating click-path tests.
+
+**Refinement vs Planning:** refinement covers early shaping (t-shirt-size epic, backlog
+slice); planning covers sprint/commitment work (estimate/split/assign, capacity, scope
+moves). Do not conflate the two topics when authoring or reviewing recipes.
+
+**Role coverage:** engineering and refinement examples are the most validated. QA,
+planning, delivery, and customize recipes use the same model but need copy and
+applicability reviewed by role owners before treating the catalog as complete.
+
 ## Conversation Participants
 
 A conversation has **three message authors**: `user`, `agent`, and `system`. The third
@@ -616,10 +663,22 @@ behaviour selected by whether the body uses the `thread` global.
 
 ### Launcher UX by workflow shape
 
-The shell does not own a single launcher UX. Recipes surface through **sidecar sections**
-([Epic 19 — Sidecar Sections](./19-workspace-miniapps.md#sidecar-sections)) — most
-commonly the bundled "Quick Starts" section — and that section's View decides per-item
-click behaviour based on the workflow's content:
+Recipes surface through **topic-grouped sidecar sections**
+([Epic 19 — Sidecar Sections](./19-workspace-miniapps.md#sidecar-sections)). Every
+recipe declares a required `topic`; matched recipes bucket into the section whose
+`topicFilter` includes that topic. **A section renders only when it has ≥1 visible
+matched action** — empty topic buckets auto-hide.
+
+Section `component` drives click behavior (not per-recipe shell hacks):
+
+| Section `component`   | Typical `topic`(s)              | Click behaviour                                                                 |
+| --------------------- | ------------------------------- | ------------------------------------------------------------------------------- |
+| `inline-filters`      | `filters`                       | **Apply** → execute deterministic workflow (view narrows, no chat). Optional **Rank next** → `stageKickoff` for hybrid ranking flows. |
+| `recipe-list`         | `quick-actions`, `qa`, `refinement`, `planning`, `engineering`, `delivery`, `customize` | Card → `stageKickoff` (composer chip, then submit per shape below)              |
+| `recent-conversations`| — (not a recipe topic)          | Navigate to thread                                                              |
+
+Within `recipe-list` and `inline-filters`, workflow shape still selects the post-click
+path:
 
 | Workflow shape                                         | Click behaviour         | Result surface                                                                        |
 | ------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------- |
@@ -627,9 +686,9 @@ click behaviour based on the workflow's content:
 | Drives `thread.askAgent` / `askUser`                   | Launch chat directly    | Chat thread opens; the body drives turns + user escalations                           |
 | One-shot compute (`agent(…, { schema })`, no `thread`) | Execute, capture result | Artifact ([Epic 08](./08-rich-artifacts.md)) or inline toast with the result; no chat |
 
-The launcher detects the shape at click time and selects the row above. The same recipe
-authoring shape (`recipe.ts`) covers all three; nothing on the recipe declares which UX it
-wants.
+The launcher detects workflow shape at click time. The same recipe authoring shape
+(`recipe.ts`) covers all three; nothing on the recipe declares which UX it wants beyond
+`topic` (section placement) and workflow body (interaction path).
 
 In the legacy runtime, the launcher inspects the recipe's step list. In the Epic 25
 engine, the same shape detection is performed by static analysis of the workflow body —
@@ -646,15 +705,16 @@ The same deterministic launcher path also backs sidecar context-menu actions dec
 single-step workflow launched through the existing `launchRecipeWorkflow` runtime; there
 is no parallel sidecar-action executor.
 
-These UX rules belong to the Quick Starts section (and any future recipe-launcher
-section). Other sidecar sections — Recent Threads, Open Pull Requests, Status Widgets —
-have entirely different click behaviours owned by their own View.
+Composer slash commands ([below](#composer-slash-command-launchers)) apply to
+`recipe-list` sections only (Phase C). Other sidecar sections — Recent, Open Pull
+Requests, Status Widgets — have entirely different click behaviours owned by their
+section `component`.
 
 ### Composer slash-command launchers
 
 A recipe can also be selected from the composer by typing `/<slashAlias>`. The slash
-typeahead is the keyboard-driven equivalent of clicking a Quick Starts card: the recipe
-becomes the composer's pre-submit selection chip, the user keeps typing free-form
+typeahead is the keyboard-driven equivalent of clicking a `recipe-list` section card: the
+recipe becomes the composer's pre-submit selection chip, the user keeps typing free-form
 kickoff text, and submission funnels through the normal [Launcher UX by workflow shape](#launcher-ux-by-workflow-shape)
 table — there is no second launch path.
 
@@ -684,7 +744,7 @@ The composer hands the recipe catalog plus the current surface context (kickoff 
 `project.dashboard.backlog` or `project.dashboard.myWork` depending on the dashboard tab;
 in-thread = `thread.context`) and gets back the surface-applicable recipes in rank order.
 Recipes whose `visible(ctx)` returns false are filtered out. This means the slash menu
-shows exactly the same recipes the user would see as Quick Starts cards — no parallel
+shows the same recipes the user would see in `recipe-list` sidecar sections — no parallel
 catalog, no separate visibility predicate.
 
 The empty-query view (cursor immediately after `/`) shows all applicable recipes; typed
@@ -720,7 +780,7 @@ defineRecipe({
   stored without it.
 - Default: when omitted, the recipe is reachable as `/<id>`. Recipes whose `id` is not a
   valid alias (uppercase, dots, etc.) get no implicit alias — they remain reachable only
-  through the Quick Starts card.
+  through the sidecar card.
 - Per-surface scope: the alias is global within a project. Two recipes may share an alias
   only if their `surfaces` are disjoint; otherwise the merge step rejects the later one
   (see [Bundled vs. project-local recipes](#bundled-vs-project-local-recipes) for the
@@ -741,7 +801,7 @@ order, refusing to register any later contributor that collides:
    visibility/rank inheritance rule).
 
 Collisions surface in the same diagnostic channel as other recipe-load failures — the
-recipe loads but its slash alias is suppressed; the Quick Starts card remains available.
+recipe loads but its slash alias is suppressed; the sidecar card remains available.
 
 #### Selection semantics — "select" not "launch on accept"
 
@@ -751,7 +811,7 @@ click):
 1. The host calls `applyPromptReplacement(rangeStart, rangeEnd, "")` to remove the typed
    `/<alias>` prefix from the editor — same pattern as the existing `/model` selection.
 2. The host calls `setSelectedRecipe(recipe)` on the surrounding composer (the kickoff
-   composer already owns this state for Quick Starts; the in-thread composer uses the
+   composer already owns this state for sidecar selections; the in-thread composer uses the
    equivalent seam).
 3. The composer renders `TicketKickoffComposerSelectedRecipe` (or its in-thread
    equivalent) above the editor with the recipe's icon, title, and remove (`×`) affordance.
@@ -1327,7 +1387,9 @@ project is created. Project-local recipes are the editable source of truth for t
 | Shared tool surface for scripts/steps via broker; enforce `allowedToolGroups`                                                                                                                | Built                                                                                                                                                 |
 | Deterministic workflows (no-agent workflows skip thread/launch-card) + `action.inline` placement                                                                                             | Built (tool-step no-chat path; backlog inline chip wired)                                                                                             |
 | `agent.task` step (background non-interactive LLM call) + step-result binding model                                                                                                          | Subsumed by `agent(…, { schema })` (no separate `agent.task`); step-result binding obsoleted by the replay-based engine (results are scope variables) |
-| Sidecar sections + `defineSidecarSection` SDK + composition model + remove hardcoded kickoff aside                                                                                           | Built (sections + composition + shell menus + declared deterministic actions)                                                                         |
+| Sidecar sections + `defineSidecarSection` SDK + composition model + remove hardcoded kickoff aside                                                                                           | Built (topic-grouped sections, required `recipe.topic`, auto-hide empty sections, `FilterActionCard` Apply/Rank-next in `inline-filters`)             |
+| Wire `projectDefault` from project `profile.json` `sidecarSections` into kickoff panels                                                                                                      | Built (`readProjectSidecarCompositionFromProject`; passed from dashboard + ticket kickoff asides)                                                    |
+| Storybook sidecar/recipe presentation (`RecipeListCard`, `FilterActionCard`, `TopicSection`, `SidecarComposition`)                                                                           | Built (`pnpm storybook` from repo root; stories under `apps/web/src/t3work/**/*.stories.tsx`)                                                         |
 | Composer slash-command launchers for recipes (`slashAlias` + `recipe-slash-command` item kind)                                                                                               | Planned (precondition: extract shared composer-menu hook so kickoff wires `/`, `@`, `$` at all)                                                       |
 | `define*` SDK surface (per-placement helpers, no generic primitive, multi-placement via exports)                                                                                             | Planned (Phase 5 — ships alongside the placements it covers)                                                                                          |
 | Run-directory materialization, `context.json`/schema/map                                                                                                                                     | Built                                                                                                                                                 |

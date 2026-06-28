@@ -19,6 +19,7 @@ export type T3workDashboardRecipeCurrentViewSummary = {
   readonly primaryBugLabel?: string;
   readonly needsMyActionPreset?: T3workDashboardNeedsMyActionPreset;
   readonly needsMyActionCount?: number;
+  readonly viewFiltersActive?: boolean;
 };
 
 function buildBaseRecipeViewSummary(

@@ -1,13 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 
-import type { ProjectDashboardBacklogState } from "~/t3work/t3work-projectDashboardBacklogStateShared";
-import type { ProjectDashboardMyWorkState } from "~/t3work/t3work-projectDashboardMyWorkState";
-import type { ProjectBacklogFocusFilter } from "~/t3work/t3work-projectBacklogUtils";
 import {
   resolveBacklogNeedsMyActionPreset,
   resolveMyWorkNeedsMyActionPreset,
   type T3workDashboardNeedsMyActionPreset,
 } from "~/t3work/t3work-dashboardRecipeSummary";
+import {
+  type ProjectDashboardBacklogState,
+} from "~/t3work/t3work-projectDashboardBacklogStateShared";
+import type { ProjectDashboardMyWorkState } from "~/t3work/t3work-projectDashboardMyWorkState";
+import type { ProjectBacklogFocusFilter } from "~/t3work/t3work-projectBacklogUtils";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 
 export type T3workDashboardRecipeAction =
@@ -16,6 +18,9 @@ export type T3workDashboardRecipeAction =
     }
   | {
       readonly kind: "show-only-assigned-to-me";
+    }
+  | {
+      readonly kind: "clear-filters";
     };
 
 export type T3workDashboardRecipeActionOutcome = {
@@ -35,11 +40,16 @@ const T3workDashboardRecipeActionContext = createContext<{
 export function resolveT3workDashboardRecipeAction(
   recipeId: string,
 ): T3workDashboardRecipeAction | undefined {
-  return recipeId === "focus-needs-my-action"
-    ? {
-        kind: "focus-needs-my-action",
-      }
-    : undefined;
+  if (recipeId === "focus-needs-my-action") {
+    return { kind: "focus-needs-my-action" };
+  }
+  if (recipeId === "show-only-assigned-to-me") {
+    return { kind: "show-only-assigned-to-me" };
+  }
+  if (recipeId === "clear-filters") {
+    return { kind: "clear-filters" };
+  }
+  return undefined;
 }
 
 export function buildBacklogAssignedToMeOutcome(

@@ -4,6 +4,7 @@ import type {
   LinkedRepositorySyncResult,
   ProjectWorkspaceBootstrapResult,
 } from "~/t3work/backend/t3work-types";
+import type { SidecarComposition } from "@t3tools/project-recipes";
 
 export type LinkedRepositoryReference = {
   readonly url: string;
@@ -20,6 +21,7 @@ export type ProjectAgentReferences = {
 
 export type ProjectAgentSetup = {
   readonly profileId?: string;
+  readonly sidecarSections?: SidecarComposition;
 };
 
 export function normalizeRepositoryUrls(
@@ -115,6 +117,33 @@ export function readProjectSetupProfileIdFromProject(project: ProjectShellProjec
   return resolveT3WorkProjectSetupProfileId(
     typeof currentSetup.profileId === "string" ? currentSetup.profileId : undefined,
   );
+}
+
+function isSidecarComposition(value: unknown): value is SidecarComposition {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const sections = (value as SidecarComposition).sections;
+  return (
+    Array.isArray(sections) &&
+    sections.every(
+      (section) =>
+        typeof section === "object" &&
+        section !== null &&
+        typeof section.sectionId === "string" &&
+        section.sectionId.trim().length > 0,
+    )
+  );
+}
+
+export function readProjectSidecarCompositionFromProject(
+  project: ProjectShellProject,
+): SidecarComposition | undefined {
+  const currentRaw = readObjectRecord(project.source.raw);
+  const currentSetup = readObjectRecord(currentRaw.agentSetup);
+  const sidecarSections = currentSetup.sidecarSections;
+  return isSidecarComposition(sidecarSections) ? sidecarSections : undefined;
 }
 
 export function replaceLinkedRepositoryUrlsInProject(
