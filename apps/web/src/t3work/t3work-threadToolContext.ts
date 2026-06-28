@@ -59,7 +59,11 @@ type CreateT3workTurnToolContextInput = {
 export function createT3workTurnToolContext(
   input: CreateT3workTurnToolContextInput,
 ): T3workTurnToolContext | undefined {
-  const selectedTools = [...new Set(input.selectedToolIds ?? DEFAULT_T3WORK_THREAD_TOOL_IDS)]
+  const selectedToolIds =
+    input.selectedToolIds !== undefined && input.selectedToolIds.length === 0
+      ? DEFAULT_T3WORK_THREAD_TOOL_IDS
+      : (input.selectedToolIds ?? DEFAULT_T3WORK_THREAD_TOOL_IDS);
+  const selectedTools = [...new Set(selectedToolIds)]
     .map((toolId) => TOOL_BY_ID.get(toolId))
     .filter((tool): tool is T3workTurnToolDescriptor => tool !== undefined);
 

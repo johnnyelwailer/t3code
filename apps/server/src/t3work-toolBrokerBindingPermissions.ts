@@ -37,6 +37,8 @@ export function buildBindingState(input: {
   return { availableToolIdSet, allowedToolIds, allowedToolIdSet, effectiveGroups };
 }
 
+export type BindingState = ReturnType<typeof buildBindingState>;
+
 export function permissionMessage(
   toolId: string,
   effectiveGroups: ReadonlyArray<ProjectRecipeToolGroupId>,

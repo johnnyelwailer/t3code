@@ -9,6 +9,7 @@ import {
   T3workAtlassianError,
   toAtlassianError,
 } from "./t3work-atlassian-http.ts";
+import { maybeBindT3workBrokerForProviderThread } from "./t3work-mcpBindSession.ts";
 import type { T3workTurnToolContext } from "./t3work-toolBroker.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
 
@@ -32,6 +33,7 @@ export const t3workThreadToolContextRouteLayer = HttpRouter.add(
       threadId: ThreadId.make(threadIdInput),
       ...(input.toolContext !== undefined ? { toolContext: input.toolContext } : {}),
     });
+    yield* maybeBindT3workBrokerForProviderThread(ThreadId.make(threadIdInput));
 
     return okJson({ ok: true });
   }).pipe(
