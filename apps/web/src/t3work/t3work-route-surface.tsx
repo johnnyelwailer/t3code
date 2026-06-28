@@ -168,6 +168,13 @@ export function T3workRouteSurface() {
               search: buildRouteSearch(search),
             });
           }}
+          onOpenProjectRecipes={(projectId) => {
+            void navigate({
+              to: "/t3work/projects/$projectId/recipes",
+              params: { projectId },
+              search: buildRouteSearch(search),
+            });
+          }}
           onProjectCreated={(project: ProjectShellProject) => {
             void navigate({
               to: "/t3work/projects/$projectId",

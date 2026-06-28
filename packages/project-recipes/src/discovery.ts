@@ -155,6 +155,7 @@ export type ProjectRecipeManifest = {
   readonly scope: "project";
   readonly displayName: string;
   readonly shortDescription: string;
+  readonly topic?: string;
   readonly icon?: string;
   readonly surfaces: ReadonlyArray<RecipeSurface>;
   readonly rank?: number | string;
@@ -207,6 +208,7 @@ export type ManagedProjectRecipe = {
   readonly version: string;
   readonly displayName: string;
   readonly shortDescription: string;
+  readonly topic?: string;
   readonly icon?: string;
   readonly surfaces: ReadonlyArray<RecipeSurface>;
   readonly rank?: number | string;

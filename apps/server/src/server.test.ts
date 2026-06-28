@@ -1266,6 +1266,54 @@ const getWsServerUrl = (
   });
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
+  it.effect("serves project recipe management list route", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-router-recipes-",
+      });
+      const recipeRoot = path.join(workspaceRoot, ".t3work", "recipes", "release-checklist");
+      yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
+      yield* fileSystem.writeFileString(
+        path.join(recipeRoot, "recipe.json"),
+        `{
+  "id": "release-checklist",
+  "version": "1.0.0",
+  "scope": "project",
+  "displayName": "Release checklist",
+  "shortDescription": "Prepare the release.",
+  "surfaces": ["project.dashboard.backlog"],
+  "prompt": "./prompt.md"
+}`,
+      );
+      yield* fileSystem.writeFileString(path.join(recipeRoot, "prompt.md"), "Prepare release.");
+
+      yield* buildAppUnderTest();
+
+      const url = yield* getHttpServerUrl("/api/t3work/project/workspace/recipes/manage/list");
+      const response = yield* fetchEffect(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: jsonRequestBody({ workspaceRoot }),
+      });
+      const body = yield* responseJsonEffect<{
+        readonly recipes: ReadonlyArray<{
+          readonly id: string;
+          readonly displayName: string;
+          readonly prompt?: string;
+        }>;
+      }>(response);
+
+      assert.equal(response.status, 200);
+      assert.deepInclude(body.recipes[0], {
+        id: "release-checklist",
+        displayName: "Release checklist",
+        prompt: "Prepare release.",
+      });
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("serves static index content for GET / when staticDir is configured", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;

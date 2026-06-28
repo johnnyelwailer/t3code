@@ -1,4 +1,4 @@
-import { EllipsisIcon, Link2 } from "lucide-react";
+import { BookOpenCheck, EllipsisIcon, Link2 } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { ScrollArea } from "~/t3work/components/ui/t3work-scroll-area";
 import { SidebarTrigger } from "~/t3work/components/ui/t3work-sidebar";
@@ -17,12 +17,14 @@ export function ProjectDashboard({
   shouldInsetDesktopHeader = false,
   onOpenTicket,
   onManageRepositories,
+  onManageRecipes,
 }: {
   project: ProjectShellProject;
   tickets: ProjectTicket[];
   shouldInsetDesktopHeader?: boolean;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onManageRepositories: (projectId: string) => void;
+  onManageRecipes: (projectId: string) => void;
 }) {
   const { state: dashboardState } = useProjectDashboardModeState(project.id);
   const dashboardMode = dashboardState.dashboardMode;
@@ -46,6 +48,10 @@ export function ProjectDashboard({
               <EllipsisIcon className="size-3.5" />
             </MenuTrigger>
             <MenuPopup align="start" side="bottom" className="min-w-48">
+              <MenuItem onClick={() => onManageRecipes(project.id)}>
+                <BookOpenCheck className="size-4" />
+                Manage recipes
+              </MenuItem>
               <MenuItem onClick={() => onManageRepositories(project.id)}>
                 <Link2 className="size-4" />
                 Manage linked repositories

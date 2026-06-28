@@ -12,6 +12,7 @@ type ProjectContextMenuInput = {
   clientY: number;
   projectId: string;
   projectTitle: string;
+  onManageProjectRecipes: (projectId: string) => void;
   onManageProjectRepositories: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onBeginRename: () => void;
@@ -20,6 +21,7 @@ type ProjectContextMenuInput = {
 export function buildProjectContextMenuItems() {
   return [
     { id: "rename", label: "Rename project" },
+    { id: "manage-recipes", label: "Manage recipes" },
     { id: "manage-repositories", label: "Manage linked repositories" },
     { id: "delete", label: "Delete project", destructive: true },
   ] as const;
@@ -40,6 +42,10 @@ export async function showProjectContextMenu(input: ProjectContextMenuInput): Pr
   }
   if (action === "manage-repositories") {
     input.onManageProjectRepositories(input.projectId);
+    return;
+  }
+  if (action === "manage-recipes") {
+    input.onManageProjectRecipes(input.projectId);
     return;
   }
   if (action !== "delete") {

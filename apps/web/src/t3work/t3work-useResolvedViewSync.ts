@@ -6,6 +6,7 @@ import type { ViewState } from "~/t3work/t3work-types";
 export function useResolvedViewSync({
   activeDashboardMode,
   onOpenDashboard,
+  onOpenProjectRecipes,
   onOpenThread,
   onOpenTicket,
   resolvedView,
@@ -20,6 +21,7 @@ export function useResolvedViewSync({
         embeddedThreadId?: string | null,
       ) => void)
     | undefined;
+  onOpenProjectRecipes: ((projectId: string) => void) | undefined;
   onOpenThread: ((projectId: string, threadId: string) => void) | undefined;
   onOpenTicket:
     | ((projectId: string, ticketId: string, embeddedThreadId?: string | null) => void)
@@ -51,11 +53,29 @@ export function useResolvedViewSync({
       return;
     }
 
+    if (view.type === "recipes") {
+      if (onOpenProjectRecipes) {
+        onOpenProjectRecipes(resolvedView.projectId);
+        return;
+      }
+      store.setView(resolvedView);
+      return;
+    }
+
     if (onOpenDashboard) {
       onOpenDashboard(resolvedView.projectId, activeDashboardMode, view.embeddedThreadId);
       return;
     }
 
     store.setView(resolvedView);
-  }, [activeDashboardMode, onOpenDashboard, onOpenThread, onOpenTicket, resolvedView, store, view]);
+  }, [
+    activeDashboardMode,
+    onOpenDashboard,
+    onOpenProjectRecipes,
+    onOpenThread,
+    onOpenTicket,
+    resolvedView,
+    store,
+    view,
+  ]);
 }

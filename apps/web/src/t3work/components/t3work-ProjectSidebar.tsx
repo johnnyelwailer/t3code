@@ -27,6 +27,7 @@ export function ProjectSidebar({
   onOpenSearch,
   onCreateProject,
   onOpenSettings,
+  onManageProjectRecipes,
   onManageProjectRepositories,
   onDeleteProject,
   onRenameProject,
@@ -171,6 +172,7 @@ export function ProjectSidebar({
         onOpenSearch={onOpenSearch}
         onCreateProject={onCreateProject}
         onOpenSettings={onOpenSettings}
+        onManageProjectRecipes={onManageProjectRecipes}
         onManageProjectRepositories={onManageProjectRepositories}
         onDeleteProject={onDeleteProject}
         onRenameProject={onRenameProject}

@@ -1,6 +1,12 @@
 import type {
+  DeleteManagedProjectRecipeRequest,
+  DeleteManagedProjectRecipeResponse,
   DiscoverProjectRecipesRequest,
   DiscoverProjectRecipesResponse,
+  ListManagedProjectRecipesRequest,
+  ListManagedProjectRecipesResponse,
+  UpdateManagedProjectRecipeRequest,
+  UpdateManagedProjectRecipeResponse,
 } from "@t3tools/project-recipes";
 import type {
   GitHubBackendApi,
@@ -69,6 +75,33 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       return postJson<DiscoverProjectRecipesRequest, DiscoverProjectRecipesResponse>(
         httpBaseUrl,
         "/api/t3work/project/workspace/recipes/discover",
+        input,
+      );
+    },
+    listManagedRecipes(
+      input: ListManagedProjectRecipesRequest,
+    ): Promise<ListManagedProjectRecipesResponse> {
+      return postJson<ListManagedProjectRecipesRequest, ListManagedProjectRecipesResponse>(
+        httpBaseUrl,
+        "/api/t3work/project/workspace/recipes/manage/list",
+        input,
+      );
+    },
+    updateManagedRecipe(
+      input: UpdateManagedProjectRecipeRequest,
+    ): Promise<UpdateManagedProjectRecipeResponse> {
+      return postJson<UpdateManagedProjectRecipeRequest, UpdateManagedProjectRecipeResponse>(
+        httpBaseUrl,
+        "/api/t3work/project/workspace/recipes/manage/update",
+        input,
+      );
+    },
+    deleteManagedRecipe(
+      input: DeleteManagedProjectRecipeRequest,
+    ): Promise<DeleteManagedProjectRecipeResponse> {
+      return postJson<DeleteManagedProjectRecipeRequest, DeleteManagedProjectRecipeResponse>(
+        httpBaseUrl,
+        "/api/t3work/project/workspace/recipes/manage/delete",
         input,
       );
     },

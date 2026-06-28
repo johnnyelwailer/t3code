@@ -15,6 +15,7 @@ import { AppDashboardPane } from "~/t3work/t3work-AppDashboardPane";
 import { AppMainContentHomeBrowser } from "~/t3work/t3work-AppMainContentHomeBrowser";
 import { AppThreadPane } from "~/t3work/t3work-AppThreadPane";
 import { isHomeProjectId } from "~/t3work/t3work-homeProject";
+import { renderProjectSidecarPane } from "~/t3work/t3work-appMainContentPanes";
 import { useThreadResolutionDebug } from "~/t3work/t3work-useThreadResolutionDebug";
 import { useHomeProjectChat, useSyncActiveChatTarget } from "./t3work-AppMainContentShell";
 import { useProjectWorkspaceAutoSync } from "~/t3work/hooks/t3work-useProjectWorkspaceAutoSync";
@@ -184,24 +185,24 @@ export function AppMainContent({
   const project = viewProject;
   if (!project) return homeBrowser;
 
-  if (view.type === "dashboard") {
-    return (
-      <AppDashboardPane
-        activeDashboardMode={activeDashboardMode}
-        project={project}
-        projectThreads={getThreadsForProject(project.id)}
-        activeThread={resolvedThread}
-        activeThreadId={view.embeddedThreadId ?? null}
-        providers={backendState.providers}
-        isConnected={backendState.connectionStatus === "connected"}
-        onOpenThread={onOpenThread}
-        onOpenFullThread={onOpenFullThread}
-        onThreadKickoffConsumed={onThreadKickoffConsumed}
-        onRememberEmbeddedThread={(threadId) => onThreadDisplayModeChange(threadId, "embedded")}
-        onKickoffProjectThread={onKickoffProjectThread}
-        renderDashboard={renderDashboard}
-      />
-    );
+  if (view.type === "dashboard" || view.type === "recipes") {
+    return renderProjectSidecarPane({
+      view,
+      project,
+      projectThreads: getThreadsForProject(project.id),
+      activeThread: resolvedThread,
+      activeDashboardMode,
+      providers: backendState.providers,
+      isConnected: backendState.connectionStatus === "connected",
+      shouldInsetDesktopHeader,
+      onOpenThread,
+      onOpenFullThread,
+      onThreadKickoffConsumed,
+      onThreadDisplayModeChange,
+      onKickoffProjectThread,
+      onBackToDashboard,
+      renderDashboard,
+    });
   }
 
   if (view.type === "ticket")

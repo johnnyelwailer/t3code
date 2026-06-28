@@ -9,6 +9,7 @@ import {
 } from "@t3tools/project-recipes";
 
 import { discoverProjectRecipeAtPath, sortRecipes } from "./t3work-projectRecipeDiscoveryRecipe.ts";
+import { T3WORK_RECIPE_DISABLED_MARKER } from "./t3work-projectRecipeManagementPaths.ts";
 import { T3WORK_PROJECT_RECIPES_ROOT } from "./t3work-projectSetupShared.ts";
 
 function normalizeRenderContext(context: ProjectRecipeRenderContext): ProjectRecipeRenderContext {
@@ -50,6 +51,13 @@ export const discoverProjectRecipes = Effect.fn("discoverProjectRecipes")(functi
       .stat(recipePath)
       .pipe(Effect.catch(() => Effect.succeed(null)));
     if (!entryStat || entryStat.type !== "Directory") {
+      continue;
+    }
+    const disabled = yield* fileSystem
+      .exists(pathService.join(recipePath, T3WORK_RECIPE_DISABLED_MARKER))
+      .pipe(Effect.orElseSucceed(() => false));
+    if (disabled) {
+      hasProjectLocalRecipes = true;
       continue;
     }
     const maybeRecipe = yield* discoverProjectRecipeAtPath({

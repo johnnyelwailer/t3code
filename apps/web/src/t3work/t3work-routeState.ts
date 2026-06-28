@@ -13,6 +13,7 @@ export const T3WORK_CREATE_PATH = "/t3work/new";
 const T3WORK_PATH_SEGMENT = "projects";
 const T3WORK_TICKET_SEGMENT = "tickets";
 const T3WORK_THREAD_SEGMENT = "threads";
+const T3WORK_RECIPES_SEGMENT = "recipes";
 const T3WORK_CHAT_THREAD_SEARCH_KEY = "chatThreadId";
 const T3WORK_SETUP_SEARCH_KEY = "setup";
 const T3WORK_SETUP_WELCOME_VALUE = "welcome";
@@ -32,6 +33,10 @@ export type T3workRouteSearchTarget =
   | {
       to: "/t3work/projects/$projectId/tickets/$ticketId";
       params: { projectId: string; ticketId: string };
+    }
+  | {
+      to: "/t3work/projects/$projectId/recipes";
+      params: { projectId: string };
     }
   | {
       to: "/t3work/projects/$projectId/threads/$threadId";
@@ -96,6 +101,14 @@ export function parseT3workViewFromPath(
     };
   }
 
+  if (segments.length === 3 && segments[2] === T3WORK_RECIPES_SEGMENT) {
+    return {
+      type: "recipes",
+      projectId,
+      ...(embeddedThreadId ? { embeddedThreadId } : {}),
+    };
+  }
+
   if (segments.length === 4 && segments[2] === T3WORK_THREAD_SEGMENT && segments[3]) {
     return { type: "thread", projectId, threadId: segments[3] };
   }
@@ -128,6 +141,13 @@ export function resolveT3workRouteSearchTarget(pathname: string): T3workRouteSea
     return {
       to: "/t3work/projects/$projectId/tickets/$ticketId",
       params: { projectId: view.projectId, ticketId: view.ticketId },
+    };
+  }
+
+  if (view.type === "recipes") {
+    return {
+      to: "/t3work/projects/$projectId/recipes",
+      params: { projectId: view.projectId },
     };
   }
 

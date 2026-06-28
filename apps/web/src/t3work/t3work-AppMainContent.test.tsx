@@ -19,6 +19,10 @@ vi.mock("~/t3work/t3work-AppDashboardPane", () => ({
   ),
 }));
 
+vi.mock("~/t3work/t3work-appMainContentPanes", () => ({
+  renderProjectSidecarPane: () => <div>sidecar-pane</div>,
+}));
+
 vi.mock("~/t3work/t3work-AppThreadPane", () => ({
   AppThreadPane: () => <div>thread-pane</div>,
 }));

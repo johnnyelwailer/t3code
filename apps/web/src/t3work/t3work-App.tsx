@@ -5,6 +5,7 @@ import { AppContentPane } from "~/t3work/t3work-AppContentPane";
 import { ProjectSidebar } from "~/t3work/components/t3work-ProjectSidebar";
 import { useProjectSidebarState } from "~/t3work/hooks/t3work-useProjectSidebarState";
 import { useProjectStore } from "~/t3work/hooks/t3work-useProjectStore";
+import { useProjectManagementDialogs } from "~/t3work/hooks/t3work-useProjectManagementDialogs";
 import type { ViewState } from "~/t3work/t3work-types";
 import { AppOverlays } from "~/t3work/t3work-AppOverlays";
 import { T3workLeftSidebarDesktopToggle } from "~/t3work/t3work-LeftSidebarDesktopToggle";
@@ -28,6 +29,7 @@ type AppProps = {
   ) => void;
   onOpenTicket?: (projectId: string, ticketId: string, embeddedThreadId?: string | null) => void;
   onOpenThread?: (projectId: string, threadId: string) => void;
+  onOpenProjectRecipes?: (projectId: string) => void;
   onProjectCreated?: (project: ProjectShellProject) => void;
 };
 
@@ -46,6 +48,7 @@ export function App({
   onOpenDashboard,
   onOpenTicket,
   onOpenThread,
+  onOpenProjectRecipes,
   onProjectCreated,
 }: AppProps = {}) {
   const store = useProjectStore();
@@ -53,9 +56,7 @@ export function App({
   const { state: sidebarState, setState: setSidebarState } = useProjectSidebarState();
   const [showCreateInternal, setShowCreateInternal] = useState(false);
   const [showSearchPalette, setShowSearchPalette] = useState(false);
-  const [manageRepositoriesProjectId, setManageRepositoriesProjectId] = useState<string | null>(
-    null,
-  );
+  const managementDialogs = useProjectManagementDialogs(store.projects);
 
   const showCreate = showCreateProp ?? showCreateInternal;
   const setShowCreate = onCreateOpenChange ?? setShowCreateInternal;
@@ -72,9 +73,6 @@ export function App({
   }, [activeView, store]);
   const activeDashboardMode = dashboardMode ?? "my-work";
   const selectedProjectId = resolvedView?.projectId ?? store.selectedProjectId;
-  const manageRepositoriesProject = manageRepositoriesProjectId
-    ? (store.projects.find((candidate) => candidate.id === manageRepositoriesProjectId) ?? null)
-    : null;
   const {
     handleSelectProject,
     handleSelectProjectDashboardMode,
@@ -101,12 +99,16 @@ export function App({
   useResolvedViewSync({
     activeDashboardMode,
     onOpenDashboard,
+    onOpenProjectRecipes,
     onOpenThread,
     onOpenTicket,
     resolvedView,
     store,
     view,
   });
+
+  const patchSidebarState = (patch: Partial<typeof sidebarState>) =>
+    setSidebarState((current) => ({ ...current, ...patch }));
 
   return (
     <SidebarProvider className="h-dvh! min-h-0! overflow-hidden!" defaultOpen>
@@ -143,22 +145,19 @@ export function App({
             onOpenSearch={() => setShowSearchPalette(true)}
             onCreateProject={() => setShowCreate(true)}
             onOpenSettings={onOpenSettings}
-            onManageProjectRepositories={setManageRepositoriesProjectId}
+            onManageProjectRecipes={(projectId) => onOpenProjectRecipes?.(projectId)}
+            onManageProjectRepositories={managementDialogs.setManageRepositoriesProjectId}
             onDeleteProject={handleDeleteProject}
             onRenameProject={handleRenameProject}
             onCreateThread={handleCreateThread}
             onCreateTicketThread={handleCreateTicketThreadFromSidebar}
             onDeleteThread={handleDeleteThread}
             onRenameThread={store.renameThread}
-            onProjectSortOrderChange={(projectSortOrder) => {
-              setSidebarState((current) => ({ ...current, projectSortOrder }));
-            }}
-            onThreadSortOrderChange={(threadSortOrder) => {
-              setSidebarState((current) => ({ ...current, threadSortOrder }));
-            }}
-            onThreadPreviewCountChange={(threadPreviewCount) => {
-              setSidebarState((current) => ({ ...current, threadPreviewCount }));
-            }}
+            onProjectSortOrderChange={(projectSortOrder) => patchSidebarState({ projectSortOrder })}
+            onThreadSortOrderChange={(threadSortOrder) => patchSidebarState({ threadSortOrder })}
+            onThreadPreviewCountChange={(threadPreviewCount) =>
+              patchSidebarState({ threadPreviewCount })
+            }
             onSidebarStateChange={setSidebarState}
           />
         </div>
@@ -181,7 +180,8 @@ export function App({
         onThreadKickoffConsumed={handleThreadKickoffConsumed}
         onThreadDisplayModeChange={store.updateThreadDisplayMode}
         onBackToDashboard={handleSelectProject}
-        onManageRepositories={setManageRepositoriesProjectId}
+        onManageRepositories={managementDialogs.setManageRepositoriesProjectId}
+        onManageRecipes={(projectId) => onOpenProjectRecipes?.(projectId)}
       />
 
       <AppOverlays
@@ -197,8 +197,8 @@ export function App({
         onSelectThread={handleSelectThread}
         showSearchPalette={showSearchPalette}
         setShowSearchPalette={setShowSearchPalette}
-        manageRepositoriesProject={manageRepositoriesProject}
-        setManageRepositoriesProjectId={setManageRepositoriesProjectId}
+        manageRepositoriesProject={managementDialogs.manageRepositoriesProject}
+        setManageRepositoriesProjectId={managementDialogs.setManageRepositoriesProjectId}
         updateProject={store.updateProject}
         {...(onProjectCreated ? { onProjectCreated } : {})}
         {...(onOpenSettings ? { onOpenSettings } : {})}

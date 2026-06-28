@@ -30,6 +30,7 @@ export interface ProjectRowProps {
   onToggleExpand: (id: string) => void;
   onSelectThread: (projectId: string, threadId: string) => void;
   onSelectTicket: (projectId: string, ticketId: string) => void;
+  onManageProjectRecipes: (id: string) => void;
   onManageProjectRepositories: (id: string) => void;
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, newTitle: string) => void;
