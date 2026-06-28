@@ -1,5 +1,6 @@
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 import type { ProjectThread, ProjectThreadDisplayMode, ViewState } from "~/t3work/t3work-types";
+import type { useProjectStore } from "~/t3work/hooks/t3work-useProjectStore";
 
 export type { ProjectThreadDisplayMode } from "~/t3work/t3work-types";
 
@@ -116,4 +117,30 @@ export function embeddedThreadIdForDashboardModeSwitch(
     return activeView.embeddedThreadId;
   }
   return undefined;
+}
+
+type ProjectStore = ReturnType<typeof useProjectStore>;
+type OnOpenDashboard =
+  | ((
+      projectId: string,
+      dashboardMode?: ProjectDashboardMode,
+      embeddedThreadId?: string | null,
+    ) => void)
+  | undefined;
+
+export function selectProjectDashboardMode(input: {
+  activeView: ViewState | null;
+  dashboardMode: ProjectDashboardMode;
+  onOpenDashboard: OnOpenDashboard;
+  projectId: string;
+  store: ProjectStore;
+}) {
+  const { activeView, dashboardMode, onOpenDashboard, projectId, store } = input;
+  const resolvedProjectId = store.resolveProjectId(projectId);
+  store.selectProject(resolvedProjectId);
+  onOpenDashboard?.(
+    resolvedProjectId,
+    dashboardMode,
+    embeddedThreadIdForDashboardModeSwitch(activeView, resolvedProjectId) ?? null,
+  );
 }

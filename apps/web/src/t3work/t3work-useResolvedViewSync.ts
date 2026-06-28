@@ -61,10 +61,25 @@ export function useResolvedViewSync({
   }, [activeDashboardMode, onOpenDashboard, onOpenThread, onOpenTicket, resolvedView, store, view]);
 }
 
-
 export function useMergedRouteAndStoreView(
   routeView: ViewState | null | undefined,
   storeView: ViewState | null,
 ) {
   return useMemo(() => mergeRouteAndStoreView(routeView, storeView), [routeView, storeView]);
+}
+
+export function useResolvedProjectView(
+  store: ReturnType<typeof useProjectStore>,
+  activeView: ViewState | null,
+) {
+  return useMemo(() => {
+    if (!activeView) {
+      return activeView;
+    }
+
+    const resolvedProjectId = store.resolveProjectId(activeView.projectId);
+    return resolvedProjectId === activeView.projectId
+      ? activeView
+      : { ...activeView, projectId: resolvedProjectId };
+  }, [activeView, store]);
 }

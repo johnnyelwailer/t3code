@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { Sidebar, SidebarProvider, SidebarRail } from "~/t3work/components/ui/t3work-sidebar";
 import { AppContentPane } from "~/t3work/t3work-AppContentPane";
@@ -10,7 +10,11 @@ import { AppOverlays } from "~/t3work/t3work-AppOverlays";
 import { T3workLeftSidebarDesktopToggle } from "~/t3work/t3work-LeftSidebarDesktopToggle";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 import { useAppHandlers } from "~/t3work/t3work-useAppHandlers";
-import { useMergedRouteAndStoreView, useResolvedViewSync } from "~/t3work/t3work-useResolvedViewSync";
+import {
+  useMergedRouteAndStoreView,
+  useResolvedProjectView,
+  useResolvedViewSync,
+} from "~/t3work/t3work-useResolvedViewSync";
 import { useHydratePinnedSidebarItems } from "~/t3work/hooks/t3work-useHydratePinnedSidebarItems";
 
 type AppProps = {
@@ -60,16 +64,7 @@ export function App({
   const showCreate = showCreateProp ?? showCreateInternal;
   const setShowCreate = onCreateOpenChange ?? setShowCreateInternal;
   const activeView = useMergedRouteAndStoreView(view, store.view);
-  const resolvedView = useMemo(() => {
-    if (!activeView) {
-      return activeView;
-    }
-
-    const resolvedProjectId = store.resolveProjectId(activeView.projectId);
-    return resolvedProjectId === activeView.projectId
-      ? activeView
-      : { ...activeView, projectId: resolvedProjectId };
-  }, [activeView, store]);
+  const resolvedView = useResolvedProjectView(store, activeView);
   const activeDashboardMode = dashboardMode ?? "my-work";
   const selectedProjectId = resolvedView?.projectId ?? store.selectedProjectId;
   const manageRepositoriesProject = manageRepositoriesProjectId
