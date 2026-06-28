@@ -9,6 +9,8 @@ import { prepareThreadContextAttachments } from "~/t3work/chat/t3work-prepareThr
 import { launchPendingRecipeWorkflowTurn } from "~/t3work/chat/t3work-recipeWorkflowLaunch";
 import { isThreadWaitingForRecipeInput } from "~/t3work/chat/t3work-recipeAwaitingInput";
 import { useAddToChatComposerDropTarget } from "~/t3work/hooks/t3work-useAddToChatComposerDropTarget";
+import { useWorkItemContextSyncQueue } from "~/t3work/hooks/t3work-useWorkItemContextSyncQueue";
+import { useProjectStore } from "~/t3work/hooks/t3work-useProjectStore";
 import { useT3WorkAddToChatStore } from "~/t3work/t3work-addToChatStore";
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
 import type { T3workTurnToolContext } from "~/t3work/t3work-threadToolContext";
@@ -20,11 +22,21 @@ export function useThreadChatComposerState(input: {
   backend: BackendApi | null | undefined;
   projectId: string;
   threadId: string;
+  ticketId?: string;
   turnToolContext: T3workTurnToolContext | undefined;
   kickoffPending: boolean | undefined;
   kickoffWorkflow: T3workKickoffWorkflow | undefined;
   hasServerLaunchActivity: boolean;
 }) {
+  const { allProjects } = useProjectStore();
+  const project = allProjects.find((candidate) => candidate.id === input.projectId);
+  useWorkItemContextSyncQueue({
+    ...(input.backend ? { backend: input.backend } : {}),
+    threadId: input.threadId,
+    project,
+    ...(input.ticketId ? { ticketId: input.ticketId } : {}),
+    enabled: Boolean(input.backend),
+  });
   const environmentId = usePrimaryEnvironmentId();
   const threadRef = useMemo(
     () => (environmentId ? scopeThreadRef(environmentId, input.threadId as never) : null),

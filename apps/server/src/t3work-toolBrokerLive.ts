@@ -174,6 +174,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
 
       return createT3workThreadToolBinding({
         threadId,
+        toolContext: resolvedToolContext,
         availableToolIds: toolIds,
         allowedToolGroups,
         readView: () => loadThreadView(threadId, resolvedToolContext),

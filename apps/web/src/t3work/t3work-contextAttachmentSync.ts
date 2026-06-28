@@ -9,6 +9,7 @@ import {
 } from "~/t3work/t3work-addToChatUtils";
 import type { BackendApi } from "~/t3work/backend/t3work-types";
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
+import { persistDirectoryBundleToWorkspace } from "~/t3work/t3work-contextDirectoryBundlePersist";
 import { T3WORK_PROJECT_CONTEXT_ROOT } from "~/t3work/t3work-projectSetup";
 import {
   buildInitialSyncProgressUpdate,
@@ -46,38 +47,36 @@ async function persistPayload(input: {
   }
 
   if (isDirectoryBundlePayload(input.payload)) {
+    const directoryBundle = input.payload;
     input.onProgress?.({
       update: buildWriteProgressUpdate({
         request: input.request,
-        payload: input.payload,
+        payload: directoryBundle,
         startedAt: input.startedAt,
         completedCount: 0,
         activeIndex: 0,
       }),
     });
     let completed = 0;
-    for (const [index, file] of input.payload.files.entries()) {
-      await input.backend.projectWorkspace.writeContextFiles({
-        workspaceRoot: input.request.projectWorkspaceRoot,
-        files: [
-          {
-            relativePath: file.relativePath,
-            contents: file.contents,
-            ...(file.encoding ? { encoding: file.encoding } : {}),
-          },
-        ],
-      });
-      completed += 1;
-      input.onProgress?.({
-        update: buildWriteProgressUpdate({
-          request: input.request,
-          payload: input.payload,
-          startedAt: input.startedAt,
-          completedCount: completed,
-          ...(completed < input.payload.files.length ? { activeIndex: index + 1 } : {}),
-        }),
-      });
-    }
+    await persistDirectoryBundleToWorkspace({
+      backend: input.backend,
+      workspaceRoot: input.request.projectWorkspaceRoot,
+      payload: directoryBundle,
+      onProgress: (progress) => {
+        completed = progress.completedCount;
+        input.onProgress?.({
+          update: buildWriteProgressUpdate({
+            request: input.request,
+            payload: directoryBundle,
+            startedAt: input.startedAt,
+            completedCount: completed,
+            ...(completed < directoryBundle.files.length
+              ? { activeIndex: progress.activeIndex }
+              : {}),
+          }),
+        });
+      },
+    });
     return undefined;
   }
 

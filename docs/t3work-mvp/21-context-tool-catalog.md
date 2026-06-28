@@ -62,14 +62,24 @@ Current project workspace sync behavior:
 
 - project metadata and linked repository URLs are written for work projects with a managed
   workspace root
-- loaded Jira/backlog resources are written as per-item files plus `work-items/index.json`
-  only after the relevant view reports loaded data; pre-load empty arrays are not published
+- loaded Jira/backlog resources are written as per-item **summary** files plus
+  `work-items/index.json` only after the relevant view reports loaded data; pre-load empty
+  arrays are not published
+- each summary file records `availability: "summary"`, `loadableOnDemand: true`, and
+  `fullBundleRootRelativePath` pointing at the rich tree location under
+  `.t3work/context/jira/<project>/items/<key>/`
+- full per-item bundles are **not** written during workspace auto-sync; agents load them on
+  demand through `t3work.work_item.refresh_context_bundle`, which uses the same
+  `buildTicketContextBundle` + `persistDirectoryBundleToWorkspace` path as add-to-chat
+- when a connected t3work client is open for the thread, the server queues the sync request and
+  the web client drains it by calling `ensureFullWorkItemContextBundle`
 - visible project thread lists are written when project, dashboard, ticket, or standalone
   thread routes are opened
 - visible backlog and my-work state is written from the mounted dashboard views; my-work also
   writes loaded GitHub activity when available
 - `.t3work/context/entrypoint.json`, `.t3work/context/manifest.json`, and
-  `.t3work/context/.sync-commit.json` record paths and sync/commit timestamps for readers
+  `.t3work/context/.sync-commit.json` record paths, availability guidance, and sync/commit
+  timestamps for readers
 
 Sync is best-effort but durable while the relevant UI state is mounted. Requests are
 debounced per workspace root, repeated payloads are coalesced, and a newer payload replaces
@@ -83,7 +93,8 @@ and rename, then writes the commit marker last.
 Known limits: the client does not read the existing on-disk files before each render, failed
 sync status is currently internal/log-only, and the commit marker is a batch completion hint
 rather than a transactional directory swap. If the app is closed before a retry succeeds, the
-next mount/input change is what resumes the write.
+next mount/input change is what resumes the write. On-demand full sync requires a connected
+t3work web client to drain the server queue; without it the tool may return `sync_pending`.
 
 Read tools are still useful when they do one of these:
 
@@ -363,6 +374,11 @@ Metadata, description, comments, relationships, and GitHub activity should norma
 from the attached work-item context bundle. Dedicated read tools are for refreshing,
 view state, or individual assets that are not already present in text form.
 
+`t3work.work_item.refresh_context_bundle` is implemented. It validates `ticket_key` against
+the on-disk `work-items/index.json` for the current project workspace, enqueues a full sync
+for the connected client when needed, and returns the ticket entrypoint path with
+`availability: "full"` once the rich bundle is on disk.
+
 View-state tools:
 
 ```text
@@ -565,6 +581,8 @@ Start from existing code paths:
 
 - `t3work-agentContext.ts` already defines add-to-chat style capabilities.
 - `t3work-contextAttachmentSync.ts` writes context attachments into the managed workspace.
+- `t3work-contextDirectoryBundlePersist.ts` and `t3work-ensureFullWorkItemContextBundle.ts`
+  share bundle persistence between add-to-chat and on-demand agent sync.
 - `t3work-contextAttachmentSyncPlan.ts` already models sync plans and freshness progress.
 - `t3work-threadToolContext.ts` already defines a small thread tool context.
 - `ProjectDashboardBacklogView` owns backlog view state and handlers.

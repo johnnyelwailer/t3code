@@ -471,7 +471,7 @@ describe("DesktopWindow", () => {
       });
 
       yield* Effect.gen(function* () {
-         const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
         yield* desktopWindow.handleBackendReady;
 
         if (!windowOpenHandler) {

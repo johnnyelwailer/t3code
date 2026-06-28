@@ -11,6 +11,10 @@
     "./t3workToolCatalog": {
       "types": "./src/t3workToolCatalog.ts",
       "import": "./src/t3workToolCatalog.ts"
+    },
+    "./t3workContextAvailability": {
+      "types": "./src/t3workContextAvailability.ts",
+      "import": "./src/t3workContextAvailability.ts"
     }
   },
   "scripts": {

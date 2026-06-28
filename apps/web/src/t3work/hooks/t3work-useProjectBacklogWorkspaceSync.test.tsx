@@ -124,6 +124,8 @@ describe("useProjectBacklog workspace sync", () => {
           recipes: [],
         })),
         writeContextFiles,
+        listContextSyncQueue: vi.fn(async () => ({ requests: [] })),
+        completeContextSync: vi.fn(async () => ({ ok: true })),
       },
     } satisfies BackendApi;
 

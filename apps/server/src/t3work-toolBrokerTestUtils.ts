@@ -18,7 +18,9 @@ import {
 import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
+import { T3workContextSyncQueueLive } from "./t3work-contextSyncQueue.ts";
 import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
+import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 
 export const threadId = ThreadId.make("thread-1");
 
@@ -75,7 +77,26 @@ export function dirnamePosix(value: string): string {
 const projectId = ProjectId.make("project-1");
 const stubStartChildServices = Layer.mergeAll(
   Layer.succeed(FileSystem.FileSystem, {} as FileSystem.FileSystem),
-  Layer.succeed(Path.Path, {} as Path.Path),
+  Layer.succeed(Path.Path, {
+    join: joinPosix,
+    dirname: dirnamePosix,
+    resolve: (...segments: ReadonlyArray<string>) => joinPosix(...segments),
+    isAbsolute: (value: string) => value.startsWith("/"),
+    relative: (from: string, to: string) => {
+      const fromParts = from.split("/").filter(Boolean);
+      const toParts = to.split("/").filter(Boolean);
+      let index = 0;
+      while (
+        index < fromParts.length &&
+        index < toParts.length &&
+        fromParts[index] === toParts[index]
+      ) {
+        index += 1;
+      }
+      const up = Array.from({ length: fromParts.length - index }, () => "..");
+      return [...up, ...toParts.slice(index)].join("/") || ".";
+    },
+  } as unknown as Path.Path),
   Layer.succeed(GitWorkflowService, {} as GitWorkflowService["Service"]),
   Layer.succeed(SourceControlProviderRegistry, {} as SourceControlProviderRegistry["Service"]),
   Layer.succeed(ProjectSetupScriptRunner, {} as ProjectSetupScriptRunner["Service"]),
@@ -155,8 +176,19 @@ export const makeBrokerLayerWithOptions = (
         Layer.succeed(ProjectionSnapshotQuery, projectionQueryMock),
         Layer.succeed(OrchestrationEngineService, orchestrationMock),
         T3workThreadToolContextStoreLive,
+        T3workContextSyncQueueLive,
+        WorkspacePaths.layer,
         ...(options.includeStartChildServices === false
-          ? []
+          ? [
+              Layer.succeed(FileSystem.FileSystem, {} as FileSystem.FileSystem),
+              Layer.succeed(Path.Path, {
+                join: joinPosix,
+                dirname: dirnamePosix,
+                resolve: (...segments: ReadonlyArray<string>) => joinPosix(...segments),
+                isAbsolute: (value: string) => value.startsWith("/"),
+                relative: () => ".",
+              } as unknown as Path.Path),
+            ]
           : [options.startChildServicesLayer ?? stubStartChildServices]),
       ),
     ),

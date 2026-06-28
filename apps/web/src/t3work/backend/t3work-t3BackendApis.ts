@@ -8,6 +8,7 @@ import type {
   ProjectWorkspaceContextFile,
   ProjectWorkspaceBackendApi,
   ProjectWorkspaceBootstrapResult,
+  ProjectWorkspaceListContextSyncQueueResult,
   ProjectWorkspaceWriteContextFilesResult,
 } from "./t3work-types";
 import type { GitHubAssetDownloadRequest, GitHubDownloadedAsset } from "./t3work-githubAssetTypes";
@@ -77,6 +78,25 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       return postJson<typeof input, ProjectWorkspaceWriteContextFilesResult>(
         httpBaseUrl,
         "/api/t3work/project/workspace/context-files",
+        input,
+      );
+    },
+    listContextSyncQueue(input: {
+      readonly threadId: string;
+    }): Promise<ProjectWorkspaceListContextSyncQueueResult> {
+      return postJson<typeof input, ProjectWorkspaceListContextSyncQueueResult>(
+        httpBaseUrl,
+        "/api/t3work/project/workspace/context-sync/queue",
+        input,
+      );
+    },
+    completeContextSync(input: {
+      readonly threadId: string;
+      readonly requestId: string;
+    }): Promise<{ ok: boolean }> {
+      return postJson<typeof input, { ok: boolean }>(
+        httpBaseUrl,
+        "/api/t3work/project/workspace/context-sync/complete",
         input,
       );
     },

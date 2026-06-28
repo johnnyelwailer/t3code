@@ -131,6 +131,7 @@ export function ThreadChatView({
     backend,
     projectId,
     threadId,
+    ...(ticketId ? { ticketId } : {}),
     turnToolContext,
     kickoffPending,
     kickoffWorkflow,

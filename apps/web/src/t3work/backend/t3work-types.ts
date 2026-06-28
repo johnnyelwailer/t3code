@@ -95,6 +95,19 @@ export type ProjectWorkspaceWriteContextFilesResult = {
   readonly writtenFiles: ReadonlyArray<string>;
 };
 
+export type ProjectWorkspaceContextSyncRequest = {
+  readonly id: string;
+  readonly threadId: string;
+  readonly projectId: string;
+  readonly workspaceRoot: string;
+  readonly ticketKey: string;
+  readonly createdAt: string;
+};
+
+export type ProjectWorkspaceListContextSyncQueueResult = {
+  readonly requests: ReadonlyArray<ProjectWorkspaceContextSyncRequest>;
+};
+
 export interface ProjectWorkspaceBackendApi {
   readonly bootstrapWorkspace: (input: {
     readonly workspaceRoot: string;
@@ -109,6 +122,13 @@ export interface ProjectWorkspaceBackendApi {
     readonly workspaceRoot: string;
     readonly files: ReadonlyArray<ProjectWorkspaceContextFile>;
   }) => Promise<ProjectWorkspaceWriteContextFilesResult>;
+  readonly listContextSyncQueue: (input: {
+    readonly threadId: string;
+  }) => Promise<ProjectWorkspaceListContextSyncQueueResult>;
+  readonly completeContextSync: (input: {
+    readonly threadId: string;
+    readonly requestId: string;
+  }) => Promise<{ readonly ok: boolean }>;
 }
 
 export type {

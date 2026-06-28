@@ -7,22 +7,11 @@ import {
   T3WORK_MCP_SERVER_NAME,
   type T3workPrelaunchToolBinding,
   type T3workToolBinding,
+  type T3workTurnToolContext,
 } from "./t3work-toolBroker.ts";
-import {
-  TOOL_SPECS,
-  errorResult,
-  foldResource,
-  foldResult,
-  okResult,
-  readBacklogAssigneeFilterMode,
-  resourceResult,
-} from "./t3work-toolBrokerHelpers.ts";
+import { TOOL_SPECS, foldResource, okResult, resourceResult } from "./t3work-toolBrokerHelpers.ts";
 import { buildBindingState, permissionMessage } from "./t3work-toolBrokerBindingPermissions.ts";
-import {
-  callT3workDraftMutationToolEffect,
-  isT3workDraftMutationTool,
-} from "./t3work-toolBrokerDraftMutationEffect.ts";
-import { callT3workRenameTool } from "./t3work-toolBrokerBindingRename.ts";
+import { dispatchT3workToolCall } from "./t3work-toolBrokerBindingDispatch.ts";
 
 type CreateBindingInput<
   TRenameError = never,
@@ -34,6 +23,8 @@ type CreateBindingInput<
   readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
   readonly scopeLabel: string;
   readonly prelaunchOnly?: boolean;
+  readonly threadId?: ThreadId;
+  readonly toolContext?: T3workTurnToolContext;
   readonly readView: () => Effect.Effect<unknown, TReadError>;
   readonly renameThread?: (title: string) => Effect.Effect<unknown, TRenameError>;
   readonly renameThreadResult?: (title: string) => unknown;
@@ -57,57 +48,23 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
     ...(input.prelaunchOnly ? { prelaunchOnly: true } : {}),
   });
 
-  const callTool: T3workToolBinding["callTool"] = ({ server, tool, arguments: toolArgs }) => {
-    if (server !== T3WORK_MCP_SERVER_NAME) {
-      return Effect.succeed(errorResult(`Unknown MCP server '${server}'.`));
-    }
-    if (!state.availableToolIdSet.has(tool)) {
-      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
-    }
-    if (state.effectiveGroups && !state.allowedToolIdSet.has(tool)) {
-      return Effect.succeed(errorResult(permissionMessage(tool, state.effectiveGroups)));
-    }
-    if (tool === "t3work.thread.rename") {
-      return callT3workRenameTool({
-        tool,
-        scopeLabel: input.scopeLabel,
-        toolArgs,
-        ...(input.renameThread ? { renameThread: input.renameThread } : {}),
-        ...(input.renameThreadResult ? { renameThreadResult: input.renameThreadResult } : {}),
-      });
-    }
-    if (tool === "t3work.thread.start_child") {
-      if (!input.startChild) {
-        return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
-      }
-      return foldResult(input.startChild(toolArgs), okResult, (message) =>
-        errorResult(`Failed to start child session: ${message}`),
-      );
-    }
-    if (tool === "t3work.backlog.set_assignee_filter") {
-      if (!input.setBacklogAssigneeFilter) {
-        return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
-      }
-      const mode = readBacklogAssigneeFilterMode(toolArgs);
-      if (!mode) {
-        return Effect.succeed(
-          errorResult("t3work.backlog.set_assignee_filter requires mode: 'current-user'."),
-        );
-      }
-      return foldResult(input.setBacklogAssigneeFilter(mode), okResult, (message) =>
-        errorResult(`Failed to update backlog assignee filter: ${message}`),
-      );
-    }
-    if (isT3workDraftMutationTool(tool)) {
-      return callT3workDraftMutationToolEffect({ tool, toolArgs, readView: input.readView });
-    }
-    if (tool !== "t3work.view.read") {
-      return Effect.succeed(errorResult(`Tool '${tool}' is not implemented in this runtime.`));
-    }
-    return foldResult(input.readView(), okResult, (message) =>
-      errorResult(`Failed to read t3work view: ${message}`),
-    );
-  };
+  const callTool: T3workToolBinding["callTool"] = ({ server, tool, arguments: toolArgs }) =>
+    dispatchT3workToolCall({
+      state,
+      scopeLabel: input.scopeLabel,
+      server,
+      tool,
+      toolArgs,
+      ...(input.threadId ? { threadId: input.threadId } : {}),
+      ...(input.toolContext ? { toolContext: input.toolContext } : {}),
+      readView: input.readView,
+      ...(input.renameThread ? { renameThread: input.renameThread } : {}),
+      ...(input.renameThreadResult ? { renameThreadResult: input.renameThreadResult } : {}),
+      ...(input.startChild ? { startChild: input.startChild } : {}),
+      ...(input.setBacklogAssigneeFilter
+        ? { setBacklogAssigneeFilter: input.setBacklogAssigneeFilter }
+        : {}),
+    });
 
   const readResource: T3workToolBinding["readResource"] = ({ server, uri }) => {
     if (server !== T3WORK_MCP_SERVER_NAME) {
@@ -169,11 +126,15 @@ export function createT3workThreadToolBinding<
     "scopeLabel" | "prelaunchOnly"
   > & {
     readonly threadId: ThreadId;
+    readonly toolContext: T3workTurnToolContext;
   },
 ): T3workToolBinding {
   return {
     threadId: input.threadId,
-    ...createToolSurface({ ...input, scopeLabel: "for this thread." }),
+    ...createToolSurface({
+      ...input,
+      scopeLabel: "for this thread.",
+    }),
   };
 }
 

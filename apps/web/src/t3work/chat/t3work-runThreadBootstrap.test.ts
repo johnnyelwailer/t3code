@@ -45,6 +45,8 @@ function createBackend(): BackendApi {
         workspaceRoot: "/tmp/project-alpha",
         writtenFiles: [".t3work/context/misc/project-alpha/context/entrypoint.json"],
       })),
+      listContextSyncQueue: vi.fn(async () => ({ requests: [] })),
+      completeContextSync: vi.fn(async () => ({ ok: true })),
     },
   };
 }

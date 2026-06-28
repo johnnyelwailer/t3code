@@ -130,6 +130,8 @@ export function createMockBackend(): BackendApi {
         workspaceRoot: input.workspaceRoot,
         writtenFiles: input.files.map((file) => file.relativePath),
       }),
+      listContextSyncQueue: async () => ({ requests: [] }),
+      completeContextSync: async () => ({ ok: true }),
     },
   };
 }
