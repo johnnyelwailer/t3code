@@ -1,11 +1,12 @@
-# Role: Scrum Master (SM)
+# Delivery Profile: Scrum Master (SM)
 
-> **Proposed role — not in [Epic 12](../12-profiles-and-skill-packs.md) yet.** This extends
-> the role catalog beyond the original six.
+> **Proposed profile — not in [Epic 12](../12-profiles-and-skill-packs.md) yet.** This extends
+> the profile catalog beyond the original six.
 >
-> **Implementation status:** 🟡 Partial. No `scrum-master` profile exists, but the
-> implemented `delivery-coordinator` profile and `delivery` pack cover much of this role's
-> flow-and-impediment work. See [§3](#3-what-serves-this-role-today).
+> **Implementation status:** 🟡 Partial. The `scrum-master` profile now ships in
+> [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts) (it replaced the
+> generic `delivery-coordinator`). Its dedicated `scrum` pack and sprint-scoped recipes are
+> still gaps — see [§3](#3-what-serves-this-profile-today) and [§4](#4-gaps).
 
 For Scrum Masters facilitating team flow: sprint health, impediment removal, ceremony
 prep, and concise team-facing updates. Process-first, low ceremony noise.
@@ -39,11 +40,14 @@ prep, and concise team-facing updates. Process-first, low ceremony noise.
 | Summarize sprint risk | 🟡 Partial | `summarize-project-risk` (project-scoped, not sprint-scoped) |
 | Prepare retro / ceremony notes | ⬜ Specified only | — (no retrospective recipe) |
 
-## 3. What serves this role today
+## 3. What serves this profile today
+
+> **Note:** The `scrum-master` profile now ships in `profiles.ts`; the mapping below reflects
+> the generic `delivery-coordinator` profile it was derived from and the recipes usable today.
 
 The `delivery` pack already does most of the Scrum Master's day-to-day flow work.
 
-- **Closest implemented profile:** `delivery-coordinator` — low depth, short, guided; tuned
+- **Profile basis (pre-rename):** `delivery-coordinator` — low depth, short, guided; tuned
   for status, blockers, and dependencies.
 - **Implemented pack:** `delivery`.
 - **Implemented recipes usable now:**
@@ -55,7 +59,7 @@ The `delivery` pack already does most of the Scrum Master's day-to-day flow work
 
 ## 4. Gaps
 
-- ⬜ Profile id `scrum-master` not defined; behavior currently lives under `delivery-coordinator`.
+- ✅ Profile `scrum-master` is now defined in `profiles.ts` (it replaced `delivery-coordinator`).
 - ⬜ No `scrum` pack; no **sprint-scoped** rollups (current recipes are project-scoped).
 - ⬜ No retrospective / ceremony-notes recipe or `ceremony-notes` artifact.
 - ⬜ No `sprint-health` or velocity artifact template.

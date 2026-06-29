@@ -1,10 +1,11 @@
-# Role: Project Lead (PL / Projektleiter)
+# Delivery Profile: Project Lead (PL / Projektleiter)
 
 > Specified in [Epic 12 — Profiles And Skill Packs](../12-profiles-and-skill-packs.md).
 >
-> **Implementation status:** 🟡 Partial. No `project-lead` profile yet, but the implemented
-> `delivery-coordinator` profile and `delivery` pack cover much of this role. See
-> [§3](#3-what-serves-this-role-today).
+> **Implementation status:** 🟡 Partial. The `project-lead` profile now ships in
+> [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts) (it replaced the
+> generic `delivery-coordinator`). Its dedicated `project-lead` pack and several specified
+> recipes are still gaps — see [§3](#3-what-serves-this-profile-today) and [§4](#4-gaps).
 
 For project leads coordinating scope, schedule, risk, and dependencies: concise status,
 blockers, milestone/release checklists, standup-ready summaries.
@@ -38,9 +39,12 @@ blockers, milestone/release checklists, standup-ready summaries.
 | Draft standup update | 🟡 Partial | `draft-status-update` (done / in progress / blocked / next) |
 | Create milestone / release checklist | ✅ Implemented | `release-handoff-checklist` ("Prepare release handoff") |
 
-## 3. What serves this role today
+## 3. What serves this profile today
 
-- **Closest implemented profile:** `delivery-coordinator` — low depth, short, guided;
+> **Note:** The `project-lead` profile now ships in `profiles.ts`; the mapping below reflects
+> the generic `delivery-coordinator` profile it was derived from and the recipes usable today.
+
+- **Profile basis (pre-rename):** `delivery-coordinator` — low depth, short, guided;
   artifacts `status-update`, `blocker-list`, `checklist`, `timeline`; recommends packs
   `delivery`, `release`. Top recipe weights: `draft-status-update` 30,
   `release-handoff-checklist` 25, `summarize-project-risk` 20.
@@ -58,8 +62,8 @@ blockers, milestone/release checklists, standup-ready summaries.
 
 ## 4. Gaps
 
-- ⬜ Profile id `project-lead` not defined; closest is `delivery-coordinator`.
+- ✅ Profile `project-lead` is now defined in `profiles.ts` (it replaced `delivery-coordinator`).
 - ⬜ Pack id `project-lead` not defined; closest is `delivery`.
 - ⬜ Dedicated `map-dependencies` recipe and a true `risk-register` (RAID) /
   `dependency-map` / `milestone-plan` artifact template do not exist yet.
-- Status/standup intent is served by `draft-status-update` rather than role-named recipes.
+- Status/standup intent is served by `draft-status-update` rather than profile-named recipes.

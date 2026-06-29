@@ -1,12 +1,12 @@
-# Role: Security Engineer
+# Delivery Profile: Security Engineer
 
-> **Proposed role — not in [Epic 12](../12-profiles-and-skill-packs.md) yet.** This extends
-> the role catalog beyond the original six.
+> **Proposed profile — not in [Epic 12](../12-profiles-and-skill-packs.md) yet.** This extends
+> the profile catalog beyond the original six.
 >
-> **Implementation status:** ⬜ Specified only. No security profile, pack, or
-> threat-model / vulnerability / remediation recipes exist. `engineering-copilot` provides
-> the right technical altitude but none of the security recipes. See
-> [§3](#3-what-serves-this-role-today).
+> **Implementation status:** 🟡 Partial. The `security-engineer` profile now ships in
+> [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts), but no security
+> pack or threat-model / vulnerability / remediation recipes exist yet — only the technical
+> altitude transfers. See [§3](#3-what-serves-this-profile-today) and [§4](#4-gaps).
 
 For security engineers: threat modeling, vulnerability assessment, security review of
 changes, and remediation planning. Technical depth high; risk- and evidence-first, with no
@@ -41,12 +41,15 @@ is `engineering`.)
 | Draft remediation plan | 🟡 Partial | `technical-implementation-plan` (generic, not risk-ranked) |
 | List security risks | 🟡 Partial | `summarize-project-risk` (delivery risk, not security risk) |
 
-## 3. What serves this role today
+## 3. What serves this profile today
 
-There is **no security profile, pack, or recipe**. Only the technical altitude transfers;
-the security substance must be authored. This is among the least-covered proposed roles.
+> **Note:** The `security-engineer` profile now ships in `profiles.ts`; the mapping below
+> reflects the generic profile it draws on and the recipes usable today.
 
-- **Closest implemented profile:** `engineering-copilot` — high depth, expert guidance,
+There is **no security pack or recipe** yet. Only the technical altitude transfers; the
+security substance must be authored. This is among the least-covered proposed profiles.
+
+- **Profile basis (pre-rename):** `engineering-copilot` — high depth, expert guidance,
   `hideImplementationComplexity: false`; the right posture, none of the security content.
 - **Implemented packs that overlap:** `engineering` (review framing only).
 - **Implemented recipes usable now:**
@@ -56,7 +59,7 @@ the security substance must be authored. This is among the least-covered propose
 
 ## 4. Gaps (large)
 
-- ⬜ Profile id `security-engineer` not defined.
+- ✅ Profile `security-engineer` is now defined in `profiles.ts` (pack and recipes still missing).
 - ⬜ No `security` pack; no threat-modeling, vulnerability-triage, or remediation recipes.
 - ⬜ No artifact templates for `threat-model`, `security-review`, `vulnerability-report`, or
   `remediation-plan`.

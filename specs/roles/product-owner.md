@@ -1,10 +1,11 @@
-# Role: Product Owner / Proxy Product Owner (PO / PPO)
+# Delivery Profile: Product Owner / Proxy Product Owner (PO / PPO)
 
 > Specified in [Epic 12 — Profiles And Skill Packs](../12-profiles-and-skill-packs.md).
 >
-> **Implementation status:** 🟡 Partial. No `product-owner` profile yet, but the implemented
-> `product-partner` profile (the **current default**) and `product` pack cover much of this
-> role. See [§3](#3-what-serves-this-role-today).
+> **Implementation status:** 🟡 Partial. The `product-owner` profile now ships in
+> [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts) and is the **default**
+> profile (it replaced `product-partner`). Its dedicated recipes/artifacts are still partly
+> gaps — see [§3](#3-what-serves-this-profile-today) and [§4](#4-gaps).
 
 For product owners and proxy POs managing backlog, priorities, and stakeholder value:
 backlog refinement, user-story shaping, prioritization rationale, stakeholder updates.
@@ -39,9 +40,12 @@ under `product-partner`; see §3.)
 | Summarize requirement | 🟡 Partial | `explain-selected-work` ("Explain this simply") |
 | Find ambiguity | 🟡 Partial | `review-acceptance-criteria` (ambiguity warnings) |
 
-## 3. What serves this role today
+## 3. What serves this profile today
 
-- **Closest implemented profile:** `product-partner` — **the current default profile**
+> **Note:** The `product-owner` profile now ships in `profiles.ts` (and is the default); the
+> mapping below reflects the generic `product-partner` profile it was derived from.
+
+- **Profile basis (pre-rename):** `product-partner` — **was the default profile**
   (`DEFAULT_T3WORK_PROFILE_ID`). Low depth, short, guided; artifacts `summary`,
   `decision-notes`, `open-questions`, `status-update`; recommends `product`, `delivery`.
   Top weights: `stakeholder-update` 30, `explain-selected-work` 25,
@@ -57,7 +61,8 @@ under `product-partner`; see §3.)
 
 ## 4. Gaps
 
-- ⬜ Profile id `product-owner` not defined; closest is `product-partner` (the default).
+- ✅ Profile `product-owner` is now defined in `profiles.ts` and is the default
+  (`DEFAULT_T3WORK_PROFILE_ID`); it replaced `product-partner`.
 - ⬜ No `write-user-story` recipe and no `user-story` / `backlog-refinement` /
   `prioritization-rationale` artifact templates.
 - Backlog/prioritization intent is served by the delivery-flavored

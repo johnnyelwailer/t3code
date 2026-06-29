@@ -1,11 +1,13 @@
-# Role: System Administrator (SysAdmin)
+# Delivery Profile: System Administrator (SysAdmin)
 
-> **Proposed role — not in [Epic 12](../12-profiles-and-skill-packs.md) yet.** This extends
-> the role catalog beyond the original six.
+> **Proposed profile — not in [Epic 12](../12-profiles-and-skill-packs.md) yet.** This extends
+> the profile catalog beyond the original six.
 >
-> **Implementation status:** ⬜ Specified only. No sysadmin profile, pack, or
-> operations/maintenance recipes exist. The `engineering` and `release` packs partially
-> cover technical change and handoff. See [§3](#3-what-serves-this-role-today).
+> **Implementation status:** 🟡 Partial. The `system-administrator` profile now ships in
+> [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts), but no operations
+> pack or maintenance recipes exist yet. The `engineering` and `release` packs partially
+> cover technical change and handoff. See [§3](#3-what-serves-this-profile-today) and
+> [§4](#4-gaps).
 
 For system administrators keeping systems healthy: maintenance and patching, access
 reviews, operational runbooks, and incident response. Technical, procedure- and
@@ -40,12 +42,15 @@ closest are `engineering` and `release`.)
 | Conduct access review | ⬜ Specified only | — (no access/permission recipe) |
 | Draft incident summary | 🟡 Partial | `support-escalation-summary` (support-flavored) |
 
-## 3. What serves this role today
+## 3. What serves this profile today
 
-There is **no operations/sysadmin profile or pack**. The technical engineering blocks are
-the nearest fit; it shares most gaps with [Cloud Engineer](./cloud-engineer.md).
+> **Note:** The `system-administrator` profile now ships in `profiles.ts`; the mapping below
+> reflects the generic profile it draws on and the recipes usable today.
 
-- **Closest implemented profile:** `engineering-copilot` — high depth, expert guidance,
+There is **no operations/sysadmin pack** yet. The technical engineering blocks are the
+nearest fit; it shares most gaps with [Cloud Engineer](./cloud-engineer.md).
+
+- **Profile basis (pre-rename):** `engineering-copilot` — high depth, expert guidance,
   expert density; right altitude for operational procedures.
 - **Implemented packs that overlap:** `engineering`, `release`.
 - **Implemented recipes usable now:**
@@ -55,7 +60,7 @@ the nearest fit; it shares most gaps with [Cloud Engineer](./cloud-engineer.md).
 
 ## 4. Gaps
 
-- ⬜ Profile id `system-administrator` not defined.
+- ✅ Profile `system-administrator` is now defined in `profiles.ts` (pack and recipes still missing).
 - ⬜ No `operations` pack; no maintenance, patching, access-review, or change-record recipes.
 - ⬜ No artifact templates for `runbook`, `maintenance-checklist`, `access-review`, or
   `change-record`.

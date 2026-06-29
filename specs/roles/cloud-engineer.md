@@ -1,11 +1,12 @@
-# Role: Cloud Engineer
+# Delivery Profile: Cloud Engineer
 
-> **Proposed role — not in [Epic 12](../12-profiles-and-skill-packs.md) yet.** This extends
-> the role catalog beyond the original six.
+> **Proposed profile — not in [Epic 12](../12-profiles-and-skill-packs.md) yet.** This extends
+> the profile catalog beyond the original six.
 >
-> **Implementation status:** 🟡 Partial. No `cloud-engineer` profile exists, but the
-> implemented `engineering-copilot` profile already provides the high-depth, diff-first
-> defaults this role needs. See [§3](#3-what-serves-this-role-today).
+> **Implementation status:** 🟡 Partial. The `cloud-engineer` profile now ships in
+> [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts) (it provides the
+> high-depth, diff-first defaults this profile needs). Its dedicated cloud/platform pack and
+> recipes are still gaps — see [§3](#3-what-serves-this-profile-today) and [§4](#4-gaps).
 
 For cloud / platform engineers: infrastructure-as-code changes, deployment and rollout
 planning, runbooks, and verification of cloud resources. Technical depth high; safety- and
@@ -40,12 +41,15 @@ closest are `engineering` and `release`.)
 | Author runbook | ⬜ Specified only | — (no `runbook` artifact) |
 | Verify deployed resources | 🟡 Partial | `technical-implementation-plan` emits `verification-plan` |
 
-## 3. What serves this role today
+## 3. What serves this profile today
 
-There is **no infra/cloud profile or pack**; the technical engineering building blocks are
-the nearest fit.
+> **Note:** The `cloud-engineer` profile now ships in `profiles.ts`; the mapping below
+> reflects the generic profile it draws on and the recipes usable today.
 
-- **Closest implemented profile:** `engineering-copilot` — `technicalDepth: high`,
+There is **no infra/cloud pack** yet; the technical engineering building blocks are the
+nearest fit for recipes.
+
+- **Profile basis (pre-rename):** `engineering-copilot` — `technicalDepth: high`,
   `guidanceStyle: expert`, `detailDensity: expert`; the right altitude for infra work.
 - **Implemented packs that overlap:** `engineering`, `release`.
 - **Implemented recipes usable now:**
@@ -55,7 +59,7 @@ the nearest fit.
 
 ## 4. Gaps
 
-- ⬜ Profile id `cloud-engineer` not defined.
+- ✅ Profile `cloud-engineer` is now defined in `profiles.ts` (pack and recipes still missing).
 - ⬜ No `cloud`/`platform` pack; no IaC-, deployment-, or rollback-specific recipes.
 - ⬜ No artifact templates for `infra-plan`, `deployment-checklist`, `runbook`, or
   `rollback-plan`.

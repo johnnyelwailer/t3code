@@ -1,10 +1,12 @@
-# Role: Test Manager
+# Delivery Profile: Test Manager
 
 > Specified in [Epic 12 — Profiles And Skill Packs](../12-profiles-and-skill-packs.md).
 >
-> **Implementation status:** 🟡 Partial. No `test-manager` profile yet, but the implemented
-> `qa-assistant` and `verification-guide` profiles plus the `qa` pack cover the
-> tester-level slice of this role. See [§3](#3-what-serves-this-role-today).
+> **Implementation status:** 🟡 Partial. The `test-manager` profile now ships in
+> [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts) (it replaced the
+> generic `qa-assistant` / `verification-guide`). The dedicated test-management pack and
+> program-level recipes are still gaps — see [§3](#3-what-serves-this-profile-today) and
+> [§4](#4-gaps).
 
 For test managers owning test strategy, coverage, quality gates, and defect oversight —
 i.e. test **management**, a step above the individual QA tester.
@@ -38,12 +40,15 @@ i.e. test **management**, a step above the individual QA tester.
 | Summarize defect risk | 🟡 Partial | `summarize-project-risk` (general risk, not defect-specific) |
 | Review acceptance criteria | ✅ Implemented | `review-acceptance-criteria` ("Review acceptance criteria") |
 
-## 3. What serves this role today
+## 3. What serves this profile today
 
-The shipped code covers the **individual QA tester** well, but not test **management**
+> **Note:** The `test-manager` profile now ships in `profiles.ts`; the mapping below reflects
+> the generic `qa-assistant` / `verification-guide` profiles it was derived from.
+
+The shipped recipes cover the **individual QA tester** well, but not test **management**
 (strategy, coverage, quality gates).
 
-- **Closest implemented profiles:** `qa-assistant` (medium depth, short, guided; artifacts
+- **Profile basis (pre-rename):** `qa-assistant` (medium depth, short, guided; artifacts
   `test-matrix`, `risk-list`, `repro-steps`, `open-questions`, `checklist`) and
   `verification-guide` (medium depth, balanced; artifacts `checklist`,
   `verification-plan`, `risk-list`, `handoff-note`).
@@ -56,18 +61,18 @@ The shipped code covers the **individual QA tester** well, but not test **manage
 
 ## 4. Gaps
 
-- ⬜ Profile id `test-manager` not defined; the closest profiles are tester-level
-  (`qa-assistant`, `verification-guide`), not management-level.
+- ✅ Profile `test-manager` is now defined in `profiles.ts` (it replaced the tester-level
+  `qa-assistant` / `verification-guide`); the management-level pack/recipes are still gaps.
 - ⬜ Pack id `test-management` not defined; closest is `qa`.
 - ⬜ No recipes for `create-test-strategy`, `coverage-gap-analysis`, or
   `quality-gate-report`, and no `summarize-defect-risk` distinct from general project risk.
 - ⬜ No artifact templates for `test-strategy`, `coverage-matrix`, `quality-gate-report`, or
   `defect-risk-summary`.
-- The implemented QA surface is **per-ticket**; the Test Manager role needs **program /
+- The implemented QA surface is **per-ticket**; the Test Manager profile needs **program /
   release-wide** coverage and quality-gate views.
 
 ### Related note
 
 The `qa` and `support` packs reference a recipe id `draft-jira-comment` that is **not
 defined** anywhere in [`recipes.ts`](../../../packages/t3work-skill-packs/src/recipes.ts) —
-a dangling reference that affects the QA pack this role would build on.
+a dangling reference that affects the QA pack this profile would build on.
