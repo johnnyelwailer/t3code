@@ -1,0 +1,13 @@
+---
+description: Never open or update PRs against pingdotgg/t3code upstream
+alwaysApply: true
+---
+
+# No Upstream PRs
+
+**HARD RULE — NEVER target upstream `pingdotgg/t3code`.**
+
+- **NEVER** open, update, merge, or create pull requests against upstream `pingdotgg/t3code` (or any `pingdotgg/*` upstream remote).
+- Work stays on the user's fork and local branches (`origin`, feature branches).
+- Only commit and push to the user's fork (`origin`) unless the user explicitly instructs otherwise.
+- Closing mistaken upstream PRs is OK; creating or updating them is forbidden.

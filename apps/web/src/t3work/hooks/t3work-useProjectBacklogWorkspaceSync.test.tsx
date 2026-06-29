@@ -52,7 +52,7 @@ function createProject(): ProjectShellProject {
         agentReferences: {
           linkedRepositories: [{ url: "https://github.com/example/project-1" }],
         },
-        agentSetup: { profileId: "engineering-copilot" },
+        agentSetup: { profileId: "developer" },
       },
     },
     workspace: {
@@ -124,6 +124,29 @@ describe("useProjectBacklog workspace sync", () => {
           recipes: [],
         })),
         writeContextFiles,
+        refreshWorkItemContext: vi.fn(async (input) => ({
+          ok: true,
+          status: "already_synced" as const,
+          projectId: input.projectId,
+          ticketKey: input.ticketKey,
+          availability: "full" as const,
+          entryPointRelativePath: `.t3work/context/jira/${input.projectId}/items/${input.ticketKey.toLowerCase()}/entrypoint.json`,
+          manifestRelativePath: `.t3work/context/jira/${input.projectId}/items/${input.ticketKey.toLowerCase()}/manifest.json`,
+          includedCount: 0,
+          skippedCount: 0,
+        })),
+        refreshWorkItemSliceContext: vi.fn(async (input) => ({
+          ok: true,
+          status: "already_synced" as const,
+          projectId: input.projectId,
+          ticketKey: input.ticketKey,
+          focusKind: input.focusKind,
+          availability: "full" as const,
+          focusEntryPointRelativePath: `.t3work/context/jira/${input.projectId}/items/${input.ticketKey.toLowerCase()}/focus/${input.focusKind}.json`,
+          entryPointRelativePath: `.t3work/context/jira/${input.projectId}/items/${input.ticketKey.toLowerCase()}/entrypoint.json`,
+          includedCount: 0,
+          skippedCount: 0,
+        })),
       },
     } satisfies BackendApi;
 

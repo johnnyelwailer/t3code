@@ -69,7 +69,7 @@ describe("applyT3workRecipeQuickStartLaunchCustomization", () => {
       "Expand the plan with failure modes, validation, and rollout considerations.",
     );
     expect(customized.prompt).toContain("Extra focus: cache invalidation");
-    expect(customized.workflow.parameters).toEqual({
+    expect(customized.workflow?.parameters).toEqual({
       planDepth: "detailed",
       focusArea: "cache invalidation",
     });
@@ -310,7 +310,7 @@ describe("applyT3workRecipeQuickStartLaunchCustomization", () => {
     const selectedRecipe = {
       recipe: {
         id: "unblock-blocked-ticket",
-        title: "Unblock IES-9242",
+        title: "Unblock this item",
         description: "Pick the next move that will reopen progress.",
         composerGuidance: {
           helperText: "Add any context that could change the recommendation.",
@@ -320,7 +320,7 @@ describe("applyT3workRecipeQuickStartLaunchCustomization", () => {
         workflow: {
           kind: "recipe" as const,
           recipeId: "unblock-blocked-ticket",
-          title: "Unblock IES-9242",
+          title: "Unblock this item",
           description: "Pick the next move that will reopen progress.",
           source: "bundled" as const,
           surface: "workitem.detail.sidepanel" as const,

@@ -120,6 +120,10 @@ import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
+import {
+  NoopT3workContextRefreshService,
+  T3workContextRefreshService,
+} from "./t3work-contextRefreshService.ts";
 
 const defaultProjectId = ProjectId.make("project-default");
 const defaultThreadId = ThreadId.make("thread-default");
@@ -395,6 +399,7 @@ const buildAppUnderTest = (options?: {
       SqlitePersistenceMemory,
       T3workWorkflowEngineRegistryLive,
       T3workThreadToolContextStoreLive,
+      Layer.succeed(T3workContextRefreshService, NoopT3workContextRefreshService),
       WorkflowRunRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory)),
       WorkflowJournalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
       Layer.mock(VcsProcess.VcsProcess)({
@@ -3710,18 +3715,19 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("rejects reusing the same bootstrap credential after it has been exchanged", () =>
+  it.effect("allows reusing the desktop bootstrap credential", () =>
     Effect.gen(function* () {
+      // The desktop-bootstrap grant is delivered over trusted IPC at
+      // backend launch and needs to stay claimable after a renderer
+      // refresh, so it's intentionally reusable (unlike user-facing
+      // one-time pairing credentials).
       yield* buildAppUnderTest();
 
       const first = yield* bootstrapBrowserSession();
       const second = yield* bootstrapBrowserSession();
 
       assert.equal(first.response.status, 200);
-      assert.equal(second.response.status, 401);
-      assert.equal((second.body as { readonly _tag?: string })._tag, "EnvironmentAuthInvalidError");
-      assert.equal((second.body as { readonly code?: string }).code, "auth_invalid");
-      assert.equal((second.body as { readonly reason?: string }).reason, "invalid_credential");
+      assert.equal(second.response.status, 200);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

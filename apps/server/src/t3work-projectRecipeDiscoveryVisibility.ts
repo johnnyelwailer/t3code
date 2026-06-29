@@ -7,6 +7,7 @@ import * as Path from "effect/Path";
 import * as NodeURL from "node:url";
 import { queryableToReadonlyArray } from "@t3tools/project-context";
 import {
+  buildRecipeMatchSignalsFromRenderContext,
   matchRecipes,
   type ProjectRecipeManifest,
   type ProjectRecipeRenderContext,
@@ -47,6 +48,7 @@ function buildBundledCompatibilityResult(
     enabledSkillPacks: context.enabledSkillPacks,
     profile: context.profile,
     availableContextKeys: queryableToReadonlyArray(context.availableContextKeys),
+    signals: buildRecipeMatchSignalsFromRenderContext(context),
   })[0];
 
   return match ? { visible: true, rank: match.score, reason: match.reason } : { visible: false };

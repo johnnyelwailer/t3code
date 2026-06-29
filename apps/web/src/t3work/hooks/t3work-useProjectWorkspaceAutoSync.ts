@@ -7,12 +7,15 @@ import {
   readProjectSetupProfileIdFromProject,
 } from "~/t3work/hooks/t3work-createProjectBootstrap";
 import type { ProjectVisibleWorkspaceContext } from "~/t3work/t3work-projectContextBundle";
-import { syncProjectWorkspaceContext } from "~/t3work/t3work-projectWorkspaceSync";
+import {
+  retainProjectWorkspaceSync,
+  syncProjectWorkspaceContext,
+} from "~/t3work/t3work-projectWorkspaceSync";
 import type { ProjectThread, ProjectTicket } from "~/t3work/t3work-types";
 import type { GitHubWorkActivityItem } from "~/t3work/t3work-githubActivity";
 
 export function useProjectWorkspaceAutoSync(input: {
-  project: ProjectShellProject;
+  project?: ProjectShellProject | null;
   projectTickets?: ReadonlyArray<ProjectTicket>;
   projectThreads?: ReadonlyArray<ProjectThread>;
   githubActivityItems?: ReadonlyArray<GitHubWorkActivityItem>;
@@ -23,18 +26,23 @@ export function useProjectWorkspaceAutoSync(input: {
 }): void {
   const backend = useBackend();
   const linkedRepositoryUrls = useMemo(
-    () => readLinkedRepositoryUrlsFromProject(input.project),
+    () => (input.project ? readLinkedRepositoryUrlsFromProject(input.project) : []),
     [input.project],
   );
   const setupProfileId = useMemo(
-    () => readProjectSetupProfileIdFromProject(input.project),
+    () => (input.project ? readProjectSetupProfileIdFromProject(input.project) : undefined),
     [input.project],
   );
 
   useEffect(() => {
-    if (!backend || input.enabled === false || !input.project.workspace?.rootPath) {
+    if (!input.project) {
       return;
     }
+    const workspaceRoot = input.project.workspace?.rootPath;
+    if (!backend || input.enabled === false || !workspaceRoot || !setupProfileId) {
+      return;
+    }
+    const releaseSync = retainProjectWorkspaceSync(workspaceRoot);
     const visibleContext: ProjectVisibleWorkspaceContext = {
       ...(input.projectThreads ? { projectThreads: input.projectThreads } : {}),
       ...(input.githubActivityItems ? { githubActivityItems: input.githubActivityItems } : {}),
@@ -54,8 +62,10 @@ export function useProjectWorkspaceAutoSync(input: {
       visibleContext,
       setupProfileId,
     }).catch(() => {
-      // A later mount or thread bootstrap can retry if the sync fails.
+      // The queue keeps retrying while this workspace stays mounted; surface the first failure.
+      console.warn("Failed to sync t3work project workspace context.");
     });
+    return releaseSync;
   }, [
     backend,
     input.enabled,

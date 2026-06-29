@@ -53,6 +53,7 @@ type CreateT3workTurnToolContextInput = {
   threadTitle: string;
   displayMode?: ProjectThreadDisplayMode;
   ticketId?: string;
+  ticketDisplayId?: string;
   selectedToolIds?: ReadonlyArray<T3workThreadToolId>;
 };
 
@@ -80,6 +81,7 @@ export function createT3workTurnToolContext(
         threadTitle: input.threadTitle,
         displayMode: input.displayMode ?? "thread",
         ...(input.ticketId ? { ticketId: input.ticketId } : {}),
+        ...(input.ticketDisplayId ? { ticketDisplayId: input.ticketDisplayId } : {}),
       },
       ...(input.kickoffMessage || input.kickoffWorkflow || input.kickoffPending !== undefined
         ? {

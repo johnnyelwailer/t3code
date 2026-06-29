@@ -9,6 +9,12 @@ const START_CHILD_INPUT_SCHEMA = {
       description: "Name for the new child session.",
       minLength: 1,
     },
+    execution_scope: {
+      type: "string",
+      description:
+        "Required execution scope. Use 'metarepo' for project planning, triage, and synthesis in the project workspace. Use 'repository' for implementation, debugging, tests, review, or PR work in a dedicated linked-repository worktree.",
+      enum: ["metarepo", "repository"],
+    },
     ticket_id: {
       type: "string",
       description:
@@ -40,17 +46,17 @@ const START_CHILD_INPUT_SCHEMA = {
     repo_full_name: {
       type: "string",
       description:
-        "Optional linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'.",
+        "Required when execution_scope is 'repository' and forbidden when execution_scope is 'metarepo'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'.",
       minLength: 1,
     },
     repo_ref: {
       type: "string",
       description:
-        "Optional branch, tag, or commit to use as the base ref for that scoped worktree. When omitted, the linked repository default branch is used.",
+        "Optional branch, tag, or commit to use as the base ref for the repository scoped worktree. Only valid when execution_scope is 'repository'. When omitted, the linked repository default branch is used.",
       minLength: 1,
     },
   },
-  required: ["name"],
+  required: ["name", "execution_scope"],
 } as const;
 
 const BACKLOG_SET_ASSIGNEE_FILTER_INPUT_SCHEMA = {
@@ -119,12 +125,62 @@ export const IMPLEMENTED_T3WORK_TOOL_CATALOG = {
     label: "Start child session",
     title: "Start child session",
     description:
-      "Create a child t3work session from the current thread and optionally start it immediately. When repo_full_name is provided, the runtime prepares a dedicated scoped worktree for that linked repository; use repo_ref to choose the base branch, tag, or commit.",
+      "Create a child t3work session from the current thread and optionally start it immediately. execution_scope is required: 'metarepo' stays in the project metarepo workspace without repo_full_name; 'repository' requires repo_full_name and prepares a dedicated scoped worktree for that linked repository.",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
     status: "implemented",
     defaultEnabled: true,
     inputSchema: START_CHILD_INPUT_SCHEMA,
+  },
+  "t3work.work_item.refresh_context_bundle": {
+    id: "t3work.work_item.refresh_context_bundle",
+    label: "Refresh work item context bundle",
+    title: "Refresh work item context bundle",
+    description:
+      "Build and persist the full Jira work-item context bundle for the current or specified ticket. Workspace auto-sync keeps lightweight summaries; this tool loads the same rich tree used by add-to-chat.",
+    capabilities: ["write"],
+    kind: "read",
+    surfaces: ["work-item", "thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        ticket_key: {
+          type: "string",
+          description:
+            "Optional Jira issue key in the current project. Defaults to the bound work item for this thread.",
+          minLength: 1,
+        },
+        force: {
+          type: "boolean",
+          description: "When true, rebuild even if the existing full bundle is fresh.",
+        },
+      },
+    },
+  },
+  "t3work.project.refresh_context_bundle": {
+    id: "t3work.project.refresh_context_bundle",
+    label: "Refresh project context bundle",
+    title: "Refresh project context bundle",
+    description:
+      "Rebuild and persist the lightweight project context bundle (work-items index and summary JSON) for the current project workspace.",
+    capabilities: ["write"],
+    kind: "read",
+    surfaces: ["project", "thread"],
+    status: "implemented",
+    defaultEnabled: false,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        force: {
+          type: "boolean",
+          description: "When true, rebuild even if the existing project bundle is fresh.",
+        },
+      },
+    },
   },
 } as const satisfies Record<string, T3workToolCatalogEntry>;

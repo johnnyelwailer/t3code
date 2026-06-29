@@ -81,22 +81,29 @@ function areQuickStartWorkflowsEqual(
   left: T3workSidecarRecipeQuickStart["workflow"],
   right: T3workSidecarRecipeQuickStart["workflow"] | undefined,
 ): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+
   return (
-    left.kind === right?.kind &&
-    left.recipeId === right?.recipeId &&
-    left.recipeVersion === right?.recipeVersion &&
-    areValueStructuresEqual(left.parameters, right?.parameters) &&
-    areValueStructuresEqual(left.kickoff, right?.kickoff) &&
-    left.title === right?.title &&
-    left.description === right?.description &&
-    left.source === right?.source &&
-    left.surface === right?.surface &&
-    left.reason === right?.reason &&
-    left.recipePath === right?.recipePath &&
-    left.promptPath === right?.promptPath &&
-    left.workflowPath === right?.workflowPath &&
-    areArrayValuesEqual(left.allowedToolGroups, right?.allowedToolGroups) &&
-    areValueStructuresEqual(left.launchContext, right?.launchContext)
+    left.kind === right.kind &&
+    left.recipeId === right.recipeId &&
+    left.recipeVersion === right.recipeVersion &&
+    areValueStructuresEqual(left.parameters, right.parameters) &&
+    areValueStructuresEqual(left.kickoff, right.kickoff) &&
+    left.title === right.title &&
+    left.description === right.description &&
+    left.source === right.source &&
+    left.surface === right.surface &&
+    left.reason === right.reason &&
+    left.recipePath === right.recipePath &&
+    left.promptPath === right.promptPath &&
+    left.workflowPath === right.workflowPath &&
+    areArrayValuesEqual(left.allowedToolGroups, right.allowedToolGroups) &&
+    areValueStructuresEqual(left.launchContext, right.launchContext)
   );
 }
 

@@ -5,7 +5,7 @@ import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecip
 
 function createQuickStart(
   id: string,
-  source: T3workSidecarRecipeQuickStart["workflow"]["source"] = "bundled",
+  source: NonNullable<T3workSidecarRecipeQuickStart["workflow"]>["source"] = "bundled",
 ): T3workSidecarRecipeQuickStart {
   return {
     id,
@@ -58,7 +58,7 @@ describe("mergeSidecarRecipeQuickStarts", () => {
       2,
     );
 
-    expect(merged[0]?.workflow.source).toBe("project-local");
+    expect(merged[0]?.workflow?.source).toBe("project-local");
     expect(merged.map((quickStart) => quickStart.id)).toEqual([
       "prioritize-pending-work",
       "create-contextual-recipe",

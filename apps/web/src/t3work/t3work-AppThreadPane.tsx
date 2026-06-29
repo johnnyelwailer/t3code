@@ -84,6 +84,9 @@ export function AppThreadPane({
         ? { selectedToolIds: resolvedThread.selectedToolIds }
         : {})}
       {...(resolvedThread?.ticketId ? { ticketId: resolvedThread.ticketId } : {})}
+      {...(resolvedThread?.ticketDisplayId
+        ? { ticketDisplayId: resolvedThread.ticketDisplayId }
+        : {})}
       {...(resolvedThread && canOpenEmbedded
         ? {
             headerAccessory: (

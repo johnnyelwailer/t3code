@@ -98,6 +98,190 @@ This should resolve to:
 
 Only enable shorthand when it is unambiguous.
 
+## Inline Auto-Detection And Attach
+
+The composer should also recognize resource references typed as plain text, not only
+explicit `@provider:id` references.
+
+Examples:
+
+```text
+Can you compare ABC-123 with ABC-456?
+```
+
+```text
+Check #13 before changing the auth flow.
+```
+
+Detected references render as inline link-style tokens and enqueue the same pre-submit
+context attachment used by "Add to chat". They are not a separate attachment path.
+
+This means:
+
+- the attachment chip appears before submit
+- the user can remove it with the same `×` affordance
+- send-time context sync uses the existing attachment pipeline
+- duplicate attachment prevention uses the existing dedupe rules
+
+### Secure project scope
+
+Auto-detected references must always resolve inside the active `t3work` project scope.
+
+Rules:
+
+- Never resolve a detected key against global provider state.
+- Never attach an item from another project unless that item is already linked into the
+  active project's trusted resource graph.
+- The resolver input must include the active project ID and active surface context.
+- A plain key is only linkified when exactly one active-project resource matches.
+- Ambiguous or out-of-scope text remains plain text.
+- Provider adapters may return candidates only through project-scoped query APIs.
+
+Provider does not change this rule. Jira, GitHub, Linear, and future custom providers all
+use the same scoped resolver contract.
+
+Examples:
+
+```text
+ABC-123
+```
+
+Valid only if `ABC-123` exists in the current project's scoped work-item index.
+
+```text
+#13
+```
+
+Valid only if the active project has exactly one scoped GitHub repository where issue or
+pull request `13` is known or can be queried through the project-scoped GitHub adapter.
+
+```text
+other-org/other-repo#13
+```
+
+Valid only if that repository is linked to the active project. Otherwise it stays plain
+text.
+
+### Detection timing
+
+Auto-attach happens after a completed token delimiter, not while the user is still typing.
+
+Delimiters:
+
+- whitespace
+- newline
+- punctuation that cannot be part of the provider reference
+- composer blur
+- submit
+
+Example:
+
+```text
+ABC-12
+```
+
+No auto-attach yet.
+
+```text
+ABC-123
+```
+
+Resolve and attach if project-scoped match is unique.
+
+Autocomplete can still appear while the token is incomplete. Selecting a result inserts
+the completed canonical display token and attaches immediately.
+
+### Manual removal suppression
+
+Removing an auto-attached chip suppresses re-attachment for that exact token occurrence
+while the text remains unchanged.
+
+Example:
+
+1. User types `ABC-123 `.
+2. Composer auto-attaches `ABC-123`.
+3. User removes the chip.
+4. Composer does not re-add it while that same `ABC-123` token remains in the draft.
+5. If the user deletes the token and types `ABC-123 ` again, auto-attach may run again.
+
+Suppression is draft-local UI state, not persisted project state.
+
+### GitHub hash semantics
+
+GitHub's common shorthand is:
+
+```text
+#13
+owner/repo#13
+```
+
+On GitHub, `#13` means issue or pull request number `13` in the current repository
+context. `owner/repo#13` means issue or pull request `13` in that named repository.
+
+`t3work` should mirror that mental model, but with stricter project scoping:
+
+- `#13` resolves only when the active project surface has one clear current repository.
+- `owner/repo#13` resolves only when `owner/repo` is linked to the active project.
+- If both an issue and pull request with the same number could be returned by a provider
+  adapter, the menu should show both typed candidates; plain-text auto-attach requires one
+  unique match.
+- Display labels should preserve provider kind, for example `PR #13` or `Issue #13`.
+
+### Autocomplete behavior
+
+Reference autocomplete is a contributor to the existing composer menu, not a new popout.
+
+Triggers:
+
+- active project work-item prefix, such as `ABC-`
+- GitHub hash `#`
+- explicit canonical `@provider:` syntax from this epic
+
+Examples:
+
+```text
+ABC-
+```
+
+shows active-project work items whose display ID starts with `ABC-`.
+
+```text
+#1
+```
+
+shows active-project GitHub issues and pull requests matching number/title `1`.
+
+Selecting a candidate:
+
+1. replaces the typed range with the provider's preferred display token
+2. records the canonical `ResourceRef`
+3. enqueues the same context attachment as Add to chat
+4. keeps the visible chip removable before submit
+
+### Resolver contract
+
+The composer should call a provider-agnostic resolver shape:
+
+```ts
+type ComposerResourceResolveInput = {
+  projectId: string;
+  surface: string;
+  token: string;
+  trigger: "plain" | "autocomplete" | "canonical";
+};
+
+type ComposerResourceCandidate = {
+  ref: ResourceRef;
+  displayToken: string;
+  label: string;
+  description?: string;
+  attachable: boolean;
+};
+```
+
+For MVP, candidates can be served from the current project backlog, current ticket graph,
+and linked GitHub activity cache before adding live provider queries.
+
 ## Picker Behavior
 
 Typing `@` opens one combined reference menu.

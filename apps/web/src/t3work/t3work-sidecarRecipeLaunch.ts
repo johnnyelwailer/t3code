@@ -21,22 +21,16 @@ export function buildBundledSidecarRecipeWorkflowLaunch(input: {
     return null;
   }
 
-  const requiresLocalWorkflow = WORKFLOW_BACKED_BUNDLED_RECIPE_IDS.has(recipe.id);
-  const recipePath = requiresLocalWorkflow
-    ? input.projectWorkspaceRoot
-      ? `${input.projectWorkspaceRoot}/.t3work/recipes/${recipe.id}`
-      : null
-    : undefined;
-  if (recipePath === null) {
+  if (!WORKFLOW_BACKED_BUNDLED_RECIPE_IDS.has(recipe.id) || !input.projectWorkspaceRoot) {
     return null;
   }
+  const recipePath = `${input.projectWorkspaceRoot}/.t3work/recipes/${recipe.id}`;
 
   return {
     kind: "recipe",
     recipeId: recipe.id,
     ...(recipe.version ? { recipeVersion: recipe.version } : {}),
     ...(input.parameters ? { parameters: input.parameters } : {}),
-    ...(!requiresLocalWorkflow && recipe.kickoff ? { kickoff: recipe.kickoff } : {}),
     title: recipe.title,
     description: recipe.shortDescription,
     source: "bundled",

@@ -1,6 +1,6 @@
 import type { Preview } from "@storybook/react";
 
-import "../src/t3work/t3work-index.css";
+import "~/t3work/t3work-index.css";
 
 const preview: Preview = {
   parameters: {

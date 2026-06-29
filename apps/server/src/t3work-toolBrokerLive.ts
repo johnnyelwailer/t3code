@@ -1,5 +1,4 @@
 import { CommandId, type ThreadId as ThreadIdType } from "@t3tools/contracts";
-import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -21,13 +20,17 @@ import {
   createT3workThreadToolBinding,
 } from "./t3work-toolBrokerBinding.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
+import { buildPrelaunchView } from "./t3work-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
+import { buildThreadWorkspaceView } from "./t3work-toolBrokerViewWorkspace.ts";
+import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
 
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;
   const contextStore = yield* T3workThreadToolContextStore;
+  const contextRefresh = yield* T3workContextRefreshService;
   const fileSystem = Option.getOrUndefined(yield* Effect.serviceOption(FileSystem.FileSystem));
   const path = Option.getOrUndefined(yield* Effect.serviceOption(Path.Path));
   const gitWorkflow = Option.getOrUndefined(yield* Effect.serviceOption(GitWorkflowService));
@@ -75,25 +78,10 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
               interactionMode: thread.interactionMode,
               messageCount: thread.messages.length,
               latestTurnId: thread.latestTurn?.turnId ?? null,
+              ...buildThreadWorkspaceView({ thread, project }),
             }
           : null,
       };
-    });
-
-  const loadPrelaunchView = (input: {
-    readonly workspaceRoot: string;
-    readonly callerKind: "visibility" | "view.preRender";
-    readonly renderContext: ProjectRecipeRenderContext;
-  }) =>
-    Effect.succeed({
-      surface: input.renderContext.surface,
-      state: { callerKind: input.callerKind, renderContext: input.renderContext },
-      project: {
-        title: input.renderContext.project.title,
-        provider: input.renderContext.project.provider ?? null,
-        workspaceRoot: input.workspaceRoot,
-      },
-      thread: null,
     });
 
   const setBacklogAssigneeFilter = (toolContext: T3workTurnToolContext, mode: "current-user") =>
@@ -188,6 +176,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
 
       return createT3workThreadToolBinding({
         threadId,
+        toolContext: resolvedToolContext,
         availableToolIds: toolIds,
         allowedToolGroups,
         readView: () => loadThreadView(threadId, resolvedToolContext),
@@ -195,6 +184,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
         renameThreadResult: (title) => ({ ok: true, threadId, title }),
         startChild: (toolArgs) => startChildThread(threadId, toolArgs),
         setBacklogAssigneeFilter: (mode) => setBacklogAssigneeFilter(resolvedToolContext, mode),
+        refreshContextBundle: contextRefresh,
       });
     });
 
@@ -209,7 +199,8 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
         workspaceRoot,
         callerKind,
         allowedToolGroups,
-        readView: () => loadPrelaunchView({ workspaceRoot, callerKind, renderContext }),
+        readView: () =>
+          Effect.succeed(buildPrelaunchView({ workspaceRoot, callerKind, renderContext })),
       }),
     );
 

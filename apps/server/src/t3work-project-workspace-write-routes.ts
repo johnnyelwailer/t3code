@@ -1,6 +1,4 @@
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
 import { HttpRouter } from "effect/unstable/http";
 
 import {
@@ -16,15 +14,12 @@ import {
   type WriteContextFilesRequest,
   type WriteContextFilesResponse,
 } from "./t3work-project-repository-utils.ts";
-import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
+import { writeT3workWorkspaceContextFiles } from "./t3work-project-workspace-context-files.ts";
 
 export const t3workProjectWorkspaceWriteContextFilesRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3work/project/workspace/context-files",
   Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const workspacePaths = yield* WorkspacePaths;
     const input = yield* readJsonBody<WriteContextFilesRequest>();
     const workspaceRootInput = input.workspaceRoot?.trim() ?? "";
     if (workspaceRootInput.length === 0) {
@@ -32,41 +27,10 @@ export const t3workProjectWorkspaceWriteContextFilesRouteLayer = HttpRouter.add(
     }
 
     const workspaceRoot = yield* normalizeT3workWorkspaceRoot(workspaceRootInput);
-    yield* fileSystem
-      .makeDirectory(workspaceRoot, { recursive: true })
-      .pipe(Effect.mapError(toAtlassianError("Failed to ensure workspace directory exists.")));
-
-    const writtenFiles: string[] = [];
-    for (const file of input.files) {
-      const resolved = yield* workspacePaths
-        .resolveRelativePathWithinRoot({
-          workspaceRoot,
-          relativePath: file.relativePath,
-        })
-        .pipe(Effect.mapError(toAtlassianError("Failed to resolve workspace file path.")));
-
-      yield* fileSystem
-        .makeDirectory(path.dirname(resolved.absolutePath), { recursive: true })
-        .pipe(Effect.mapError(toAtlassianError("Failed to create workspace file directory.")));
-
-      const writeEffect =
-        file.encoding === "base64"
-          ? fileSystem.writeFile(
-              resolved.absolutePath,
-              Uint8Array.from(Buffer.from(file.contents, "base64")),
-            )
-          : fileSystem.writeFileString(resolved.absolutePath, file.contents);
-
-      yield* writeEffect.pipe(
-        Effect.mapError(toAtlassianError("Failed to write workspace context file.")),
-      );
-      writtenFiles.push(resolved.relativePath);
-    }
-
-    const response: WriteContextFilesResponse = {
+    const response: WriteContextFilesResponse = yield* writeT3workWorkspaceContextFiles({
       workspaceRoot,
-      writtenFiles,
-    };
+      files: input.files,
+    }).pipe(Effect.mapError(toAtlassianError("Failed to write workspace context files.")));
     return okJson(response);
   }).pipe(
     Effect.mapError((cause) => toT3workError(cause, "Failed to write workspace context files.")),

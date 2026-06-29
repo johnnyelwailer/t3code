@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ProviderInstanceEntry } from "~/providerInstances";
-import { getT3workKickoffProviderBlocker } from "./t3work-kickoffLaunchConfig";
+import {
+  getT3workKickoffProviderBlocker,
+  hasConfiguredProviderSettings,
+} from "./t3work-kickoffLaunchConfig";
 
 function providerEntry(overrides: Partial<ProviderInstanceEntry> = {}): ProviderInstanceEntry {
   return {
@@ -52,5 +55,37 @@ describe("t3work kickoff launch config", () => {
         selectedProviderEntry: unavailableProvider,
       }),
     ).toContain("not ready");
+  });
+
+  it("treats empty live providers as loading when settings have enabled providers", () => {
+    expect(
+      getT3workKickoffProviderBlocker({
+        isConnected: true,
+        hasConfiguredProviders: true,
+        providerInstanceEntries: [],
+        selectedProviderEntry: undefined,
+      }),
+    ).toContain("Loading provider status");
+  });
+
+  it("detects configured providers from explicit and legacy settings", () => {
+    expect(
+      hasConfiguredProviderSettings({
+        providerInstances: {},
+        providers: { codex: { enabled: true } },
+      }),
+    ).toBe(true);
+    expect(
+      hasConfiguredProviderSettings({
+        providerInstances: { codex_personal: { enabled: true } },
+        providers: { codex: { enabled: false } },
+      }),
+    ).toBe(true);
+    expect(
+      hasConfiguredProviderSettings({
+        providerInstances: {},
+        providers: { codex: { enabled: false } },
+      }),
+    ).toBe(false);
   });
 });

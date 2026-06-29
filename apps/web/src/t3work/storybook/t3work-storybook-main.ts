@@ -6,11 +6,11 @@ import type { StorybookConfig } from "@storybook/react-vite";
 import * as NodeURL from "node:url";
 import { mergeConfig } from "vite";
 
-const srcDir = NodeURL.fileURLToPath(new URL("../src", import.meta.url));
+const srcDir =
+  process.env.T3WORK_STORYBOOK_SRC_DIR ?? NodeURL.fileURLToPath(new URL("../src", import.meta.url));
 
 const config: StorybookConfig = {
-  stories: ["../src/t3work/stories/**/*.stories.tsx"],
-  addons: ["@storybook/addon-essentials", "@storybook/addon-a11y"],
+  stories: [`${srcDir}/t3work/stories/**/*.stories.tsx`],
   framework: {
     name: "@storybook/react-vite",
     options: {},

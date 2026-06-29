@@ -66,12 +66,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     });
 
     expect(quickStarts[0]?.id).toBe("technical-implementation-plan");
-    expect(quickStarts[0]?.workflow).toMatchObject({
-      kind: "recipe",
-      recipeId: "technical-implementation-plan",
-      source: "bundled",
-      surface: "workitem.detail.sidepanel",
-    });
+    expect(quickStarts[0]?.workflow).toBeUndefined();
     expect(quickStarts.some((recipe) => recipe.id === "create-qa-test-plan")).toBe(false);
   });
 
@@ -150,11 +145,11 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     });
 
     expect(quickStarts.find((recipe) => recipe.id === "prioritize-pending-work")).toMatchObject({
-      title: "Prioritize my work: 3 items, one bug (IES-1234)",
+      title: "Prioritize pending work",
       description: "Rank the my work in front of you by urgency, unblock value, and user impact.",
     });
     expect(quickStarts.find((recipe) => recipe.id === "create-contextual-recipe")).toMatchObject({
-      title: "Create a recipe for my work view",
+      title: "Create a recipe for this view",
     });
   });
 
@@ -171,11 +166,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     });
 
     expect(quickStarts.find((recipe) => recipe.id === "create-contextual-recipe")).toMatchObject({
-      title: "Create a recipe for PROJ-123",
-      workflow: {
-        recipeId: "create-contextual-recipe",
-        surface: "workitem.detail.sidepanel",
-      },
+      title: "Create a recipe for this view",
     });
   });
 
@@ -198,6 +189,31 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
         workflowPath: "/tmp/project-alpha/.t3work/recipes/create-recipe/workflow.ts",
       },
     });
+  });
+
+  it("does not attach workflow launch metadata to prompt-only bundled recipes", () => {
+    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+      surface: "workitem.detail.sidepanel",
+      project: createProject("product-owner", "/tmp/project-alpha"),
+      profileId: "product-owner",
+      selectedWorkLabel: "PROJ-100",
+      selectedWorkTitle: "Platform epic",
+      resourceKind: "ticket",
+      jiraIssueType: "Epic",
+      ticketContext: {
+        relationships: {
+          childKeys: [],
+          referenceKeys: [],
+          blockedByKeys: [],
+          blockingKeys: [],
+        },
+      },
+      availableContextKeys: ["project.summary", "ticket.summary"],
+    });
+
+    const recipe = quickStarts.find((quickStart) => quickStart.id === "tshirt-size-epic");
+    expect(recipe).toBeDefined();
+    expect(recipe?.workflow).toBeUndefined();
   });
 
   it("hides dashboard quick starts for very large unfocused views", () => {
@@ -484,7 +500,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     });
 
     expect(quickStarts.find((recipe) => recipe.id === "explain-selected-work")).toMatchObject({
-      title: "Explain PROJ-123 Stabilize search",
+      title: "Explain this simply",
     });
   });
 
@@ -575,5 +591,47 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     expect(recipeIds).toContain("release-handoff-checklist");
     expect(recipeIds).not.toContain("address-linked-pr-feedback");
     expect(recipeIds).not.toContain("technical-implementation-plan");
+  });
+
+  it("hides tshirt-size-epic when the selected epic already has children", () => {
+    const withoutChildren = buildT3workSidecarRecipeQuickStarts({
+      surface: "workitem.detail.sidepanel",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
+      selectedWorkLabel: "PROJ-100",
+      selectedWorkTitle: "Platform epic",
+      resourceKind: "ticket",
+      jiraIssueType: "Epic",
+      ticketContext: {
+        relationships: {
+          childKeys: [],
+          referenceKeys: [],
+          blockedByKeys: [],
+          blockingKeys: [],
+        },
+      },
+      availableContextKeys: ["project.summary", "ticket.summary"],
+    });
+    const withChildren = buildT3workSidecarRecipeQuickStarts({
+      surface: "workitem.detail.sidepanel",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
+      selectedWorkLabel: "PROJ-100",
+      selectedWorkTitle: "Platform epic",
+      resourceKind: "ticket",
+      jiraIssueType: "Epic",
+      ticketContext: {
+        relationships: {
+          childKeys: ["PROJ-101"],
+          referenceKeys: [],
+          blockedByKeys: [],
+          blockingKeys: [],
+        },
+      },
+      availableContextKeys: ["project.summary", "ticket.summary"],
+    });
+
+    expect(withoutChildren.map((recipe) => recipe.id)).toContain("tshirt-size-epic");
+    expect(withChildren.map((recipe) => recipe.id)).not.toContain("tshirt-size-epic");
   });
 });

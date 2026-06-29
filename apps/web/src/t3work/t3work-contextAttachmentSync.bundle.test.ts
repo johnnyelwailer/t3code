@@ -34,6 +34,29 @@ function createBackend(): BackendApi {
         recipes: [],
       })),
       writeContextFiles: backendHarness.writeContextFiles,
+      refreshWorkItemContext: vi.fn(async (input) => ({
+        ok: true,
+        status: "synced" as const,
+        projectId: input.projectId,
+        ticketKey: input.ticketKey,
+        availability: "full" as const,
+        entryPointRelativePath: `.t3work/context/jira/${input.projectId}/items/${input.ticketKey.toLowerCase()}/entrypoint.json`,
+        manifestRelativePath: `.t3work/context/jira/${input.projectId}/items/${input.ticketKey.toLowerCase()}/manifest.json`,
+        includedCount: 1,
+        skippedCount: 0,
+      })),
+      refreshWorkItemSliceContext: vi.fn(async (input) => ({
+        ok: true,
+        status: "synced" as const,
+        projectId: input.projectId,
+        ticketKey: input.ticketKey,
+        focusKind: input.focusKind,
+        availability: "full" as const,
+        focusEntryPointRelativePath: `.t3work/context/jira/${input.projectId}/items/${input.ticketKey.toLowerCase()}/focus/${input.focusKind}.json`,
+        entryPointRelativePath: `.t3work/context/jira/${input.projectId}/items/${input.ticketKey.toLowerCase()}/entrypoint.json`,
+        includedCount: 1,
+        skippedCount: 0,
+      })),
     },
   } as unknown as BackendApi;
 }
@@ -155,5 +178,31 @@ describe("syncContextAttachmentFromRequest directory bundles", () => {
     expect(firstAttachment.contextText).toBe(secondAttachment.contextText);
 
     forgetContextAttachmentRequest("attachment-concurrent");
+  });
+
+  it("skips workspace file writes for server-owned directory bundles", async () => {
+    const payload: T3WorkDirectoryBundlePayload = {
+      kind: "t3work-directory-bundle",
+      dedupeKey: "project-alpha:PROJ-7:work-item",
+      bundleRootRelativePath: ".t3work/context/jira/project-alpha/items/proj-7",
+      files: [],
+      fileReferences: [
+        {
+          label: "Ticket entrypoint",
+          relativePath: ".t3work/context/jira/project-alpha/items/proj-7/entrypoint.json",
+        },
+      ],
+      lightweightItem: { kind: "jira-work-item", label: "PROJ-7 Investigate context sync" },
+    };
+
+    const attachment = await syncContextAttachmentFromRequest({
+      attachmentId: "attachment-server-owned",
+      request: createContextAttachmentRequest({ payload }),
+      backend: createBackend(),
+    });
+
+    expect(backendHarness.writeContextFiles).not.toHaveBeenCalled();
+    expect(attachment.fileReferences).toEqual(payload.fileReferences);
+    expect(attachment.syncStatus).toBe("synced");
   });
 });

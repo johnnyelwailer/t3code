@@ -66,6 +66,7 @@
     ".github/agents/**",
     ".github/skills/t3code-runtime-investigation/SKILL.md",
     ".claude/**",
+    ".cursor/**",
     "docs/t3work-mvp/**",
     "docs/t3work-additive-whitelist.md",
     "docs/t3work-company-agentic-shell-handoff.md",

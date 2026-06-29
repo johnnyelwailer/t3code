@@ -61,6 +61,7 @@ export const TicketKickoffComposer = forwardRef<
       interactionMode,
       launchConfig,
       modelOptionsByInstance,
+      hasConfiguredProviders,
       providerInstanceEntries,
       runtimeMode,
       runtimeOption,
@@ -117,6 +118,7 @@ export const TicketKickoffComposer = forwardRef<
 
     const providerStatusMessage = getT3workKickoffProviderBlocker({
       isConnected,
+      hasConfiguredProviders,
       providerInstanceEntries,
       selectedProviderEntry,
     });

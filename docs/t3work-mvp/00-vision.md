@@ -72,6 +72,9 @@ The machinery for this already exists across the spec — this axis names it:
 - **Miniapps & placements** ([Epic 19](./19-workspace-miniapps.md)) — custom UI mounted at
   typed placements (sidecar sections, dashboard widgets, nav sections, conversation cards,
   inline actions) via the `define*` family.
+- **Composable project views** ([Epic 31](./31-composable-project-views.md)) — dense
+  project pages assembled from safe blocks and high-level capabilities, so agents compose
+  Backlog/My Work-style dashboards without raw provider APIs.
 - **Recipes & Views** ([Epic 16](./16-action-recipes.md)) — the launchable, context-aware
   actions and the interactive UI they render.
 
@@ -153,7 +156,8 @@ spec and its tickets) possible at all.
   [Epic 05](./05-atlassian-mvp.md)
 - Surfaces axis (profiles, packs, miniapps, recipes) —
   [Epic 12](./12-profiles-and-skill-packs.md),
-  [Epic 19](./19-workspace-miniapps.md), [Epic 16](./16-action-recipes.md)
+  [Epic 19](./19-workspace-miniapps.md), [Epic 16](./16-action-recipes.md),
+  [Epic 31](./31-composable-project-views.md)
 - Cross-provider graph — [Epic 13](./13-resource-references.md)
 - Knowledge Workbench (Confluence as first knowledge Source) —
   [Epic 26](./26-knowledge-workbench.md)

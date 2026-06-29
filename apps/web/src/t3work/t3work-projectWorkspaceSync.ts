@@ -15,8 +15,14 @@ import {
 } from "~/t3work/t3work-projectContextBundle";
 import { isWorkProject } from "~/t3work/t3work-isWorkProject";
 import type { ProjectTicket } from "~/t3work/t3work-types";
+import {
+  enqueueProjectWorkspaceSync,
+  getProjectWorkspaceSyncStatus,
+  resetProjectWorkspaceSyncQueueForTests,
+  retainProjectWorkspaceSync,
+} from "~/t3work/t3work-projectWorkspaceSyncQueue";
 
-const syncStateByWorkspaceRoot = new Map<string, { signature: string; promise?: Promise<void> }>();
+export { getProjectWorkspaceSyncStatus, retainProjectWorkspaceSync };
 
 function buildProjectWorkspaceSyncSignature(input: {
   project: ProjectShellProject;
@@ -142,38 +148,22 @@ export function syncProjectWorkspaceContext(input: {
     ...(input.visibleContext ? { visibleContext: input.visibleContext } : {}),
     setupProfileId,
   });
-  const existing = syncStateByWorkspaceRoot.get(workspaceRoot);
-  if (existing && existing.signature === signature) {
-    return existing.promise ?? Promise.resolve();
-  }
-
-  const promise = runProjectWorkspaceSync({
-    backend: input.backend,
-    project: input.project,
-    linkedRepositoryUrls: input.linkedRepositoryUrls,
-    ...(input.projectTickets ? { projectTickets: input.projectTickets } : {}),
-    ...(input.visibleContext ? { visibleContext: input.visibleContext } : {}),
-    ...(input.ensureBootstrap !== undefined ? { ensureBootstrap: input.ensureBootstrap } : {}),
-    setupProfileId,
+  return enqueueProjectWorkspaceSync({
+    workspaceRoot,
+    signature,
+    run: () =>
+      runProjectWorkspaceSync({
+        backend: input.backend,
+        project: input.project,
+        linkedRepositoryUrls: input.linkedRepositoryUrls,
+        ...(input.projectTickets ? { projectTickets: input.projectTickets } : {}),
+        ...(input.visibleContext ? { visibleContext: input.visibleContext } : {}),
+        ...(input.ensureBootstrap !== undefined ? { ensureBootstrap: input.ensureBootstrap } : {}),
+        setupProfileId,
+      }),
   });
-  promise.then(
-    () => {
-      const current = syncStateByWorkspaceRoot.get(workspaceRoot);
-      if (current?.promise === promise) {
-        syncStateByWorkspaceRoot.set(workspaceRoot, { signature });
-      }
-    },
-    () => {
-      const current = syncStateByWorkspaceRoot.get(workspaceRoot);
-      if (current?.promise === promise) {
-        syncStateByWorkspaceRoot.delete(workspaceRoot);
-      }
-    },
-  );
-  syncStateByWorkspaceRoot.set(workspaceRoot, { signature, promise });
-  return promise;
 }
 
 export function resetProjectWorkspaceSyncStateForTests(): void {
-  syncStateByWorkspaceRoot.clear();
+  resetProjectWorkspaceSyncQueueForTests();
 }

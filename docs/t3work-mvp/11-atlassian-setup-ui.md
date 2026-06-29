@@ -350,13 +350,21 @@ type AtlassianProjectCreationDraft = {
   jiraProjectKey: string;
   title: string;
   workspaceKind: "managed";
-  profileId: string;
+  primaryProfileId: string;
+  profileIds: string[];
   recipeIds: string[];
 };
 ```
 
-`profileId` references a configured profile record. The setup flow may offer bundled
-starter profiles, but the draft model must not assume a closed list of built-in ids.
+`primaryProfileId` and `profileIds` reference configured profile records. The setup flow
+may offer bundled starter profiles, but the draft model must not assume a closed list of
+built-in ids. If older persisted state only has `profileId`, import it as
+`primaryProfileId: profileId` and `profileIds: [profileId]`.
+
+When multiple profiles are selected, the setup flow should show a lightweight review step
+before confirmation: selected profiles can be removed, and one selected profile must be
+chosen as the primary profile. The primary profile controls communication style; all
+selected profiles contribute role coverage and recipe/skill-pack defaults.
 
 `agentProviderInstanceId` references a configured provider instance record. The setup
 flow may recommend a provider or model, but the draft model must not assume a closed

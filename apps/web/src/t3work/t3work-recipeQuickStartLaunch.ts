@@ -102,12 +102,16 @@ export function applyT3workRecipeQuickStartLaunchCustomization(
   return {
     ...recipe,
     prompt: buildCustomizedPrompt(recipe.prompt, customization),
-    workflow: {
-      ...recipe.workflow,
-      parameters: Object.fromEntries(
-        customization.selections.map((selection) => [selection.name, selection.value]),
-      ),
-    },
+    ...(recipe.workflow
+      ? {
+          workflow: {
+            ...recipe.workflow,
+            parameters: Object.fromEntries(
+              customization.selections.map((selection) => [selection.name, selection.value]),
+            ),
+          },
+        }
+      : {}),
   };
 }
 
@@ -127,9 +131,10 @@ export function buildT3workSelectedRecipeKickoffLaunch(input: {
   readonly selectedRecipe: T3workSelectedRecipeQuickStart;
   readonly customMessage?: string;
 }): T3workSelectedRecipeKickoffLaunch {
-  const kickoffFromProgram = input.selectedRecipe.recipe.workflow.kickoff
+  const kickoff = input.selectedRecipe.recipe.workflow?.kickoff;
+  const kickoffFromProgram = kickoff
     ? buildT3workKickoffLaunchFromProgram({
-        program: input.selectedRecipe.recipe.workflow.kickoff,
+        program: kickoff,
         prompt: input.selectedRecipe.recipe.prompt,
         ...(input.customMessage !== undefined ? { customMessage: input.customMessage } : {}),
         context: input.selectedRecipe.recipe.actionView?.context,

@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { T3WORK_PROJECT_CONTEXT_ENTRYPOINT_PATH } from "~/t3work/t3work-projectSetup";
 
 import type { BackendApi } from "~/t3work/backend/t3work-types";
 import {
   buildProjectWorkspaceSyncFiles,
+  retainProjectWorkspaceSync,
   resetProjectWorkspaceSyncStateForTests,
   syncProjectWorkspaceContext,
 } from "~/t3work/t3work-projectWorkspaceSync";
@@ -69,8 +70,24 @@ function createBackendHarness() {
   };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 beforeEach(() => {
+  vi.useFakeTimers();
   resetProjectWorkspaceSyncStateForTests();
+});
+
+afterEach(() => {
+  resetProjectWorkspaceSyncStateForTests();
+  vi.useRealTimers();
 });
 
 describe("buildProjectWorkspaceSyncFiles", () => {
@@ -122,13 +139,54 @@ describe("syncProjectWorkspaceContext", () => {
       projectTickets: [createTicket("PROJ-1")],
     };
 
-    await Promise.all([syncProjectWorkspaceContext(input), syncProjectWorkspaceContext(input)]);
+    const syncs = Promise.all([
+      syncProjectWorkspaceContext(input),
+      syncProjectWorkspaceContext(input),
+    ]);
+    await vi.advanceTimersByTimeAsync(150);
+    await syncs;
 
     expect(backendHarness.bootstrapWorkspace).toHaveBeenCalledTimes(1);
     expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(1);
   });
 
-  it("retries the same payload after a failed write", async () => {
+  it("debounces and writes only the latest queued payload", async () => {
+    const backendHarness = createBackendHarness();
+    const backend = {
+      projectWorkspace: {
+        bootstrapWorkspace: backendHarness.bootstrapWorkspace,
+        discoverRecipes: vi.fn(async () => ({
+          workspaceRoot: "/tmp/project-alpha",
+          hasProjectLocalRecipes: false,
+          recipes: [],
+        })),
+        writeContextFiles: backendHarness.writeContextFiles,
+      },
+    } as unknown as BackendApi;
+    const baseInput = {
+      backend,
+      project: createProject(),
+      linkedRepositoryUrls: ["https://github.com/example/project-alpha"],
+    };
+
+    const stale = syncProjectWorkspaceContext({
+      ...baseInput,
+      projectTickets: [createTicket("PROJ-1")],
+    });
+    const latest = syncProjectWorkspaceContext({
+      ...baseInput,
+      projectTickets: [createTicket("PROJ-2")],
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    await Promise.all([stale, latest]);
+
+    expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(1);
+    const writtenFiles = backendHarness.writeContextFiles.mock.calls[0]?.[0].files ?? [];
+    expect(writtenFiles.some((file) => file.relativePath.endsWith("/proj-1.json"))).toBe(false);
+    expect(writtenFiles.some((file) => file.relativePath.endsWith("/proj-2.json"))).toBe(true);
+  });
+
+  it("retries the latest payload after a failed write while retained", async () => {
     const backendHarness = createBackendHarness();
     backendHarness.writeContextFiles
       .mockRejectedValueOnce(new Error("disk unavailable"))
@@ -147,6 +205,7 @@ describe("syncProjectWorkspaceContext", () => {
         writeContextFiles: backendHarness.writeContextFiles,
       },
     } as unknown as BackendApi;
+    const release = retainProjectWorkspaceSync("/tmp/project-alpha");
     const input = {
       backend,
       project: createProject(),
@@ -154,9 +213,58 @@ describe("syncProjectWorkspaceContext", () => {
       projectTickets: [createTicket("PROJ-1")],
     };
 
-    await expect(syncProjectWorkspaceContext(input)).rejects.toThrow("disk unavailable");
-    await syncProjectWorkspaceContext(input);
+    const firstAttempt = syncProjectWorkspaceContext(input);
+    const firstAttemptExpectation = expect(firstAttempt).rejects.toThrow("disk unavailable");
+    await vi.advanceTimersByTimeAsync(150);
+    await firstAttemptExpectation;
+    await vi.runOnlyPendingTimersAsync();
+    await vi.runOnlyPendingTimersAsync();
 
     expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(2);
+    release();
+  });
+
+  it("serializes newer writes after an in-flight older write", async () => {
+    const backendHarness = createBackendHarness();
+    const firstWrite = createDeferred<{ workspaceRoot: string; writtenFiles: string[] }>();
+    backendHarness.writeContextFiles.mockReturnValueOnce(firstWrite.promise).mockResolvedValueOnce({
+      workspaceRoot: "/tmp/project-alpha",
+      writtenFiles: [],
+    });
+    const backend = {
+      projectWorkspace: {
+        bootstrapWorkspace: backendHarness.bootstrapWorkspace,
+        discoverRecipes: vi.fn(async () => ({
+          workspaceRoot: "/tmp/project-alpha",
+          hasProjectLocalRecipes: false,
+          recipes: [],
+        })),
+        writeContextFiles: backendHarness.writeContextFiles,
+      },
+    } as unknown as BackendApi;
+    const baseInput = {
+      backend,
+      project: createProject(),
+      linkedRepositoryUrls: ["https://github.com/example/project-alpha"],
+    };
+
+    const stale = syncProjectWorkspaceContext({
+      ...baseInput,
+      projectTickets: [createTicket("PROJ-1")],
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(1);
+    const latest = syncProjectWorkspaceContext({
+      ...baseInput,
+      projectTickets: [createTicket("PROJ-2")],
+    });
+    firstWrite.resolve({ workspaceRoot: "/tmp/project-alpha", writtenFiles: [] });
+    await stale;
+    await vi.advanceTimersByTimeAsync(0);
+    await latest;
+
+    expect(backendHarness.writeContextFiles).toHaveBeenCalledTimes(2);
+    const finalFiles = backendHarness.writeContextFiles.mock.calls[1]?.[0].files ?? [];
+    expect(finalFiles.some((file) => file.relativePath.endsWith("/proj-2.json"))).toBe(true);
   });
 });

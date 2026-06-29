@@ -1,0 +1,1780 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recipes &amp; Workflows in T3 Code — explained</title>
+    <style>
+      :root {
+        --bg: #0b0d12;
+        --bg-soft: #11141b;
+        --panel: #151922;
+        --panel-2: #1b2030;
+        --line: #232a3a;
+        --text: #e6e9f0;
+        --muted: #9aa3b8;
+        --dim: #6b7488;
+        --accent: #7cc4ff;
+        --accent-2: #b794ff;
+        --green: #6ee7b7;
+        --amber: #fbbf77;
+        --red: #f87171;
+        --pink: #f9a8d4;
+        --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+        --sans:
+          -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        line-height: 1.6;
+        font-size: 16px;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        max-width: 1280px;
+        margin: 0 auto;
+      }
+      .toc {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        height: 100vh;
+        overflow-y: auto;
+        padding: 28px 18px;
+        border-right: 1px solid var(--line);
+        background: linear-gradient(180deg, var(--bg-soft), var(--bg));
+        font-size: 13.5px;
+      }
+      .toc h4 {
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--dim);
+        margin: 18px 0 8px;
+      }
+      .toc ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .toc li {
+        margin: 2px 0;
+      }
+      .toc a {
+        color: var(--muted);
+        display: block;
+        padding: 4px 8px;
+        border-radius: 6px;
+      }
+      .toc a:hover {
+        background: var(--panel);
+        color: var(--text);
+        text-decoration: none;
+      }
+      .toc a.lvl2 {
+        padding-left: 18px;
+        font-size: 13px;
+        color: var(--dim);
+      }
+
+      .content {
+        padding: 0 48px 120px;
+        max-width: 880px;
+      }
+
+      .hero {
+        padding: 80px 0 40px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 48px;
+      }
+      .hero .eyebrow {
+        font-size: 12px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--accent-2);
+        margin-bottom: 14px;
+      }
+      .hero h1 {
+        font-size: 44px;
+        line-height: 1.1;
+        margin: 0 0 16px;
+        font-weight: 700;
+        background: linear-gradient(90deg, #fff 0%, #b9c6e0 60%, var(--accent) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .hero p.lede {
+        font-size: 19px;
+        color: var(--muted);
+        max-width: 60ch;
+        margin: 0 0 18px;
+      }
+      .hero .meta-row {
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .hero .meta-row code {
+        color: var(--muted);
+      }
+
+      h2 {
+        font-size: 28px;
+        margin: 56px 0 8px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+      }
+      h2 .num {
+        color: var(--dim);
+        font-weight: 400;
+        margin-right: 10px;
+      }
+      h3 {
+        font-size: 20px;
+        margin: 32px 0 6px;
+        color: #cdd5e6;
+      }
+      h4 {
+        font-size: 15px;
+        margin: 22px 0 6px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      p {
+        margin: 10px 0;
+      }
+      ul,
+      ol {
+        margin: 10px 0;
+        padding-left: 22px;
+      }
+      li {
+        margin: 4px 0;
+      }
+      small {
+        color: var(--dim);
+      }
+
+      code {
+        font-family: var(--mono);
+        font-size: 13.5px;
+      }
+      :not(pre) > code {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        padding: 1px 6px;
+        border-radius: 5px;
+        color: #d6def0;
+      }
+      pre {
+        background: var(--bg-soft);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 18px 20px;
+        overflow-x: auto;
+        font-size: 13.5px;
+        line-height: 1.55;
+      }
+      pre code {
+        color: #d6def0;
+      }
+      .tok-k {
+        color: var(--accent-2);
+      }
+      .tok-s {
+        color: var(--green);
+      }
+      .tok-c {
+        color: var(--dim);
+        font-style: italic;
+      }
+      .tok-f {
+        color: var(--accent);
+      }
+      .tok-n {
+        color: var(--amber);
+      }
+      .tok-t {
+        color: var(--pink);
+      }
+
+      .callout {
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--accent);
+        background: var(--panel);
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin: 18px 0;
+      }
+      .callout.amber {
+        border-left-color: var(--amber);
+      }
+      .callout.green {
+        border-left-color: var(--green);
+      }
+      .callout.pink {
+        border-left-color: var(--pink);
+      }
+      .callout .ttl {
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 900px) {
+        .grid2 {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 18px 20px;
+      }
+      .card h4 {
+        margin-top: 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 14px 0;
+        font-size: 14px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      td code {
+        font-size: 12.5px;
+      }
+      tr:hover td {
+        background: var(--bg-soft);
+      }
+
+      /* diagram styles */
+      figure.diagram {
+        background: var(--bg-soft);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 24px;
+        margin: 22px 0;
+        overflow-x: auto;
+      }
+      figure.diagram figcaption {
+        color: var(--dim);
+        font-size: 13px;
+        margin-top: 14px;
+        text-align: center;
+      }
+      svg.diagram {
+        display: block;
+        margin: 0 auto;
+        max-width: 100%;
+        height: auto;
+      }
+      svg.diagram text {
+        font-family: var(--sans);
+        fill: var(--text);
+      }
+      svg.diagram .muted {
+        fill: var(--muted);
+      }
+      svg.diagram .dim {
+        fill: var(--dim);
+      }
+      svg.diagram .mono {
+        font-family: var(--mono);
+        font-size: 12px;
+        fill: var(--accent);
+      }
+      svg.diagram .box {
+        fill: var(--panel);
+        stroke: var(--line);
+      }
+      svg.diagram .accent {
+        fill: rgba(124, 196, 255, 0.08);
+        stroke: var(--accent);
+      }
+      svg.diagram .purple {
+        fill: rgba(183, 148, 255, 0.08);
+        stroke: var(--accent-2);
+      }
+      svg.diagram .green {
+        fill: rgba(110, 231, 183, 0.08);
+        stroke: var(--green);
+      }
+      svg.diagram .amber {
+        fill: rgba(251, 191, 119, 0.08);
+        stroke: var(--amber);
+      }
+      svg.diagram .pink {
+        fill: rgba(249, 168, 212, 0.08);
+        stroke: var(--pink);
+      }
+      svg.diagram .red {
+        fill: rgba(248, 113, 113, 0.08);
+        stroke: var(--red);
+      }
+      svg.diagram .arrow {
+        stroke: var(--muted);
+        stroke-width: 1.5;
+        fill: none;
+        marker-end: url(#arrow);
+      }
+      svg.diagram .arrow-accent {
+        stroke: var(--accent);
+        stroke-width: 1.5;
+        fill: none;
+        marker-end: url(#arrow-accent);
+      }
+      svg.diagram .dashed {
+        stroke-dasharray: 4 4;
+      }
+
+      .legend {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--muted);
+        margin: 10px 0 0;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend i {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        display: inline-block;
+      }
+
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-family: var(--mono);
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .pill.green {
+        color: var(--green);
+        border-color: rgba(110, 231, 183, 0.4);
+      }
+      .pill.amber {
+        color: var(--amber);
+        border-color: rgba(251, 191, 119, 0.4);
+      }
+      .pill.accent {
+        color: var(--accent);
+        border-color: rgba(124, 196, 255, 0.4);
+      }
+      .pill.purple {
+        color: var(--accent-2);
+        border-color: rgba(183, 148, 255, 0.4);
+      }
+      .pill.pink {
+        color: var(--pink);
+        border-color: rgba(249, 168, 212, 0.4);
+      }
+
+      .kbd {
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 1px 6px;
+        border: 1px solid var(--line);
+        border-bottom-width: 2px;
+        border-radius: 5px;
+        background: var(--panel);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute">
+      <defs>
+        <marker
+          id="arrow"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0,0 L10,5 L0,10 z" fill="#9aa3b8" />
+        </marker>
+        <marker
+          id="arrow-accent"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0,0 L10,5 L0,10 z" fill="#7cc4ff" />
+        </marker>
+      </defs>
+    </svg>
+
+    <div class="layout">
+      <nav class="toc">
+        <h4>On this page</h4>
+        <ul>
+          <li><a href="#intro">The 30-second idea</a></li>
+          <li><a href="#mental-model">1 · Mental model</a></li>
+          <li><a href="#primitives">2 · The four primitives</a></li>
+          <li><a href="#recipes">3 · Recipes, end to end</a></li>
+          <li><a href="#recipe-anatomy" class="lvl2">Anatomy of a recipe</a></li>
+          <li><a href="#surfaces" class="lvl2">Surfaces &amp; discovery</a></li>
+          <li><a href="#save-as-recipe" class="lvl2">“Save as recipe”</a></li>
+          <li><a href="#workflows">4 · Workflows, end to end</a></li>
+          <li><a href="#replay" class="lvl2">Durable &amp; replay</a></li>
+          <li><a href="#primitives-list" class="lvl2">Workflow primitives</a></li>
+          <li><a href="#routines">5 · Routines &amp; the clock</a></li>
+          <li><a href="#sidebar">6 · Threads in the sidebar</a></li>
+          <li><a href="#kanban-today">7 · Kanban today</a></li>
+          <li><a href="#usecase">8 · Use case: auto-agent lane</a></li>
+          <li><a href="#usecase-design" class="lvl2">Design</a></li>
+          <li><a href="#usecase-flow" class="lvl2">The flow</a></li>
+          <li><a href="#usecase-code" class="lvl2">Workflow sketch</a></li>
+          <li><a href="#usecase-files" class="lvl2">Files to touch</a></li>
+          <li><a href="#summary">9 · One-screen summary</a></li>
+        </ul>
+        <h4>Reference</h4>
+        <ul>
+          <li><a href="#refs">Docs &amp; code locations</a></li>
+        </ul>
+      </nav>
+
+      <main class="content">
+        <header class="hero">
+          <div class="eyebrow">T3 Code · t3work MVP</div>
+          <h1>Recipes &amp; Workflows,<br />explained simply.</h1>
+          <p class="lede">
+            A recipe is a one-click launcher. A workflow is the durable TypeScript program that runs
+            when you click it. Together they let T3 Code do real, repeatable work without you
+            writing a prompt every time.
+          </p>
+          <div class="meta-row">
+            Companion to <code>docs/t3work-mvp/16-action-recipes.md</code>,
+            <code>25-workflow-engine.md</code>, and <code>27-scheduled-workflows.md</code> ·
+            generated Jun 2026
+          </div>
+        </header>
+
+        <!-- ===================== INTRO ===================== -->
+        <section id="intro">
+          <h2><span class="num">0</span>The 30-second idea</h2>
+          <div class="grid2">
+            <div class="card">
+              <h4>Recipe</h4>
+              <p>
+                <b>A launcher with a face.</b> A small bundle of metadata + an icon + a card that
+                says “Approve &amp; merge PR”. Clicking it runs a workflow with sensible defaults
+                and a short guided kickoff. You never type a prompt.
+              </p>
+            </div>
+            <div class="card">
+              <h4>Workflow</h4>
+              <p>
+                <b>A real TypeScript program</b> that lives in a <code>.workflow.ts</code> file and
+                runs under a durable, replay-based engine. It can call tools, spawn agent turns, ask
+                you questions, wait for hours, and branch on errors — exactly like Temporal/Restate,
+                but TS-native and journaled to SQLite.
+              </p>
+            </div>
+          </div>
+
+          <div class="callout green">
+            <div class="ttl">The one-liner</div>
+            A <b>recipe</b> is what you click. A <b>workflow</b> is what runs. The workflow can
+            loop, wait, ask, and spawn agents — and when it does, each agent turn becomes a
+            <b>thread</b> that shows up in the sidebar under whatever workitem it belongs to.
+          </div>
+        </section>
+
+        <!-- ===================== MENTAL MODEL ===================== -->
+        <section id="mental-model">
+          <h2><span class="num">1</span>Mental model</h2>
+          <p>
+            The whole system is built on four primitives (Epic 16): <b>Context</b>, <b>Tools</b>,
+            <b>Workflows</b>, and <b>Views</b>. A recipe ties the first three together and offers
+            itself on a <b>Surface</b> (a place in the UI).
+          </p>
+
+          <figure class="diagram">
+            <svg class="diagram" viewBox="0 0 760 360" width="760">
+              <!-- Surfaces -->
+              <g>
+                <rect class="box" x="20" y="20" width="150" height="46" rx="8" />
+                <text x="95" y="42" text-anchor="middle" font-size="13">project.dashboard</text>
+                <text x="95" y="58" text-anchor="middle" font-size="11" class="muted">
+                  .backlog / .myWork
+                </text>
+
+                <rect class="box" x="20" y="80" width="150" height="46" rx="8" />
+                <text x="95" y="102" text-anchor="middle" font-size="13">workitem.detail</text>
+                <text x="95" y="118" text-anchor="middle" font-size="11" class="muted">
+                  .sidepanel
+                </text>
+
+                <rect class="box" x="20" y="140" width="150" height="46" rx="8" />
+                <text x="95" y="162" text-anchor="middle" font-size="13">github.pr.detail</text>
+                <text x="95" y="178" text-anchor="middle" font-size="11" class="muted">
+                  .sidepanel
+                </text>
+
+                <text x="95" y="210" text-anchor="middle" font-size="11" class="dim">
+                  SURFACES (where recipes show up)
+                </text>
+              </g>
+
+              <!-- Recipe -->
+              <g>
+                <rect class="accent" x="230" y="60" width="160" height="100" rx="10" />
+                <text x="310" y="92" text-anchor="middle" font-size="15" font-weight="600">
+                  Recipe
+                </text>
+                <text x="310" y="112" text-anchor="middle" font-size="11" class="muted">
+                  title · icon · card
+                </text>
+                <text x="310" y="128" text-anchor="middle" font-size="11" class="muted">
+                  appliesTo · defaults
+                </text>
+                <text x="310" y="144" text-anchor="middle" font-size="11" class="muted">
+                  defaultAction →
+                </text>
+              </g>
+
+              <!-- Workflow -->
+              <g>
+                <rect class="purple" x="450" y="40" width="180" height="120" rx="10" />
+                <text x="540" y="74" text-anchor="middle" font-size="15" font-weight="600">
+                  .workflow.ts
+                </text>
+                <text x="540" y="96" text-anchor="middle" font-size="11" class="muted">
+                  meta · Inputs · Outputs
+                </text>
+                <text x="540" y="114" text-anchor="middle" font-size="11" class="muted">
+                  tools.* · agent()
+                </text>
+                <text x="540" y="130" text-anchor="middle" font-size="11" class="muted">
+                  askUser · waitUntil
+                </text>
+                <text x="540" y="146" text-anchor="middle" font-size="11" class="muted">
+                  spawnThread
+                </text>
+              </g>
+
+              <!-- Engine -->
+              <g>
+                <rect class="box" x="450" y="200" width="180" height="120" rx="10" />
+                <text x="540" y="232" text-anchor="middle" font-size="15" font-weight="600">
+                  Durable engine
+                </text>
+                <text x="540" y="254" text-anchor="middle" font-size="11" class="muted">
+                  journal + replay
+                </text>
+                <text x="540" y="270" text-anchor="middle" font-size="11" class="muted">
+                  suspend / resume
+                </text>
+                <text x="540" y="286" text-anchor="middle" font-size="11" class="muted">
+                  scheduler (clock)
+                </text>
+                <text x="540" y="302" text-anchor="middle" font-size="11" class="muted">
+                  SQLite workflow_runs
+                </text>
+              </g>
+
+              <!-- Context + Tools -->
+              <g>
+                <rect class="green" x="230" y="200" width="180" height="50" rx="10" />
+                <text x="320" y="222" text-anchor="middle" font-size="13" font-weight="600">
+                  Context
+                </text>
+                <text x="320" y="240" text-anchor="middle" font-size="11" class="muted">
+                  workitem · refs · profile
+                </text>
+
+                <rect class="amber" x="230" y="270" width="180" height="50" rx="10" />
+                <text x="320" y="292" text-anchor="middle" font-size="13" font-weight="600">
+                  Tools
+                </text>
+                <text x="320" y="310" text-anchor="middle" font-size="11" class="muted">
+                  jira · github · scripts
+                </text>
+              </g>
+
+              <!-- arrows -->
+              <path class="arrow-accent" d="M170 60 C 200 70, 210 90, 230 100" />
+              <path class="arrow-accent" d="M170 103 C 200 103, 210 110, 230 110" />
+              <path class="arrow-accent" d="M170 163 C 200 150, 210 130, 230 120" />
+              <path class="arrow-accent" d="M390 110 L 450 100" />
+              <path class="arrow" d="M540 160 L 540 200" />
+              <path class="arrow" d="M410 225 L 450 230" />
+              <path class="arrow" d="M410 295 L 450 270" />
+            </svg>
+            <figcaption>
+              Recipes appear on surfaces, launch workflows, which run on the durable engine and pull
+              from Context + Tools.
+            </figcaption>
+          </figure>
+
+          <div class="legend">
+            <span
+              ><i style="background: rgba(124, 196, 255, 0.25); border: 1px solid var(--accent)"></i
+              >Recipe</span
+            >
+            <span
+              ><i
+                style="background: rgba(183, 148, 255, 0.25); border: 1px solid var(--accent-2)"
+              ></i
+              >Workflow</span
+            >
+            <span
+              ><i style="background: rgba(110, 231, 183, 0.25); border: 1px solid var(--green)"></i
+              >Context</span
+            >
+            <span
+              ><i style="background: rgba(251, 191, 119, 0.25); border: 1px solid var(--amber)"></i
+              >Tools</span
+            >
+            <span
+              ><i style="background: var(--panel); border: 1px solid var(--line)"></i>Surface /
+              Engine</span
+            >
+          </div>
+        </section>
+
+        <!-- ===================== PRIMITIVES ===================== -->
+        <section id="primitives">
+          <h2><span class="num">2</span>The four primitives</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Primitive</th>
+                <th>What it is</th>
+                <th>Owner</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>Context</b></td>
+                <td>
+                  What the recipe/agent can see — the workitem, attached refs, profile, project.
+                </td>
+                <td><code>packages/project-context</code></td>
+              </tr>
+              <tr>
+                <td><b>Tools</b></td>
+                <td>
+                  Typed, capability-gated actions: <code>tools.jira.*</code>,
+                  <code>tools.github.*</code>, scripts.
+                </td>
+                <td>SDK groups + tool broker</td>
+              </tr>
+              <tr>
+                <td><b>Workflows</b></td>
+                <td>
+                  Durable TS programs (<code>.workflow.ts</code>) that orchestrate tools, agents,
+                  and asks.
+                </td>
+                <td><code>packages/t3work-sdk</code> + server engine</td>
+              </tr>
+              <tr>
+                <td><b>Views</b></td>
+                <td>JSX card templates that render the recipe / workflow messages in the UI.</td>
+                <td><code>t3work-skill-packs</code> + web</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="callout">
+            A <b>recipe</b> is metadata that <i>binds</i> these: it points at a
+            <code>defaultAction</code> (a workflow ref), declares which <b>Context</b> it needs, on
+            which <b>Surfaces</b> it appears, and which <b>Views</b> render its card and its
+            workflow’s conversation messages.
+          </p>
+        </section>
+
+        <!-- ===================== RECIPES ===================== -->
+        <section id="recipes">
+          <h2><span class="num">3</span>Recipes, end to end</h2>
+
+          <h3 id="recipe-anatomy">3.1 · Anatomy of a recipe</h3>
+          <p>Recipes live in three scopes. The two you’ll touch most:</p>
+          <ul>
+            <li>
+              <span class="pill purple">project-local</span>
+              <code>&lt;managed-project&gt;/.t3work/recipes/&lt;id&gt;/</code> — your team’s
+              recipes, checked into the project.
+            </li>
+            <li>
+              <span class="pill accent">bundled</span> shipped in
+              <code>packages/t3work-skill-packs</code> — the defaults that ship with T3 Code.
+            </li>
+          </ul>
+
+          <p>A project-local recipe is a small folder:</p>
+          <pre><code><span class="tok-c"># .t3work/recipes/pr-approve-and-merge/</span>
+recipe.ts            <span class="tok-c"># metadata + defaultAction + surfaces + appliesTo</span>
+approve.workflow.ts  <span class="tok-c"># the durable program</span>
+views/               <span class="tok-c"># JSX card templates (optional)</span>
+tools/               <span class="tok-c"># recipe-scoped tools (optional)</span></code></pre>
+
+          <p>
+            The <code>Recipe</code> schema (UI-facing projection) is the contract the server uses to
+            match recipes to surfaces and render cards:
+          </p>
+          <pre><code><span class="tok-c">// packages/project-recipes/src/recipe.ts</span>
+<span class="tok-k">export const</span> Recipe = Schema.Struct({
+  id: Schema.String,
+  title: Schema.String,
+  shortDescription: Schema.String,
+  surfaces: Schema.Array(RecipeSurface),
+  promptTemplate: Schema.optional(Schema.String),
+  kickoff: Schema.optional(ProjectRecipeKickoffProgram),
+  appliesTo: RecipeApplicability,
+  requiredContext: Schema.Array(RecipeContextRequirement),
+  outputPreference: RichOutputPreference,
+  artifactKinds: Schema.optional(Schema.Array(Schema.String)),
+  suggestedActions: Schema.optional(Schema.Array(RecipeFollowup)),
+});</code></pre>
+
+          <p>Authors don’t write that schema by hand. They use the typed SDK:</p>
+          <pre><code><span class="tok-c">// .t3work/recipes/pr-approve-and-merge/recipe.ts</span>
+<span class="tok-k">import</span> { defineRecipe, defineWorkflow } <span class="tok-k">from</span> <span class="tok-s">"@t3work/sdk"</span>;
+
+<span class="tok-k">export const</span> approveMerge = defineRecipe({
+  id: <span class="tok-s">"pr-approve-and-merge"</span>,
+  version: <span class="tok-s">"1.0.0"</span>,
+  scope: <span class="tok-s">"project"</span>,            <span class="tok-c">// only project-scoped recipes are supported</span>
+  title: <span class="tok-s">"Approve &amp; merge PR"</span>,
+  shortDescription: <span class="tok-s">"Approve, then merge — escalate on protected-branch errors."</span>,
+  surfaces: [<span class="tok-s">"github.pull_request.detail.sidepanel"</span>],
+  defaultAction: defineWorkflow(<span class="tok-s">"./approve.workflow.ts"</span>),
+});</code></pre>
+
+          <h3 id="surfaces">3.2 · Surfaces &amp; discovery</h3>
+          <p>
+            A surface is just a string literal — a place in the UI where a recipe card can appear:
+          </p>
+          <pre><code><span class="tok-c">// packages/project-recipes/src/surface.ts</span>
+<span class="tok-k">export const</span> RecipeSurface = Schema.Literals([
+  <span class="tok-s">"project.dashboard.backlog"</span>,
+  <span class="tok-s">"project.dashboard.myWork"</span>,
+  <span class="tok-s">"workitem.detail.sidepanel"</span>,
+  <span class="tok-s">"thread.context"</span>,
+  <span class="tok-s">"github.pull_request.detail.sidepanel"</span>,
+  <span class="tok-s">"github.pull_request.diff.selection"</span>,
+  <span class="tok-s">"github.review.comment"</span>,
+]);</code></pre>
+
+          <p>
+            Discovery is server-side and visibility-aware. When the web asks for recipes for a given
+            render context, the server:
+          </p>
+          <ol>
+            <li>
+              Scans <code>.t3work/recipes/*</code> (project-local) and merges in bundled recipes.
+            </li>
+            <li>
+              Filters by <code>surfaces</code> — only recipes declaring the current surface survive.
+            </li>
+            <li>
+              Evaluates <code>appliesTo</code> against the render context (workitem type,
+              integrations connected, profile).
+            </li>
+            <li>Ranks survivors via <code>matchRecipes</code> + profile weights.</li>
+          </ol>
+
+          <figure class="diagram">
+            <svg class="diagram" viewBox="0 0 760 240" width="760">
+              <rect class="box" x="20" y="100" width="150" height="50" rx="8" />
+              <text x="95" y="122" text-anchor="middle">UI asks for</text>
+              <text x="95" y="140" text-anchor="middle" class="muted" font-size="11">
+                recipes(surface, ctx)
+              </text>
+
+              <rect class="accent" x="220" y="40" width="150" height="40" rx="8" />
+              <text x="295" y="65" text-anchor="middle">bundled recipes</text>
+              <rect class="accent" x="220" y="100" width="150" height="40" rx="8" />
+              <text x="295" y="125" text-anchor="middle">.t3work/recipes/*</text>
+              <rect class="accent" x="220" y="160" width="150" height="40" rx="8" />
+              <text x="295" y="185" text-anchor="middle">profile weights</text>
+
+              <rect class="purple" x="420" y="80" width="150" height="80" rx="8" />
+              <text x="495" y="108" text-anchor="middle">matchRecipes()</text>
+              <text x="495" y="128" text-anchor="middle" class="muted" font-size="11">
+                surface filter
+              </text>
+              <text x="495" y="144" text-anchor="middle" class="muted" font-size="11">
+                appliesTo
+              </text>
+              <text x="495" y="160" text-anchor="middle" class="muted" font-size="11">rank</text>
+
+              <rect class="green" x="620" y="80" width="120" height="80" rx="8" />
+              <text x="680" y="115" text-anchor="middle">sorted recipe</text>
+              <text x="680" y="135" text-anchor="middle">cards → UI</text>
+
+              <path class="arrow" d="M170 125 L 220 120" />
+              <path class="arrow" d="M370 60 C 395 70, 400 95, 420 105" />
+              <path class="arrow" d="M370 120 L 420 120" />
+              <path class="arrow" d="M370 180 C 395 170, 400 145, 420 135" />
+              <path class="arrow-accent" d="M570 120 L 620 120" />
+            </svg>
+            <figcaption>
+              Recipe discovery: bundle + project-local + profile → matchRecipes → ranked cards.
+            </figcaption>
+          </figure>
+
+          <h3 id="save-as-recipe">3.3 · “Save as recipe” — the offer, never silent</h3>
+          <div class="callout amber">
+            <div class="ttl">Constitution rule (AGENTS.md)</div>
+            After completing a repeatable t3work workflow, agents should <b>mention</b> that it
+            could be saved as a project-scoped action recipe and <b>offer</b> to create it.
+            <b>Do not create recipes silently.</b> The bundled <code>create-recipe</code>
+            meta-recipe scaffolds the folder via an explicit user confirmation.
+          </div>
+          <p>
+            This is also the user-facing framing in Epic 28: don’t say “I created a workflow” — say
+            “I can set this up so it’s one click next time.”
+          </p>
+        </section>
+
+        <!-- ===================== WORKFLOWS ===================== -->
+        <section id="workflows">
+          <h2><span class="num">4</span>Workflows, end to end</h2>
+
+          <h3 id="replay">4.1 · Durable &amp; replay-based</h3>
+          <p>
+            A workflow is a real TypeScript body in a <code>.workflow.ts</code> file. There is no
+            <code>defineWorkflow(async (ctx) =&gt; …)</code> wrapper — the body <i>is</i> the
+            function. The engine journals every primitive call and replays the body on resume to
+            reach the next live call. Suspend for an hour, restart the server, come back — the run
+            continues from the journal.
+          </p>
+
+          <pre><code><span class="tok-c">// .t3work/recipes/pr-approve-and-merge/approve.workflow.ts</span>
+<span class="tok-k">import</span> { Schema } <span class="tok-k">from</span> <span class="tok-s">"effect"</span>;
+<span class="tok-k">import</span> { githubWrite } <span class="tok-k">from</span> <span class="tok-s">"@t3work/sdk/groups"</span>;
+
+<span class="tok-k">export const</span> Inputs = Schema.Struct({ prId: Schema.String });
+<span class="tok-k">export const</span> Outputs = Schema.Union(
+  Schema.Struct({ status: Schema.Literal(<span class="tok-s">"merged"</span>), sha: Schema.String }),
+  Schema.Struct({ status: Schema.Literal(<span class="tok-s">"blocked"</span>), reason: Schema.String }),
+);
+
+<span class="tok-k">export const</span> meta = {
+  name: <span class="tok-s">"pr-review.approve-and-merge"</span>,
+  capabilities: [<span class="tok-s">"user"</span>, githubWrite],
+  phases: [{ title: <span class="tok-s">"Approve"</span> }, { title: <span class="tok-s">"Merge"</span> }] <span class="tok-k">as const</span>,
+} <span class="tok-k">as const</span>;
+
+<span class="tok-k">const</span> input = Schema.decodeSync(Inputs)(args);
+
+phase(<span class="tok-s">"Approve"</span>);
+<span class="tok-k">await</span> tools.github.pullRequest.approve({ id: input.prId });
+
+phase(<span class="tok-s">"Merge"</span>);
+<span class="tok-k">try</span> {
+  <span class="tok-k">const</span> { sha } = <span class="tok-k">await</span> tools.github.pullRequest.merge({ id: input.prId });
+  <span class="tok-k">return</span> { status: <span class="tok-s">"merged"</span>, sha };
+} <span class="tok-k">catch</span> (e) {
+  <span class="tok-k">if</span> (e <span class="tok-k">instanceof</span> PermissionDeniedError) {
+    <span class="tok-k">const</span> ask = <span class="tok-k">await</span> user.ask({
+      title: <span class="tok-s">"Branch protected — request admin override?"</span>,
+      responseSchema: Schema.Struct({ proceed: Schema.Boolean }),
+    });
+    <span class="tok-k">const</span> decision = <span class="tok-k">await</span> ask.response;
+    <span class="tok-k">if</span> (!decision.proceed) <span class="tok-k">return</span> { status: <span class="tok-s">"blocked"</span>, reason: <span class="tok-s">"declined"</span> };
+    <span class="tok-k">const</span> { sha } = <span class="tok-k">await</span> tools.github.pullRequest.merge({ id: input.prId, adminOverride: <span class="tok-k">true</span> });
+    <span class="tok-k">return</span> { status: <span class="tok-s">"merged"</span>, sha };
+  }
+  <span class="tok-k">throw</span> e;
+}</code></pre>
+
+          <figure class="diagram">
+            <svg class="diagram" viewBox="0 0 760 320" width="760">
+              <!-- timeline -->
+              <line x1="40" y1="160" x2="720" y2="160" stroke="#9aa3b8" stroke-width="2" />
+              <text x="40" y="186" font-size="11" class="dim">time →</text>
+
+              <!-- run lifecycle -->
+              <g>
+                <rect class="green" x="60" y="120" width="80" height="40" rx="8" />
+                <text x="100" y="145" text-anchor="middle">running</text>
+
+                <rect class="amber" x="180" y="120" width="80" height="40" rx="8" />
+                <text x="220" y="145" text-anchor="middle">suspended</text>
+
+                <rect class="green" x="300" y="120" width="80" height="40" rx="8" />
+                <text x="340" y="145" text-anchor="middle">running</text>
+
+                <rect class="purple" x="420" y="120" width="80" height="40" rx="8" />
+                <text x="460" y="145" text-anchor="middle">sleeping</text>
+
+                <rect class="green" x="540" y="120" width="80" height="40" rx="8" />
+                <text x="580" y="145" text-anchor="middle">running</text>
+
+                <rect class="box" x="660" y="120" width="80" height="40" rx="8" />
+                <text x="700" y="145" text-anchor="middle">completed</text>
+              </g>
+
+              <!-- journal -->
+              <g>
+                <rect class="box" x="60" y="230" width="680" height="50" rx="8" />
+                <text x="400" y="252" text-anchor="middle" class="mono">
+                  workflow_journal: args · phase("Approve") · approve() · phase("Merge") · merge() ▶
+                  err · user.ask() · …
+                </text>
+                <text x="400" y="270" text-anchor="middle" font-size="11" class="dim">
+                  every primitive call is journaled; on resume the body is replayed up to the next
+                  live call
+                </text>
+              </g>
+
+              <!-- triggers -->
+              <text x="220" y="100" text-anchor="middle" font-size="11" class="muted">
+                user.ask reply
+              </text>
+              <text x="460" y="100" text-anchor="middle" font-size="11" class="muted">
+                waitUntil deadline
+              </text>
+              <path class="arrow" d="M220 105 L 220 120" />
+              <path class="arrow" d="M460 105 L 460 120" />
+
+              <path class="arrow" d="M140 140 L 180 140" />
+              <path class="arrow" d="M260 140 L 300 140" />
+              <path class="arrow" d="M380 140 L 420 140" />
+              <path class="arrow" d="M500 140 L 540 140" />
+              <path class="arrow" d="M620 140 L 660 140" />
+            </svg>
+            <figcaption>
+              A run moves through statuses persisted in <code>workflow_runs</code>; each transition
+              is driven by either a user/event reply or the scheduler clock.
+            </figcaption>
+          </figure>
+
+          <h3 id="primitives-list">4.2 · Workflow primitives (the globals)</h3>
+          <p>
+            Inside a <code>.workflow.ts</code>, these are ambient globals injected by the engine:
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Primitive</th>
+                <th>What it does</th>
+                <th>Suspends on?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>tools.*</code></td>
+                <td>Typed, capability-gated external calls (jira, github, scripts).</td>
+                <td>No (unless it returns a Handle)</td>
+              </tr>
+              <tr>
+                <td><code>agent()</code> / <code>askAgent()</code></td>
+                <td>Run an LLM turn, optionally in a child thread.</td>
+                <td>Yes — until turn completes</td>
+              </tr>
+              <tr>
+                <td><code>user.ask()</code></td>
+                <td>Render a typed form/card in the UI and wait for the reply.</td>
+                <td>Yes — until user replies</td>
+              </tr>
+              <tr>
+                <td><code>thread.notifyUser()</code></td>
+                <td>Post a rich message; fire-and-forget.</td>
+                <td>No</td>
+              </tr>
+              <tr>
+                <td><code>spawnThread()</code></td>
+                <td>Create a child thread and get a Handle to drive it.</td>
+                <td>Depends on call</td>
+              </tr>
+              <tr>
+                <td><code>waitUntil(date)</code></td>
+                <td>Sleep until a wall-clock deadline (Epic 27).</td>
+                <td>Yes — until clock</td>
+              </tr>
+              <tr>
+                <td><code>phase(title)</code></td>
+                <td>Mark progress (pure metadata, journaled).</td>
+                <td>No</td>
+              </tr>
+              <tr>
+                <td><code>now()</code></td>
+                <td>The journaled clock — replay-safe time read.</td>
+                <td>No</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="callout">
+            <div class="ttl">Where it runs</div>
+            Server: <code>t3work-workflowEngineLaunch.ts</code> (launch + journal + DB lifecycle),
+            <code>t3work-workflowEngineReactor.ts</code> (wakes <code>askUser</code>/<code
+              >askAgent</code
+            >
+            on events), <code>t3work-workflowScheduler.ts</code> (clock wake for
+            <code>waitUntil</code>), <code>t3work-workflowEngineRegistry.ts</code> (in-memory
+            parked-run index). Persistence: <code>workflow_runs</code> +
+            <code>workflow_journal</code> (SQLite).
+          </div>
+        </section>
+
+        <!-- ===================== ROUTINES ===================== -->
+        <section id="routines">
+          <h2><span class="num">5</span>Routines &amp; the clock</h2>
+          <p>
+            Epic 27 adds one primitive (<code>waitUntil</code>) and one service (the scheduler). A
+            <b>routine</b> is just a workflow that loops on a timer.
+            <b>There is no “automations panel.”</b> A routine is a thread that lives in the sidebar,
+            mostly asleep, waking on its timer to post what it did and sleep again.
+          </p>
+
+          <figure class="diagram">
+            <svg class="diagram" viewBox="0 0 720 220" width="720">
+              <rect class="purple" x="40" y="80" width="120" height="60" rx="8" />
+              <text x="100" y="105" text-anchor="middle">Wait</text>
+              <text x="100" y="125" text-anchor="middle" class="muted" font-size="11">
+                waitUntil(Mon 09:00)
+              </text>
+
+              <rect class="green" x="200" y="80" width="120" height="60" rx="8" />
+              <text x="260" y="105" text-anchor="middle">Triage</text>
+              <text x="260" y="125" text-anchor="middle" class="muted" font-size="11">
+                tools.jira.search
+              </text>
+
+              <rect class="accent" x="360" y="80" width="120" height="60" rx="8" />
+              <text x="420" y="105" text-anchor="middle">Agent</text>
+              <text x="420" y="125" text-anchor="middle" class="muted" font-size="11">
+                spawnThread + askAgent
+              </text>
+
+              <rect class="amber" x="520" y="80" width="120" height="60" rx="8" />
+              <text x="580" y="105" text-anchor="middle">Act + notify</text>
+              <text x="580" y="125" text-anchor="middle" class="muted" font-size="11">
+                assign · askUser
+              </text>
+
+              <path class="arrow" d="M160 110 L 200 110" />
+              <path class="arrow" d="M320 110 L 360 110" />
+              <path class="arrow" d="M480 110 L 520 110" />
+              <path
+                class="arrow-accent"
+                d="M580 140 C 580 200, 100 200, 100 140"
+                stroke-dasharray="4 4"
+              />
+              <text x="340" y="195" text-anchor="middle" font-size="11" class="dim">
+                loop back to sleep
+              </text>
+            </svg>
+            <figcaption>
+              The weekly-triage routine: a normal workflow that loops on <code>waitUntil</code>.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- ===================== SIDEBAR ===================== -->
+        <section id="sidebar">
+          <h2><span class="num">6</span>Threads in the sidebar</h2>
+          <p>
+            Every workflow runs <i>inside a thread</i>. Threads are grouped in the project sidebar,
+            and crucially: a thread can be attached to a <b>workitem</b> (a Jira ticket) via
+            <code>ticketId</code>, and a child thread can be nested under a parent via
+            <code>parentThreadId</code>. That’s how agent handoffs show up under the kickoff that
+            spawned them.
+          </p>
+
+          <figure class="diagram">
+            <svg class="diagram" viewBox="0 0 560 380" width="560">
+              <rect class="box" x="20" y="20" width="520" height="340" rx="10" />
+              <text x="40" y="48" font-size="14" font-weight="600">T3 Code — sidebar</text>
+
+              <text x="40" y="78" font-size="12" class="muted">▼ Acme Web</text>
+
+              <rect class="box" x="40" y="92" width="480" height="30" rx="6" />
+              <text x="56" y="112" font-size="12">📊 My Work thread</text>
+
+              <rect class="box" x="40" y="128" width="480" height="30" rx="6" />
+              <text x="56" y="148" font-size="12">📂 Backlog thread</text>
+
+              <rect class="box" x="40" y="164" width="480" height="30" rx="6" />
+              <text x="56" y="184" font-size="12">💬 Project-level thread</text>
+
+              <rect class="accent" x="40" y="206" width="480" height="40" rx="6" />
+              <text x="56" y="222" font-size="13" font-weight="600">
+                PROJ-123 Implement login throttling
+              </text>
+              <text x="56" y="238" font-size="11" class="muted">
+                kanban: In Progress · assignee: you
+              </text>
+
+              <rect class="purple" x="60" y="252" width="460" height="28" rx="6" />
+              <text x="76" y="270" font-size="12">↳ PROJ-123 kickoff 1</text>
+
+              <rect class="green" x="84" y="286" width="436" height="26" rx="6" />
+              <text x="100" y="303" font-size="11.5">↳ child handoff (agent, parentThreadId)</text>
+
+              <rect class="purple" x="60" y="318" width="460" height="28" rx="6" />
+              <text x="76" y="336" font-size="12">↳ PROJ-123 kickoff 2</text>
+            </svg>
+            <figcaption>
+              Sidebar grouping: project-level → dashboard-mode → ticket-attached (with nested child
+              handoffs).
+            </figcaption>
+          </figure>
+
+          <p>
+            The grouping logic lives in <code>t3work-projectSidebarThreadGroups.ts</code> and the
+            parent/child tree in <code>t3work-projectSidebarThreadTree.ts</code>. The
+            <code>ProjectThread</code> type carries the linkage fields:
+          </p>
+          <pre><code><span class="tok-c">// apps/web/src/t3work/t3work-types.ts</span>
+<span class="tok-k">export type</span> ProjectThread = {
+  id: string;
+  projectId: string;
+  parentThreadId?: string;     <span class="tok-c">// nested handoff</span>
+  ticketId?: string;           <span class="tok-c">// attached workitem</span>
+  dashboardMode?: <span class="tok-s">"backlog"</span> | <span class="tok-s">"my-work"</span>;
+  displayMode?: <span class="tok-s">"embedded"</span> | <span class="tok-s">"thread"</span>;
+  sleepingUntil?: string;      <span class="tok-c">// scheduled wake (Epic 27)</span>
+  status: <span class="tok-s">"idle"</span> | <span class="tok-s">"running"</span> | <span class="tok-s">"completed"</span> | <span class="tok-s">"error"</span>;
+};</code></pre>
+        </section>
+
+        <!-- ===================== KANBAN TODAY ===================== -->
+        <section id="kanban-today">
+          <h2><span class="num">7</span>Kanban today — and what’s missing</h2>
+          <p>
+            T3 Code already renders a kanban board from Jira tickets. The lane a ticket lands in is
+            derived from its Jira <code>status</code> string by keyword matching:
+          </p>
+          <pre><code><span class="tok-c">// apps/web/src/t3work/t3work-projectTicketStatus.ts</span>
+<span class="tok-k">export function</span> getProjectTicketKanbanLane(status: string)
+  : <span class="tok-s">"todo"</span> | <span class="tok-s">"inProgress"</span> | <span class="tok-s">"review"</span> | <span class="tok-s">"done"</span> {
+  <span class="tok-k">const</span> s = normalizeProjectTicketStatus(status);
+  <span class="tok-k">if</span> (s.length === 0) <span class="tok-k">return</span> <span class="tok-s">"todo"</span>;
+  <span class="tok-k">if</span> (includesStatusKeyword(s, doneStatusKeywords))      <span class="tok-k">return</span> <span class="tok-s">"done"</span>;
+  <span class="tok-k">if</span> (includesStatusKeyword(s, reviewStatusKeywords))    <span class="tok-k">return</span> <span class="tok-s">"review"</span>;
+  <span class="tok-k">if</span> (includesStatusKeyword(s, todoStatusKeywords))      <span class="tok-k">return</span> <span class="tok-s">"todo"</span>;
+  <span class="tok-k">return</span> includesStatusKeyword(s, inProgressStatusKeywords) ? <span class="tok-s">"inProgress"</span> : <span class="tok-s">"todo"</span>;
+}</code></pre>
+
+          <div class="callout amber">
+            <div class="ttl">The gap</div>
+            There is <b>no dedicated workitem state-machine module</b> today — Jira is the source of
+            truth for status, and T3 Code only mirrors it. There’s also no concept of
+            <b>“this lane means: an agent should pick it up automatically.”</b> The board is a view;
+            nothing watches it.
+          </div>
+
+          <p>Everything we need to <i>build</i> that watcher already exists, though:</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Capability</th>
+                <th>Status</th>
+                <th>Where</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Workflow that loops + sleeps</td>
+                <td><span class="pill green">shipped</span></td>
+                <td>Epic 27 — <code>waitUntil</code> + scheduler</td>
+              </tr>
+              <tr>
+                <td>Poll Jira for changes</td>
+                <td><span class="pill green">shipped</span></td>
+                <td><code>t3work-integration-polling.ts</code> + atlassian routes</td>
+              </tr>
+              <tr>
+                <td>Spawn an agent in a child thread</td>
+                <td><span class="pill green">shipped</span></td>
+                <td><code>spawnThread</code> + tool broker handoff</td>
+              </tr>
+              <tr>
+                <td>Create isolated worktree + feature branch</td>
+                <td><span class="pill green">shipped</span></td>
+                <td>
+                  <code>t3work-toolBrokerStartChildContext.ts</code> +
+                  <code>GitWorkflowService</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Nest child thread under a workitem</td>
+                <td><span class="pill green">shipped</span></td>
+                <td><code>ticketId</code> + <code>parentThreadId</code> + sidebar tree</td>
+              </tr>
+              <tr>
+                <td>A “ready for agent” lane / state</td>
+                <td><span class="pill amber">missing</span></td>
+                <td>Needs a project-local convention + a watcher</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- ===================== USE CASE ===================== -->
+        <section id="usecase">
+          <h2><span class="num">8</span>Use case: a kanban lane that auto-runs agents</h2>
+          <p>
+            Here’s a concrete, end-to-end design for a workflow that turns a kanban column into an
+            <b>auto-agent lane</b>: drag a ticket to <code>Ready for Agent</code>, and an agent
+            spins up in an isolated worktree + feature branch, attached as a new child thread under
+            that workitem in the sidebar.
+          </p>
+
+          <h3 id="usecase-design">8.1 · Design</h3>
+          <ul>
+            <li>
+              <b>State cycle.</b> Add one project-local lane convention: a Jira status whose name
+              contains <code>Ready for Agent</code> (or a configured status id). The existing
+              lane-mapper already buckets by keyword — we just add a new keyword bucket and treat it
+              as a trigger, not a view-only lane.
+            </li>
+            <li>
+              <b>Watcher.</b> A routine (Epic 27 looping workflow) per project that polls the
+              backlog for tickets in the <code>ready-for-agent</code> lane. Polling uses the
+              existing fingerprint envelope so unchanged boards cost almost nothing.
+            </li>
+            <li>
+              <b>Kickoff.</b> For each ready ticket, the routine spawns a child agent thread
+              <i>attached to the workitem</i> (<code>ticketId</code>) and moves the ticket to
+              <code>In Progress (Agent)</code> so the same ticket isn’t picked twice.
+            </li>
+            <li>
+              <b>Isolation.</b> The agent runs in a fresh worktree under
+              <code>.t3work/child-session-worktrees/&lt;ticket&gt;-&lt;short&gt;</code> on a feature
+              branch <code>t3work/&lt;ticket&gt;/&lt;slug&gt;</code>. This is exactly what
+              <code>t3work-toolBrokerStartChildContext.ts</code> already does for child handoffs.
+            </li>
+            <li>
+              <b>Sidebar.</b> Because the child thread is created with <code>ticketId</code> +
+              <code>parentThreadId</code>, it shows up <i>nested under the workitem</i> in the
+              sidebar — exactly like a manual kickoff would.
+            </li>
+            <li>
+              <b>Termination.</b> On agent completion, the workflow posts a rich result card, opens
+              (or updates) a PR from the feature branch, and moves the ticket to
+              <code>Review</code>. On failure, it moves the ticket back to
+              <code>Ready for Agent</code> (or <code>Blocked</code>) with a diagnostic artifact.
+            </li>
+          </ul>
+
+          <h3 id="usecase-flow">8.2 · The flow</h3>
+
+          <figure class="diagram">
+            <svg class="diagram" viewBox="0 0 820 460" width="820">
+              <!-- Kanban lanes -->
+              <g>
+                <rect class="box" x="20" y="20" width="120" height="420" rx="8" />
+                <text x="80" y="44" text-anchor="middle" font-size="12" class="muted">KANBAN</text>
+                <rect class="box" x="30" y="60" width="100" height="40" rx="6" />
+                <text x="80" y="84" text-anchor="middle" font-size="11">Backlog</text>
+                <rect class="amber" x="30" y="120" width="100" height="40" rx="6" />
+                <text x="80" y="138" text-anchor="middle" font-size="11">Ready for</text>
+                <text x="80" y="152" text-anchor="middle" font-size="11">Agent</text>
+                <rect class="accent" x="30" y="200" width="100" height="40" rx="6" />
+                <text x="80" y="218" text-anchor="middle" font-size="11">In Progress</text>
+                <text x="80" y="232" text-anchor="middle" font-size="11">(Agent)</text>
+                <rect class="purple" x="30" y="280" width="100" height="40" rx="6" />
+                <text x="80" y="304" text-anchor="middle" font-size="11">Review</text>
+                <rect class="green" x="30" y="360" width="100" height="40" rx="6" />
+                <text x="80" y="384" text-anchor="middle" font-size="11">Done</text>
+              </g>
+
+              <!-- Watcher routine -->
+              <g>
+                <rect class="purple" x="180" y="120" width="160" height="80" rx="10" />
+                <text x="260" y="148" text-anchor="middle" font-size="13" font-weight="600">
+                  Watcher routine
+                </text>
+                <text x="260" y="168" text-anchor="middle" font-size="11" class="muted">
+                  ready-agent-watcher
+                </text>
+                <text x="260" y="184" text-anchor="middle" font-size="11" class="muted">
+                  .workflow.ts (loops)
+                </text>
+              </g>
+
+              <!-- Poll -->
+              <g>
+                <rect class="box" x="380" y="120" width="160" height="80" rx="10" />
+                <text x="460" y="148" text-anchor="middle" font-size="13" font-weight="600">
+                  tools.jira.search
+                </text>
+                <text x="460" y="168" text-anchor="middle" font-size="11" class="muted">
+                  JQL: status = "Ready"
+                </text>
+                <text x="460" y="184" text-anchor="middle" font-size="11" class="muted">
+                  fingerprint poll
+                </text>
+              </g>
+
+              <!-- For each ticket -->
+              <g>
+                <rect class="accent" x="180" y="240" width="160" height="80" rx="10" />
+                <text x="260" y="268" text-anchor="middle" font-size="13" font-weight="600">
+                  For each ticket
+                </text>
+                <text x="260" y="286" text-anchor="middle" font-size="11" class="muted">
+                  move → In Progress(Agent)
+                </text>
+                <text x="260" y="302" text-anchor="middle" font-size="11" class="muted">
+                  claim atomically
+                </text>
+              </g>
+
+              <!-- Worktree + branch -->
+              <g>
+                <rect class="green" x="380" y="240" width="160" height="80" rx="10" />
+                <text x="460" y="266" text-anchor="middle" font-size="13" font-weight="600">
+                  createWorktree
+                </text>
+                <text x="460" y="284" text-anchor="middle" font-size="11" class="muted">
+                  + feature branch
+                </text>
+                <text x="460" y="302" text-anchor="middle" font-size="11" class="mono">
+                  t3work/PROJ-123/…
+                </text>
+              </g>
+
+              <!-- Spawn agent thread -->
+              <g>
+                <rect class="pink" x="580" y="240" width="220" height="80" rx="10" />
+                <text x="690" y="266" text-anchor="middle" font-size="13" font-weight="600">
+                  spawnThread + askAgent
+                </text>
+                <text x="690" y="284" text-anchor="middle" font-size="11" class="muted">
+                  ticketId = PROJ-123
+                </text>
+                <text x="690" y="302" text-anchor="middle" font-size="11" class="muted">
+                  parentThreadId = watcher
+                </text>
+              </g>
+
+              <!-- Agent works -->
+              <g>
+                <rect class="box" x="580" y="360" width="220" height="70" rx="10" />
+                <text x="690" y="386" text-anchor="middle" font-size="13" font-weight="600">
+                  Agent codes → commits
+                </text>
+                <text x="690" y="404" text-anchor="middle" font-size="11" class="muted">
+                  on feature branch in worktree
+                </text>
+                <text x="690" y="420" text-anchor="middle" font-size="11" class="muted">
+                  posts progress to thread
+                </text>
+              </g>
+
+              <!-- result transitions -->
+              <g>
+                <rect class="purple" x="380" y="360" width="160" height="70" rx="10" />
+                <text x="460" y="386" text-anchor="middle" font-size="12" font-weight="600">
+                  open PR
+                </text>
+                <text x="460" y="404" text-anchor="middle" font-size="11" class="muted">
+                  move ticket → Review
+                </text>
+                <text x="460" y="420" text-anchor="middle" font-size="11" class="muted">
+                  (or → Blocked on fail)
+                </text>
+              </g>
+
+              <!-- arrows -->
+              <path class="arrow-accent" d="M130 140 L 180 150" />
+              <path class="arrow" d="M340 160 L 380 160" />
+              <path class="arrow" d="M460 200 L 460 230 C 460 230, 300 230, 260 240" />
+              <path class="arrow-accent" d="M340 280 L 380 280" />
+              <path class="arrow-accent" d="M540 280 L 580 280" />
+              <path class="arrow" d="M690 320 L 690 360" />
+              <path class="arrow" d="M580 395 L 540 395" />
+              <path
+                class="arrow-accent"
+                d="M380 395 C 200 395, 130 240, 130 220"
+                stroke-dasharray="4 4"
+              />
+              <text x="220" y="430" font-size="11" class="dim">
+                ticket lane reflects state at every step
+              </text>
+            </svg>
+            <figcaption>
+              A routine watches the “Ready for Agent” lane, claims a ticket, spins up an isolated
+              agent, and drives the ticket forward through the kanban states.
+            </figcaption>
+          </figure>
+
+          <h3 id="usecase-code">8.3 · The workflow sketch</h3>
+          <p>
+            This is a single <code>.workflow.ts</code> plus a tiny <code>recipe.ts</code>. It reuses
+            every primitive above — no new engine concepts.
+          </p>
+
+          <pre><code><span class="tok-c">// .t3work/recipes/ready-agent-watcher/recipe.ts</span>
+<span class="tok-k">import</span> { defineRecipe, defineWorkflow } <span class="tok-k">from</span> <span class="tok-s">"@t3work/sdk"</span>;
+
+<span class="tok-k">export const</span> readyAgentWatcher = defineRecipe({
+  id: <span class="tok-s">"ready-agent-watcher"</span>,
+  version: <span class="tok-s">"1.0.0"</span>,
+  scope: <span class="tok-s">"project"</span>,
+  title: <span class="tok-s">"Auto-agent lane watcher"</span>,
+  shortDescription: <span class="tok-s">"Watch the ‘Ready for Agent’ lane and spin up an isolated agent per ticket."</span>,
+  surfaces: [<span class="tok-s">"project.dashboard.backlog"</span>],
+  defaultAction: defineWorkflow(<span class="tok-s">"./watcher.workflow.ts"</span>),
+});</code></pre>
+
+          <pre><code><span class="tok-c">// .t3work/recipes/ready-agent-watcher/watcher.workflow.ts</span>
+<span class="tok-k">import</span> { Schema } <span class="tok-k">from</span> <span class="tok-s">"effect"</span>;
+<span class="tok-k">import</span> { jiraRead, jiraWrite, githubWrite } <span class="tok-k">from</span> <span class="tok-s">"@t3work/sdk/groups"</span>;
+<span class="tok-k">import</span> { nextDelay } <span class="tok-k">from</span> <span class="tok-s">"@t3work/sdk/time"</span>;
+
+<span class="tok-k">export const</span> Inputs = Schema.Struct({
+  jqlReady: Schema.String.payload(<span class="tok-s">`status = "Ready for Agent"`</span>),
+  jqlClaimed: Schema.String.payload(<span class="tok-s">`status = "In Progress (Agent)"`</span>),
+  pollSeconds: Schema.Number.payload(60),
+});
+
+<span class="tok-k">export const</span> meta = {
+  name: <span class="tok-s">"ready-agent-watcher"</span>,
+  capabilities: [<span class="tok-s">"schedule"</span>, <span class="tok-s">"user"</span>, jiraRead, jiraWrite, githubWrite],
+  phases: [{ title: <span class="tok-s">"Wait"</span> }, { title: <span class="tok-s">"Scan"</span> }, { title: <span class="tok-s">"Claim"</span> }, { title: <span class="tok-s">"Run"</span> }, { title: <span class="tok-s">"Finish"</span> }] <span class="tok-k">as const</span>,
+} <span class="tok-k">as const</span>;
+
+<span class="tok-k">const</span> input = Schema.decodeSync(Inputs)(args);
+<span class="tok-k">const</span> ReadyTicket = Schema.Struct({
+  id: Schema.String, key: Schema.String, summary: Schema.String,
+});
+
+<span class="tok-k">while</span> (<span class="tok-k">true</span>) {
+  phase(<span class="tok-s">"Wait"</span>);
+  <span class="tok-k">await</span> waitUntil(nextDelay(now(), { seconds: input.pollSeconds }));
+
+  phase(<span class="tok-s">"Scan"</span>);
+  <span class="tok-k">const</span> ready = <span class="tok-k">await</span> tools.jira.searchIssues({ jql: input.jqlReady });
+  <span class="tok-k">if</span> (ready.items.length === 0) <span class="tok-k">continue</span>;
+
+  <span class="tok-k">for</span> (<span class="tok-k">const</span> item <span class="tok-k">of</span> ready.items) {
+    <span class="tok-k">const</span> ticket = Schema.decodeSync(ReadyTicket)(item);
+
+    phase(<span class="tok-s">"Claim"</span>);
+    <span class="tok-c">// Atomic claim: move to "In Progress (Agent)" before doing anything.</span>
+    <span class="tok-k">await</span> tools.jira.transitionIssue({ id: ticket.id, status: <span class="tok-s">"In Progress (Agent)"</span> });
+
+    phase(<span class="tok-s">"Run"</span>);
+    <span class="tok-c">// spawnThread with ticketId + parentThreadId → nested under workitem in sidebar.</span>
+    <span class="tok-k">const</span> run = spawnThread({
+      name: <span class="tok-s">`</span><span class="tok-n">${ticket.key}</span><span class="tok-s"> agent`</span>,
+      ticketId: ticket.key,
+      parentThreadId: thread.id,
+      <span class="tok-c">// Tool-broker child context creates the worktree + feature branch.</span>
+      childContext: { kind: <span class="tok-s">"worktree"</span>, baseRef: <span class="tok-s">"main"</span> },
+    });
+
+    <span class="tok-k">const</span> result = <span class="tok-k">await</span> run.askAgent(
+      <span class="tok-s">`Implement </span><span class="tok-n">${ticket.summary}</span><span class="tok-s"> (</span><span class="tok-n">${ticket.key}</span><span class="tok-s">). `</span> +
+      <span class="tok-s">`Work on your feature branch, commit in logical chunks, push, and open a PR back to main. `</span> +
+      <span class="tok-s">`Post a short progress note after each commit.`</span>,
+      { attachments: [item] },
+    );
+
+    phase(<span class="tok-s">"Finish"</span>);
+    <span class="tok-k">if</span> (result.status === <span class="tok-s">"completed"</span>) {
+      <span class="tok-k">await</span> tools.jira.transitionIssue({ id: ticket.id, status: <span class="tok-s">"Review"</span> });
+      <span class="tok-k">await</span> thread.notifyUser(<span class="tok-s">`</span><span class="tok-n">${ticket.key}</span><span class="tok-s"> → Review. PR opened.`</span>, { attachments: [result.prRef] });
+    } <span class="tok-k">else</span> {
+      <span class="tok-k">await</span> tools.jira.transitionIssue({ id: ticket.id, status: <span class="tok-s">"Ready for Agent"</span> });
+      <span class="tok-k">await</span> thread.notifyUser(<span class="tok-s">`</span><span class="tok-n">${ticket.key}</span><span class="tok-s"> agent failed — requeued.`</span>, { attachments: [result.diagnosticArtifact] });
+    }
+  }
+}</code></pre>
+
+          <div class="callout green">
+            <div class="ttl">Why this fits cleanly</div>
+            Every moving part already exists:
+            <ul style="margin: 8px 0 0">
+              <li><code>waitUntil</code> + loop = the routine (Epic 27).</li>
+              <li><code>tools.jira.searchIssues</code> + fingerprint poll = existing polling.</li>
+              <li>
+                <code
+                  >spawnThread({ ticketId, parentThreadId, childContext: { kind: "worktree" }
+                  })</code
+                >
+                = existing child-handoff + worktree creation in
+                <code>t3work-toolBrokerStartChildContext.ts</code>.
+              </li>
+              <li>
+                Sidebar nesting under the workitem = existing <code>ProjectThread</code> + tree
+                builder.
+              </li>
+              <li>
+                Ticket lane transitions = existing <code>transitionIssue</code> tool + lane mapper.
+              </li>
+            </ul>
+            The only genuinely new bits are: a <b>status-keyword convention</b> for the “Ready for
+            Agent” lane, and a <b>claim transition</b> to prevent double-pickup.
+          </div>
+
+          <h3 id="usecase-files">8.4 · Files to touch (concrete change list)</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>File / area</th>
+                <th>Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>apps/web/src/t3work/t3work-projectTicketStatusKeywords.ts</code></td>
+                <td>
+                  Add <code>readyForAgentStatusKeywords</code> +
+                  <code>agentInProgressStatusKeywords</code> keyword buckets.
+                </td>
+              </tr>
+              <tr>
+                <td><code>apps/web/src/t3work/t3work-projectTicketStatus.ts</code></td>
+                <td>
+                  Optionally extend <code>getProjectTicketKanbanLane</code> to surface an
+                  <code>"agent"</code> lane (or keep mapping to <code>inProgress</code> with an
+                  “agent” badge).
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>packages/t3work-skill-packs/src/recipes.ts</code> <i>or</i> a project-local
+                  recipe
+                </td>
+                <td>
+                  Ship <code>ready-agent-watcher</code> as a bundled or project-local recipe +
+                  <code>.workflow.ts</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><code>packages/t3work-sdk/src/t3work-sdk.workflowGlobals.ts</code></td>
+                <td>
+                  If not already present, formalize
+                  <code>spawnThread({ childContext: { kind: "worktree", baseRef } })</code> as a
+                  typed option (the runtime already exists in
+                  <code>t3work-toolBrokerStartChildContext.ts</code>).
+                </td>
+              </tr>
+              <tr>
+                <td><code>apps/server/src/t3work-toolBrokerStartChildHandoff.ts</code></td>
+                <td>
+                  Ensure routine-spawned child threads inherit <code>ticketId</code> +
+                  <code>parentThreadId</code> the same way embedded handoffs do.
+                </td>
+              </tr>
+              <tr>
+                <td>Docs</td>
+                <td>
+                  Update Epic 16 / 27 with the “auto-agent lane” pattern as a worked example; offer
+                  the recipe as a save-as-recipe candidate after first use.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="callout pink">
+            <div class="ttl">UX note</div>
+            The watcher thread itself shows up in the sidebar under the project (it’s a routine, so
+            it’s mostly asleep with a “next wake: …” subtitle). Each ticket it picks up gets its
+            <i>own</i> child thread nested under the ticket card — so from the user’s view, the
+            agent work is discoverable exactly where they’d expect: under the workitem, not buried
+            in some “automations” panel (which Epic 27 explicitly rejects).
+          </div>
+        </section>
+
+        <!-- ===================== SUMMARY ===================== -->
+        <section id="summary">
+          <h2><span class="num">9</span>One-screen summary</h2>
+          <div class="grid2">
+            <div class="card">
+              <h4>Recipes</h4>
+              <ul>
+                <li>Launcher + metadata + card on a surface.</li>
+                <li>Project-local under <code>.t3work/recipes/*</code>, or bundled.</li>
+                <li>Point at a <code>defaultAction</code> workflow.</li>
+                <li>Offered (never silently created) after repeatable runs.</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h4>Workflows</h4>
+              <ul>
+                <li>Real TS in <code>.workflow.ts</code>, no wrapper.</li>
+                <li>Durable: journal + replay, suspend/resume.</li>
+                <li>Primitives: tools, agent, askUser, waitUntil, spawnThread.</li>
+                <li>Run inside a thread; thread attaches to a workitem.</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h4>Routines</h4>
+              <ul>
+                <li>A workflow that loops on <code>waitUntil</code>.</li>
+                <li>No automations panel — it’s a sleeping sidebar thread.</li>
+                <li>Scheduler wakes it on the wall-clock deadline.</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h4>Auto-agent lane (use case)</h4>
+              <ul>
+                <li>One new status convention: <code>Ready for Agent</code>.</li>
+                <li>A routine polls, claims, spawns an agent in a worktree + branch.</li>
+                <li>Child thread nested under the workitem in the sidebar.</li>
+                <li>Drives the ticket forward: Ready → In Progress (Agent) → Review.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== REFS ===================== -->
+        <section id="refs">
+          <h2><span class="num">·</span>Reference locations</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Topic</th>
+                <th>Doc / file</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Action recipes spec</td>
+                <td><code>docs/t3work-mvp/16-action-recipes.md</code></td>
+              </tr>
+              <tr>
+                <td>Recipe model &amp; scopes</td>
+                <td><code>docs/t3work-mvp/06-recipes-and-skills.md</code></td>
+              </tr>
+              <tr>
+                <td>Workflow engine</td>
+                <td><code>docs/t3work-mvp/25-workflow-engine.md</code></td>
+              </tr>
+              <tr>
+                <td>Scheduled routines</td>
+                <td><code>docs/t3work-mvp/27-scheduled-workflows.md</code></td>
+              </tr>
+              <tr>
+                <td>Agent communication vocabulary</td>
+                <td><code>docs/t3work-mvp/28-agent-communication.md</code></td>
+              </tr>
+              <tr>
+                <td>Embedded chat &amp; handoffs</td>
+                <td><code>docs/t3work-mvp/20-embedded-chat-and-handoffs.md</code></td>
+              </tr>
+              <tr>
+                <td>Recipe schema</td>
+                <td><code>packages/project-recipes/src/recipe.ts</code></td>
+              </tr>
+              <tr>
+                <td>Authoring SDK</td>
+                <td><code>packages/t3work-sdk/src/t3work-sdk.recipe.ts</code></td>
+              </tr>
+              <tr>
+                <td>Engine globals</td>
+                <td><code>packages/t3work-sdk/src/t3work-sdk.workflowGlobals.ts</code></td>
+              </tr>
+              <tr>
+                <td>Bundled recipes</td>
+                <td><code>packages/t3work-skill-packs/src/recipes.ts</code></td>
+              </tr>
+              <tr>
+                <td>Workflow launch (server)</td>
+                <td><code>apps/server/src/t3work-workflowEngineLaunch.ts</code></td>
+              </tr>
+              <tr>
+                <td>Scheduler</td>
+                <td><code>apps/server/src/t3work-workflowScheduler.ts</code></td>
+              </tr>
+              <tr>
+                <td>Child worktree + branch</td>
+                <td><code>apps/server/src/t3work-toolBrokerStartChildContext.ts</code></td>
+              </tr>
+              <tr>
+                <td>Child handoff placement</td>
+                <td><code>apps/server/src/t3work-toolBrokerStartChildHandoff.ts</code></td>
+              </tr>
+              <tr>
+                <td>Integration polling</td>
+                <td><code>apps/server/src/t3work-integration-polling.ts</code></td>
+              </tr>
+              <tr>
+                <td>Kanban lane mapping</td>
+                <td><code>apps/web/src/t3work/t3work-projectTicketStatus.ts</code></td>
+              </tr>
+              <tr>
+                <td>Sidebar thread grouping</td>
+                <td>
+                  <code>apps/web/src/t3work/components/t3work-projectSidebarThreadGroups.ts</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Sidebar thread tree</td>
+                <td>
+                  <code>apps/web/src/t3work/components/t3work-projectSidebarThreadTree.ts</code>
+                </td>
+              </tr>
+              <tr>
+                <td>ProjectThread type</td>
+                <td><code>apps/web/src/t3work/t3work-types.ts</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="margin-top: 40px; color: var(--dim); font-size: 13px">
+            Open this file directly in a browser:
+            <span class="kbd">open docs/t3work-mvp/recipes-and-workflows-explained.html</span>
+          </p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

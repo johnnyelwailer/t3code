@@ -6,6 +6,7 @@ import { tryClaimRecipeWorkflowLaunch } from "~/t3work/chat/t3work-recipeLaunchD
 import type { T3workKickoffWorkflow } from "~/t3work/t3work-types";
 
 type RecipeKickoffWorkflow = Extract<T3workKickoffWorkflow, { kind: "recipe" }>;
+type WorkflowBackedRecipeKickoff = RecipeKickoffWorkflow & { readonly workflowPath: string };
 
 export function toProjectRecipeWorkflowLaunch(workflow: RecipeKickoffWorkflow) {
   return {
@@ -35,13 +36,14 @@ export function canLaunchPendingRecipeWorkflow(input: {
   readonly hasAttachments: boolean;
 }): input is {
   readonly kickoffPending: false;
-  readonly kickoffWorkflow: RecipeKickoffWorkflow;
+  readonly kickoffWorkflow: WorkflowBackedRecipeKickoff;
   readonly hasServerLaunchActivity: false;
   readonly hasAttachments: false;
 } {
   return (
     input.kickoffPending === false &&
     input.kickoffWorkflow?.kind === "recipe" &&
+    typeof input.kickoffWorkflow.workflowPath === "string" &&
     !input.hasServerLaunchActivity &&
     !input.hasAttachments
   );

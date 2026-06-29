@@ -211,7 +211,7 @@ export default function Action() {
       },
     });
 
-    expect(markup).toContain("Create a recipe for this backlog");
+    expect(markup).toContain("Create a recipe for this view");
     expect(markup).toContain(
       "Let the agent handle repeatable backlog work: triage risk, shape the next slice, or flag missing owners.",
     );

@@ -455,6 +455,7 @@ exist to prevent.
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
 | `defineSidecarSection`            | `sidecar.section`                                                                                                   | Labeled group in the right contextual sidecar (Quick Starts, Recent Threads, Inline Filters, Status Widgets)                                                                                                                                                                           | Built (Phase 5a)    |
 | `defineWorkItemSection`           | `workitem.detail.section`                                                                                           | Section inside a work-item detail page (e.g., "Risk Assessment" between Description and Comments)                                                                                                                                                                                      | Planned (Phase 5+)  |
+| `defineProjectView`               | `project.navView`                                                                                                   | Full project page assembled from safe project blocks (Backlog, My Work, triage dashboards, release readiness). See [Epic 31](./31-composable-project-views.md).                                                                                                                        | Planned (Epic 31)   |
 | `defineDashboardWidget`           | `dashboard.widget`                                                                                                  | Widget tile inside a project dashboard (backlog overview, my-work overview)                                                                                                                                                                                                            | Planned (Phase 5+)  |
 | `defineNavSection`                | `nav.section`                                                                                                       | Section inside the left navigation tree (e.g., a "Saved Filters" subtree)                                                                                                                                                                                                              | Planned (Phase 5+)  |
 | `defineHomeBlock`                 | `home.block`                                                                                                        | Block on the home workspace                                                                                                                                                                                                                                                            | Planned (Phase 5+)  |
@@ -472,7 +473,7 @@ exist to prevent.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------- |
 | `defineTool`         | Custom tool registered with `T3workToolBroker` (project-local or pack-bundled). Today tools are only built-in.            | Planned |
 | `defineSkillPack`    | Bundle of recipes + sections + profile defaults + tool grants under one id ([Epic 12](./12-profiles-and-skill-packs.md)). | Planned |
-| `defineProfile`      | A starter profile with preference fields. Today profiles are hardcoded; this makes them authorable.                       | Planned |
+| `defineProfile`      | A configuration-defined starter profile with preference fields; bundled profiles are seed config, not behavior enums.     | Planned |
 | `defineResourceType` | Typed resource shape + renderer (for new integration providers).                                                          | Planned |
 
 ### No generic primitive
@@ -517,6 +518,11 @@ Current first-party surfaces such as Backlog and My Work are effectively hardcod
 project dashboards. They prove the interaction model, but they should not remain the
 only way to add dense project views.
 
+[Epic 31: Composable Project Views](./31-composable-project-views.md) narrows this into
+the concrete product path: project nav views are composed from safe blocks and
+high-level capabilities, not raw Jira/Tempo/GitHub APIs. Backlog and My Work are the
+dogfood targets for that block library.
+
 The miniapp model should allow custom views to register into navigation:
 
 - project nav: views scoped to one project workspace.
@@ -539,8 +545,8 @@ Example:
       "order": 40
     }
   ],
-  "tools": ["artifact.list", "integration.search", "recipe.run"],
-  "components": ["Button", "Table", "KanbanBoard", "Timeline"]
+  "capabilities": ["workItems.read", "recipes.read", "recipes.run", "threads.read"],
+  "blocks": ["ProjectView", "WorkItemTable", "WorkItemBoard", "RecipeSection"]
 }
 ```
 
@@ -567,6 +573,26 @@ export default function App({ host }: { host: MiniappHostContext }) {
 ## Runtime Contract
 
 Miniapps are full React code, but they should import through a narrow SDK.
+
+For full project nav views, the preferred import surface is the block library from
+[Epic 31](./31-composable-project-views.md):
+
+```tsx
+import { ProjectView, RecipeSection, WorkItemFilters, WorkItemTable } from "@t3work/blocks";
+
+export default function App() {
+  return (
+    <ProjectView title="Planning">
+      <WorkItemFilters presets={["assigned-to-me", "blocked"]} />
+      <WorkItemTable query="workItems.myWork" columns={["key", "title", "status", "assignee"]} />
+      <RecipeSection topic="planning" />
+    </ProjectView>
+  );
+}
+```
+
+Lower-level miniapps still use `@t3work/sdk` for host context, tool bridge, shell controls,
+and non-project-view placements.
 
 ```tsx
 import { Badge, Button, Chart, Table, useMiniappTools } from "@t3work/sdk";
@@ -606,7 +632,8 @@ Useful component families to whitelist over time:
 - motion: constrained animation primitives that respect shell accessibility settings
 
 Direct access to arbitrary internal app modules should stay blocked. Public miniapp
-components should be intentionally exported and versioned through the SDK.
+components should be intentionally exported and versioned through `@t3work/sdk` or
+`@t3work/blocks`.
 
 ## Tool Access
 
@@ -628,6 +655,8 @@ await tools.integration.prepareMutation({ ref, action: "comment" });
 Rules:
 
 - tool calls must be declared in `miniapp.json`
+- project nav views should prefer high-level capabilities and `@t3work/blocks`; raw
+  provider-shaped tools stay out of the default view authoring surface
 - shell resolves tools from the active workspace and user permissions
 - mutation-capable tools keep the same review and approval gates as agent actions
 - tool calls should be logged into run or artifact history when they affect workflow state
@@ -683,9 +712,11 @@ Start with:
 
 - project workspace miniapps only
 - home workspace concept stubbed but not required
-- `dashboard`, `conversation.inlineCard`, and `conversation.sidecar` placements
+- `project.navView`, `dashboard`, `conversation.inlineCard`, and `conversation.sidecar`
+  placements
 - manifest schema and discovery under `.t3work/miniapps`
-- SDK exports for core shell components, tables, simple charts, artifact links, and tool bridge
+- SDK/block exports for core shell components, work-item tables/boards/filters, simple
+  charts, artifact links, and tool bridge
 - no arbitrary npm dependencies
 - declared tools only
 - explicit enablement UI

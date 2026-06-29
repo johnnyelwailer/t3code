@@ -325,9 +325,13 @@ Organized by domain. Each entry would be registered via `defineConversationCard`
 
 **Provider / integration views**
 
-- `<JiraIssueView id />` — full ticket card with inline actions.
+These render normalized resources and high-level query results. They should not expose
+raw provider query languages to arbitrary generated views by default; see
+[Epic 31](./31-composable-project-views.md) for the project-view block/capability model.
+
+- `<WorkItemView id />` — full normalized ticket/work-item card with inline actions.
 - `<JiraCommentDraft body />` — draft a comment with preview and "post" affordance.
-- `<JiraQueryResult jql />` — render a JQL query result table.
+- `<WorkItemQueryResult query />` — render an approved normalized work-item query result.
 - `<GitHubPr num repo />` — full PR detail card.
 - `<GitHubIssue num repo />` — full issue card.
 - `<GitHubReviewDraft />` — draft a PR review with file annotations.

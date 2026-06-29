@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import { useServerConfig } from "~/t3work/t3work-serverState";
+import { useEnsurePrimaryProvidersRefreshed, useServerConfig } from "~/t3work/t3work-serverState";
 import { getWsConnectionUiState, useWsConnectionStatus } from "~/t3work/t3work-wsConnection";
 import type { BackendApi, BackendState } from "./t3work-types";
 
@@ -23,15 +23,21 @@ export function useBackendState(): BackendState {
   const serverConfig = useServerConfig();
   const wsStatus = useWsConnectionStatus();
   const connectionUiState = getWsConnectionUiState(wsStatus);
+  const isConnected = connectionUiState === "connected";
+
+  useEnsurePrimaryProvidersRefreshed({
+    enabled: backend === null,
+    isConnected,
+    serverConfig,
+  });
 
   return (
     backend?.state ?? {
-      connectionStatus:
-        connectionUiState === "connected"
-          ? "connected"
-          : connectionUiState === "connecting" || connectionUiState === "reconnecting"
-            ? "connecting"
-            : "error",
+      connectionStatus: isConnected
+        ? "connected"
+        : connectionUiState === "connecting" || connectionUiState === "reconnecting"
+          ? "connecting"
+          : "error",
       serverConfig,
       providers: serverConfig?.providers ?? [],
       error: wsStatus.lastError,

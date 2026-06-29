@@ -32,6 +32,16 @@ describe("buildBundledSidecarRecipeWorkflowLaunch", () => {
     ).toBeNull();
   });
 
+  it("returns null for prompt-only bundled recipes even with a workspace root", () => {
+    expect(
+      buildBundledSidecarRecipeWorkflowLaunch({
+        recipeId: "tshirt-size-epic",
+        surface: "workitem.detail.sidepanel",
+        projectWorkspaceRoot: "/workspace/project-alpha",
+      }),
+    ).toBeNull();
+  });
+
   it("builds a focused default kickoff message for edit-plugin-module launches", () => {
     expect(
       buildBundledSidecarRecipeKickoffMessage({
