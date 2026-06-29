@@ -517,7 +517,7 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="General">
+      <SettingsSection title="Appearance">
         <SettingsRow
           title="Theme"
           description="Choose how T3 Code looks across the app."
@@ -646,6 +646,9 @@ export function GeneralSettingsPanel() {
           }
         />
 
+      </SettingsSection>
+
+      <SettingsSection title="Behavior">
         <SettingsRow
           title="Assistant output"
           description="Show token-by-token output while a response is in progress."
@@ -726,6 +729,9 @@ export function GeneralSettingsPanel() {
           }
         />
 
+      </SettingsSection>
+
+      <SettingsSection title="Threads & projects">
         <SettingsRow
           title="New threads"
           description="Pick the default workspace mode for newly created draft threads."
@@ -882,6 +888,9 @@ export function GeneralSettingsPanel() {
           }
         />
 
+      </SettingsSection>
+
+      <SettingsSection title="Text generation">
         <SettingsRow
           title="Text generation model"
           description="Configure the model used for generated commit messages, PR titles, and similar Git text."
