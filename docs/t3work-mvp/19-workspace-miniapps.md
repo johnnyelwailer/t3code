@@ -472,7 +472,7 @@ exist to prevent.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------- |
 | `defineTool`         | Custom tool registered with `T3workToolBroker` (project-local or pack-bundled). Today tools are only built-in.            | Planned |
 | `defineSkillPack`    | Bundle of recipes + sections + profile defaults + tool grants under one id ([Epic 12](./12-profiles-and-skill-packs.md)). | Planned |
-| `defineProfile`      | A starter profile with preference fields. Today profiles are hardcoded; this makes them authorable.                       | Planned |
+| `defineProfile`      | A configuration-defined starter profile with preference fields; bundled profiles are seed config, not behavior enums.     | Planned |
 | `defineResourceType` | Typed resource shape + renderer (for new integration providers).                                                          | Planned |
 
 ### No generic primitive
