@@ -177,14 +177,91 @@ If cutover fails, set `enable_postgresql = false` in `terraform.prod.tfvars`,
 run `terraform apply -var-file=terraform.prod.tfvars`, and redeploy. This
 restores SQLite-on-fileshare behavior.
 
-## Hardening (later)
+## Hardening
 
-- **SQLite reliability**: Azure Files SMB + WAL can hit locking edge cases.
-  Migrate `/data` to an NFS share behind a private endpoint for production-grade
-  durability.
-- **Access**: front with Entra ID (Container Apps auth / Front Door) instead of
-  relying solely on the bearer token; set `allowed_ip_cidrs`.
-- **Network isolation**: VNet-integrate the environment and add private
-  endpoints for Key Vault and Storage.
-- **Non-root**: the image currently runs as root; drop privileges once provider
-  CLIs and volume permissions are validated.
+The stack now supports a staged hardening model:
+
+- Keep **Container App ingress public** (HTTPS + token pairing), while
+  hardening data-plane resources behind private networking.
+- Enable private networking with:
+  - `enable_private_networking = true`
+  - `enforce_data_plane_public_network_disable = true`
+- This provisions VNet/subnets plus private data-plane connectivity for:
+  - PostgreSQL Flexible Server via delegated subnet + private DNS
+  - Azure Files via private endpoint + private DNS
+
+Key Vault is intentionally configurable for development-phase simplicity:
+
+- Keep it public (recommended default while CI runners are outside the VNet):
+  - `enable_key_vault_private_endpoint = false`
+  - `disable_key_vault_public_network_access = false`
+- Fully private Key Vault (advanced):
+  - `enable_key_vault_private_endpoint = true`
+  - `disable_key_vault_public_network_access = true`
+
+Recommended rollout (two applies):
+
+1. Set `enable_private_networking = true` and keep
+   `enforce_data_plane_public_network_disable = false` for initial validation.
+2. Verify startup, migrations, and secrets resolve correctly over private paths
+   (PostgreSQL + Storage), and Key Vault access behaves as configured.
+3. Set `enforce_data_plane_public_network_disable = true` and apply again to
+   disable public data-plane access.
+
+Notes:
+
+- `allowed_ip_cidrs` remains optional; when set, only those CIDRs can reach
+  the public app ingress.
+- If you choose private-only Key Vault, Terraform applies that manage secrets
+  must run from a network path that can reach private endpoints (for example,
+  a runner in the same VNet or connected network).
+- Future hardening can still add Entra-gated app access (Front Door / ACA auth)
+  and non-root runtime once provider CLI permissions are validated.
+
+### Quick Rollout Checklist (External CI Runner Friendly)
+
+Use this sequence when Terraform/CI runs outside the VNet:
+
+1. Confirm `terraform.prod.tfvars` includes:
+
+- `enable_private_networking = true`
+- `enforce_data_plane_public_network_disable = true`
+- `enable_key_vault_private_endpoint = false`
+- `disable_key_vault_public_network_access = false`
+
+2. Review and apply:
+
+```bash
+terraform plan -var-file=terraform.prod.tfvars
+terraform apply -var-file=terraform.prod.tfvars
+```
+
+3. Verify hardening outputs:
+
+```bash
+terraform output private_networking_enabled
+terraform output data_plane_public_network_disabled
+terraform output key_vault_private_endpoint_enabled
+terraform output key_vault_public_network_disabled
+```
+
+4. Verify app health and migrations:
+
+```bash
+az containerapp logs show -n "$(terraform output -raw container_app_name)" \
+  -g "$(terraform output -raw resource_group_name)" --follow --tail 300
+```
+
+5. Confirm app remains publicly reachable and pair with token:
+
+- `terraform output app_url`
+
+Optional later step (private-only Key Vault):
+
+1. Move Terraform runner into reachable private network.
+2. Set:
+
+- `enable_key_vault_private_endpoint = true`
+- `disable_key_vault_public_network_access = true`
+
+3. Re-apply and re-verify secret resolution.

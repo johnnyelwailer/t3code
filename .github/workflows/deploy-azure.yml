@@ -60,3 +60,39 @@ jobs:
             --name "${{ vars.AZURE_CONTAINERAPP_NAME }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --image "${{ vars.ACR_LOGIN_SERVER }}/${{ vars.IMAGE_REPOSITORY }}:${{ github.sha }}"
+
+      - name: Verify latest revision and ingress
+        run: |
+          set -euo pipefail
+          APP_NAME="${{ vars.AZURE_CONTAINERAPP_NAME }}"
+          APP_RG="${{ vars.AZURE_RESOURCE_GROUP }}"
+
+          REVISION="$(az containerapp show --name "$APP_NAME" --resource-group "$APP_RG" --query properties.latestReadyRevisionName -o tsv)"
+          if [ -z "$REVISION" ]; then
+            echo "No latest ready revision was reported by Azure Container Apps."
+            exit 1
+          fi
+
+          FQDN="$(az containerapp show --name "$APP_NAME" --resource-group "$APP_RG" --query properties.configuration.ingress.fqdn -o tsv)"
+          if [ -z "$FQDN" ]; then
+            echo "No ingress FQDN found for container app."
+            exit 1
+          fi
+
+          echo "Latest ready revision: $REVISION"
+          echo "Ingress endpoint: https://$FQDN"
+
+          curl --retry 12 --retry-delay 5 --retry-all-errors --fail "https://$FQDN/" >/dev/null
+
+      - name: Verify startup logs include migration and readiness signals
+        run: |
+          set -euo pipefail
+          APP_NAME="${{ vars.AZURE_CONTAINERAPP_NAME }}"
+          APP_RG="${{ vars.AZURE_RESOURCE_GROUP }}"
+          REVISION="$(az containerapp show --name "$APP_NAME" --resource-group "$APP_RG" --query properties.latestReadyRevisionName -o tsv)"
+
+          LOGS="$(az containerapp logs show --name "$APP_NAME" --resource-group "$APP_RG" --revision "$REVISION" --tail 400 || true)"
+          printf '%s\n' "$LOGS"
+
+          printf '%s\n' "$LOGS" | grep -Eq "Migrations ran successfully|Running all migrations"
+          printf '%s\n' "$LOGS" | grep -Eq "0\.0\.0\.0:3773|Listening on|ready"
