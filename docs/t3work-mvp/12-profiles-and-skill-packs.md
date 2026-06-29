@@ -95,7 +95,7 @@ Profile-set rules:
 - `primaryProfileId` must be one of `profileIds`.
 - If only one profile is selected, that profile is both selected and primary.
 - If legacy config only has `profileId`, treat it as `{ primaryProfileId: profileId,
-  profileIds: [profileId] }`.
+profileIds: [profileId] }`.
 - Communication style comes from the primary profile unless a later explicit user setting
   overrides it.
 - Scalar priority fields that affect wording or density come from the primary profile.

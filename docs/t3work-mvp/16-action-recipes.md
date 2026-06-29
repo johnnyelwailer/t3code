@@ -17,12 +17,12 @@ different angles.
 Everything in this epic is expressed in terms of four primitives. They are defined once,
 in code, and reused everywhere. Avoid inventing recipe-specific parallels to any of them.
 
-| Primitive    | What it is                                                                                                                                                                                                                                       | Owns                       |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
-| **Context**  | A read-only snapshot of the world the agent and workflows read. Two depths: a light _render context_ used before launch, and a rich _full context_ available after launch.                                                                       | `packages/project-context` |
-| **Tools**    | The single capability surface — the verbs that read or mutate `t3work` and external state. The _same_ surface is consumed by agent turns, workflow steps, and views, scoped by `allowedToolGroups`. See [Epic 21](./21-context-tool-catalog.md). | `T3workToolBroker`         |
-| **Workflow** | The core engine: a TS-native, replay-based durable-execution engine (Epic 25) where workflows are plain async TypeScript `.workflow.ts` bodies and primitive calls are journaled. The earlier step-union runtime has been deleted.               | `packages/project-recipes` |
-| **View**     | A code-based, interactive UI unit that mounts on any surface — the action list, a conversation message, a dashboard slot, a side panel. Action launchers and conversation cards are both Views. See [Epic 19](./19-workspace-miniapps.md).       | `@t3work/sdk`              |
+| Primitive    | What it is                                                                                                                                                                                                                                                                                                                           | Owns                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
+| **Context**  | A read-only snapshot of the world the agent and workflows read. Two depths: a light _render context_ used before launch, and a rich _full context_ available after launch.                                                                                                                                                           | `packages/project-context` |
+| **Tools**    | The single capability surface — the verbs that read or mutate `t3work` and external state. The _same_ surface is consumed by agent turns, workflow steps, and views, scoped by `allowedToolGroups`. See [Epic 21](./21-context-tool-catalog.md).                                                                                     | `T3workToolBroker`         |
+| **Workflow** | The core engine: a TS-native, replay-based durable-execution engine (Epic 25) where workflows are plain async TypeScript `.workflow.ts` bodies and primitive calls are journaled. The earlier step-union runtime has been deleted.                                                                                                   | `packages/project-recipes` |
+| **View**     | A code-based, interactive UI unit that mounts on any surface — the action list, a conversation message, a project nav page, a dashboard slot, a side panel. Action launchers, custom project views, and conversation cards are all Views. See [Epic 19](./19-workspace-miniapps.md) and [Epic 31](./31-composable-project-views.md). | `@t3work/sdk`              |
 
 How they interact, in one line:
 
@@ -357,6 +357,11 @@ rest of the system is already partitioned — the tool catalog uses separate
 and the React layer renders `ProjectDashboardBacklogView` and `ProjectDashboardMyWorkView`
 as distinct pages. Each gets its own typed context; recipes that legitimately span both
 declare both surfaces and narrow with `ctx.surface ===`.
+
+[Epic 31](./31-composable-project-views.md) keeps these surfaces as recipe/context
+identifiers while moving the page implementation toward composable project views. In that
+model, Backlog and My Work become registered views assembled from safe blocks, but recipe
+matching still uses the exact surface strings above.
 
 Dot-namespacing is hierarchical for ranking and UI grouping purposes only; surface
 matching is exact-string. There is no abstract `project.dashboard` parent.
@@ -945,11 +950,14 @@ A workflow emits the system message — via a `present-message` step in the lega
 or via the `ui.show(view)` primitive in the Epic 25 engine — and the host renders the
 referenced View at the message's placement.
 
-Views receive context as props and use shell-provided components and the tool bridge. They
-never start a chat by themselves; the shell owns click and launch behavior. A View action
-(button, form submit, approval) round-trips through the workflow runtime as a typed event
-— it does not mutate React state directly and, under [stage 2](#security-two-stages), does
-not call tools directly from the renderer.
+Views receive context as props and use shell-provided components and the tool bridge.
+Project nav views additionally use the block/capability model from
+[Epic 31](./31-composable-project-views.md): agents compose `@t3work/blocks` such as
+tables, boards, filters, and recipe sections rather than calling raw provider APIs.
+Views never start a chat by themselves; the shell owns click and launch behavior. A View
+action (button, form submit, approval) round-trips through the workflow runtime as a typed
+event — it does not mutate React state directly and, under [stage 2](#security-two-stages),
+does not call tools directly from the renderer.
 
 If a recipe declares no View, the host renders a default launcher/card from the recipe
 metadata.
