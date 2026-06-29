@@ -61,6 +61,40 @@ jobs:
       - name: Test
         run: vp run test
 
+  postgres_migration_from_zero:
+    name: PostgreSQL Migration From Zero
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: t3code_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d t3code_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Verify PostgreSQL migrations from empty database
+        env:
+          T3CODE_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/t3code_ci?sslmode=disable
+        run: vp run --filter t3 test -- src/persistence/Migrations/PostgresMigrationFromZero.test.ts
+
   mobile_native_static_analysis:
     name: Mobile Native Static Analysis
     runs-on: blacksmith-12vcpu-macos-26
