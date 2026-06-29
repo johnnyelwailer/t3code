@@ -320,32 +320,32 @@ export const TSHIRT_SIZE_EPIC_ACTION_VIEW = `
 export default function Action() {
   return (
     <RecipeAction
-      title="T-shirt-size this epic"
+      title="T-shirt-size this story"
       icon="ruler"
-      description="Combine Jira scope, related work, code evidence, and unknowns into an XS/S/M/L/XL estimate."
+      description="Locate where the story fits in code and Confluence, count the components it touches, estimate the hours, derive an XS/S/M/L/XL size, and recommend the label to apply."
     >
       <LaunchOptionGroup
-        name="sizingLens"
-        label="Sizing lens"
-        defaultValue="evidence"
+        name="analysisDepth"
+        label="Analysis depth"
+        defaultValue="standard"
         options={[
           {
-            value: "evidence",
-            label: "Evidence-based",
+            value: "standard",
+            label: "Standard",
             promptText:
-              "Ground the size in Jira details, linked work, code implementation status, acceptance criteria, and unknowns before naming a size.",
+              "Search the codebase and Confluence enough to list the components touched and give a defensible per-component and total hours estimate.",
           },
           {
-            value: "gut",
-            label: "Gut check",
+            value: "deep",
+            label: "Deep dive",
             promptText:
-              "Lead with a fast gut size, then briefly justify it from the epic scope.",
+              "Exhaustively trace every affected component across the workspace and linked repos, and read the relevant Confluence specs in full before estimating.",
           },
           {
             value: "comparative",
             label: "Comparative",
             promptText:
-              "Compare against similar past epics or stories when available, and explain where this epic is smaller, larger, or riskier.",
+              "Anchor the estimate on similar past change requests and their actual effort, and explain where this one is bigger, smaller, or riskier.",
           },
         ]}
       />

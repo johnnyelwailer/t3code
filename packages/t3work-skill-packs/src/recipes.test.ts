@@ -1,5 +1,4 @@
 import { isRecipeApplicable, matchRecipes, type RecipeMatchInput } from "@t3tools/project-recipes";
-import { recipeSignalPredicates } from "@t3tools/project-recipes";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getBundledT3WorkRecipe, listBundledT3WorkRecipes } from "./recipes.js";
@@ -35,63 +34,61 @@ describe("tshirt-size-epic bundled recipe", () => {
     );
   });
 
-  it("asks for a multi-source estimate grounded in Jira, code, precedent work, and unknowns", () => {
+  it("drives a bottom-up story estimate: code + Confluence, component count, hours, banded size, then a label", () => {
     const recipe = getBundledT3WorkRecipe("tshirt-size-epic")!;
 
-    expect(recipe.promptTemplate).toContain("multi-source estimate");
-    expect(recipe.promptTemplate).toContain("child stories/subtasks");
-    expect(recipe.promptTemplate).toContain("linked or precedent stories and epics");
-    expect(recipe.promptTemplate).toContain("current codebase implementation state");
+    expect(recipe.promptTemplate).toContain("selected story");
+    expect(recipe.promptTemplate).toContain("size the parent story as a whole");
+    expect(recipe.promptTemplate).toContain("Search the current codebase");
+    expect(recipe.promptTemplate).toContain("Confluence");
+    expect(recipe.promptTemplate).toContain("total number of components changed");
+    expect(recipe.promptTemplate).toContain("1 story point = 8 hours");
     expect(recipe.promptTemplate).toContain("acceptance criteria");
+    // Fixed hour bands map total hours to a T-shirt size.
+    expect(recipe.promptTemplate).toContain("XS = under 8h");
+    expect(recipe.promptTemplate).toContain("XL = over 200h");
+    // Size is surfaced as a ready-to-apply label, not written by the recipe.
+    expect(recipe.promptTemplate).toContain("tshirt-<size>");
+    expect(recipe.promptTemplate).toContain("does not write the label itself");
     expect(recipe.promptTemplate).toContain("unknowns");
     expect(recipe.artifactKinds).toEqual(["estimation-notes", "open-questions"]);
     expect(recipe.allowedToolGroups).toEqual(["integration.read", "artifact.rw", "ui.render"]);
     expect(recipe.requiredContext).toEqual(
       expect.arrayContaining([
-        { key: "ticket.summary", description: "Epic summary" },
-        expect.objectContaining({ key: "ticket.relationship.children", optional: true }),
+        { key: "ticket.summary", description: "Story summary" },
+        expect.objectContaining({ key: "project.codebase", optional: true }),
+        expect.objectContaining({ key: "ticket.confluence", optional: true }),
         expect.objectContaining({ key: "ticket.relationship.linked", optional: true }),
         expect.objectContaining({ key: "ticket.github.pull-request", optional: true }),
       ]),
     );
   });
 
-  it("is applicable for an Epic on workitem.detail.sidepanel when the epic has no children", () => {
+  it("is applicable for a Story and a Sub-task, regardless of whether it has children", () => {
     const recipe = getBundledT3WorkRecipe("tshirt-size-epic")!;
+    expect(isRecipeApplicable(recipe, buildMatchInput({ jiraIssueType: "Story" }))).toBe(true);
+    expect(isRecipeApplicable(recipe, buildMatchInput({ jiraIssueType: "Sub-task" }))).toBe(true);
+    // No child-count predicate: a split story is still sizeable.
+    expect(recipe.appliesTo.visiblePredicates).toBeUndefined();
     expect(
-      isRecipeApplicable(recipe, buildMatchInput({ signals: { "workitem.hasChildren": false } })),
+      isRecipeApplicable(
+        recipe,
+        buildMatchInput({ jiraIssueType: "Story", signals: { "workitem.hasChildren": true } }),
+      ),
     ).toBe(true);
   });
 
-  it("waits for known child signals before applying the no-children predicate", () => {
+  it("is NOT applicable for issue types outside stories/substories", () => {
     const recipe = getBundledT3WorkRecipe("tshirt-size-epic")!;
-    expect(
-      isRecipeApplicable(recipe, buildMatchInput({ surface: "project.dashboard.backlog" })),
-    ).toBe(false);
-    expect(recipe.appliesTo.visiblePredicates).toEqual(
-      recipeSignalPredicates.workitemHasNoChildren,
-    );
-  });
-
-  it("is NOT applicable for non-epic issue types", () => {
-    const recipe = getBundledT3WorkRecipe("tshirt-size-epic")!;
-    expect(isRecipeApplicable(recipe, buildMatchInput({ jiraIssueType: "Story" }))).toBe(false);
+    expect(isRecipeApplicable(recipe, buildMatchInput({ jiraIssueType: "Epic" }))).toBe(false);
     expect(isRecipeApplicable(recipe, buildMatchInput({ jiraIssueType: "Bug" }))).toBe(false);
     expect(isRecipeApplicable(recipe, buildMatchInput({ jiraIssueType: null }))).toBe(false);
   });
 
-  it("is hidden via matchRecipes when the epic already has children", () => {
+  it("surfaces via matchRecipes for a story and links the shape-next-backlog-slice follow-up", () => {
     const results = matchRecipes(
       listBundledT3WorkRecipes(),
-      buildMatchInput({ signals: { "workitem.hasChildren": true } }),
-    );
-    expect(results.map((result) => result.recipe.id)).not.toContain("tshirt-size-epic");
-  });
-
-  it("surfaces via matchRecipes for an un-sized epic and links the shape-next-backlog-slice follow-up", () => {
-    const results = matchRecipes(
-      listBundledT3WorkRecipes(),
-      buildMatchInput({ signals: { "workitem.hasChildren": false } }),
+      buildMatchInput({ jiraIssueType: "Story" }),
     );
     const match = results.find((result) => result.recipe.id === "tshirt-size-epic");
     expect(match).toBeDefined();

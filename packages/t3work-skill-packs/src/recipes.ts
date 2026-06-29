@@ -1,5 +1,4 @@
 import type { Recipe } from "@t3tools/project-recipes";
-import { recipeSignalPredicates } from "@t3tools/project-recipes";
 
 import {
   CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
@@ -755,30 +754,35 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   }),
   createBundledRecipe({
     id: "tshirt-size-epic",
-    title: "T-shirt-size this epic",
-    manifestDisplayName: "T-shirt-size this epic",
+    title: "T-shirt-size this story",
+    manifestDisplayName: "T-shirt-size this story",
     shortDescription:
-      "Estimate the epic effort as XS/S/M/L/XL with rationale, confidence, and the main risk drivers.",
+      "Locate where a story's change fits in the code and Confluence, count the components it touches, estimate the work in hours, derive a T-shirt size for the whole story, and recommend the label to apply.",
     actionViewTemplate: TSHIRT_SIZE_EPIC_ACTION_VIEW,
     surfaces: ["workitem.detail.sidepanel", "project.dashboard.backlog"],
     promptTemplate:
-      "T-shirt-size the epic {{selectedWorkLabel}} as a multi-source estimate. First confirm the selected epic/story details (key, title, status, owner, acceptance criteria, and any existing children). Then inspect all available evidence before sizing: child stories/subtasks, linked or precedent stories and epics, attached Jira context, related GitHub/PR activity, and the current codebase implementation state where the workspace or linked repositories are available. Produce one size (XS, S, M, L, or XL) with confidence (low/medium/high), an evidence table grouped by Jira scope, code/implementation status, precedent comparisons, and unknowns, plus the main risk drivers that could move the size up. Call out missing acceptance criteria or data you could not inspect. If the epic has no stories or subtasks yet, recommend running the shape-next-backlog-slice recipe to decompose it before implementation. Persist the estimate as a durable estimation-notes artifact.",
+      "T-shirt-size the selected story {{selectedWorkLabel}} as a bottom-up, multi-source estimate. Treat the selected story (plus any change-request detail provided in the prompt) as the change to size, and size the parent story as a whole — splitting it into substories is handled separately.\n\nStep 1 — Understand the story. Restate its intent, scope, and acceptance criteria in one or two sentences before estimating.\n\nStep 2 — Locate where it fits. Search the current codebase (the workspace and any linked repositories) to find the modules, services, and UI areas the change would touch, and search Confluence via the connected Atlassian tools for related specs, architecture, and prior decisions. Cross-check Jira for linked or precedent stories and their actual effort.\n\nStep 3 — Count the components to change. Enumerate every component that would have to change (module/service/package/UI area) with a one-line reason each, and report the total number of components changed.\n\nStep 4 — Estimate the work in hours. Give a per-component hour estimate and a total for the story, using the convention that 1 story point = 8 hours. Flag any component you could not inspect.\n\nStep 5 — Derive the T-shirt size from the total hours using these fixed bands: XS = under 8h, S = 8-24h, M = 24-80h, L = 80-200h, XL = over 200h. State the size with a confidence level (low/medium/high).\n\nStep 6 — Recommend the label. Output the size as a single ready-to-apply Jira label for the story — use the team's existing T-shirt-size label convention if it is visible on similar issues, otherwise default to the form `tshirt-<size>` (for example `tshirt-M`). This recipe does not write the label itself; present it so it can be applied on the story.\n\nPresent: the story restatement, the list of components to change with the total count, the per-component and total hour estimate, the resulting T-shirt size with confidence, the recommended label, an evidence table grouped by codebase findings, Confluence/spec findings, Jira precedent, and unknowns, plus the main risk drivers that could move the size up. Call out missing acceptance criteria or data you could not inspect. If the story is large enough to need decomposition, recommend running the shape-next-backlog-slice recipe to split it into substories. Persist the estimate as a durable estimation-notes artifact.",
     icon: "ruler",
     appliesTo: {
-      jiraIssueTypes: ["Epic"],
-      // Prefer epics with no child stories yet; unknown child signals wait for enrichment.
-      visiblePredicates: recipeSignalPredicates.workitemHasNoChildren,
+      // Stories and their substories (sub-tasks); sizing the parent story does not
+      // depend on whether it has been split yet, so no child-count predicate is applied.
+      jiraIssueTypes: ["Story", "Sub-task"],
     },
     requiredContext: [
-      { key: "ticket.summary", description: "Epic summary" },
+      { key: "ticket.summary", description: "Story summary" },
       {
-        key: "ticket.relationship.children",
-        description: "Child stories, subtasks, or decomposition status",
+        key: "project.codebase",
+        description: "Workspace or linked repositories to locate the components the change touches",
+        optional: true,
+      },
+      {
+        key: "ticket.confluence",
+        description: "Linked Confluence specs, architecture, or prior decisions",
         optional: true,
       },
       {
         key: "ticket.relationship.linked",
-        description: "Related or precedent Jira work",
+        description: "Related or precedent stories and their actual effort",
         optional: true,
       },
       {
@@ -788,7 +792,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
       },
       {
         key: "ticket.context.pre-implementation",
-        description: "Epic is still before implementation or PR work starts",
+        description: "Story is still before implementation or PR work starts",
         optional: true,
       },
     ],

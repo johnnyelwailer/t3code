@@ -197,9 +197,9 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
       project: createProject("product-partner", "/tmp/project-alpha"),
       profileId: "product-partner",
       selectedWorkLabel: "PROJ-100",
-      selectedWorkTitle: "Platform epic",
+      selectedWorkTitle: "Login story",
       resourceKind: "ticket",
-      jiraIssueType: "Epic",
+      jiraIssueType: "Story",
       ticketContext: {
         relationships: {
           childKeys: [],
@@ -593,15 +593,15 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     expect(recipeIds).not.toContain("technical-implementation-plan");
   });
 
-  it("hides tshirt-size-epic when the selected epic already has children", () => {
+  it("shows the story sizer on a Story whether or not it has been split into substories", () => {
     const withoutChildren = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("product-partner"),
       profileId: "product-partner",
       selectedWorkLabel: "PROJ-100",
-      selectedWorkTitle: "Platform epic",
+      selectedWorkTitle: "Login story",
       resourceKind: "ticket",
-      jiraIssueType: "Epic",
+      jiraIssueType: "Story",
       ticketContext: {
         relationships: {
           childKeys: [],
@@ -617,9 +617,9 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
       project: createProject("product-partner"),
       profileId: "product-partner",
       selectedWorkLabel: "PROJ-100",
-      selectedWorkTitle: "Platform epic",
+      selectedWorkTitle: "Login story",
       resourceKind: "ticket",
-      jiraIssueType: "Epic",
+      jiraIssueType: "Story",
       ticketContext: {
         relationships: {
           childKeys: ["PROJ-101"],
@@ -632,6 +632,6 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     });
 
     expect(withoutChildren.map((recipe) => recipe.id)).toContain("tshirt-size-epic");
-    expect(withChildren.map((recipe) => recipe.id)).not.toContain("tshirt-size-epic");
+    expect(withChildren.map((recipe) => recipe.id)).toContain("tshirt-size-epic");
   });
 });
