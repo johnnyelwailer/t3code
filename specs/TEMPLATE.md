@@ -7,7 +7,7 @@
 | Reviewers  | <names>                                |
 | Created    | YYYY-MM-DD                             |
 | Updated    | YYYY-MM-DD                             |
-| Epic       | <link to docs/t3work-mvp epic, if any> |
+| Epic       | <link to specs/epics epic, if any>     |
 
 ## 1. Summary
 

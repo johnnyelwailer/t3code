@@ -1,5 +1,5 @@
 /**
- * Tempo capacity integration (spec docs/t3work-mvp/29-planning-space.md §10.2).
+ * Tempo capacity integration (spec specs/epics/29-planning-space.md §10.2).
  *
  * Capacity formula (v1):
  *   capacity(person, range) =

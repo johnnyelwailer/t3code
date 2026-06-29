@@ -8,7 +8,7 @@ delivery persona (Requirements Engineer, Developer, …), not an auth role.
 One file per delivery profile. Each documents:
 
 1. **Profile** — what is *specified* for the profile in
-   [Epic 12 — Profiles And Skill Packs](../12-profiles-and-skill-packs.md).
+   [Epic 12 — Profiles And Skill Packs](../epics/12-profiles-and-skill-packs.md).
 2. **Skill pack** — the pack specified for the profile and its recipes.
 3. **Implemented today** — what actually exists in
    [`packages/t3work-skill-packs`](../../../packages/t3work-skill-packs/src) that serves
@@ -30,7 +30,7 @@ partly implemented: the shipped catalog still has six packs (`qa`, `product`, `s
 its specified intent onto those building blocks so you can see what works today and what
 still needs to be authored (see each file's **Gaps**).
 
-The first six profiles are specified in [Epic 12](../12-profiles-and-skill-packs.md). The
+The first six profiles are specified in [Epic 12](../epics/12-profiles-and-skill-packs.md). The
 remaining five are **extensions** beyond Epic 12 and are not yet folded into that spec.
 
 ## Delivery profiles

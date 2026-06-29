@@ -1,6 +1,6 @@
 # Delivery Profile: Service Manager
 
-> **Proposed profile — not in [Epic 12](../12-profiles-and-skill-packs.md) yet.** This extends
+> **Proposed profile — not in [Epic 12](../epics/12-profiles-and-skill-packs.md) yet.** This extends
 > the profile catalog beyond the original six.
 >
 > **Implementation status:** 🟡 Partial. The `service-manager` profile now ships in

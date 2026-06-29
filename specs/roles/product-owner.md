@@ -1,6 +1,6 @@
 # Delivery Profile: Product Owner / Proxy Product Owner (PO / PPO)
 
-> Specified in [Epic 12 — Profiles And Skill Packs](../12-profiles-and-skill-packs.md).
+> Specified in [Epic 12 — Profiles And Skill Packs](../epics/12-profiles-and-skill-packs.md).
 >
 > **Implementation status:** 🟡 Partial. The `product-owner` profile now ships in
 > [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts) and is the **default**

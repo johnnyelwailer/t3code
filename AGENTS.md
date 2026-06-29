@@ -42,7 +42,7 @@ Keep files small and composable by default (see the 200-line cap under Task Comp
 
 When working on the t3work MVP docs, packages, or app surfaces, agents MUST follow the t3work engineering constitution:
 
-- `docs/t3work-mvp/10-engineering-constitution.md`
+- `specs/epics/10-engineering-constitution.md`
 
 In short: t3work work must reuse the existing T3 Code shell and UI as the baseline, keep additions isolated where possible, favor small composable code, target high-value 90-100% test coverage, provide Storybook and snapshot coverage for reusable UI and important screens, persist rich artifacts instead of chat-only output, and validate UI/workflow changes by opening the app in a browser and clicking through the changed flow end to end.
 

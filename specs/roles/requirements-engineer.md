@@ -1,6 +1,6 @@
 # Delivery Profile: Requirements Engineer (RE)
 
-> Specified in [Epic 12 — Profiles And Skill Packs](../12-profiles-and-skill-packs.md).
+> Specified in [Epic 12 — Profiles And Skill Packs](../epics/12-profiles-and-skill-packs.md).
 >
 > **Implementation status:** 🟡 Partial. The `requirements-engineer` profile now ships in
 > [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts). Its dedicated
@@ -30,7 +30,7 @@ surface ambiguity; and keep requirements traceable to tickets and tests.
 `write-acceptance-criteria` 0.9, `derive-test-conditions` 0.7, `trace-requirement` 0.6.
 
 This is the one profile with a full `T3WorkProfile` TS example in
-[Epic 12 → Example profile instance](../12-profiles-and-skill-packs.md#example-profile-instance).
+[Epic 12 → Example profile instance](../epics/12-profiles-and-skill-packs.md#example-profile-instance).
 
 ## 2. Skill pack & recipes (specified)
 

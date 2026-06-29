@@ -1,6 +1,6 @@
 # Delivery Profile: Developer (Dev)
 
-> Specified in [Epic 12 — Profiles And Skill Packs](../12-profiles-and-skill-packs.md).
+> Specified in [Epic 12 — Profiles And Skill Packs](../epics/12-profiles-and-skill-packs.md).
 >
 > **Implementation status:** 🟡 Partial. The `developer` profile now ships in
 > [`profiles.ts`](../../../packages/t3work-skill-packs/src/profiles.ts) (it replaced the

@@ -1,23 +1,28 @@
 # Specifications
 
-This folder holds **concrete, reviewable feature specifications** for T3 Code / `t3work`.
+This folder is the **single source of truth** for what T3 Code / `t3work` is building. It
+holds two tiers:
 
-A spec answers: *what are we building, why, how does it behave, and how do we know it's
-done?* It is the contract reviewed and agreed **before** implementation, and kept current
-as the source of truth **after**.
+- **Epics & vision** — [`epics/`](./epics/): the high-level product vision, scope,
+  architecture, and per-epic narrative. Start at [`epics/README.md`](./epics/README.md).
+  *(This is the former `docs/t3work-mvp/` set, relocated here so there is one spec home.)*
+- **Buildable specs** — `NNNN-short-slug/`: the detailed, reviewable specification an epic
+  breaks down into. A spec answers *what are we building, why, how does it behave, and how do
+  we know it's done?* — the contract agreed **before** implementation and kept current as the
+  source of truth **after**.
 
-This is distinct from [`docs/`](../docs/), which holds product narrative, architecture
-overviews, and reference material. In particular, [`docs/t3work-mvp/`](../docs/t3work-mvp/)
-holds the high-level **epic** and vision documents; a `specs/` entry is the detailed,
-buildable specification that an epic eventually breaks down into.
+Delivery-profile specs live in [`roles/`](./roles/00_README.md). Product narrative and
+reference material that isn't a spec still lives in [`docs/`](../docs/).
 
 ## Layout
 
 ```
 specs/
-├── README.md                  # this file
-├── TEMPLATE.md                # copy to start a new spec
-├── NNNN-short-slug/           # one folder per spec, zero-padded sequential id
+├── README.md                  # this file — the spec index
+├── TEMPLATE.md                # copy to start a new buildable spec
+├── epics/                     # epic & vision documents (see epics/README.md)
+├── roles/                     # delivery-profile specs (see roles/00_README.md)
+├── NNNN-short-slug/           # one folder per buildable spec, zero-padded sequential id
 │   ├── spec.md                # the specification
 │   └── assets/                # diagrams, mockups, sample payloads (optional)
 └── archive/                   # superseded or rejected specs, kept for history
@@ -25,15 +30,15 @@ specs/
 
 ## Conventions
 
-- **Numbering** — sequential, zero-padded to 4 digits (`0001`, `0002`, ...). The number is
-  permanent and never reused, even if the spec is rejected or superseded.
+- **Numbering** — buildable specs are sequential, zero-padded to 4 digits (`0001`, `0002`,
+  ...). The number is permanent and never reused, even if the spec is rejected or superseded.
 - **Slug** — short, kebab-case, describes the feature (`0007-jira-comment-review`).
 - **Filenames** — kebab-case, matching the rest of the repo.
 - **One spec, one concern** — if a spec grows two distinct deliverables, split it.
 
 ## Status lifecycle
 
-Every spec records a status in its front-matter table:
+Every buildable spec records a status in its front-matter table:
 
 | Status        | Meaning                                                        |
 | ------------- | -------------------------------------------------------------- |
@@ -49,10 +54,21 @@ Every spec records a status in its front-matter table:
 1. Pick the next free number.
 2. `cp TEMPLATE.md NNNN-short-slug/spec.md` (create the folder).
 3. Fill it in, set status `Draft`, open a PR.
-4. Add a row to the index below.
+4. Add a row to the buildable-specs index below.
 
 ## Index
 
-| ID   | Spec                                        | Status | Owner |
-| ---- | ------------------------------------------- | ------ | ----- |
+### Epics & vision
+
+The full catalog (vision, product scope, additive architecture, and the 30+ epic documents)
+is indexed in [`epics/README.md`](./epics/README.md).
+
+### Delivery profiles
+
+The 11 delivery-profile specs are indexed in [`roles/00_README.md`](./roles/00_README.md).
+
+### Buildable specs
+
+| ID   | Spec                                              | Status | Owner |
+| ---- | ------------------------------------------------- | ------ | ----- |
 | 0001 | [Example feature](./0001-example-feature/spec.md) | Draft  | —     |

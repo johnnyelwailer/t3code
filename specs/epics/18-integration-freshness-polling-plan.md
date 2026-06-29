@@ -21,7 +21,7 @@ This plan follows [Engineering Constitution](./10-engineering-constitution.md):
 
 Initial file boundary rule:
 
-- allowed: `docs/t3work-mvp/**`
+- allowed: `specs/epics/**`
 - allowed: `apps/web/src/t3work/**`
 - allowed when needed later: `apps/server/src/t3work-*.ts`
 - allowed when needed later: `packages/integrations-atlassian/src/provider.ts`
