@@ -56,8 +56,12 @@ workflows; FTE cost reporting.
 
 ### 2.1 Placement
 
-Capacity is a **dashboard mode**, not a per-board view mode: teams and off-days span
-boards and sprints, and the page is useful without a backlog selection. Entry points:
+Capacity starts as a **dashboard mode**, not a per-board view mode: teams and off-days
+span boards and sprints, and the page is useful without a backlog selection. Under
+[Epic 31](./31-composable-project-views.md), this should become a registered
+`project.navView` composed from the same safe blocks as Backlog and My Work, with Tempo
+remaining a source behind normalized capacity hooks rather than a raw API exposed to view
+authors. Entry points:
 
 1. Dashboard mode switch: `Backlog · My Work · Capacity`.
 2. From the planning-space rail: clicking a dock's capacity arc deep-links to that
