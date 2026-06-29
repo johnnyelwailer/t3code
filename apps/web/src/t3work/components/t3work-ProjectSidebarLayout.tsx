@@ -85,7 +85,7 @@ export function ProjectSidebarLayout({
         <div className="flex w-full min-w-0 items-center gap-2">
           <SidebarTrigger className="shrink-0 md:hidden" />
           <span className="truncate text-sm font-semibold">{APP_BASE_NAME}</span>
-          <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
+          <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground/80">
             {APP_TAGLINE}
           </span>
         </div>
