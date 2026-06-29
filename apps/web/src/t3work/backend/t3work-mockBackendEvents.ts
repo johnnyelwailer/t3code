@@ -1,5 +1,7 @@
 import type { ServerLifecycleStreamEvent } from "@t3tools/contracts";
 
+import { APP_BASE_NAME } from "~/t3work/t3work-branding";
+
 export function now() {
   return new Date().toISOString();
 }
@@ -163,7 +165,7 @@ export function emitMockWelcome(
       type: "welcome",
       payload: {
         version: "0.0.24",
-        appName: "T3 Work",
+        appName: APP_BASE_NAME,
         environmentId: "mock-env",
         authDescriptor: { requiresAuth: false, method: "none" },
       },

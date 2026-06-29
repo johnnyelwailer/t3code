@@ -9,6 +9,7 @@ import { readLocalApi } from "~/localApi";
 import { useServerKeybindings } from "~/t3work/t3work-serverState";
 import { useCommandPaletteStore } from "~/t3work/t3work-commandPaletteStore";
 import type { ProjectThread } from "~/t3work/t3work-types";
+import { APP_BASE_NAME } from "~/t3work/t3work-branding";
 import {
   Command,
   CommandDialog,
@@ -443,7 +444,7 @@ export function T3workCommandPalette(props: T3workCommandPaletteProps) {
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandDialogPopup
-        aria-label="T3 Work search"
+        aria-label={`${APP_BASE_NAME} search`}
         className="overflow-hidden p-0"
         finalFocus={() => false}
         onBackdropPointerDown={() => {
@@ -452,7 +453,7 @@ export function T3workCommandPalette(props: T3workCommandPaletteProps) {
       >
         <Command
           key={isSubmenu ? "submenu" : "root"}
-          aria-label="T3 Work command palette"
+          aria-label={`${APP_BASE_NAME} command palette`}
           autoHighlight="always"
           mode="none"
           onItemHighlighted={(value) => {
