@@ -20,10 +20,7 @@ describe("project my work content", () => {
         assignedWorkItemsCount: 0,
         filteredWorkItemsCount: 0,
       }),
-    ).toEqual({
-      kind: "empty",
-      message: "No Jira issues are currently assigned to you in this project.",
-    });
+    ).toEqual({ kind: "empty", reason: "no-assigned" });
   });
 
   it("shows the filtered empty state after assigned work has loaded", () => {
@@ -33,9 +30,6 @@ describe("project my work content", () => {
         assignedWorkItemsCount: 3,
         filteredWorkItemsCount: 0,
       }),
-    ).toEqual({
-      kind: "empty",
-      message: "No assigned issues match your current search and filters.",
-    });
+    ).toEqual({ kind: "empty", reason: "filtered" });
   });
 });

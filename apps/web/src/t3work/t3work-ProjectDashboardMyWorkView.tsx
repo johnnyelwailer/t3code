@@ -181,6 +181,11 @@ export function ProjectDashboardMyWorkView({
           onTableSortDirectionChange={setTableSortDirection}
           {...(canMoveTickets ? { onMoveTicketToStatus: moveTicketToStatus } : {})}
           onOpenTicket={onOpenTicket}
+          onRefresh={reloadTickets}
+          onClearFilters={() => {
+            setQuery("");
+            resetOptionsFilters();
+          }}
         />
       </section>
 

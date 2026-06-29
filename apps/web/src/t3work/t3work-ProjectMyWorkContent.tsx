@@ -1,4 +1,4 @@
-import { T3SurfacePanel } from "~/t3work/components/ui/t3work-surface";
+import { ProjectMyWorkEmptyState } from "~/t3work/t3work-ProjectMyWorkEmptyState";
 import { useTicketAgentContext } from "~/t3work/hooks/t3work-useTicketAgentContext";
 import {
   ProjectDashboardKanban,
@@ -46,6 +46,8 @@ export function ProjectMyWorkContent({
   onTableSortDirectionChange,
   onMoveTicketToStatus,
   onOpenTicket,
+  onRefresh,
+  onClearFilters,
 }: {
   loading: boolean;
   project: ProjectShellProject;
@@ -67,6 +69,8 @@ export function ProjectMyWorkContent({
   onTableSortDirectionChange: (value: ProjectMyWorkTableSortDirection) => void;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
   onOpenTicket: (projectId: string, ticketId: string) => void;
+  onRefresh: () => void;
+  onClearFilters: () => void;
 }) {
   const {
     getTicketAgentContext,
@@ -102,9 +106,11 @@ export function ProjectMyWorkContent({
 
   if (contentState.kind === "empty") {
     return (
-      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        {contentState.message}
-      </T3SurfacePanel>
+      <ProjectMyWorkEmptyState
+        reason={contentState.reason}
+        onRefresh={onRefresh}
+        onClearFilters={onClearFilters}
+      />
     );
   }
 

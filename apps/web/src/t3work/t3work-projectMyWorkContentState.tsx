@@ -2,7 +2,7 @@ import { Skeleton } from "~/t3work/components/ui/t3work-skeleton";
 
 export type ProjectMyWorkContentState =
   | { kind: "loading" }
-  | { kind: "empty"; message: string }
+  | { kind: "empty"; reason: "no-assigned" | "filtered" }
   | { kind: "ready" };
 
 export function resolveProjectMyWorkContentState(input: {
@@ -15,17 +15,11 @@ export function resolveProjectMyWorkContentState(input: {
   }
 
   if (input.assignedWorkItemsCount === 0) {
-    return {
-      kind: "empty",
-      message: "No Jira issues are currently assigned to you in this project.",
-    };
+    return { kind: "empty", reason: "no-assigned" };
   }
 
   if (input.filteredWorkItemsCount === 0) {
-    return {
-      kind: "empty",
-      message: "No assigned issues match your current search and filters.",
-    };
+    return { kind: "empty", reason: "filtered" };
   }
 
   return { kind: "ready" };

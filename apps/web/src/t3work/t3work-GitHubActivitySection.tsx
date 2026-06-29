@@ -1,4 +1,4 @@
-import { LinkExternalIcon } from "@primer/octicons-react";
+import { LinkExternalIcon, MarkGithubIcon } from "@primer/octicons-react";
 import { ExternalLink } from "lucide-react";
 import { Skeleton } from "~/t3work/components/ui/t3work-skeleton";
 import { T3SurfacePanel } from "~/t3work/components/ui/t3work-surface";
@@ -157,8 +157,12 @@ export function GitHubActivitySection({
           <Skeleton className="h-12 w-4/5" />
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded border border-dashed border-border/70 bg-background/60 px-3 py-4 text-xs text-muted-foreground">
-          No GitHub activity matched yet.
+        <div className="flex flex-col items-center gap-1.5 rounded border border-dashed border-border/70 bg-background/60 px-3 py-5 text-center">
+          <MarkGithubIcon className="size-4 text-muted-foreground/70" />
+          <p className="text-xs text-muted-foreground">No GitHub activity matched yet.</p>
+          <p className="text-[11px] text-muted-foreground/70">
+            Pull requests, reviews, and issues from your linked repositories show up here.
+          </p>
         </div>
       ) : null}
       {suggestedRepositoryCount && suggestedRepositoryCount > 0 ? (
