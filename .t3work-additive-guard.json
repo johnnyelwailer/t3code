@@ -65,6 +65,7 @@
     "apps/server/src/persistence/Layers/SqliteJournalStore.ts",
     "apps/server/src/provider/Drivers/claudeSpawn.ts",
     "apps/server/src/provider/Drivers/claudeSpawn.test.ts",
+    "scripts/preview-dev.cmd",
     ".github/agents/**",
     ".github/skills/t3code-runtime-investigation/SKILL.md",
     ".claude/**",
