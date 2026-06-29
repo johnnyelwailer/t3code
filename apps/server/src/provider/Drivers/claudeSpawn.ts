@@ -1,7 +1,14 @@
+// The Claude Agent SDK's `spawnClaudeCodeProcess` hook is a synchronous callback
+// that must return a Node `ChildProcess`, so this driver spawns directly via
+// `node:child_process` rather than Effect's `ChildProcess` (matches the same
+// suppression on `@t3tools/shared/shell`, which owns the resolution logic).
+// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 
 import type { SpawnedProcess, SpawnOptions } from "@anthropic-ai/claude-agent-sdk";
 import { resolveSpawnCommandSync } from "@t3tools/shared/shell";
+
+type ClaudeCodeSpawn = (options: SpawnOptions) => SpawnedProcess;
 
 /**
  * Builds a custom spawn function for the Claude Agent SDK's
@@ -23,9 +30,7 @@ import { resolveSpawnCommandSync } from "@t3tools/shared/shell";
  * The platform is injected (resolved from `HostProcessPlatform`) rather than
  * read from `process.platform` so the behavior stays explicit and testable.
  */
-export function makeClaudeCodeSpawn(
-  platform: NodeJS.Platform,
-): (options: SpawnOptions) => SpawnedProcess {
+export function makeClaudeCodeSpawn(platform: NodeJS.Platform): ClaudeCodeSpawn {
   return (options) => {
     const env = options.env as NodeJS.ProcessEnv;
     const resolved = resolveSpawnCommandSync(options.command, options.args, {
@@ -54,4 +59,26 @@ export function makeClaudeCodeSpawn(
     // the set of EventEmitter overloads.
     return child as unknown as SpawnedProcess;
   };
+}
+
+/**
+ * Builds the partial Claude Agent SDK options that opt a query into the custom
+ * spawn hook, keyed on the host platform.
+ *
+ * Only Windows gets the override, because that is the only platform where the
+ * SDK's default `shell: false` spawn cannot launch the `claude.cmd` shim. And
+ * even on Windows the override is narrow: {@link resolveSpawnCommandSync} spawns
+ * a resolved `.exe` directly (same as the SDK) and only switches to a shell for
+ * `.cmd`/`.bat` shims — so this is not a blanket "always reroute" change.
+ *
+ * Centralizing the decision here keeps the platform branch out of the provider
+ * Layers (`ClaudeProvider`, `ClaudeAdapter`), which simply spread the result.
+ */
+export function claudeCodeSpawnOptions(
+  platform: NodeJS.Platform,
+): { readonly spawnClaudeCodeProcess?: ClaudeCodeSpawn } {
+  if (platform !== "win32") {
+    return {};
+  }
+  return { spawnClaudeCodeProcess: makeClaudeCodeSpawn(platform) };
 }

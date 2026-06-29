@@ -39,7 +39,7 @@ import {
   type ServerProviderDraft,
 } from "../providerSnapshot.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
-import { makeClaudeCodeSpawn } from "../Drivers/claudeSpawn.ts";
+import { claudeCodeSpawnOptions } from "../Drivers/claudeSpawn.ts";
 
 const DEFAULT_CLAUDE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
@@ -566,12 +566,8 @@ const probeClaudeCapabilities = (
         options: {
           persistSession: false,
           pathToClaudeCodeExecutable: claudeSettings.binaryPath,
-          // Only override the SDK's spawn on Windows, where it cannot launch the
-          // `claude.cmd` shim without a shell. Elsewhere the key is omitted so the
-          // SDK's default spawn (which already works) is used. See {@link makeClaudeCodeSpawn}.
-          ...(hostPlatform === "win32"
-            ? { spawnClaudeCodeProcess: makeClaudeCodeSpawn(hostPlatform) }
-            : {}),
+          // Windows-only spawn override for the `claude.cmd` shim; see claudeSpawn.ts.
+          ...claudeCodeSpawnOptions(hostPlatform),
           abortController: abort,
           settingSources: ["user", "project", "local"],
           allowedTools: [],
