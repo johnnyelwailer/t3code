@@ -11,7 +11,7 @@ import {
 } from "./t3workToolCatalog.ts";
 
 const CATALOG_DOC_PATH = new URL(
-  "../../../docs/t3work-mvp/21-context-tool-catalog.md",
+  "../../../specs/epics/21-context-tool-catalog.md",
   import.meta.url,
 );
 
