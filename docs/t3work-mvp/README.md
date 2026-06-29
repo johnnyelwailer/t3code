@@ -85,6 +85,7 @@ The user should be able to:
 - [Epic 29: Planning Space](./29-planning-space.md)
 - [Epic 30: Capacity And Teams](./30-capacity-and-teams.md)
 - [Epic 31: Composable Project Views](./31-composable-project-views.md)
+- [Epic 32: Project Provider And Tool Policies](./32-project-provider-tool-policies.md)
 
 ## Supporting Docs
 
