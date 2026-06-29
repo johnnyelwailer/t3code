@@ -30,6 +30,17 @@ postgres_backup_retention_days = 7
 # Optional: restrict public ingress to known CIDR ranges.
 # allowed_ip_cidrs = ["203.0.113.0/24"]
 
+# Platform hardening: keep app ingress public for token-based auth, but move
+# data-plane traffic onto private networking.
+enable_private_networking                 = true
+enforce_data_plane_public_network_disable = true
+enable_key_vault_private_endpoint         = false
+disable_key_vault_public_network_access   = false
+vnet_cidr                                 = "10.70.0.0/16"
+container_apps_infra_subnet_cidr          = "10.70.0.0/23"
+private_endpoints_subnet_cidr             = "10.70.2.0/24"
+postgres_delegated_subnet_cidr            = "10.70.3.0/24"
+
 # Optional OTLP export.
 # otlp_traces_url  = "https://otlp.example.com/v1/traces"
 # otlp_metrics_url = "https://otlp.example.com/v1/metrics"

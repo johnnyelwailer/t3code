@@ -52,3 +52,28 @@ output "postgresql_database_name" {
   description = "Application PostgreSQL database name when enable_postgresql=true."
   value       = var.enable_postgresql ? azurerm_postgresql_flexible_server_database.app[0].name : null
 }
+
+output "private_networking_enabled" {
+  description = "Whether private networking resources are enabled in this deployment."
+  value       = var.enable_private_networking
+}
+
+output "data_plane_public_network_disabled" {
+  description = "Whether public network access is disabled for PostgreSQL and Storage Account data-plane resources."
+  value       = var.enable_private_networking && var.enforce_data_plane_public_network_disable
+}
+
+output "virtual_network_name" {
+  description = "VNet name when private networking is enabled."
+  value       = var.enable_private_networking ? azurerm_virtual_network.main[0].name : null
+}
+
+output "key_vault_private_endpoint_enabled" {
+  description = "Whether Key Vault private endpoint resources are enabled."
+  value       = var.enable_private_networking && var.enable_key_vault_private_endpoint
+}
+
+output "key_vault_public_network_disabled" {
+  description = "Whether Key Vault public network access is disabled."
+  value       = var.enable_private_networking && var.enforce_data_plane_public_network_disable && var.disable_key_vault_public_network_access
+}

@@ -13,8 +13,12 @@ resource "random_password" "postgres_admin" {
 }
 
 locals {
-  base_name = "${var.name_prefix}-${var.environment}"
-  suffix    = random_string.suffix.result
+  base_name                          = "${var.name_prefix}-${var.environment}"
+  suffix                             = random_string.suffix.result
+  private_networking_enabled         = var.enable_private_networking
+  data_plane_lockdown_enabled        = var.enable_private_networking && var.enforce_data_plane_public_network_disable
+  key_vault_private_endpoint_enabled = local.private_networking_enabled && var.enable_key_vault_private_endpoint
+  key_vault_public_network_disabled  = local.private_networking_enabled && var.enforce_data_plane_public_network_disable && var.disable_key_vault_public_network_access
 
   # Globally-unique names with no separators (storage/acr/kv constraints).
   acr_name     = substr("${var.name_prefix}${var.environment}acr${local.suffix}", 0, 50)
@@ -53,7 +57,9 @@ resource "azurerm_postgresql_flexible_server" "main" {
   sku_name                      = var.postgres_sku_name
   storage_mb                    = var.postgres_storage_mb
   backup_retention_days         = var.postgres_backup_retention_days
-  public_network_access_enabled = true
+  public_network_access_enabled = local.data_plane_lockdown_enabled ? false : true
+  delegated_subnet_id           = local.private_networking_enabled && var.enable_postgresql ? azurerm_subnet.postgres_delegated[0].id : null
+  private_dns_zone_id           = local.private_networking_enabled && var.enable_postgresql ? azurerm_private_dns_zone.postgres[0].id : null
 
   lifecycle {
     # Imported servers may have an assigned zone that Azure disallows changing
@@ -66,6 +72,10 @@ resource "azurerm_postgresql_flexible_server" "main" {
   }
 
   tags = var.tags
+
+  depends_on = [
+    azurerm_private_dns_zone_virtual_network_link.postgres,
+  ]
 }
 
 resource "azurerm_postgresql_flexible_server_database" "app" {
@@ -80,7 +90,7 @@ resource "azurerm_postgresql_flexible_server_database" "app" {
 # Allows Azure-hosted workloads (including Container Apps) to reach the DB over
 # public networking while we keep the initial deployment simple.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_services" {
-  count = var.enable_postgresql ? 1 : 0
+  count = var.enable_postgresql && !local.data_plane_lockdown_enabled ? 1 : 0
 
   name             = "allow-azure-services"
   server_id        = azurerm_postgresql_flexible_server.main[0].id
@@ -95,6 +105,64 @@ resource "azurerm_resource_group" "main" {
   name     = "rg-${local.base_name}"
   location = var.location
   tags     = var.tags
+}
+
+# -----------------------------------------------------------------------------
+# Private networking (optional)
+# -----------------------------------------------------------------------------
+resource "azurerm_virtual_network" "main" {
+  count = local.private_networking_enabled ? 1 : 0
+
+  name                = "vnet-${local.base_name}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  address_space       = [var.vnet_cidr]
+  tags                = var.tags
+}
+
+resource "azurerm_subnet" "container_apps_infra" {
+  count = local.private_networking_enabled ? 1 : 0
+
+  name                 = "snet-${local.base_name}-aca"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main[0].name
+  address_prefixes     = [var.container_apps_infra_subnet_cidr]
+
+  delegation {
+    name = "containerapps"
+    service_delegation {
+      name = "Microsoft.App/environments"
+    }
+  }
+}
+
+resource "azurerm_subnet" "private_endpoints" {
+  count = local.private_networking_enabled ? 1 : 0
+
+  name                              = "snet-${local.base_name}-private-endpoints"
+  resource_group_name               = azurerm_resource_group.main.name
+  virtual_network_name              = azurerm_virtual_network.main[0].name
+  address_prefixes                  = [var.private_endpoints_subnet_cidr]
+  private_endpoint_network_policies = "Disabled"
+}
+
+resource "azurerm_subnet" "postgres_delegated" {
+  count = local.private_networking_enabled && var.enable_postgresql ? 1 : 0
+
+  name                 = "snet-${local.base_name}-postgres"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main[0].name
+  address_prefixes     = [var.postgres_delegated_subnet_cidr]
+
+  delegation {
+    name = "postgres-flex"
+    service_delegation {
+      name = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = [
+        "Microsoft.Network/virtualNetworks/subnets/join/action",
+      ]
+    }
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -153,7 +221,7 @@ resource "azurerm_storage_account" "main" {
   account_kind                  = local.is_premium_storage ? "FileStorage" : "StorageV2"
   account_replication_type      = "LRS"
   min_tls_version               = "TLS1_2"
-  public_network_access_enabled = true
+  public_network_access_enabled = local.data_plane_lockdown_enabled ? false : true
   tags                          = var.tags
 }
 
@@ -167,15 +235,21 @@ resource "azurerm_storage_share" "data" {
 # Key Vault (RBAC) + provider secrets
 # -----------------------------------------------------------------------------
 resource "azurerm_key_vault" "main" {
-  name                       = local.kv_name
-  resource_group_name        = azurerm_resource_group.main.name
-  location                   = azurerm_resource_group.main.location
-  tenant_id                  = data.azurerm_client_config.current.tenant_id
-  sku_name                   = "standard"
-  rbac_authorization_enabled = true
-  purge_protection_enabled   = false
-  soft_delete_retention_days = 7
-  tags                       = var.tags
+  name                          = local.kv_name
+  resource_group_name           = azurerm_resource_group.main.name
+  location                      = azurerm_resource_group.main.location
+  tenant_id                     = data.azurerm_client_config.current.tenant_id
+  sku_name                      = "standard"
+  rbac_authorization_enabled    = true
+  purge_protection_enabled      = false
+  soft_delete_retention_days    = 7
+  public_network_access_enabled = local.key_vault_public_network_disabled ? false : true
+
+  network_acls {
+    default_action = local.key_vault_public_network_disabled ? "Deny" : "Allow"
+    bypass         = "AzureServices"
+  }
+  tags = var.tags
 }
 
 # The principal running Terraform needs data-plane rights to create secrets.
@@ -213,6 +287,110 @@ resource "azurerm_key_vault_secret" "database_url" {
 }
 
 # -----------------------------------------------------------------------------
+# Private endpoints + private DNS zones (optional)
+# -----------------------------------------------------------------------------
+resource "azurerm_private_dns_zone" "postgres" {
+  count = local.private_networking_enabled && var.enable_postgresql ? 1 : 0
+
+  name                = "privatelink.postgres.database.azure.com"
+  resource_group_name = azurerm_resource_group.main.name
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
+  count = local.private_networking_enabled && var.enable_postgresql ? 1 : 0
+
+  name                  = "pdnslink-${local.base_name}-postgres"
+  resource_group_name   = azurerm_resource_group.main.name
+  private_dns_zone_name = azurerm_private_dns_zone.postgres[0].name
+  virtual_network_id    = azurerm_virtual_network.main[0].id
+  registration_enabled  = false
+  tags                  = var.tags
+}
+
+resource "azurerm_private_dns_zone" "key_vault" {
+  count = local.key_vault_private_endpoint_enabled ? 1 : 0
+
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = azurerm_resource_group.main.name
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "key_vault" {
+  count = local.key_vault_private_endpoint_enabled ? 1 : 0
+
+  name                  = "pdnslink-${local.base_name}-keyvault"
+  resource_group_name   = azurerm_resource_group.main.name
+  private_dns_zone_name = azurerm_private_dns_zone.key_vault[0].name
+  virtual_network_id    = azurerm_virtual_network.main[0].id
+  registration_enabled  = false
+  tags                  = var.tags
+}
+
+resource "azurerm_private_dns_zone" "storage_file" {
+  count = local.private_networking_enabled ? 1 : 0
+
+  name                = "privatelink.file.core.windows.net"
+  resource_group_name = azurerm_resource_group.main.name
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "storage_file" {
+  count = local.private_networking_enabled ? 1 : 0
+
+  name                  = "pdnslink-${local.base_name}-storage-file"
+  resource_group_name   = azurerm_resource_group.main.name
+  private_dns_zone_name = azurerm_private_dns_zone.storage_file[0].name
+  virtual_network_id    = azurerm_virtual_network.main[0].id
+  registration_enabled  = false
+  tags                  = var.tags
+}
+
+resource "azurerm_private_endpoint" "key_vault" {
+  count = local.key_vault_private_endpoint_enabled ? 1 : 0
+
+  name                = "pep-${local.base_name}-keyvault"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  subnet_id           = azurerm_subnet.private_endpoints[0].id
+  tags                = var.tags
+
+  private_service_connection {
+    name                           = "psc-${local.base_name}-keyvault"
+    private_connection_resource_id = azurerm_key_vault.main.id
+    subresource_names              = ["vault"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "pdnszg-keyvault"
+    private_dns_zone_ids = [azurerm_private_dns_zone.key_vault[0].id]
+  }
+}
+
+resource "azurerm_private_endpoint" "storage_file" {
+  count = local.private_networking_enabled ? 1 : 0
+
+  name                = "pep-${local.base_name}-storage-file"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  subnet_id           = azurerm_subnet.private_endpoints[0].id
+  tags                = var.tags
+
+  private_service_connection {
+    name                           = "psc-${local.base_name}-storage-file"
+    private_connection_resource_id = azurerm_storage_account.main.id
+    subresource_names              = ["file"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "pdnszg-storage-file"
+    private_dns_zone_ids = [azurerm_private_dns_zone.storage_file[0].id]
+  }
+}
+
+# -----------------------------------------------------------------------------
 # Container Apps Environment + persistent storage mount
 # -----------------------------------------------------------------------------
 resource "azurerm_container_app_environment" "main" {
@@ -220,6 +398,7 @@ resource "azurerm_container_app_environment" "main" {
   resource_group_name        = azurerm_resource_group.main.name
   location                   = azurerm_resource_group.main.location
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+  infrastructure_subnet_id   = local.private_networking_enabled ? azurerm_subnet.container_apps_infra[0].id : null
   tags                       = var.tags
 }
 

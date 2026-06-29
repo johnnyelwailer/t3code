@@ -156,6 +156,69 @@ variable "allowed_ip_cidrs" {
 }
 
 # -----------------------------------------------------------------------------
+# Private networking / hardening
+# -----------------------------------------------------------------------------
+variable "enable_private_networking" {
+  description = "When true, provisions a VNet, integrates Container Apps infrastructure subnet, configures PostgreSQL private access (delegated subnet + private DNS), and creates private endpoints for Key Vault (optional) and Azure Files."
+  type        = bool
+  default     = false
+}
+
+variable "enforce_data_plane_public_network_disable" {
+  description = "When true (with enable_private_networking), disables public network access for PostgreSQL and Storage Account data-plane resources. Key Vault public access is controlled separately."
+  type        = bool
+  default     = false
+}
+
+variable "enable_key_vault_private_endpoint" {
+  description = "When true (with enable_private_networking), provisions Key Vault private endpoint and private DNS. Keep false when Terraform runners are outside the VNet."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = var.enable_key_vault_private_endpoint ? var.enable_private_networking : true
+    error_message = "enable_key_vault_private_endpoint=true requires enable_private_networking=true."
+  }
+}
+
+variable "disable_key_vault_public_network_access" {
+  description = "When true, disables public network access for Key Vault. Keep false if Terraform/CI must manage secrets from outside private networking."
+  type        = bool
+  default     = false
+
+  validation {
+    condition = var.disable_key_vault_public_network_access ? (
+      var.enable_private_networking && var.enable_key_vault_private_endpoint
+    ) : true
+    error_message = "disable_key_vault_public_network_access=true requires enable_private_networking=true and enable_key_vault_private_endpoint=true."
+  }
+}
+
+variable "vnet_cidr" {
+  description = "Address space for the platform VNet when private networking is enabled."
+  type        = string
+  default     = "10.70.0.0/16"
+}
+
+variable "container_apps_infra_subnet_cidr" {
+  description = "CIDR for the delegated Container Apps infrastructure subnet."
+  type        = string
+  default     = "10.70.0.0/23"
+}
+
+variable "private_endpoints_subnet_cidr" {
+  description = "CIDR for private endpoints subnet (Key Vault and Storage private endpoints)."
+  type        = string
+  default     = "10.70.2.0/24"
+}
+
+variable "postgres_delegated_subnet_cidr" {
+  description = "CIDR for delegated PostgreSQL Flexible Server subnet when private networking is enabled."
+  type        = string
+  default     = "10.70.3.0/24"
+}
+
+# -----------------------------------------------------------------------------
 # Observability (optional OTLP export)
 # -----------------------------------------------------------------------------
 variable "otlp_traces_url" {
