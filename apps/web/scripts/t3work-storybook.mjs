@@ -23,25 +23,38 @@ for (const [sourceName, targetName] of [
   );
 }
 
-const storybookArgs =
-  mode === "build"
-    ? ["x", "storybook", "build", "--config-dir", configDir, ...extraArgs]
-    : [
-        "x",
-        "storybook",
-        "dev",
-        "-p",
-        "6006",
-        "--host",
-        "127.0.0.1",
-        "--config-dir",
-        configDir,
-        "--ci",
-        ...extraArgs,
-      ];
+function readStorybookPort(args) {
+  const portFlagIndex = args.findIndex((arg) => arg === "-p" || arg === "--port");
+  if (portFlagIndex === -1) {
+    return 6006;
+  }
 
-try {
-  const result = NodeChildProcess.spawnSync("bun", storybookArgs, {
+  const rawPort = args[portFlagIndex + 1];
+  const parsed = Number.parseInt(String(rawPort), 10);
+  return Number.isFinite(parsed) ? parsed : 6006;
+}
+
+function isPortPassedInArgs(args) {
+  return args.some((arg) => arg === "-p" || arg === "--port");
+}
+
+function buildStorybookDevArgs(port) {
+  return [
+    "x",
+    "storybook",
+    "dev",
+  ...(isPortPassedInArgs(extraArgs) ? [] : ["-p", String(port)]),
+    "--host",
+    "127.0.0.1",
+    "--config-dir",
+    configDir,
+    "--ci",
+    ...extraArgs,
+  ];
+}
+
+function runStorybook(args) {
+  return NodeChildProcess.spawnSync("bun", args, {
     cwd: webRoot,
     env: {
       ...process.env,
@@ -49,6 +62,37 @@ try {
     },
     stdio: "inherit",
   });
+}
+
+try {
+  let result;
+  if (mode === "build") {
+    result = runStorybook(["x", "storybook", "build", "--config-dir", configDir, ...extraArgs]);
+  } else if (isPortPassedInArgs(extraArgs)) {
+    result = runStorybook(buildStorybookDevArgs(readStorybookPort(extraArgs)));
+  } else {
+    const preferredPort = Number.parseInt(process.env.T3WORK_STORYBOOK_PORT ?? "6006", 10);
+    const fallbackPorts = [preferredPort, 6010, 6011, 6012];
+    result = { status: 1 };
+
+    for (const port of fallbackPorts) {
+      if (port !== preferredPort) {
+        console.warn(`\nPort ${preferredPort} is busy; trying Storybook on http://127.0.0.1:${port}/ …\n`);
+      }
+      result = runStorybook(buildStorybookDevArgs(port));
+      if ((result.status ?? 1) === 0) {
+        break;
+      }
+    }
+
+    if ((result.status ?? 1) !== 0) {
+      console.error(
+        "\nStorybook failed to start. If an old instance is still running, stop it first:\n" +
+          "  lsof -ti :6006 | xargs kill\n" +
+          "Then rerun: pnpm storybook\n",
+      );
+    }
+  }
 
   if (result.error) {
     throw result.error;

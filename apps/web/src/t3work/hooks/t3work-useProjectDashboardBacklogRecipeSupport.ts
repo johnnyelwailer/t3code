@@ -2,9 +2,11 @@ import { useMemo } from "react";
 import { useBackend } from "~/t3work/backend/t3work-index";
 
 import {
+  buildBacklogAssignedToMeOutcome,
   buildBacklogNeedsMyActionOutcome,
   useRegisterT3workDashboardRecipeActionHandler,
 } from "~/t3work/t3work-dashboardRecipeActions";
+import { buildBacklogClearFiltersOutcome } from "~/t3work/t3work-dashboardRecipeFilterOutcomes";
 import {
   type T3workDeterministicWorkflowLaunch,
   launchProjectDashboardBacklogInlineRecipe,
@@ -33,6 +35,25 @@ export function useProjectDashboardBacklogRecipeSupport(input: {
   useRegisterT3workDashboardRecipeActionHandler(
     useMemo(
       () => (action) => {
+        if (action.kind === "show-only-assigned-to-me") {
+          const outcome = buildBacklogAssignedToMeOutcome(
+            input.state,
+            input.currentUserDisplayName,
+          );
+          if (!outcome) {
+            return { applied: false };
+          }
+
+          input.setState(outcome.nextState);
+          return { applied: true, promptText: outcome.promptText };
+        }
+
+        if (action.kind === "clear-filters") {
+          const outcome = buildBacklogClearFiltersOutcome(input.state);
+          input.setState(outcome.nextState);
+          return { applied: true, promptText: outcome.promptText };
+        }
+
         if (action.kind !== "focus-needs-my-action") {
           return null;
         }

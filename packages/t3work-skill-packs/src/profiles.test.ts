@@ -27,6 +27,22 @@ describe("resolveT3WorkProfileId", () => {
       detailDensity: "expert",
     });
   });
+
+  it("uses the shared topic section catalog for every bundled profile", () => {
+    for (const profile of listT3WorkProfiles()) {
+      expect(profile.sidecarSections?.sections.map((section) => section.sectionId)).toEqual([
+        "filters",
+        "quick-actions",
+        "qa",
+        "refinement",
+        "planning",
+        "engineering",
+        "delivery",
+        "customize",
+        "recent",
+      ]);
+    }
+  });
 });
 
 describe("resolveT3WorkProfile", () => {
@@ -48,7 +64,7 @@ describe("custom profile recipe ranking", () => {
       preferredArtifactKinds: ["implementation-plan", "technical-checklist"],
       defaultActionFamilies: ["engineering", "release"],
       recommendedSkillPackIds: ["engineering", "release"],
-      defaultRecipeWeights: { "technical-implementation-plan": 40 },
+      defaultRecipeWeights: { "review-acceptance-criteria": 40 },
     });
 
     const matchInput = {

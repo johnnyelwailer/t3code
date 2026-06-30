@@ -55,6 +55,9 @@ export function buildAvailableContextKeys(input: T3workSidecarRecipeInput): Read
         keys.add("dashboard.view.needs-my-action");
         keys.add(`dashboard.view.needs-my-action.${input.currentViewSummary.needsMyActionPreset}`);
       }
+      if (input.currentViewSummary.viewFiltersActive) {
+        keys.add("dashboard.view.filtered");
+      }
       if (itemCount > 0 && itemCount <= 20 && bugCount >= 3 && bugCount / itemCount >= 0.25) {
         keys.add("dashboard.view.risk-hotspot");
       }

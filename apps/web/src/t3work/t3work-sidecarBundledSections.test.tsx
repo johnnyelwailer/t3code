@@ -11,6 +11,17 @@ vi.mock("~/t3work/t3work-sidecarRecipes", () => ({
   useT3workSidecarRecipeQuickStarts: (input: unknown) => mockUseQuickStarts(input),
 }));
 
+vi.mock("@t3tools/t3work-skill-packs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@t3tools/t3work-skill-packs")>();
+  return {
+    ...actual,
+    getBundledT3WorkRecipe: (recipeId: string) => ({
+      ...actual.getBundledT3WorkRecipe(recipeId),
+      topic: "quick-actions",
+    }),
+  };
+});
+
 vi.mock("~/t3work/t3work-KickoffRecipeList", () => ({
   T3workKickoffRecipeList: ({ recipes }: { recipes: ReadonlyArray<{ id: string }> }) => {
     return <div>{recipes.map((recipe) => recipe.id).join(",")}</div>;
@@ -121,6 +132,7 @@ describe("bundled sidecar sections", () => {
             selectedWorkLabel: project.title,
             dashboardMode: "backlog",
           },
+          topic: "quick-actions",
           shell: {
             orderItemIds: buildOrderedItemIds,
           },

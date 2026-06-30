@@ -48,9 +48,13 @@ vi.mock("~/t3work/hooks/t3work-useSidecarComposition", () => ({
   useT3workSidecarComposition: (input: unknown) => mockUseSidecarComposition(input),
 }));
 
-vi.mock("~/t3work/t3work-sidecarRecipes", () => ({
-  useT3workSidecarRecipeQuickStarts: () => [],
-}));
+vi.mock("~/t3work/t3work-sidecarRecipes", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/t3work/t3work-sidecarRecipes")>();
+  return {
+    ...actual,
+    useT3workSidecarRecipeQuickStarts: () => [],
+  };
+});
 
 vi.mock("~/t3work/t3work-TicketKickoffComposer", () => ({
   createDefaultT3workKickoffLaunchConfig: () => ({
@@ -81,10 +85,7 @@ describe("TicketKickoffPanel", () => {
   beforeEach(() => {
     mockUseSidecarComposition.mockReturnValue({
       composition: {
-        sections: [
-          { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
-        ],
+        sections: [{ sectionId: "recent", visible: true, collapsed: false }],
       },
       setCollapsed: () => undefined,
       userOverrides: { sections: [] },
@@ -137,8 +138,7 @@ describe("TicketKickoffPanel", () => {
     );
 
     expect(markup).toContain("<ul");
-    expect(markup).toContain("Quick starts");
-    expect(markup).toContain("Recent conversations");
+    expect(markup).toContain("Recent");
     expect(markup).toContain("IES-17877 thread 2");
     expect(markup).toContain("relative:2026-05-27T10:00:00.000Z");
     expect(markup).not.toContain("Get Help With IES-17877");

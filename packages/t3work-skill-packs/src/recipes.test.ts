@@ -27,6 +27,82 @@ function buildMatchInput(overrides: Partial<RecipeMatchInput> = {}): RecipeMatch
   };
 }
 
+const KEEP_PACK_META_RECIPE_IDS = [
+  "create-recipe",
+  "edit-plugin-module",
+  "create-contextual-recipe",
+  "explain-selected-work",
+  "review-acceptance-criteria",
+  "create-qa-test-plan",
+  "prioritize-pending-work",
+  "focus-needs-my-action",
+  "show-only-assigned-to-me",
+  "clear-filters",
+  "shape-next-backlog-slice",
+  "technical-implementation-plan",
+  "unblock-blocked-ticket",
+  "tshirt-size-epic",
+] as const;
+
+const RECIPE_TOPICS: Record<(typeof KEEP_PACK_META_RECIPE_IDS)[number], string> = {
+  "create-recipe": "customize",
+  "edit-plugin-module": "customize",
+  "create-contextual-recipe": "customize",
+  "explain-selected-work": "quick-actions",
+  "review-acceptance-criteria": "qa",
+  "create-qa-test-plan": "qa",
+  "prioritize-pending-work": "planning",
+  "clear-filters": "filters",
+  "focus-needs-my-action": "filters",
+  "show-only-assigned-to-me": "filters",
+  "shape-next-backlog-slice": "refinement",
+  "technical-implementation-plan": "engineering",
+  "unblock-blocked-ticket": "delivery",
+  "tshirt-size-epic": "refinement",
+};
+
+describe("bundled t3work recipe catalog", () => {
+  it("keeps KEEP/PACK/META recipes with explicit topics", () => {
+    expect(listBundledT3WorkRecipes().map((recipe) => recipe.id)).toEqual([
+      ...KEEP_PACK_META_RECIPE_IDS,
+    ]);
+    for (const recipeId of KEEP_PACK_META_RECIPE_IDS) {
+      expect(getBundledT3WorkRecipe(recipeId)?.topic).toBe(RECIPE_TOPICS[recipeId]);
+    }
+  });
+
+  it("defines inline assignee filtering for show-only-assigned-to-me", () => {
+    const recipe = getBundledT3WorkRecipe("show-only-assigned-to-me")!;
+
+    expect(recipe.kickoff?.steps).toEqual([
+      expect.objectContaining({
+        kind: "tool",
+        toolName: "t3work.backlog.set_assignee_filter",
+        input: { mode: "current-user" },
+      }),
+    ]);
+    expect(recipe.allowedToolGroups).toEqual(["view.state"]);
+    expect(recipe.actionViewTemplate).toContain("Show only assigned to me");
+    expect(recipe.topic).toBe("filters");
+  });
+
+  it("defines clear-filters for active dashboard slices", () => {
+    const recipe = getBundledT3WorkRecipe("clear-filters")!;
+
+    expect(recipe.topic).toBe("filters");
+    expect(recipe.requiredContext?.map((entry) => entry.key)).toContain("dashboard.view.filtered");
+    expect(recipe.surfaces).toEqual(["project.dashboard.backlog", "project.dashboard.myWork"]);
+  });
+
+  it("defines ticket-depth acceptance review for workitem sidepanel", () => {
+    const recipe = getBundledT3WorkRecipe("review-acceptance-criteria")!;
+
+    expect(recipe.surfaces).toEqual(["workitem.detail.sidepanel"]);
+    expect(recipe.promptTemplate).toContain("acceptance criteria");
+    expect(recipe.actionViewTemplate).toContain("Review acceptance criteria");
+    expect(recipe.topic).toBe("qa");
+  });
+});
 describe("tshirt-size-epic bundled recipe", () => {
   it("is present in the bundled catalog", () => {
     expect(getBundledT3WorkRecipe("tshirt-size-epic")).toBeDefined();

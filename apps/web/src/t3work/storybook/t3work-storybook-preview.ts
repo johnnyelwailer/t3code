@@ -1,8 +1,10 @@
 import type { Preview } from "@storybook/react";
 
 import "~/t3work/t3work-index.css";
+import { withT3workStorybookRouter } from "~/t3work/storybook/t3work-storybookRouterDecorator";
 
 const preview: Preview = {
+  decorators: [withT3workStorybookRouter],
   parameters: {
     layout: "fullscreen",
     controls: {

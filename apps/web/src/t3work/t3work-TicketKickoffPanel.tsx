@@ -8,6 +8,8 @@ import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment"
 import { mergeContextAttachmentsById } from "~/t3work/t3work-contextAttachmentMerge";
 import { ContextAttachmentChip } from "~/t3work/components/t3work-ContextAttachmentChip";
 import { T3workSidecarComposition } from "~/t3work/t3work-SidecarComposition";
+import { readProjectSidecarCompositionFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
+import { resolveT3workKickoffSectionProps } from "~/t3work/t3work-sidecarKickoffSectionProps";
 import {
   applyT3workRecipeQuickStartLaunchCustomization,
   buildT3workSelectedRecipeKickoffLaunch,
@@ -128,34 +130,27 @@ export function TicketKickoffPanel({
     clearSelectedRecipe();
   };
 
+  const projectDefault = readProjectSidecarCompositionFromProject(quickStartRecipeInput.project);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ScrollArea className="min-h-0 flex-1">
         <T3workSidecarComposition
           surface="workitem.detail.sidepanel"
           profileId={profileId}
+          projectDefault={projectDefault}
           host={sidecarHost}
-          resolveSectionProps={(sectionId) => {
-            if (sectionId === "quick-starts") {
-              return {
-                recipeInput: quickStartRecipeInput,
-                ...(selectedRecipe?.recipe.id
-                  ? { selectedRecipeId: selectedRecipe.recipe.id }
-                  : {}),
-              };
-            }
-
-            if (sectionId === "recent-conversations") {
-              return {
-                threads: issueThreads,
-                emptyMessage: "No conversations started for this ticket yet.",
-                showSearch: false,
-                showCount: false,
-              };
-            }
-
-            return undefined;
-          }}
+          resolveSectionProps={(sectionId) =>
+            resolveT3workKickoffSectionProps({
+              sectionId,
+              recipeInput: quickStartRecipeInput,
+              ...(selectedRecipe?.recipe.id ? { selectedRecipeId: selectedRecipe.recipe.id } : {}),
+              recentThreads: issueThreads,
+              recentEmptyMessage: "No conversations started for this ticket yet.",
+              recentShowSearch: false,
+              recentShowCount: false,
+            })
+          }
         />
       </ScrollArea>
 

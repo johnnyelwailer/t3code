@@ -10,13 +10,16 @@ const srcDir =
   process.env.T3WORK_STORYBOOK_SRC_DIR ?? NodeURL.fileURLToPath(new URL("../src", import.meta.url));
 
 const config: StorybookConfig = {
-  stories: [`${srcDir}/t3work/stories/**/*.stories.tsx`],
+  stories: [`${srcDir}/t3work/**/*.stories.tsx`],
   framework: {
     name: "@storybook/react-vite",
     options: {},
   },
-  viteFinal: async (config) =>
-    mergeConfig(config, {
+  typescript: {
+    reactDocgen: false,
+  },
+  viteFinal: async (config) => {
+    const merged = mergeConfig(config, {
       plugins: [
         babel({
           parserOpts: { plugins: ["typescript", "jsx"] },
@@ -38,7 +41,19 @@ const config: StorybookConfig = {
         __ATLASSIAN_SITE_URL__: JSON.stringify(""),
         __ATLASSIAN_OAUTH_REDIRECT_URI__: JSON.stringify(""),
       },
-    }),
+    });
+
+    // apps/web/vite.config.ts prebundles Clerk for the full app; Storybook does not
+    // depend on @clerk/clerk-js directly and Vite can hang on "bundling dependencies".
+    const clerkDeps = ["@clerk/clerk-js", "@clerk/react/internal"];
+    const include = (merged.optimizeDeps?.include ?? []).filter(
+      (dep: string) => !clerkDeps.includes(String(dep)),
+    );
+    const exclude = [...new Set([...(merged.optimizeDeps?.exclude ?? []), ...clerkDeps])];
+    merged.optimizeDeps = { ...merged.optimizeDeps, include, exclude };
+
+    return merged;
+  },
 };
 
 export default config;

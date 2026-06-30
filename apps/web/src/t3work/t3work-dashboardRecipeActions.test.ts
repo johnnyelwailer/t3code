@@ -7,6 +7,10 @@ import {
   resolveT3workDashboardRecipeAction,
 } from "~/t3work/t3work-dashboardRecipeActions";
 import {
+  buildBacklogClearFiltersOutcome,
+  buildMyWorkClearFiltersOutcome,
+} from "~/t3work/t3work-dashboardRecipeFilterOutcomes";
+import {
   createDefaultProjectDashboardBacklogState,
   type ProjectDashboardBacklogState,
 } from "~/t3work/t3work-projectDashboardBacklogStateShared";
@@ -42,11 +46,16 @@ function createTicket(overrides: Partial<ProjectTicket> = {}): ProjectTicket {
 }
 
 describe("t3work-dashboardRecipeActions", () => {
-  it("maps the needs-my-action recipe id to a dashboard action", () => {
+  it("maps dashboard inline-action recipe ids to dashboard actions", () => {
     expect(resolveT3workDashboardRecipeAction("focus-needs-my-action")).toEqual({
       kind: "focus-needs-my-action",
     });
-    expect(resolveT3workDashboardRecipeAction("show-only-assigned-to-me")).toBeUndefined();
+    expect(resolveT3workDashboardRecipeAction("show-only-assigned-to-me")).toEqual({
+      kind: "show-only-assigned-to-me",
+    });
+    expect(resolveT3workDashboardRecipeAction("clear-filters")).toEqual({
+      kind: "clear-filters",
+    });
     expect(resolveT3workDashboardRecipeAction("prioritize-pending-work")).toBeUndefined();
   });
 
@@ -143,5 +152,37 @@ describe("t3work-dashboardRecipeActions", () => {
 
     expect(outcome?.nextState.statusCategory).toBe("active");
     expect(outcome?.promptText).toContain("active work");
+  });
+
+  it("clears backlog view filters back to defaults", () => {
+    const outcome = buildBacklogClearFiltersOutcome({
+      ...createDefaultProjectDashboardBacklogState(),
+      focusFilter: "needs-plan",
+      assigneeFilter: "Pat Jones",
+      query: "blocked",
+    });
+
+    expect(outcome.nextState).toMatchObject({
+      focusFilter: "all",
+      assigneeFilter: "__all__",
+      query: "",
+    });
+    expect(outcome.promptText).toContain("Cleared");
+  });
+
+  it("clears my-work view filters back to defaults", () => {
+    const outcome = buildMyWorkClearFiltersOutcome({
+      ...createDefaultProjectDashboardMyWorkState(),
+      query: "review",
+      statusCategory: "review",
+      selectedPriority: "High",
+    });
+
+    expect(outcome.nextState).toMatchObject({
+      query: "",
+      statusCategory: "all",
+      selectedPriority: "all",
+    });
+    expect(outcome.promptText).toContain("Cleared");
   });
 });

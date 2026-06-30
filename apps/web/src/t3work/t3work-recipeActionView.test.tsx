@@ -285,24 +285,7 @@ export default function Action() {
       availableContextKeys: createQueryable(["project.summary", "ticket.summary"]),
     };
 
-    const [
-      riskMarkup,
-      prioritizeMarkup,
-      focusMarkup,
-      assignedMarkup,
-      backlogMarkup,
-      unblockMarkup,
-      explainMarkup,
-      planMarkup,
-    ] = await Promise.all([
-      renderBundledRecipeActionView({
-        recipeId: "summarize-project-risk",
-        context: dashboardContext,
-      }),
-      renderBundledRecipeActionView({
-        recipeId: "prioritize-pending-work",
-        context: dashboardContext,
-      }),
+    const [focusMarkup, assignedMarkup, explainMarkup, reviewMarkup] = await Promise.all([
       renderBundledRecipeActionView({
         recipeId: "focus-needs-my-action",
         context: dashboardContext,
@@ -319,46 +302,14 @@ export default function Action() {
         },
       }),
       renderBundledRecipeActionView({
-        recipeId: "shape-next-backlog-slice",
-        context: {
-          ...dashboardContext,
-          surface: "project.dashboard.backlog",
-          surfaceState: {
-            ...dashboardContext.surfaceState,
-            dashboardMode: "backlog",
-          },
-          availableContextKeys: createQueryable([
-            "project.summary",
-            "dashboard.backlog.summary",
-            "dashboard.view.focused",
-          ]),
-        },
-      }),
-      renderBundledRecipeActionView({
-        recipeId: "unblock-my-work",
-        context: dashboardContext,
-      }),
-      renderBundledRecipeActionView({
         recipeId: "explain-selected-work",
         context: ticketContext,
       }),
       renderBundledRecipeActionView({
-        recipeId: "technical-implementation-plan",
+        recipeId: "review-acceptance-criteria",
         context: ticketContext,
       }),
     ]);
-
-    expect(riskMarkup).toContain("Summarize project risk");
-    expect(riskMarkup).toContain("Items");
-    expect(riskMarkup).not.toContain("Risk scan");
-    expect(riskMarkup).not.toContain("Bug-driven risk");
-
-    expect(prioritizeMarkup).toContain("Prioritize");
-    expect(prioritizeMarkup).toContain("Bugs");
-    expect(prioritizeMarkup).not.toContain("Current view");
-    expect(prioritizeMarkup).not.toContain("Bug-heavy queue");
-    expect(prioritizeMarkup).not.toContain("Lead");
-    expect(prioritizeMarkup).not.toContain("IES-1235");
 
     expect(focusMarkup).toContain("Show what needs my action");
     expect(focusMarkup).toContain("Visible items");
@@ -367,26 +318,12 @@ export default function Action() {
     expect(assignedMarkup).toContain("Show only assigned to me");
     expect(assignedMarkup).toContain("Apply filter");
 
-    expect(backlogMarkup).toContain("Shape the next backlog slice");
-    expect(backlogMarkup).toContain("Bugs");
-    expect(backlogMarkup).not.toContain("Lead bug first");
-    expect(backlogMarkup).not.toContain("Lead");
-    expect(backlogMarkup).not.toContain("IES-1235");
-
-    expect(unblockMarkup).toContain("Unblock my work");
-    expect(unblockMarkup).toContain("Items");
-    expect(unblockMarkup).toContain("Bugs");
-    expect(unblockMarkup).not.toContain("Current work");
-    expect(unblockMarkup).not.toContain("Needs clarification");
-    expect(unblockMarkup).not.toContain("Lead");
-    expect(unblockMarkup).not.toContain("IES-1235");
-
     expect(explainMarkup).toContain("Explain simply");
     expect(explainMarkup).toContain("Explain for");
     expect(explainMarkup).not.toContain("High-priority work");
 
-    expect(planMarkup).toContain("Draft implementation plan");
-    expect(planMarkup).toContain("Depth");
-    expect(planMarkup).not.toContain("High-impact change");
+    expect(reviewMarkup).toContain("Review acceptance criteria");
+    expect(reviewMarkup).toContain("Review for");
+    expect(reviewMarkup).not.toContain("High-impact change");
   });
 });

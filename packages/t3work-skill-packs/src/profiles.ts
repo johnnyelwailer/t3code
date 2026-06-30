@@ -1,5 +1,7 @@
 import type { RecipeProfileContext, SidecarComposition } from "@t3tools/project-recipes";
 
+import { DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION } from "./sidecarSections.ts";
+
 export type BundledT3WorkProfileId =
   | "qa-assistant"
   | "product-partner"
@@ -114,6 +116,7 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
       "draft-jira-comment": 10,
       "release-handoff-checklist": 10,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["qa", "delivery"],
     hideImplementationComplexity: true,
   },
@@ -137,6 +140,7 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
       "stakeholder-update": 30,
       "summarize-project-risk": 10,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["product", "delivery"],
     hideImplementationComplexity: true,
   },
@@ -164,6 +168,7 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
       "draft-jira-comment": 15,
       "explain-selected-work": 10,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["support", "qa"],
     hideImplementationComplexity: true,
   },
@@ -186,6 +191,7 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
       "release-handoff-checklist": 25,
       "summarize-project-risk": 20,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["delivery", "release"],
     hideImplementationComplexity: true,
   },
@@ -213,6 +219,7 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
       "release-handoff-checklist": 20,
       "summarize-project-risk": 15,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["qa", "release"],
     hideImplementationComplexity: false,
   },
@@ -245,9 +252,7 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
       "release-handoff-checklist": 10,
       "next-best-task": 10,
     },
-    sidecarSections: {
-      sections: [{ sectionId: "recent-conversations" }, { sectionId: "quick-starts" }],
-    },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["engineering", "release"],
     hideImplementationComplexity: false,
   },
