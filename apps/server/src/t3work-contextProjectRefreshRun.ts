@@ -43,6 +43,11 @@ export function runT3workContextProjectRefreshForeground(input: T3workContextPro
           provider: scope.project.source.provider,
         },
         externalProjectId,
+        // Bound this refresh fan-out explicitly: each item triggers a getResource
+        // call below. listResources no longer caps assigned issues at 50 (that cap
+        // silently broke My Work), so keep the prior bound here on purpose rather
+        // than inheriting it. Epic 33 revisits context-graph coverage.
+        limit: 50,
       })).items;
 
     const tickets = yield* Effect.forEach(resourceItems, (item) =>

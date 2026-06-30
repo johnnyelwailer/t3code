@@ -239,6 +239,105 @@ describe("AtlassianIntegrationProvider", () => {
     expect(page.items.map((item) => item.displayId)).toEqual(["PROJ-3"]);
   });
 
+  it("paginates assigned my-work issues past the first page", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.includes("/rest/api/3/project/search")) {
+        return Response.json({
+          values: [{ id: "project-1", key: "PROJ" }],
+        });
+      }
+
+      if (url.includes("/rest/api/3/search/jql")) {
+        if (url.includes(encodeURIComponent("assignee = currentUser()"))) {
+          // Second page: requested with the continuation token from page one.
+          if (url.includes("nextPageToken=page-2")) {
+            return Response.json({
+              total: 2,
+              isLast: true,
+              issues: [
+                {
+                  key: "PROJ-2",
+                  fields: {
+                    summary: "Assigned child on page two",
+                    parent: { key: "PROJ-1" },
+                    issuetype: { name: "Task" },
+                    status: { name: "To Do" },
+                    assignee: { displayName: "Me" },
+                    project: { id: "project-1" },
+                    updated: "2026-05-18T00:00:00.000Z",
+                  },
+                },
+              ],
+            });
+          }
+          // First page: not last, hands back a continuation token.
+          return Response.json({
+            total: 2,
+            isLast: false,
+            nextPageToken: "page-2",
+            issues: [
+              {
+                key: "PROJ-9",
+                fields: {
+                  summary: "Recently updated assigned task",
+                  issuetype: { name: "Task" },
+                  status: { name: "In Progress" },
+                  assignee: { displayName: "Me" },
+                  project: { id: "project-1" },
+                  updated: "2026-05-20T00:00:00.000Z",
+                },
+              },
+            ],
+          });
+        }
+
+        if (url.includes(encodeURIComponent('key in ("PROJ-1")'))) {
+          return Response.json({
+            total: 1,
+            issues: [
+              {
+                key: "PROJ-1",
+                fields: {
+                  summary: "Parent story",
+                  issuetype: { name: "Story" },
+                  status: { name: "To Do" },
+                  project: { id: "project-1" },
+                  updated: "2026-05-17T00:00:00.000Z",
+                },
+              },
+            ],
+          });
+        }
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    const page = await provider.listResources({
+      account: {
+        id: "https://test.atlassian.net",
+        provider: "atlassian",
+      },
+      externalProjectId: "project-1",
+    });
+
+    const displayIds = page.items.map((item) => item.displayId);
+    // The page-two child must survive — it was previously dropped by the cap.
+    expect(displayIds).toContain("PROJ-2");
+    expect(displayIds).toContain("PROJ-9");
+    expect(displayIds).toContain("PROJ-1");
+  });
+
   it("loads a project backlog without the current-user filter", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();

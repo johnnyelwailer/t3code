@@ -702,11 +702,22 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
 
     const projectKey = project.key.replace(/"/g, '\\"');
     const assignedJql = `project = "${projectKey}" AND assignee = currentUser() ORDER BY updated DESC`;
-    const assignedResponse = await entry.client.searchIssues(assignedJql, input.limit ?? 50);
-    const assignedItems = normalizeIssueSearch(assignedResponse, entry.siteUrl);
+    // My Work must surface EVERY issue assigned to the user. The previous fixed
+    // page limit (50) silently dropped assigned issues — and therefore their
+    // children — beyond the most-recently-updated window, so a user with >50
+    // assignments never saw the rest. Paginate to completion (no caller limit ⇒
+    // walk all pages). Epic 33 replaces this live path with a server-side
+    // project mirror, which removes the per-poll pagination cost entirely.
+    const assignedSearch = await this.searchIssuesWithPagination(
+      entry.client,
+      assignedJql,
+      [],
+      input.limit,
+    );
+    const assignedItems = normalizeIssueSearch({ issues: assignedSearch.issues }, entry.siteUrl);
 
     const parentKeys = new Set<string>();
-    for (const issue of assignedResponse.issues) {
+    for (const issue of assignedSearch.issues) {
       if (!issue || typeof issue !== "object") continue;
       const fields = (issue as { fields?: unknown }).fields;
       if (!fields || typeof fields !== "object") continue;
