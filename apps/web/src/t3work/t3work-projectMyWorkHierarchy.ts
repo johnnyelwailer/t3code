@@ -66,7 +66,9 @@ export function buildProjectMyWorkVisibleHierarchy(
     excludedVisibleTypeKeys?: ReadonlyArray<string>;
   },
 ): ProjectMyWorkVisibleHierarchy {
-  const presentation = buildVisibleBacklogHierarchy(tickets, matchedTickets);
+  const presentation = buildVisibleBacklogHierarchy(tickets, matchedTickets, {
+    includeDescendants: true,
+  });
   const excludedVisibleTypeKeySet = new Set(excludedVisibleTypeKeys);
   const visibleTickets =
     excludedVisibleTypeKeySet.size === 0

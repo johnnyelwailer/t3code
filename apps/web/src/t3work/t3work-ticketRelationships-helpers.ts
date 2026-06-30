@@ -38,20 +38,34 @@ function findTicketByKey(tickets: ProjectTicket[], key: string): ProjectTicket |
   );
 }
 
+function relationshipEntryIdentities(entry: RelationshipEntry): string[] {
+  const keys = [entry.key, entry.ticket?.id, entry.ticket?.ref.id, entry.ticket?.ref.displayId];
+  return [
+    ...new Set(keys.map((key) => normalizeRelationshipKey(key)).filter((key) => !!key)),
+  ] as string[];
+}
+
 function mergeEntries(entries: readonly RelationshipEntry[]): RelationshipEntry[] {
   const deduped = new Map<string, RelationshipEntry>();
   for (const entry of entries) {
-    const existing = deduped.get(entry.key);
+    const identities = relationshipEntryIdentities(entry);
+    const keys = identities.length > 0 ? identities : [entry.key];
+    const existing = identities.map((key) => deduped.get(key)).find((value) => value);
     if (!existing) {
-      deduped.set(entry.key, entry);
+      for (const key of keys) {
+        deduped.set(key, entry);
+      }
       continue;
     }
-    deduped.set(entry.key, {
+    const merged = {
       ...existing,
       ...(entry.ticket ? { ticket: entry.ticket } : {}),
-    });
+    };
+    for (const key of relationshipEntryIdentities(merged)) {
+      deduped.set(key, merged);
+    }
   }
-  return [...deduped.values()];
+  return [...new Set(deduped.values())];
 }
 
 export function buildTicketRelationships(input: {

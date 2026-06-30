@@ -32,6 +32,7 @@ export type T3workThreadPlacement = {
 };
 
 export interface BackendApi {
+  readonly httpBaseUrl?: string;
   readonly state: BackendState;
   readonly connect: () => Promise<void>;
   readonly disconnect: () => Promise<void>;

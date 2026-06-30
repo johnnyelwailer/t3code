@@ -3,7 +3,7 @@ import type { ProjectShellProject, ResourceSnapshot } from "@t3tools/project-con
 import { useBackend } from "~/t3work/backend/t3work-index";
 import {
   buildAtlassianResourceCacheKey,
-  loadAtlassianResourceSnapshot,
+  fetchAtlassianResourceSnapshot,
   readCachedAtlassianResourceSnapshot,
 } from "~/t3work/t3work-atlassianResourceSnapshotCache";
 
@@ -41,11 +41,17 @@ export function useTicketDetail(project: ProjectShellProject, ticketId: string):
 
     try {
       if (!backend) throw new Error("Backend not available");
-      const result = await loadAtlassianResourceSnapshot({
+      const cached = readCachedAtlassianResourceSnapshot({
+        project,
+        key: ticketId,
+      });
+      if (cached) {
+        setSnapshot(cached);
+      }
+      const result = await fetchAtlassianResourceSnapshot({
         backend,
         project,
         key: ticketId,
-        refreshOnCacheHit: true,
       });
       setSnapshot(result);
     } catch (e) {

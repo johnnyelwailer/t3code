@@ -126,6 +126,7 @@ export function buildProjectBacklogTicketContext(
 export function buildVisibleBacklogHierarchy(
   tickets: readonly ProjectTicket[],
   filteredTickets: readonly ProjectTicket[],
+  options: { readonly includeDescendants?: boolean } = {},
 ): {
   visibleTickets: readonly ProjectTicket[];
   visibleHierarchy: ProjectTicketHierarchy;
@@ -140,6 +141,18 @@ export function buildVisibleBacklogHierarchy(
   for (const ticket of filteredTickets) {
     for (const ancestor of contextByTicketId.get(ticket.id)?.ancestors ?? []) {
       visibleTicketIds.add(ancestor.id);
+    }
+    if (options.includeDescendants === true) {
+      const addDescendants = (ticketId: string) => {
+        for (const child of fullHierarchy.childrenByParentId.get(ticketId) ?? []) {
+          if (visibleTicketIds.has(child.id)) {
+            continue;
+          }
+          visibleTicketIds.add(child.id);
+          addDescendants(child.id);
+        }
+      };
+      addDescendants(ticket.id);
     }
   }
 

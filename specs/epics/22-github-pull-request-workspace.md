@@ -7,8 +7,8 @@ Current `t3work` GitHub integration is context-first, not workspace-first.
 That is enough for linking GitHub activity to Jira work items and for attaching pull
 request bundles to chat, but it is not enough for doing review work inside `t3work`.
 The next GitHub phase should treat pull requests as first-class resources with their
-own detail page, diff workspace, selection-aware chat/handoffs, and recipe-driven
-mutation flows.
+own built-in project View, diff workspace, selection-aware chat/handoffs, and
+recipe-driven mutation flows.
 
 This should build on the additive GitHub route and context-bundle work that already
 exists. Do not introduce direct browser-to-GitHub access. Do not clone the GitHub UI
@@ -44,6 +44,10 @@ The existing additive slice already gives us the raw ingredients:
   snapshots
 - web code already turns PR context into durable bundle artifacts for chat and handoffs
 - ticket detail and dashboard views already surface related GitHub activity
+- GitHub activity already extracts Jira-style work item keys from PR titles, branches, and
+  repositories, then groups activity by work item for the project shell
+- linked-repository child-session tooling already understands when implementation or PR
+  work needs a repository-scoped worktree instead of the project metarepo
 
 The missing layer is the interactive PR workspace:
 
@@ -51,6 +55,10 @@ The missing layer is the interactive PR workspace:
 - a performance-first diff view with a real file browser
 - selection-aware chat and handoff entry points
 - recipe launchers and draft mutation flows tuned for review work
+- a normalized PR resource model that joins GitHub state, linked Jira context, local
+  checkout/worktree state, and agent/tool permissions
+- mutation routes for review comments, reviews, thread replies, thread resolution, and
+  refresh/check-for-new-comments flows
 
 ## Implementation Fit Against The Current Codebase
 
@@ -89,7 +97,7 @@ Existing `t3work` UI shell/state patterns are also directly relevant:
 - `apps/web/src/t3work/hooks/t3work-usePersistedRouteState.ts`
   - persisted route/search state pattern for t3work-specific views
 - `apps/web/src/t3work/t3work-ResizableRightSidebarLayout.tsx`
-  - ready-made dense split-view layout for detail + side panel shells
+  - ready-made dense split-view layout for detail + right-side sidecar shells
 - `apps/web/src/t3work/components/ui/t3work-*`
   - additive t3work UI primitives already aligned with the current shell
 
@@ -145,11 +153,21 @@ The codebase does not currently have these pieces and they should be built as ne
 
 - first-class PR detail route and view type in `t3work`
 - PR overview/activity/checks query hooks for the in-app PR page
+- shell-owned PR blocks for overview, gates, linked resources, activity, checks, diff,
+  review threads, worktree state, and sidecar sections so the first implementation is
+  already reusable by project-local Views
+- linked Jira work-item resolver for PR titles, branches, body text, commits, and project
+  configured key patterns
+- PR resource context builder that packages GitHub PR data, Jira work-item bundle,
+  related work items, branch checkout metadata, comments, review threads, checks, and
+  diff refs for agent turns
 - a performance-first PR file tree with grouping, filtering, and navigation state
 - review-thread grouping and selection-aware context capture
 - backend diff manifest and lazy diff-chunk endpoints
 - selection-context endpoints for comment/thread/line-range/check attachments
 - draft mutation UI for replies, review packages, reviewer changes, and PR-body preview
+- mutation endpoints for posting issue comments, review comments, review summaries,
+  replies, and resolving or unresolving review threads where the provider supports it
 - deployment, release, and rollout context reads such as `where is this deployed`
 - project-convention PR template resolution and preview
 
@@ -222,6 +240,9 @@ This work should stay inside the same additive boundary discipline as the rest o
   not inside the base chat diff route
 - use `t3work-usePersistedRouteState` and existing split-view layout patterns for PR-level
   navigation/search/filter persistence
+- implement the built-in PR workspace as a composition of reusable `t3work` blocks first,
+  then mount those blocks in the default View; do not hard-code a monolithic PR page that
+  later has to be split for customization
 
 ### Server Boundary
 
@@ -256,9 +277,89 @@ To stay aligned with the additive guard and keep the OG T3 surface small:
 5. Defer any websocket/core runtime seam work until the HTTP + polling shape proves
    insufficient.
 
+## Composable View Model
+
+The PR workspace should be built as a default shell View composed from the same primitives
+defined in Epic 16, Epic 19, and Epic 31. Do not invent a separate "PR app" abstraction.
+
+Vocabulary alignment:
+
+- **View / miniapp**: the composable UI unit. The default PR workspace is a built-in View,
+  and teams can later create project-local PR Views under `.t3work/miniapps/*`.
+- **Block**: shell-owned React component used by Views. Blocks own density, loading,
+  empty/error states, accessibility, and safe data hooks.
+- **Surface**: where recipes and sections appear, such as
+  `github.pull_request.detail.sidepanel`, `github.pull_request.diff.selection`, and
+  `github.review.comment`.
+- **Sidecar section**: a miniapp at `sidecar.section`, not a special hard-coded sidebar.
+- **Recipe**: the launcher users click.
+- **Workflow**: the `.workflow.ts` program the recipe runs.
+
+Initial PR block library:
+
+- `PullRequestView`
+- `PullRequestHeader`
+- `PullRequestGateShelf`
+- `PullRequestLinkedResources`
+- `PullRequestDescription`
+- `PullRequestActivityFeed`
+- `PullRequestChecksPanel`
+- `PullRequestFileTree`
+- `PullRequestDiffViewer`
+- `PullRequestReviewThreadList`
+- `PullRequestReviewDraftPanel`
+- `PullRequestWorktreeState`
+- `PullRequestRecipeSection`
+- `PullRequestContextAttachmentList`
+- `PullRequestFreshnessStatus`
+
+Composition rules:
+
+- the default PR page uses these blocks internally from day one
+- blocks read shell-owned queryables and context, not raw GitHub/Jira clients
+- each block declares the high-level capabilities it needs through the same View manifest
+  model as other miniapps
+- teams can reorder, hide, or replace sections through project-local Views without
+  reimplementing GitHub auth, caching, mutations, or diff parsing
+- built-in blocks should be dogfooded in the default View before exposing a customization
+  surface
+
+Example project-local View direction:
+
+```tsx
+import {
+  PullRequestActivityFeed,
+  PullRequestDiffViewer,
+  PullRequestGateShelf,
+  PullRequestLinkedResources,
+  PullRequestRecipeSection,
+  PullRequestView,
+  PullRequestWorktreeState,
+} from "@t3work/blocks";
+
+export default function TeamReviewView() {
+  return (
+    <PullRequestView density="compact">
+      <PullRequestGateShelf />
+      <PullRequestLinkedResources providers={["jira", "confluence"]} />
+      <PullRequestWorktreeState />
+      <PullRequestDiffViewer focusMode="unresolved" />
+      <PullRequestActivityFeed filters={["new-since-last-visit", "human-comments"]} />
+      <PullRequestRecipeSection topic="review" />
+    </PullRequestView>
+  );
+}
+```
+
 ## User Problems To Solve
 
 - link-outs break project context and force users to rebuild state in another tool
+- users want website-level PR parity for review work: description, checks, commits, files,
+  review threads, comments, branch state, and all relevant actions in one place
+- referenced Jira work items are easy to miss, so reviewers lose product and acceptance
+  context before reading the diff
+- agents do not get enough context unless the user manually gathers PR diff, comments,
+  branch checkout, linked ticket details, and related work
 - checks, mergeability, requested changes, and blockers are buried instead of surfaced
 - native GitHub activity order is poor for triage when the newest state matters most
 - large diffs are hard to navigate, search, and filter quickly
@@ -296,7 +397,10 @@ Required sections:
   actions
 - gate shelf with requested changes, failing checks, merge queue/conflict state, and
   blocked reviewers
-- description and linked-resource summary
+- description and linked-resource summary, including Jira work items resolved from title,
+  branch, body, commits, and project mapping rules
+- branch/worktree shelf showing whether the PR branch is checked out locally, where the
+  agent worktree lives, base/head SHAs, and whether the local checkout is stale
 - activity feed with comments, review events, commits, checks, and state transitions
 - quick-launch recipe rail for review and follow-up workflows
 
@@ -314,6 +418,24 @@ Personalization options should include:
 - prioritize threads involving me or my team
 - pin a preferred default filter/view preset per user or project
 - expand unresolved threads automatically while keeping resolved threads folded
+
+Parity target:
+
+- users can stay in `t3work` for normal review work without opening GitHub
+- GitHub remains the escape hatch for repository settings, unusual admin actions, and
+  provider features that do not yet have safe draft-first mutations
+- every outbound write shows the exact payload, target repository, PR number, acting
+  account, and provider URL before commit
+
+Minimum tab model:
+
+- `Overview`: status, linked Jira context, description, review state, checks, and recipes
+- `Files`: file tree, diff, inline threads, line-range attachments, and review draft
+- `Conversation`: issue comments, review summaries, review threads, commits, checks, and
+  timeline events with newest-first filters
+- sidecar sections: recipes, active threads, current context package, worktree state, and
+  pending drafts. This is the right-side **sidecar**, composed from `sidecar.section`
+  miniapps, not an extra hard-coded tab.
 
 ### Profile-Aware Presentation
 
@@ -433,6 +555,8 @@ Context rules:
 - child-session handoffs should optionally carry `repo_full_name`, base/head SHA, and the
   exact selection ref so the child can open the right worktree context immediately
 - agent responses should deep-link back to the selected comment, line range, or file
+- worktree handoffs should pin the exact checkout directory and branch/ref state used for
+  the agent turn
 
 Illustrative reference forms:
 
@@ -441,6 +565,78 @@ Illustrative reference forms:
 @github:owner/repo/pull/123#review-comment=456
 @github:owner/repo/pull/123#file=apps/web/src/foo.ts&start=88&end=103
 ```
+
+## Linked Jira Context
+
+Any PR with a Jira-style work item reference should automatically become a compound work
+object, not just a GitHub object with a loose badge.
+
+Resolution inputs:
+
+- PR title, body, branch name, commit messages, and repository/project configured key
+  patterns
+- current `t3work` project backlog cache and rich work-item context bundle
+- explicit user-added links when automatic matching is ambiguous
+
+Context package:
+
+- primary work item summary, acceptance criteria, description, comments, attachments, and
+  status
+- parent epic, subtasks, blockers, related issues, linked PRs, and recent ticket activity
+- confidence score and evidence for each inferred link
+- stale/missing markers when the Jira bundle needs refresh
+
+Rules:
+
+- automatic matches can attach read context without user friction
+- ambiguous matches show a small picker before becoming primary context
+- agents receive both the raw refs and rendered summaries so they can cite exact sources
+- writes to Jira remain separate draft-first mutations; a PR recipe must not silently
+  update ticket status or comments while posting GitHub review output
+
+Example:
+
+```text
+PR title: "ABC-123 fix retry loop for cancelled sessions"
+Primary context: ABC-123
+Related context: parent epic, linked bug, previous PRs touching same component
+Agent package: Jira bundle + full PR diff + unresolved review threads + checkout path
+```
+
+## Agent Sidecar And Worktree Context
+
+The PR page should behave like ticket detail: main work object on the left, agent sidecar
+on the right.
+
+Sidecar responsibilities:
+
+- show quick recipes ranked for PR state, profile, linked work item, and selected object
+- show current context attachments before launch
+- show existing child sessions tied to the PR and linked work item
+- expose refresh buttons for PR context, Jira context, checks, and local checkout state
+- surface pending draft mutations for review before any GitHub or Jira write
+- mount as composable `sidecar.section` miniapps so teams can reorder, hide, or replace
+  sections per project/profile
+
+Agent context must include:
+
+- full PR overview, description, files manifest, diff chunks or full diff refs, comments,
+  reviews, review threads, commits, and checks
+- linked Jira work-item bundle and relatives
+- repository identity, base/head SHAs, branch names, remote URLs, and provider host
+- local worktree path for the checked-out PR branch when an implementation recipe needs
+  code access
+- project recipes, coding conventions, prior artifacts, and relevant knowledge-base refs
+
+Checkout rules:
+
+- review-only recipes may run from cached PR artifacts without checkout
+- implementation or comment-handling recipes must prepare a repository-scoped worktree
+  using existing linked-repository services
+- checkout state is visible and refreshable; stale head SHA blocks write/implementation
+  flows until the user refreshes or accepts the stale context
+- generated branches and commits stay on the user's fork/remotes per the repository's PR
+  policy
 
 ## Recipes And Draft Mutations
 
@@ -459,6 +655,9 @@ Built-in recipe candidates:
 - draft a PR body using the project template
 - show where this PR is deployed
 - summarize deployment or release blockers
+- refresh PR context and show new comments since last agent run
+- resolve threads that are addressed by this branch, with draft review summary
+- learn from this merged PR and propose project knowledge updates
 
 Mutation policy stays consistent with the broader `t3work` model:
 
@@ -468,6 +667,113 @@ Mutation policy stays consistent with the broader `t3work` model:
 - the UI must show the exact outbound GitHub payload before commit
 - multi-comment review submissions should be previewed as one review package, not as a
   hidden sequence of calls
+- resolving review threads is draft-first and must show which thread IDs will change
+- refresh/check-for-new-comments is read-only and can run automatically on a low-frequency
+  poll, but notification and auto-recipe launch require explicit project settings
+
+Minimum GitHub mutation capabilities:
+
+- create issue comment on the PR conversation
+- create review comment on a file/line/range
+- reply to an existing review comment/thread
+- submit a pending review with approve/comment/request-changes state
+- dismiss or edit drafts before submission
+- resolve and unresolve review threads when the provider API and permissions allow it
+- request or remove reviewers where project policy permits it
+
+Example review package:
+
+```text
+Action: "Handle comments"
+Input: 4 unresolved review threads
+Agent output:
+- code changes in /worktrees/owner-repo-pr-123
+- draft replies for 3 threads
+- 1 thread marked "needs human decision"
+- review summary payload preview
+User commits GitHub writes only after preview.
+```
+
+## Freshness And Notifications
+
+Phase 1 should use explicit refresh plus polling, not a new realtime dependency.
+
+Required freshness states:
+
+- PR metadata stale
+- diff stale because head SHA changed
+- comments stale because new activity exists
+- checks stale or still running
+- Jira context stale
+- local checkout stale compared with PR head
+
+Refresh actions:
+
+- refresh PR now
+- refresh comments only
+- refresh checks only
+- refresh linked Jira context
+- update local worktree to current PR head
+
+Notification plan:
+
+- first rollout: project-configured polling and `new since last visit` indicators
+- later: provider webhook/subscription adapter if polling cost or latency becomes a real
+  problem
+- no automatic agent work from new comments until the user enables a specific recipe rule
+  such as `when reviewer comments appear, prepare a draft response checklist`
+
+## Merged PR Learning Workflow
+
+Merged PRs are valuable project memory. This is a recipe-backed workflow, not a new
+runtime primitive: a user clicks a recipe, or a project routine triggers after merge, and
+the `.workflow.ts` body scans the PR, extracts candidate knowledge, and proposes
+reviewable updates.
+
+Recipe shape:
+
+- surface: `github.pull_request.detail.sidepanel`
+- optional routine trigger: merged PR polling or provider event, implemented as a normal
+  scheduled workflow/routine from Epic 27
+- workflow: `.workflow.ts` using PR context, linked Jira context, approved artifacts, and
+  knowledge tools
+- output: a durable artifact plus reviewable knowledge-base mutation drafts
+
+Inputs:
+
+- merged PR diff, commits, checks, review comments, issue comments, and final review state
+- linked Jira work item and related ticket context
+- agent artifacts and draft mutations that were approved or rejected
+- final branch/worktree changes and test evidence
+
+Outputs:
+
+- durable `merged-pr-learning` artifact linked to the PR, work item, repository, and
+  creating workflow run
+- extracted patterns such as recurring review comments, accepted fixes, risky files,
+  missing tests, preferred reviewer language, and project conventions
+- candidate Knowledge Workbench updates that require user review before becoming shared
+  project knowledge, following Epic 26's maintain-knowledge model
+
+Rules:
+
+- do not train silently from private code or comments
+- distinguish facts from inferred conventions
+- store citations back to PR comments, commits, file paths, and Jira refs
+- approved knowledge becomes normal project context/tool-catalog data that implementation
+  and review agents can query later
+- recipe completion should offer to save/tune the workflow as a project-scoped action
+  recipe when the user repeats the flow, following the existing save-as-recipe rule
+
+Example:
+
+```text
+Merged PR ABC-123/#456:
+- Reviewer repeatedly asked for cancellation-path tests.
+- Final fix added tests in apps/server/src/session/*.test.ts.
+- Candidate knowledge: "For session cancellation changes, include retry and cancelled
+  subprocess tests."
+```
 
 ## Adjacent Authoring And Ops Slice
 

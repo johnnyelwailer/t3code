@@ -14,6 +14,7 @@ export function TicketRichContent({
   projectId,
   ticketKey,
   accountId,
+  httpBaseUrl,
   workspaceRoot,
   afterDescription,
   attachments,
@@ -28,6 +29,7 @@ export function TicketRichContent({
   projectId: string;
   ticketKey: string;
   accountId?: string;
+  httpBaseUrl?: string;
   workspaceRoot?: string;
   afterDescription?: ReactNode;
   attachments: JiraAttachment[];
@@ -42,11 +44,12 @@ export function TicketRichContent({
         projectId,
         ticketKey,
         ...(accountId ? { accountId } : {}),
+        ...(httpBaseUrl ? { httpBaseUrl } : {}),
         ...(workspaceRoot ? { workspaceRoot } : {}),
         ...(htmlBaseUrl ? { baseUrl: htmlBaseUrl } : {}),
         attachments,
       }),
-    [accountId, attachments, htmlBaseUrl, projectId, ticketKey, workspaceRoot],
+    [accountId, attachments, htmlBaseUrl, httpBaseUrl, projectId, ticketKey, workspaceRoot],
   );
 
   return (
