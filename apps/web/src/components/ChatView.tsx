@@ -202,6 +202,7 @@ import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import type { ChatViewT3workExtensionProps } from "~/t3work/t3work-chatViewExtensions";
 import { appendContextAttachmentsToPrompt } from "~/t3work/chat/t3work-prepareThreadContextAttachments";
+import { buildContextAttachmentMessageExt } from "~/t3work/t3work-messageContextAttachments";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
@@ -3837,6 +3838,9 @@ function ChatViewContent(props: ChatViewProps) {
       }
       return;
     }
+    const t3workMessageExt = buildContextAttachmentMessageExt(contextAttachmentsResult.value, {
+      displayText: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+    });
     const messageTextWithT3workContext = appendContextAttachmentsToPrompt(
       messageTextForSend,
       contextAttachmentsResult.value,
@@ -3884,6 +3888,7 @@ function ChatViewContent(props: ChatViewProps) {
         role: "user",
         text: outgoingMessageText,
         ...(optimisticAttachments.length > 0 ? { attachments: optimisticAttachments } : {}),
+        ...(t3workMessageExt ? { t3workExt: t3workMessageExt } : {}),
         turnId: null,
         createdAt: messageCreatedAt,
         updatedAt: messageCreatedAt,
@@ -4010,7 +4015,8 @@ function ChatViewContent(props: ChatViewProps) {
           runtimeMode,
           interactionMode,
           createdAt: messageCreatedAt,
-          hasAttachments: turnAttachmentsResult.value.length > 0,
+          hasAttachments:
+            turnAttachmentsResult.value.length > 0 || contextAttachmentsResult.value.length > 0,
         });
         if (overrideResult === "resolved-input") {
           sendInFlightRef.current = false;
@@ -4034,6 +4040,7 @@ function ChatViewContent(props: ChatViewProps) {
             role: "user",
             text: outgoingMessageText,
             attachments: turnAttachmentsResult.value,
+            ...(t3workMessageExt ? { t3workExt: t3workMessageExt } : {}),
           },
           modelSelection: ctxSelectedModelSelection,
           titleSeed: title,

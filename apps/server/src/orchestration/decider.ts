@@ -430,6 +430,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "user",
           text: command.message.text,
           attachments: command.message.attachments,
+          ...(command.message.t3workExt !== undefined
+            ? { t3workExt: command.message.t3workExt }
+            : {}),
           turnId: null,
           streaming: false,
           createdAt: command.createdAt,

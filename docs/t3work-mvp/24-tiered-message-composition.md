@@ -656,6 +656,7 @@ export const inline = defineInlineWidget({
 ```
 Message
   └─ content (markdown or MDX)        ← T1 inline widgets
+  └─ t3workExt.displayText?           ← user-facing text when provider text includes hidden context
   └─ t3workExt.view?                  ← T2 view (one)
   └─ t3workExt.attachments?           ← context attachments (existing)
 ```
@@ -663,9 +664,16 @@ Message
 The web app dispatches at the message-renderer level:
 
 - Default upstream behaviour: `ChatMarkdown.tsx` with `react-markdown` (unchanged).
+- When `t3workExt.displayText` is set: render it as the conversation body instead of
+  `message.text`. `message.text` remains the provider-facing serialization and may include
+  injected context, paths, or other agent-only framing. The renderer must not parse provider
+  text to recover attachment cards.
 - When `t3workExt.mdx === true` or any T1 widget is detected: route to
   `t3work-MdxChatRenderer.tsx` (new, additive) using `safe-mdx` with the resolved
   per-surface component map.
+- When `t3workExt.attachments` is set: render attachment cards from that structured payload.
+  Context-bound sends and kickoff messages must store cards here; text syntax is only for the
+  provider-facing prompt.
 - When `t3workExt.view` is set: render the T2 view in addition to (or instead of) the
   message body, per the view's `placement` (`conversation.inlineCard` is rendered
   beneath the message; `conversation.sidecar` opens the right panel).

@@ -127,6 +127,7 @@ export type T3workMessageWorkflowReply = typeof T3workMessageWorkflowReply.Type;
 
 export const T3workMessageExt = Schema.Struct({
   author: Schema.optional(T3workMessageAuthor),
+  displayText: Schema.optional(Schema.String),
   visibleToUser: Schema.optional(Schema.Boolean),
   visibleToAgent: Schema.optional(Schema.Boolean),
   status: Schema.optional(T3workMessageStatus),

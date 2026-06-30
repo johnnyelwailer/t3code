@@ -147,7 +147,7 @@ const TEST_KICKOFF_WORKFLOW: T3workKickoffWorkflow = {
 };
 
 describe("runThreadBootstrap", () => {
-  it("includes queued thread context in kickoff messages and clears it after success", async () => {
+  it("stores queued thread context as kickoff message attachments and clears it after success", async () => {
     const backend = createBackend();
     useT3WorkAddToChatStore.getState().enqueueThreadAttachment("thread-1", {
       id: "ctx-1",
@@ -196,6 +196,17 @@ describe("runThreadBootstrap", () => {
         type: "thread.turn.start",
         message: expect.objectContaining({
           text: "### Added Context: Open PR\n\nTell me something about this",
+          t3workExt: expect.objectContaining({
+            displayText: "Tell me something about this",
+            attachments: [
+              expect.objectContaining({
+                kind: "resource",
+                resource: expect.objectContaining({
+                  text: "### Added Context: Open PR",
+                }),
+              }),
+            ],
+          }),
         }),
       }),
     );
@@ -249,6 +260,17 @@ describe("runThreadBootstrap", () => {
       expect.objectContaining({
         message: expect.objectContaining({
           text: expect.stringContaining("Open PR"),
+          t3workExt: expect.objectContaining({
+            displayText: "Tell me something about this",
+            attachments: [
+              expect.objectContaining({
+                kind: "resource",
+                resource: expect.objectContaining({
+                  text: expect.stringContaining("Open PR"),
+                }),
+              }),
+            ],
+          }),
         }),
       }),
     );

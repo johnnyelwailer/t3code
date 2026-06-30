@@ -110,6 +110,10 @@ import {
   findActiveWorkflowInputMessageId,
   T3workSystemTimelineRow,
 } from "~/t3work/chat/t3work-SystemTimelineRow";
+import {
+  getT3workRenderableAttachments,
+  T3workMessageAttachmentList,
+} from "~/t3work/chat/t3work-messageExtViews";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -522,7 +526,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const userImages = row.message.attachments ?? [];
-  const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
+  const displayedUserMessage = deriveDisplayedUserMessageState(
+    row.message.t3workExt?.displayText ?? row.message.text,
+  );
   const terminalContexts = displayedUserMessage.contexts;
   const previewAnnotations: ParsedPreviewAnnotation[] = [];
   let visibleText = displayedUserMessage.visibleText;
@@ -540,6 +546,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const previewImages = userImages.filter((image) => image.name.startsWith("preview-annotation-"));
   const regularImages = userImages.filter((image) => !image.name.startsWith("preview-annotation-"));
   const canRevertAgentWork = typeof row.revertTurnCount === "number";
+  const t3workAttachments = getT3workRenderableAttachments(row.message);
 
   return (
     <div className="group flex flex-col items-end gap-1">
@@ -592,6 +599,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                 context={context}
               />
             ))}
+          </div>
+        ) : null}
+        {t3workAttachments.length > 0 ? (
+          <div className="mb-2">
+            <T3workMessageAttachmentList attachments={t3workAttachments} />
           </div>
         ) : null}
         <CollapsibleUserMessageBody

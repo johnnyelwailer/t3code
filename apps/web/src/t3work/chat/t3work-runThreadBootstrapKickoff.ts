@@ -18,6 +18,7 @@ import {
 import type { ThreadBootstrapDispatchState } from "~/t3work/chat/t3work-threadBootstrapPlan";
 import { randomUUID } from "~/lib/utils";
 import { useT3WorkAddToChatStore } from "~/t3work/t3work-addToChatStore";
+import { buildContextAttachmentMessageExt } from "~/t3work/t3work-messageContextAttachments";
 import type { T3workTurnToolContext } from "~/t3work/t3work-threadToolContext";
 import type { T3workKickoffWorkflow } from "~/t3work/t3work-types";
 
@@ -112,6 +113,9 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
     input.initialUserMessage,
     preparedContextAttachments,
   );
+  const t3workMessageExt = buildContextAttachmentMessageExt(preparedContextAttachments, {
+    displayText: input.initialUserMessage,
+  });
 
   if (hasWorkflowLaunchPath(input.kickoffWorkflow)) {
     await dispatchThreadBootstrapCreateWithRecovery({
@@ -164,6 +168,7 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
       role: "user",
       text: bootstrapMessage,
       attachments: [],
+      ...(t3workMessageExt ? { t3workExt: t3workMessageExt } : {}),
     },
     modelSelection: input.kickoffModelSelection,
     titleSeed: input.title,
