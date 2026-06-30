@@ -1,12 +1,10 @@
 import { useCallback, useEffect } from "react";
-import { PanelRightOpenIcon } from "lucide-react";
 import { useCanGoBack } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { ThreadChatView } from "~/t3work/chat/t3work-ThreadChatView";
-import { Button } from "~/t3work/components/ui/t3work-button";
+import { OpenEmbeddedThreadControl } from "~/t3work/t3work-OpenEmbeddedThreadControl";
 import type { ProjectThread, ViewState } from "~/t3work/t3work-types";
 import { navigateBackWithFallback } from "~/t3work/t3work-historyBack";
-import { runT3workViewTransition } from "~/t3work/t3work-runViewTransition";
 
 export function AppThreadPane({
   view,
@@ -89,21 +87,10 @@ export function AppThreadPane({
         : {})}
       {...(resolvedThread && canOpenEmbedded
         ? {
-            headerAccessory: (
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                className="shrink-0 text-muted-foreground/80"
-                onClick={() =>
-                  runT3workViewTransition(() =>
-                    onOpenEmbeddedThread(view.projectId, resolvedThread.id),
-                  )
-                }
-                aria-label="Open side-by-side view"
-                title="Open side-by-side view"
-              >
-                <PanelRightOpenIcon className="size-4" />
-              </Button>
+            titleBarControlsAccessory: (
+              <OpenEmbeddedThreadControl
+                onOpen={() => onOpenEmbeddedThread(view.projectId, resolvedThread.id)}
+              />
             ),
           }
         : {})}
