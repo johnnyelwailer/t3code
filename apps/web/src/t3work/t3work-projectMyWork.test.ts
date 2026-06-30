@@ -125,49 +125,6 @@ describe("project my work", () => {
     ]);
   });
 
-  it("keeps child tasks visible under assigned parents", () => {
-    const story = createTicket({
-      id: "story",
-      issueType: "Story",
-      ref: { displayId: "PROJ-2", title: "Story" },
-      assignee: "Philip Jonientz",
-    });
-    const child = createTicket({
-      id: "child",
-      issueType: "Sub-task",
-      parentId: story.id,
-      ref: { displayId: "PROJ-3", title: "Child task" },
-      assignee: "Alex",
-    });
-
-    const filteredTickets = filterProjectMyWorkTickets({
-      tickets: [story, child],
-      identity: { displayName: "Philip Jonientz" },
-      query: "",
-      statusCategory: "all",
-      excludedTypeKeys: [],
-      selectedPriority: "all",
-      selectedStatus: "all",
-    });
-    const hierarchy = buildProjectMyWorkVisibleHierarchy([story, child], filteredTickets, {
-      sortBy: "updated",
-      sortDirection: "desc",
-      excludedVisibleTypeKeys: [],
-    });
-
-    expect(hierarchy.visibleTickets.map((ticket) => ticket.id)).toEqual(["story", "child"]);
-    expect(
-      hierarchy.rows.map((row) => ({
-        id: row.ticket.id,
-        depth: row.depth,
-        isContextOnly: row.isContextOnly,
-      })),
-    ).toEqual([
-      { id: "story", depth: 0, isContextOnly: false },
-      { id: "child", depth: 1, isContextOnly: true },
-    ]);
-  });
-
   it("can hide epic context while keeping assigned descendants visible", () => {
     const epic = createTicket({
       id: "epic",

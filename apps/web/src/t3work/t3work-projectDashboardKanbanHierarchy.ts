@@ -36,6 +36,5 @@ export function buildProjectDashboardKanbanLaneHierarchy(
   return buildVisibleBacklogHierarchy(
     collectProjectDashboardKanbanHierarchyTickets(hierarchy),
     laneTickets,
-    { includeDescendants: true },
   ).visibleHierarchy;
 }

@@ -16,7 +16,6 @@ import {
   buildProjectTicketKanbanColumns,
   getProjectTicketKanbanColumnId,
 } from "./t3work-projectTicketStatus";
-import { buildProjectDashboardKanbanLaneHierarchy } from "./t3work-projectDashboardKanbanHierarchy";
 
 describe("project my work kanban", () => {
   it("can hide specific kanban lanes while keeping descendants on visible lanes", () => {
@@ -99,35 +98,6 @@ describe("project my work kanban", () => {
     expect(columns).toHaveLength(1);
     expect(columns[0]?.title).toBe("In Progress");
     expect(columns[0]?.items.map((ticket) => ticket.id)).toEqual(["parent", "child"]);
-  });
-
-  it("keeps child tasks below assigned parents in hierarchy kanban lanes", () => {
-    const story = createTicket({
-      id: "story",
-      issueType: "Story",
-      status: "In Progress",
-      ref: { displayId: "PROJ-2", title: "Story" },
-      assignee: "Philip Jonientz",
-    });
-    const child = createTicket({
-      id: "child",
-      issueType: "Sub-task",
-      status: "To Do",
-      parentId: story.id,
-      ref: { displayId: "PROJ-3", title: "Child task" },
-      assignee: "Alex",
-    });
-    const hierarchy = buildProjectMyWorkVisibleHierarchy([story, child], [story], {
-      sortBy: "updated",
-      sortDirection: "desc",
-      excludedVisibleTypeKeys: [],
-    });
-    const laneHierarchy = buildProjectDashboardKanbanLaneHierarchy(hierarchy.hierarchy, [story]);
-
-    expect(laneHierarchy.roots.map((ticket) => ticket.id)).toEqual(["story"]);
-    expect(laneHierarchy.childrenByParentId.get("story")?.map((ticket) => ticket.id)).toEqual([
-      "child",
-    ]);
   });
 
   it("builds stable issue type options and recognizes epics", () => {
