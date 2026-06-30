@@ -15,7 +15,14 @@ export function findAtlassianAccountDisplayName(
     return undefined;
   }
 
-  return accounts.find((account) => account.id === accountId)?.label;
+  const normalizedAccountId = accountId.trim().replace(/\/+$/, "").toLocaleLowerCase();
+  return accounts.find((account) => {
+    if (account.id.trim().toLocaleLowerCase() === normalizedAccountId) {
+      return true;
+    }
+    const accountUrl = account.accountUrl?.trim().replace(/\/+$/, "").toLocaleLowerCase();
+    return accountUrl === normalizedAccountId;
+  })?.label;
 }
 
 export function readCachedAtlassianCurrentUserDisplayName(accountId?: string): string | undefined {
