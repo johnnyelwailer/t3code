@@ -33,6 +33,7 @@ describe("drainWorkItemContextSyncQueueOnce", () => {
         id: "sync-proj-1",
         projectId: "Project Alpha",
         ticketKey: "PROJ-1",
+        threadId: "thread-1",
       },
     ];
 
@@ -60,6 +61,7 @@ describe("drainWorkItemContextSyncQueueOnce", () => {
     expect(ensureFullWorkItemContextBundle).toHaveBeenCalledTimes(1);
     expect(ensureFullWorkItemContextBundle).toHaveBeenCalledWith({
       projectId: "Project Alpha",
+      request: queuedRequests[0],
       ticket,
     });
   });

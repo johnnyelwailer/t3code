@@ -8,6 +8,11 @@ import {
   createTicketKickoffThread,
   openEmbeddedProjectThread,
 } from "~/t3work/t3work-appThreadMutations";
+import {
+  drainQueuedWorkItemContextSyncRequests,
+  readQueuedWorkItemContextSyncRequests,
+  resetWorkItemContextSyncQueueForTests,
+} from "~/t3work/hooks/t3work-useWorkItemContextSyncQueue";
 import { useT3WorkPinnedSidebarStore } from "~/t3work/t3work-pinnedSidebarStore";
 import { useT3WorkSidebarNavPreferencesStore } from "~/t3work/t3work-sidebarNavPreferencesStore";
 import { buildTicketSidebarPinnedItemId } from "~/t3work/t3work-sidebarPinningTypes";
@@ -43,15 +48,22 @@ function createDashboardThread(): ProjectThread {
 describe("createTicketKickoffThread", () => {
   beforeEach(() => {
     useT3WorkPinnedSidebarStore.setState({ hydrated: true, items: [] });
+    resetWorkItemContextSyncQueueForTests();
     useT3WorkSidebarNavPreferencesStore.setState({
       hydrated: true,
       preferencesByProjectId: {
         "project-1": {
           hiddenItemIds: [
-            buildTicketSidebarPinnedItemId({ projectId: "project-1", ticketId: "ticket-9" }),
+            buildTicketSidebarPinnedItemId({
+              projectId: "project-1",
+              ticketId: "ticket-9",
+            }),
           ],
           orderedItemIds: [
-            buildTicketSidebarPinnedItemId({ projectId: "project-1", ticketId: "ticket-8" }),
+            buildTicketSidebarPinnedItemId({
+              projectId: "project-1",
+              ticketId: "ticket-8",
+            }),
           ],
         },
       },
@@ -106,10 +118,98 @@ describe("createTicketKickoffThread", () => {
     ).toEqual({
       hiddenItemIds: [],
       orderedItemIds: [
-        buildTicketSidebarPinnedItemId({ projectId: "project-1", ticketId: "ticket-9" }),
-        buildTicketSidebarPinnedItemId({ projectId: "project-1", ticketId: "ticket-8" }),
+        buildTicketSidebarPinnedItemId({
+          projectId: "project-1",
+          ticketId: "ticket-9",
+        }),
+        buildTicketSidebarPinnedItemId({
+          projectId: "project-1",
+          ticketId: "ticket-8",
+        }),
       ],
     });
+  });
+
+  it("keeps delayed ticket context queued until project tickets load", async () => {
+    const thread = createProjectThread();
+    const addToChatFromRequest = vi.fn(async () => undefined);
+    const backend = {} as never;
+    const project = {
+      id: "project-1",
+      title: "Project One",
+      workspace: { rootPath: "/tmp/project-one" },
+    } as never;
+
+    await createTicketKickoffThread({
+      addToChatFromRequest,
+      backend,
+      onOpenTicket: vi.fn(),
+      store: {
+        resolveProjectId: vi.fn(() => "project-1"),
+        createThreadForTicket: vi.fn(() => thread),
+        allProjects: [project],
+        getTicketsForProject: vi.fn(() => []),
+      } as never,
+      threadInput: {
+        projectId: "project-from-route",
+        ticketId: "ticket-9",
+        ticketDisplayId: "PROJ-9",
+        kickoffMessage: "Investigate the regression",
+        kickoffModelSelection: { instanceId: "codex" as any, model: "gpt-5.4" },
+        kickoffRuntimeMode: "full-access",
+        kickoffInteractionMode: "default",
+        selectedToolIds: [],
+        kickoffContextAttachments: [],
+        githubActivityItems: [],
+      },
+    });
+
+    expect(addToChatFromRequest).not.toHaveBeenCalled();
+    expect(readQueuedWorkItemContextSyncRequests()).toHaveLength(1);
+
+    await drainQueuedWorkItemContextSyncRequests({
+      addToChatFromRequest,
+      backend,
+      project,
+      projectTickets: [],
+    });
+
+    expect(addToChatFromRequest).not.toHaveBeenCalled();
+    expect(readQueuedWorkItemContextSyncRequests()).toHaveLength(1);
+
+    await drainQueuedWorkItemContextSyncRequests({
+      addToChatFromRequest,
+      backend,
+      project,
+      projectTickets: [
+        {
+          id: "ticket-9",
+          projectId: "Project One",
+          status: "In Progress",
+          updatedAt: "2026-05-26T12:00:00.000Z",
+          ref: {
+            provider: "atlassian",
+            kind: "issue",
+            id: "PROJ-9",
+            displayId: "PROJ-9",
+            title: "Investigate context sync",
+            type: "Bug",
+            url: "https://example.test/browse/PROJ-9",
+            projectId: "PROJ",
+          },
+        },
+      ],
+    });
+
+    expect(addToChatFromRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: "project-1",
+        targetLabel: "PROJ-9 Investigate context sync",
+        projectWorkspaceRoot: "/tmp/project-one",
+      }),
+      { type: "thread", threadId: "thread-1" },
+    );
+    expect(readQueuedWorkItemContextSyncRequests()).toHaveLength(0);
   });
 
   it("queues generated ticket context directly on the created kickoff thread", async () => {
