@@ -4,6 +4,7 @@ import {
   buildExistingProjectThreadViewState,
   buildProjectThreadViewState,
   isEmbeddedProjectThread,
+  mergeRouteAndStoreView,
 } from "./t3work-projectThreadViewState";
 
 describe("buildProjectThreadViewState", () => {
@@ -84,5 +85,84 @@ describe("isEmbeddedProjectThread", () => {
     expect(isEmbeddedProjectThread({ dashboardMode: "my-work" })).toBe(true);
     expect(isEmbeddedProjectThread({ ticketId: "ticket-1" })).toBe(true);
     expect(isEmbeddedProjectThread({})).toBe(false);
+  });
+});
+
+describe("mergeRouteAndStoreView", () => {
+  it("falls back to store view when route view is absent", () => {
+    const storeView = {
+      type: "dashboard" as const,
+      projectId: "project-1",
+      embeddedThreadId: "thread-1",
+    };
+
+    expect(mergeRouteAndStoreView(null, storeView)).toEqual(storeView);
+    expect(mergeRouteAndStoreView(undefined, storeView)).toEqual(storeView);
+  });
+
+  it("keeps store embeddedThreadId on dashboard routes until URL catches up", () => {
+    expect(
+      mergeRouteAndStoreView(
+        { type: "dashboard", projectId: "project-1" },
+        { type: "dashboard", projectId: "project-1", embeddedThreadId: "thread-1" },
+      ),
+    ).toEqual({
+      type: "dashboard",
+      projectId: "project-1",
+      embeddedThreadId: "thread-1",
+    });
+  });
+
+  it("keeps store embeddedThreadId on matching ticket routes until URL catches up", () => {
+    expect(
+      mergeRouteAndStoreView(
+        { type: "ticket", projectId: "project-1", ticketId: "ticket-1" },
+        {
+          type: "ticket",
+          projectId: "project-1",
+          ticketId: "ticket-1",
+          embeddedThreadId: "thread-1",
+        },
+      ),
+    ).toEqual({
+      type: "ticket",
+      projectId: "project-1",
+      ticketId: "ticket-1",
+      embeddedThreadId: "thread-1",
+    });
+  });
+
+  it("prefers route embeddedThreadId when both route and store provide one", () => {
+    expect(
+      mergeRouteAndStoreView(
+        { type: "dashboard", projectId: "project-1", embeddedThreadId: "thread-route" },
+        { type: "dashboard", projectId: "project-1", embeddedThreadId: "thread-store" },
+      ),
+    ).toEqual({
+      type: "dashboard",
+      projectId: "project-1",
+      embeddedThreadId: "thread-route",
+    });
+  });
+
+  it("does not merge embeddedThreadId across different projects or view types", () => {
+    const routeDashboard = { type: "dashboard" as const, projectId: "project-1" };
+
+    expect(
+      mergeRouteAndStoreView(routeDashboard, {
+        type: "dashboard",
+        projectId: "project-2",
+        embeddedThreadId: "thread-1",
+      }),
+    ).toEqual(routeDashboard);
+
+    expect(
+      mergeRouteAndStoreView(routeDashboard, {
+        type: "ticket",
+        projectId: "project-1",
+        ticketId: "ticket-1",
+        embeddedThreadId: "thread-1",
+      }),
+    ).toEqual(routeDashboard);
   });
 });

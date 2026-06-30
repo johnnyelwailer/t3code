@@ -86,6 +86,7 @@
     "scripts/lib/additive-guard-core.mjs",
     "scripts/lib/additive-guard-cache.mjs",
     "scripts/lib/additive-guard-config.mjs",
-    "scripts/lib/sync-upstream-core.mjs"
+    "scripts/lib/sync-upstream-core.mjs",
+    ".cursor/rules/no-upstream-prs.mdc"
   ]
 }

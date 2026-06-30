@@ -43,3 +43,4 @@ node_modules/
 *.log
 .env*
 !.env.example
+.githooks/t3work-additive-guard-cache.json
