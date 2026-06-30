@@ -787,8 +787,8 @@ label:has(> select#reasoning-effort) select {
 }
 
 /* ----------------------------------------------------------------------------
-   Nexi AI onboarding ("Pick your working style") theme
-   Design source: Figma "Nexi AI" (light + dark). Brand tokens are scoped to
+   Nexi Work onboarding ("Pick your working style") theme
+   Design source: Figma "Nexi Work" (light + dark). Brand tokens are scoped to
    `.t3work-onboarding`; the profile-card classes fall back to app tokens
    (`var(--card)` etc.) so they also render correctly when reused outside the
    onboarding surface (e.g. the create-project wizard).

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ArrowRight, Check, Search, Sparkles } from "lucide-react";
 
 import { APP_STAGE_LABEL } from "~/branding";
+import { APP_BASE_NAME, APP_TAGLINE } from "~/t3work/t3work-branding";
 import {
   listT3workProjectSetupCardOptions,
   T3WORK_PROFILE_CATEGORIES,
@@ -52,9 +53,9 @@ export function T3workSetupWelcomeSurface({ onCreate }: { onCreate: () => void }
             <Sparkles className="size-4" />
           </span>
           <span className="truncate text-sm font-semibold" style={{ color: "var(--nx-heading)" }}>
-            t3work
+            {APP_BASE_NAME}
           </span>
-          <span className="nx-brand-badge">Nexi AI</span>
+          <span className="nx-brand-badge">{APP_TAGLINE}</span>
         </div>
         {APP_STAGE_LABEL ? <span className="nx-version">{APP_STAGE_LABEL}</span> : null}
       </header>
@@ -66,9 +67,9 @@ export function T3workSetupWelcomeSurface({ onCreate }: { onCreate: () => void }
               <Sparkles className="size-3.5" />
               Setup wizard
             </span>
-            <h1 className="nx-h1 max-w-[16rem]">Bring your Jira work into t3work.</h1>
+            <h1 className="nx-h1 max-w-[16rem]">Bring your Jira work into {APP_BASE_NAME}.</h1>
             <p className="nx-sub max-w-[18rem]">
-              Connect Jira, choose how Nexi AI should support your team and start with guided
+              Connect Jira, choose how {APP_BASE_NAME} should support your team and start with guided
               project setup.
             </p>
           </div>
@@ -101,7 +102,7 @@ export function T3workSetupWelcomeSurface({ onCreate }: { onCreate: () => void }
               <span className="nx-eyebrow">Step 1 of 3</span>
               <h2 className="nx-h2">Pick your working style</h2>
               <p className="nx-sub max-w-[40rem]">
-                Choose the role that best matches how Nexi AI should support your work. You can
+                Choose the role that best matches how {APP_BASE_NAME} should support your work. You can
                 change this later.
               </p>
             </div>
