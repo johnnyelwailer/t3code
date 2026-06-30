@@ -86,6 +86,8 @@ The user should be able to:
 - [Epic 30: Capacity And Teams](./30-capacity-and-teams.md)
 - [Epic 31: Composable Project Views](./31-composable-project-views.md)
 - [Epic 32: Project Provider And Tool Policies](./32-project-provider-tool-policies.md)
+- [Epic 34: Daily Standup](./34-daily-standup.md)
+- [Epic 35: Work Item Change Sets](./35-work-item-change-sets.md)
 
 ## Supporting Docs
 
