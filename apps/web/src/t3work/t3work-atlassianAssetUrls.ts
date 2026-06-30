@@ -1,6 +1,7 @@
 export function buildAtlassianAssetContentUrl(input: {
   accountId: string;
   url: string;
+  httpBaseUrl?: string;
   workspaceRoot?: string;
   relativePath?: string;
 }): string {
@@ -16,5 +17,6 @@ export function buildAtlassianAssetContentUrl(input: {
     params.set("relativePath", input.relativePath);
   }
 
-  return `/api/t3work/atlassian/asset/content?${params.toString()}`;
+  const path = `/api/t3work/atlassian/asset/content?${params.toString()}`;
+  return input.httpBaseUrl ? new URL(path, input.httpBaseUrl).toString() : path;
 }

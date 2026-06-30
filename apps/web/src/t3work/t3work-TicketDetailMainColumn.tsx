@@ -163,6 +163,7 @@ export function TicketDetailMainColumn({
         projectId={projectId}
         ticketKey={displayId}
         {...(project.source.accountId ? { accountId: project.source.accountId } : {})}
+        {...(backend?.httpBaseUrl ? { httpBaseUrl: backend.httpBaseUrl } : {})}
         {...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {})}
         onDescriptionContextMenu={(event) =>
           handleSectionContextMenu(event, "description", `${displayId} description`, [

@@ -113,6 +113,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
   const projectWorkspace = createProjectWorkspaceBackendApi(httpBaseUrl);
 
   return {
+    httpBaseUrl,
     get state() {
       return state;
     },
