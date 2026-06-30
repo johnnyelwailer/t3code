@@ -1,9 +1,13 @@
-import { ArrowRight, BadgeCheck, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowRight, Check, Search, Sparkles } from "lucide-react";
 
-import { Button } from "~/t3work/components/ui/t3work-button";
+import { APP_STAGE_LABEL } from "~/branding";
+import { APP_BASE_NAME, APP_TAGLINE } from "~/t3work/t3work-branding";
 import {
   listT3workProjectSetupCardOptions,
+  T3WORK_PROFILE_CATEGORIES,
   T3workProjectSetupProfileCards,
+  type T3workProfileCategoryId,
 } from "~/t3work/t3work-ProjectSetupProfileCards";
 import {
   useT3workProjectSetupProfile,
@@ -11,111 +15,140 @@ import {
 } from "~/t3work/t3work-projectSetupProfile";
 
 const SETUP_STEPS = [
-  {
-    step: "01",
-    title: "Pick your style",
-    description: "Choose how technical, concise, and guided t3work should feel.",
-  },
-  {
-    step: "02",
-    title: "Connect Jira",
-    description: "Select the Atlassian site and project you want to work from.",
-  },
-  {
-    step: "03",
-    title: "Start working",
-    description: "GitHub links are optional. You can add them now or later.",
-  },
-] as const;
+  { step: 1, title: "Pick your style", state: "active" as const },
+  { step: 2, title: "Connect Jira", state: "next" as const },
+  { step: 3, title: "Start working", state: "todo" as const },
+];
 
 export function T3workSetupWelcomeSurface({ onCreate }: { onCreate: () => void }) {
   const setupProfileId = useT3workProjectSetupProfile();
-  const selectedProfile = listT3workProjectSetupCardOptions().find(
-    (option) => option.id === setupProfileId,
-  );
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<T3workProfileCategoryId | "all">("all");
+
+  const allOptions = listT3workProjectSetupCardOptions();
+  const selectedProfile = allOptions.find((option) => option.id === setupProfileId);
+
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return allOptions.filter((option) => {
+      if (category !== "all" && option.category !== category) return false;
+      if (!normalizedQuery) return true;
+      const haystack =
+        `${option.title} ${option.badge} ${option.description} ${option.bullets.join(" ")}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [allOptions, category, query]);
 
   return (
-    <div className="relative flex flex-1 items-center justify-center overflow-auto p-4 sm:p-6">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-[radial-gradient(44rem_22rem_at_top,color-mix(in_srgb,var(--color-sky-400)_22%,transparent),transparent)] opacity-80" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_88%,white)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-amber-100))_100%)] dark:bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_92%,black)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-sky-950))_100%)]" />
+    <div
+      className="t3work-onboarding flex h-full min-h-0 w-full flex-col"
+      style={{ background: "var(--nx-bg)" }}
+    >
+      <header
+        className="flex shrink-0 items-center justify-between gap-4 px-4 py-3 sm:px-6"
+        style={{ borderBottom: "1px solid var(--nx-border)" }}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="nx-logo">
+            <Sparkles className="size-4" />
+          </span>
+          <span className="truncate text-sm font-semibold" style={{ color: "var(--nx-heading)" }}>
+            {APP_BASE_NAME}
+          </span>
+          <span className="nx-brand-badge">{APP_TAGLINE}</span>
+        </div>
+        {APP_STAGE_LABEL ? <span className="nx-version">{APP_STAGE_LABEL}</span> : null}
+      </header>
 
-      <section className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[2rem] border border-border/70 bg-card/85 p-4 shadow-2xl shadow-black/10 backdrop-blur sm:p-6 xl:p-8">
-        <div className="pointer-events-none absolute -left-10 top-14 size-40 rounded-full bg-sky-400/20 blur-3xl motion-safe:animate-pulse" />
-        <div
-          className="pointer-events-none absolute right-0 top-0 size-52 rounded-full bg-amber-300/20 blur-3xl motion-safe:animate-pulse"
-          style={{ animationDelay: "900ms" }}
-        />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <aside className="nx-rail flex w-full shrink-0 flex-col gap-7 p-8 lg:h-full lg:w-[340px] lg:overflow-y-auto">
+          <div className="flex flex-col gap-5">
+            <span className="nx-pill self-start">
+              <Sparkles className="size-3.5" />
+              Setup wizard
+            </span>
+            <h1 className="nx-h1 max-w-[16rem]">Bring your Jira work into {APP_BASE_NAME}.</h1>
+            <p className="nx-sub max-w-[18rem]">
+              Connect Jira, choose how {APP_BASE_NAME} should support your team and start with guided
+              project setup.
+            </p>
+          </div>
 
-        <div
-          className="relative grid items-start gap-8"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 24rem), 1fr))" }}
-        >
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-medium text-foreground/80 shadow-sm backdrop-blur-sm">
-              <Sparkles className="size-3.5 text-sky-500" />
-              First project setup
-            </div>
+          <div className="flex flex-col gap-4">
+            {SETUP_STEPS.map((item) => (
+              <div key={item.step} className="nx-step" data-state={item.state}>
+                <span className="nx-step-badge" data-state={item.state}>
+                  {item.state === "active" ? <Check className="size-3.5" /> : item.step}
+                </span>
+                <span className="nx-step-label">{item.title}</span>
+              </div>
+            ))}
+          </div>
 
-            <div className="max-w-2xl space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                Bring your Jira work into t3work in a few clicks.
-              </h1>
-              <p className="max-w-xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
-                Pick how you want t3work to communicate, connect a Jira project, and start from a
-                workspace that feels ready out of the box.
+          <div className="mt-auto flex flex-col gap-3 pt-4">
+            <button type="button" className="nx-cta" onClick={onCreate}>
+              Set up first project
+              <ArrowRight className="size-4" />
+            </button>
+            <button type="button" className="nx-skip self-center" onClick={onCreate}>
+              Skip for now
+            </button>
+          </div>
+        </aside>
+
+        <main className="min-h-0 flex-1 px-4 py-7 sm:px-6 sm:py-8 lg:h-full lg:overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-[900px] flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <span className="nx-eyebrow">Step 1 of 3</span>
+              <h2 className="nx-h2">Pick your working style</h2>
+              <p className="nx-sub max-w-[40rem]">
+                Choose the role that best matches how {APP_BASE_NAME} should support your work. You can
+                change this later.
               </p>
             </div>
 
-            <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 11rem), 1fr))" }}
-            >
-              {SETUP_STEPS.map((item) => (
-                <div
-                  key={item.step}
-                  className="rounded-2xl border border-border/65 bg-background/75 p-4 shadow-sm backdrop-blur-sm"
+            <label className="nx-search">
+              <Search className="size-4 shrink-0" aria-hidden="true" />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Find a role…"
+                aria-label="Find a role"
+              />
+            </label>
+
+            <div className="flex flex-wrap gap-2">
+              {T3WORK_PROFILE_CATEGORIES.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className="nx-tab"
+                  data-active={category === tab.id ? "true" : "false"}
+                  aria-pressed={category === tab.id}
+                  onClick={() => setCategory(tab.id)}
                 >
-                  <div className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">
-                    {item.step}
-                  </div>
-                  <h2 className="mt-2 text-sm font-semibold text-foreground">{item.title}</h2>
-                  <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                    {item.description}
-                  </p>
-                </div>
+                  {tab.label}
+                </button>
               ))}
             </div>
 
-            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              <Button className="w-full gap-2 sm:w-auto" onClick={onCreate}>
-                Set up first project
-                <ArrowRight className="size-4" />
-              </Button>
-              <div className="inline-flex min-w-0 items-center gap-2 rounded-full bg-background/75 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
-                <BadgeCheck className="size-3.5 text-emerald-500" />
-                Selected profile: {selectedProfile?.title ?? "Project Partner"}
-              </div>
-            </div>
-          </div>
+            {filteredOptions.length > 0 ? (
+              <T3workProjectSetupProfileCards
+                selectedProfileId={setupProfileId}
+                onSelectProfile={writeT3workProjectSetupProfile}
+                options={filteredOptions}
+              />
+            ) : (
+              <p className="nx-sub py-8 text-center">No roles match your search.</p>
+            )}
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold tracking-tight text-foreground">
-                Who are you, and how do you want to work?
-              </h2>
-              <p className="text-sm leading-6 text-muted-foreground">
-                Choose a style that matches your day-to-day work. You can change it later in
-                Settings or before creating a project.
-              </p>
-            </div>
-
-            <T3workProjectSetupProfileCards
-              selectedProfileId={setupProfileId}
-              onSelectProfile={writeT3workProjectSetupProfile}
-            />
+            <p className="nx-eyebrow pt-1">
+              Selected role: <span style={{ color: "var(--nx-accent)" }}>{selectedProfile?.title ?? "—"}</span>
+            </p>
           </div>
-        </div>
-      </section>
+        </main>
+      </div>
     </div>
   );
 }

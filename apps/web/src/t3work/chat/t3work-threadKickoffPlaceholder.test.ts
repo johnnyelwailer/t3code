@@ -86,8 +86,8 @@ describe("shouldShowThreadKickoffPlaceholder", () => {
   it("keeps workflow metadata only for workflow-backed quick starts", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot", "/tmp/project-alpha"),
-      profileId: "engineering-copilot",
+      project: createProject("developer", "/tmp/project-alpha"),
+      profileId: "developer",
       selectedWorkLabel: "PROJ-123",
       resourceKind: "ticket",
       availableContextKeys: ["project.summary", "ticket.summary"],
@@ -103,8 +103,8 @@ describe("shouldShowThreadKickoffPlaceholder", () => {
   it("does not treat prompt-only quick starts as guided workflow launches", () => {
     const createRecipe = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("engineering-copilot"),
-      profileId: "engineering-copilot",
+      project: createProject("developer"),
+      profileId: "developer",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {

@@ -4,9 +4,9 @@ import { buildT3workProjectSetupConfirmPreview } from "./t3work-projectSetupConf
 
 describe("buildT3workProjectSetupConfirmPreview", () => {
   it("surfaces enabled skill packs and ranked starter recipes for a bundled profile", () => {
-    const preview = buildT3workProjectSetupConfirmPreview({ profileId: "engineering-copilot" });
+    const preview = buildT3workProjectSetupConfirmPreview({ profileId: "developer" });
 
-    expect(preview.profile.id).toBe("engineering-copilot");
+    expect(preview.profile.id).toBe("developer");
     expect(preview.enabledSkillPackIds).toContain("engineering");
     expect(preview.skillPacks.map((pack) => pack.id)).toContain("engineering");
     expect(preview.topRecipes.length).toBeGreaterThan(0);

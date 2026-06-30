@@ -288,7 +288,7 @@ describe("t3work.thread.start_child execution_scope integration eval", () => {
   });
 
   it("documents vague planning vs implementation handoffs in AGENTS.md", () => {
-    const agentsMd = renderAgentsMd(getT3WorkProfile("engineering-copilot"));
+    const agentsMd = renderAgentsMd(getT3WorkProfile("developer"));
     expect(agentsMd).toContain("execution_scope");
     expect(agentsMd).toContain("Planning, triage, synthesis, project status");
     expect(agentsMd).toContain("Implementation, debugging, tests, review, PR work");

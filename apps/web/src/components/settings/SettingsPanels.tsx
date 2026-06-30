@@ -24,7 +24,12 @@ import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import * as Result from "effect/Result";
-import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
+import {
+  APP_BASE_NAME,
+  APP_VERSION,
+  HOSTED_APP_CHANNEL,
+  HOSTED_APP_CHANNEL_LABEL,
+} from "../../branding";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -517,10 +522,10 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="General">
+      <SettingsSection title="Appearance">
         <SettingsRow
           title="Theme"
-          description="Choose how T3 Code looks across the app."
+          description={`Choose how ${APP_BASE_NAME} looks across the app.`}
           resetAction={
             theme !== "system" ? (
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />
@@ -646,6 +651,9 @@ export function GeneralSettingsPanel() {
           }
         />
 
+      </SettingsSection>
+
+      <SettingsSection title="Behavior">
         <SettingsRow
           title="Assistant output"
           description="Show token-by-token output while a response is in progress."
@@ -726,6 +734,9 @@ export function GeneralSettingsPanel() {
           }
         />
 
+      </SettingsSection>
+
+      <SettingsSection title="Threads & projects">
         <SettingsRow
           title="New threads"
           description="Pick the default workspace mode for newly created draft threads."
@@ -882,6 +893,9 @@ export function GeneralSettingsPanel() {
           }
         />
 
+      </SettingsSection>
+
+      <SettingsSection title="Text generation">
         <SettingsRow
           title="Text generation model"
           description="Configure the model used for generated commit messages, PR titles, and similar Git text."

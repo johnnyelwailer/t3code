@@ -12,6 +12,7 @@ import {
 import { T3workLeftSidebarHeaderToggle } from "~/t3work/t3work-LeftSidebarHeaderToggle";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { isElectron } from "~/env";
+import { APP_BASE_NAME, APP_TAGLINE } from "~/t3work/t3work-branding";
 import { LocalWorkspaceSidebarSection } from "./t3work-LocalWorkspaceSidebarSection";
 import { ProjectSidebarProjectsSection } from "./t3work-ProjectSidebarProjectsSection";
 import type { TicketViewMode } from "./t3work-projectSidebarShared";
@@ -83,9 +84,9 @@ export function ProjectSidebarLayout({
       <SidebarHeader className={sidebarHeaderClassName}>
         <div className="flex w-full min-w-0 items-center gap-2">
           <SidebarTrigger className="shrink-0 md:hidden" />
-          <span className="truncate text-sm font-semibold">T3 Work</span>
-          <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
-            Work shell
+          <span className="truncate text-sm font-semibold">{APP_BASE_NAME}</span>
+          <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground/80">
+            {APP_TAGLINE}
           </span>
         </div>
       </SidebarHeader>

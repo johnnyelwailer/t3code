@@ -1,7 +1,7 @@
 /**
  * Planning space scene math — pure module, no DOM.
  *
- * Spec: docs/t3work-mvp/29-planning-space.md §3 (scene model), §4 (groupings).
+ * Spec: specs/epics/29-planning-space.md §3 (scene model), §4 (groupings).
  * Hard rules encoded here and guarded by tests:
  *  - layout is zoom-independent (no camera-coupled spacing)
  *  - cursor-anchored zoom is exact

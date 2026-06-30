@@ -36,7 +36,7 @@ export function T3workCloneProjectSetupProfileDialog({
   const bundledProfiles = useMemo(() => listT3WorkProfiles(), []);
   const [open, setOpen] = useState(false);
   const [starterId, setStarterId] = useState(
-    isBundledT3WorkProfileId(sourceProfileId) ? sourceProfileId : "product-partner",
+    isBundledT3WorkProfileId(sourceProfileId) ? sourceProfileId : "product-owner",
   );
   const [customId, setCustomId] = useState("");
   const [title, setTitle] = useState("");

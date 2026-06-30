@@ -42,7 +42,10 @@ export function ProjectDashboard({
             {project.title}
           </h2>
           <Menu>
-            <MenuTrigger className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground">
+            <MenuTrigger
+              aria-label={`Project actions for ${project.title}`}
+              className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+            >
               <EllipsisIcon className="size-3.5" />
             </MenuTrigger>
             <MenuPopup align="start" side="bottom" className="min-w-48">

@@ -266,7 +266,7 @@ To stay aligned with the additive guard and keep the OG T3 surface small:
 
 ### Practical Implementation Order
 
-1. Stay inside `docs/t3work-mvp/**`, `apps/web/src/t3work/**`, and
+1. Stay inside `specs/epics/**`, `apps/web/src/t3work/**`, and
    `apps/server/src/t3work-github-*.ts` for the first implementation slice.
 2. Land the PR detail shell first by reusing the current pull-request-context route and
    current artifact vocabulary.

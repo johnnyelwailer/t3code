@@ -25,8 +25,8 @@ describe("focus-needs-my-action recipe", () => {
   it("surfaces on broad dashboard views that need narrowing", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -49,8 +49,8 @@ describe("focus-needs-my-action recipe", () => {
   it("stays hidden on already focused slices", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "my-work",
       currentViewSummary: {
@@ -67,8 +67,8 @@ describe("focus-needs-my-action recipe", () => {
   it("stays hidden on broad views when no deterministic narrowing exists", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
