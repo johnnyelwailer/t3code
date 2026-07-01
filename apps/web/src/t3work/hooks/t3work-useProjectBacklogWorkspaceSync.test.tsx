@@ -52,7 +52,7 @@ function createProject(): ProjectShellProject {
         agentReferences: {
           linkedRepositories: [{ url: "https://github.com/example/project-1" }],
         },
-        agentSetup: { profileId: "engineering-copilot" },
+        agentSetup: { profileId: "developer" },
       },
     },
     workspace: {

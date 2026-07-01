@@ -1,12 +1,17 @@
 import type { RecipeProfileContext, SidecarComposition } from "@t3tools/project-recipes";
 
 export type BundledT3WorkProfileId =
-  | "qa-assistant"
-  | "product-partner"
-  | "support-triage"
-  | "delivery-coordinator"
-  | "verification-guide"
-  | "engineering-copilot";
+  | "requirements-engineer"
+  | "product-owner"
+  | "project-lead"
+  | "scrum-master"
+  | "developer"
+  | "test-manager"
+  | "cloud-engineer"
+  | "system-administrator"
+  | "security-engineer"
+  | "service-manager"
+  | "steering-member";
 
 export type T3WorkProfileId = string;
 
@@ -85,44 +90,52 @@ export type ResolveT3WorkProfileInput = {
 export const T3WORK_PROJECT_PROFILES_DIR = ".t3work/setup/profiles";
 export const T3WORK_PROJECT_PROFILE_MANIFEST_PATH = ".t3work/setup/profile.json";
 
-export const DEFAULT_T3WORK_PROFILE_ID: BundledT3WorkProfileId = "product-partner";
+export const DEFAULT_T3WORK_PROFILE_ID: BundledT3WorkProfileId = "product-owner";
 
+// Delivery-role profiles (see specs/roles/*.md). Identity, communication style, surface
+// defaults, tags, and preferred artifact kinds follow each role spec. The engine-coupled
+// fields — defaultActionFamilies, defaultRecipeWeights, recommendedSkillPackIds — use the
+// existing recipe/pack vocabulary (the role spec's "what serves this role today" mapping),
+// because the recipe matcher gates and scores on that vocabulary. The aspirational action
+// families / recipes / packs the specs propose are not implemented yet.
 export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
-  "qa-assistant": {
-    id: "qa-assistant",
-    title: "QA Assistant",
-    description: "Short verification guidance with test matrices, repro steps, and risk notes.",
-    audience: "qa",
-    tags: ["qa", "verification"],
-    communicationStyle: { technicalDepth: "medium", brevity: "short", guidanceStyle: "guided" },
+  "requirements-engineer": {
+    id: "requirements-engineer",
+    title: "Requirements Engineer",
+    description:
+      "Requirement clarity, acceptance criteria, and ambiguity checks with traceability in mind.",
+    audience: "product",
+    tags: ["requirements", "analysis", "specification"],
+    communicationStyle: { technicalDepth: "medium", brevity: "balanced", guidanceStyle: "balanced" },
     surfaceDefaults: {
-      detailDensity: "guided",
+      detailDensity: "balanced",
       activityOrder: "newest-first",
       collapseLowSignalEvents: true,
     },
     preferredArtifactKinds: [
-      "test-matrix",
-      "risk-list",
-      "repro-steps",
-      "open-questions",
-      "checklist",
+      "requirement-spec",
+      "acceptance-criteria",
+      "ambiguity-list",
+      "open-question-list",
+      "traceability-matrix",
     ],
-    defaultActionFamilies: ["qa", "verification", "delivery"],
+    defaultActionFamilies: ["product", "summary", "verification"],
     defaultRecipeWeights: {
-      "create-qa-test-plan": 35,
-      "review-acceptance-criteria": 20,
-      "draft-jira-comment": 10,
-      "release-handoff-checklist": 10,
+      "review-acceptance-criteria": 35,
+      "explain-selected-work": 25,
+      "create-qa-test-plan": 10,
+      "summarize-project-risk": 5,
     },
-    recommendedSkillPackIds: ["qa", "delivery"],
+    recommendedSkillPackIds: ["product", "qa"],
     hideImplementationComplexity: true,
   },
-  "product-partner": {
-    id: "product-partner",
-    title: "Product Partner",
-    description: "Plain-language summaries, ambiguity checks, and stakeholder-ready updates.",
+  "product-owner": {
+    id: "product-owner",
+    title: "Product Owner",
+    description:
+      "Backlog refinement, prioritization rationale, and stakeholder-ready value framing.",
     audience: "product",
-    tags: ["product", "planning"],
+    tags: ["product", "backlog", "prioritization"],
     communicationStyle: { technicalDepth: "low", brevity: "short", guidanceStyle: "guided" },
     surfaceDefaults: {
       detailDensity: "guided",
@@ -140,12 +153,12 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
     recommendedSkillPackIds: ["product", "delivery"],
     hideImplementationComplexity: true,
   },
-  "support-triage": {
-    id: "support-triage",
-    title: "Support Triage",
-    description: "Customer-readable issue framing with escalation and reproduction requests first.",
-    audience: "support",
-    tags: ["support", "triage"],
+  "project-lead": {
+    id: "project-lead",
+    title: "Project Lead",
+    description: "Concise status, blockers, dependencies, and milestone / release coordination.",
+    audience: "delivery",
+    tags: ["delivery", "coordination", "planning"],
     communicationStyle: { technicalDepth: "low", brevity: "short", guidanceStyle: "guided" },
     surfaceDefaults: {
       detailDensity: "guided",
@@ -153,33 +166,12 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
       collapseLowSignalEvents: true,
     },
     preferredArtifactKinds: [
-      "escalation-summary",
-      "impact-summary",
-      "repro-steps",
-      "status-update",
+      "status-report",
+      "risk-register",
+      "dependency-map",
+      "milestone-plan",
+      "standup-summary",
     ],
-    defaultActionFamilies: ["support", "product"],
-    defaultRecipeWeights: {
-      "support-escalation-summary": 35,
-      "draft-jira-comment": 15,
-      "explain-selected-work": 10,
-    },
-    recommendedSkillPackIds: ["support", "qa"],
-    hideImplementationComplexity: true,
-  },
-  "delivery-coordinator": {
-    id: "delivery-coordinator",
-    title: "Delivery Coordinator",
-    description: "Concise status, blockers, dependencies, and release-checklist guidance.",
-    audience: "delivery",
-    tags: ["delivery", "release"],
-    communicationStyle: { technicalDepth: "low", brevity: "short", guidanceStyle: "guided" },
-    surfaceDefaults: {
-      detailDensity: "guided",
-      activityOrder: "newest-first",
-      collapseLowSignalEvents: true,
-    },
-    preferredArtifactKinds: ["status-update", "blocker-list", "checklist", "timeline"],
     defaultActionFamilies: ["delivery", "release"],
     defaultRecipeWeights: {
       "draft-status-update": 30,
@@ -189,36 +181,38 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
     recommendedSkillPackIds: ["delivery", "release"],
     hideImplementationComplexity: true,
   },
-  "verification-guide": {
-    id: "verification-guide",
-    title: "Verification Guide",
-    description:
-      "Guided summaries with verification checklists, blockers, and deployment cues first.",
-    audience: "qa",
-    tags: ["verification", "release"],
-    communicationStyle: {
-      technicalDepth: "medium",
-      brevity: "balanced",
-      guidanceStyle: "guided",
-    },
+  "scrum-master": {
+    id: "scrum-master",
+    title: "Scrum Master",
+    description: "Sprint health, impediment removal, and concise team-facing flow updates.",
+    audience: "delivery",
+    tags: ["agile", "facilitation", "delivery"],
+    communicationStyle: { technicalDepth: "low", brevity: "short", guidanceStyle: "guided" },
     surfaceDefaults: {
       detailDensity: "guided",
       activityOrder: "newest-first",
-      collapseLowSignalEvents: false,
+      collapseLowSignalEvents: true,
     },
-    preferredArtifactKinds: ["checklist", "verification-plan", "risk-list", "handoff-note"],
-    defaultActionFamilies: ["verification", "qa", "release"],
+    preferredArtifactKinds: [
+      "sprint-health",
+      "impediment-list",
+      "ceremony-notes",
+      "status-update",
+      "blocker-list",
+    ],
+    defaultActionFamilies: ["delivery", "summary"],
     defaultRecipeWeights: {
-      "create-qa-test-plan": 25,
-      "release-handoff-checklist": 20,
-      "summarize-project-risk": 15,
+      "draft-status-update": 30,
+      "focus-needs-my-action": 20,
+      "unblock-my-work": 15,
+      "shape-next-backlog-slice": 10,
     },
-    recommendedSkillPackIds: ["qa", "release"],
-    hideImplementationComplexity: false,
+    recommendedSkillPackIds: ["delivery"],
+    hideImplementationComplexity: true,
   },
-  "engineering-copilot": {
-    id: "engineering-copilot",
-    title: "Engineering Copilot",
+  developer: {
+    id: "developer",
+    title: "Developer",
     description:
       "Technical implementation guidance with diff-first and verification-oriented defaults.",
     audience: "engineering",
@@ -250,6 +244,194 @@ export const T3WORK_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
     },
     recommendedSkillPackIds: ["engineering", "release"],
     hideImplementationComplexity: false,
+  },
+  "test-manager": {
+    id: "test-manager",
+    title: "Test Manager",
+    description: "Test strategy, coverage, quality gates, and defect-risk oversight.",
+    audience: "qa",
+    tags: ["quality", "test-management", "qa"],
+    communicationStyle: { technicalDepth: "medium", brevity: "balanced", guidanceStyle: "balanced" },
+    surfaceDefaults: {
+      detailDensity: "balanced",
+      activityOrder: "newest-first",
+      collapseLowSignalEvents: true,
+    },
+    preferredArtifactKinds: [
+      "test-strategy",
+      "test-plan",
+      "coverage-matrix",
+      "quality-gate-report",
+      "defect-risk-summary",
+    ],
+    defaultActionFamilies: ["qa", "verification", "release"],
+    defaultRecipeWeights: {
+      "create-qa-test-plan": 35,
+      "review-acceptance-criteria": 20,
+      "release-handoff-checklist": 10,
+      "summarize-project-risk": 10,
+    },
+    recommendedSkillPackIds: ["qa", "release"],
+    hideImplementationComplexity: true,
+  },
+  "cloud-engineer": {
+    id: "cloud-engineer",
+    title: "Cloud Engineer",
+    description:
+      "Infrastructure-as-code changes, rollout planning, and verification with rollback-first defaults.",
+    audience: "engineering",
+    tags: ["infrastructure", "cloud", "platform", "engineering"],
+    communicationStyle: {
+      technicalDepth: "high",
+      brevity: "balanced",
+      guidanceStyle: "expert",
+    },
+    surfaceDefaults: {
+      detailDensity: "expert",
+      activityOrder: "newest-first",
+      collapseLowSignalEvents: false,
+    },
+    preferredArtifactKinds: [
+      "infra-plan",
+      "deployment-checklist",
+      "runbook",
+      "verification-plan",
+      "rollback-plan",
+    ],
+    defaultActionFamilies: ["engineering", "release", "verify"],
+    defaultRecipeWeights: {
+      "technical-implementation-plan": 40,
+      "release-handoff-checklist": 15,
+      "next-best-task": 10,
+    },
+    recommendedSkillPackIds: ["engineering", "release"],
+    hideImplementationComplexity: false,
+  },
+  "system-administrator": {
+    id: "system-administrator",
+    title: "System Administrator",
+    description:
+      "Maintenance, patching, access reviews, and operational runbooks with safety-first procedures.",
+    audience: "engineering",
+    tags: ["operations", "sysadmin", "maintenance", "infrastructure"],
+    communicationStyle: {
+      technicalDepth: "high",
+      brevity: "balanced",
+      guidanceStyle: "expert",
+    },
+    surfaceDefaults: {
+      detailDensity: "expert",
+      activityOrder: "newest-first",
+      collapseLowSignalEvents: false,
+    },
+    preferredArtifactKinds: [
+      "runbook",
+      "maintenance-checklist",
+      "access-review",
+      "incident-summary",
+      "change-record",
+    ],
+    defaultActionFamilies: ["engineering", "release", "verify"],
+    defaultRecipeWeights: {
+      "technical-implementation-plan": 35,
+      "release-handoff-checklist": 15,
+      "support-escalation-summary": 10,
+    },
+    recommendedSkillPackIds: ["engineering", "release"],
+    hideImplementationComplexity: false,
+  },
+  "security-engineer": {
+    id: "security-engineer",
+    title: "Security Engineer",
+    description:
+      "Threat modeling, security review, and risk-ranked remediation with evidence-first framing.",
+    audience: "engineering",
+    tags: ["security", "appsec", "risk", "engineering"],
+    communicationStyle: {
+      technicalDepth: "high",
+      brevity: "balanced",
+      guidanceStyle: "expert",
+    },
+    surfaceDefaults: {
+      detailDensity: "expert",
+      activityOrder: "newest-first",
+      collapseLowSignalEvents: false,
+    },
+    preferredArtifactKinds: [
+      "threat-model",
+      "security-review",
+      "vulnerability-report",
+      "remediation-plan",
+      "risk-list",
+    ],
+    defaultActionFamilies: ["engineering", "review", "verify"],
+    defaultRecipeWeights: {
+      "review-acceptance-criteria": 25,
+      "address-linked-pr-feedback": 20,
+      "technical-implementation-plan": 20,
+      "summarize-project-risk": 10,
+    },
+    recommendedSkillPackIds: ["engineering"],
+    hideImplementationComplexity: false,
+  },
+  "service-manager": {
+    id: "service-manager",
+    title: "Service Manager",
+    description:
+      "SLAs, incident and escalation oversight, and customer-facing service status, impact-first.",
+    audience: "support",
+    tags: ["service-management", "itil", "operations", "support"],
+    communicationStyle: { technicalDepth: "low", brevity: "short", guidanceStyle: "guided" },
+    surfaceDefaults: {
+      detailDensity: "guided",
+      activityOrder: "newest-first",
+      collapseLowSignalEvents: true,
+    },
+    preferredArtifactKinds: [
+      "sla-report",
+      "service-review",
+      "incident-summary",
+      "escalation-summary",
+      "status-update",
+    ],
+    defaultActionFamilies: ["support", "summary"],
+    defaultRecipeWeights: {
+      "support-escalation-summary": 35,
+      "draft-status-update": 15,
+      "stakeholder-update": 10,
+      "summarize-project-risk": 10,
+    },
+    recommendedSkillPackIds: ["support", "delivery"],
+    hideImplementationComplexity: true,
+  },
+  "steering-member": {
+    id: "steering-member",
+    title: "Steering Member",
+    description:
+      "Executive summaries, decision briefs, and portfolio-level risk for go / no-go decisions.",
+    audience: "delivery",
+    tags: ["governance", "executive", "oversight"],
+    communicationStyle: { technicalDepth: "low", brevity: "short", guidanceStyle: "expert" },
+    surfaceDefaults: {
+      detailDensity: "guided",
+      activityOrder: "newest-first",
+      collapseLowSignalEvents: true,
+    },
+    preferredArtifactKinds: [
+      "executive-summary",
+      "decision-brief",
+      "portfolio-risk",
+      "budget-schedule-overview",
+      "escalation-summary",
+    ],
+    defaultActionFamilies: ["delivery", "summary"],
+    defaultRecipeWeights: {
+      "summarize-project-risk": 30,
+      "draft-status-update": 20,
+      "stakeholder-update": 20,
+    },
+    recommendedSkillPackIds: ["delivery"],
+    hideImplementationComplexity: true,
   },
 };
 

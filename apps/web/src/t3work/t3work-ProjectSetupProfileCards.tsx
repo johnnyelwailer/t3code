@@ -1,82 +1,129 @@
-import {
-  Bug,
-  ClipboardCheck,
-  Code2,
-  MessageCircleMore,
-  PackageCheck,
-  Sparkles,
-  type LucideIcon,
-} from "lucide-react";
-
-import { cn } from "~/lib/utils";
 import type { BundledT3WorkProfileId } from "@t3tools/t3work-skill-packs";
 import {
   listT3WorkProjectSetupProfiles,
   type T3WorkProjectSetupProfileId,
 } from "~/t3work/t3work-projectSetup";
 
-type T3workProjectSetupCardOption = {
+export type T3workProfileCategoryId =
+  | "product"
+  | "delivery"
+  | "engineering"
+  | "operations"
+  | "security";
+
+export const T3WORK_PROFILE_CATEGORIES: ReadonlyArray<{
+  readonly id: T3workProfileCategoryId | "all";
+  readonly label: string;
+}> = [
+  { id: "all", label: "All" },
+  { id: "product", label: "Product" },
+  { id: "delivery", label: "Delivery" },
+  { id: "engineering", label: "Engineering" },
+  { id: "operations", label: "Operations" },
+  { id: "security", label: "Security" },
+];
+
+type T3workProfileFamily = "pink" | "lavender" | "indigo" | "deep" | "orange";
+
+export type T3workProjectSetupCardOption = {
   readonly id: T3WorkProjectSetupProfileId;
   readonly title: string;
   readonly description: string;
-  readonly eyebrow: string;
-  readonly chips: readonly [string, string];
-  readonly icon: LucideIcon;
-  readonly accentClassName: string;
-  readonly iconClassName: string;
+  readonly badge: string;
+  readonly bullets: readonly string[];
+  readonly category: T3workProfileCategoryId;
+  readonly family: T3workProfileFamily;
+  readonly iconSrc: string;
 };
+
+/**
+ * Nexi profile illustrations live in `apps/web/public/profiles`, referenced by absolute
+ * path (matching the web app's static-asset convention). The category mapping groups the
+ * bundled roles under the design's filter tabs; it is presentation-only and can be tuned
+ * without touching profile behavior.
+ */
+const PROFILE_ICON_BASE = "/profiles";
 
 const PROFILE_VISUALS: Record<
   BundledT3WorkProfileId,
   Omit<T3workProjectSetupCardOption, "id" | "title" | "description">
 > = {
-  "qa-assistant": {
-    eyebrow: "Verify",
-    chips: ["Test matrices", "Repro steps"],
-    icon: Bug,
-    accentClassName:
-      "from-emerald-500/18 via-lime-400/16 to-cyan-400/16 dark:from-emerald-300/18 dark:via-lime-300/14 dark:to-cyan-300/14",
-    iconClassName: "text-emerald-600 dark:text-emerald-300",
+  "requirements-engineer": {
+    badge: "RE",
+    bullets: ["Refine requirements", "Check acceptance criteria", "Find unclear tickets"],
+    category: "product",
+    family: "pink",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_RE.png`,
   },
-  "product-partner": {
-    eyebrow: "Friendly",
-    chips: ["Plain language", "Fast summaries"],
-    icon: Sparkles,
-    accentClassName:
-      "from-sky-500/18 via-cyan-400/18 to-emerald-400/16 dark:from-sky-400/20 dark:via-cyan-300/16 dark:to-emerald-300/14",
-    iconClassName: "text-sky-600 dark:text-sky-300",
+  "product-owner": {
+    badge: "PO / PPO",
+    bullets: ["Prioritise backlog", "Split large items", "Draft sprint goals"],
+    category: "product",
+    family: "pink",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_PO.png`,
   },
-  "support-triage": {
-    eyebrow: "Triage",
-    chips: ["Escalations", "Customer impact"],
-    icon: MessageCircleMore,
-    accentClassName:
-      "from-amber-500/18 via-orange-400/18 to-rose-400/16 dark:from-amber-300/18 dark:via-orange-300/14 dark:to-rose-300/14",
-    iconClassName: "text-amber-600 dark:text-amber-300",
+  "project-lead": {
+    badge: "PL",
+    bullets: ["Summarise project status", "Highlight risks", "Prepare stakeholder updates"],
+    category: "delivery",
+    family: "lavender",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_PL.png`,
   },
-  "delivery-coordinator": {
-    eyebrow: "Coordinate",
-    chips: ["Status", "Dependencies"],
-    icon: PackageCheck,
-    accentClassName:
-      "from-cyan-500/18 via-sky-400/16 to-emerald-300/16 dark:from-cyan-300/18 dark:via-sky-300/14 dark:to-emerald-300/14",
-    iconClassName: "text-cyan-600 dark:text-cyan-300",
+  "scrum-master": {
+    badge: "SM",
+    bullets: ["Find blockers", "Prepare retro input", "Track action items"],
+    category: "delivery",
+    family: "lavender",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_ScrumMaster.png`,
   },
-  "verification-guide": {
-    eyebrow: "Guide",
-    chips: ["Checklists", "Release cues"],
-    icon: ClipboardCheck,
-    accentClassName:
-      "from-violet-500/18 via-indigo-400/16 to-sky-400/16 dark:from-violet-300/18 dark:via-indigo-300/14 dark:to-sky-300/14",
-    iconClassName: "text-violet-600 dark:text-violet-300",
+  developer: {
+    badge: "Dev",
+    bullets: ["Explain issue context", "Identify blockers", "Draft implementation notes"],
+    category: "engineering",
+    family: "indigo",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_Dev.png`,
   },
-  "engineering-copilot": {
-    eyebrow: "Build",
-    chips: ["Technical depth", "Verification bias"],
-    icon: Code2,
-    accentClassName:
-      "from-fuchsia-500/18 via-violet-400/16 to-blue-400/16 dark:from-fuchsia-300/18 dark:via-violet-300/14 dark:to-blue-300/14",
-    iconClassName: "text-fuchsia-600 dark:text-fuchsia-300",
+  "test-manager": {
+    badge: "Test",
+    bullets: ["Plan test scope", "Check coverage gaps", "Summarise defects"],
+    category: "engineering",
+    family: "indigo",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_Tester-QA.png`,
+  },
+  "cloud-engineer": {
+    badge: "Cloud",
+    bullets: ["Track environment tasks", "Identify deployment risks", "Summarise cloud changes"],
+    category: "engineering",
+    family: "indigo",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_CloudEngineer.png`,
+  },
+  "system-administrator": {
+    badge: "SysAdmin",
+    bullets: ["Track access requests", "Summarise system changes", "Flag operational risks"],
+    category: "operations",
+    family: "deep",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_SystemAdmin.png`,
+  },
+  "security-engineer": {
+    badge: "Security",
+    bullets: ["Identify security risks", "Review access topics", "Summarise vulnerabilities"],
+    category: "security",
+    family: "orange",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_SecurityEngineer.png`,
+  },
+  "service-manager": {
+    badge: "Service",
+    bullets: ["Summarise incidents", "Track service risks", "Prepare SLA update"],
+    category: "operations",
+    family: "deep",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_ServiceManager.png`,
+  },
+  "steering-member": {
+    badge: "Steering",
+    bullets: ["Create steering summary", "Surface key decisions", "Explain business impact"],
+    category: "delivery",
+    family: "lavender",
+    iconSrc: `${PROFILE_ICON_BASE}/Nexi_Steering.png`,
   },
 };
 
@@ -89,11 +136,7 @@ export function listT3workProjectSetupCardOptions(): ReadonlyArray<T3workProject
         id: profile.id,
         title: profile.title,
         description: profile.description,
-        eyebrow: visuals.eyebrow,
-        chips: visuals.chips,
-        icon: visuals.icon,
-        accentClassName: visuals.accentClassName,
-        iconClassName: visuals.iconClassName,
+        ...visuals,
       },
     ];
   });
@@ -103,24 +146,25 @@ export function T3workProjectSetupProfileCards({
   selectedProfileId,
   onSelectProfile,
   compact = false,
+  options,
 }: {
   selectedProfileId: T3WorkProjectSetupProfileId;
   onSelectProfile: (profileId: T3WorkProjectSetupProfileId) => void;
   compact?: boolean;
+  options?: ReadonlyArray<T3workProjectSetupCardOption>;
 }) {
-  const options = listT3workProjectSetupCardOptions();
+  const cardOptions = options ?? listT3workProjectSetupCardOptions();
 
   return (
     <div
       className="grid gap-3"
       style={{
         gridTemplateColumns: compact
-          ? "repeat(auto-fit, minmax(min(100%, 13rem), 1fr))"
-          : "repeat(auto-fit, minmax(min(100%, 15rem), 1fr))",
+          ? "repeat(auto-fit, minmax(min(100%, 16rem), 1fr))"
+          : "repeat(auto-fit, minmax(min(100%, 20rem), 1fr))",
       }}
     >
-      {options.map((option, index) => {
-        const Icon = option.icon;
+      {cardOptions.map((option) => {
         const selected = option.id === selectedProfileId;
 
         return (
@@ -129,71 +173,33 @@ export function T3workProjectSetupProfileCards({
             type="button"
             data-profile-id={option.id}
             data-selected={selected ? "true" : "false"}
+            data-nx-family={option.family}
             aria-pressed={selected}
             onClick={() => onSelectProfile(option.id)}
-            className={cn(
-              "group relative overflow-hidden rounded-2xl border text-left transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-              compact ? "min-h-[10.5rem] p-4" : "min-h-[13rem] p-5",
-              selected
-                ? "border-primary/60 bg-card shadow-lg shadow-primary/10"
-                : "border-border/70 bg-card/85 hover:-translate-y-0.5 hover:border-border hover:shadow-md hover:shadow-black/5",
-            )}
-            style={{ animationDelay: `${index * 80}ms` }}
+            className="nx-card"
           >
-            <div
-              className={cn(
-                "pointer-events-none absolute inset-0 bg-gradient-to-br opacity-90 transition-opacity duration-300",
-                option.accentClassName,
-                selected ? "motion-safe:animate-pulse" : "opacity-75 group-hover:opacity-90",
-              )}
-            />
-            <div className="pointer-events-none absolute -right-10 top-0 size-28 rounded-full bg-white/25 blur-3xl dark:bg-white/10" />
-
-            <div className="relative flex h-full flex-col">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">
-                    {option.eyebrow}
-                  </div>
-                  <h3
-                    className={cn(
-                      "mt-2 font-semibold tracking-tight",
-                      compact ? "text-base" : "text-lg",
-                    )}
-                  >
-                    {option.title}
-                  </h3>
-                </div>
-                <span
-                  className={cn(
-                    "flex shrink-0 items-center justify-center",
-                    compact ? "size-10" : "size-11",
-                    option.iconClassName,
-                  )}
-                >
-                  <Icon className={cn(compact ? "size-4.5" : "size-5")} />
-                </span>
-              </div>
-
-              <p
-                className={cn(
-                  "mt-3 text-muted-foreground",
-                  compact ? "text-xs leading-5" : "text-sm leading-6",
-                )}
-              >
-                {option.description}
-              </p>
-
-              <div className="mt-auto flex flex-wrap gap-2 pt-4">
-                {option.chips.map((chip) => (
-                  <span
-                    key={chip}
-                    className="px-0 py-0 text-[11px] font-medium text-foreground/70 dark:text-foreground/75"
-                  >
-                    {chip}
-                  </span>
+            <div className="nx-card-figure">
+              <img
+                src={option.iconSrc}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                draggable={false}
+                className="nx-card-img"
+              />
+            </div>
+            <div className="nx-card-body">
+              <span className="nx-badge self-start">{option.badge}</span>
+              <h3 className="nx-card-title mt-2">{option.title}</h3>
+              <p className="nx-card-desc mt-1.5">{option.description}</p>
+              <ul className="nx-bullets mt-3">
+                {option.bullets.map((bullet) => (
+                  <li key={bullet}>
+                    <span className="nx-dot" aria-hidden="true" />
+                    {bullet}
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           </button>
         );

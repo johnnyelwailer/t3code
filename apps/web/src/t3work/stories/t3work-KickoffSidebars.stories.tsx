@@ -27,13 +27,13 @@ function createProject(profileId: string, title: string): ProjectShellProject {
   };
 }
 
-const productProject = createProject("product-partner", "Project Alpha");
-const engineeringProject = createProject("engineering-copilot", "Project Alpha");
+const productProject = createProject("product-owner", "Project Alpha");
+const engineeringProject = createProject("developer", "Project Alpha");
 
 const projectDashboardRecipes = buildT3workSidecarRecipeQuickStarts({
   surface: "project.dashboard",
   project: productProject,
-  profileId: "product-partner",
+  profileId: "product-owner",
   selectedWorkLabel: productProject.title,
   dashboardMode: "backlog",
   currentViewSummary: {
@@ -48,7 +48,7 @@ const projectDashboardRecipes = buildT3workSidecarRecipeQuickStarts({
 const ticketDetailRecipes = buildT3workSidecarRecipeQuickStarts({
   surface: "workitem.detail.sidepanel",
   project: engineeringProject,
-  profileId: "engineering-copilot",
+  profileId: "developer",
   selectedWorkLabel: "ALPHA-42",
   selectedWorkTitle: "Stabilize import retries",
   resourceKind: "ticket",

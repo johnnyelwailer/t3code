@@ -24,7 +24,7 @@ function createProject(): ProjectShellProject {
     source: {
       provider: "atlassian",
       externalProjectId: "PA",
-      raw: { agentSetup: { profileId: "product-partner" } },
+      raw: { agentSetup: { profileId: "product-owner" } },
     },
     workspace: {
       rootPath: "/tmp/project-alpha",
@@ -69,7 +69,7 @@ function QuickStartProbe({
     backend,
     surface: epicMode ? "workitem.detail.sidepanel" : "project.dashboard",
     project: { ...project },
-    profileId: "product-partner",
+    profileId: "product-owner",
     selectedWorkLabel: epicMode ? "PROJ-100" : project.title,
     selectedWorkTitle: epicMode ? "Platform epic" : undefined,
     ...(epicMode

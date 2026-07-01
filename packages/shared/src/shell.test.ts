@@ -19,6 +19,7 @@ import {
   resolveCommandPath,
   resolveKnownWindowsCliDirs,
   resolveSpawnCommand,
+  resolveSpawnCommandSync,
   resolveWindowsEnvironment,
   SpawnExecutableResolution,
   WindowsShellEnvironment,
@@ -446,6 +447,50 @@ effectIt.layer(NodeServices.layer)("resolveSpawnCommand", (it) => {
       });
     }),
   );
+});
+
+describe("resolveSpawnCommandSync", () => {
+  it("passes the command through unchanged on non-Windows platforms", () => {
+    expect(
+      resolveSpawnCommandSync("claude", ["--version", "a & b"], {
+        platform: "linux",
+        env: { PATH: "/usr/bin" },
+        resolveExecutable: () => "/usr/local/bin/claude.cmd",
+      }),
+    ).toEqual({ command: "claude", args: ["--version", "a & b"], shell: false });
+  });
+
+  it("runs a resolved Windows .exe directly without a shell", () => {
+    expect(
+      resolveSpawnCommandSync("claude", ["--version"], {
+        platform: "win32",
+        env: { PATH: "", PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+        resolveExecutable: () => "C:\\bin\\claude.exe",
+      }),
+    ).toEqual({ command: "C:\\bin\\claude.exe", args: ["--version"], shell: false });
+  });
+
+  it("routes a Windows .cmd shim through the shell with escaped arguments", () => {
+    const resolved = resolveSpawnCommandSync("claude", ["--print", "a & b"], {
+      platform: "win32",
+      env: { PATH: "", PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      resolveExecutable: () => "C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd",
+    });
+
+    expect(resolved.shell).toBe(true);
+    expect(resolved.command).toContain("claude.cmd");
+    expect(resolved.args).toEqual(['^"--print^"', '^"a^ ^&^ b^"']);
+  });
+
+  it("keeps the original command when the executable cannot be resolved on Windows", () => {
+    expect(
+      resolveSpawnCommandSync("claude", ["--version"], {
+        platform: "win32",
+        env: { PATH: "", PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+        resolveExecutable: () => undefined,
+      }),
+    ).toEqual({ command: "claude", args: ["--version"], shell: false });
+  });
 });
 
 effectIt.layer(NodeServices.layer)("resolveWindowsEnvironment", (it) => {

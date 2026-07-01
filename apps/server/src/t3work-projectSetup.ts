@@ -13,6 +13,8 @@ import {
   renderSkillTemplate,
   renderSkillsReadme,
 } from "./t3work-projectSetupContent.ts";
+import { renderChangeRequestAssessmentSkill } from "./t3work-projectSetupChangeRequestSkill.ts";
+import { renderChangeRequestAssessmentTemplate } from "./t3work-projectSetupChangeRequestTemplate.ts";
 import { renderBundledRecipeSetupFiles } from "./t3work-projectSetupRecipes.ts";
 import { renderStatusAndContextSkill } from "./t3work-projectSetupStatusSkill.ts";
 import {
@@ -127,6 +129,23 @@ export function renderT3WorkProjectSetupFiles(input?: {
       writeMode: "if-missing",
     },
   ];
+
+  // The change-request assessment workflow is a Requirements-Engineer skill, so it
+  // only ships into projects set up with that profile.
+  if (profile.id === "requirements-engineer") {
+    files.push(
+      {
+        relativePath: `${T3WORK_PROJECT_SKILLS_ROOT}/change-request-assessment/SKILL.md`,
+        contents: renderChangeRequestAssessmentSkill(),
+        writeMode: "if-missing",
+      },
+      {
+        relativePath: `${T3WORK_PROJECT_SKILLS_ROOT}/change-request-assessment/assessment-template.md`,
+        contents: renderChangeRequestAssessmentTemplate(),
+        writeMode: "if-missing",
+      },
+    );
+  }
 
   if (input?.customProfile && !isBundledT3WorkProfileId(input.customProfile.id)) {
     files.push({

@@ -14,14 +14,14 @@ import {
 
 describe("resolveT3WorkProfileId", () => {
   it("resolves canonical bundled profile ids", () => {
-    expect(resolveT3WorkProfileId("engineering-copilot")).toBe("engineering-copilot");
-    expect(resolveT3WorkProfileId("product-partner")).toBe("product-partner");
-    expect(resolveT3WorkProfileId("qa-assistant")).toBe("qa-assistant");
+    expect(resolveT3WorkProfileId("developer")).toBe("developer");
+    expect(resolveT3WorkProfileId("product-owner")).toBe("product-owner");
+    expect(resolveT3WorkProfileId("test-manager")).toBe("test-manager");
   });
 
   it("lists bundled starter profiles with matcher-ready preference fields", () => {
-    expect(listT3WorkProfiles()).toHaveLength(6);
-    expect(toRecipeProfileContext(getT3WorkProfile("engineering-copilot"))).toMatchObject({
+    expect(listT3WorkProfiles()).toHaveLength(11);
+    expect(toRecipeProfileContext(getT3WorkProfile("developer"))).toMatchObject({
       technicalDepth: "high",
       guidanceStyle: "expert",
       detailDensity: "expert",
@@ -39,7 +39,7 @@ describe("resolveT3WorkProfile", () => {
 
 describe("custom profile recipe ranking", () => {
   it("ranks engineering recipes from preference fields without relying on bundled profile id", () => {
-    const customProfile = cloneBundledT3WorkProfile("product-partner", "custom-eng-like", {
+    const customProfile = cloneBundledT3WorkProfile("product-owner", "custom-eng-like", {
       communicationStyle: {
         technicalDepth: "high",
         brevity: "balanced",
@@ -71,7 +71,7 @@ describe("custom profile recipe ranking", () => {
     });
     const baselineResults = matchRecipes(listBundledT3WorkRecipes(), {
       ...matchInput,
-      profile: toRecipeProfileContext(getT3WorkProfile("product-partner")),
+      profile: toRecipeProfileContext(getT3WorkProfile("product-owner")),
     });
 
     const customEngineeringIndex = customResults.findIndex((result) =>

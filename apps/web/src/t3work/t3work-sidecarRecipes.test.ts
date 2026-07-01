@@ -37,8 +37,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("surfaces engineering-biased recipes for the engineering copilot profile", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot"),
-      profileId: "engineering-copilot",
+      project: createProject("developer"),
+      profileId: "developer",
       selectedWorkLabel: "PROJ-123",
       resourceKind: "ticket",
       jiraIssueType: "Task",
@@ -73,8 +73,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("shows general dashboard recipes without attached items while hiding selected-work recipes", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -98,8 +98,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("surfaces backlog-specific recipes only on the backlog dashboard", () => {
     const backlogQuickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -111,8 +111,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     });
     const myWorkQuickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "my-work",
       currentViewSummary: {
@@ -132,8 +132,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("renders bundled dashboard recipe titles from the current view context", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "my-work",
       currentViewSummary: {
@@ -156,8 +156,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("renders the recipe-authoring quick start against selected ticket context", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot"),
-      profileId: "engineering-copilot",
+      project: createProject("developer"),
+      profileId: "developer",
       selectedWorkLabel: "PROJ-123",
       selectedWorkTitle: "Stabilize search",
       resourceKind: "ticket",
@@ -173,8 +173,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("includes local recipePath and workflowPath for the bundled create-recipe quick start", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot", "/tmp/project-alpha"),
-      profileId: "engineering-copilot",
+      project: createProject("developer", "/tmp/project-alpha"),
+      profileId: "developer",
       selectedWorkLabel: "PROJ-123",
       selectedWorkTitle: "Stabilize search",
       resourceKind: "ticket",
@@ -194,8 +194,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("does not attach workflow launch metadata to prompt-only bundled recipes", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("product-partner", "/tmp/project-alpha"),
-      profileId: "product-partner",
+      project: createProject("product-owner", "/tmp/project-alpha"),
+      profileId: "product-owner",
       selectedWorkLabel: "PROJ-100",
       selectedWorkTitle: "Platform epic",
       resourceKind: "ticket",
@@ -219,8 +219,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("hides dashboard quick starts for very large unfocused views", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -242,8 +242,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("surfaces risk-hotspot dashboard recipes only for concentrated hotspots", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -262,8 +262,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("attaches bundled action views with rendered placeholders and recipe context", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -301,8 +301,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     const request = buildProjectRecipeDiscoveryRequest({
       workspaceRoot: "/tmp/project-alpha",
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       availableContextKeys: ["project.summary"],
@@ -320,8 +320,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     const request = buildProjectRecipeDiscoveryRequest({
       workspaceRoot: "/tmp/project-alpha",
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "PROJ-123 Stabilize search",
       dashboardMode: "backlog",
       resourceKind: "ticket",
@@ -363,8 +363,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     const request = buildProjectRecipeDiscoveryRequest({
       workspaceRoot: "/tmp/project-alpha",
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "Project Alpha",
       dashboardMode: "backlog",
       currentViewSummary: {
@@ -391,8 +391,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     const request = buildProjectRecipeDiscoveryRequest({
       workspaceRoot: "/tmp/project-alpha",
       surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot"),
-      profileId: "engineering-copilot",
+      project: createProject("developer"),
+      profileId: "developer",
       selectedWorkLabel: "IES-9242",
       selectedWorkTitle: "Stabilize search",
       resourceKind: "ticket",
@@ -490,8 +490,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("surfaces selected-work recipes on the dashboard when ticket context exists", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "project.dashboard",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "PROJ-123 Stabilize search",
       dashboardMode: "backlog",
       resourceKind: "ticket",
@@ -507,8 +507,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("surfaces ticket recipes based on blockers, PR feedback, and estimate overrun", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot"),
-      profileId: "engineering-copilot",
+      project: createProject("developer"),
+      profileId: "developer",
       selectedWorkLabel: "IES-9242",
       selectedWorkTitle: "Stabilize search",
       resourceKind: "ticket",
@@ -557,8 +557,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("surfaces closeout recipes only after linked code is merged", () => {
     const quickStarts = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot"),
-      profileId: "engineering-copilot",
+      project: createProject("developer"),
+      profileId: "developer",
       selectedWorkLabel: "IES-9300",
       selectedWorkTitle: "Ship search fallback",
       resourceKind: "ticket",
@@ -596,8 +596,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   it("hides tshirt-size-epic when the selected epic already has children", () => {
     const withoutChildren = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "PROJ-100",
       selectedWorkTitle: "Platform epic",
       resourceKind: "ticket",
@@ -614,8 +614,8 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
     });
     const withChildren = buildT3workSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
-      project: createProject("product-partner"),
-      profileId: "product-partner",
+      project: createProject("product-owner"),
+      profileId: "product-owner",
       selectedWorkLabel: "PROJ-100",
       selectedWorkTitle: "Platform epic",
       resourceKind: "ticket",

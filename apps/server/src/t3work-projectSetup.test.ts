@@ -124,6 +124,23 @@ describe("renderT3WorkProjectSetupFiles", () => {
     expect(manifest?.contents).toContain("sha256:known");
     expect(manifest?.contents).toContain("sha256:known-claude");
   });
+
+  it("ships the change-request assessment skill only for the requirements-engineer profile", () => {
+    const skillPath = ".t3work/skills/change-request-assessment/SKILL.md";
+    const templatePath = ".t3work/skills/change-request-assessment/assessment-template.md";
+
+    const defaultFiles = renderT3WorkProjectSetupFiles();
+    expect(defaultFiles.some((file) => file.relativePath === skillPath)).toBe(false);
+    expect(DEFAULT_T3WORK_PROJECT_SETUP_PROFILE_ID).not.toBe("requirements-engineer");
+
+    const reFiles = renderT3WorkProjectSetupFiles({ profileId: "requirements-engineer" });
+    const skill = reFiles.find((file) => file.relativePath === skillPath);
+    const template = reFiles.find((file) => file.relativePath === templatePath);
+    expect(skill?.contents).toContain("name: change-request-assessment");
+    expect(skill?.contents).toContain("1 SP = 8 hours");
+    expect(skill?.writeMode).toBe("if-missing");
+    expect(template?.contents).toContain("# CR-NNNN");
+  });
 });
 
 describe("resolveT3WorkProjectSetupWriteDecision", () => {
