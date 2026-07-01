@@ -112,6 +112,14 @@ export function createMockAtlassianBackendApi(input: {
           ...(request.limit !== undefined ? { limit: request.limit } : {}),
         }),
       ),
+    pollMyWork: async (request) =>
+      input.toMockPollResult(
+        await input.mockIntegrationProvider.listResources({
+          account: request.account,
+          externalProjectId: request.externalProjectId,
+          ...(request.limit !== undefined ? { limit: request.limit } : {}),
+        }),
+      ),
     getResource: async (ref) => input.mockIntegrationProvider.getResource(ref.ref),
     searchAssignableUsers: async (request) => {
       const normalizedQuery = request.query?.trim().toLowerCase() ?? "";

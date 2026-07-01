@@ -14,7 +14,7 @@ import { useAtlassianCurrentUserDisplayNameState } from "~/t3work/hooks/t3work-u
 import { readProjectSetupProfileIdFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
 import { useProjectMyWorkDerivedData } from "~/t3work/hooks/t3work-useProjectMyWorkDerivedData";
 import { useProjectKanbanBoardColumns } from "~/t3work/hooks/t3work-useProjectKanbanBoardColumns";
-import { useProjectResources } from "~/t3work/hooks/t3work-useProjectResources";
+import { useProjectMyWork } from "~/t3work/hooks/t3work-useProjectMyWork";
 import { type ProjectMyWorkStatusCategory } from "~/t3work/t3work-projectMyWork";
 import {
   useProjectDashboardMyWorkState,
@@ -38,7 +38,7 @@ export function useProjectMyWorkState({
     lastCheckedAt,
     reload,
     loading: resourcesLoading,
-  } = useProjectResources(project);
+  } = useProjectMyWork(project);
   const { boardColumns, availableStatuses } = useProjectKanbanBoardColumns(project);
   const tickets = fetchedTickets.length > 0 ? fetchedTickets : fallbackTickets;
   const kanbanProfileId = useMemo(() => readProjectSetupProfileIdFromProject(project), [project]);
