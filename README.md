@@ -1,6 +1,32 @@
 # T3 Code
 
-T3 Code is a minimal web GUI for coding agents (currently Codex, Claude, Cursor, and OpenCode, more coming soon).
+This is our fork of T3 Code. Upstream T3 Code is a minimal web/desktop GUI for coding
+agents; this fork adds **t3work** on top.
+
+**t3work** is a team-based, project-aware agentic shell. The premise is simple: teams do
+not need another loose AI chat. They need one managed workbench where engineers, PMs,
+designers, QA, support, and managers share project context, use role-aware recipes, and
+review external writes before they happen.
+
+Core stays lean: agent runtime, providers, permissions, persistence, workflows, safe UI
+blocks, and pack loading. Product opinion comes from **packs**: versioned bundles for
+connectors, views, recipes, profiles, themes, policies, provider integrations, and project
+sync.
+
+Examples: a GitHub pack makes it a PR/repo workbench; an Atlassian pack makes it a
+Jira/Confluence workbench; an enterprise pack can add internal systems, branded UI,
+approved providers, role-based workflows, and locked policy.
+
+Current state:
+
+- local-first web/desktop shell
+- provider support for Codex, Claude, Cursor, and OpenCode
+- project and session UI for working with coding agents
+- early `t3work` experiments for team/project-oriented work surfaces
+
+This repository is still very early. Expect rough edges.
+
+Detailed working spec: [`docs/t3work-mvp`](./docs/t3work-mvp).
 
 ## Installation
 
