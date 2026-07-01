@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Make project dashboards agent-authorable without giving agents raw integration access.
+Make project dashboards and pack-provided work surfaces agent-authorable without giving
+agents raw integration access.
 
 The model is **Lego blocks, not raw APIs**. Agents compose safe project views from
 shell-owned data hooks, UI blocks, and reviewed actions. The shell keeps ownership of
@@ -10,8 +11,9 @@ provider auth, caching, normalization, freshness, permissions, and mutation revi
 
 This epic extends [Epic 19: Workspace Miniapps](./19-workspace-miniapps.md). Miniapps
 remain the durable View primitive. This epic defines the block library and delivery plan
-needed to let agents recreate and customize the existing Backlog and My Work dashboards
-from project scope.
+needed to let agents and workspace packs recreate and customize Backlog/My Work-style
+dashboards. Under [Epic 36](./36-workspace-packs-and-distributions.md), Backlog and My
+Work are proof views supplied by a pack, not permanent core product pages.
 
 ## Product Vision
 
@@ -70,16 +72,17 @@ The user reviews the view manifest before enablement:
 ## Design Principles
 
 1. **Compose first.** Agents arrange approved blocks before writing custom rendering.
-2. **No raw provider APIs by default.** Jira, Tempo, GitHub, and future providers stay
+2. **No raw connector APIs by default.** Jira, Tempo, GitHub, and future connectors stay
    behind normalized project contracts.
 3. **Shell owns data.** Blocks use shell-managed queryables, cache freshness, and tool
    broker permissions.
-4. **Views are source artifacts.** Project-local views live under `.t3work/miniapps/`
-   and are inspectable, reviewable, and git-trackable.
+4. **Views are source artifacts.** Current examples use `.t3work/miniapps/` for
+   project-local views. Under Epic 36 this is transitional; generated/synced state should
+   move to host app-data, with repo files only for explicitly project-owned source.
 5. **Review before enablement.** A generated view is not mounted until the user reviews
    manifest capabilities and placement.
-6. **Dogfood with built-ins.** Backlog and My Work must be expressible through the same
-   public blocks that agents use.
+6. **Dogfood with current views.** Backlog and My Work must be expressible through the same
+   public blocks that agents and packs use.
 
 ## Architecture
 
@@ -191,9 +194,11 @@ The shell owns routing and mounting.
 
 The host resolves:
 
-1. built-in views
-2. enabled project-local views
+1. core/distribution registry views
+2. enabled global or remote-managed pack views
 3. enabled user-home views
+4. enabled project-local views
+5. explicit policy locks and user overrides
 
 The host passes a `ProjectViewHostContext` into blocks:
 
@@ -207,9 +212,10 @@ type ProjectViewHostContext = {
 };
 ```
 
-## Built-In View Targets
+## Transitional View Targets
 
-Backlog and My Work become the proof that this model is real.
+Backlog and My Work become proof that this model is real. They should be expressible as
+pack-provided views using the same public blocks as custom enterprise views.
 
 ### Backlog As Blocks
 
@@ -265,7 +271,7 @@ Tasks:
 
 - Add `ProjectViewCapability` and `ProjectViewManifest` schemas.
 - Document that project custom views use blocks and high-level capabilities.
-- Add a registry shape for built-in project views.
+- Add a registry shape for current and pack-provided project views.
 - Keep current Backlog and My Work behavior unchanged.
 
 Acceptance:
@@ -293,16 +299,16 @@ Acceptance:
 - No block imports integration clients.
 - `vp test`, `vp run typecheck`, and additive guard pass.
 
-### Wave 2: Built-In Views Use The Same Registry
+### Wave 2: Existing Views Use The Same Registry
 
 Goal: make Backlog and My Work look like registered views internally.
 
 Tasks:
 
-- Add built-in view registry entries for `backlog` and `my-work`.
+- Add internal registry entries for `backlog` and `my-work`.
 - Route project view selection through the registry.
 - Keep implementation source in app code for now.
-- Surface each built-in view's manifest in diagnostics/dev UI.
+- Surface each registered view's manifest in diagnostics/dev UI.
 
 Acceptance:
 
@@ -337,13 +343,13 @@ Goal: first dogfood migration.
 Tasks:
 
 - Implement a `.t3work/miniapps/my-work` equivalent using public blocks.
-- Compare behavior against built-in My Work.
+- Compare behavior against current in-app My Work.
 - Fill missing block capabilities rather than importing app internals.
-- Keep built-in My Work as fallback.
+- Keep current in-app My Work as fallback during migration.
 
 Acceptance:
 
-- Project-local My Work can replace built-in My Work behind a feature flag.
+- Project-local or pack-provided My Work can replace current My Work behind a feature flag.
 - Block gaps are documented or closed.
 - Browser click-through covers filter, board/table switch, recipe launch, and ticket open.
 
@@ -357,10 +363,12 @@ Tasks:
 - Support board/sprint/filter selection, table columns, planning lanes, hierarchy,
   GitHub activity, and recipe sidecar.
 - Keep mutations as high-level reviewed actions.
+- Treat the resulting view as the candidate entry for an external Atlassian/work-management
+  pack.
 
 Acceptance:
 
-- Project-local Backlog can replace built-in Backlog behind a feature flag.
+- Project-local or pack-provided Backlog can replace current Backlog behind a feature flag.
 - No raw Jira/Tempo/GitHub imports.
 - Existing backlog tests remain green or move to block-level tests.
 - Browser click-through covers search, filters, board/table/planning modes, drag/move if
@@ -439,22 +447,29 @@ The agent must not:
 - create or enable the view silently
 - widen capabilities after user approval without a new review
 
-## Open Questions
+## Working Decisions
 
-- Should project-local views live under `.t3work/miniapps/` only, or should
-  `.t3work/views/` alias the common case?
-- Should built-in Backlog and My Work eventually move out of app source, or stay as
-  bundled registry entries?
-- How much custom rendering should be allowed before sandboxing lands?
-- Should view state be per-user, per-project, or both?
-- Should generated views be committed automatically, staged, or left as unstaged files?
+- Backlog and My Work should move out of core into an Atlassian/work-management pack as
+  soon as the pack loading path can carry them. Temporary distribution/core registry
+  entries are allowed only as migration scaffolding, not as the target architecture.
+- Pack-installed views do not copy into project workspaces. Project-local views are
+  explicitly authored project code, not installed pack code.
+- v1 assumes trusted view code. Sandboxing remains a later hardening track for untrusted
+  marketplaces or arbitrary third-party code, not a blocker for trusted packs.
+- View state must declare ownership. Per-user state is the default for layout, filters, and
+  hides/pins; per-project state is allowed only when the view declares shared state and the
+  user approves the write.
+- Generated views are never auto-committed. The workflow writes a draft or unstaged files,
+  shows a diff, and leaves commit/stage decisions to the user.
+- Explicitly project-owned view source follows the project-local storage decision in Epic
+  36; pack-installed views stay in host app-data.
 
 ## First Milestone
 
 The first milestone is intentionally small:
 
 1. Extract blocks.
-2. Register built-in Backlog/My Work.
+2. Register current Backlog/My Work through the same registry used by packs.
 3. Create one project-local trusted `triage-dashboard`.
 
 This proves the direction without giving agents raw integration access.

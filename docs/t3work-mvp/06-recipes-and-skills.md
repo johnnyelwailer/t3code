@@ -3,12 +3,14 @@
 ## Purpose
 
 Recipes turn blank chat into contextual actions. A recipe is a visible UI launcher backed
-by a skill or project-local action recipe.
+by a workflow from a project-local source, user pack, distribution pack, or remote-managed
+pack.
 
-Action recipes are the stronger project-scoped form: a trusted plugin-module directory
+Action recipes are the stronger code-backed form: a trusted plugin-module directory
 (`recipe.ts`) with metadata, a launcher View, templated files, a visibility predicate, and
 a workflow. When launched, the shell materializes the recipe into a run directory and gives
-the agent only the path to that run. See [Epic 16](./16-action-recipes.md) for the full model.
+the agent only the path to that run. See [Epic 16](./16-action-recipes.md) for the full
+model.
 
 ## Recipe Model
 
@@ -29,17 +31,17 @@ type RecipeMatchResult = {
 };
 ```
 
-Bundled skill-pack recipes and project-local recipes are the same concept with different
-sources: bundled recipes are matched against the render context; project-local recipes are
-discovered from the workspace `recipes/` directory and authored as plugin modules. Metadata
-that varies by context (display name, icon, rank, visibility) is plain code over the render
-context, not a `{{ }}` template language.
+Pack-provided recipes and project-local recipes are the same concept with different
+sources. The host discovers recipes from active pack manifests and local workspace
+directories, then merges them through the pack precedence model. Metadata that varies by
+context (display name, icon, rank, visibility) is plain code over the render context, not a
+`{{ }}` template language.
 
 ## Recipe Scope
 
 ### Skill Pack Recipes
 
-Bundled with `t3work` and enabled by selected skill packs.
+Provided by packs and enabled by selected skill packs or policy.
 
 Examples:
 
@@ -50,7 +52,8 @@ Examples:
 
 ### Global Recipes
 
-Shipped with the app and available everywhere.
+Installed globally, user-wide, or through a distribution pack and available across
+workspaces when policy allows.
 
 Examples:
 
@@ -92,7 +95,7 @@ Inputs:
 - Jira issue type
 - project profile
 - enabled skill packs
-- available integrations
+- available pack-provided connectors
 - project memory
 - recent artifacts
 

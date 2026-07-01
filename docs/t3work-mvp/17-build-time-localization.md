@@ -2,12 +2,15 @@
 
 ## Goal
 
-Add a project-scoped localization path for `t3work` without hand-editing existing T3
-Code UI source files.
+Add a pack-aware localization path for `t3work` without hand-editing existing T3 Code UI
+source files.
 
-The first goal is not upstream-ready full i18n. The first goal is a reversible build
-pipeline experiment that can prove whether another display language can be shipped for
-the `t3work` surface while preserving the upstream source tree.
+The first goal is not upstream-ready full i18n. The first goal is a reversible pipeline
+experiment that can prove whether another display language can be shipped for the
+`t3work` surface while preserving the upstream source tree. Under the pack-driven vision,
+workspace packs should be able to provide locale strings and terminology overrides; build
+time remains useful for core/distribution strings, while pack strings may need runtime
+catalog loading.
 
 ## Current Context
 

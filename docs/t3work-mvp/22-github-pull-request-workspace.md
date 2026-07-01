@@ -6,9 +6,13 @@ Current `t3work` GitHub integration is context-first, not workspace-first.
 
 That is enough for linking GitHub activity to Jira work items and for attaching pull
 request bundles to chat, but it is not enough for doing review work inside `t3work`.
-The next GitHub phase should treat pull requests as first-class resources with their
-own built-in project View, diff workspace, selection-aware chat/handoffs, and
-recipe-driven mutation flows.
+The next GitHub phase should treat pull requests as first-class resources with their own
+default project View, diff workspace, selection-aware chat/handoffs, and recipe-driven
+mutation flows.
+
+Pack alignment note: GitHub should ship as a normal default pack because it is deeply tied
+to developer workspaces and the base T3 Code runtime. This spec treats the PR workspace as
+a default-pack View, not as permanent core product shape.
 
 This should build on the additive GitHub route and context-bundle work that already
 exists. Do not introduce direct browser-to-GitHub access. Do not clone the GitHub UI
@@ -22,7 +26,8 @@ than GitHub for the workflows that matter most.
 - keep review gates, blocking conditions, and common actions pinned at the top
 - default activity to newest-first and unresolved-first workflows
 - let users attach any review object to chat or a child session
-- provide built-in recipes for review, reply, requested-changes handling, and follow-up
+- provide default pack/distribution recipes for review, reply, requested-changes handling,
+  and follow-up
 - make the same PR workspace adapt to the active user profile
 - add adjacent authoring, deployment, and release actions around PR work
 - keep all external writes reviewable and explicit
@@ -240,9 +245,9 @@ This work should stay inside the same additive boundary discipline as the rest o
   not inside the base chat diff route
 - use `t3work-usePersistedRouteState` and existing split-view layout patterns for PR-level
   navigation/search/filter persistence
-- implement the built-in PR workspace as a composition of reusable `t3work` blocks first,
+- implement the default PR workspace as a composition of reusable `t3work` blocks first,
   then mount those blocks in the default View; do not hard-code a monolithic PR page that
-  later has to be split for customization
+  later has to be split for pack customization
 
 ### Server Boundary
 
@@ -284,8 +289,8 @@ defined in Epic 16, Epic 19, and Epic 31. Do not invent a separate "PR app" abst
 
 Vocabulary alignment:
 
-- **View / miniapp**: the composable UI unit. The default PR workspace is a built-in View,
-  and teams can later create project-local PR Views under `.t3work/miniapps/*`.
+- **View / miniapp**: the composable UI unit. The default PR workspace is a default-pack
+  View, and teams can later create project-local or pack-provided PR Views.
 - **Block**: shell-owned React component used by Views. Blocks own density, loading,
   empty/error states, accessibility, and safe data hooks.
 - **Surface**: where recipes and sections appear, such as
@@ -321,8 +326,8 @@ Composition rules:
   model as other miniapps
 - teams can reorder, hide, or replace sections through project-local Views without
   reimplementing GitHub auth, caching, mutations, or diff parsing
-- built-in blocks should be dogfooded in the default View before exposing a customization
-  surface
+- shell-owned blocks should be dogfooded in the default View before exposing a pack/user
+  customization surface
 
 Example project-local View direction:
 
@@ -880,7 +885,7 @@ sub-surface changed.
 
 - attach comment, file, hunk, line-range, and check selections to chat
 - launch child sessions from PR selections with repository/worktree context
-- add built-in recipes for review, reply, and requested-changes handling
+- add default pack/distribution recipes for review, reply, and requested-changes handling
 
 ### Phase 4: Personalization And Advanced Review Flows
 

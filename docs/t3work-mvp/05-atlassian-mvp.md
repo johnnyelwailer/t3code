@@ -5,6 +5,10 @@
 Atlassian provides structured project discovery and Jira issue context for the first
 `t3work` MVP.
 
+Under the pack-driven vision, this is the first connector/proof pack, not core product
+shape. Atlassian-specific behavior should stay behind connector and pack boundaries so it
+can later move out of the core repository or ship as an optional distribution pack.
+
 ## MVP Capabilities
 
 - Discover accessible Atlassian sites/accounts.

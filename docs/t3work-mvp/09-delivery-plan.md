@@ -1,5 +1,9 @@
 # Epic 09: Delivery Plan
 
+This plan describes the first proof slice. Under the pack-driven vision, Atlassian/Jira
+deliverables should be treated as proof-pack or connector-distribution work, not as
+permanent core product shape.
+
 ## Phase 0: Architecture Spike
 
 Deliverables:
@@ -39,7 +43,7 @@ Validation:
 
 Deliverables:
 
-- Atlassian provider implementation
+- Atlassian connector implementation
 - account/site discovery
 - Jira project listing
 - Jira issue listing
@@ -58,7 +62,7 @@ Deliverables:
 
 - recipe registry
 - applicability matcher
-- project-scoped recipe plugin-module (`recipe.ts`) registry
+- project-local and pack-provided recipe plugin-module (`recipe.ts`) registry
 - pre-launch recipe metadata rendering for dashboard and side panel actions
 - recipe run materialization into `runs/<run-id>/recipe/`
 - `context.json`, `context.schema.json`, and `context-map.md` generation

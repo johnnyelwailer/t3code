@@ -137,6 +137,10 @@ live at the project root for shared use:
 Discovery is by filesystem scan for `*.workflow.ts`. Ownership comes from where
 `defineWorkflow(path)` is called, not from where the file sits.
 
+The `.t3work` paths in this epic are the current project-local authoring convention. Under
+Epic 36, generated/synced state should move to host app-data, and repo files should remain
+only for explicitly project-owned workflow source.
+
 ## The `meta` block
 
 ```ts
@@ -572,7 +576,7 @@ workflow bodies as **typed, namespaced callables** — never as strings.
 ### `defineTool` — declaration + implementation in one place
 
 ```ts
-// @t3work/sdk/tools/github.ts — a built-in tool
+// @t3work/sdk/tools/github.ts — default-pack tool example
 import { Schema } from "effect";
 import { githubWrite } from "@t3work/sdk/groups";
 
@@ -622,10 +626,13 @@ and as the broker-side classification). `label` and `description` are user-facin
 Group `id`s are globally unique within a project; the loader refuses duplicate
 registrations with a clear error.
 
-Groups live in three tiers, by ownership:
+Groups live in pack-aware tiers, by ownership:
 
-- **Built-in groups** in `@t3work/sdk/groups.ts` — covers integrations the SDK ships
-  (`githubRead`, `githubWrite`, `jiraRead`, `jiraWrite`, `t3workThreadWrite`, etc.).
+- **Core/distribution groups** in `@t3work/sdk/groups.ts` or an active distribution pack —
+  covers tools the host or distribution ships (`githubRead`, `githubWrite`, `jiraRead`,
+  `jiraWrite`, `t3workThreadWrite`, etc.).
+- **Pack-provided groups** from active packs. These are how enterprise or connector packs
+  introduce new consent categories.
 - **Project-local groups** in `.t3work/groups.ts`, registered via
   `defineProject({ groups: { … } })`. For project-wide novel consent semantics.
 - **Recipe-scoped groups** declared inline in `recipe.ts` when only that recipe's tools
@@ -633,8 +640,9 @@ Groups live in three tiers, by ownership:
 
 ### The `tools.*` global tree
 
-Workflow bodies call tools through a namespaced global — no imports needed for
-built-ins. The mapping from tool `id` to the namespace path is mechanical:
+Workflow bodies call tools through a namespaced global — no imports needed for tools made
+available by the resolved pack/project environment. The mapping from tool `id` to the
+namespace path is mechanical:
 `github.pull_request.merge` → `tools.github.pullRequest.merge` (dot segments become
 nested objects; snake_case → camelCase per segment).
 
@@ -650,8 +658,8 @@ ref's `group` is checked against `meta.capabilities` at the call site; missing
 capability → `PermissionDeniedError` thrown synchronously and journaled like any other
 primitive failure.
 
-The SDK ships an ambient `.d.ts` for the built-in tree so authors get full IntelliSense
-without a project build step.
+The SDK/pack loader emits ambient `.d.ts` files for the resolved tool tree so authors get
+full IntelliSense without a project build step.
 
 ### Project-local tools via recipe registration
 

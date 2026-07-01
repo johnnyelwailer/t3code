@@ -2,6 +2,11 @@
 
 This traces a REAL flow through t3code.
 
+This is an implementation-support document for the current Atlassian/Jira proof slice.
+It is not the target product architecture. In the pack-driven vision, these flows are
+owned by an Atlassian/work-management pack and use the shared connector, sync/cache,
+policy, and reviewable-mutation primitives.
+
 ---
 
 ## Flow 1: User Connects Jira (What Already Exists)
@@ -248,7 +253,7 @@ async createProject(input: CreateProjectInput): Promise<ProjectShellProject> {
 ### Server handles it
 
 ```ts
-// (Hypothetically - this route probably exists somewhere)
+// Example route shape; exact implementation may use a typed backend method.
 POST /api/t3work/projects/create
 {
   externalProjectId: "ABC",

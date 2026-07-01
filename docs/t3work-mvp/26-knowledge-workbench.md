@@ -2,17 +2,19 @@
 
 ## Purpose
 
-Documentation and knowledge work are unaddressed today. `t3work` has structured-issue
-support (Jira) but nothing for the wiki/documentation half of how teams actually work —
-Confluence, in Atlassian terms — where requirements, runbooks, decisions, and specs live.
+Documentation and knowledge work are unaddressed today. The current Atlassian proof slice
+has structured-issue support (Jira) but nothing for the wiki/documentation half of how
+teams actually work — Confluence, in Atlassian terms — where requirements, runbooks,
+decisions, and specs live.
 
-The **Knowledge Workbench** is a provider-agnostic _documents_ surface, a sibling to the
-Backlog and My Work surfaces. **Confluence is its first Source.** It is the knowledge-side
-counterpart to the issue-side Backlog browser.
+The **Knowledge Workbench** is a connector-agnostic _documents_ surface, supplied by a
+knowledge/work-management pack once pack loading exists. **Confluence is its first
+Source.** It is the knowledge-side counterpart to pack-provided work-item views such as
+Backlog.
 
 This epic also realizes the [vision](./00-vision.md) along the **Sources** axis: knowledge
 is a second resource domain, and connecting it should not require a second product — just
-a second domain exposed by a connector.
+a second domain exposed by a connector and delivered through a pack.
 
 ## Principle — Accelerate, Don't Replicate
 

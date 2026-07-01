@@ -37,13 +37,15 @@ launch). When this document says a recipe is a template, it means the authored f
 
 ## Scope
 
-The first implementation supports project-scoped recipes only. Personal recipes and
-company-owned collections are later extensions of the same model, distinguished only by
-where the plugin module lives (project workspace vs. home workspace vs. bundled app).
+The first implementation may support project-scoped recipes only, but the product model is
+broader. Recipes can be supplied by project packs, user packs, distribution packs, or
+remote-managed workspace packs (see
+[Epic 36](./36-workspace-packs-and-distributions.md)). Scope is determined by where the
+pack/module is installed and which policy layer enables it.
 
 The MVP does not optimize for public-marketplace security. Project recipes are trusted
-local code in the first stage; see [Security: Two Stages](#security-two-stages) for how
-that evolves.
+local code in the first stage; remote-managed pack recipes add signing, capability
+manifests, policy locks, and rollback before activation.
 
 ## Plugin Modules
 
@@ -430,8 +432,9 @@ type RenderContextCommon = {
 };
 ```
 
-Discovery walks the project `recipes/` directory, loads each plugin module, filters by
-surface, evaluates `visible`, and renders metadata. Failures are isolated:
+Discovery walks all active recipe sources (distribution/user/project/remote-managed packs
+plus project-local `recipes/`), loads each plugin module, filters by surface, evaluates
+`visible`, and renders metadata. Failures are isolated:
 
 - A recipe whose module fails to load or whose `visible`/metadata throws is dropped from
   the list — it never breaks the page or the other recipes.
@@ -442,14 +445,21 @@ surface, evaluates `visible`, and renders metadata. Failures are isolated:
 read-only tools, but it must not perform writes or long IO. (See the binding note under
 [Tools](#tools) for how pre-launch code gets a no-thread, read-only tool surface.)
 
-### Bundled vs. project-local recipes
+### Recipe Sources And Precedence
 
-Bundled recipes (shipped with the app, enabled by skill packs) and project-local recipes
-are the **same concept with different sources**. Bundled recipes are matched against the
-render context by the recipe matcher; project-local recipes are discovered from the
-workspace directory. A project-local recipe whose id matches a bundled one inherits the
-bundled visibility/rank unless it declares its own. The long-term goal is a single
-discovery path over a single recipe type, regardless of source.
+Pack-provided recipes and project-local recipes are the **same concept with different
+sources**. The host discovers recipes from active packs and local workspace folders, then
+merges them through the same pack precedence model as other contributions:
+
+```text
+core defaults → distribution packs → global packs → user packs → project packs →
+remote-managed packs → explicit locks
+```
+
+A higher-precedence recipe whose id matches a lower-precedence recipe may override fields
+such as visibility, rank, slash alias, default inputs, or workflow entrypoint. Locks may
+prevent override. The long-term goal is a single discovery path over a single recipe type,
+regardless of source.
 
 ## Conversation Participants
 
@@ -623,7 +633,7 @@ behaviour selected by whether the body uses the `thread` global.
 
 The shell does not own a single launcher UX. Recipes surface through **sidecar sections**
 ([Epic 19 — Sidecar Sections](./19-workspace-miniapps.md#sidecar-sections)) — most
-commonly the bundled "Quick Starts" section — and that section's View decides per-item
+commonly a pack-provided "Quick Starts" section — and that section's View decides per-item
 click behaviour based on the workflow's content:
 
 | Workflow shape                                         | Click behaviour         | Result surface                                                                        |
@@ -728,7 +738,7 @@ defineRecipe({
   through the Quick Starts card.
 - Per-surface scope: the alias is global within a project. Two recipes may share an alias
   only if their `surfaces` are disjoint; otherwise the merge step rejects the later one
-  (see [Bundled vs. project-local recipes](#bundled-vs-project-local-recipes) for the
+  (see [Recipe Sources And Precedence](#recipe-sources-and-precedence) for the
   precedence rule that decides which wins).
 
 #### Namespace and collision rules
@@ -740,10 +750,9 @@ order, refusing to register any later contributor that collides:
    override.
 2. **Provider slash commands** (`ServerProvider.slashCommands`). Reserved per-provider;
    recipes cannot override on a surface where that provider is currently selected.
-3. **Bundled recipes** ([Bundled vs. project-local](#bundled-vs-project-local-recipes)).
-4. **Project-local recipes**. A project recipe whose `id` matches a bundled recipe inherits
-   the bundled `slashAlias` unless it declares its own (consistent with the existing
-   visibility/rank inheritance rule).
+3. **Pack and project recipes** in resolved precedence order
+   ([Recipe Sources And Precedence](#recipe-sources-and-precedence)). A higher-precedence
+   recipe may override a lower-precedence `slashAlias` unless a policy lock prevents it.
 
 Collisions surface in the same diagnostic channel as other recipe-load failures — the
 recipe loads but its slash alias is suppressed; the Quick Starts card remains available.
@@ -926,8 +935,9 @@ Binding modes:
 > pre-launch `visible.ts` evaluation. Thread-bound recipe execution is filtered by
 > `allowedToolGroups`; pre-launch bindings are further intersected with the read-only
 > default (`integration.read`, `ui.render`). Project-local recipes with no declared
-> `allowedToolGroups` get no tools. Bundled core recipes keep their explicit default grants
-> from the bundled recipe registry for MVP compatibility.
+> `allowedToolGroups` get no tools. Temporary distribution/core registry recipes keep their
+> explicit default grants for MVP compatibility until they move behind the pack manifest
+> model.
 
 ## Views
 
@@ -1087,7 +1097,7 @@ thread bootstrap or first context build is still pending. It shows at least:
 
 - recipe id and version
 - rendered title and short description
-- source (`project-local` or bundled)
+- source (pack id/version or project-local path)
 - selected surface and relevant work-item context
 - current phase: `queued`, `creating-thread`, `bootstrapping-agent`, `running`,
   `waiting-for-input`, `completed`, `failed`
@@ -1188,7 +1198,7 @@ A small, declarative workflow built from the unified step union — and itself a
 proof that the architecture composes end-to-end:
 
 ```ts
-// recipes/create-recipe/recipe.ts (bundled)
+// recipes/create-recipe/recipe.ts (distribution pack or project-local source)
 export default defineRecipe({
   id: "create-recipe",
   surfaces: ["thread.context"],
@@ -1260,8 +1270,7 @@ future Edit-this surface ([Epic 19 — Context menus](./19-workspace-miniapps.md
 
 Shape:
 
-1. **Input**: a target source path plus the kickoff customization (what change the
-   user wants).
+1. **Input**: a target source path plus the requested edit (what change the user wants).
 2. **Script step**: reads the target file, inspects which `define*` helper it exports,
    and selects the appropriate authoring guidance to inject into the agent's prompt
    (falling back to manifest guidance for legacy project-local `recipe.json` items).
@@ -1277,9 +1286,10 @@ right move once per-kind guidance grows beyond what fits cleanly in one prompt �
 recipe, multiple prompt references picked by the script step.
 
 The same workflow also backs the **"Customize…"** context-menu action used for
-_structured / destructive_ operations (revert-to-bundled, reset overrides, change tool
+_structured / destructive_ operations (reset to source defaults, reset overrides, change tool
 grants, etc.). There are intentionally no ad-hoc confirmation dialogs in the UI — every
-destructive customization routes through this guided workflow's preview + approval steps.
+destructive pack or project-local edit routes through this guided workflow's preview +
+approval steps.
 
 ### Default behavior
 
@@ -1318,14 +1328,15 @@ Project recipes live next to project data:
   memory/
 ```
 
-Bundled recipes from skill packs may be referenced or copied into project scope when a
-project is created. Project-local recipes are the editable source of truth for the MVP.
+Pack-provided recipes from skill packs may be referenced from project scope, or copied into
+project scope when the user explicitly wants an editable fork. Project-local recipes are
+the editable source of truth for the early MVP.
 
 ## Implementation Status Summary
 
 | Area                                                                                                                                                                                         | Status                                                                                                                                                |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Project-local discovery + bundled matching                                                                                                                                                   | Built                                                                                                                                                 |
+| Project-local discovery + temporary distribution/core matching                                                                                                                               | Built                                                                                                                                                 |
 | Visibility (predicate + script, timeout, isolation)                                                                                                                                          | Built (via `recipe.json` + expression engine)                                                                                                         |
 | TS-module authoring (`recipe.ts`), retire expression engine                                                                                                                                  | Partial (engine deleted; the discovery-layer `{{ }}` template renderer is kept and its removal deferred)                                              |
 | Unified workflow step union; kickoff absorbed                                                                                                                                                | Deleted (step-union runtime removed; replaced by the Epic 25 engine)                                                                                  |

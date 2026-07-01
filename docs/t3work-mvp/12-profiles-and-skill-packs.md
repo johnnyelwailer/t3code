@@ -2,19 +2,23 @@
 
 ## Purpose
 
-`t3work` should not be positioned as a QA-only product. QA is the first useful bundle,
-but the product is a project-based agent workspace for many kinds of work.
+`t3work` should not be positioned as a QA-only product. QA is the first useful proof pack,
+but the product is a pack-based agent workspace for many kinds of work.
 
-Profiles and skill packs make that explicit.
+Profiles and skill packs make that explicit. Under the pack-driven vision in
+[Epic 36](./36-workspace-packs-and-distributions.md), profiles and skill packs are content
+types inside broader packs. A pack may ship profiles, skill packs, recipes, views, themes,
+localization, connectors, providers, and policy together.
 
 Profiles are configuration, not a hardcoded product enum.
 
-`t3work` may ship bundled starter profiles as seed configuration, but profiles themselves
-are fully configuration-based. Users and projects should be able to add, clone, edit, and
-replace profiles freely without code changes. Runtime behavior must never depend on checks
-like `profile.id === "engineering-copilot"` or `profile.title === "QA Assistant"`.
-All ranking, visibility, and presentation logic should derive from the profile's lower-
-level preference fields.
+`t3work` may ship starter profiles through a distribution pack as seed configuration, but
+profiles themselves are fully configuration-based. Users, projects, and managed packs
+should be able to add, clone, edit, replace, or force profiles according to policy.
+Runtime behavior must never depend on checks like
+`profile.id === "engineering-copilot"` or `profile.title === "QA Assistant"`. All ranking,
+visibility, and presentation logic should derive from the profile's lower-level
+preference fields.
 
 ## Concepts
 
@@ -45,17 +49,18 @@ Profiles affect:
   [sidecar sections](./19-workspace-miniapps.md#sidecar-sections) are visible by default,
   in what order, and which are collapsed; the profile sets the starting point (e.g., a
   QA profile leads with Open Bugs + QA Quick Starts; an engineering profile leads with
-  Open Pull Requests). Profile defaults are the second layer in the override stack
-  `bundled defaults → profile defaults → project config → user overrides`; the user can
-  override per workspace via the context-menu hide / pin / reorder actions
+  Open Pull Requests). Profile defaults are one input to the pack merge model; the user can
+  override per workspace via the context-menu hide / pin / reorder actions when policy
+  allows it
   ([Epic 19 — Context menus](./19-workspace-miniapps.md#context-menus))
 
 ### Skill Pack
 
 A skill pack is a bundle of recipes (authored as `recipe.ts` plugin modules), prompt
 blocks, artifact templates, and tool-group permissions for a type of work. A skill pack's
-recipes are bundled-source recipes — the same recipe model as project-local recipes, just
-shipped with the app (see [Epic 16](./16-action-recipes.md)).
+recipes use the same recipe model as project-local recipes. Skill packs may be shipped by
+a distribution pack, remote-managed pack, user pack, project pack, or temporary in-repo
+starter package (see [Epic 16](./16-action-recipes.md)).
 
 Examples:
 
@@ -117,15 +122,19 @@ persisted custom profile. Persist selected profile ids and the primary id instea
 persist a generated custom profile when the user explicitly edits and saves the merged
 configuration as its own profile.
 
+Managed packs may force the selected profile set through policy. That is a lock at the
+pack/policy layer, not a profile runtime special case.
+
 ## Package
 
-Skill packs should live in:
+During early implementation, bundled starter skill packs may live in:
 
 ```text
 packages/t3work-skill-packs
 ```
 
-This package owns bundled definitions, not runtime execution.
+This package owns bundled definitions, not runtime execution. Long term, this package is a
+starter distribution-pack source, not the only place skill packs can live.
 
 It should contain starter presets and starter skill packs, not the only legal profile
 definitions in the system.
@@ -348,13 +357,13 @@ Recipes:
 
 ## Project Creation Defaults
 
-When creating from Jira:
+When creating from a pack-provided source:
 
 - show recommended skill packs based on project type and issue data
 - default packs based on project signals plus profile preference fields, not on profile id
   or title
 - allow Product, Support, Delivery, Engineering, and Release packs to be enabled too
-- never imply Jira projects are only for QA work
+- never imply one source, for example Jira, is only for QA work
 
 Example recommendation inputs:
 
@@ -362,7 +371,7 @@ Example recommendation inputs:
 - `communicationStyle.technicalDepth`
 - `preferredArtifactKinds`
 - `defaultActionFamilies`
-- provider/project metadata such as Jira project type and issue patterns
+- connector/project metadata such as Jira project type and issue patterns
 
 Confirm screen should show:
 

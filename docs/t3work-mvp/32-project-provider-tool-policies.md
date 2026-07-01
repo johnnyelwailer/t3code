@@ -5,6 +5,12 @@
 Add a first-class policy layer that decides which agent providers may operate on which
 projects and which tool groups they may access.
 
+Under the pack-driven model in
+[Epic 36](./36-workspace-packs-and-distributions.md), this policy layer also evaluates
+pack-provided defaults and locks. A remote-managed pack may whitelist or deny AI provider
+integrations, connector access, tool groups, profile selection, views, recipes, themes, and
+other workspace defaults. The host remains the source of enforcement.
+
 The policy layer answers questions like:
 
 ```text
@@ -30,6 +36,16 @@ Policies should compose across three levels:
 2. **Project policy** — allow or deny providers for one `t3work` project.
 3. **Tool-group policy** — allow, deny, or require approval for provider access to a tool
    group.
+
+When workspace packs are active, these levels are resolved through the pack merge order
+and lock model:
+
+```text
+core defaults → distribution packs → global packs → user packs → project packs →
+remote-managed packs → explicit locks
+```
+
+By default, pack policy is overrideable. Managed packs can lock any policy field.
 
 Project policy example:
 
@@ -58,6 +74,10 @@ Tool calls are straightforward to gate because every call crosses the broker. Al
 synced context is harder: once Jira, Confluence, or another connector has written files
 into `.t3work/context/...`, a provider running in the same project workspace may be able to
 read those files through normal filesystem access.
+
+That path is a current implementation detail. Under Epic 36, synced/generated connector
+context should move toward host-owned project storage so connector policy does not depend
+on hiding files inside the user's repo.
 
 That means connector policy must affect provider session eligibility, not only tool
 injection.
@@ -197,15 +217,27 @@ smallest blocking rule instead of hiding the recipe silently.
 - Do not claim connector isolation while blocked connector context remains readable from the
   provider's workspace.
 
-## Open Questions
+## Provider Research Questions
 
-- Should project owners be able to edit policy locally, or should organization policy be
-  read-only in managed deployments?
-- Should policy distinguish read-only project metadata from full work-item content?
-- Should approval be per run, per provider session, per tool group, or per individual tool
-  call?
 - Which providers can be launched with enforceable filesystem path restrictions?
-- Should synced context taint clear automatically when connector files are removed, or should
-  it remain until the project workspace is rebuilt?
-- How should policies be exported with project recipes without leaking organization-specific
-  rules?
+
+## Working Decisions
+
+- Project owners can edit local policy only where no higher-precedence managed pack lock
+  applies.
+- Organization-managed policy is read-only at the project level when supplied by a trusted
+  remote endpoint or managed distribution.
+- The UI must explain the lock source instead of merely disabling the control.
+- v1 should type common lock helpers for AI providers, connectors, tool policy, profile
+  selection, active theme, nav views, enabled recipes, and active locales. Less common or
+  pack-specific policy uses the generic lock target escape hatch.
+- Policy distinguishes project metadata from full work-item/content access. Read-only
+  metadata can power setup and navigation without granting connector content.
+- Approval defaults to per run and per tool group for ordinary read tools. External writes,
+  filesystem writes outside the run directory, provider config changes, and capability
+  expansions require individual preview/approval.
+- Synced context taint does not clear merely because files were removed. It clears only
+  after the host records a rebuild/resync boundary that proves blocked connector context is
+  no longer readable by the provider workspace.
+- Recipes export capability references and policy intents, not resolved organization rules.
+  Managed policy is re-applied by the receiving workspace or pack endpoint.
