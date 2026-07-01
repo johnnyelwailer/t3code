@@ -81,7 +81,8 @@ export const readCachedBacklogIssueRows = Effect.fn("t3work.atlassianBacklogCach
         external_project_id AS "externalProjectId",
         issue_id AS "issueId",
         issue_key AS "issueKey",
-        resource_json AS "resourceJson"
+        resource_json AS "resourceJson",
+        assignee_account_id AS "assigneeAccountId"
       FROM t3work_atlassian_backlog_issues
       WHERE provider = ${input.provider}
         AND account_id = ${input.accountId}

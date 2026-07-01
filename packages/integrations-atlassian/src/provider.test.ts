@@ -338,6 +338,55 @@ describe("AtlassianIntegrationProvider", () => {
     expect(displayIds).toContain("PROJ-1");
   });
 
+  it("builds mirror JQL over all statuses, using a relative bound for incremental walks", async () => {
+    const seenJql: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.includes("/rest/api/3/project/search")) {
+        return Response.json({ values: [{ id: "project-1", key: "PROJ" }] });
+      }
+
+      if (url.includes("/rest/api/3/search/jql")) {
+        const match = url.match(/[?&]jql=([^&]+)/);
+        if (match?.[1]) seenJql.push(decodeURIComponent(match[1]));
+        return Response.json({ total: 0, issues: [], isLast: true });
+      }
+
+      // Field-resolution calls (estimate/sprint) hit /field etc. — return empty.
+      return Response.json([]);
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+    const account = { id: "https://test.atlassian.net", provider: "atlassian" } as const;
+
+    // Full backfill: no time bound, all statuses (no statusCategory filter).
+    await provider.listProjectMirrorPage({ account, externalProjectId: "project-1" });
+    // Incremental: relative bound, never an absolute ISO datetime.
+    await provider.listProjectMirrorPage({
+      account,
+      externalProjectId: "project-1",
+      updatedWithinMinutes: 15,
+    });
+
+    const backfillJql = seenJql[0] ?? "";
+    const incrementalJql = seenJql[1] ?? "";
+
+    expect(backfillJql).toContain('project = "PROJ"');
+    expect(backfillJql).not.toContain("statusCategory");
+    expect(backfillJql).not.toContain("updated >=");
+
+    expect(incrementalJql).toContain("updated >= -15m");
+    // Must NOT emit an absolute ISO datetime — Jira JQL rejects the T/Z form.
+    expect(incrementalJql).not.toMatch(/updated >= "?\d{4}-\d{2}-\d{2}T/);
+  });
+
   it("loads a project backlog without the current-user filter", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();

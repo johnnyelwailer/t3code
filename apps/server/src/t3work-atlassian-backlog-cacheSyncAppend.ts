@@ -7,6 +7,7 @@ import { toPersistenceSqlError } from "./persistence/Errors.ts";
 import { serializeBacklogCacheJson } from "./t3work-atlassian-backlog-cacheQueries.ts";
 import {
   parseJson,
+  type BacklogResourceRef,
   type T3workBacklogCacheIdentity,
 } from "./t3work-atlassian-backlog-cacheShared.ts";
 import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables.ts";
@@ -36,6 +37,8 @@ export const appendCachedT3workAtlassianBacklogSyncPage = Effect.fn(
     yield* sql.withTransaction(
       Effect.gen(function* () {
         for (const item of input.items) {
+          const assigneeAccountId =
+            (item as BacklogResourceRef).assigneeAccountId ?? null;
           yield* sql`
             INSERT INTO t3work_atlassian_backlog_issues (
               provider,
@@ -44,7 +47,8 @@ export const appendCachedT3workAtlassianBacklogSyncPage = Effect.fn(
               issue_id,
               issue_key,
               resource_json,
-              updated_at
+              updated_at,
+              assignee_account_id
             )
             VALUES (
               ${input.provider},
@@ -53,13 +57,15 @@ export const appendCachedT3workAtlassianBacklogSyncPage = Effect.fn(
               ${item.id},
               ${item.displayId ?? null},
               ${serializeBacklogCacheJson(item)},
-              ${updatedAt}
+              ${updatedAt},
+              ${assigneeAccountId}
             )
             ON CONFLICT (provider, account_id, external_project_id, issue_id)
             DO UPDATE SET
               issue_key = excluded.issue_key,
               resource_json = excluded.resource_json,
-              updated_at = excluded.updated_at
+              updated_at = excluded.updated_at,
+              assignee_account_id = excluded.assignee_account_id
           `;
         }
 

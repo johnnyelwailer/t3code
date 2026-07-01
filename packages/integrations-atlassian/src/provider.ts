@@ -1116,6 +1116,77 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     };
   }
 
+  /**
+   * Fetches one page of ALL issues in a project across ALL status categories
+   * (including Done), ordered by updated ASC. Used exclusively by the
+   * whole-project mirror sync (Epic 33 Wave 2).
+   *
+   * @param updatedWithinMinutes - When set, restricts to issues updated in the
+   *   last N minutes via a RELATIVE JQL bound (`updated >= -Nm`). Relative is
+   *   deliberate: Jira evaluates it server-side in its own clock, so we avoid
+   *   JQL's absolute-datetime format constraints (it rejects ISO-8601 with
+   *   T/Z/millis) and any server/Jira timezone or clock skew. Omit for a full
+   *   backfill / reconcile walk over the entire project.
+   * @param cursor - Opaque page token from a previous call's `nextCursor`.
+   * @param limit - Page size; defaults to jiraIssueSearchPageSize.
+   */
+  async listProjectMirrorPage(input: {
+    account: IntegrationAccountRef;
+    externalProjectId: string;
+    updatedWithinMinutes?: number;
+    cursor?: string;
+    limit?: number;
+  }): Promise<{
+    items: ReadonlyArray<ReturnType<typeof normalizeIssueSearch>[number]>;
+    nextCursor: string | undefined;
+  }> {
+    const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
+    if (!entry) return { items: [], nextCursor: undefined };
+
+    const project = await this.findProjectById(input.externalProjectId, entry.client);
+    if (!project) return { items: [], nextCursor: undefined };
+
+    const [estimateField, sprintField] = await Promise.all([
+      this.resolveEstimateField(entry.client),
+      this.resolveSprintField(entry.client),
+    ]);
+
+    const projectKey = project.key.replace(/"/g, '\\"');
+    const jqlParts = [`project = "${projectKey}"`];
+    if (input.updatedWithinMinutes && input.updatedWithinMinutes > 0) {
+      jqlParts.push(`updated >= -${Math.floor(input.updatedWithinMinutes)}m`);
+    }
+    const jql = `${jqlParts.join(" AND ")} ORDER BY updated ASC`;
+
+    const extraFields: string[] = [
+      ...(estimateField ? [estimateField.id] : []),
+      ...(sprintField ? [sprintField.id] : []),
+      "timeoriginalestimate",
+      "timeestimate",
+      "aggregatetimeoriginalestimate",
+      "aggregatetimeestimate",
+    ];
+
+    const response = await entry.client.searchIssues(
+      jql,
+      input.limit ?? jiraIssueSearchPageSize,
+      extraFields,
+      input.cursor,
+    );
+
+    const items = response.issues.map((issue) =>
+      this.toBacklogItem(issue as JiraIssue, entry.siteUrl, estimateField, sprintField),
+    );
+
+    return {
+      items,
+      nextCursor:
+        response.nextPageToken && response.isLast !== true
+          ? response.nextPageToken
+          : undefined,
+    };
+  }
+
   async searchAssignableUsers(
     accountId: string,
     issueIdOrKey: string,

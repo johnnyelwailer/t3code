@@ -99,6 +99,8 @@ export const writeCachedT3workAtlassianBacklog = Effect.fn("t3work.atlassianBack
           }
 
           for (const item of input.response.page.items) {
+            const assigneeAccountId =
+              (item as BacklogResourceRef).assigneeAccountId ?? null;
             yield* sql`
             INSERT INTO t3work_atlassian_backlog_issues (
               provider,
@@ -107,7 +109,8 @@ export const writeCachedT3workAtlassianBacklog = Effect.fn("t3work.atlassianBack
               issue_id,
               issue_key,
               resource_json,
-              updated_at
+              updated_at,
+              assignee_account_id
             )
             VALUES (
               ${input.provider},
@@ -116,13 +119,15 @@ export const writeCachedT3workAtlassianBacklog = Effect.fn("t3work.atlassianBack
               ${item.id},
               ${item.displayId ?? null},
               ${serializeBacklogCacheJson(item)},
-              ${updatedAt}
+              ${updatedAt},
+              ${assigneeAccountId}
             )
             ON CONFLICT (provider, account_id, external_project_id, issue_id)
             DO UPDATE SET
               issue_key = excluded.issue_key,
               resource_json = excluded.resource_json,
-              updated_at = excluded.updated_at
+              updated_at = excluded.updated_at,
+              assignee_account_id = excluded.assignee_account_id
           `;
           }
 
