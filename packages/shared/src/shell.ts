@@ -567,6 +567,45 @@ export const resolveCommandPath = Effect.fn("shell.resolveCommandPath")(function
   });
 });
 
+export interface ResolveSpawnCommandSyncOptions {
+  readonly platform: NodeJS.Platform;
+  readonly env: NodeJS.ProcessEnv;
+  readonly resolveExecutable?: SpawnExecutableResolver;
+}
+
+/**
+ * Synchronous core of {@link resolveSpawnCommand}. Resolves a command name to a
+ * directly spawnable executable and decides whether `child_process.spawn` needs
+ * `shell: true` (and matching argument escaping) on Windows.
+ *
+ * Exposed separately because some callers — notably the Claude Agent SDK's
+ * synchronous `spawnClaudeCodeProcess` hook — must resolve the command outside
+ * of an Effect runtime.
+ */
+export function resolveSpawnCommandSync(
+  command: string,
+  args: ReadonlyArray<string>,
+  options: ResolveSpawnCommandSyncOptions,
+): ResolvedSpawnCommand {
+  const { platform, env } = options;
+  if (platform !== "win32") {
+    return { command, args: [...args], shell: false };
+  }
+
+  const resolveExecutable = options.resolveExecutable ?? resolveSpawnExecutableWithNode;
+  const resolvedCommand = resolveExecutable(command, platform, env) ?? command;
+  const extension = NodePath.win32.extname(resolvedCommand).toLowerCase();
+  if (extension !== ".cmd" && extension !== ".bat") {
+    return { command: resolvedCommand, args: [...args], shell: false };
+  }
+
+  return {
+    command: escapeWindowsShellArg(resolvedCommand),
+    args: sanitizeShellModeArgsForPlatform(args, platform),
+    shell: true,
+  };
+}
+
 export const resolveSpawnCommand = Effect.fn("shell.resolveSpawnCommand")(function* (
   command: string,
   args: ReadonlyArray<string>,
@@ -585,17 +624,7 @@ export const resolveSpawnCommand = Effect.fn("shell.resolveSpawnCommand")(functi
         ? { ...hostEnvironment, ...options.env }
         : options.env;
   const resolveExecutable = yield* SpawnExecutableResolution;
-  const resolvedCommand = resolveExecutable(command, platform, env) ?? command;
-  const extension = NodePath.win32.extname(resolvedCommand).toLowerCase();
-  if (extension !== ".cmd" && extension !== ".bat") {
-    return { command: resolvedCommand, args: [...args], shell: false };
-  }
-
-  return {
-    command: escapeWindowsShellArg(resolvedCommand),
-    args: sanitizeShellModeArgsForPlatform(args, platform),
-    shell: true,
-  };
+  return resolveSpawnCommandSync(command, args, { platform, env, resolveExecutable });
 });
 
 export const isCommandAvailable = Effect.fn("shell.isCommandAvailable")(function* (
