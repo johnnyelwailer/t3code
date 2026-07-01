@@ -1187,6 +1187,24 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     };
   }
 
+  /**
+   * Resolve the Jira accountId of the viewer authenticated by `account`.
+   *
+   * `account.id` is the Jira site/cloud id used to select the client — it is
+   * NOT the user's `atlassianAccountId`. My Work needs the latter to filter
+   * the mirror by `assignee_account_id`, so this calls `/rest/api/3/myself`.
+   * Callers should cache the result per `account.id` (stable for the life of
+   * the OAuth connection) rather than calling this on every request.
+   */
+  async resolveViewerAccountId(input: {
+    account: IntegrationAccountRef;
+  }): Promise<string | undefined> {
+    const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
+    if (!entry) return undefined;
+    const myself = await entry.client.getMyself();
+    return myself.accountId;
+  }
+
   async searchAssignableUsers(
     accountId: string,
     issueIdOrKey: string,

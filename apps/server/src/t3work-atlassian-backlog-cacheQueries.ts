@@ -3,7 +3,9 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import {
   buildBacklogSelectionKey,
+  parseJson,
   type BacklogIssueRow,
+  type BacklogResourceRef,
   type BacklogViewRow,
   type T3workBacklogCacheIdentity,
   type T3workBacklogSelectionInput,
@@ -88,5 +90,77 @@ export const readCachedBacklogIssueRows = Effect.fn("t3work.atlassianBacklogCach
         AND account_id = ${input.accountId}
         AND external_project_id = ${input.externalProjectId}
     `;
+  },
+);
+
+/**
+ * My Work projection: issues assigned to the viewer in this project, plus one
+ * level of parents for the assigned issues that aren't already assigned to
+ * the viewer (mirrors the parent-backfill semantics of
+ * `AtlassianIntegrationProvider.listResources`). Uses the
+ * `idx_t3work_atlassian_backlog_issues_my_work` index.
+ */
+export const readMyWorkIssueRows = Effect.fn("t3work.atlassianBacklogCache.readMyWorkIssueRows")(
+  function* (
+    input: T3workBacklogCacheIdentity & {
+      readonly viewerAccountId: string;
+    },
+  ) {
+    const sql = yield* SqlClient.SqlClient;
+
+    const assignedRows = yield* sql<BacklogIssueRow>`
+      SELECT
+        external_project_id AS "externalProjectId",
+        issue_id AS "issueId",
+        issue_key AS "issueKey",
+        resource_json AS "resourceJson",
+        assignee_account_id AS "assigneeAccountId"
+      FROM t3work_atlassian_backlog_issues
+      WHERE provider = ${input.provider}
+        AND account_id = ${input.accountId}
+        AND external_project_id = ${input.externalProjectId}
+        AND assignee_account_id = ${input.viewerAccountId}
+    `;
+
+    const assignedRefs: BacklogResourceRef[] = [];
+    const assignedIds = new Set<string>();
+    const parentIds = new Set<string>();
+    for (const row of assignedRows) {
+      const parsed = parseJson<BacklogResourceRef>(row.resourceJson);
+      if (!parsed) continue;
+      assignedRefs.push(parsed);
+      assignedIds.add(row.issueId);
+      if (parsed.parentId) {
+        parentIds.add(parsed.parentId);
+      }
+    }
+
+    // Second pass: only fetch parents that aren't already in the assigned set.
+    const missingParentIds = [...parentIds].filter((id) => !assignedIds.has(id));
+    if (missingParentIds.length === 0) {
+      return { assigned: assignedRefs, parents: [] as BacklogResourceRef[] };
+    }
+
+    const parentRows = yield* sql<BacklogIssueRow>`
+      SELECT
+        external_project_id AS "externalProjectId",
+        issue_id AS "issueId",
+        issue_key AS "issueKey",
+        resource_json AS "resourceJson",
+        assignee_account_id AS "assigneeAccountId"
+      FROM t3work_atlassian_backlog_issues
+      WHERE provider = ${input.provider}
+        AND account_id = ${input.accountId}
+        AND external_project_id = ${input.externalProjectId}
+        AND ${sql.in("issue_id", missingParentIds)}
+    `;
+
+    const parents: BacklogResourceRef[] = [];
+    for (const row of parentRows) {
+      const parsed = parseJson<BacklogResourceRef>(row.resourceJson);
+      if (parsed) parents.push(parsed);
+    }
+
+    return { assigned: assignedRefs, parents };
   },
 );
