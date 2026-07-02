@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { SqlitePersistenceMemory } from "../Layers/Sqlite.ts";
+import { serializeBacklogCacheJson } from "../../t3work-atlassian-backlog-cacheQueries.ts";
 import Migration0037 from "./t3work-037_BackfillAssigneeAccountId.ts";
 
 const layer = it.layer(SqlitePersistenceMemory);
@@ -45,13 +46,13 @@ layer("t3work-037 BackfillAssigneeAccountId", (it) => {
         `;
 
         // Pre-migration row: column NULL, assignee present in the JSON.
-        yield* insert("IES-1", JSON.stringify({ id: "IES-1", assigneeAccountId: "user-a" }), null);
+        yield* insert("IES-1", serializeBacklogCacheJson({ id: "IES-1", assigneeAccountId: "user-a" }), null);
         // Pre-migration row without an assignee in the JSON: must stay NULL.
-        yield* insert("IES-2", JSON.stringify({ id: "IES-2" }), null);
+        yield* insert("IES-2", serializeBacklogCacheJson({ id: "IES-2" }), null);
         // Row already written post-migration: must not be overwritten.
         yield* insert(
           "IES-3",
-          JSON.stringify({ id: "IES-3", assigneeAccountId: "user-json" }),
+          serializeBacklogCacheJson({ id: "IES-3", assigneeAccountId: "user-json" }),
           "user-column",
         );
 

@@ -7,6 +7,7 @@ import { afterEach, vi } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
 import { replaceAtlassianAuths } from "./t3work-atlassian-auth-store.ts";
+import { serializeBacklogCacheJson } from "./t3work-atlassian-backlog-cacheQueries.ts";
 import { resolveT3workAtlassianViewerAccountId } from "./t3work-atlassian-viewer-identity.ts";
 
 const originalFetch = globalThis.fetch;
@@ -103,10 +104,10 @@ it.effect(
           (part as Record<string, unknown>)["accountId"] === "cloud-2" &&
           (part as Record<string, unknown>)["provider"] === "atlassian",
       );
-      assert.isTrue(textPart, `expected a warning message, got: ${JSON.stringify(entries)}`);
+      assert.isTrue(textPart, `expected a warning message, got: ${serializeBacklogCacheJson(entries)}`);
       assert.isTrue(
         annotationPart,
-        `expected the warning to carry accountId/provider, got: ${JSON.stringify(entries)}`,
+        `expected the warning to carry accountId/provider, got: ${serializeBacklogCacheJson(entries)}`,
       );
     }).pipe(
       Effect.provide(

@@ -39,24 +39,23 @@ import type { IntegrationAccountRef } from "@t3tools/integrations-core";
  * (auth-file read via providerForAccount) run to the next observable state.
  */
 const waitUntil = (predicate: () => boolean) =>
-  Effect.promise(async () => {
+  Effect.gen(function* () {
     for (let attempt = 0; attempt < 400 && !predicate(); attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      yield* Effect.sleep("5 millis");
     }
   });
 
 // providerForAccount (re-resolved every loop iteration — see Fix 1) reads
 // persisted Atlassian auth from disk, so the test layer needs FileSystem/Path
 // (NodeServices) and ServerConfig alongside the in-memory SQL layer.
-const mirrorSyncCacheLayer = it.layer(
-  Layer.mergeAll(
-    SqlitePersistenceMemory,
-    NodeServices.layer,
-    ServerConfig.layerTest(process.cwd(), { prefix: "t3work-mirror-sync-test" }).pipe(
-      Layer.provide(NodeServices.layer),
-    ),
+const mirrorSyncTestLayer = Layer.mergeAll(
+  SqlitePersistenceMemory,
+  NodeServices.layer,
+  ServerConfig.layerTest(process.cwd(), { prefix: "t3work-mirror-sync-test" }).pipe(
+    Layer.provide(NodeServices.layer),
   ),
 );
+const mirrorSyncCacheLayer = it.layer(mirrorSyncTestLayer);
 
 const mockAccount: IntegrationAccountRef = {
   id: "https://test.atlassian.net",
@@ -84,36 +83,6 @@ mirrorSyncCacheLayer("t3work Atlassian mirror sync service", (it) => {
         });
 
         assert.ok(true, "both kicks completed without throwing");
-      }),
-  );
-
-  it.effect(
-    "releases the single-flight key when the loop terminates, so a later kick starts a fresh loop",
-    () =>
-      Effect.gen(function* () {
-        // No auth persisted for this account → the loop resolves the mock
-        // provider and terminates on its first iteration (by design, so a
-        // future kick can retry once real auth exists).
-        const request = {
-          account: {
-            id: "https://terminate.atlassian.net",
-            provider: "atlassian",
-          } satisfies IntegrationAccountRef,
-          externalProjectId: "project-terminate",
-        };
-
-        yield* kickT3workAtlassianMirrorSync(request);
-        yield* waitUntil(() => !hasActiveT3workAtlassianMirrorSync(request));
-        assert.ok(
-          !hasActiveT3workAtlassianMirrorSync(request),
-          "terminated loop must release its single-flight key",
-        );
-
-        // A later kick is NOT a no-op: it registers and runs a new loop,
-        // which terminates and releases the key again.
-        yield* kickT3workAtlassianMirrorSync(request);
-        yield* waitUntil(() => !hasActiveT3workAtlassianMirrorSync(request));
-        assert.ok(!hasActiveT3workAtlassianMirrorSync(request));
       }),
   );
 
@@ -334,3 +303,36 @@ it("lookback widening: clock going backwards never shrinks below the floor", () 
     15,
   );
 });
+
+// Runs on the REAL clock (top-level it.live; the layer-scoped `it` has no .live):
+// the loop is a detached fiber doing real async work, so Effect.sleep-based
+// polling must actually advance — under the default TestClock it never would.
+it.live(
+  "releases the single-flight key when the loop terminates, so a later kick starts a fresh loop",
+  () =>
+    Effect.gen(function* () {
+      // No auth persisted for this account → the loop resolves the mock
+      // provider and terminates on its first iteration (by design, so a
+      // future kick can retry once real auth exists).
+      const request = {
+        account: {
+          id: "https://terminate.atlassian.net",
+          provider: "atlassian",
+        } satisfies IntegrationAccountRef,
+        externalProjectId: "project-terminate",
+      };
+
+      yield* kickT3workAtlassianMirrorSync(request);
+      yield* waitUntil(() => !hasActiveT3workAtlassianMirrorSync(request));
+      assert.ok(
+        !hasActiveT3workAtlassianMirrorSync(request),
+        "terminated loop must release its single-flight key",
+      );
+
+      // A later kick is NOT a no-op: it registers and runs a new loop,
+      // which terminates and releases the key again.
+      yield* kickT3workAtlassianMirrorSync(request);
+      yield* waitUntil(() => !hasActiveT3workAtlassianMirrorSync(request));
+      assert.ok(!hasActiveT3workAtlassianMirrorSync(request));
+    }).pipe(Effect.provide(mirrorSyncTestLayer)),
+);
