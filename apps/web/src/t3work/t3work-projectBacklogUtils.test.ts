@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   buildProjectBacklogAssigneeFilterOptions,
+  buildProjectBacklogLabelFilterOptions,
   filterProjectBacklogTickets,
   getProjectBacklogIssueTypeFilterCategory,
   isProjectTicketHourTracked,
@@ -318,6 +319,67 @@ describe("project backlog utils", () => {
         visibleIssueTypes: ["standard", "subtask"],
       }).map((ticket) => ticket.id),
     ).toEqual(["story", "subtask"]);
+  });
+
+  it("builds sorted label filter options with per-label counts", () => {
+    const tickets = [
+      createTicket({ id: "alpha", labels: ["backend", "urgent"] }),
+      createTicket({ id: "beta", labels: ["backend"] }),
+      createTicket({ id: "gamma" }),
+    ];
+
+    expect(buildProjectBacklogLabelFilterOptions(tickets)).toEqual([
+      { value: "backend", count: 2 },
+      { value: "urgent", count: 1 },
+    ]);
+  });
+
+  it("matches tickets that carry at least one selected label (OR semantics)", () => {
+    const backend = createTicket({ id: "backend-only", labels: ["backend"] });
+    const urgent = createTicket({ id: "urgent-only", labels: ["urgent"] });
+    const both = createTicket({ id: "both", labels: ["backend", "urgent"] });
+    const neither = createTicket({ id: "neither", labels: ["design"] });
+    const unlabeled = createTicket({ id: "unlabeled" });
+
+    const filteredIds = filterProjectBacklogTickets({
+      tickets: [backend, urgent, both, neither, unlabeled],
+      query: "",
+      focusFilter: "all",
+      selectedLabels: ["backend", "urgent"],
+    }).map((ticket) => ticket.id);
+
+    expect(filteredIds).toEqual(
+      expect.arrayContaining(["backend-only", "urgent-only", "both"]),
+    );
+    expect(filteredIds).toHaveLength(3);
+  });
+
+  it("excludes tickets without labels when any label is selected", () => {
+    const labeled = createTicket({ id: "labeled", labels: ["backend"] });
+    const unlabeled = createTicket({ id: "unlabeled" });
+
+    expect(
+      filterProjectBacklogTickets({
+        tickets: [labeled, unlabeled],
+        query: "",
+        focusFilter: "all",
+        selectedLabels: ["backend"],
+      }).map((ticket) => ticket.id),
+    ).toEqual(["labeled"]);
+  });
+
+  it("applies no label filter when no labels are selected", () => {
+    const labeled = createTicket({ id: "labeled", labels: ["backend"] });
+    const unlabeled = createTicket({ id: "unlabeled" });
+
+    expect(
+      filterProjectBacklogTickets({
+        tickets: [labeled, unlabeled],
+        query: "",
+        focusFilter: "all",
+        selectedLabels: [],
+      }).map((ticket) => ticket.id),
+    ).toEqual(expect.arrayContaining(["labeled", "unlabeled"]));
   });
 
   it("treats unavailable assignee filters as all assignees", () => {

@@ -111,6 +111,27 @@ export function buildProjectBacklogAssigneeFilterOptions(
   ];
 }
 
+export type ProjectBacklogLabelFilterOption = {
+  readonly value: string;
+  readonly count: number;
+};
+
+export function buildProjectBacklogLabelFilterOptions(
+  tickets: readonly ProjectTicket[],
+): ReadonlyArray<ProjectBacklogLabelFilterOption> {
+  const counts = new Map<string, number>();
+
+  for (const ticket of tickets) {
+    for (const label of ticket.labels ?? []) {
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ value, count }))
+    .toSorted((left, right) => left.value.localeCompare(right.value));
+}
+
 export function resolveProjectBacklogAssigneeFilter(
   tickets: readonly ProjectTicket[],
   assigneeFilter?: string,
