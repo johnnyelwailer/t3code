@@ -15,6 +15,7 @@ import { useProjectWorkspaceAutoSync } from "~/t3work/hooks/t3work-useProjectWor
 import { ProjectDashboardBacklogContent } from "~/t3work/t3work-ProjectDashboardBacklogContent";
 import { ProjectDashboardBacklogOverviewSection } from "~/t3work/t3work-ProjectDashboardBacklogOverviewSection";
 import { buildProjectDashboardBacklogVisibleSyncState } from "~/t3work/t3work-projectDashboardBacklogVisibleSync";
+import { buildRequestedBacklogSelection } from "~/t3work/t3work-projectDashboardBacklogStateShared";
 import { isProjectBacklogImmersiveViewMode } from "~/t3work/t3work-projectBacklogPresentationMeta";
 
 export function ProjectDashboardBacklogView({
@@ -24,18 +25,13 @@ export function ProjectDashboardBacklogView({
   project: ProjectShellProject;
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const { state: backlogState, setState: setBacklogState } = useProjectDashboardBacklogState(
-    project.id,
-  );
+  const { state: backlogState, setState: setBacklogState } =
+    useProjectDashboardBacklogState(project.id);
   const currentUserDisplayName = useAtlassianCurrentUserDisplayName(project.source.accountId);
   const deferredQuery = useDeferredValue(backlogState.query);
   const requestedSelection = useMemo(
-    () => ({
-      ...(backlogState.boardId ? { boardId: backlogState.boardId } : {}),
-      ...(backlogState.sprintId ? { sprintId: backlogState.sprintId } : {}),
-      ...(backlogState.filterId ? { filterId: backlogState.filterId } : {}),
-    }),
-    [backlogState.boardId, backlogState.filterId, backlogState.sprintId],
+    () => buildRequestedBacklogSelection(backlogState),
+    [backlogState.boardId, backlogState.filterId, backlogState.selectedQuickFilterIds, backlogState.sprintId],
   );
   const onOpenTicketRef = useRef(onOpenTicket);
   onOpenTicketRef.current = onOpenTicket;
@@ -45,6 +41,7 @@ export function ProjectDashboardBacklogView({
     boards,
     sprints,
     savedFilters,
+    quickFilters,
     loading,
     error,
     hasLoaded,
@@ -55,14 +52,13 @@ export function ProjectDashboardBacklogView({
     refreshBacklog,
   } = useProjectBacklog(project, {
     selection: requestedSelection,
-    onSelectionChange: (selection) => {
+    onSelectionChange: (selection) =>
       setBacklogState((current) => ({
         ...current,
         boardId: selection.boardId,
         sprintId: selection.sprintId,
         filterId: selection.filterId,
-      }));
-    },
+      })),
   });
   const { searchTickets } = useProjectBacklogRemoteSearch({
     project,
@@ -139,6 +135,7 @@ export function ProjectDashboardBacklogView({
       assigneeOptions={assigneeOptions}
       labelOptions={labelOptions}
       savedFilters={savedFilters}
+      quickFilters={quickFilters}
       boards={boards}
       sprints={sprints}
       onTableSortByChange={handleTableSortByChange}

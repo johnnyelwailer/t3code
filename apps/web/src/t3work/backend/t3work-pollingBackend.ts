@@ -7,10 +7,8 @@ import type {
 } from "./t3work-types";
 import { postJson } from "./t3work-t3BackendHttp";
 
-type T3workPollEnvelope = {
-  readonly enabled: true;
-  readonly knownFingerprint?: string;
-};
+type T3workPollEnvelope = { readonly enabled: true; readonly knownFingerprint?: string };
+type PollAccountRef = { readonly id: string; readonly provider: string };
 
 export type T3workPollResult<T> =
   | {
@@ -26,31 +24,23 @@ export type T3workPollResult<T> =
 export type T3workPollingBackend = BackendApi & {
   readonly atlassian: BackendApi["atlassian"] & {
     readonly pollBacklog: (input: {
-      readonly account: {
-        readonly id: string;
-        readonly provider: string;
-      };
+      readonly account: PollAccountRef;
       readonly externalProjectId: string;
       readonly limit?: number;
       readonly boardId?: string;
       readonly sprintId?: string;
       readonly filterId?: string;
+      readonly quickFilterIds?: ReadonlyArray<string>;
       readonly knownFingerprint?: string;
     }) => Promise<T3workPollResult<AtlassianBacklogResponse>>;
     readonly pollResources: (input: {
-      readonly account: {
-        readonly id: string;
-        readonly provider: string;
-      };
+      readonly account: PollAccountRef;
       readonly externalProjectId: string;
       readonly limit?: number;
       readonly knownFingerprint?: string;
     }) => Promise<T3workPollResult<ResourcePage>>;
     readonly pollMyWork: (input: {
-      readonly account: {
-        readonly id: string;
-        readonly provider: string;
-      };
+      readonly account: PollAccountRef;
       readonly externalProjectId: string;
       readonly knownFingerprint?: string;
     }) => Promise<T3workPollResult<ResourcePage>>;
@@ -82,28 +72,24 @@ function withPollEnvelope<TInput extends object>(
 export function createAtlassianPollingBackendApi(httpBaseUrl: string) {
   return {
     pollBacklog(input: {
-      readonly account: {
-        readonly id: string;
-        readonly provider: string;
-      };
+      readonly account: PollAccountRef;
       readonly externalProjectId: string;
       readonly limit?: number;
       readonly boardId?: string;
       readonly sprintId?: string;
       readonly filterId?: string;
+      readonly quickFilterIds?: ReadonlyArray<string>;
       readonly knownFingerprint?: string;
     }) {
       return postJson<
         {
-          readonly account: {
-            readonly id: string;
-            readonly provider: string;
-          };
+          readonly account: PollAccountRef;
           readonly externalProjectId: string;
           readonly limit?: number;
           readonly boardId?: string;
           readonly sprintId?: string;
           readonly filterId?: string;
+          readonly quickFilterIds?: ReadonlyArray<string>;
           readonly poll: T3workPollEnvelope;
         },
         T3workPollResult<AtlassianBacklogResponse>
@@ -118,6 +104,7 @@ export function createAtlassianPollingBackendApi(httpBaseUrl: string) {
             ...(input.boardId ? { boardId: input.boardId } : {}),
             ...(input.sprintId ? { sprintId: input.sprintId } : {}),
             ...(input.filterId ? { filterId: input.filterId } : {}),
+            ...(input.quickFilterIds?.length ? { quickFilterIds: input.quickFilterIds } : {}),
           },
           input.knownFingerprint,
         ),
@@ -125,20 +112,14 @@ export function createAtlassianPollingBackendApi(httpBaseUrl: string) {
     },
 
     pollResources(input: {
-      readonly account: {
-        readonly id: string;
-        readonly provider: string;
-      };
+      readonly account: PollAccountRef;
       readonly externalProjectId: string;
       readonly limit?: number;
       readonly knownFingerprint?: string;
     }) {
       return postJson<
         {
-          readonly account: {
-            readonly id: string;
-            readonly provider: string;
-          };
+          readonly account: PollAccountRef;
           readonly externalProjectId: string;
           readonly limit?: number;
           readonly poll: T3workPollEnvelope;
@@ -159,19 +140,13 @@ export function createAtlassianPollingBackendApi(httpBaseUrl: string) {
     },
 
     pollMyWork(input: {
-      readonly account: {
-        readonly id: string;
-        readonly provider: string;
-      };
+      readonly account: PollAccountRef;
       readonly externalProjectId: string;
       readonly knownFingerprint?: string;
     }) {
       return postJson<
         {
-          readonly account: {
-            readonly id: string;
-            readonly provider: string;
-          };
+          readonly account: PollAccountRef;
           readonly externalProjectId: string;
           readonly poll: T3workPollEnvelope;
         },

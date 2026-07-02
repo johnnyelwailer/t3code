@@ -19,6 +19,7 @@ export function ProjectDashboardBacklogOverviewSection({
   assigneeOptions,
   labelOptions,
   savedFilters,
+  quickFilters,
   boards,
   sprints,
   onTableSortByChange,
@@ -34,6 +35,7 @@ export function ProjectDashboardBacklogOverviewSection({
   assigneeOptions: OverviewProps["assigneeOptions"];
   labelOptions: OverviewProps["labelOptions"];
   savedFilters: OverviewProps["savedFilters"];
+  quickFilters: OverviewProps["quickFilters"];
   boards: OverviewProps["boards"];
   sprints: OverviewProps["sprints"];
   onTableSortByChange: OverviewProps["onTableSortByChange"];
@@ -69,6 +71,11 @@ export function ProjectDashboardBacklogOverviewSection({
       savedFilters={savedFilters}
       selectedFilterId={backlogState.filterId}
       onFilterChange={(filterId) => setBacklogState((current) => ({ ...current, filterId }))}
+      quickFilters={quickFilters}
+      selectedQuickFilterIds={backlogState.selectedQuickFilterIds}
+      onSelectedQuickFilterIdsChange={(selectedQuickFilterIds) =>
+        setBacklogState((current) => ({ ...current, selectedQuickFilterIds }))
+      }
       viewMode={backlogState.viewMode}
       onViewModeChange={(viewMode) => setBacklogState((current) => ({ ...current, viewMode }))}
       focusFilter={backlogState.focusFilter}

@@ -19,6 +19,7 @@ describe("project dashboard backlog state", () => {
       assigneeFilter: "account-1",
       visibleIssueTypes: ["standard", "subtask"],
       selectedLabels: ["backend"],
+      selectedQuickFilterIds: ["qf-1"],
       viewMode: "table",
       tableGroupBy: "assignee",
       tableSortBy: "title",
@@ -45,6 +46,7 @@ describe("project dashboard backlog state", () => {
       assigneeFilterScope: { epic: false, story: true, subtask: false },
       visibleIssueTypes: ["standard", "subtask"],
       selectedLabels: ["backend"],
+      selectedQuickFilterIds: ["qf-1"],
       viewMode: "planning",
       tableGroupBy: "assignee",
       tableSortBy: "title",
@@ -105,6 +107,36 @@ describe("project dashboard backlog state", () => {
         persisted: { selectedLabels: ["backend"] },
         search: { ...search, labels: "" },
       }).selectedLabels,
+    ).toEqual([]);
+  });
+
+  it("round-trips selected quick filters through route search and persisted state", () => {
+    const search = parseProjectDashboardBacklogRouteSearch({ quickFilters: "qf-1,qf-2" });
+    expect(search.quickFilters).toBe("qf-1,qf-2");
+
+    const resolved = resolveProjectDashboardBacklogState({ search });
+    expect(resolved.selectedQuickFilterIds).toEqual(["qf-1", "qf-2"]);
+
+    expect(
+      buildProjectDashboardBacklogRouteSearch({
+        ...createDefaultProjectDashboardBacklogState(),
+        selectedQuickFilterIds: ["qf-1", "qf-2"],
+      }).quickFilters,
+    ).toBe("qf-1,qf-2");
+
+    expect(
+      buildProjectDashboardBacklogRouteSearch(createDefaultProjectDashboardBacklogState())
+        .quickFilters,
+    ).toBeUndefined();
+  });
+
+  it("clears selected quick filters when the route search explicitly resets them", () => {
+    const search = parseProjectDashboardBacklogRouteSearch({ q: "" });
+    expect(
+      resolveProjectDashboardBacklogState({
+        persisted: { selectedQuickFilterIds: ["qf-1"] },
+        search: { ...search, quickFilters: "" },
+      }).selectedQuickFilterIds,
     ).toEqual([]);
   });
 

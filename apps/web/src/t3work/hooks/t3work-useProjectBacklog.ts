@@ -28,8 +28,16 @@ export function useProjectBacklog(
       ...(options.selection?.boardId ? { boardId: options.selection.boardId } : {}),
       ...(options.selection?.sprintId ? { sprintId: options.selection.sprintId } : {}),
       ...(options.selection?.filterId ? { filterId: options.selection.filterId } : {}),
+      ...(options.selection?.selectedQuickFilterIds?.length
+        ? { selectedQuickFilterIds: options.selection.selectedQuickFilterIds }
+        : {}),
     }),
-    [options.selection?.boardId, options.selection?.filterId, options.selection?.sprintId],
+    [
+      options.selection?.boardId,
+      options.selection?.filterId,
+      options.selection?.selectedQuickFilterIds,
+      options.selection?.sprintId,
+    ],
   );
   const [backlogState, setBacklogState] = useState(() => createProjectBacklogState(project.id));
   const previousProjectIdRef = useRef(project.id);
@@ -140,6 +148,7 @@ export function useProjectBacklog(
     boards: backlogState.boards,
     sprints: backlogState.sprints,
     savedFilters: backlogState.savedFilters,
+    quickFilters: backlogState.quickFilters,
     selectedBoardId: backlogState.selectedBoardId,
     selectedSprintId: backlogState.selectedSprintId,
     selectedFilterId: backlogState.selectedFilterId,

@@ -32,6 +32,7 @@ function createBacklogResponse(): AtlassianBacklogResponse {
     boards: [],
     sprints: [],
     savedFilters: [],
+    quickFilters: [],
     cache: {
       source: "persisted",
       updatedAt: Date.now(),

@@ -36,6 +36,7 @@ export interface ProjectDashboardBacklogRouteSearch {
   board?: string;
   sprint?: string;
   jiraFilter?: string;
+  quickFilters?: string;
 }
 
 export interface ProjectDashboardBacklogState extends BacklogSelectionInput {
@@ -45,6 +46,7 @@ export interface ProjectDashboardBacklogState extends BacklogSelectionInput {
   assigneeFilterScope: ProjectBacklogAssigneeFilterScope;
   visibleIssueTypes: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>;
   selectedLabels: ReadonlyArray<string>;
+  selectedQuickFilterIds: ReadonlyArray<string>;
   viewMode: ProjectBacklogViewMode;
   tableGroupBy: ProjectBacklogTableGroupBy;
   tableSortBy: ProjectBacklogTableSortBy;
@@ -125,6 +127,7 @@ export const routeSearchKeys = [
   "board",
   "sprint",
   "jiraFilter",
+  "quickFilters",
 ] as const;
 
 export { parseProjectDashboardBacklogRouteSearch } from "./t3work-projectDashboardBacklogRouteSearchParse";
@@ -141,6 +144,7 @@ export function createDefaultProjectDashboardBacklogState(): ProjectDashboardBac
     assigneeFilterScope: { ...defaultProjectBacklogAssigneeFilterScope },
     visibleIssueTypes: [...defaultProjectBacklogVisibleIssueTypes],
     selectedLabels: [],
+    selectedQuickFilterIds: [],
     viewMode: projectBacklogViewModes[0]?.value ?? "table",
     tableGroupBy: "planning-state",
     tableSortBy: "rank",
@@ -151,4 +155,20 @@ export function createDefaultProjectDashboardBacklogState(): ProjectDashboardBac
 
 export function getProjectDashboardBacklogStorageKey(projectId: string): string {
   return `t3work:project-backlog-state:v1:${projectId}`;
+}
+
+export function buildRequestedBacklogSelection(
+  state: Pick<
+    ProjectDashboardBacklogState,
+    "boardId" | "sprintId" | "filterId" | "selectedQuickFilterIds"
+  >,
+): BacklogSelectionInput {
+  return {
+    ...(state.boardId ? { boardId: state.boardId } : {}),
+    ...(state.sprintId ? { sprintId: state.sprintId } : {}),
+    ...(state.filterId ? { filterId: state.filterId } : {}),
+    ...(state.selectedQuickFilterIds.length
+      ? { selectedQuickFilterIds: state.selectedQuickFilterIds }
+      : {}),
+  };
 }

@@ -46,10 +46,13 @@ export {
   parseProjectBacklogAssigneeFilterScopeRouteValue,
   parseProjectBacklogSelectedLabels,
   parseProjectBacklogSelectedLabelsRouteValue,
+  parseProjectBacklogSelectedQuickFilterIds,
+  parseProjectBacklogSelectedQuickFilterIdsRouteValue,
   parseProjectBacklogVisibleIssueTypes,
   parseProjectBacklogVisibleIssueTypesRouteValue,
   serializeProjectBacklogAssigneeFilterScopeRouteValue,
   serializeProjectBacklogSelectedLabelsRouteValue,
+  serializeProjectBacklogSelectedQuickFilterIdsRouteValue,
   serializeProjectBacklogVisibleIssueTypesRouteValue,
 } from "~/t3work/t3work-projectBacklogFilterSerialization";
 export {

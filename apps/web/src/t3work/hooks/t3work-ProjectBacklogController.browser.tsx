@@ -120,6 +120,7 @@ function createBacklogResponse(updatedAt: number): AtlassianBacklogResponse {
       },
     ],
     savedFilters: [],
+    quickFilters: [],
     selectedBoardId: "95",
     selectedSprintId: "3185",
     cache: {

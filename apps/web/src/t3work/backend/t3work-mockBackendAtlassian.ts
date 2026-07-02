@@ -33,6 +33,7 @@ async function createMockBacklogResponse(
     boards: [],
     sprints: [],
     savedFilters: [],
+    quickFilters: [],
     cache: {
       source: "live",
       updatedAt: Date.now(),

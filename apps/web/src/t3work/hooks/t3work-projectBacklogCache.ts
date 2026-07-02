@@ -20,6 +20,7 @@ export type BacklogSelectionInput = {
   boardId?: string | undefined;
   sprintId?: string | undefined;
   filterId?: string | undefined;
+  selectedQuickFilterIds?: ReadonlyArray<string> | undefined;
 };
 
 type BacklogResourceRef = AtlassianBacklogResponse["page"]["items"][number] & {
