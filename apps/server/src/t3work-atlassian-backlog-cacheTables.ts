@@ -14,12 +14,17 @@ export const ensureBacklogCacheTables = Effect.fn("t3work.atlassianBacklogCache.
         issue_key TEXT,
         resource_json TEXT NOT NULL,
         updated_at INTEGER NOT NULL,
+        assignee_account_id TEXT,
         PRIMARY KEY (provider, account_id, external_project_id, issue_id)
       )
     `;
     yield* sql`
       CREATE INDEX IF NOT EXISTS idx_t3work_atlassian_backlog_issues_account_key
       ON t3work_atlassian_backlog_issues (provider, account_id, issue_key)
+    `;
+    yield* sql`
+      CREATE INDEX IF NOT EXISTS idx_t3work_atlassian_backlog_issues_my_work
+      ON t3work_atlassian_backlog_issues (provider, account_id, external_project_id, assignee_account_id)
     `;
     yield* sql`
       CREATE TABLE IF NOT EXISTS t3work_atlassian_backlog_views (

@@ -16,6 +16,7 @@ import type { ExternalProject } from "@t3tools/integrations-core";
 import {
   AtlassianApiError,
   AtlassianAuthError,
+  AtlassianMirrorSourceUnavailableError,
   AtlassianNetworkError,
   type JiraIssue,
 } from "./client.ts";
@@ -1114,6 +1115,111 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       ...(estimateField ? { estimateFieldLabel: estimateField.label } : {}),
       canCreateSubtasks: subtaskIssueType !== null,
     };
+  }
+
+  /**
+   * Fetches one page of ALL issues in a project across ALL status categories
+   * (including Done), ordered by updated ASC. Used exclusively by the
+   * whole-project mirror sync (Epic 33 Wave 2).
+   *
+   * @param updatedWithinMinutes - When set, restricts to issues updated in the
+   *   last N minutes via a RELATIVE JQL bound (`updated >= -Nm`). Relative is
+   *   deliberate: Jira evaluates it server-side in its own clock, so we avoid
+   *   JQL's absolute-datetime format constraints (it rejects ISO-8601 with
+   *   T/Z/millis) and any server/Jira timezone or clock skew. Omit for a full
+   *   backfill / reconcile walk over the entire project.
+   * @param cursor - Opaque page token from a previous call's `nextCursor`.
+   * @param limit - Page size; defaults to jiraIssueSearchPageSize.
+   * @throws AtlassianMirrorSourceUnavailableError when no client is registered
+   *   for the account or the project lookup does not find the project. An
+   *   empty page ({ items: [] }) therefore always means "the project genuinely
+   *   has no (matching) issues", so the reconcile prune can trust it.
+   */
+  async listProjectMirrorPage(input: {
+    account: IntegrationAccountRef;
+    externalProjectId: string;
+    updatedWithinMinutes?: number;
+    cursor?: string;
+    limit?: number;
+  }): Promise<{
+    items: ReadonlyArray<ReturnType<typeof normalizeIssueSearch>[number]>;
+    nextCursor: string | undefined;
+  }> {
+    const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
+    if (!entry) {
+      throw new AtlassianMirrorSourceUnavailableError({
+        reason: "client-unavailable",
+        externalProjectId: input.externalProjectId,
+        message: `No Atlassian client available for account "${input.account.id}".`,
+      });
+    }
+
+    const project = await this.findProjectById(input.externalProjectId, entry.client);
+    if (!project) {
+      throw new AtlassianMirrorSourceUnavailableError({
+        reason: "project-not-found",
+        externalProjectId: input.externalProjectId,
+        message: `Atlassian project "${input.externalProjectId}" was not found on ${entry.siteUrl}.`,
+      });
+    }
+
+    const [estimateField, sprintField] = await Promise.all([
+      this.resolveEstimateField(entry.client),
+      this.resolveSprintField(entry.client),
+    ]);
+
+    const projectKey = project.key.replace(/"/g, '\\"');
+    const jqlParts = [`project = "${projectKey}"`];
+    if (input.updatedWithinMinutes && input.updatedWithinMinutes > 0) {
+      jqlParts.push(`updated >= -${Math.floor(input.updatedWithinMinutes)}m`);
+    }
+    const jql = `${jqlParts.join(" AND ")} ORDER BY updated ASC`;
+
+    const extraFields: string[] = [
+      ...(estimateField ? [estimateField.id] : []),
+      ...(sprintField ? [sprintField.id] : []),
+      "timeoriginalestimate",
+      "timeestimate",
+      "aggregatetimeoriginalestimate",
+      "aggregatetimeestimate",
+    ];
+
+    const response = await entry.client.searchIssues(
+      jql,
+      input.limit ?? jiraIssueSearchPageSize,
+      extraFields,
+      input.cursor,
+    );
+
+    const items = response.issues.map((issue) =>
+      this.toBacklogItem(issue as JiraIssue, entry.siteUrl, estimateField, sprintField),
+    );
+
+    return {
+      items,
+      nextCursor:
+        response.nextPageToken && response.isLast !== true
+          ? response.nextPageToken
+          : undefined,
+    };
+  }
+
+  /**
+   * Resolve the Jira accountId of the viewer authenticated by `account`.
+   *
+   * `account.id` is the Jira site/cloud id used to select the client — it is
+   * NOT the user's `atlassianAccountId`. My Work needs the latter to filter
+   * the mirror by `assignee_account_id`, so this calls `/rest/api/3/myself`.
+   * Callers should cache the result per `account.id` (stable for the life of
+   * the OAuth connection) rather than calling this on every request.
+   */
+  async resolveViewerAccountId(input: {
+    account: IntegrationAccountRef;
+  }): Promise<string | undefined> {
+    const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
+    if (!entry) return undefined;
+    const myself = await entry.client.getMyself();
+    return myself.accountId;
   }
 
   async searchAssignableUsers(

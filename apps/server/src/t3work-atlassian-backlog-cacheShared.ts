@@ -68,6 +68,7 @@ export type BacklogIssueRow = {
   readonly issueId: string;
   readonly issueKey: string | null;
   readonly resourceJson: string;
+  readonly assigneeAccountId: string | null;
 };
 
 function normalizeSelectionPart(value: string | undefined): string {

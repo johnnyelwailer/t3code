@@ -22,6 +22,7 @@ import {
 } from "./t3work-atlassian-http.ts";
 export { t3workAtlassianAssetContentRouteLayer } from "./t3work-atlassian-asset-content-route.ts";
 export { t3workAtlassianBacklogRouteLayer } from "./t3work-atlassian-backlog-routes.ts";
+export { t3workAtlassianMyWorkRouteLayer } from "./t3work-atlassian-myWork-routes.ts";
 export { t3workAtlassianResourcesRouteLayer } from "./t3work-atlassian-resources-routes.ts";
 
 type ResourceGetInput = {

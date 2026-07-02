@@ -46,6 +46,14 @@ export type T3workPollingBackend = BackendApi & {
       readonly limit?: number;
       readonly knownFingerprint?: string;
     }) => Promise<T3workPollResult<ResourcePage>>;
+    readonly pollMyWork: (input: {
+      readonly account: {
+        readonly id: string;
+        readonly provider: string;
+      };
+      readonly externalProjectId: string;
+      readonly knownFingerprint?: string;
+    }) => Promise<T3workPollResult<ResourcePage>>;
   };
   readonly github: BackendApi["github"] & {
     readonly pollInbox: (input: {
@@ -144,6 +152,37 @@ export function createAtlassianPollingBackendApi(httpBaseUrl: string) {
             account: input.account,
             externalProjectId: input.externalProjectId,
             ...(input.limit !== undefined ? { limit: input.limit } : {}),
+          },
+          input.knownFingerprint,
+        ),
+      );
+    },
+
+    pollMyWork(input: {
+      readonly account: {
+        readonly id: string;
+        readonly provider: string;
+      };
+      readonly externalProjectId: string;
+      readonly knownFingerprint?: string;
+    }) {
+      return postJson<
+        {
+          readonly account: {
+            readonly id: string;
+            readonly provider: string;
+          };
+          readonly externalProjectId: string;
+          readonly poll: T3workPollEnvelope;
+        },
+        T3workPollResult<ResourcePage>
+      >(
+        httpBaseUrl,
+        "/api/t3work/atlassian/my-work/poll",
+        withPollEnvelope(
+          {
+            account: input.account,
+            externalProjectId: input.externalProjectId,
           },
           input.knownFingerprint,
         ),
