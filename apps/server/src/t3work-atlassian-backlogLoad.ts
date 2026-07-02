@@ -60,6 +60,9 @@ export function loadT3workAtlassianBacklog(input: T3workAtlassianBacklogInput) {
       ...(input.boardId ? { boardId: input.boardId } : {}),
       ...(input.sprintId ? { sprintId: input.sprintId } : {}),
       ...(input.filterId ? { filterId: input.filterId } : {}),
+      ...(input.quickFilterIds && input.quickFilterIds.length > 0
+        ? { quickFilterIds: input.quickFilterIds }
+        : {}),
     };
 
     if (!(provider instanceof AtlassianIntegrationProvider)) {
@@ -78,6 +81,7 @@ export function loadT3workAtlassianBacklog(input: T3workAtlassianBacklogInput) {
         boards: [],
         sprints: [],
         savedFilters: [],
+        quickFilters: [],
       } satisfies T3workAtlassianBacklogPayload;
 
       return createLiveT3workAtlassianBacklogResponse({

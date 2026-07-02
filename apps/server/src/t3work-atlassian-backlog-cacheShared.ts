@@ -1,5 +1,6 @@
 import type {
   AtlassianBacklogBoard,
+  AtlassianBacklogQuickFilter,
   AtlassianBacklogSavedFilter,
   AtlassianBacklogSprint,
 } from "@t3tools/integrations-atlassian";
@@ -11,6 +12,7 @@ export type T3workBacklogSelectionInput = {
   readonly boardId?: string;
   readonly sprintId?: string;
   readonly filterId?: string;
+  readonly quickFilterIds?: ReadonlyArray<string>;
 };
 
 export type T3workAtlassianBacklogCapabilities = {
@@ -24,6 +26,7 @@ export type T3workAtlassianBacklogPayload = {
   readonly boards: ReadonlyArray<AtlassianBacklogBoard>;
   readonly sprints: ReadonlyArray<AtlassianBacklogSprint>;
   readonly savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
+  readonly quickFilters: ReadonlyArray<AtlassianBacklogQuickFilter>;
   readonly selectedBoardId?: string;
   readonly selectedSprintId?: string;
   readonly selectedFilterId?: string;
@@ -57,6 +60,7 @@ export type BacklogViewRow = {
   readonly boardsJson: string;
   readonly sprintsJson: string;
   readonly savedFiltersJson: string;
+  readonly quickFiltersJson: string;
   readonly capabilitiesJson: string;
   readonly pageNextCursor: string | null;
   readonly pageTotalCount: number | null;
@@ -75,11 +79,20 @@ function normalizeSelectionPart(value: string | undefined): string {
   return value?.trim().length ? value.trim() : "default";
 }
 
+function normalizeQuickFilterIds(quickFilterIds: ReadonlyArray<string> | undefined): string {
+  const ids = (quickFilterIds ?? [])
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0)
+    .toSorted();
+  return ids.length > 0 ? ids.join(",") : "default";
+}
+
 export function buildBacklogSelectionKey(selection?: T3workBacklogSelectionInput): string {
   return [
     `board=${normalizeSelectionPart(selection?.boardId)}`,
     `sprint=${normalizeSelectionPart(selection?.sprintId)}`,
     `filter=${normalizeSelectionPart(selection?.filterId)}`,
+    `quickFilters=${normalizeQuickFilterIds(selection?.quickFilterIds)}`,
   ].join(":");
 }
 
@@ -92,6 +105,9 @@ export function buildPersistedSelectionKeys(input: {
     ...(input.response.selectedBoardId ? { boardId: input.response.selectedBoardId } : {}),
     ...(input.response.selectedSprintId ? { sprintId: input.response.selectedSprintId } : {}),
     ...(input.response.selectedFilterId ? { filterId: input.response.selectedFilterId } : {}),
+    ...(input.requestSelection?.quickFilterIds
+      ? { quickFilterIds: input.requestSelection.quickFilterIds }
+      : {}),
   });
   return requestKey === resolvedKey ? [requestKey] : [requestKey, resolvedKey];
 }
@@ -121,8 +137,11 @@ export function materializeBacklogPayload(input: {
   const savedFilters = parseJson<ReadonlyArray<AtlassianBacklogSavedFilter>>(
     input.row.savedFiltersJson,
   );
+  const quickFilters = parseJson<ReadonlyArray<AtlassianBacklogQuickFilter>>(
+    input.row.quickFiltersJson,
+  );
   const capabilities = parseJson<T3workAtlassianBacklogCapabilities>(input.row.capabilitiesJson);
-  if (!issueIds || !boards || !sprints || !savedFilters || !capabilities) {
+  if (!issueIds || !boards || !sprints || !savedFilters || !quickFilters || !capabilities) {
     return null;
   }
 
@@ -157,6 +176,7 @@ export function materializeBacklogPayload(input: {
     boards,
     sprints,
     savedFilters,
+    quickFilters,
     ...(input.row.selectedBoardId ? { selectedBoardId: input.row.selectedBoardId } : {}),
     ...(input.row.selectedSprintId ? { selectedSprintId: input.row.selectedSprintId } : {}),
     ...(input.row.selectedFilterId ? { selectedFilterId: input.row.selectedFilterId } : {}),

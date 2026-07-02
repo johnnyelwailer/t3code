@@ -13,7 +13,12 @@ import {
 import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables.ts";
 
 const hasExplicitSelection = (selection?: T3workBacklogSelectionInput): boolean =>
-  Boolean(selection?.boardId || selection?.sprintId || selection?.filterId);
+  Boolean(
+    selection?.boardId ||
+      selection?.sprintId ||
+      selection?.filterId ||
+      (selection?.quickFilterIds && selection.quickFilterIds.length > 0),
+  );
 
 export const serializeBacklogCacheJson = (value: unknown): string => JSON.stringify(value);
 
@@ -35,6 +40,7 @@ export const readCachedBacklogViewRow = Effect.fn("t3work.atlassianBacklogCache.
         boards_json AS "boardsJson",
         sprints_json AS "sprintsJson",
         saved_filters_json AS "savedFiltersJson",
+        quick_filters_json AS "quickFiltersJson",
         capabilities_json AS "capabilitiesJson",
         page_next_cursor AS "pageNextCursor",
         page_total_count AS "pageTotalCount",
@@ -60,6 +66,7 @@ export const readCachedBacklogViewRow = Effect.fn("t3work.atlassianBacklogCache.
         boards_json AS "boardsJson",
         sprints_json AS "sprintsJson",
         saved_filters_json AS "savedFiltersJson",
+        quick_filters_json AS "quickFiltersJson",
         capabilities_json AS "capabilitiesJson",
         page_next_cursor AS "pageNextCursor",
         page_total_count AS "pageTotalCount",

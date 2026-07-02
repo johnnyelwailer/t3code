@@ -50,6 +50,7 @@ import Migration0034 from "./Migrations/t3work-034_WorkflowDurability.ts";
 import Migration0035 from "./Migrations/t3work-035_WorkflowScheduler.ts";
 import Migration0036 from "./Migrations/t3work-036_AtlassianMirrorColumns.ts";
 import Migration0037 from "./Migrations/t3work-037_BackfillAssigneeAccountId.ts";
+import Migration0038 from "./Migrations/t3work-038_BacklogQuickFilters.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -99,6 +100,7 @@ export const migrationEntries = [
   [35, "WorkflowScheduler", Migration0035],
   [36, "AtlassianMirrorColumns", Migration0036],
   [37, "BackfillAssigneeAccountId", Migration0037],
+  [38, "BacklogQuickFilters", Migration0038],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

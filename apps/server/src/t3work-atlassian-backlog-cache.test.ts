@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import type {
   AtlassianBacklogBoard,
+  AtlassianBacklogQuickFilter,
   AtlassianBacklogSavedFilter,
   AtlassianBacklogSprint,
 } from "@t3tools/integrations-atlassian";
@@ -51,6 +52,7 @@ function createBacklogPayload(
     savedFilters: [
       { id: "filter-1", name: "Only mine", jql: "assignee = currentUser()" },
     ] satisfies ReadonlyArray<AtlassianBacklogSavedFilter>,
+    quickFilters: [] satisfies ReadonlyArray<AtlassianBacklogQuickFilter>,
     selectedBoardId: "board-1",
     selectedSprintId: "sprint-1",
     ...overrides,
@@ -92,6 +94,48 @@ backlogCacheLayer("t3work Atlassian backlog cache", (it) => {
       `;
       assert.deepStrictEqual(issueRows[0]?.count, 1);
     }),
+  );
+
+  it.effect(
+    "keys the cache by quickFilterIds so different active quick filters don't collide",
+    () =>
+      Effect.gen(function* () {
+        yield* writeCachedT3workAtlassianBacklog({
+          provider: "atlassian",
+          accountId: "account-1",
+          externalProjectId: "project-1",
+          requestSelection: { boardId: "board-1", quickFilterIds: ["2", "1"] },
+          response: createBacklogPayload({
+            quickFilters: [{ id: "1", name: "My Issues", jql: "assignee = currentUser()" }],
+          }),
+        });
+        yield* writeCachedT3workAtlassianBacklog({
+          provider: "atlassian",
+          accountId: "account-1",
+          externalProjectId: "project-1",
+          requestSelection: { boardId: "board-1" },
+          response: createBacklogPayload({ quickFilters: [] }),
+        });
+
+        // Order-independent: ["1", "2"] must hit the same row as ["2", "1"].
+        const withQuickFilters = yield* readCachedT3workAtlassianBacklog({
+          provider: "atlassian",
+          accountId: "account-1",
+          externalProjectId: "project-1",
+          selection: { boardId: "board-1", quickFilterIds: ["1", "2"] },
+        });
+        assert.deepStrictEqual(withQuickFilters?.response.quickFilters, [
+          { id: "1", name: "My Issues", jql: "assignee = currentUser()" },
+        ]);
+
+        const withoutQuickFilters = yield* readCachedT3workAtlassianBacklog({
+          provider: "atlassian",
+          accountId: "account-1",
+          externalProjectId: "project-1",
+          selection: { boardId: "board-1" },
+        });
+        assert.deepStrictEqual(withoutQuickFilters?.response.quickFilters, []);
+      }),
   );
 
   it.effect("patches cached issue rows so cached views stay usable offline after mutations", () =>
@@ -165,7 +209,7 @@ backlogCacheLayer("t3work Atlassian backlog cache", (it) => {
         }),
       });
 
-      const selectionKeys = ["board=default:sprint=default:filter=default"];
+      const selectionKeys = ["board=default:sprint=default:filter=default:quickFilters=default"];
       yield* appendCachedT3workAtlassianBacklogSyncPage({
         provider: "atlassian",
         accountId: "account-1",
@@ -212,7 +256,7 @@ backlogCacheLayer("t3work Atlassian backlog cache", (it) => {
 
   it.effect("merging a live first page keeps the synced tail instead of clobbering it", () =>
     Effect.gen(function* () {
-      const selectionKeys = ["board=default:sprint=default:filter=default"];
+      const selectionKeys = ["board=default:sprint=default:filter=default:quickFilters=default"];
       yield* writeCachedT3workAtlassianBacklog({
         provider: "atlassian",
         accountId: "account-1",

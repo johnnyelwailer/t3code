@@ -76,6 +76,7 @@ cacheQueriesLayer("t3work Atlassian My Work projection query", (it) => {
             boards: [],
             sprints: [],
             savedFilters: [],
+            quickFilters: [],
           },
         });
 
@@ -129,6 +130,7 @@ cacheQueriesLayer("t3work Atlassian My Work projection query", (it) => {
             boards: [],
             sprints: [],
             savedFilters: [],
+            quickFilters: [],
           },
         });
 
@@ -163,6 +165,7 @@ cacheQueriesLayer("t3work Atlassian My Work projection query", (it) => {
           boards: [],
           sprints: [],
           savedFilters: [],
+          quickFilters: [],
         },
       });
 
@@ -225,6 +228,7 @@ cacheQueriesLayer("t3work Atlassian My Work projection query", (it) => {
             boards: [],
             sprints: [],
             savedFilters: [],
+            quickFilters: [],
           },
         });
 
@@ -286,6 +290,7 @@ hasMirrorRowsLayer("t3work Atlassian mirror hasMirrorRowsForProject", (it) => {
             boards: [],
             sprints: [],
             savedFilters: [],
+            quickFilters: [],
           },
         });
 

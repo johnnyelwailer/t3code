@@ -113,6 +113,7 @@ function runBacklogSyncWalk(input: T3workAtlassianBacklogSyncRequest, isSupersed
       ...(resolved.selectedBoardId ? { boardId: resolved.selectedBoardId } : {}),
       ...(resolved.selectedSprintId ? { sprintId: resolved.selectedSprintId } : {}),
       ...(resolved.selectedFilterId ? { filterId: resolved.selectedFilterId } : {}),
+      ...(input.selection.quickFilterIds ? { quickFilterIds: input.selection.quickFilterIds } : {}),
     });
     const selectionKeys =
       requestSelectionKey === resolvedSelectionKey
@@ -150,6 +151,9 @@ function runBacklogSyncWalk(input: T3workAtlassianBacklogSyncRequest, isSupersed
             ...(resolved.selectedBoardId ? { boardId: resolved.selectedBoardId } : {}),
             ...(resolved.selectedSprintId ? { sprintId: resolved.selectedSprintId } : {}),
             ...(resolved.selectedFilterJql ? { filterJql: resolved.selectedFilterJql } : {}),
+            ...(input.selection.quickFilterIds && input.selection.quickFilterIds.length > 0
+              ? { quickFilterIds: input.selection.quickFilterIds }
+              : {}),
           }),
         "Failed to sync Atlassian backlog page.",
       );

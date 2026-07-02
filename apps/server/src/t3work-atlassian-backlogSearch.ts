@@ -26,6 +26,7 @@ export type T3workAtlassianBacklogSearchInput = {
   readonly boardId?: string;
   readonly sprintId?: string;
   readonly filterId?: string;
+  readonly quickFilterIds?: ReadonlyArray<string>;
   readonly limit?: number;
 };
 
@@ -137,6 +138,9 @@ function searchLiveBacklog(input: T3workAtlassianBacklogSearchInput) {
           filterJql,
           ...(selection.selectedBoardId ? { boardId: selection.selectedBoardId } : {}),
           ...(selection.selectedSprintId ? { sprintId: selection.selectedSprintId } : {}),
+          ...(input.quickFilterIds && input.quickFilterIds.length > 0
+            ? { quickFilterIds: input.quickFilterIds }
+            : {}),
         }),
       "Failed to search the Atlassian backlog.",
     );
@@ -150,11 +154,13 @@ function searchLiveBacklog(input: T3workAtlassianBacklogSearchInput) {
         ...(input.boardId ? { boardId: input.boardId } : {}),
         ...(input.sprintId ? { sprintId: input.sprintId } : {}),
         ...(input.filterId ? { filterId: input.filterId } : {}),
+        ...(input.quickFilterIds ? { quickFilterIds: input.quickFilterIds } : {}),
       });
       const resolvedSelectionKey = buildBacklogSelectionKey({
         ...(selection.selectedBoardId ? { boardId: selection.selectedBoardId } : {}),
         ...(selection.selectedSprintId ? { sprintId: selection.selectedSprintId } : {}),
         ...(selection.selectedFilterId ? { filterId: selection.selectedFilterId } : {}),
+        ...(input.quickFilterIds ? { quickFilterIds: input.quickFilterIds } : {}),
       });
       yield* appendCachedT3workAtlassianBacklogSyncPage({
         provider: input.account.provider,
