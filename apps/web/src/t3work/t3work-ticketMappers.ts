@@ -35,6 +35,12 @@ function readIssueTypeIconUrl(value: unknown): string | undefined {
   return readOptionalString(record.iconUrl) ?? readOptionalString(record.iconURL);
 }
 
+function readLabels(value: unknown): ReadonlyArray<string> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const parsed = value.filter((label): label is string => typeof label === "string");
+  return parsed.length > 0 ? parsed : undefined;
+}
+
 export function resourceRefToProjectTicket(
   projectId: string,
   ref: ExternalResourceRef,
@@ -129,6 +135,7 @@ export function resourceRefToProjectTicket(
     ...(sprintEndDate ? { sprintEndDate } : {}),
     ...(sprintCompleteDate ? { sprintCompleteDate } : {}),
     updatedAt: ref.updatedAt ?? new Date().toISOString(),
+    ...(readLabels(ref.labels) ? { labels: readLabels(ref.labels) } : {}),
   };
 }
 
@@ -146,6 +153,7 @@ export function snapshotToProjectTicket(
   const issueTypeIconUrl =
     readIssueTypeIconUrl(fields.typeIconUrl) ?? readIssueTypeIconUrl(fields.issuetype);
   const description = readOptionalString(fields.description);
+  const labels = readLabels(fields.labels);
 
   return {
     ...base,
@@ -155,5 +163,6 @@ export function snapshotToProjectTicket(
     ...(description ? { description } : {}),
     ...(issueType ? { issueType } : {}),
     ...(issueTypeIconUrl ? { issueTypeIconUrl } : {}),
+    ...(labels ? { labels } : {}),
   };
 }

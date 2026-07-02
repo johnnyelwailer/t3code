@@ -306,6 +306,12 @@ function extractIssueTypeIsSubtask(issueType: unknown): boolean | undefined {
   return typeof obj.subtask === "boolean" ? obj.subtask : undefined;
 }
 
+function extractLabels(labels: unknown): ReadonlyArray<string> | undefined {
+  if (!Array.isArray(labels)) return undefined;
+  const parsed = labels.filter((label): label is string => typeof label === "string");
+  return parsed.length > 0 ? parsed : undefined;
+}
+
 function formatComments(comments: ReadonlyArray<JiraComment>): string {
   return comments
     .map((c) => {
@@ -419,6 +425,7 @@ export function normalizeIssue(issue: JiraIssue, siteUrl: string): ResourceSnaps
         fields.project && typeof fields.project === "object"
           ? (fields.project as { id?: string }).id
           : undefined,
+      ...(extractLabels(fields.labels) ? { labels: extractLabels(fields.labels) } : {}),
     },
     fetchedAt: isoNow(),
     summary: summary,
@@ -480,6 +487,9 @@ export function normalizeIssueSearch(
       assignee: extractDisplayName(jiraIssue.fields.assignee),
       updatedAt:
         typeof jiraIssue.fields.updated === "string" ? jiraIssue.fields.updated : undefined,
+      ...(extractLabels(jiraIssue.fields.labels)
+        ? { labels: extractLabels(jiraIssue.fields.labels) }
+        : {}),
     };
   });
 }
