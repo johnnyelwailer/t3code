@@ -90,6 +90,7 @@ export function resourceRefToProjectTicket(
   const sprintStartDate = readOptionalString(resourceWithParent.sprintStartDate);
   const sprintEndDate = readOptionalString(resourceWithParent.sprintEndDate);
   const sprintCompleteDate = readOptionalString(resourceWithParent.sprintCompleteDate);
+  const labels = readLabels(ref.labels);
 
   return {
     id: ref.id,
@@ -135,7 +136,7 @@ export function resourceRefToProjectTicket(
     ...(sprintEndDate ? { sprintEndDate } : {}),
     ...(sprintCompleteDate ? { sprintCompleteDate } : {}),
     updatedAt: ref.updatedAt ?? new Date().toISOString(),
-    ...(readLabels(ref.labels) ? { labels: readLabels(ref.labels) } : {}),
+    ...(labels ? { labels } : {}),
   };
 }
 
