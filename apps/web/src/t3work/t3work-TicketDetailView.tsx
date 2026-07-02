@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useCanGoBack } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { useBackend, useBackendState } from "~/t3work/backend/t3work-index";
@@ -11,6 +11,7 @@ import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
 import { useProjectGitHubActivity } from "~/t3work/hooks/t3work-useProjectGitHubActivity";
 import { useProjectResources } from "~/t3work/hooks/t3work-useProjectResources";
 import { useRelatedTickets } from "~/t3work/hooks/t3work-useRelatedTickets";
+import { drainQueuedWorkItemContextSyncRequests } from "~/t3work/hooks/t3work-useWorkItemContextSyncQueue";
 import { useTicketDetail } from "~/t3work/hooks/t3work-useTicketDetail";
 import type { TicketKickoffThreadInput } from "~/t3work/t3work-kickoffTypes";
 import { TicketDetailBody } from "~/t3work/t3work-TicketDetailBody";
@@ -115,6 +116,19 @@ export function TicketDetailView({
     enabled: true,
   });
   const matchedGitHubActivityItems = githubActivity.activityByWorkItem.get(displayId) ?? [];
+
+  useEffect(() => {
+    if (!backend || projectTickets.length === 0) {
+      return;
+    }
+
+    void drainQueuedWorkItemContextSyncRequests({
+      addToChatFromRequest,
+      backend,
+      project,
+      projectTickets,
+    });
+  }, [addToChatFromRequest, backend, project, projectTickets]);
 
   useTicketDetailEmbeddedThreadEffects({
     activeThread,

@@ -1,6 +1,7 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { enqueueThreadKickoffAttachments } from "~/t3work/t3work-enqueueThreadKickoffAttachments";
+import { enqueueWorkItemContextSyncRequest } from "~/t3work/hooks/t3work-useWorkItemContextSyncQueue";
 import { buildJiraWorkItemSummary } from "~/t3work/t3work-jiraContextMetadata";
 import type { TicketKickoffThreadInput } from "~/t3work/t3work-kickoffTypes";
 import { useT3WorkPinnedSidebarStore } from "~/t3work/t3work-pinnedSidebarStore";
@@ -68,7 +69,17 @@ export async function createTicketKickoffThread(input: {
     .getTicketsForProject(resolvedProjectId)
     .find((candidate) => candidate.id === threadInput.ticketId);
 
-  if (!backend || !project || !ticket) return thread.id;
+  if (!backend || !project) return thread.id;
+
+  if (!ticket) {
+    enqueueWorkItemContextSyncRequest({
+      id: thread.id,
+      projectId: resolvedProjectId,
+      ticketKey: threadInput.ticketDisplayId || threadInput.ticketId,
+      threadId: thread.id,
+    });
+    return thread.id;
+  }
 
   const jiraSummary = buildJiraWorkItemSummary(ticket);
   await addToChatFromRequest(
