@@ -3,21 +3,29 @@
  *
  * The background loop (kickT3workAtlassianMirrorSync) uses forkDetach which
  * makes observing its DB side effects timing-sensitive in tests, so this file
- * covers the single-flight guard (synchronous, no DB access needed). The
+ * covers the single-flight guard (synchronous, no DB access needed) plus the
+ * reconcile prune paths via the exported runMirrorReconcile walk: a completed
+ * empty walk prunes, a provider-unavailable failure never does. The
  * relative-JQL incremental filter is covered in the provider unit tests.
  */
 
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { vi } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import {
   computeIncrementalLookbackMinutes,
   kickT3workAtlassianMirrorSync,
+  runMirrorReconcile,
 } from "./t3work-atlassian-backlog-mirrorSyncService.ts";
+import { AtlassianMirrorSourceUnavailableError } from "@t3tools/integrations-atlassian";
+import type { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import type { IntegrationAccountRef } from "@t3tools/integrations-core";
 
 // providerForAccount (re-resolved every loop iteration — see Fix 1) reads
@@ -59,6 +67,92 @@ mirrorSyncCacheLayer("t3work Atlassian mirror sync service", (it) => {
         });
 
         assert.ok(true, "both kicks completed without throwing");
+      }),
+  );
+
+  const identity = {
+    provider: "atlassian",
+    accountId: mockAccount.id,
+    externalProjectId: "project-1",
+  };
+
+  const reconcileWith = (provider: AtlassianIntegrationProvider) =>
+    runMirrorReconcile(
+      { account: mockAccount, externalProjectId: "project-1" },
+      provider,
+      identity,
+      () => false,
+    );
+
+  const countMirrorRows = Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const rows = yield* sql<{ count: number }>`
+      SELECT COUNT(*) AS "count"
+      FROM t3work_atlassian_backlog_issues
+      WHERE provider = ${identity.provider}
+        AND account_id = ${identity.accountId}
+        AND external_project_id = ${identity.externalProjectId}
+    `;
+    return rows[0]?.count ?? 0;
+  });
+
+  const providerReturning = (
+    pages: ReadonlyArray<{ items: ReadonlyArray<{ id: string; displayId: string }> }>,
+  ) => {
+    let call = 0;
+    return {
+      listProjectMirrorPage: vi.fn(async () => {
+        const page = pages[Math.min(call, pages.length - 1)];
+        call += 1;
+        return { items: page?.items ?? [], nextCursor: undefined };
+      }),
+    } as unknown as AtlassianIntegrationProvider;
+  };
+
+  it.effect(
+    "reconcile prunes every mirrored row when a complete walk finds a genuinely emptied project",
+    () =>
+      Effect.gen(function* () {
+        yield* reconcileWith(
+          providerReturning([
+            {
+              items: [
+                { id: "10001", displayId: "PROJ-1" },
+                { id: "10002", displayId: "PROJ-2" },
+              ],
+            },
+          ]),
+        );
+        assert.strictEqual(yield* countMirrorRows, 2);
+
+        // The project was genuinely emptied: the walk completes with zero items.
+        yield* reconcileWith(providerReturning([{ items: [] }]));
+        assert.strictEqual(yield* countMirrorRows, 0);
+      }),
+  );
+
+  it.effect(
+    "reconcile keeps mirrored rows when the provider reports the source unavailable",
+    () =>
+      Effect.gen(function* () {
+        yield* reconcileWith(
+          providerReturning([{ items: [{ id: "10001", displayId: "PROJ-1" }] }]),
+        );
+        assert.strictEqual(yield* countMirrorRows, 1);
+
+        const unavailableProvider = {
+          listProjectMirrorPage: vi.fn(async () => {
+            throw new AtlassianMirrorSourceUnavailableError({
+              reason: "project-not-found",
+              externalProjectId: "project-1",
+              message: "project lookup failed",
+            });
+          }),
+        } as unknown as AtlassianIntegrationProvider;
+
+        const exit = yield* Effect.exit(reconcileWith(unavailableProvider));
+        assert.ok(Exit.isFailure(exit), "reconcile must fail, not treat it as an empty project");
+        assert.strictEqual(yield* countMirrorRows, 1);
       }),
   );
 });
@@ -106,3 +200,4 @@ it("lookback widening: clock going backwards never shrinks below the floor", () 
     15,
   );
 });
+// trivial

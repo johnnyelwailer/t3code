@@ -16,6 +16,7 @@ import type { ExternalProject } from "@t3tools/integrations-core";
 import {
   AtlassianApiError,
   AtlassianAuthError,
+  AtlassianMirrorSourceUnavailableError,
   AtlassianNetworkError,
   type JiraIssue,
 } from "./client.ts";
@@ -1129,6 +1130,10 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
    *   backfill / reconcile walk over the entire project.
    * @param cursor - Opaque page token from a previous call's `nextCursor`.
    * @param limit - Page size; defaults to jiraIssueSearchPageSize.
+   * @throws AtlassianMirrorSourceUnavailableError when no client is registered
+   *   for the account or the project lookup does not find the project. An
+   *   empty page ({ items: [] }) therefore always means "the project genuinely
+   *   has no (matching) issues", so the reconcile prune can trust it.
    */
   async listProjectMirrorPage(input: {
     account: IntegrationAccountRef;
@@ -1141,10 +1146,22 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     nextCursor: string | undefined;
   }> {
     const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
-    if (!entry) return { items: [], nextCursor: undefined };
+    if (!entry) {
+      throw new AtlassianMirrorSourceUnavailableError({
+        reason: "client-unavailable",
+        externalProjectId: input.externalProjectId,
+        message: `No Atlassian client available for account "${input.account.id}".`,
+      });
+    }
 
     const project = await this.findProjectById(input.externalProjectId, entry.client);
-    if (!project) return { items: [], nextCursor: undefined };
+    if (!project) {
+      throw new AtlassianMirrorSourceUnavailableError({
+        reason: "project-not-found",
+        externalProjectId: input.externalProjectId,
+        message: `Atlassian project "${input.externalProjectId}" was not found on ${entry.siteUrl}.`,
+      });
+    }
 
     const [estimateField, sprintField] = await Promise.all([
       this.resolveEstimateField(entry.client),

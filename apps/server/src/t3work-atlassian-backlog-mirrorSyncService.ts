@@ -283,8 +283,18 @@ function runMirrorIncrementalWalk(
 /**
  * Walks every issue in the project (no updated filter), collects all seen IDs,
  * then deletes rows for issues that are no longer in the project at all.
+ *
+ * Failure modes are explicit: `listProjectMirrorPage` THROWS
+ * `AtlassianMirrorSourceUnavailableError` when the client or project lookup is
+ * unavailable (it never silently returns an empty page for those cases), so a
+ * provider failure aborts the walk here before `walkComplete` is set and the
+ * prune is skipped. Conversely, a completed walk that saw zero issues means
+ * the project is genuinely empty and pruning every mirrored row is correct.
+ *
+ * Exported for tests; production code enters through
+ * `kickT3workAtlassianMirrorSync`.
  */
-function runMirrorReconcile(
+export function runMirrorReconcile(
   input: T3workAtlassianMirrorSyncRequest,
   provider: AtlassianIntegrationProvider,
   identity: { provider: string; accountId: string; externalProjectId: string },
@@ -421,8 +431,10 @@ function deleteMirrorIssuesAbsentFromWalk(input: {
   seenIds: Set<string>;
 }) {
   return Effect.gen(function* () {
-    if (input.seenIds.size === 0) return;
-
+    // An empty seenIds set is trusted: the caller only invokes this after a
+    // complete walk, and the provider throws (rather than returning an empty
+    // page) when the client/project is unavailable — so empty means the
+    // project genuinely has no issues and every mirrored row is stale.
     const sql = yield* SqlClient.SqlClient;
 
     // Fetch all stored IDs for the project, delete those not in seenIds.
