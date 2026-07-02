@@ -79,10 +79,17 @@ export type AtlassianBacklogSavedFilter = {
   readonly favourite?: boolean;
 };
 
+export type AtlassianBacklogQuickFilter = {
+  readonly id: string;
+  readonly name: string;
+  readonly jql: string;
+};
+
 export type AtlassianBacklogSelection = {
   readonly boards: ReadonlyArray<AtlassianBacklogBoard>;
   readonly sprints: ReadonlyArray<AtlassianBacklogSprint>;
   readonly savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
+  readonly quickFilters: ReadonlyArray<AtlassianBacklogQuickFilter>;
   readonly selectedBoardId?: string;
   readonly selectedBoardColumns?: ReadonlyArray<AtlassianBacklogBoardColumn>;
   readonly selectedSprintId?: string;
@@ -265,6 +272,24 @@ function toBacklogSavedFilter(filter: {
     jql,
     ...(filter.owner?.displayName ? { ownerDisplayName: filter.owner.displayName } : {}),
     ...(filter.favourite !== undefined ? { favourite: filter.favourite } : {}),
+  };
+}
+
+function toBacklogQuickFilter(filter: {
+  id: string | number;
+  name: string;
+  jql?: string;
+}): AtlassianBacklogQuickFilter | undefined {
+  const id = normalizeOptionalId(filter.id);
+  const jql = typeof filter.jql === "string" ? filter.jql.trim() : "";
+  if (!id || filter.name.trim().length === 0 || jql.length === 0) {
+    return undefined;
+  }
+
+  return {
+    id,
+    name: filter.name,
+    jql,
   };
 }
 
@@ -761,6 +786,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       boardId?: string;
       sprintId?: string;
       filterJql?: string;
+      quickFilterIds?: ReadonlyArray<string>;
       cursor?: string;
     },
   ): Promise<ResourcePage> {
@@ -781,6 +807,22 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     const requestedSprintId = input.sprintId?.trim();
     if (requestedSprintId) {
       backlogJqlParts.push(buildSprintJqlClause(requestedSprintId));
+    }
+    const requestedQuickFilterIds = (input.quickFilterIds ?? [])
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    if (requestedQuickFilterIds.length > 0 && input.boardId?.trim()) {
+      const boardQuickFilters = await this.listBacklogQuickFilters(
+        entry.client,
+        input.boardId.trim(),
+      );
+      for (const quickFilterId of requestedQuickFilterIds) {
+        const quickFilter = boardQuickFilters.find((filter) => filter.id === quickFilterId);
+        const quickFilterJql = stripJqlOrderBy(quickFilter?.jql);
+        if (quickFilterJql) {
+          backlogJqlParts.push(`(${quickFilterJql})`);
+        }
+      }
     }
     const backlogJql = `${backlogJqlParts.join(" AND ")} ORDER BY updated DESC`;
     const [estimateField, sprintField] = await Promise.all([
@@ -1005,12 +1047,12 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
   }): Promise<AtlassianBacklogSelection> {
     const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
     if (!entry) {
-      return { boards: [], sprints: [], savedFilters: [] };
+      return { boards: [], sprints: [], savedFilters: [], quickFilters: [] };
     }
 
     const project = await this.findProjectById(input.externalProjectId, entry.client);
     if (!project) {
-      return { boards: [], sprints: [], savedFilters: [] };
+      return { boards: [], sprints: [], savedFilters: [], quickFilters: [] };
     }
 
     const [savedFilters, projectBoards] = await Promise.all([
@@ -1054,11 +1096,14 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         boards,
         sprints: fallbackCatalog.sprints,
         savedFilters,
+        quickFilters: [],
         ...(selectedSprint ? { selectedSprintId: selectedSprint.id } : {}),
         ...(selectedFilter ? { selectedFilterId: selectedFilter.id } : {}),
         ...(selectedFilter ? { selectedFilterJql: selectedFilter.jql } : {}),
       };
     }
+
+    const quickFilters = await this.listBacklogQuickFilters(entry.client, selectedBoard.id);
 
     const boardSprints = (
       await entry.client.listBoardSprints(selectedBoard.id).catch(() => ({ values: [] }))
@@ -1085,6 +1130,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       boards,
       sprints,
       savedFilters,
+      quickFilters,
       selectedBoardId: selectedBoard.id,
       ...(selectedBoardColumns && selectedBoardColumns.length > 0 ? { selectedBoardColumns } : {}),
       ...(selectedSprint ? { selectedSprintId: selectedSprint.id } : {}),
@@ -1578,6 +1624,19 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         .filter((filter): filter is AtlassianBacklogSavedFilter => filter !== undefined)
         .toSorted(compareBacklogSavedFilters)
         .slice(0, 50);
+    } catch {
+      return [];
+    }
+  }
+
+  private async listBacklogQuickFilters(
+    client: JiraApiClient,
+    boardId: string,
+  ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
+    try {
+      return (await client.listBoardQuickFilters(boardId)).values
+        .map((filter) => toBacklogQuickFilter(filter))
+        .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
     } catch {
       return [];
     }

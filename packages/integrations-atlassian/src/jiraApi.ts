@@ -22,6 +22,7 @@ import {
   type JiraMyself,
   type JiraProject,
   type JiraProjectSearchResponse,
+  type JiraQuickFilterSearchResponse,
   type JiraSprintSearchResponse,
   type JiraUser,
 } from "./client.ts";
@@ -294,6 +295,15 @@ export class JiraApiClient {
     }
     return this.fetchJson<JiraSprintSearchResponse>(
       `/rest/agile/1.0/board/${encodeURIComponent(boardId)}/sprint?${params.toString()}`,
+    );
+  }
+
+  async listBoardQuickFilters(boardId: string): Promise<JiraQuickFilterSearchResponse> {
+    const params = new URLSearchParams({
+      maxResults: "100",
+    });
+    return this.fetchJson<JiraQuickFilterSearchResponse>(
+      `/rest/agile/1.0/board/${encodeURIComponent(boardId)}/quickfilter?${params.toString()}`,
     );
   }
 

@@ -560,6 +560,63 @@ describe("AtlassianIntegrationProvider", () => {
     });
   });
 
+  it("ANDs active quick filters into the backlog JQL", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.includes("/rest/api/3/project/search")) {
+        return Response.json({
+          values: [{ id: "project-1", key: "PROJ" }],
+        });
+      }
+
+      if (url.endsWith("/rest/api/3/field")) {
+        return Response.json([]);
+      }
+
+      if (url.includes("/rest/agile/1.0/board/77/quickfilter")) {
+        return Response.json({
+          values: [
+            { id: 1, name: "My Issues", jql: "assignee = currentUser()" },
+            { id: 2, name: "Recently Updated", jql: "updated >= -1d ORDER BY updated DESC" },
+          ],
+          isLast: true,
+        });
+      }
+
+      if (url.includes("/rest/api/3/search/jql")) {
+        expect(url).toContain(
+          encodeURIComponent(
+            'project = "PROJ" AND statusCategory != Done AND (assignee = currentUser()) AND (updated >= -1d) ORDER BY updated DESC',
+          ),
+        );
+        return Response.json({ total: 0, issues: [] });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    const page = await provider.listBacklogResources({
+      account: {
+        id: "https://test.atlassian.net",
+        provider: "atlassian",
+      },
+      externalProjectId: "project-1",
+      boardId: "77",
+      quickFilterIds: ["1", "2"],
+    });
+
+    expect(page.items).toEqual([]);
+  });
+
   it("loads official Jira board columns for the resolved backlog board", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
@@ -1019,6 +1076,13 @@ describe("AtlassianIntegrationProvider", () => {
         });
       }
 
+      if (url.includes("/rest/agile/1.0/board/77/quickfilter")) {
+        return Response.json({
+          values: [{ id: 1, name: "My Issues", jql: "assignee = currentUser()" }],
+          isLast: true,
+        });
+      }
+
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -1070,6 +1134,7 @@ describe("AtlassianIntegrationProvider", () => {
           favourite: true,
         },
       ],
+      quickFilters: [{ id: "1", name: "My Issues", jql: "assignee = currentUser()" }],
       selectedBoardId: "77",
       selectedSprintId: "4488",
       selectedFilterId: "17",
@@ -1220,6 +1285,7 @@ describe("AtlassianIntegrationProvider", () => {
         },
       ],
       savedFilters: [],
+      quickFilters: [],
       selectedBoardId: "95",
       selectedSprintId: "3185",
     });
@@ -1382,6 +1448,7 @@ describe("AtlassianIntegrationProvider", () => {
         },
       ],
       savedFilters: [],
+      quickFilters: [],
       selectedBoardId: "2513",
       selectedSprintId: "4488",
     });
@@ -1530,6 +1597,7 @@ describe("AtlassianIntegrationProvider", () => {
         },
       ],
       savedFilters: [],
+      quickFilters: [],
       selectedBoardId: "2277",
       selectedSprintId: "4488",
     });
@@ -1673,6 +1741,7 @@ describe("AtlassianIntegrationProvider", () => {
         },
       ],
       savedFilters: [],
+      quickFilters: [],
       selectedBoardId: "2277",
       selectedSprintId: "4488",
     });
@@ -1772,6 +1841,7 @@ describe("AtlassianIntegrationProvider", () => {
         },
       ],
       savedFilters: [],
+      quickFilters: [],
       selectedBoardId: "2277",
       selectedSprintId: "4488",
     });
