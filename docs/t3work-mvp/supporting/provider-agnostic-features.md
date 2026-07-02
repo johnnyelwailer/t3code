@@ -2,6 +2,11 @@
 
 T3 Code already has **extensive provider-agnostic infrastructure** that we can leverage for tools, recipes, and skills. This document lists concrete examples and how to use them.
 
+Terminology note: "provider" here means an AI/code-agent provider such as Codex, Claude,
+Cursor, or OpenCode. Work-system integrations such as Jira, GitHub, Linear, and Confluence
+are connectors in the pack-driven t3work specs, even where older code fields still use
+`provider`.
+
 ---
 
 ## 1. Provider Routing & Discovery (Already Agnostic)

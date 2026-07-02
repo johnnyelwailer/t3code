@@ -2,8 +2,8 @@
 
 ## Position
 
-`t3work` needs fresher GitHub and Jira data without violating the additive constraints in
-the constitution.
+`t3work` needs fresher connector data (GitHub and Jira in the current proof slice) without
+violating the additive constraints in the constitution.
 
 The first rollout should avoid non-`t3work` files and avoid introducing new core server
 or websocket seams. That means polling first, through existing `t3work` backend routes,
@@ -35,7 +35,8 @@ It works with the current architecture:
 
 - browser UI already calls `t3work` backend routes
 - backend routes already own third-party access
-- GitHub and Jira read surfaces already exist in `t3work` hooks
+- GitHub and Jira read surfaces already exist in `t3work` hooks; long term these are
+  pack-provided views backed by the same cache contract
 - the main missing behavior is freshness, not initial data access
 
 This gives us user-visible freshness now, while leaving room for a later server-owned sync
@@ -46,7 +47,7 @@ loop if we decide an additive seam is worth adding.
 The cache this plan refreshes is the same local SQL store defined in
 [Epic 04 — Caching](./04-integration-platform.md#caching) and consumed by the
 `Queryable<T>` contract in [Epic 16](./16-action-recipes.md#context-reactive-queryable-surface).
-Polling lands fresh provider data into the SQL tables; the existing projection pipeline
+Polling lands fresh connector data into the SQL tables; the existing projection pipeline
 invalidates downstream subscribers (recipe discovery, Views, open workflow `collect-input`
 steps). A future server-owned sync loop swaps the _trigger_ of these writes (push instead
 of pull) without changing the cache shape or the consumer contract.

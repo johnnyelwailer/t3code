@@ -5,24 +5,29 @@
 Design the generic front half of the `t3work` create-project wizard using the existing
 T3 Code shell and UI primitives as the baseline.
 
-This document owns the steps that happen before any source-specific setup UI:
+This document owns the steps that happen before any pack/source-specific setup UI:
 
-1. Choose a project source.
-2. Check which agent providers are installed and ready.
+1. Choose a project source exposed by active packs.
+2. Check which AI provider integrations are installed, allowed, and ready.
 3. Choose a default provider instance and model for the managed project.
 4. Install and authenticate a provider from the wizard when needed.
 5. Hand off to the selected source-specific setup flow.
 
-Atlassian is the first consumer of this preflight, but this spec must remain reusable
-for later sources such as GitHub, Linear, Azure DevOps, or local managed projects.
+Atlassian is the first consumer of this preflight in the current implementation, but it
+should behave like a pack-provided source option. This spec must remain reusable for later
+sources such as GitHub, Linear, Azure DevOps, Zendesk, internal systems, or local managed
+projects.
 
 ## Relationship To Source-Specific Docs
 
 - This doc owns `Source Choice` and `Agent Runtime Preflight`.
-- Source-specific docs pick up after preflight succeeds.
+- Pack/source-specific docs pick up after preflight succeeds.
 - [Epic 11: Atlassian Setup UI](./11-atlassian-setup-ui.md) defines the Atlassian
   connection, site selection, Jira project selection, and confirmation screens that
   follow this preflight.
+- [Epic 36: Workspace Packs And Distributions](./36-workspace-packs-and-distributions.md)
+  defines how packs contribute source options, AI provider integrations, defaults, and
+  locks.
 
 ## Existing T3 Baseline
 
@@ -48,6 +53,7 @@ only the missing `t3work`-specific composition.
   explicitly skipped for a source that does not need an agent runtime
 - runtime preflight must reuse the app's existing provider instance and model selection
   concepts instead of inventing a second configuration system
+- source and AI provider choices must be filtered through active pack policy and locks
 - install, update, and authentication flows for agent providers must be backend-managed
   orchestration surfaced through a single wizard step, not manual terminal instructions
 - the project creation flow must preserve source choice and runtime choice independently
@@ -76,7 +82,7 @@ First-time flow:
 ```text
 Project Browser
   -> New Project
-  -> Choose Source
+  -> Choose Source (from active packs)
   -> Agent Runtime Preflight
   -> Install / Authenticate Provider (if needed)
   -> Source-Specific Setup
@@ -107,7 +113,7 @@ Baseline:
 Content:
 
 - page title: `Create project`
-- primary option for the MVP: Atlassian
+- source options discovered from active packs
 - secondary options: local project, empty managed project
 - disabled or future options can be shown only if visually quiet
 - cards may show a short runtime summary such as `Uses your default agent setup` or
@@ -119,6 +125,7 @@ Source card:
 - title and concise description
 - source badges where applicable
 - readiness hint when a source depends on a provider-specific prerequisite
+- pack/source attribution when useful, for example `From Acme Support Pack`
 - action: `Continue` or `Resume`
 
 States:
@@ -128,6 +135,7 @@ States:
 - recommended
 - last used
 - blocked by missing prerequisite
+- blocked by policy lock
 
 ## Screen 2: Agent Runtime Preflight
 
@@ -137,7 +145,7 @@ project that depends on an agent runtime.
 Purpose:
 
 - check which agent providers are installed
-- let the user choose a default provider instance for the project
+- let the user choose a default provider instance for the project when policy allows it
 - let the user choose a default model for that provider
 - install and authenticate a provider from the same step when needed
 
@@ -147,8 +155,10 @@ Content:
 - concise explanation that this selects the default runtime for recipes, runs, and
   project threads
 - recommended provider cards ordered by readiness and user history
+- provider cards filtered by active pack policy and locks
 - model select shown after a provider is selected and models are known
 - helper copy that this can be changed later in project settings
+  unless locked by a managed pack
 
 Provider card:
 
@@ -179,6 +189,8 @@ States:
 - install failed
 - auth failed or cancelled
 - no compatible models
+- denied by policy
+- locked to organization default
 
 ## Automation Requirements
 
@@ -215,7 +227,8 @@ controls.
 ```ts
 type ProjectSourceOption = {
   id: string;
-  provider: string;
+  connectorId: string;
+  packId?: string;
   title: string;
   description: string;
   badges: string[];
@@ -302,7 +315,7 @@ and click through:
 
 1. Open project browser.
 2. Click `New project`.
-3. Inspect source choice and choose Atlassian.
+3. Inspect source choice and choose an available pack-provided source.
 4. Inspect agent runtime preflight.
 5. If needed, install a provider from the wizard.
 6. If needed, complete or mock provider authentication from the wizard.
@@ -310,5 +323,5 @@ and click through:
 8. Continue into the source-specific setup flow.
 9. Verify the chosen source, provider, and model carry forward.
 
-The final report must state which source path was clicked, which runtime install and
-auth path was clicked, and which states were inspected.
+The final report must state which source path was clicked, which pack provided it, which
+runtime install and auth path was clicked, and which states were inspected.

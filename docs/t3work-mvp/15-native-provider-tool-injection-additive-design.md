@@ -4,6 +4,10 @@
 
 Support raw MCP/tool injection for Claude, Codex, Cursor, and OpenCode without editing existing provider adapter files during the first implementation phase.
 
+Terminology note: this document uses **provider** for AI/code-agent providers. It is not
+about work-system connectors. Workspace packs may later provide AI provider integration
+configuration, but this additive-only design is the first host-side injection path.
+
 ## Additive-Only Constraints
 
 - Add new `t3work-` prefixed files only.
@@ -23,6 +27,9 @@ Support raw MCP/tool injection for Claude, Codex, Cursor, and OpenCode without e
 
 - Implemented Codex MCP registration via native CLI commands (`codex mcp add/list`) scoped to a workspace-local home directory.
 - Default home path: `.t3work/provider-homes/codex` under `workspaceRoot`.
+- This path is a current workaround. Under Epic 36, provider homes and generated provider
+  config should move toward host-owned app-data unless the project explicitly owns the
+  config file.
 - Absolute paths and any path resolving outside `workspaceRoot` are rejected.
 - Implemented OpenCode MCP registration via workspace-local `opencode.json` materialization plus `OPENCODE_CONFIG` override.
 - Default OpenCode config path: `opencode.json` under `workspaceRoot`.

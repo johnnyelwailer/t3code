@@ -439,7 +439,8 @@ context-only tone. Deliberate divergence: avatar initials + color as primary ide
 
 ## 12. Open questions
 
-- Sprint target line: board velocity vs. Σ Tempo capacity of the team (now derivable!) — probably the latter.
+- Sprint target line uses Σ Tempo capacity of the team when available, with board velocity
+  as fallback or comparison.
 - Multi-sprint boards: sprint picker (likely) vs. multiple zones.
 - Issue link types: render all as "related" with type badge, or configured subset?
 - Tempo plans: which plan categories count as unavailability (vacation vs. project allocations)?

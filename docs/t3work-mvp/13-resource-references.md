@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Jira issues and other external entities should be referenceable in the composer just like
-files.
+Pack-provided external resources, such as Jira issues, should be referenceable in the
+composer just like files.
 
 T3 Code already uses:
 
@@ -54,7 +54,9 @@ Relevant existing files:
 
 ### Canonical
 
-Use typed `@provider:id` references.
+Use typed `@connector-or-resource:id` references. The current syntax still uses the
+historical `@provider:id` spelling for compatibility, but the value is a work-system
+connector/resource slug, not an AI provider id.
 
 Examples:
 
@@ -369,8 +371,10 @@ type ResourceRef = {
 };
 ```
 
-`provider` is an open slug, not a closed union — a user-authored connector
-([Epic 04](./04-integration-platform.md)) must be referenceable without editing this type.
+`provider` is the existing field name for an open connector slug, not a closed union and
+not an AI provider id — a user-authored connector ([Epic 04](./04-integration-platform.md))
+must be referenceable without editing this type. Future schemas may alias this as
+`connectorId`, but the wire contract should not churn just for naming.
 
 For Jira:
 

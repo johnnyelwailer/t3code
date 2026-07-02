@@ -39,6 +39,7 @@ type WorkItemChangeSet = {
     recipeId?: string;
   };
   target: {
+    // Existing field name; means work-system connector slug, not AI provider id.
     provider: "jira" | "linear" | "github" | string;
     projectRef: string;
   };
@@ -56,7 +57,7 @@ type WorkItemChangeSet = {
 };
 ```
 
-Operations are provider-neutral first:
+Operations are connector-neutral first:
 
 ```ts
 type WorkItemDraftOperation =

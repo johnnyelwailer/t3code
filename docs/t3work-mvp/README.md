@@ -1,11 +1,14 @@
 # t3work MVP
 
-This folder describes `t3work`, an additive MVP for a project-oriented T3 Code shell.
+This folder describes `t3work`, an additive MVP for a team-based, project-oriented T3 Code
+shell.
 
-The goal is to keep benefiting from active T3 Code development while adding a sibling
-experience for non-developer and QA-oriented users. The shell should avoid broad edits
-to the existing app and server. New behavior should live in additive packages and a
-separate UI surface.
+The goal is to keep benefiting from active T3 Code development while adding a pack-driven
+work platform on top. `t3work` should bring different roles into one shared project
+workspace: engineers, PMs, designers, QA, support, and managers can work from the same
+context with role-specific views, recipes, and policies. The shell should avoid broad edits
+to the existing app and server. New behavior should live in additive packages,
+pack-provided modules, and separate UI surfaces.
 
 `t3work` is the product and namespace for the additive work-oriented layer. Package and
 app names should make it obvious which code belongs to `t3work` and which code belongs
@@ -13,36 +16,37 @@ to the existing T3 Code runtime.
 
 ## Product Thesis
 
-`t3work` is an **extensible work platform**: it turns the systems you already work in into
-guided, AI-accelerated workspaces, and lets users extend it along two axes — **Sources**
-(connect any back-end as a first-class data provider) and **Surfaces** (compose
-role-specific pages and recipes for how you work). Atlassian/Jira and the QA profile are
-the first Source and the first Surface, not the definition of the product. See the full
+`t3work` is a **pack-driven team work platform**. Core `t3work` should stay lean: runtime,
+SDK, policy enforcement, sync/cache plumbing, reviewable mutations, and safe UI building
+blocks. The actual product shape comes from versioned packs that can provide connectors,
+AI provider integrations, profiles, recipes, workflows, views, themes, localization, and
+policies. See the full
 [Vision & Extensibility Model](./00-vision.md).
 
 T3 Code should remain a local-first agent runtime with strong provider orchestration.
 `t3work` adds a guided layer on top:
 
-- users start from a project, not a blank chat
-- projects can come from integrations such as Jira
+- teams start from a shared project context, not isolated blank chats
+- each role gets relevant views, recipes, and policies
+- projects can come from pack-provided connectors such as Jira
 - local workspaces can be managed automatically
-- recipes suggest useful actions based on current context
+- pack-provided recipes suggest useful actions based on current context
 - recipes are backed by skills
 - skills produce rich, persistent artifacts, not only chat text
 - external mutations use reviewable app-style UI before commit
 
 ## MVP Scope
 
-The first MVP targets Atlassian/Jira-backed projects, but `t3work` is not a QA-only
-product. QA is the first useful skill pack because Jira tickets, test plans, and review
-flows are concrete MVP inputs. The broader product is a project-based agent workspace
-for different kinds of work.
+The first implemented slice may still use Atlassian/Jira because the repo already has
+that work in progress, but Atlassian should be treated as a proof pack or connector
+distribution, not as core product shape. The broader product is a pack-based agent
+workspace for different kinds of work.
 
-The user should be able to:
+For the proof slice, the user should be able to:
 
-1. Choose a project source.
+1. Choose a pack-provided project source.
 2. Complete agent runtime preflight by choosing or installing a default provider and model.
-3. Connect Atlassian.
+3. Connect the Atlassian proof-pack source.
 4. Pick a Jira project visible to their account.
 5. Create a T3 project without choosing a local directory.
 6. Browse Jira issues inside `t3work`.
@@ -88,6 +92,7 @@ The user should be able to:
 - [Epic 32: Project Provider And Tool Policies](./32-project-provider-tool-policies.md)
 - [Epic 34: Daily Standup](./34-daily-standup.md)
 - [Epic 35: Work Item Change Sets](./35-work-item-change-sets.md)
+- [Epic 36: Workspace Packs And Distributions](./36-workspace-packs-and-distributions.md)
 
 ## Supporting Docs
 
@@ -98,7 +103,8 @@ The user should be able to:
 ## Non-Goals
 
 - Do not fork T3 Code into a separate long-lived product.
-- Do not build a full Jira replacement.
+- Do not make core `t3work` a Jira, QA, support, or backlog product.
+- Do not require product-shaping packs to live in this repository.
 - Do not build a full Confluence replacement; the knowledge layer accelerates, it does not
   replicate.
 - Do not require every project to have a Git repository.
@@ -107,10 +113,10 @@ The user should be able to:
 
 ## Success Criteria
 
-The product MVP succeeds when non-technical users can start from a Jira project, pick a
-ticket, choose a useful recipe, and receive a durable output without having to write a
-good prompt.
+The product MVP succeeds when users can enable or receive a pack, open a project shaped by
+that pack, choose a useful recipe or view, and receive a durable output without having to
+write a good prompt.
 
 The technical MVP succeeds when existing T3 behavior remains unchanged, all private T3
-coupling is isolated behind one adapter package, and future integrations can reuse the
-same project, resource, recipe, tool, artifact, and mutation models.
+coupling is isolated behind one adapter package, and future packs can reuse the same
+project, resource, recipe, view, tool, artifact, policy, and mutation models.

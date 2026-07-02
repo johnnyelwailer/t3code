@@ -10,6 +10,10 @@ baseline. The first `t3work` UI should copy or import the current shell structur
 navigation, primitives, visual density, and interaction patterns, then adapt that
 baseline for project, integration, recipe, and artifact workflows.
 
+Under the pack-driven vision, project sources and overview surfaces are contributed by
+active workspace packs. The Atlassian/Jira flow below is the first proof source, not a
+core-only project browser assumption.
+
 This is not a greenfield UI. Divergence from the existing T3 shell should be deliberate
 and tied to a `t3work` use case.
 
@@ -23,7 +27,7 @@ Card content:
 
 - project name
 - project kind
-- source badges, such as Jira or local
+- source badges from active connectors, such as Jira or local
 - managed workspace indicator
 - recent issue count
 - recent artifact count
@@ -34,12 +38,13 @@ Card content:
 
 Options:
 
-- create from Atlassian
+- create from pack-provided source, with Atlassian as the first proof source
 - create empty managed project
 - import existing local T3 project
 - attach local folder to project
 
-The default path for non-technical users should be "create from Atlassian."
+The default path for the proof slice can be "create from Atlassian." Long term, the default
+comes from active packs and policy.
 
 ### Project Overview
 
@@ -47,7 +52,7 @@ Shows:
 
 - project context summary
 - connected sources
-- current Jira issues or other resources
+- current source resources, such as Jira issues
 - suggested recipes
 - project-scoped action recipes rendered from current project context
 - recent artifacts
@@ -65,7 +70,7 @@ Recipe groups:
 
 ### Resource Detail
 
-For a Jira issue:
+For a work item such as a Jira issue:
 
 - title, key, type, status, priority
 - assignee and reporter
@@ -90,10 +95,10 @@ For a Jira issue:
 - The chat box should remain available for follow-up.
 - Recent generated artifacts should be easier to find than old chat turns.
 
-## First Jira Project Flow
+## First Atlassian Proof Flow
 
 1. Click "New project."
-2. Choose "Atlassian."
+2. Choose the Atlassian proof-pack source.
 3. Complete agent runtime preflight by choosing or installing a default provider and model.
 4. Connect Atlassian and pick a site if needed.
 5. Pick a Jira project from accessible projects.
@@ -106,6 +111,7 @@ For a Jira issue:
 The empty state should present concrete actions:
 
 - Connect Atlassian
+- Connect another pack-provided source when available
 - Import existing T3 project
 - Create managed project
 

@@ -1,5 +1,10 @@
 # T3work Recipes/Skills/Tools Planning
 
+> Supporting note: this document describes the current Jira/Atlassian proof slice and the
+> early tool-injection plan. Jira examples are proof-pack examples, not core product shape.
+> "Provider" in the tool-injection sections means AI/code-agent provider unless explicitly
+> referring to an integration connector.
+
 ## Current Status
 
 ### ✅ Already Implemented
@@ -9,7 +14,7 @@
    - `RecipeMatchInput` / `RecipeMatchResult` types for applicability matching
    - `SkillRef` for referencing skills by id + version
 
-2. **Integration Platform** (in place, Atlassian first)
+2. **Integration Platform** (in place, Atlassian proof connector first)
    - `IntegrationProvider` interface with listAccounts, listProjects, listResources, getResource
    - Two-step mutation: prepareMutation → commitMutation
    - Resource snapshots and caching support
@@ -30,12 +35,12 @@
 5. **Documentation**
    - Epic 06: Recipes and Skills design
    - Epic 07: Skill Tools and Mutations (tool list & permission model)
-   - Epic 12: Profiles and Skill Packs (structure and bundling)
+   - Epic 12: Profiles and Skill Packs (starter pack structure)
 
 ### ❌ Not Yet Implemented
 
 1. **packages/t3work-skill-packs**
-   - Should contain bundled profile & pack definitions
+   - Contains starter distribution-pack profile definitions
    - Prompt blocks, artifact templates
    - Tool permission whitelists
 
@@ -275,30 +280,33 @@ This keeps the contract between skills and shell stable and provider-agnostic.
 
 ---
 
-## Questions & Decisions Needed
+## Current Defaults
 
 1. **Tool Versioning**
-   - Should tools be versioned separately from skills?
-   - How do we handle breaking changes?
+   - Tools are versioned with the pack and SDK contract that declares them.
+   - Breaking changes require a new tool id or a manifest compatibility bump.
 
 2. **Tool Error Handling**
-   - Provider-agnostic error schema?
-   - How verbose should tool errors be?
+   - Tool errors use provider-neutral structured errors.
+   - User-facing detail is concise; logs/audit records can keep diagnostic detail.
 
 3. **Tool Caching**
-   - Cache tool results (e.g., integration.resources.list)?
-   - Cache key strategy?
+   - Cache connector reads through the connector sync/cache layer, not ad hoc tool caches.
+   - Cache keys include connector account, resource scope, query parameters, and freshness
+     policy.
 
 4. **Tool Audit**
-   - Record all tool calls in artifact history?
-   - Include tool input/output in thread logs?
+   - Record tool calls that affect external systems, durable artifacts, provider config, or
+     policy.
+   - Redact secrets and large payloads; attach durable artifacts for large outputs.
 
 5. **UI Primitive Tools**
-   - Should they be actual "tools" or just internal rendering?
-   - Can skills call them, or only shell internals?
+   - UI primitives are Views/domain events, not raw provider tools.
+   - Skills and recipes can request registered Views; shell internals own rendering.
 
 6. **Permission Model Detail**
-   - How granular? (per-project, per-integration account, per-resource-kind)
+   - Use project, connector account, resource kind, tool group, and individual mutation
+     gates. Start broad for reads, narrow for writes.
    - Who decides permissions? (skill pack, recipe, project config, user)
 
 ---
