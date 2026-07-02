@@ -39,4 +39,18 @@ describe("t3work integration polling", () => {
       fingerprint: createT3workPollFingerprint(payload),
     });
   });
+
+  it("produces the same fingerprint regardless of object key insertion order", () => {
+    const a = { totalCount: 2, nextCursor: "abc", items: [{ id: "one", title: "Issue 1" }] };
+    const b = { nextCursor: "abc", items: [{ title: "Issue 1", id: "one" }], totalCount: 2 };
+
+    expect(createT3workPollFingerprint(a)).toBe(createT3workPollFingerprint(b));
+  });
+
+  it("still produces different fingerprints for different data", () => {
+    const a = { totalCount: 2, nextCursor: "abc" };
+    const b = { totalCount: 3, nextCursor: "abc" };
+
+    expect(createT3workPollFingerprint(a)).not.toBe(createT3workPollFingerprint(b));
+  });
 });
