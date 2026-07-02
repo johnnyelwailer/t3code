@@ -14,6 +14,7 @@ import {
   type PersistedAtlassianAuths,
   savePersistedAtlassianAuthsPayload,
 } from "./t3work-atlassian-auth-persistence.ts";
+import { invalidateT3workAtlassianViewerAccountIdCache } from "./t3work-atlassian-viewer-identity.ts";
 
 export type BasicConnectInput = {
   readonly auth: {
@@ -197,8 +198,15 @@ export function providerForPersistedAuths() {
 
 export function setAtlassianAuth(accountId: string, auth: JiraApiAuth): void {
   atlassianAuths.set(accountId, auth);
+  invalidateT3workAtlassianViewerAccountIdCache();
 }
 
+/**
+ * Replace the whole persisted-auths set (basic/OAuth connect, test fixture
+ * reset). Invalidates the cached viewer accountIds too: a reconnect can swap
+ * in a different Atlassian user for the same account id, and a stale cached
+ * accountId would silently keep serving the previous person's My Work.
+ */
 export function replaceAtlassianAuths(
   entries: ReadonlyArray<{ readonly accountId: string; readonly auth: JiraApiAuth }>,
 ): void {
@@ -206,4 +214,5 @@ export function replaceAtlassianAuths(
   for (const entry of entries) {
     atlassianAuths.set(entry.accountId, entry.auth);
   }
+  invalidateT3workAtlassianViewerAccountIdCache();
 }
