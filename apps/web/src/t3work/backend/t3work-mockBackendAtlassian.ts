@@ -117,7 +117,6 @@ export function createMockAtlassianBackendApi(input: {
         await input.mockIntegrationProvider.listResources({
           account: request.account,
           externalProjectId: request.externalProjectId,
-          ...(request.limit !== undefined ? { limit: request.limit } : {}),
         }),
       ),
     getResource: async (ref) => input.mockIntegrationProvider.getResource(ref.ref),

@@ -23,14 +23,20 @@ export function useProjectMyWork(project: ProjectShellProject) {
   const [error, setError] = useState<string | null>(null);
   const fingerprintRef = useRef<string | undefined>(undefined);
   const lastCheckedAtRef = useRef<number | undefined>(undefined);
+  // Bumped whenever the target project/account changes (and on unmount) so an
+  // in-flight load() from a stale project/account cannot clobber state that
+  // belongs to whatever is current by the time its await resolves.
+  const generationRef = useRef(0);
 
   const accountId = project.source.accountId;
   const externalProjectId = project.source.externalProjectId;
   const provider = project.source.provider;
 
   const load = useCallback(async () => {
+    const generation = generationRef.current;
     if (!externalProjectId) return;
     if (!accountId) {
+      if (generationRef.current !== generation) return;
       setResources(null);
       fingerprintRef.current = undefined;
       setError("Missing Atlassian account for this project. Reconnect and re-add the project.");
@@ -50,6 +56,8 @@ export function useProjectMyWork(project: ProjectShellProject) {
         ...(fingerprintRef.current ? { knownFingerprint: fingerprintRef.current } : {}),
       });
 
+      if (generationRef.current !== generation) return;
+
       if (result.unchanged) {
         fingerprintRef.current = result.fingerprint;
         if (lastCheckedAtRef.current === undefined) {
@@ -66,18 +74,26 @@ export function useProjectMyWork(project: ProjectShellProject) {
       setResources(result.value);
       setLastCheckedAt(nextCheckedAt);
     } catch (e) {
+      if (generationRef.current !== generation) return;
       setError(e instanceof Error ? e.message : "Failed to load resources");
     } finally {
-      setLoading(false);
+      if (generationRef.current === generation) {
+        setLoading(false);
+      }
     }
   }, [backend, accountId, externalProjectId, provider]);
 
   // Reset in-memory state when switching projects.
   useEffect(() => {
+    generationRef.current += 1;
     setResources(null);
     setLastCheckedAt(undefined);
     fingerprintRef.current = undefined;
     lastCheckedAtRef.current = undefined;
+
+    return () => {
+      generationRef.current += 1;
+    };
   }, [accountId, externalProjectId, provider]);
 
   useEffect(() => {

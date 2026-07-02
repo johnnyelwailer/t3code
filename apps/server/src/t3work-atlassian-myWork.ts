@@ -4,7 +4,7 @@ import type { ExternalResourceRef, ResourcePage } from "@t3tools/project-context
 import * as Effect from "effect/Effect";
 
 import { providerForAccount } from "./t3work-atlassian-auth-store.ts";
-import { readMyWorkIssueRows } from "./t3work-atlassian-backlog-cacheQueries.ts";
+import { hasMirrorRowsForProject, readMyWorkIssueRows } from "./t3work-atlassian-backlog-cacheQueries.ts";
 import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables.ts";
 import { kickT3workAtlassianMirrorSync } from "./t3work-atlassian-backlog-mirrorSyncService.ts";
 import { tryAtlassianPromise } from "./t3work-atlassian-http.ts";
@@ -14,7 +14,6 @@ import { resolveT3workAtlassianViewerAccountId } from "./t3work-atlassian-viewer
 export type T3workAtlassianMyWorkInput = {
   readonly account: IntegrationAccountRef;
   readonly externalProjectId: string;
-  readonly limit?: number;
 };
 
 export type T3workAtlassianMyWorkPollInput = T3workAtlassianMyWorkInput & {
@@ -46,7 +45,6 @@ export function loadT3workAtlassianMyWorkPage(input: T3workAtlassianMyWorkInput)
 
     if (provider instanceof AtlassianIntegrationProvider) {
       yield* kickT3workAtlassianMirrorSync({
-        provider,
         account: input.account,
         externalProjectId: input.externalProjectId,
       });
@@ -56,14 +54,20 @@ export function loadT3workAtlassianMyWorkPage(input: T3workAtlassianMyWorkInput)
 
     if (viewerAccountId) {
       yield* ensureBacklogCacheTables();
-      const projection = yield* readMyWorkIssueRows({
+      const identity = {
         provider: input.account.provider,
         accountId: input.account.id,
         externalProjectId: input.externalProjectId,
-        viewerAccountId,
-      });
+      };
 
-      if (projection.assigned.length > 0) {
+      const hasMirrorRows = yield* hasMirrorRowsForProject(identity);
+
+      if (hasMirrorRows) {
+        // Mirror is populated for this project — always trust its projection,
+        // including a legitimate empty result (viewer has zero assigned
+        // issues right now). Falling back to live here would mean zero-
+        // assigned viewers never get mirror-backed responses.
+        const projection = yield* readMyWorkIssueRows({ ...identity, viewerAccountId });
         const items = dedupeById([...projection.assigned, ...projection.parents]);
         return {
           items,
@@ -79,7 +83,6 @@ export function loadT3workAtlassianMyWorkPage(input: T3workAtlassianMyWorkInput)
         provider.listResources({
           account: input.account,
           externalProjectId: input.externalProjectId,
-          ...(input.limit !== undefined ? { limit: input.limit } : {}),
         }),
       "Failed to load My Work issues.",
     );

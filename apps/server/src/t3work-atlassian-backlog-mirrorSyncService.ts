@@ -3,6 +3,7 @@ import type { IntegrationAccountRef } from "@t3tools/integrations-core";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
+import { providerForAccount } from "./t3work-atlassian-auth-store.ts";
 import { serializeBacklogCacheJson } from "./t3work-atlassian-backlog-cacheQueries.ts";
 import type { BacklogResourceRef } from "./t3work-atlassian-backlog-cacheShared.ts";
 import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables.ts";
@@ -26,12 +27,42 @@ const normalSleepMs = 90_000; // 90 seconds
 const reconcileIntervalMs = 24 * 60 * 60 * 1_000;
 
 /**
- * Relative lookback for incremental walks: fetch issues updated in the last N
- * minutes (`updated >= -Nm`). Comfortably larger than the ~90 s poll interval so
- * brief hiccups don't drop updates; the 24 h reconcile is the deep backstop.
- * Over-fetch is harmless (upserts dedupe) and typically stays within one page.
+ * Minimum relative lookback for incremental walks: fetch issues updated in the
+ * last N minutes (`updated >= -Nm`). Comfortably larger than the ~90 s poll
+ * interval so brief hiccups don't drop updates. Over-fetch is harmless (upserts
+ * dedupe) and typically stays within one page.
  */
-const incrementalLookbackMinutes = 15;
+const minIncrementalLookbackMinutes = 15;
+
+/**
+ * Slack added on top of the elapsed-time-based lookback so clock skew between
+ * this machine and Jira (and JQL's minute granularity) can't drop updates.
+ */
+const incrementalLookbackSlackMinutes = 5;
+
+/**
+ * Cap on the widened lookback. Anything older than this is the 24 h
+ * reconcile's job anyway, and an uncapped `updated >= -Nm` after a very long
+ * suspend would degenerate into a full-project walk on the incremental path.
+ */
+const maxIncrementalLookbackMinutes = 24 * 60;
+
+/**
+ * Lookback for an incremental walk, widened by the time since the last
+ * successful walk so a gap (laptop suspend, repeated walk failures) doesn't
+ * drop updates until the 24 h reconcile. `lastSuccessfulWalkMs` of 0 (no
+ * successful walk yet) yields the max lookback via the cap.
+ */
+export function computeIncrementalLookbackMinutes(input: {
+  readonly nowMs: number;
+  readonly lastSuccessfulWalkMs: number;
+}): number {
+  const elapsedMinutes = Math.ceil(Math.max(0, input.nowMs - input.lastSuccessfulWalkMs) / 60_000);
+  return Math.min(
+    Math.max(minIncrementalLookbackMinutes, elapsedMinutes + incrementalLookbackSlackMinutes),
+    maxIncrementalLookbackMinutes,
+  );
+}
 
 /** Mirror page size. */
 const mirrorPageSize = 100;
@@ -53,10 +84,22 @@ function mirrorSyncMapKey(input: {
   return `${input.account.provider}|${input.account.id}|${input.externalProjectId}`;
 }
 
+/**
+ * Test-only visibility into the single-flight map: is a mirror sync loop
+ * currently registered for this (provider, account, project) triple? Lets
+ * tests assert that a terminated loop released its key (so a later kick can
+ * start a fresh loop) without exposing the map itself.
+ */
+export function hasActiveT3workAtlassianMirrorSync(input: {
+  readonly account: IntegrationAccountRef;
+  readonly externalProjectId: string;
+}): boolean {
+  return activeMirrorSyncs.has(mirrorSyncMapKey(input));
+}
+
 // ─── Public kick function ─────────────────────────────────────────────────────
 
 export type T3workAtlassianMirrorSyncRequest = {
-  readonly provider: AtlassianIntegrationProvider;
   readonly account: IntegrationAccountRef;
   readonly externalProjectId: string;
 };
@@ -108,22 +151,62 @@ function runMirrorLoop(input: T3workAtlassianMirrorSyncRequest, isSuperseded: ()
 
   return Effect.gen(function* () {
     let lastReconcileMs = 0;
+    let lastSuccessfulWalkMs = 0;
 
     while (true) {
       if (isSuperseded()) return;
+
+      // Re-resolve the provider every iteration instead of using a captured
+      // instance: JiraApiClient freezes its auth at construction (no
+      // in-place refresh), so a provider resolved once at kick time goes
+      // stale as soon as the OAuth access token expires (~1h). Re-resolving
+      // via providerForAccount re-reads persisted auth and runs
+      // refreshOAuthAuthIfNeeded, so a refreshed token is picked up here.
+      const provider = yield* providerForAccount(input.account.id);
+
+      if (!(provider instanceof AtlassianIntegrationProvider)) {
+        // Resolved to the mock provider (no real Atlassian auth persisted
+        // for this account) — nothing to walk. Terminate so the single-flight
+        // map unblocks a future kick once real auth is available, rather
+        // than looping forever on a walk that can never succeed.
+        yield* Effect.logDebug(
+          "t3work atlassian mirror sync: resolved provider is not an AtlassianIntegrationProvider; terminating loop",
+        ).pipe(Effect.annotateLogs(identity));
+        return;
+      }
 
       const nowMs = yield* Clock.currentTimeMillis;
       const doReconcile = nowMs - lastReconcileMs >= reconcileIntervalMs;
 
       if (doReconcile) {
-        yield* runMirrorReconcile(input, identity, isSuperseded).pipe(
+        // A reconcile covers everything an incremental walk would, so on
+        // success it also counts as a successful walk for lookback purposes.
+        yield* runMirrorReconcile(input, provider, identity, isSuperseded).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              lastSuccessfulWalkMs = nowMs;
+            }),
+          ),
           Effect.catchCause((cause) =>
             Effect.logWarning("t3work atlassian mirror reconcile walk failed", cause),
           ),
         );
         lastReconcileMs = yield* Clock.currentTimeMillis;
       } else {
-        yield* runMirrorIncrementalWalk(input, identity, isSuperseded).pipe(
+        // Widen the JQL lookback to cover the gap since the last successful
+        // walk (laptop suspend, failed walks) instead of a fixed 15 m window.
+        // Anchor to the walk's *start* so updates landing mid-walk aren't
+        // skipped by the next window.
+        const lookbackMinutes = computeIncrementalLookbackMinutes({
+          nowMs,
+          lastSuccessfulWalkMs,
+        });
+        yield* runMirrorIncrementalWalk(input, provider, identity, isSuperseded, lookbackMinutes).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              lastSuccessfulWalkMs = nowMs;
+            }),
+          ),
           Effect.catchCause((cause) =>
             Effect.logWarning("t3work atlassian mirror incremental walk failed", cause),
           ),
@@ -140,8 +223,10 @@ function runMirrorLoop(input: T3workAtlassianMirrorSyncRequest, isSuperseded: ()
 
 function runMirrorIncrementalWalk(
   input: T3workAtlassianMirrorSyncRequest,
+  provider: AtlassianIntegrationProvider,
   identity: { provider: string; accountId: string; externalProjectId: string },
   isSuperseded: () => boolean,
+  lookbackMinutes: number,
 ) {
   return Effect.gen(function* () {
     let cursor: string | undefined;
@@ -159,10 +244,10 @@ function runMirrorIncrementalWalk(
 
       const page = yield* tryAtlassianPromise(
         () =>
-          input.provider.listProjectMirrorPage({
+          provider.listProjectMirrorPage({
             account: input.account,
             externalProjectId: input.externalProjectId,
-            updatedWithinMinutes: incrementalLookbackMinutes,
+            updatedWithinMinutes: lookbackMinutes,
             ...(cursor ? { cursor } : {}),
             limit: mirrorPageSize,
           }),
@@ -201,6 +286,7 @@ function runMirrorIncrementalWalk(
  */
 function runMirrorReconcile(
   input: T3workAtlassianMirrorSyncRequest,
+  provider: AtlassianIntegrationProvider,
   identity: { provider: string; accountId: string; externalProjectId: string },
   isSuperseded: () => boolean,
 ) {
@@ -222,7 +308,7 @@ function runMirrorReconcile(
 
       const page = yield* tryAtlassianPromise(
         () =>
-          input.provider.listProjectMirrorPage({
+          provider.listProjectMirrorPage({
             account: input.account,
             externalProjectId: input.externalProjectId,
             // No updatedSinceIso: walk the whole project
