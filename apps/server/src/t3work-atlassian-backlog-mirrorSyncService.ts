@@ -376,7 +376,30 @@ export function runMirrorReconcile(
 
 // ─── DB helpers ──────────────────────────────────────────────────────────────
 
-function upsertMirrorIssues(input: {
+/**
+ * Upserts mirror-walked issues into the shared backlog issues table.
+ *
+ * The mirror walk calls `toBacklogItem` without sprint context, so
+ * `resource_json` for a mirror item always has the item's sprint resolved to
+ * the *active* sprint (via `selectJiraPrimarySprint`) rather than whatever
+ * sprint the selection-scoped backlog sync requested. If the update ran
+ * unconditionally on every incremental/reconcile pass (~90 s), it would
+ * clobber selection-enriched rows (sprintId chosen for a specific requested
+ * sprint) with the mirror's active-sprint view on every tick, even when the
+ * underlying issue hadn't changed in Jira at all.
+ *
+ * To prevent that, the `DO UPDATE` only fires when the incoming item's Jira
+ * `updatedAt` is strictly newer than the stored row's `updatedAt` (both read
+ * from `resource_json`, since that's where `toBacklogItem` stamps it). ISO
+ * timestamps compare correctly as strings. A NULL/missing stored `updatedAt`
+ * is treated as always-stale (COALESCE to the empty string, which compares
+ * less than any real ISO string) so rows written before this field existed
+ * still get repaired by the next walk.
+ *
+ * Exported for tests (precedent: `runMirrorReconcile` is exported the same
+ * way).
+ */
+export function upsertMirrorIssues(input: {
   identity: { provider: string; accountId: string; externalProjectId: string };
   items: ReadonlyArray<Record<string, unknown> & { readonly id: string }>;
 }) {
@@ -419,6 +442,11 @@ function upsertMirrorIssues(input: {
               resource_json = excluded.resource_json,
               updated_at = excluded.updated_at,
               assignee_account_id = excluded.assignee_account_id
+            WHERE json_extract(excluded.resource_json, '$.updatedAt') >
+              COALESCE(
+                json_extract(t3work_atlassian_backlog_issues.resource_json, '$.updatedAt'),
+                ''
+              )
           `;
         }
       }),

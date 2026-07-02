@@ -19,11 +19,15 @@ import { vi } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { serializeBacklogCacheJson } from "./t3work-atlassian-backlog-cacheQueries.ts";
+import { parseJson } from "./t3work-atlassian-backlog-cacheShared.ts";
+import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables.ts";
 import {
   computeIncrementalLookbackMinutes,
   hasActiveT3workAtlassianMirrorSync,
   kickT3workAtlassianMirrorSync,
   runMirrorReconcile,
+  upsertMirrorIssues,
 } from "./t3work-atlassian-backlog-mirrorSyncService.ts";
 import { AtlassianMirrorSourceUnavailableError } from "@t3tools/integrations-atlassian";
 import type { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
@@ -196,6 +200,93 @@ mirrorSyncCacheLayer("t3work Atlassian mirror sync service", (it) => {
         const exit = yield* Effect.exit(reconcileWith(unavailableProvider));
         assert.ok(Exit.isFailure(exit), "reconcile must fail, not treat it as an empty project");
         assert.strictEqual(yield* countMirrorRows, 1);
+      }),
+  );
+
+  // Distinct identity from the reconcile tests above (own externalProjectId)
+  // so this test's rows can't collide with rows left behind by earlier tests
+  // sharing the same in-memory SQLite instance.
+  const conditionalUpsertIdentity = {
+    provider: "atlassian",
+    accountId: mockAccount.id,
+    externalProjectId: "project-conditional-upsert",
+  };
+
+  const readMirrorResourceJson = Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const rows = yield* sql<{ resourceJson: string }>`
+      SELECT resource_json AS "resourceJson"
+      FROM t3work_atlassian_backlog_issues
+      WHERE provider = ${conditionalUpsertIdentity.provider}
+        AND account_id = ${conditionalUpsertIdentity.accountId}
+        AND external_project_id = ${conditionalUpsertIdentity.externalProjectId}
+        AND issue_id = ${"10001"}
+    `;
+    return rows[0]?.resourceJson;
+  });
+
+  it.effect(
+    "upsertMirrorIssues does not clobber a row's resource_json when the incoming updatedAt is not newer (preserves selection-scoped sprint enrichment)",
+    () =>
+      Effect.gen(function* () {
+        // Simulate a row previously written by the selection-scoped backlog
+        // sync with sprint-contextual enrichment (sprintId 4037) at T2.
+        const sql = yield* SqlClient.SqlClient;
+        yield* ensureBacklogCacheTables();
+        yield* sql`
+          INSERT INTO t3work_atlassian_backlog_issues (
+            provider, account_id, external_project_id, issue_id, issue_key,
+            resource_json, updated_at, assignee_account_id
+          ) VALUES (
+            ${conditionalUpsertIdentity.provider}, ${conditionalUpsertIdentity.accountId}, ${conditionalUpsertIdentity.externalProjectId},
+            ${"10001"}, ${"PROJ-1"},
+            ${serializeBacklogCacheJson({ id: "10001", sprintId: "4037", updatedAt: "2026-07-01T12:00:00.000Z" })},
+            ${0}, ${null}
+          )
+        `;
+
+        // Mirror walk sees the same issue with an equal or older updatedAt
+        // (T1/T2) but resolved to the active sprint (4444) instead — must NOT
+        // overwrite the stored row.
+        yield* upsertMirrorIssues({
+          identity: conditionalUpsertIdentity,
+          items: [
+            {
+              id: "10001",
+              displayId: "PROJ-1",
+              sprintId: "4444",
+              updatedAt: "2026-07-01T12:00:00.000Z",
+            },
+          ],
+        });
+
+        const unchangedJson = yield* readMirrorResourceJson;
+        assert.ok(unchangedJson, "row must still exist");
+        assert.strictEqual(
+          parseJson<{ sprintId: string }>(unchangedJson ?? null)?.sprintId,
+          "4037",
+        );
+
+        // Now the issue genuinely changed in Jira (strictly newer updatedAt,
+        // T3) — the mirror update must go through.
+        yield* upsertMirrorIssues({
+          identity: conditionalUpsertIdentity,
+          items: [
+            {
+              id: "10001",
+              displayId: "PROJ-1",
+              sprintId: "4444",
+              updatedAt: "2026-07-01T13:00:00.000Z",
+            },
+          ],
+        });
+
+        const changedJson = yield* readMirrorResourceJson;
+        assert.ok(changedJson, "row must still exist");
+        assert.strictEqual(
+          parseJson<{ sprintId: string }>(changedJson ?? null)?.sprintId,
+          "4444",
+        );
       }),
   );
 });
