@@ -18,6 +18,7 @@ describe("project dashboard backlog state", () => {
       focusFilter: "needs-plan",
       assigneeFilter: "account-1",
       visibleIssueTypes: ["standard", "subtask"],
+      selectedLabels: ["backend"],
       viewMode: "table",
       tableGroupBy: "assignee",
       tableSortBy: "title",
@@ -43,6 +44,7 @@ describe("project dashboard backlog state", () => {
       assigneeFilter: "account-1",
       assigneeFilterScope: { epic: false, story: true, subtask: false },
       visibleIssueTypes: ["standard", "subtask"],
+      selectedLabels: ["backend"],
       viewMode: "planning",
       tableGroupBy: "assignee",
       tableSortBy: "title",
@@ -75,6 +77,35 @@ describe("project dashboard backlog state", () => {
       sprint: ALL_SPRINTS_ROUTE_SEARCH_VALUE,
       jiraFilter: "filter-7",
     });
+  });
+
+  it("round-trips selected labels through route search and persisted state", () => {
+    const search = parseProjectDashboardBacklogRouteSearch({ labels: "backend,urgent" });
+    expect(search.labels).toBe("backend,urgent");
+
+    const resolved = resolveProjectDashboardBacklogState({ search });
+    expect(resolved.selectedLabels).toEqual(["backend", "urgent"]);
+
+    expect(
+      buildProjectDashboardBacklogRouteSearch({
+        ...createDefaultProjectDashboardBacklogState(),
+        selectedLabels: ["backend", "urgent"],
+      }).labels,
+    ).toBe("backend,urgent");
+
+    expect(
+      buildProjectDashboardBacklogRouteSearch(createDefaultProjectDashboardBacklogState()).labels,
+    ).toBeUndefined();
+  });
+
+  it("clears selected labels when the route search explicitly resets them", () => {
+    const search = parseProjectDashboardBacklogRouteSearch({ q: "" });
+    expect(
+      resolveProjectDashboardBacklogState({
+        persisted: { selectedLabels: ["backend"] },
+        search: { ...search, labels: "" },
+      }).selectedLabels,
+    ).toEqual([]);
   });
 
   it("accepts planning-space as a routable backlog view mode", () => {

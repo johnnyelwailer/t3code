@@ -28,6 +28,7 @@ export interface ProjectDashboardBacklogRouteSearch {
   assignee?: string;
   assigneeScope?: string;
   issueTypes?: string;
+  labels?: string;
   view?: ProjectBacklogViewMode;
   group?: ProjectBacklogTableGroupBy;
   sort?: ProjectBacklogTableSortBy;
@@ -43,6 +44,7 @@ export interface ProjectDashboardBacklogState extends BacklogSelectionInput {
   assigneeFilter: string;
   assigneeFilterScope: ProjectBacklogAssigneeFilterScope;
   visibleIssueTypes: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>;
+  selectedLabels: ReadonlyArray<string>;
   viewMode: ProjectBacklogViewMode;
   tableGroupBy: ProjectBacklogTableGroupBy;
   tableSortBy: ProjectBacklogTableSortBy;
@@ -115,6 +117,7 @@ export const routeSearchKeys = [
   "assignee",
   "assigneeScope",
   "issueTypes",
+  "labels",
   "view",
   "group",
   "sort",
@@ -137,6 +140,7 @@ export function createDefaultProjectDashboardBacklogState(): ProjectDashboardBac
     assigneeFilter: PROJECT_BACKLOG_ASSIGNEE_FILTER_ALL,
     assigneeFilterScope: { ...defaultProjectBacklogAssigneeFilterScope },
     visibleIssueTypes: [...defaultProjectBacklogVisibleIssueTypes],
+    selectedLabels: [],
     viewMode: projectBacklogViewModes[0]?.value ?? "table",
     tableGroupBy: "planning-state",
     tableSortBy: "rank",

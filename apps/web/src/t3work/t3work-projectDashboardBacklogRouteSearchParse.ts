@@ -42,6 +42,10 @@ export function parseProjectDashboardBacklogRouteSearch(
     parsed.issueTypes = search.issueTypes;
   }
 
+  if (typeof search.labels === "string") {
+    parsed.labels = search.labels;
+  }
+
   const view = parseRouteEnum(search.view, projectBacklogViewModeValues);
   if (view !== undefined) {
     parsed.view = view;
