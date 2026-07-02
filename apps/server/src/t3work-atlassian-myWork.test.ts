@@ -82,7 +82,7 @@ function installJiraFetchMock(options: {
   readonly liveAssignedIssues: ReadonlyArray<ReturnType<typeof liveJiraIssue>>;
 }): { readonly urls: string[] } {
   const urls: string[] = [];
-  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+  globalThis.fetch = vi.fn(async (input: string | URL) => {
     const url = input.toString();
     urls.push(url);
     if (url.includes("/rest/api/3/myself")) {

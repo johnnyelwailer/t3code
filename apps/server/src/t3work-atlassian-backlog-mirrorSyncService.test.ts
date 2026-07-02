@@ -21,12 +21,25 @@ import * as ServerConfig from "./config.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import {
   computeIncrementalLookbackMinutes,
+  hasActiveT3workAtlassianMirrorSync,
   kickT3workAtlassianMirrorSync,
   runMirrorReconcile,
 } from "./t3work-atlassian-backlog-mirrorSyncService.ts";
 import { AtlassianMirrorSourceUnavailableError } from "@t3tools/integrations-atlassian";
 import type { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import type { IntegrationAccountRef } from "@t3tools/integrations-core";
+
+/**
+ * The loop runs as a detached fiber, so its progress is only observable by
+ * polling. Real (not TestClock) short sleeps let the fiber's async steps
+ * (auth-file read via providerForAccount) run to the next observable state.
+ */
+const waitUntil = (predicate: () => boolean) =>
+  Effect.promise(async () => {
+    for (let attempt = 0; attempt < 400 && !predicate(); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  });
 
 // providerForAccount (re-resolved every loop iteration — see Fix 1) reads
 // persisted Atlassian auth from disk, so the test layer needs FileSystem/Path
@@ -67,6 +80,36 @@ mirrorSyncCacheLayer("t3work Atlassian mirror sync service", (it) => {
         });
 
         assert.ok(true, "both kicks completed without throwing");
+      }),
+  );
+
+  it.effect(
+    "releases the single-flight key when the loop terminates, so a later kick starts a fresh loop",
+    () =>
+      Effect.gen(function* () {
+        // No auth persisted for this account → the loop resolves the mock
+        // provider and terminates on its first iteration (by design, so a
+        // future kick can retry once real auth exists).
+        const request = {
+          account: {
+            id: "https://terminate.atlassian.net",
+            provider: "atlassian",
+          } satisfies IntegrationAccountRef,
+          externalProjectId: "project-terminate",
+        };
+
+        yield* kickT3workAtlassianMirrorSync(request);
+        yield* waitUntil(() => !hasActiveT3workAtlassianMirrorSync(request));
+        assert.ok(
+          !hasActiveT3workAtlassianMirrorSync(request),
+          "terminated loop must release its single-flight key",
+        );
+
+        // A later kick is NOT a no-op: it registers and runs a new loop,
+        // which terminates and releases the key again.
+        yield* kickT3workAtlassianMirrorSync(request);
+        yield* waitUntil(() => !hasActiveT3workAtlassianMirrorSync(request));
+        assert.ok(!hasActiveT3workAtlassianMirrorSync(request));
       }),
   );
 
@@ -200,4 +243,3 @@ it("lookback widening: clock going backwards never shrinks below the floor", () 
     15,
   );
 });
-// trivial
