@@ -17,6 +17,7 @@ export function ProjectDashboardBacklogOverviewSection({
   setBacklogState,
   loading,
   assigneeOptions,
+  labelOptions,
   savedFilters,
   boards,
   sprints,
@@ -31,6 +32,7 @@ export function ProjectDashboardBacklogOverviewSection({
   setBacklogState: BacklogStateApi["setState"];
   loading: boolean;
   assigneeOptions: OverviewProps["assigneeOptions"];
+  labelOptions: OverviewProps["labelOptions"];
   savedFilters: OverviewProps["savedFilters"];
   boards: OverviewProps["boards"];
   sprints: OverviewProps["sprints"];
@@ -58,7 +60,12 @@ export function ProjectDashboardBacklogOverviewSection({
       onVisibleIssueTypesChange={(visibleIssueTypes) =>
         setBacklogState((current) => ({ ...current, visibleIssueTypes }))
       }
+      selectedLabels={backlogState.selectedLabels}
+      onSelectedLabelsChange={(selectedLabels) =>
+        setBacklogState((current) => ({ ...current, selectedLabels }))
+      }
       assigneeOptions={assigneeOptions}
+      labelOptions={labelOptions}
       savedFilters={savedFilters}
       selectedFilterId={backlogState.filterId}
       onFilterChange={(filterId) => setBacklogState((current) => ({ ...current, filterId }))}

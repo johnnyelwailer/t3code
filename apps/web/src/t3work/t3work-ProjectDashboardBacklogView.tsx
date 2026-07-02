@@ -73,6 +73,7 @@ export function ProjectDashboardBacklogView({
     assigneeOptions,
     filteredTickets,
     hierarchyPresentation,
+    labelOptions,
     ownershipGroups,
     planningLanes,
   } = useProjectDashboardBacklogDerivedData({
@@ -82,6 +83,7 @@ export function ProjectDashboardBacklogView({
     assigneeFilter: backlogState.assigneeFilter,
     assigneeFilterScope: backlogState.assigneeFilterScope,
     visibleIssueTypes: backlogState.visibleIssueTypes,
+    selectedLabels: backlogState.selectedLabels,
     currentUserDisplayName,
     searchTickets,
   });
@@ -135,6 +137,7 @@ export function ProjectDashboardBacklogView({
       setBacklogState={setBacklogState}
       loading={loading}
       assigneeOptions={assigneeOptions}
+      labelOptions={labelOptions}
       savedFilters={savedFilters}
       boards={boards}
       sprints={sprints}

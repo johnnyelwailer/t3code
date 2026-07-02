@@ -10,6 +10,7 @@ import type {
 } from "~/t3work/backend/t3work-types";
 import { Input } from "~/t3work/components/ui/t3work-input";
 import { ProjectBacklogOverviewAssigneeFilter } from "~/t3work/t3work-ProjectBacklogOverviewAssigneeFilter";
+import { ProjectBacklogOverviewLabelsFilter } from "~/t3work/t3work-ProjectBacklogOverviewLabelsFilter";
 import { ProjectBacklogOptionsMenu } from "~/t3work/t3work-ProjectBacklogOptionsMenu";
 import type { ProjectBacklogViewMode } from "~/t3work/t3work-projectBacklogPresentation";
 import type {
@@ -23,6 +24,7 @@ import type {
   ProjectBacklogAssigneeFilterScope,
   ProjectBacklogFocusFilter,
   ProjectBacklogIssueTypeFilterKey,
+  ProjectBacklogLabelFilterOption,
 } from "~/t3work/t3work-projectBacklogUtils";
 
 export interface ProjectBacklogOverviewFiltersProps {
@@ -35,7 +37,10 @@ export interface ProjectBacklogOverviewFiltersProps {
   onAssigneeFilterScopeChange: (value: ProjectBacklogAssigneeFilterScope) => void;
   visibleIssueTypes: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>;
   onVisibleIssueTypesChange: (value: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>) => void;
+  selectedLabels: ReadonlyArray<string>;
+  onSelectedLabelsChange: (value: ReadonlyArray<string>) => void;
   assigneeOptions: ReadonlyArray<ProjectBacklogAssigneeFilterOption>;
+  labelOptions: ReadonlyArray<ProjectBacklogLabelFilterOption>;
   savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
   selectedFilterId: string | undefined;
   onFilterChange: (filterId: string | undefined) => void;
@@ -72,7 +77,10 @@ export function ProjectBacklogOverviewFilters({
   onAssigneeFilterScopeChange,
   visibleIssueTypes,
   onVisibleIssueTypesChange,
+  selectedLabels,
+  onSelectedLabelsChange,
   assigneeOptions = [],
+  labelOptions = [],
   savedFilters = [],
   selectedFilterId,
   onFilterChange,
@@ -113,6 +121,12 @@ export function ProjectBacklogOverviewFilters({
         scope={assigneeFilterScope}
         onScopeChange={onAssigneeFilterScopeChange}
         options={assigneeOptions}
+      />
+
+      <ProjectBacklogOverviewLabelsFilter
+        value={selectedLabels}
+        onValueChange={onSelectedLabelsChange}
+        options={labelOptions}
       />
 
       <div className="ml-auto flex items-center gap-2">
