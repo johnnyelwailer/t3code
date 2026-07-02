@@ -4,6 +4,11 @@
 
 Define how t3work injects custom tools into each provider using the most native mechanism available, while keeping additive architecture and constitution constraints.
 
+Terminology note: in this document, **provider** means an AI/code-agent provider
+integration (Codex, Claude Code, Cursor, OpenCode), not a work-system connector such as
+Atlassian or Linear. Workspace packs may add or configure these AI provider integrations,
+but host policy remains the enforcement point.
+
 Visual review version:
 
 - [14-native-provider-tool-injection-plan.html](./14-native-provider-tool-injection-plan.html)
@@ -512,19 +517,23 @@ For mutation-capable tools:
 
 ## Provider Capability Matrix (Template)
 
-| Provider | Runtime SDK Injection | Native MCP Path | File Discovery Fallback | Preferred Strategy | Notes |
-| -------- | --------------------- | --------------- | ----------------------- | ------------------ | ----- |
-| Claude   | TBD                   | TBD             | TBD                     | TBD                |       |
-| Codex    | TBD                   | TBD             | TBD                     | TBD                |       |
-| Cursor   | TBD                   | TBD             | TBD                     | TBD                |       |
-| OpenCode | TBD                   | TBD             | TBD                     | TBD                |       |
+| Provider | Runtime SDK Injection | Native MCP Path  | File Discovery Fallback | Preferred Strategy | Notes |
+| -------- | --------------------- | ---------------- | ----------------------- | ------------------ | ----- |
+| Claude   | Research pending      | Research pending | Research pending        | Research pending   |       |
+| Codex    | Research pending      | Research pending | Research pending        | Research pending   |       |
+| Cursor   | Research pending      | Research pending | Research pending        | Research pending   |       |
+| OpenCode | Research pending      | Research pending | Research pending        | Research pending   |       |
 
-## Open Questions
+## Provider Research Questions
 
 1. Which providers support dynamic tool registration after session start versus startup-only?
 2. Which providers expose structured UI payload channels for card-style interaction?
 3. Which providers can surface scoped auth context to tools without leaking secrets?
 4. What is the minimum canonical event set required for identical UX across providers?
+
+These are implementation research gates, not pack-vision product questions. Pack-provided
+AI provider integrations are allowed, but the host still chooses the safest injection path
+per provider.
 
 ## Acceptance Criteria
 

@@ -1,8 +1,9 @@
 # Epic 01: Product Scope
 
-> This epic scopes the **first shippable slice** (Jira/QA). For the product identity it is
-> the first instance of — the extensible work platform and its two axes — see the
-> [Vision & Extensibility Model](./00-vision.md).
+> This epic scopes the **first shippable proof slice** (Jira/QA). For the product identity
+> it is the first pack-shaped instance of the extensible work platform — see the
+> [Vision & Extensibility Model](./00-vision.md) and
+> [Epic 36: Workspace Packs And Distributions](./36-workspace-packs-and-distributions.md).
 
 ## Problem
 
@@ -26,6 +27,7 @@ project layer that uses this infrastructure without turning the codebase into a 
 ## Primary User
 
 The first target user is a QA or product-adjacent teammate who works from Jira tickets.
+That user proves the pack model; they do not define the core product.
 
 They need help with:
 
@@ -39,7 +41,7 @@ They need help with:
 ## MVP User Journey
 
 1. User opens `t3work`.
-2. User chooses Atlassian as project source.
+2. User chooses the Atlassian proof-pack source.
 3. User chooses or installs a default agent provider and model if needed.
 4. User connects Atlassian.
 5. User chooses one Jira project from a structured list.
@@ -86,7 +88,8 @@ They need help with:
 
 ## Deferred Scope
 
-- personal or company-wide recipe collections
+- public marketplace-style recipe discovery
+- general-purpose pack marketplace or hosted pack control plane
 - silent autonomous recipe creation
 - autonomous project memory writes
 - Confluence / knowledge workbench — planned as the first expansion beyond the MVP

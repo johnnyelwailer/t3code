@@ -8,6 +8,10 @@ experience using the existing T3 Code shell and UI primitives as the baseline.
 This document starts after the generic source choice and agent runtime preflight defined
 in [Epic 23: Project Setup Preflight UI](./23-project-setup-preflight-ui.md).
 
+Under the pack-driven vision, this flow is the setup UI for an Atlassian connector/proof
+pack. It should not assume Atlassian is a core source or that other packs must reuse
+Atlassian-specific screens.
+
 This flow should make Atlassian-backed project creation feel structured and low-effort:
 
 1. Connect Atlassian.

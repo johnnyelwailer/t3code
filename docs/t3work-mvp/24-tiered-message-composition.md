@@ -376,9 +376,10 @@ A chat agent has two ways to land a T2 view on a message. Both end at the same
 `t3workExt.view` envelope and the same renderer.
 
 **T2a — registered invocation.** Agent emits a tool call naming a view in the per-
-surface catalog with schema-validated props. The view already exists (bundled,
-project-authored, or composed in a previous turn and persisted). Renders
-immediately, no subagent involved. This is the fast path for the bulk of cases.
+surface catalog with schema-validated props. The view already exists (core,
+distribution, pack-provided, project-authored, or composed in a previous turn and
+persisted). Renders immediately, no subagent involved. This is the fast path for
+the bulk of cases.
 
 **T2b — on-the-fly composition.** Agent emits `compose_view({ purpose, data_refs,
 prefer_existing, scope, constraints? })`. A dedicated **composer subagent** spawns,
@@ -436,12 +437,14 @@ The composer adds a sibling setting `composerModelSelection: ModelSelection`
 alongside `textGenerationModelSelection`, with **fallback cascading**:
 
 1. **Recipe override** — `defineRecipe({ composer: { model, provider, reasoning, ... } })`.
-2. **Workspace `composerModelSelection`** setting — if configured by the user.
-3. **Workspace `textGenerationModelSelection`** setting — the existing utility-
+2. **Pack or distribution policy** — optional defaults or locks from the resolved
+   pack graph. Locks win over lower layers; defaults stay user-overridable.
+3. **Workspace `composerModelSelection`** setting — if configured by the user.
+4. **Workspace `textGenerationModelSelection`** setting — the existing utility-
    model preference. If the user has already picked GPT-5.4 mini for commit
    messages, that signal carries forward.
-4. **Per-provider built-in default** (the table below) — only reached when
-   neither setting is configured.
+5. **Per-provider host fallback** (the table below) — only reached when neither
+   policy nor setting is configured.
 
 Two independent axes are configurable at each layer:
 
@@ -449,7 +452,7 @@ Two independent axes are configurable at each layer:
 - **Reasoning effort** — how much per-turn thought the model spends (extended
   thinking for Anthropic, `reasoning_effort` for OpenAI, etc.).
 
-_Per-provider built-in defaults (used when both settings are unset):_
+_Per-provider host fallbacks (used when policy and settings are unset):_
 
 | Provider                     | Default composer model      | Reasoning effort        | Notes                                       |
 | ---------------------------- | --------------------------- | ----------------------- | ------------------------------------------- |
@@ -500,10 +503,10 @@ default is "set it once for the workspace, forget about it."
 - **`scope: "thread"`** (default) — module lands in
   `runs/<run-id>/views/<view-id>.tsx`. Lives with the thread; ephemeral but
   inspectable. Disappears when the run directory is pruned.
-- **`scope: "project"`** — module lands in
-  `.t3work/miniapps/<view-id>/` as a normal Epic 19 miniapp. Git-tracked,
-  reusable across threads. The composer subagent must justify this scope in its
-  step-result; promoting a thread view later is a one-click affordance in the
+- **`scope: "project"`** — module lands in the project-local miniapp source location as a
+  normal Epic 19 miniapp. Current examples spell this as `.t3work/miniapps/<view-id>/`,
+  but Epic 36 treats that path as transitional. The composer subagent must justify this
+  scope in its step-result; promoting a thread view later is a one-click affordance in the
   message UI.
 - **`scope: "home"`** — user-global, lands in the home workspace's
   `.t3work/miniapps/`. Reserved for views the user explicitly promotes.
@@ -604,10 +607,11 @@ Two new typed helpers, peers to the existing `define*` family in Epic 19:
 Existing helpers (`defineArtifactRenderer`, `defineConversationSidecar`, etc.) cover
 the rest of the T2 surfaces without change.
 
-The on-the-fly composer is a built-in capability rather than a `define*` helper —
-the `compose_view` tool is contributed by the t3work runtime and gated by the
-active recipe's `allowedComponentGroups`. A recipe can optionally narrow composer
-behaviour via `defineRecipe({ composer: { … } })`:
+The on-the-fly composer is a host capability rather than a `define*` helper — the
+`compose_view` tool is contributed by the t3work runtime and gated by the active
+recipe's `allowedComponentGroups` plus any pack/distribution policy locks. A
+recipe can optionally narrow composer behaviour via
+`defineRecipe({ composer: { … } })`:
 
 ```ts
 defineRecipe({
@@ -617,7 +621,7 @@ defineRecipe({
     maxIterations: 6, // fix-loop budget
     maxWallClockMs: 120_000,
     allowedAuthoringFormats: ["tsx", "mdx"],
-    model: "auto", // "auto" → per-provider default table
+    model: "auto", // "auto" → resolved policy or host fallback
     provider: "inherit", // "inherit" | explicit provider id
     reasoning: {
       onInitialDraft: "auto", // "minimal" | "low" | "medium" | "high" | "auto"
@@ -630,9 +634,9 @@ defineRecipe({
 ```
 
 All fields are optional; the runtime defaults are sensible. `model: "auto"`
-resolves through the **settings cascade** (recipe → `composerModelSelection`
-workspace setting → `textGenerationModelSelection` workspace setting →
-per-provider built-in default). `reasoning` level names map to each provider's
+resolves through the **settings cascade** (recipe → pack/distribution policy →
+`composerModelSelection` workspace setting → `textGenerationModelSelection`
+workspace setting → host fallback). `reasoning` level names map to each provider's
 native knob — Anthropic's extended-thinking budget (driven by `budget`),
 OpenAI's `reasoning_effort` parameter (`minimal` | `low` | `medium` | `high`),
 and provider-specific equivalents elsewhere.
@@ -822,7 +826,7 @@ Smallest credible end-to-end slice that proves the model:
     add `apps/server/src/composer/` with per-provider drivers
     (`ClaudeComposer`, `CursorComposer`, `OpenCodeComposer`) mirroring the
     `textGeneration/` layout; wire the cascade resolver
-    (recipe → composer setting → text-gen setting → built-in default).
+    (recipe → pack policy → composer setting → text-gen setting → host fallback).
 15. Composer subagent skeleton — `compose_view` tool, `agent.task` invocation,
     bounded budget, step-result subscription wiring.
 16. Composer tool surface — `search_existing_views`, `read_view_source`,
@@ -830,9 +834,9 @@ Smallest credible end-to-end slice that proves the model:
     `preview`, `register_view`.
 17. Streaming placeholder rendering — `<ComposingView>` T1 widget reflects
     composer progress and swaps to the registered view on completion.
-18. Storage tiers — `runs/<run-id>/views/` for thread scope; promotion flow to
-    `.t3work/miniapps/` for project scope; UI for "promote to project" on a
-    composed view.
+18. Storage tiers — `runs/<run-id>/views/` for thread scope; promotion flow to the
+    project-local miniapp source location for project scope; UI for "promote to project"
+    on a composed view.
 19. Settings UI — add a "Composer model" row to the existing settings panel
     next to "Text generation model", linking the cascade transparently
     ("inherits from Text generation model when unset").
@@ -855,13 +859,13 @@ Phases A–B sit alongside the existing 6-phase plan (per the recipes architectu
 memory). Phase C folds into Epic 19 Phase 5. Phase D blocks on recipes Phase 4
 (`agent.task`). Phase E folds into the parallel stage-2 sandbox track.
 
-## Open questions
+## Working decisions
 
-1. Should T1 widgets ever be **clickable into a workflow** (e.g. clicking a
-   `<TicketRef>` opens the ticket detail), or strictly read-only links? Today most
-   refs are links; if click triggers a recipe, that smells like T2.
-2. **Per-project custom T1 widgets** — owned by a workspace's
-   `.t3work/widgets/` directory, mirroring miniapps. Stage-2 question.
+1. T1 widgets are display/link primitives. They may navigate to an existing route, but they
+   do not launch workflows. Workflow-triggering UI belongs in T2 views, recipe launchers,
+   or explicit action components.
+2. Per-project custom T1 widgets are out of v1. Use T2 miniapps/views for trusted
+   project-specific UI; revisit custom T1 only in the later sandbox/marketplace track.
 3. ~~**MDX vs MDX-lite.**~~ **Resolved.** Two-shape model:
    - **T1 in messages: MDX-lite via `safe-mdx`** — markdown + tag invocations with
      literal props. No imports, no JS expressions. The model-emitted MDX in

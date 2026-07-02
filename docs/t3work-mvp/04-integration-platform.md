@@ -6,10 +6,11 @@ The integration platform allows projects to be created from external systems and
 skills read external context through a stable tool surface. It is the **Sources** axis of
 the [vision](./00-vision.md): the platform owns the plumbing (auth, caching, sync,
 normalization, reviewable mutations, the cross-provider graph) so that connecting a new
-back-end is plugin code, not a new product.
+back-end is pack-provided plugin code, not a new product.
 
-Atlassian is the first implementation, not the abstraction. A back-end is made available
-by a **connector**; Atlassian is the first connector.
+Atlassian is the first implementation, not the abstraction or a core dependency. A
+back-end is made available by a **connector**; connectors should be deliverable through
+workspace packs (see [Epic 36](./36-workspace-packs-and-distributions.md)).
 
 ## Core Concepts
 
@@ -97,7 +98,8 @@ type IntegrationProvider = {
 
 The `IntegrationProvider` interface above is the runtime contract. Today connectors are
 **team-authored TypeScript** living in `packages/integrations-*` (with the abstraction in
-`integrations-core` and Atlassian in `integrations-atlassian`).
+`integrations-core` and Atlassian in `integrations-atlassian`). Long term, those packages
+are implementation examples or pack sources, not core product shape.
 
 The North Star is that a connector is a **plugin module authored with `defineConnector`** —
 a peer of `defineRecipe` in the same SDK — and ultimately authorable **in the app, by the

@@ -8,12 +8,13 @@ Related: 00-vision, 02-additive-architecture, 03-project-browser, 16-action-reci
 
 ## 1. Summary
 
-A new **Capacity** surface: one page where a user sees, per sprint, how much time each
-person actually has and how full they are — and manages the local planning model that
-feeds it: **teams** (self-defined groups of people), **off-days**, and **overhead
-percentages**. Capacity stops being a planning-space-only number and becomes a
-platform-level service: any surface that renders a person can render their capacity,
-and agents can read and adjust the model through tools.
+A new **Capacity** surface, supplied by a work-management pack once pack loading exists:
+one page where a user sees, per sprint, how much time each person actually has and how
+full they are — and manages the local planning model that feeds it: **teams**
+(self-defined groups of people), **off-days**, and **overhead percentages**. Capacity
+stops being a planning-space-only number and becomes a reusable service: any surface that
+renders a person can render their capacity, and agents can read and adjust the model
+through tools.
 
 Two principles:
 
@@ -31,7 +32,8 @@ Two principles:
 
 In scope (v1):
 
-- New `capacity` dashboard mode (third mode next to `backlog` and `my-work`).
+- New `capacity` project view (temporary dashboard mode during current implementation),
+  beside pack-provided `backlog` and `my-work`.
 - Local **teams**: create/rename/delete, pick members from known assignees +
   Tempo team rosters; multiple teams; per-project default team; team as a backlog
   filter and as the planning-space rail roster.
@@ -56,12 +58,12 @@ workflows; FTE cost reporting.
 
 ### 2.1 Placement
 
-Capacity starts as a **dashboard mode**, not a per-board view mode: teams and off-days
-span boards and sprints, and the page is useful without a backlog selection. Under
-[Epic 31](./31-composable-project-views.md), this should become a registered
-`project.navView` composed from the same safe blocks as Backlog and My Work, with Tempo
-remaining a source behind normalized capacity hooks rather than a raw API exposed to view
-authors. Entry points:
+Capacity starts as a **dashboard mode**, not a per-board view mode: teams and off-days span
+boards and sprints, and the page is useful without a backlog selection. Under
+[Epic 31: Composable Project Views](./31-composable-project-views.md), this should become a
+pack-provided registered `project.navView` composed from the same safe blocks as Backlog
+and My Work, with Tempo remaining a source behind normalized capacity hooks rather than a
+raw API exposed to view authors. Entry points:
 
 1. Dashboard mode switch: `Backlog · My Work · Capacity`.
 2. From the planning-space rail: clicking a dock's capacity arc deep-links to that
@@ -302,8 +304,8 @@ entry), "sprint health" (over-capacity people + unassigned hours summary).
 
 - Sprint columns for boards with irregular cadence: derive windows strictly from
   sprint dates (current behavior) or allow custom date ranges as columns?
-- Should team membership suggestions auto-sync from Tempo teams (one-way refresh
-  button) or stay purely manual after creation?
+- Team membership suggestions may refresh one-way from Tempo, but never auto-apply after
+  creation. Changes remain preview/review actions.
 - Overhead semantics for over-capacity warnings: warn at >100% of effective, or also
   soft-warn at >100% of pre-overhead schedule?
 - Off-day granularity: is full/half day enough, or do we need arbitrary hours/day?

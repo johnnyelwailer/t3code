@@ -38,11 +38,19 @@ stage-2 sandboxing. Pre-launch code (recipe visibility, View pre-render) binds i
 no-thread, read-only mode — read tools and resource reads only, no view-state or mutation
 tools.
 
+Under the pack-driven model, tools and tool groups may be provided by core, distribution
+packs, remote-managed packs, user packs, or project-local source. The broker and policy
+engine remain host-owned; pack code never bypasses this catalog.
+
 ## Context Files First
 
 `t3work` already has a context attachment model. Attached context is written into the
 managed project workspace under `.t3work/context/...`, then the agent can read those
 files through normal workspace file access.
+
+The `.t3work/context` path is transitional. Under Epic 36, synced/generated context should
+move toward host app-data or another host-owned project store, with the agent receiving
+explicit readable paths through the host/tool layer.
 
 That should be the primary read substrate for broad context.
 
@@ -199,7 +207,10 @@ Notes:
   `availability: "summary"`. The broker tool and HTTP route
   `POST /api/t3work/project/workspace/context-refresh/project` share the same service.
 
-## Backlog View Tools
+## Backlog / Work-Item View Tools
+
+These tools describe the current Backlog proof surface. Long term, Backlog is a
+pack-provided work-item view using the same tool classes and policy gates.
 
 Current UI basis:
 

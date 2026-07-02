@@ -7,8 +7,9 @@ Related: 21-context-tool-catalog, 22-github-pull-request-workspace, 27-scheduled
 
 ## 1. Summary
 
-A **Standup** surface: one page that walks a team through "yesterday / today /
-blockers" per person for the active sprint — Jira's standup view as the familiar
+A **Standup** surface, likely supplied by a work-management or Atlassian pack: one page
+that walks a team through "yesterday / today / blockers" per person for the active
+sprint — Jira's standup view as the familiar
 baseline — plus the thing Jira can't do: **custom ordering, including dependency-aware
 order derived from a combined Jira + GitHub link graph.** The team is walked in an order
 that surfaces blockers first and puts the people who unblock others ahead of the people
@@ -27,17 +28,17 @@ Two principles:
    [Epic 31](./31-composable-project-views.md).
 2. **Reuse the graph we already have.** GitHub activity already extracts work-item keys
    from PR titles/branches/repos and groups activity by work item (Epic 22). Jira issue
-   links, parent/subtask edges, and sprint membership are already in the backlog cache.
-   The dependency order is computed over that joined graph server-side — no new raw
-   provider access.
+   links, parent/subtask edges, and sprint membership are already in the current Atlassian
+   backlog cache proof. The dependency order is computed over that joined graph
+   server-side — no new raw provider access.
 
 ## 2. Scope
 
 In scope (v1):
 
-- New **`standup` dashboard mode** (peer to `backlog`, `my-work`, `capacity`), scoped to
-  a board's active sprint. Under Epic 31 it becomes a registered `project.navView`
-  composed from safe blocks.
+- New **`standup` project view** (peer to pack-provided `backlog`, `my-work`, and
+  `capacity` views), scoped to a board's active sprint. Under Epic 31 it is a registered
+  `project.navView` composed from safe blocks.
 - **Per-person panel**: avatar/name/capacity chip, three columns —
   - _Since last standup_: items moved status / closed, PRs opened·merged·reviewed,
     comments authored, in the window since the last standup run (default: previous
@@ -63,8 +64,9 @@ posting summaries to Slack/Teams (later Surface); cross-project dependency graph
 
 ### 2.1 Placement
 
-Starts as a **dashboard mode switch** (`Backlog · My Work · Capacity · Standup`), like
-Capacity did. Entry points:
+Starts as a pack-provided project nav view beside `Backlog · My Work · Capacity`. During
+the current implementation it may still appear through the dashboard mode switch. Entry
+points:
 
 1. Dashboard mode switch.
 2. Scheduled pre-standup digest (§6.1) deep-links into the surface with the day's window
@@ -79,11 +81,11 @@ dependency lane.
 ### 3.1 Edge sources (all already available, joined here)
 
 ```
-Jira issue links     blocks / is blocked by / relates to        (backlog cache)
-Parent / subtask     story → subtasks, epic → stories           (backlog cache)
+Jira issue links     blocks / is blocked by / relates to        (connector cache)
+Parent / subtask     story → subtasks, epic → stories           (connector cache)
 GitHub PR ↔ issue    PR closes/links work-item key              (Epic 22 extraction)
 GitHub PR reviews    author waits on requested reviewer         (Epic 22 PR state)
-Sprint membership    restrict the graph to the active sprint    (backlog cache)
+Sprint membership    restrict the graph to the active sprint    (connector cache)
 ```
 
 Each edge is normalized to `{ from: node, to: node, kind, source, evidence }` where
@@ -240,11 +242,10 @@ overloaded this sprint?" (cross with Epic 30 capacity).
   fallback previous workday.)
 - Cycle handling: surface circular dependencies as a warning lane only, or let the
   facilitator force a manual cut that persists?
-- Should the dependency projection weight a _reviewer_ edge (A waits on B's review) as
-  strongly as a Jira `blocks` edge, or as a softer tie-break?
+- Reviewer edges are softer tie-breaks, not equal to Jira `blocks` edges.
 - Person vs item ordering: walk people (Jira-standup style) or walk items grouped by
   owner (planning-space style)? v1 assumes people; the item view may be a sub-mode.
 - Do we need an explicit "not at standup today" toggle (pulls from Epic 30 off-days
   automatically)?
-- Should the digest post anywhere external in v1, or stay in-app until the Slack/Teams
-  Surface exists?
+- The digest stays in-app for v1. External Slack/Teams posting waits for a pack-provided
+  communication surface and reviewable mutation flow.

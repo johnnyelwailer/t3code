@@ -3,9 +3,11 @@
 ## Direction
 
 The MVP should be additive in the monorepo. Use `t3work` to mark additive packages and
-keep ownership obvious.
+keep ownership obvious. Under the pack-driven vision, the monorepo should contain the
+core host, SDK, and temporary proof packs only; product-shaping packs do not need to live
+in this repository long term.
 
-Suggested structure:
+Original suggested structure:
 
 ```text
 apps/web/src/t3work
@@ -17,6 +19,11 @@ packages/t3work-artifacts
 packages/t3work-skill-packs
 packages/t3work-t3-adapter
 ```
+
+Current package names may differ because some packages predate the prefix policy
+(`packages/project-context`, `packages/project-recipes`, `packages/integrations-*`). New
+pack-hosting logic should still follow the additive rule and prefer `t3work-` names where
+new packages are needed.
 
 The existing `apps/web`, `apps/server`, and core packages should remain the upstream
 engine. `t3work` can duplicate UI patterns, but should avoid scattering
@@ -67,6 +74,7 @@ This package should contain schemas and deterministic helpers, not service clien
 
 The first implementation is Atlassian, but the abstractions should also fit Linear,
 GitHub Issues, Azure DevOps, Notion, Zendesk, and local files.
+Atlassian should be treated as a connector/pack proof, not a core package requirement.
 
 Core interface:
 
@@ -108,6 +116,12 @@ Default layout:
 
 T3 can still receive a real `workspaceRoot`; the user-facing shell simply treats it as
 managed implementation detail.
+
+Managed project workspaces should hold project-owned context and project-local code. Remote
+managed packs and globally installed packs should normally live in host app-data pack
+locations, not be copied into every project workspace. If a capability currently depends
+on project-local files, expose it through the host/tool/MCP layer before treating remote
+pack code as project source.
 
 ## Compatibility Strategy
 

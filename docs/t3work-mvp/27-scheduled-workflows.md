@@ -316,9 +316,8 @@ clock, the one-off timer and the routine loop are both just `waitUntil`.
    needs careful re-arming; a polling loop is simpler but coarse. Decide in 27.2; precision
    beyond ~1s isn't a requirement for any routine use case here.
 2. **Editable cadence ergonomics.** "Edit via composer" only works if the loop reads its
-   schedule from mutable config. Should the SDK offer a small helper for that common
-   pattern (a `routineConfig` the loop reads + the composer writes), so authors don't each
-   reinvent it? Lean yes, but defer until a couple of real routines exist.
+   schedule from mutable config. Do not add a v1 SDK helper yet; prove the pattern with a
+   couple of real routines, then extract `routineConfig` if duplication appears.
 3. **Runaway detection.** The frequency floor catches the obvious `while(true)` with zero
    waits. Are there subtler runaway shapes (a loop whose `waitUntil` always resolves to the
    past) that need a per-run "woke N times in M minutes" circuit breaker?
