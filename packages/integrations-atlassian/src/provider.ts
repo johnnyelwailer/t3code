@@ -1634,10 +1634,19 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     boardId: string,
   ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
     try {
-      return (await client.listBoardQuickFilters(boardId)).values
+      const response = await client.listBoardQuickFilters(boardId);
+      return (response.values ?? [])
         .map((filter) => toBacklogQuickFilter(filter))
         .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
-    } catch {
+    } catch (error) {
+      // Degrade to "no quick filters" but leave a trace: a silent [] here is
+      // indistinguishable from a board that simply has none. This package is
+      // Promise-based (no Effect logger in scope), so console is the trace.
+      // @effect-diagnostics-next-line globalConsole:off
+      console.warn(
+        `[t3work-atlassian] quick filter fetch failed for board ${boardId}:`,
+        error instanceof Error ? error.message : error,
+      );
       return [];
     }
   }
