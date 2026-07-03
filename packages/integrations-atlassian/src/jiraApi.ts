@@ -100,6 +100,7 @@ async function fetchWithJiraTimeout(url: string, init?: RequestInit): Promise<Re
 
 export class JiraApiClient {
   private readonly auth: JiraApiAuth;
+  private cachedCloudId?: string;
 
   constructor(auth: JiraApiAuth) {
     this.auth = auth;
@@ -227,6 +228,40 @@ export class JiraApiClient {
 
     const merged = [...new Set([...baseFields, ...extraFields])];
     return merged.join(",");
+  }
+
+  async getCloudId(): Promise<string> {
+    if (this.auth.kind === "oauth") {
+      return this.auth.cloudId;
+    }
+    if (this.cachedCloudId) {
+      return this.cachedCloudId;
+    }
+    const tenantInfo = await this.fetchJson<{ cloudId: string }>(`${this.baseUrl}/_edge/tenant_info`);
+    if (typeof tenantInfo.cloudId !== "string" || tenantInfo.cloudId.trim().length === 0) {
+      throw new AtlassianApiError({
+        status: 502,
+        message: "Atlassian tenant_info response did not include a cloudId.",
+        path: "/_edge/tenant_info",
+      });
+    }
+    this.cachedCloudId = tenantInfo.cloudId;
+    return this.cachedCloudId;
+  }
+
+  async postGraphql<T>(body: { query: string; variables?: Record<string, unknown> }): Promise<T> {
+    if (this.auth.kind === "oauth") {
+      throw new AtlassianApiError({
+        status: 400,
+        message:
+          "GraphQL gateway is not reachable for OAuth-authenticated Jira clients (no site-domain base URL).",
+        path: "/gateway/api/graphql",
+      });
+    }
+    return this.fetchJson<T>(`${this.baseUrl}/gateway/api/graphql`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   }
 
   async downloadAsset(url: string): Promise<{ bytes: Uint8Array; mimeType?: string }> {

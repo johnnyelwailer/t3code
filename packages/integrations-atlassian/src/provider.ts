@@ -1635,9 +1635,19 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
   ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
     try {
       const response = await client.listBoardQuickFilters(boardId);
-      return (response.values ?? [])
+      const quickFilters = (response.values ?? [])
         .map((filter) => toBacklogQuickFilter(filter))
         .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
+
+      if (quickFilters.length > 0) {
+        return quickFilters;
+      }
+
+      // Boards on Jira's "new board experience" store custom filters that the
+      // REST quickfilter endpoint never returns (200 + empty values). Jira's
+      // own UI reads them via an internal GraphQL field, so fall back to that
+      // only when the REST call succeeded but came back empty.
+      return await this.listBacklogCustomFiltersViaGraphql(client, boardId);
     } catch (error) {
       // Degrade to "no quick filters" but leave a trace: a silent [] here is
       // indistinguishable from a board that simply has none. This package is
@@ -1645,6 +1655,54 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       // @effect-diagnostics-next-line globalConsole:off
       console.warn(
         `[t3work-atlassian] quick filter fetch failed for board ${boardId}:`,
+        error instanceof Error ? error.message : error,
+      );
+      return [];
+    }
+  }
+
+  private async listBacklogCustomFiltersViaGraphql(
+    client: JiraApiClient,
+    boardId: string,
+  ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
+    try {
+      const cloudId = await client.getCloudId();
+      const boardAri = `ari:cloud:jira-software:${cloudId}:board/${boardId}`;
+      const response = await client.postGraphql<{
+        data?: {
+          boardScope?: {
+            customFiltersConfig?: {
+              customFilters?: ReadonlyArray<{
+                id: string;
+                name: string;
+                jql?: string;
+                description?: string;
+              }>;
+            };
+          };
+        };
+        errors?: ReadonlyArray<{ message: string }>;
+      }>({
+        query: `query BoardCustomFilters($id: ID!) { boardScope(boardId: $id) { customFiltersConfig { customFilters { id name jql description } } } }`,
+        variables: { id: boardAri },
+      });
+
+      if (response.errors && response.errors.length > 0) {
+        // @effect-diagnostics-next-line globalConsole:off
+        console.warn(
+          `[t3work-atlassian] custom filter GraphQL fallback returned errors for board ${boardId}: ${response.errors[0]?.message}`,
+        );
+        return [];
+      }
+
+      const customFilters = response.data?.boardScope?.customFiltersConfig?.customFilters ?? [];
+      return customFilters
+        .map((filter) => toBacklogQuickFilter(filter))
+        .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
+    } catch (error) {
+      // @effect-diagnostics-next-line globalConsole:off
+      console.warn(
+        `[t3work-atlassian] custom filter GraphQL fallback failed for board ${boardId}:`,
         error instanceof Error ? error.message : error,
       );
       return [];

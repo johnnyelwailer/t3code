@@ -2148,4 +2148,157 @@ describe("AtlassianIntegrationProvider", () => {
       }),
     );
   });
+
+  describe("backlog quick filter GraphQL fallback", () => {
+    function baseBacklogMocks(url: string): Response | undefined {
+      if (url.includes("/rest/api/3/project/search")) {
+        return Response.json({ values: [{ id: "project-1", key: "PROJ" }] });
+      }
+      if (url.includes("/rest/agile/1.0/board?")) {
+        return Response.json({ values: [{ id: 77, name: "Release board", type: "scrum" }] });
+      }
+      if (url.includes("/rest/agile/1.0/board/77/sprint?")) {
+        return Response.json({ values: [] });
+      }
+      if (url.includes("/rest/api/3/filter/favourite?")) {
+        return Response.json([]);
+      }
+      return undefined;
+    }
+
+    it("does not call the GraphQL gateway when REST quick filters are present", async () => {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+
+        const base = baseBacklogMocks(url);
+        if (base) return base;
+
+        if (url.includes("/rest/agile/1.0/board/77/quickfilter")) {
+          return Response.json({
+            values: [{ id: 1, name: "My Issues", jql: "assignee = currentUser()" }],
+            isLast: true,
+          });
+        }
+
+        throw new Error(`Unexpected request: ${url}`);
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const provider = new AtlassianIntegrationProvider({
+        siteUrl: "https://test.atlassian.net",
+        email: "user@example.com",
+        apiToken: "token",
+      });
+
+      const selection = await provider.getBacklogSelection({
+        account: { id: "https://test.atlassian.net", provider: "atlassian" },
+        externalProjectId: "project-1",
+        boardId: "77",
+      });
+
+      expect(selection.quickFilters).toEqual([
+        { id: "1", name: "My Issues", jql: "assignee = currentUser()" },
+      ]);
+      expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/gateway/api/graphql"))).toBe(
+        false,
+      );
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).includes("/_edge/tenant_info")),
+      ).toBe(false);
+    });
+
+    it("falls back to GraphQL custom filters when REST quick filters are empty", async () => {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+
+        const base = baseBacklogMocks(url);
+        if (base) return base;
+
+        if (url.includes("/rest/agile/1.0/board/77/quickfilter")) {
+          return Response.json({ values: [], isLast: true });
+        }
+
+        if (url.includes("/_edge/tenant_info")) {
+          return Response.json({ cloudId: "cloud-abc" });
+        }
+
+        if (url.includes("/gateway/api/graphql")) {
+          const body = JSON.parse(String(init?.body ?? "{}")) as {
+            variables?: { id?: string };
+          };
+          expect(body.variables?.id).toBe("ari:cloud:jira-software:cloud-abc:board/77");
+          return Response.json({
+            data: {
+              boardScope: {
+                customFiltersConfig: {
+                  customFilters: [
+                    { id: "cf-1", name: "Blocked", jql: "status = Blocked", description: "" },
+                    { id: "cf-2", name: "At risk", jql: "labels = at-risk" },
+                  ],
+                },
+              },
+            },
+          });
+        }
+
+        throw new Error(`Unexpected request: ${url}`);
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const provider = new AtlassianIntegrationProvider({
+        siteUrl: "https://test.atlassian.net",
+        email: "user@example.com",
+        apiToken: "token",
+      });
+
+      const selection = await provider.getBacklogSelection({
+        account: { id: "https://test.atlassian.net", provider: "atlassian" },
+        externalProjectId: "project-1",
+        boardId: "77",
+      });
+
+      expect(selection.quickFilters).toEqual([
+        { id: "cf-1", name: "Blocked", jql: "status = Blocked" },
+        { id: "cf-2", name: "At risk", jql: "labels = at-risk" },
+      ]);
+    });
+
+    it("returns an empty list without throwing when the GraphQL gateway is unauthorized", async () => {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+
+        const base = baseBacklogMocks(url);
+        if (base) return base;
+
+        if (url.includes("/rest/agile/1.0/board/77/quickfilter")) {
+          return Response.json({ values: [], isLast: true });
+        }
+
+        if (url.includes("/_edge/tenant_info")) {
+          return Response.json({ cloudId: "cloud-abc" });
+        }
+
+        if (url.includes("/gateway/api/graphql")) {
+          return new Response("Unauthorized", { status: 401 });
+        }
+
+        throw new Error(`Unexpected request: ${url}`);
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const provider = new AtlassianIntegrationProvider({
+        siteUrl: "https://test.atlassian.net",
+        email: "user@example.com",
+        apiToken: "token",
+      });
+
+      const selection = await provider.getBacklogSelection({
+        account: { id: "https://test.atlassian.net", provider: "atlassian" },
+        externalProjectId: "project-1",
+        boardId: "77",
+      });
+
+      expect(selection.quickFilters).toEqual([]);
+    });
+  });
 });
