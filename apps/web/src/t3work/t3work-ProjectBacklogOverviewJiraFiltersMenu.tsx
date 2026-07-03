@@ -15,8 +15,11 @@ import {
   MenuShortcut,
   MenuTrigger,
 } from "~/t3work/components/ui/t3work-menu";
+import { projectBacklogFocusFilterOptions } from "~/t3work/t3work-ProjectBacklogOptionsMenuMeta";
+import type { ProjectBacklogFocusFilter } from "~/t3work/t3work-projectBacklogUtils";
 
 const ALL_SAVED_FILTERS_VALUE = "__all_saved_filters__";
+const DEFAULT_FOCUS_FILTER: ProjectBacklogFocusFilter = "all";
 
 export function ProjectBacklogOverviewJiraFiltersMenu({
   quickFilters,
@@ -25,6 +28,8 @@ export function ProjectBacklogOverviewJiraFiltersMenu({
   savedFilters,
   selectedFilterId,
   onFilterChange,
+  focusFilter,
+  onFocusFilterChange,
 }: {
   quickFilters: ReadonlyArray<AtlassianBacklogQuickFilter>;
   selectedQuickFilterIds: ReadonlyArray<string>;
@@ -32,13 +37,14 @@ export function ProjectBacklogOverviewJiraFiltersMenu({
   savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
   selectedFilterId: string | undefined;
   onFilterChange: (filterId: string | undefined) => void;
+  focusFilter: ProjectBacklogFocusFilter;
+  onFocusFilterChange: (value: ProjectBacklogFocusFilter) => void;
 }) {
-  if (quickFilters.length === 0 && savedFilters.length === 0) {
-    return null;
-  }
-
   const selectedQuickFilterSet = new Set(selectedQuickFilterIds);
-  const activeCount = selectedQuickFilterSet.size + (selectedFilterId ? 1 : 0);
+  const activeCount =
+    selectedQuickFilterSet.size +
+    (selectedFilterId ? 1 : 0) +
+    (focusFilter !== DEFAULT_FOCUS_FILTER ? 1 : 0);
   const triggerLabel = activeCount === 0 ? "Filters" : `Filters (${activeCount})`;
 
   function toggleQuickFilter(quickFilterId: string, checked: boolean) {
@@ -63,6 +69,27 @@ export function ProjectBacklogOverviewJiraFiltersMenu({
         <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
       </MenuTrigger>
       <MenuPopup align="start" side="bottom" className="min-w-[15rem] border-border/80">
+        <MenuGroup>
+          <MenuGroupLabel>Focus</MenuGroupLabel>
+          <MenuRadioGroup
+            className="grid gap-1"
+            value={focusFilter}
+            onValueChange={(value) => onFocusFilterChange(value as ProjectBacklogFocusFilter)}
+          >
+            {projectBacklogFocusFilterOptions.map((option) => (
+              <MenuRadioItem
+                key={option.value}
+                value={option.value}
+                className="min-h-8 rounded-md py-1.5 text-[12px]"
+              >
+                {option.label}
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
+        </MenuGroup>
+
+        {quickFilters.length > 0 || savedFilters.length > 0 ? <MenuSeparator /> : null}
+
         {quickFilters.length > 0 ? (
           <MenuGroup>
             <MenuGroupLabel>Quick filters</MenuGroupLabel>

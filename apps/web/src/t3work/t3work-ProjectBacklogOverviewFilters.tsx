@@ -143,6 +143,8 @@ export function ProjectBacklogOverviewFilters({
         savedFilters={savedFilters}
         selectedFilterId={selectedFilterId}
         onFilterChange={onFilterChange}
+        focusFilter={focusFilter}
+        onFocusFilterChange={onFocusFilterChange}
       />
 
       <div className="ml-auto flex items-center gap-2">
@@ -160,8 +162,6 @@ export function ProjectBacklogOverviewFilters({
         <ProjectBacklogOptionsMenu
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
-          focusFilter={focusFilter}
-          onFocusFilterChange={onFocusFilterChange}
           visibleIssueTypes={visibleIssueTypes}
           onVisibleIssueTypesChange={onVisibleIssueTypesChange}
           tableGroupBy={tableGroupBy}

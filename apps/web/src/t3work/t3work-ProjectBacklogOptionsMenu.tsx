@@ -21,16 +21,11 @@ import {
   type ProjectBacklogTableSortBy,
   type ProjectBacklogTableSortDirection,
 } from "~/t3work/t3work-projectBacklogTable";
-import type {
-  ProjectBacklogFocusFilter,
-  ProjectBacklogIssueTypeFilterKey,
-} from "~/t3work/t3work-projectBacklogUtils";
+import type { ProjectBacklogIssueTypeFilterKey } from "~/t3work/t3work-projectBacklogUtils";
 
 export function ProjectBacklogOptionsMenu({
   viewMode,
   onViewModeChange,
-  focusFilter,
-  onFocusFilterChange,
   visibleIssueTypes,
   onVisibleIssueTypesChange,
   tableGroupBy,
@@ -54,8 +49,6 @@ export function ProjectBacklogOptionsMenu({
 }: {
   viewMode: ProjectBacklogViewMode;
   onViewModeChange: (value: ProjectBacklogViewMode) => void;
-  focusFilter: ProjectBacklogFocusFilter;
-  onFocusFilterChange: (value: ProjectBacklogFocusFilter) => void;
   visibleIssueTypes: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>;
   onVisibleIssueTypesChange: (value: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>) => void;
   tableGroupBy: ProjectBacklogTableGroupBy;
@@ -105,8 +98,6 @@ export function ProjectBacklogOptionsMenu({
         <ProjectBacklogPrimaryOptionsMenu
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
-          focusFilter={focusFilter}
-          onFocusFilterChange={onFocusFilterChange}
           visibleIssueTypes={visibleIssueTypes}
           onVisibleIssueTypesChange={onVisibleIssueTypesChange}
           boards={boards}

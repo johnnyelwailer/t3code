@@ -17,26 +17,19 @@ import {
 import { ProjectBacklogOptionsJiraFilters } from "~/t3work/t3work-ProjectBacklogOptionsJiraFilters";
 import type { ProjectBacklogViewMode } from "~/t3work/t3work-projectBacklogPresentation";
 import { projectBacklogViewModes } from "~/t3work/t3work-projectBacklogPresentation";
-import type {
-  ProjectBacklogFocusFilter,
-  ProjectBacklogIssueTypeFilterKey,
-} from "~/t3work/t3work-projectBacklogUtils";
+import type { ProjectBacklogIssueTypeFilterKey } from "~/t3work/t3work-projectBacklogUtils";
 import { projectBacklogIssueTypeFilterOptions } from "~/t3work/t3work-projectBacklogUtils";
 import {
   getSelectedBacklogOptionLabel,
   menuShortcutClassName,
   menuSubPopupClassName,
-  projectBacklogFocusFilterOptions,
   radioItemClassName,
-  singleColumnRadioGroupClassName,
   twoColumnRadioGroupClassName,
 } from "~/t3work/t3work-ProjectBacklogOptionsMenuMeta";
 
 export function ProjectBacklogPrimaryOptionsMenu({
   viewMode,
   onViewModeChange,
-  focusFilter,
-  onFocusFilterChange,
   visibleIssueTypes,
   onVisibleIssueTypesChange,
   boards,
@@ -48,8 +41,6 @@ export function ProjectBacklogPrimaryOptionsMenu({
 }: {
   viewMode: ProjectBacklogViewMode;
   onViewModeChange: (value: ProjectBacklogViewMode) => void;
-  focusFilter: ProjectBacklogFocusFilter;
-  onFocusFilterChange: (value: ProjectBacklogFocusFilter) => void;
   visibleIssueTypes: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>;
   onVisibleIssueTypesChange: (value: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>) => void;
   boards: ReadonlyArray<AtlassianBacklogBoard>;
@@ -60,10 +51,6 @@ export function ProjectBacklogPrimaryOptionsMenu({
   onSprintChange: (sprintId: string | undefined) => void;
 }) {
   const selectedViewLabel = getSelectedBacklogOptionLabel(projectBacklogViewModes, viewMode);
-  const selectedFilterLabel = getSelectedBacklogOptionLabel(
-    projectBacklogFocusFilterOptions,
-    focusFilter,
-  );
   const selectedIssueTypeLabel =
     visibleIssueTypes.length === projectBacklogIssueTypeFilterOptions.length
       ? "All"
@@ -100,32 +87,6 @@ export function ProjectBacklogPrimaryOptionsMenu({
               onValueChange={(value) => onViewModeChange(value as ProjectBacklogViewMode)}
             >
               {projectBacklogViewModes.map((option) => (
-                <MenuRadioItem
-                  key={option.value}
-                  value={option.value}
-                  className={radioItemClassName}
-                >
-                  {option.label}
-                </MenuRadioItem>
-              ))}
-            </MenuRadioGroup>
-          </MenuSubPopup>
-        </MenuSub>
-
-        <MenuSub>
-          <MenuSubTrigger className={radioItemClassName}>
-            Filter
-            {selectedFilterLabel ? (
-              <MenuShortcut className={menuShortcutClassName}>{selectedFilterLabel}</MenuShortcut>
-            ) : null}
-          </MenuSubTrigger>
-          <MenuSubPopup className={menuSubPopupClassName}>
-            <MenuRadioGroup
-              className={singleColumnRadioGroupClassName}
-              value={focusFilter}
-              onValueChange={(value) => onFocusFilterChange(value as ProjectBacklogFocusFilter)}
-            >
-              {projectBacklogFocusFilterOptions.map((option) => (
                 <MenuRadioItem
                   key={option.value}
                   value={option.value}
