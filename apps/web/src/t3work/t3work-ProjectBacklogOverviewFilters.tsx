@@ -9,8 +9,8 @@ import type {
 import type { AtlassianBacklogQuickFilter } from "~/t3work/backend/t3work-atlassianBackendTypes";
 import { Input } from "~/t3work/components/ui/t3work-input";
 import { ProjectBacklogOverviewAssigneeFilter } from "~/t3work/t3work-ProjectBacklogOverviewAssigneeFilter";
+import { ProjectBacklogOverviewJiraFiltersMenu } from "~/t3work/t3work-ProjectBacklogOverviewJiraFiltersMenu";
 import { ProjectBacklogOverviewLabelsFilter } from "~/t3work/t3work-ProjectBacklogOverviewLabelsFilter";
-import { ProjectBacklogOverviewQuickFilters } from "~/t3work/t3work-ProjectBacklogOverviewQuickFilters";
 import { ProjectBacklogOverviewViewSwitch } from "~/t3work/t3work-ProjectBacklogOverviewViewSwitch";
 import { ProjectBacklogOptionsMenu } from "~/t3work/t3work-ProjectBacklogOptionsMenu";
 import type { ProjectBacklogViewMode } from "~/t3work/t3work-projectBacklogPresentation";
@@ -136,10 +136,13 @@ export function ProjectBacklogOverviewFilters({
         options={labelOptions}
       />
 
-      <ProjectBacklogOverviewQuickFilters
+      <ProjectBacklogOverviewJiraFiltersMenu
         quickFilters={quickFilters}
         selectedQuickFilterIds={selectedQuickFilterIds}
         onSelectedQuickFilterIdsChange={onSelectedQuickFilterIdsChange}
+        savedFilters={savedFilters}
+        selectedFilterId={selectedFilterId}
+        onFilterChange={onFilterChange}
       />
 
       <div className="ml-auto flex items-center gap-2">
@@ -173,13 +176,10 @@ export function ProjectBacklogOverviewFilters({
           onExpandTableGroups={onExpandTableGroups}
           boards={boards}
           sprints={sprints}
-          savedFilters={savedFilters}
           selectedBoardId={selectedBoardId}
           selectedSprintId={selectedSprintId}
-          selectedFilterId={selectedFilterId}
           onBoardChange={onBoardChange}
           onSprintChange={onSprintChange}
-          onFilterChange={onFilterChange}
           loading={loading}
           onRefreshData={onRefreshData}
         />

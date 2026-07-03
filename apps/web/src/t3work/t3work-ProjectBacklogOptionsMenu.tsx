@@ -1,7 +1,6 @@
 import { EllipsisIcon } from "lucide-react";
 import type {
   AtlassianBacklogBoard,
-  AtlassianBacklogSavedFilter,
   AtlassianBacklogSprint,
 } from "~/t3work/backend/t3work-types";
 
@@ -46,13 +45,10 @@ export function ProjectBacklogOptionsMenu({
   onExpandTableGroups,
   boards,
   sprints,
-  savedFilters,
   selectedBoardId,
   selectedSprintId,
-  selectedFilterId,
   onBoardChange,
   onSprintChange,
-  onFilterChange,
   loading,
   onRefreshData,
 }: {
@@ -74,13 +70,10 @@ export function ProjectBacklogOptionsMenu({
   onExpandTableGroups: () => void;
   boards: ReadonlyArray<AtlassianBacklogBoard>;
   sprints: ReadonlyArray<AtlassianBacklogSprint>;
-  savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
   selectedBoardId: string | undefined;
   selectedSprintId: string | undefined;
-  selectedFilterId: string | undefined;
   onBoardChange: (boardId: string) => void;
   onSprintChange: (sprintId: string | undefined) => void;
-  onFilterChange: (filterId: string | undefined) => void;
   loading: boolean;
   onRefreshData: () => void;
 }) {
@@ -118,13 +111,10 @@ export function ProjectBacklogOptionsMenu({
           onVisibleIssueTypesChange={onVisibleIssueTypesChange}
           boards={boards}
           sprints={sprints}
-          savedFilters={savedFilters}
           selectedBoardId={selectedBoardId}
           selectedSprintId={selectedSprintId}
-          selectedFilterId={selectedFilterId}
           onBoardChange={onBoardChange}
           onSprintChange={onSprintChange}
-          onFilterChange={onFilterChange}
         />
 
         {viewMode === "table" ? (

@@ -1,6 +1,5 @@
 import type {
   AtlassianBacklogBoard,
-  AtlassianBacklogSavedFilter,
   AtlassianBacklogSprint,
 } from "~/t3work/backend/t3work-types";
 import {
@@ -19,35 +18,25 @@ import {
   stackedRadioGroupClassName,
 } from "~/t3work/t3work-ProjectBacklogOptionsMenuMeta";
 
-const ALL_SAVED_FILTERS_VALUE = "__all_saved_filters__";
 const ALL_SPRINTS_VALUE = "all";
 
 export function ProjectBacklogOptionsJiraFilters({
   boards,
   sprints,
-  savedFilters,
   selectedBoardId,
   selectedSprintId,
-  selectedFilterId,
   onBoardChange,
   onSprintChange,
-  onFilterChange,
 }: {
   boards: ReadonlyArray<AtlassianBacklogBoard>;
   sprints: ReadonlyArray<AtlassianBacklogSprint>;
-  savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
   selectedBoardId: string | undefined;
   selectedSprintId: string | undefined;
-  selectedFilterId: string | undefined;
   onBoardChange: (boardId: string) => void;
   onSprintChange: (sprintId: string | undefined) => void;
-  onFilterChange: (filterId: string | undefined) => void;
 }) {
   const hasBoards = boards.length > 0;
   const hasSprintOptions = hasBoards || sprints.length > 0;
-  const selectedFilterLabel =
-    savedFilters.find((savedFilter) => savedFilter.id === selectedFilterId)?.name ??
-    "No saved filter";
   const selectedBoardValue =
     hasBoards && boards.some((board) => board.id === selectedBoardId)
       ? selectedBoardId
@@ -60,35 +49,6 @@ export function ProjectBacklogOptionsJiraFilters({
 
   return (
     <>
-      <MenuSub>
-        <MenuSubTrigger className={radioItemClassName}>
-          Saved filter
-          <MenuShortcut className={menuShortcutClassName}>{selectedFilterLabel}</MenuShortcut>
-        </MenuSubTrigger>
-        <MenuSubPopup className={menuSubPopupClassName}>
-          <MenuRadioGroup
-            className={stackedRadioGroupClassName}
-            value={selectedFilterId ?? ALL_SAVED_FILTERS_VALUE}
-            onValueChange={(value) =>
-              onFilterChange(value === ALL_SAVED_FILTERS_VALUE ? undefined : value)
-            }
-          >
-            <MenuRadioItem value={ALL_SAVED_FILTERS_VALUE} className={radioItemClassName}>
-              No saved filter
-            </MenuRadioItem>
-            {savedFilters.map((savedFilter) => (
-              <MenuRadioItem
-                key={savedFilter.id}
-                value={savedFilter.id}
-                className={radioItemClassName}
-              >
-                {savedFilter.name}
-              </MenuRadioItem>
-            ))}
-          </MenuRadioGroup>
-        </MenuSubPopup>
-      </MenuSub>
-
       <MenuSub>
         <MenuSubTrigger className={radioItemClassName}>
           Sprint board

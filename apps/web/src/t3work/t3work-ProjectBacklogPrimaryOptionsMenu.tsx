@@ -1,6 +1,5 @@
 import type {
   AtlassianBacklogBoard,
-  AtlassianBacklogSavedFilter,
   AtlassianBacklogSprint,
 } from "~/t3work/backend/t3work-types";
 import {
@@ -42,13 +41,10 @@ export function ProjectBacklogPrimaryOptionsMenu({
   onVisibleIssueTypesChange,
   boards,
   sprints,
-  savedFilters,
   selectedBoardId,
   selectedSprintId,
-  selectedFilterId,
   onBoardChange,
   onSprintChange,
-  onFilterChange,
 }: {
   viewMode: ProjectBacklogViewMode;
   onViewModeChange: (value: ProjectBacklogViewMode) => void;
@@ -58,13 +54,10 @@ export function ProjectBacklogPrimaryOptionsMenu({
   onVisibleIssueTypesChange: (value: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>) => void;
   boards: ReadonlyArray<AtlassianBacklogBoard>;
   sprints: ReadonlyArray<AtlassianBacklogSprint>;
-  savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
   selectedBoardId: string | undefined;
   selectedSprintId: string | undefined;
-  selectedFilterId: string | undefined;
   onBoardChange: (boardId: string) => void;
   onSprintChange: (sprintId: string | undefined) => void;
-  onFilterChange: (filterId: string | undefined) => void;
 }) {
   const selectedViewLabel = getSelectedBacklogOptionLabel(projectBacklogViewModes, viewMode);
   const selectedFilterLabel = getSelectedBacklogOptionLabel(
@@ -174,13 +167,10 @@ export function ProjectBacklogPrimaryOptionsMenu({
         <ProjectBacklogOptionsJiraFilters
           boards={boards}
           sprints={sprints}
-          savedFilters={savedFilters}
           selectedBoardId={selectedBoardId}
           selectedSprintId={selectedSprintId}
-          selectedFilterId={selectedFilterId}
           onBoardChange={onBoardChange}
           onSprintChange={onSprintChange}
-          onFilterChange={onFilterChange}
         />
       </MenuGroup>
     </>
