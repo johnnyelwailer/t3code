@@ -19,6 +19,7 @@ import {
 } from "./t3work-atlassian-backlogCachedResponse.ts";
 import { loadLiveBacklogPayload, loadSelection } from "./t3work-atlassian-backlogLivePayload.ts";
 import { kickT3workAtlassianBacklogBackgroundSync } from "./t3work-atlassian-backlog-syncService.ts";
+import { kickT3workAtlassianBacklogMetadataRefresh } from "./t3work-atlassian-backlog-metadataRefresh.ts";
 
 export function loadT3workAtlassianBoardColumns(input: T3workAtlassianBoardColumnsInput) {
   return Effect.gen(function* () {
@@ -107,6 +108,22 @@ export function loadT3workAtlassianBacklog(input: T3workAtlassianBacklogInput) {
             account: input.account,
             externalProjectId: input.externalProjectId,
             selection: requestSelection,
+          });
+        }
+        const cachedSelectedBoardId =
+          cachedResponse.selectedBoardId ?? requestSelection.boardId;
+        if (
+          cachedSelectedBoardId &&
+          cachedResponse.quickFilters.length === 0
+        ) {
+          // Quick filters were persisted empty, most likely because Jira
+          // rate-limited the original fetch. Since the cache is otherwise
+          // valid, nothing would ever re-resolve the selection — self-heal
+          // with a throttled, single-flight background refresh instead.
+          yield* kickT3workAtlassianBacklogMetadataRefresh({
+            account: input.account,
+            externalProjectId: input.externalProjectId,
+            selection: { ...requestSelection, boardId: cachedSelectedBoardId },
           });
         }
         return cachedResponse;
