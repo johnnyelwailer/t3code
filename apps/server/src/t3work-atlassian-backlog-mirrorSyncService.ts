@@ -67,6 +67,42 @@ export function computeIncrementalLookbackMinutes(input: {
 /** Mirror page size. */
 const mirrorPageSize = 100;
 
+/**
+ * Backoff bounds for failed walks (doc 33 §4.9: honor rate limits). A
+ * rate-limited walk jumps straight to a 5-minute pause; other failures double
+ * the previous sleep. Both are capped, and any successful walk resets to the
+ * normal cadence.
+ */
+const rateLimitedSleepMs = 5 * 60_000;
+const maxSleepMs = 15 * 60_000;
+
+function causeChainHasStatus429(error: unknown, depth = 0): boolean {
+  if (depth > 5 || error === null || typeof error !== "object") {
+    return false;
+  }
+  const record = error as { status?: unknown; cause?: unknown };
+  if (record.status === 429) {
+    return true;
+  }
+  return causeChainHasStatus429(record.cause, depth + 1);
+}
+
+/**
+ * Next loop sleep given the walk outcome: success resets to the 90 s cadence;
+ * a 429 anywhere in the error's cause chain jumps to the rate-limit pause;
+ * any other failure doubles the previous sleep (capped) so a persistently
+ * failing walk cannot hammer Jira every 90 s.
+ */
+export function nextMirrorSleepMs(previousSleepMs: number, outcome: "ok" | unknown): number {
+  if (outcome === "ok") {
+    return normalSleepMs;
+  }
+  if (causeChainHasStatus429(outcome)) {
+    return Math.min(Math.max(rateLimitedSleepMs, previousSleepMs), maxSleepMs);
+  }
+  return Math.min(Math.max(previousSleepMs * 2, normalSleepMs * 2), maxSleepMs);
+}
+
 // ─── Single-flight map ───────────────────────────────────────────────────────
 
 type ActiveMirrorSync = { readonly token: symbol };
@@ -152,6 +188,7 @@ function runMirrorLoop(input: T3workAtlassianMirrorSyncRequest, isSuperseded: ()
   return Effect.gen(function* () {
     let lastReconcileMs = 0;
     let lastSuccessfulWalkMs = 0;
+    let sleepMs = normalSleepMs;
 
     while (true) {
       if (isSuperseded()) return;
@@ -181,16 +218,20 @@ function runMirrorLoop(input: T3workAtlassianMirrorSyncRequest, isSuperseded: ()
       if (doReconcile) {
         // A reconcile covers everything an incremental walk would, so on
         // success it also counts as a successful walk for lookback purposes.
-        yield* runMirrorReconcile(input, provider, identity, isSuperseded).pipe(
+        const outcome = yield* runMirrorReconcile(input, provider, identity, isSuperseded).pipe(
           Effect.andThen(
             Effect.sync(() => {
               lastSuccessfulWalkMs = nowMs;
+              return "ok" as const;
             }),
           ),
-          Effect.catchCause((cause) =>
-            Effect.logWarning("t3work atlassian mirror reconcile walk failed", cause),
+          Effect.catch((error) =>
+            Effect.logWarning("t3work atlassian mirror reconcile walk failed", error).pipe(
+              Effect.as(error),
+            ),
           ),
         );
+        sleepMs = nextMirrorSleepMs(sleepMs, outcome);
         lastReconcileMs = yield* Clock.currentTimeMillis;
       } else {
         // Widen the JQL lookback to cover the gap since the last successful
@@ -201,20 +242,30 @@ function runMirrorLoop(input: T3workAtlassianMirrorSyncRequest, isSuperseded: ()
           nowMs,
           lastSuccessfulWalkMs,
         });
-        yield* runMirrorIncrementalWalk(input, provider, identity, isSuperseded, lookbackMinutes).pipe(
+        const outcome = yield* runMirrorIncrementalWalk(
+          input,
+          provider,
+          identity,
+          isSuperseded,
+          lookbackMinutes,
+        ).pipe(
           Effect.andThen(
             Effect.sync(() => {
               lastSuccessfulWalkMs = nowMs;
+              return "ok" as const;
             }),
           ),
-          Effect.catchCause((cause) =>
-            Effect.logWarning("t3work atlassian mirror incremental walk failed", cause),
+          Effect.catch((error) =>
+            Effect.logWarning("t3work atlassian mirror incremental walk failed", error).pipe(
+              Effect.as(error),
+            ),
           ),
         );
+        sleepMs = nextMirrorSleepMs(sleepMs, outcome);
       }
 
       if (isSuperseded()) return;
-      yield* Effect.sleep(normalSleepMs);
+      yield* Effect.sleep(sleepMs);
     }
   });
 }
