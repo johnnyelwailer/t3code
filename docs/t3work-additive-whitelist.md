@@ -11,6 +11,8 @@ Prefix policy:
 
 ## Allowed Modified Upstream Files
 
+- `README.md`
+  - Describe this repository as the t3work fork (fork premise, pack model, current state) instead of the upstream one-line intro.
 - `AGENTS.md`
   - Update project constitution reference from project-shell to t3work docs.
 - `package.json`
