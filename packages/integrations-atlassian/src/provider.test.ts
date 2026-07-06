@@ -617,6 +617,93 @@ describe("AtlassianIntegrationProvider", () => {
     expect(page.items).toEqual([]);
   });
 
+  it("resolves quick filters on providers built via fromMultipleAuths", async () => {
+    // Regression: fromMultipleAuths constructs via Object.create, which skips
+    // field initializers — the quick-filter cache must be assigned there too.
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.includes("/rest/api/3/project/search")) {
+        return Response.json({ values: [{ id: "project-1", key: "PROJ" }] });
+      }
+      if (url.endsWith("/rest/api/3/field")) {
+        return Response.json([]);
+      }
+      if (url.includes("/rest/agile/1.0/board/77/quickfilter")) {
+        return Response.json({
+          values: [{ id: 1, name: "My Issues", jql: "assignee = currentUser()" }],
+          isLast: true,
+        });
+      }
+      if (url.includes("/rest/api/3/search/jql")) {
+        return Response.json({ total: 0, issues: [] });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = AtlassianIntegrationProvider.fromMultipleAuths([
+      {
+        kind: "basic",
+        siteUrl: "https://test.atlassian.net",
+        email: "user@example.com",
+        apiToken: "token",
+      },
+    ]);
+
+    const page = await provider.listBacklogResources({
+      account: { id: "https://test.atlassian.net", provider: "atlassian" },
+      externalProjectId: "project-1",
+      boardId: "77",
+      quickFilterIds: ["1"],
+    });
+
+    expect(page.items).toEqual([]);
+    const quickFilterCalls = fetchMock.mock.calls.filter(([input]) =>
+      String(input).includes("/quickfilter"),
+    );
+    expect(quickFilterCalls).toHaveLength(1);
+  });
+
+  it("fails the backlog fetch instead of silently dropping unavailable quick filters", async () => {
+    // A transient catalog failure must reject: degrading to [] would return
+    // unfiltered data under a quick-filtered selection (and, mid-walk, break
+    // the JQL the pagination cursor is bound to).
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.includes("/rest/api/3/project/search")) {
+        return Response.json({ values: [{ id: "project-1", key: "PROJ" }] });
+      }
+      if (url.endsWith("/rest/api/3/field")) {
+        return Response.json([]);
+      }
+      if (url.includes("/rest/agile/1.0/board/77/quickfilter")) {
+        return new Response("rate limited", { status: 429 });
+      }
+      if (url.includes("/rest/api/3/search/jql")) {
+        return Response.json({ total: 0, issues: [] });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.listBacklogResources({
+        account: { id: "https://test.atlassian.net", provider: "atlassian" },
+        externalProjectId: "project-1",
+        boardId: "77",
+        quickFilterIds: ["1"],
+      }),
+    ).rejects.toThrow();
+  });
+
   it("loads official Jira board columns for the resolved backlog board", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();

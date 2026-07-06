@@ -41,8 +41,14 @@ export function ProjectBacklogOverviewJiraFiltersMenu({
   onFocusFilterChange: (value: ProjectBacklogFocusFilter) => void;
 }) {
   const selectedQuickFilterSet = new Set(selectedQuickFilterIds);
+  // Count only ids that exist on the resolved board: restored state can carry
+  // ids from another board, and those are dropped server-side — a badge for
+  // them would claim filtering that isn't applied.
+  const appliedQuickFilterCount = quickFilters.filter((filter) =>
+    selectedQuickFilterSet.has(filter.id),
+  ).length;
   const activeCount =
-    selectedQuickFilterSet.size +
+    appliedQuickFilterCount +
     (selectedFilterId ? 1 : 0) +
     (focusFilter !== DEFAULT_FOCUS_FILTER ? 1 : 0);
   const triggerLabel = activeCount === 0 ? "Filters" : `Filters (${activeCount})`;

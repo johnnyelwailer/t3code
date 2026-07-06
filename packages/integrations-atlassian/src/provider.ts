@@ -631,6 +631,13 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
   id = "atlassian";
   kind = "atlassian";
   private clients: Map<string, { client: JiraApiClient; siteUrl: string }> = new Map();
+  // Instance-lifetime quick-filter catalog cache. The backlog sync walk calls
+  // listBacklogResources once per cursor page; without this, each page would
+  // re-fetch the board's quick filters (REST + possible GraphQL fallback).
+  private quickFilterCache: Map<
+    string,
+    { promise: Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> }
+  > = new Map();
 
   constructor(auth: JiraApiAuth | AtlassianIntegrationProviderConfig) {
     if ("kind" in auth) {
@@ -657,6 +664,9 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     provider.id = "atlassian";
     provider.kind = "atlassian";
     provider.clients = new Map();
+    // Object.create skips field initializers; every instance field must be
+    // assigned here or methods that touch it crash on this construction path.
+    provider.quickFilterCache = new Map();
     for (const auth of auths) {
       const key = auth.kind === "oauth" ? auth.cloudId : normalizeSiteUrl(auth.siteUrl);
       const clientAuth: JiraApiAuth =
@@ -812,10 +822,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       .map((id) => id.trim())
       .filter((id) => id.length > 0);
     if (requestedQuickFilterIds.length > 0 && input.boardId?.trim()) {
-      const boardQuickFilters = await this.listBacklogQuickFilters(
-        entry.client,
-        input.boardId.trim(),
-      );
+      const boardQuickFilters = await this.listBacklogQuickFilters(entry, input.boardId.trim());
       for (const quickFilterId of requestedQuickFilterIds) {
         const quickFilter = boardQuickFilters.find((filter) => filter.id === quickFilterId);
         const quickFilterJql = stripJqlOrderBy(quickFilter?.jql);
@@ -1103,7 +1110,23 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       };
     }
 
-    const quickFilters = await this.listBacklogQuickFilters(entry.client, selectedBoard.id);
+    // Catalog listing degrades gracefully: a failed fetch here should not
+    // take down the whole selection payload. (The resource path in
+    // listBacklogResources deliberately does NOT degrade — dropping quick
+    // filter clauses there would silently return unfiltered data.)
+    const quickFilters = await this.listBacklogQuickFilters(entry, selectedBoard.id).catch(
+      (error: unknown) => {
+        // A silent [] is indistinguishable from a board that simply has no
+        // filters, so leave a trace. This package is Promise-based (no
+        // Effect logger in scope), so console is the trace.
+        // @effect-diagnostics-next-line globalConsole:off
+        console.warn(
+          `[t3work-atlassian] quick filter fetch failed for board ${selectedBoard.id}:`,
+          error instanceof Error ? error.message : error,
+        );
+        return [] as ReadonlyArray<AtlassianBacklogQuickFilter>;
+      },
+    );
 
     const boardSprints = (
       await entry.client.listBoardSprints(selectedBoard.id).catch(() => ({ values: [] }))
@@ -1629,46 +1652,65 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     }
   }
 
-  private async listBacklogQuickFilters(
+  private listBacklogQuickFilters(
+    entry: { client: JiraApiClient; siteUrl: string },
+    boardId: string,
+  ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
+    const cacheKey = `${entry.siteUrl}:${boardId}`;
+    const cached = this.quickFilterCache.get(cacheKey);
+    if (cached) {
+      return cached.promise;
+    }
+    // Successful catalogs are cached for the life of this provider instance
+    // (the server constructs a fresh provider per request/sync walk, so this
+    // is bounded). Never expiring mid-instance keeps the composed JQL stable
+    // across a paginated walk — Jira's nextPageToken is bound to the exact
+    // JQL that produced it, so the catalog must not change between pages.
+    // Failed fetches are NOT cached (and reject): callers that filter by
+    // quick filters must fail loudly rather than silently drop the clauses,
+    // and the next call retries instead of reading a false-empty catalog.
+    const promise = this.fetchBacklogQuickFilters(entry.client, boardId);
+    promise.catch(() => {
+      this.quickFilterCache.delete(cacheKey);
+    });
+    this.quickFilterCache.set(cacheKey, { promise });
+    return promise;
+  }
+
+  private async fetchBacklogQuickFilters(
     client: JiraApiClient,
     boardId: string,
   ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
-    try {
-      const response = await client.listBoardQuickFilters(boardId);
-      const quickFilters = (response.values ?? [])
-        .map((filter) => toBacklogQuickFilter(filter))
-        .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
+    const response = await client.listBoardQuickFilters(boardId);
+    const quickFilters = (response.values ?? [])
+      .map((filter) => toBacklogQuickFilter(filter))
+      .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
 
-      if (quickFilters.length > 0) {
-        return quickFilters;
-      }
-
-      // Boards on Jira's "new board experience" store custom filters that the
-      // REST quickfilter endpoint never returns (200 + empty values). Jira's
-      // own UI reads them via an internal GraphQL field, so fall back to that
-      // only when the REST call succeeded but came back empty.
-      return await this.listBacklogCustomFiltersViaGraphql(client, boardId);
-    } catch (error) {
-      // Degrade to "no quick filters" but leave a trace: a silent [] here is
-      // indistinguishable from a board that simply has none. This package is
-      // Promise-based (no Effect logger in scope), so console is the trace.
-      // @effect-diagnostics-next-line globalConsole:off
-      console.warn(
-        `[t3work-atlassian] quick filter fetch failed for board ${boardId}:`,
-        error instanceof Error ? error.message : error,
-      );
-      return [];
+    if (quickFilters.length > 0) {
+      return quickFilters;
     }
+
+    // Boards on Jira's "new board experience" store custom filters that the
+    // REST quickfilter endpoint never returns (200 + empty values). Jira's
+    // own UI reads them via an internal GraphQL field, so fall back to that
+    // only when the REST call succeeded but came back empty.
+    return await this.listBacklogCustomFiltersViaGraphql(client, boardId);
   }
 
   private async listBacklogCustomFiltersViaGraphql(
     client: JiraApiClient,
     boardId: string,
   ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
-    try {
-      const cloudId = await client.getCloudId();
-      const boardAri = `ari:cloud:jira-software:${cloudId}:board/${boardId}`;
-      const response = await client.postGraphql<{
+    // OAuth clients cannot reach the GraphQL gateway at all — a permanent
+    // condition, not a failure. Those accounts can never have custom filters
+    // in their catalog (and so none selected), so an empty catalog is the
+    // truthful answer, not a degraded one.
+    if (!client.supportsGraphql) {
+      return [];
+    }
+    const cloudId = await client.getCloudId();
+    const boardAri = `ari:cloud:jira-software:${cloudId}:board/${boardId}`;
+    const response = await client.postGraphql<{
         data?: {
           boardScope?: {
             customFiltersConfig?: {
@@ -1687,26 +1729,23 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         variables: { id: boardAri },
       });
 
-      if (response.errors && response.errors.length > 0) {
-        // @effect-diagnostics-next-line globalConsole:off
-        console.warn(
-          `[t3work-atlassian] custom filter GraphQL fallback returned errors for board ${boardId}: ${response.errors[0]?.message}`,
-        );
-        return [];
-      }
-
-      const customFilters = response.data?.boardScope?.customFiltersConfig?.customFilters ?? [];
-      return customFilters
-        .map((filter) => toBacklogQuickFilter(filter))
-        .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
-    } catch (error) {
+    // A well-formed GraphQL error means the internal customFilters field is
+    // not available for this tenant/board — a stable condition, so an empty
+    // catalog is correct. Transport-level failures (network, 429, 5xx) throw
+    // past this method instead: they are transient, and swallowing them here
+    // would let the quick-filter cache pin a false-empty catalog.
+    if (response.errors && response.errors.length > 0) {
       // @effect-diagnostics-next-line globalConsole:off
       console.warn(
-        `[t3work-atlassian] custom filter GraphQL fallback failed for board ${boardId}:`,
-        error instanceof Error ? error.message : error,
+        `[t3work-atlassian] custom filter GraphQL fallback returned errors for board ${boardId}: ${response.errors[0]?.message}`,
       );
       return [];
     }
+
+    const customFilters = response.data?.boardScope?.customFiltersConfig?.customFilters ?? [];
+    return customFilters
+      .map((filter) => toBacklogQuickFilter(filter))
+      .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
   }
 
   private async listProjectBoards(

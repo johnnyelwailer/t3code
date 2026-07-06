@@ -35,4 +35,29 @@ export default Effect.gen(function* () {
   yield* sql`
     ALTER TABLE t3work_atlassian_backlog_views ADD COLUMN quick_filters_json TEXT NOT NULL DEFAULT '[]'
   `.pipe(Effect.catch(() => Effect.void));
+
+  // Backfill: buildBacklogSelectionKey now always appends a quickFilters
+  // segment, so pre-existing rows (keyed without it) would never match again.
+  // Rewrite them to the new format so persisted caches survive the upgrade.
+  // If a new-format row already exists for the same selection (downgrade /
+  // mixed-binary window), the new-format row wins: drop the legacy row first
+  // so the UPDATE cannot hit a primary-key conflict. These statements are
+  // deliberately NOT error-swallowed — a failed backfill should fail the
+  // migration loudly, not strand invisible legacy rows.
+  yield* sql`
+    DELETE FROM t3work_atlassian_backlog_views
+    WHERE selection_key NOT LIKE '%:quickFilters=%'
+      AND EXISTS (
+        SELECT 1 FROM t3work_atlassian_backlog_views AS newer
+        WHERE newer.provider = t3work_atlassian_backlog_views.provider
+          AND newer.account_id = t3work_atlassian_backlog_views.account_id
+          AND newer.external_project_id = t3work_atlassian_backlog_views.external_project_id
+          AND newer.selection_key = t3work_atlassian_backlog_views.selection_key || ':quickFilters=default'
+      )
+  `;
+  yield* sql`
+    UPDATE t3work_atlassian_backlog_views
+    SET selection_key = selection_key || ':quickFilters=default'
+    WHERE selection_key NOT LIKE '%:quickFilters=%'
+  `;
 });

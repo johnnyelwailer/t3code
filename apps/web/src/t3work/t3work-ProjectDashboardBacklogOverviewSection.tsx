@@ -99,7 +99,14 @@ export function ProjectDashboardBacklogOverviewSection({
       selectedBoardId={backlogState.boardId}
       selectedSprintId={backlogState.sprintId}
       onBoardChange={(boardId) =>
-        setBacklogState((current) => ({ ...current, boardId, sprintId: undefined }))
+        setBacklogState((current) => ({
+          ...current,
+          boardId,
+          sprintId: undefined,
+          // Quick filters are board-scoped; stale ids from the previous board
+          // would render as chips without actually filtering.
+          selectedQuickFilterIds: [],
+        }))
       }
       onSprintChange={(sprintId) => setBacklogState((current) => ({ ...current, sprintId }))}
       onRefreshData={onRefreshData}

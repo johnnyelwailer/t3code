@@ -249,6 +249,10 @@ export class JiraApiClient {
     return this.cachedCloudId;
   }
 
+  get supportsGraphql(): boolean {
+    return this.auth.kind !== "oauth";
+  }
+
   async postGraphql<T>(body: { query: string; variables?: Record<string, unknown> }): Promise<T> {
     if (this.auth.kind === "oauth") {
       throw new AtlassianApiError({

@@ -41,6 +41,22 @@ layer("t3work-038 BacklogQuickFilters", (it) => {
           )
         `;
 
+        yield* sql`
+          INSERT INTO t3work_atlassian_backlog_views (
+            provider, account_id, external_project_id, selection_key,
+            issue_ids_json, boards_json, sprints_json, saved_filters_json,
+            capabilities_json, updated_at
+          ) VALUES
+            ('atlassian', 'a1', 'p1', 'board=1:sprint=default:filter=default',
+             '[]', '[]', '[]', '[]', '[]', 0),
+            ('atlassian', 'a1', 'p1', 'board=1:sprint=default:filter=default:quickFilters=7',
+             '[]', '[]', '[]', '[]', '[]', 0),
+            ('atlassian', 'a1', 'p1', 'board=2:sprint=default:filter=default',
+             '["legacy"]', '[]', '[]', '[]', '[]', 0),
+            ('atlassian', 'a1', 'p1', 'board=2:sprint=default:filter=default:quickFilters=default',
+             '["newer"]', '[]', '[]', '[]', '[]', 0)
+        `;
+
         yield* Migration0038;
         yield* Migration0038;
 
@@ -49,6 +65,21 @@ layer("t3work-038 BacklogQuickFilters", (it) => {
           WHERE name = 'quick_filters_json'
         `;
         assert.strictEqual(rows.length, 1);
+
+        const keys = yield* sql<{ selection_key: string; issue_ids_json: string }>`
+          SELECT selection_key, issue_ids_json
+          FROM t3work_atlassian_backlog_views ORDER BY selection_key
+        `;
+        assert.deepStrictEqual(
+          keys.map((row) => row.selection_key),
+          [
+            "board=1:sprint=default:filter=default:quickFilters=7",
+            "board=1:sprint=default:filter=default:quickFilters=default",
+            "board=2:sprint=default:filter=default:quickFilters=default",
+          ],
+        );
+        // On a key collision the already-new-format row wins over the legacy one.
+        assert.strictEqual(keys[2]?.issue_ids_json, '["newer"]');
       }),
   );
 });
