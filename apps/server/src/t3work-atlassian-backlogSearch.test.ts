@@ -41,6 +41,7 @@ backlogSearchLayer("t3work Atlassian backlog offline search", (it) => {
           boards: [],
           sprints: [],
           savedFilters: [],
+          quickFilters: [],
         },
       });
 

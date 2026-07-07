@@ -19,6 +19,12 @@ export function areProjectDashboardBacklogStatesEqual(
     ) &&
     left.visibleIssueTypes.length === right.visibleIssueTypes.length &&
     left.visibleIssueTypes.every((value, index) => value === right.visibleIssueTypes[index]) &&
+    left.selectedLabels.length === right.selectedLabels.length &&
+    left.selectedLabels.every((value, index) => value === right.selectedLabels[index]) &&
+    left.selectedQuickFilterIds.length === right.selectedQuickFilterIds.length &&
+    left.selectedQuickFilterIds.every(
+      (value, index) => value === right.selectedQuickFilterIds[index],
+    ) &&
     left.viewMode === right.viewMode &&
     left.tableGroupBy === right.tableGroupBy &&
     left.tableSortBy === right.tableSortBy &&

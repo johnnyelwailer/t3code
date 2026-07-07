@@ -24,6 +24,7 @@ import { parseJson } from "./t3work-atlassian-backlog-cacheShared.ts";
 import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables.ts";
 import {
   computeIncrementalLookbackMinutes,
+  nextMirrorSleepMs,
   hasActiveT3workAtlassianMirrorSync,
   kickT3workAtlassianMirrorSync,
   runMirrorReconcile,
@@ -336,3 +337,21 @@ it.live(
       assert.ok(!hasActiveT3workAtlassianMirrorSync(request));
     }).pipe(Effect.provide(mirrorSyncTestLayer)),
 );
+
+it("backoff: success resets the sleep to the normal cadence", () => {
+  assert.strictEqual(nextMirrorSleepMs(15 * 60_000, "ok"), 90_000);
+});
+
+it("backoff: a 429 anywhere in the cause chain jumps to the rate-limit pause", () => {
+  const rateLimited = { message: "x", cause: { status: 429 } };
+  assert.strictEqual(nextMirrorSleepMs(90_000, rateLimited), 5 * 60_000);
+  // An already-longer sleep is kept rather than shortened.
+  assert.strictEqual(nextMirrorSleepMs(10 * 60_000, rateLimited), 10 * 60_000);
+});
+
+it("backoff: other failures double the sleep up to the cap", () => {
+  const failure = { message: "boom" };
+  assert.strictEqual(nextMirrorSleepMs(90_000, failure), 180_000);
+  assert.strictEqual(nextMirrorSleepMs(180_000, failure), 360_000);
+  assert.strictEqual(nextMirrorSleepMs(14 * 60_000, failure), 15 * 60_000);
+});

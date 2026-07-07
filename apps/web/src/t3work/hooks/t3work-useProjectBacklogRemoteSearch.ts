@@ -29,7 +29,7 @@ export function useProjectBacklogRemoteSearch(input: {
 
   const projectId = input.project.id;
   const { provider, accountId, externalProjectId } = input.project.source;
-  const { boardId, sprintId, filterId } = input.selection;
+  const { boardId, sprintId, filterId, selectedQuickFilterIds } = input.selection;
   const trimmedQuery = input.query.trim();
 
   useEffect(() => {
@@ -66,6 +66,7 @@ export function useProjectBacklogRemoteSearch(input: {
       ...(boardId ? { boardId } : {}),
       ...(sprintId ? { sprintId } : {}),
       ...(filterId ? { filterId } : {}),
+      ...(selectedQuickFilterIds?.length ? { quickFilterIds: selectedQuickFilterIds } : {}),
     });
 
     // Offline path: cheap local-SQL search, fire immediately.
@@ -92,6 +93,7 @@ export function useProjectBacklogRemoteSearch(input: {
     boardId,
     sprintId,
     filterId,
+    selectedQuickFilterIds,
     trimmedQuery,
   ]);
 

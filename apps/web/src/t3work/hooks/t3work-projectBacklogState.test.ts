@@ -33,6 +33,7 @@ function createBacklogResponse(
     boards: [{ id: "board-1", name: "Core board" }],
     sprints: [{ id: "sprint-1", name: "Sprint 1" }],
     savedFilters: [{ id: "filter-1", name: "Only mine", jql: "assignee = currentUser()" }],
+    quickFilters: [],
     ...overrides,
   };
 }

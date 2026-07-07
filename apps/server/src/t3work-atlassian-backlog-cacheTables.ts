@@ -39,6 +39,7 @@ export const ensureBacklogCacheTables = Effect.fn("t3work.atlassianBacklogCache.
         boards_json TEXT NOT NULL,
         sprints_json TEXT NOT NULL,
         saved_filters_json TEXT NOT NULL,
+        quick_filters_json TEXT NOT NULL DEFAULT '[]',
         capabilities_json TEXT NOT NULL,
         page_next_cursor TEXT,
         page_total_count INTEGER,

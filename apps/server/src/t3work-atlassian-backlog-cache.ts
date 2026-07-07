@@ -13,6 +13,7 @@ export {
 export {
   incrementCachedT3workAtlassianBacklogSubtaskCount,
   insertCachedT3workAtlassianBacklogChildIssue,
+  updateCachedBacklogViewMetadata,
   updateCachedT3workAtlassianBacklogAssignee,
   updateCachedT3workAtlassianBacklogEstimate,
 } from "./t3work-atlassian-backlog-cacheMutations.ts";

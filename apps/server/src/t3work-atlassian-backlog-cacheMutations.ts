@@ -8,121 +8,13 @@ import {
   patchCachedBacklogEstimate,
   patchEstimateCapabilities,
 } from "./t3work-atlassian-backlog-cachePatches.ts";
+import { patchCachedIssueRows } from "./t3work-atlassian-backlog-cachePatchRows.ts";
 import { serializeBacklogCacheJson } from "./t3work-atlassian-backlog-cacheQueries.ts";
 import {
-  parseJson,
-  type BacklogIssueRow,
-  type BacklogResourceRef,
   type T3workAtlassianBacklogCapabilities,
+  type T3workAtlassianBacklogPayload,
 } from "./t3work-atlassian-backlog-cacheShared.ts";
 import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables.ts";
-
-const patchCachedIssueRows = Effect.fn("t3work.atlassianBacklogCache.patchIssues")(
-  function* (input: {
-    readonly provider: string;
-    readonly accountId: string;
-    readonly issueIdOrKey: string;
-    readonly patch: (item: BacklogResourceRef) => BacklogResourceRef;
-    readonly patchCapabilities?: (
-      capabilities: T3workAtlassianBacklogCapabilities,
-    ) => T3workAtlassianBacklogCapabilities;
-  }) {
-    return yield* Effect.gen(function* () {
-      yield* ensureBacklogCacheTables();
-      const sql = yield* SqlClient.SqlClient;
-      const updatedAt = yield* Clock.currentTimeMillis;
-
-      const matchingRows = yield* sql<BacklogIssueRow>`
-      SELECT
-        external_project_id AS "externalProjectId",
-        issue_id AS "issueId",
-        issue_key AS "issueKey",
-        resource_json AS "resourceJson"
-      FROM t3work_atlassian_backlog_issues
-      WHERE provider = ${input.provider}
-        AND account_id = ${input.accountId}
-        AND (issue_id = ${input.issueIdOrKey} OR issue_key = ${input.issueIdOrKey})
-    `;
-      if (matchingRows.length === 0) {
-        return;
-      }
-
-      const projectIds = new Set<string>();
-      yield* sql.withTransaction(
-        Effect.gen(function* () {
-          for (const row of matchingRows) {
-            const parsed = parseJson<BacklogResourceRef>(row.resourceJson);
-            if (!parsed) {
-              continue;
-            }
-
-            const patched = input.patch(parsed);
-            projectIds.add(row.externalProjectId);
-            yield* sql`
-            UPDATE t3work_atlassian_backlog_issues
-            SET
-              issue_key = ${patched.displayId ?? row.issueKey},
-              resource_json = ${serializeBacklogCacheJson(patched)},
-              updated_at = ${updatedAt}
-            WHERE provider = ${input.provider}
-              AND account_id = ${input.accountId}
-              AND external_project_id = ${row.externalProjectId}
-              AND issue_id = ${row.issueId}
-          `;
-          }
-
-          for (const externalProjectId of projectIds) {
-            if (!input.patchCapabilities) {
-              yield* sql`
-              UPDATE t3work_atlassian_backlog_views
-              SET updated_at = ${updatedAt}
-              WHERE provider = ${input.provider}
-                AND account_id = ${input.accountId}
-                AND external_project_id = ${externalProjectId}
-            `;
-              continue;
-            }
-
-            const viewRows = yield* sql<{
-              readonly selectionKey: string;
-              readonly capabilitiesJson: string;
-            }>`
-            SELECT
-              selection_key AS "selectionKey",
-              capabilities_json AS "capabilitiesJson"
-            FROM t3work_atlassian_backlog_views
-            WHERE provider = ${input.provider}
-              AND account_id = ${input.accountId}
-              AND external_project_id = ${externalProjectId}
-          `;
-
-            for (const row of viewRows) {
-              const parsedCapabilities = parseJson<T3workAtlassianBacklogCapabilities>(
-                row.capabilitiesJson,
-              );
-              if (!parsedCapabilities) {
-                continue;
-              }
-
-              yield* sql`
-              UPDATE t3work_atlassian_backlog_views
-              SET
-                capabilities_json = ${serializeBacklogCacheJson(
-                  input.patchCapabilities(parsedCapabilities),
-                )},
-                updated_at = ${updatedAt}
-              WHERE provider = ${input.provider}
-                AND account_id = ${input.accountId}
-                AND external_project_id = ${externalProjectId}
-                AND selection_key = ${row.selectionKey}
-            `;
-            }
-          }
-        }),
-      );
-    }).pipe(Effect.mapError(toPersistenceSqlError("t3work.atlassianBacklogCache.patchIssues")));
-  },
-);
 
 export const updateCachedT3workAtlassianBacklogAssignee = Effect.fn(
   "t3work.atlassianBacklogCache.updateAssignee",
@@ -183,6 +75,64 @@ export const incrementCachedT3workAtlassianBacklogSubtaskCount = Effect.fn(
       subtaskCount: (item.subtaskCount ?? 0) + 1,
     }),
   });
+});
+
+/**
+ * Refreshes only the selection metadata columns (boards/sprints/saved
+ * filters/quick filters/capabilities/selected ids) for existing view rows
+ * matching the given selection keys. Never touches issue_ids_json or the
+ * page cursor — this is a metadata-only self-heal for rows whose selection
+ * options were persisted empty (e.g. a 429 during the original fetch), not a
+ * cache write.
+ */
+export const updateCachedBacklogViewMetadata = Effect.fn(
+  "t3work.atlassianBacklogCache.updateViewMetadata",
+)(function* (input: {
+  readonly provider: string;
+  readonly accountId: string;
+  readonly externalProjectId: string;
+  readonly selectionKeys: ReadonlyArray<string>;
+  readonly boards: T3workAtlassianBacklogPayload["boards"];
+  readonly sprints: T3workAtlassianBacklogPayload["sprints"];
+  readonly savedFilters: T3workAtlassianBacklogPayload["savedFilters"];
+  readonly quickFilters: T3workAtlassianBacklogPayload["quickFilters"];
+  readonly capabilities: T3workAtlassianBacklogCapabilities;
+  readonly selectedBoardId?: string;
+  readonly selectedSprintId?: string;
+  readonly selectedFilterId?: string;
+}) {
+  return yield* Effect.gen(function* () {
+    if (input.selectionKeys.length === 0) {
+      return;
+    }
+    yield* ensureBacklogCacheTables();
+    const sql = yield* SqlClient.SqlClient;
+    const updatedAt = yield* Clock.currentTimeMillis;
+
+    yield* sql.withTransaction(
+      Effect.gen(function* () {
+        for (const selectionKey of input.selectionKeys) {
+          yield* sql`
+            UPDATE t3work_atlassian_backlog_views
+            SET
+              selected_board_id = ${input.selectedBoardId ?? null},
+              selected_sprint_id = ${input.selectedSprintId ?? null},
+              selected_filter_id = ${input.selectedFilterId ?? null},
+              boards_json = ${serializeBacklogCacheJson(input.boards)},
+              sprints_json = ${serializeBacklogCacheJson(input.sprints)},
+              saved_filters_json = ${serializeBacklogCacheJson(input.savedFilters)},
+              quick_filters_json = ${serializeBacklogCacheJson(input.quickFilters)},
+              capabilities_json = ${serializeBacklogCacheJson(input.capabilities)},
+              updated_at = ${updatedAt}
+            WHERE provider = ${input.provider}
+              AND account_id = ${input.accountId}
+              AND external_project_id = ${input.externalProjectId}
+              AND selection_key = ${selectionKey}
+          `;
+        }
+      }),
+    );
+  }).pipe(Effect.mapError(toPersistenceSqlError("t3work.atlassianBacklogCache.updateViewMetadata")));
 });
 
 export { insertCachedT3workAtlassianBacklogChildIssue } from "./t3work-atlassian-backlog-cacheChildInsert.ts";

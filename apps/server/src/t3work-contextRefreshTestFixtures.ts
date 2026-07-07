@@ -149,6 +149,7 @@ export function seedContextRefreshBacklogChild(input: {
       boards: [],
       sprints: [],
       savedFilters: [],
+      quickFilters: [],
     },
   });
 }

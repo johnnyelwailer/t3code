@@ -42,6 +42,14 @@ export function parseProjectDashboardBacklogRouteSearch(
     parsed.issueTypes = search.issueTypes;
   }
 
+  if (typeof search.labels === "string") {
+    parsed.labels = search.labels;
+  }
+
+  if (typeof search.quickFilters === "string") {
+    parsed.quickFilters = search.quickFilters;
+  }
+
   const view = parseRouteEnum(search.view, projectBacklogViewModeValues);
   if (view !== undefined) {
     parsed.view = view;

@@ -137,6 +137,20 @@ export type JiraSprintSearchResponse = {
   readonly isLast?: boolean;
 };
 
+export type JiraQuickFilter = {
+  readonly id: string | number;
+  readonly name: string;
+  readonly jql?: string;
+};
+
+export type JiraQuickFilterSearchResponse = {
+  readonly values: ReadonlyArray<JiraQuickFilter>;
+  readonly total?: number;
+  readonly startAt?: number;
+  readonly maxResults?: number;
+  readonly isLast?: boolean;
+};
+
 export type JiraFilter = {
   readonly id: string | number;
   readonly name: string;

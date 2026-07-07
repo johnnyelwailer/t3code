@@ -47,5 +47,6 @@ export function createProjectBacklogTestTicket(
     ...(overrides.sprintCompleteDate ? { sprintCompleteDate: overrides.sprintCompleteDate } : {}),
     updatedAt: overrides.updatedAt ?? "2026-05-21T00:00:00.000Z",
     ...(overrides.parentId ? { parentId: overrides.parentId } : {}),
+    ...(overrides.labels ? { labels: overrides.labels } : {}),
   };
 }

@@ -79,6 +79,8 @@ export type AtlassianBacklogSavedFilter = {
   readonly favourite?: boolean;
 };
 
+export type AtlassianBacklogQuickFilter = { readonly id: string; readonly name: string; readonly jql: string };
+
 export type AtlassianBacklogCacheMetadata = {
   readonly source: "live" | "persisted" | "stale-fallback";
   readonly updatedAt: number;
@@ -91,6 +93,7 @@ export type AtlassianBacklogResponse = {
   readonly boards: ReadonlyArray<AtlassianBacklogBoard>;
   readonly sprints: ReadonlyArray<AtlassianBacklogSprint>;
   readonly savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
+  readonly quickFilters: ReadonlyArray<AtlassianBacklogQuickFilter>;
   readonly selectedBoardId?: string;
   readonly selectedSprintId?: string;
   readonly selectedFilterId?: string;
@@ -105,6 +108,7 @@ export type AtlassianBacklogSearchInput = {
   readonly boardId?: string;
   readonly sprintId?: string;
   readonly filterId?: string;
+  readonly quickFilterIds?: ReadonlyArray<string>;
   readonly limit?: number;
 };
 
@@ -163,6 +167,7 @@ export interface AtlassianBackendApi {
     readonly boardId?: string;
     readonly sprintId?: string;
     readonly filterId?: string;
+    readonly quickFilterIds?: ReadonlyArray<string>;
     readonly forceRefresh?: boolean;
     readonly clearProjectCache?: boolean;
   }) => Promise<AtlassianBacklogResponse>;

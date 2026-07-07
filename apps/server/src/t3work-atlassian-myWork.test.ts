@@ -141,6 +141,7 @@ function seedMirror(input: {
       boards: [],
       sprints: [],
       savedFilters: [],
+      quickFilters: [],
     },
   });
 }

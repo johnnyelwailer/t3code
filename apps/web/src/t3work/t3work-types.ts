@@ -97,6 +97,7 @@ export type ProjectTicket = {
   sprintEndDate?: string;
   sprintCompleteDate?: string;
   updatedAt: string;
+  labels?: ReadonlyArray<string>;
 };
 
 export type ProjectBacklogSubtaskCreateInput = {

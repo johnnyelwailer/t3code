@@ -26,21 +26,30 @@ export function useBackendState(): BackendState {
   const isConnected = connectionUiState === "connected";
 
   useEnsurePrimaryProvidersRefreshed({
-    enabled: backend === null,
+    enabled: true,
     isConnected,
     serverConfig,
   });
 
-  return (
-    backend?.state ?? {
-      connectionStatus: isConnected
-        ? "connected"
-        : connectionUiState === "connecting" || connectionUiState === "reconnecting"
-          ? "connecting"
-          : "error",
-      serverConfig,
-      providers: serverConfig?.providers ?? [],
-      error: wsStatus.lastError,
-    }
-  );
+  const providers = serverConfig?.providers ?? [];
+
+  if (backend) {
+    // backend.state.providers is snapshotted once inside connect(), which runs on mount
+    // before the server config projection has resolved providers, and never updates
+    // afterward. Source providers (and serverConfig) from the reactive atom so the composer
+    // stops showing "Loading provider status..." once providers arrive — without needing a
+    // remount via Settings.
+    return { ...backend.state, serverConfig, providers };
+  }
+
+  return {
+    connectionStatus: isConnected
+      ? "connected"
+      : connectionUiState === "connecting" || connectionUiState === "reconnecting"
+        ? "connecting"
+        : "error",
+    serverConfig,
+    providers,
+    error: wsStatus.lastError,
+  };
 }

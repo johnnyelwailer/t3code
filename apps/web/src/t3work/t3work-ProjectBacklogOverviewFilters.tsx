@@ -1,15 +1,17 @@
 /* oxlint-disable react/no-object-type-as-default-prop -- Existing merged lint debt; keep green while preserving behavior. */
-import { Loader2, Orbit, Table2 } from "lucide-react";
-
-import { planningSpaceEnabled } from "~/t3work/planning-space/t3work-planningSpaceFlag";
+import { Loader2 } from "lucide-react";
 
 import type {
   AtlassianBacklogBoard,
   AtlassianBacklogSavedFilter,
   AtlassianBacklogSprint,
 } from "~/t3work/backend/t3work-types";
+import type { AtlassianBacklogQuickFilter } from "~/t3work/backend/t3work-atlassianBackendTypes";
 import { Input } from "~/t3work/components/ui/t3work-input";
 import { ProjectBacklogOverviewAssigneeFilter } from "~/t3work/t3work-ProjectBacklogOverviewAssigneeFilter";
+import { ProjectBacklogOverviewJiraFiltersMenu } from "~/t3work/t3work-ProjectBacklogOverviewJiraFiltersMenu";
+import { ProjectBacklogOverviewLabelsFilter } from "~/t3work/t3work-ProjectBacklogOverviewLabelsFilter";
+import { ProjectBacklogOverviewViewSwitch } from "~/t3work/t3work-ProjectBacklogOverviewViewSwitch";
 import { ProjectBacklogOptionsMenu } from "~/t3work/t3work-ProjectBacklogOptionsMenu";
 import type { ProjectBacklogViewMode } from "~/t3work/t3work-projectBacklogPresentation";
 import type {
@@ -23,6 +25,7 @@ import type {
   ProjectBacklogAssigneeFilterScope,
   ProjectBacklogFocusFilter,
   ProjectBacklogIssueTypeFilterKey,
+  ProjectBacklogLabelFilterOption,
 } from "~/t3work/t3work-projectBacklogUtils";
 
 export interface ProjectBacklogOverviewFiltersProps {
@@ -35,10 +38,16 @@ export interface ProjectBacklogOverviewFiltersProps {
   onAssigneeFilterScopeChange: (value: ProjectBacklogAssigneeFilterScope) => void;
   visibleIssueTypes: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>;
   onVisibleIssueTypesChange: (value: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>) => void;
+  selectedLabels: ReadonlyArray<string>;
+  onSelectedLabelsChange: (value: ReadonlyArray<string>) => void;
   assigneeOptions: ReadonlyArray<ProjectBacklogAssigneeFilterOption>;
+  labelOptions: ReadonlyArray<ProjectBacklogLabelFilterOption>;
   savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
   selectedFilterId: string | undefined;
   onFilterChange: (filterId: string | undefined) => void;
+  quickFilters: ReadonlyArray<AtlassianBacklogQuickFilter>;
+  selectedQuickFilterIds: ReadonlyArray<string>;
+  onSelectedQuickFilterIdsChange: (value: ReadonlyArray<string>) => void;
   viewMode: ProjectBacklogViewMode;
   onViewModeChange: (value: ProjectBacklogViewMode) => void;
   focusFilter: ProjectBacklogFocusFilter;
@@ -72,10 +81,16 @@ export function ProjectBacklogOverviewFilters({
   onAssigneeFilterScopeChange,
   visibleIssueTypes,
   onVisibleIssueTypesChange,
+  selectedLabels,
+  onSelectedLabelsChange,
   assigneeOptions = [],
+  labelOptions = [],
   savedFilters = [],
   selectedFilterId,
   onFilterChange,
+  quickFilters = [],
+  selectedQuickFilterIds = [],
+  onSelectedQuickFilterIdsChange,
   viewMode,
   onViewModeChange,
   focusFilter,
@@ -115,6 +130,23 @@ export function ProjectBacklogOverviewFilters({
         options={assigneeOptions}
       />
 
+      <ProjectBacklogOverviewLabelsFilter
+        value={selectedLabels}
+        onValueChange={onSelectedLabelsChange}
+        options={labelOptions}
+      />
+
+      <ProjectBacklogOverviewJiraFiltersMenu
+        quickFilters={quickFilters}
+        selectedQuickFilterIds={selectedQuickFilterIds}
+        onSelectedQuickFilterIdsChange={onSelectedQuickFilterIdsChange}
+        savedFilters={savedFilters}
+        selectedFilterId={selectedFilterId}
+        onFilterChange={onFilterChange}
+        focusFilter={focusFilter}
+        onFocusFilterChange={onFocusFilterChange}
+      />
+
       <div className="ml-auto flex items-center gap-2">
         {loading ? (
           <div
@@ -126,45 +158,10 @@ export function ProjectBacklogOverviewFilters({
             <span>Updating backlog…</span>
           </div>
         ) : null}
-        {planningSpaceEnabled ? (
-          <div
-            className="inline-flex items-center rounded-md border border-border/70 bg-background/90"
-            role="group"
-            aria-label="Quick view switch"
-          >
-            <button
-              type="button"
-              aria-label="Table view"
-              aria-pressed={viewMode === "table"}
-              onClick={() => onViewModeChange("table")}
-              className={`inline-flex size-8 items-center justify-center rounded-l-md transition-colors ${
-                viewMode === "table"
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Table2 className="size-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="Planning space view"
-              aria-pressed={viewMode === "planning-space"}
-              onClick={() => onViewModeChange("planning-space")}
-              className={`inline-flex size-8 items-center justify-center rounded-r-md transition-colors ${
-                viewMode === "planning-space"
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Orbit className="size-4" />
-            </button>
-          </div>
-        ) : null}
+        <ProjectBacklogOverviewViewSwitch viewMode={viewMode} onViewModeChange={onViewModeChange} />
         <ProjectBacklogOptionsMenu
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
-          focusFilter={focusFilter}
-          onFocusFilterChange={onFocusFilterChange}
           visibleIssueTypes={visibleIssueTypes}
           onVisibleIssueTypesChange={onVisibleIssueTypesChange}
           tableGroupBy={tableGroupBy}
@@ -179,13 +176,10 @@ export function ProjectBacklogOverviewFilters({
           onExpandTableGroups={onExpandTableGroups}
           boards={boards}
           sprints={sprints}
-          savedFilters={savedFilters}
           selectedBoardId={selectedBoardId}
           selectedSprintId={selectedSprintId}
-          selectedFilterId={selectedFilterId}
           onBoardChange={onBoardChange}
           onSprintChange={onSprintChange}
-          onFilterChange={onFilterChange}
           loading={loading}
           onRefreshData={onRefreshData}
         />

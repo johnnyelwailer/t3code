@@ -6,6 +6,7 @@ import type {
   AtlassianBacklogSavedFilter,
   AtlassianBacklogSprint,
 } from "~/t3work/backend/t3work-types";
+import type { AtlassianBacklogQuickFilter } from "~/t3work/backend/t3work-atlassianBackendTypes";
 import { resourceRefToProjectTicket } from "../t3work-ticketMappers";
 import type { ProjectTicket } from "~/t3work/t3work-types";
 
@@ -20,6 +21,7 @@ export type ProjectBacklogState = {
   readonly boards: ReadonlyArray<AtlassianBacklogBoard>;
   readonly sprints: ReadonlyArray<AtlassianBacklogSprint>;
   readonly savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
+  readonly quickFilters: ReadonlyArray<AtlassianBacklogQuickFilter>;
   readonly selectedBoardId?: string | undefined;
   readonly selectedSprintId?: string | undefined;
   readonly selectedFilterId?: string | undefined;
@@ -36,6 +38,7 @@ export function createProjectBacklogState(
       boards: [],
       sprints: [],
       savedFilters: [],
+      quickFilters: [],
     };
   }
 
@@ -45,6 +48,7 @@ export function createProjectBacklogState(
     boards: response.boards,
     sprints: response.sprints,
     savedFilters: response.savedFilters,
+    quickFilters: response.quickFilters,
     selectedBoardId: response.selectedBoardId,
     selectedSprintId: response.selectedSprintId,
     selectedFilterId: response.selectedFilterId,

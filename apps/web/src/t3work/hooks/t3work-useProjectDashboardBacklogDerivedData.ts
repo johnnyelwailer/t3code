@@ -9,6 +9,7 @@ import {
 } from "~/t3work/t3work-projectBacklogPresentation";
 import {
   buildProjectBacklogAssigneeFilterOptions,
+  buildProjectBacklogLabelFilterOptions,
   compareProjectBacklogTickets,
   filterProjectBacklogTickets,
 } from "~/t3work/t3work-projectBacklogUtils";
@@ -29,6 +30,7 @@ export function useProjectDashboardBacklogDerivedData(
     focusFilter,
     query,
     searchTickets,
+    selectedLabels,
     tickets,
     visibleIssueTypes,
   } = input;
@@ -47,6 +49,7 @@ export function useProjectDashboardBacklogDerivedData(
       ...(assigneeFilter !== undefined ? { assigneeFilter } : {}),
       ...(assigneeFilterScope !== undefined ? { assigneeFilterScope } : {}),
       ...(visibleIssueTypes !== undefined ? { visibleIssueTypes } : {}),
+      ...(selectedLabels !== undefined ? { selectedLabels } : {}),
     });
     let filteredTickets = locallyFiltered;
     if (query.trim() && extraSearchTickets.length) {
@@ -58,6 +61,7 @@ export function useProjectDashboardBacklogDerivedData(
         ...(assigneeFilter !== undefined ? { assigneeFilter } : {}),
         ...(assigneeFilterScope !== undefined ? { assigneeFilterScope } : {}),
         ...(visibleIssueTypes !== undefined ? { visibleIssueTypes } : {}),
+        ...(selectedLabels !== undefined ? { selectedLabels } : {}),
       }).filter((ticket) => !matchedIds.has(ticket.id));
       if (remoteOnlyMatches.length) {
         filteredTickets = [...locallyFiltered, ...remoteOnlyMatches].toSorted(
@@ -68,6 +72,7 @@ export function useProjectDashboardBacklogDerivedData(
     return {
       filteredTickets,
       assigneeOptions: buildProjectBacklogAssigneeFilterOptions(tickets, currentUserDisplayName),
+      labelOptions: buildProjectBacklogLabelFilterOptions(tickets),
       hierarchyPresentation: buildVisibleBacklogHierarchy(allTickets, filteredTickets),
       planningLanes: buildProjectBacklogPlanningLanes(filteredTickets),
       ownershipGroups: buildProjectBacklogOwnershipGroups(filteredTickets),
@@ -80,6 +85,7 @@ export function useProjectDashboardBacklogDerivedData(
     focusFilter,
     query,
     searchTickets,
+    selectedLabels,
     tickets,
     visibleIssueTypes,
   ]);

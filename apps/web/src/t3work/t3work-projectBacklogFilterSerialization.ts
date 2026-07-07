@@ -47,6 +47,66 @@ export function serializeProjectBacklogVisibleIssueTypesRouteValue(
   return parsed.join(",");
 }
 
+export function parseProjectBacklogSelectedLabels(
+  value: unknown,
+): ReadonlyArray<string> | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const parsed = value.filter(
+    (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+  );
+  const deduped = [...new Set(parsed)];
+  return deduped.length > 0 ? deduped : undefined;
+}
+
+export function parseProjectBacklogSelectedLabelsRouteValue(
+  value: string | undefined,
+): ReadonlyArray<string> | undefined {
+  if (!value?.trim()) {
+    return undefined;
+  }
+  return parseProjectBacklogSelectedLabels(value.split(",").map((entry) => entry.trim()));
+}
+
+export function serializeProjectBacklogSelectedLabelsRouteValue(
+  values: ReadonlyArray<string>,
+): string | undefined {
+  const parsed = parseProjectBacklogSelectedLabels(values);
+  return parsed?.join(",");
+}
+
+export function parseProjectBacklogSelectedQuickFilterIds(
+  value: unknown,
+): ReadonlyArray<string> | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const parsed = value.filter(
+    (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+  );
+  const deduped = [...new Set(parsed)];
+  return deduped.length > 0 ? deduped : undefined;
+}
+
+export function parseProjectBacklogSelectedQuickFilterIdsRouteValue(
+  value: string | undefined,
+): ReadonlyArray<string> | undefined {
+  if (!value?.trim()) {
+    return undefined;
+  }
+  return parseProjectBacklogSelectedQuickFilterIds(value.split(",").map((entry) => entry.trim()));
+}
+
+export function serializeProjectBacklogSelectedQuickFilterIdsRouteValue(
+  values: ReadonlyArray<string>,
+): string | undefined {
+  const parsed = parseProjectBacklogSelectedQuickFilterIds(values);
+  return parsed?.join(",");
+}
+
 export function parseProjectBacklogAssigneeFilterScope(
   value: unknown,
 ): ProjectBacklogAssigneeFilterScope {

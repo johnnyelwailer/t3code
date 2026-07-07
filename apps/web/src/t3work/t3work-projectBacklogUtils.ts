@@ -23,6 +23,7 @@ import type { ProjectTicket } from "~/t3work/t3work-types";
 
 export {
   buildProjectBacklogAssigneeFilterOptions,
+  buildProjectBacklogLabelFilterOptions,
   defaultProjectBacklogAssigneeFilterScope,
   defaultProjectBacklogVisibleIssueTypes,
   getProjectBacklogAssigneeFilterValue,
@@ -37,14 +38,21 @@ export type {
   ProjectBacklogAssigneeFilterScope,
   ProjectBacklogAssigneeFilterScopeKey,
   ProjectBacklogIssueTypeFilterKey,
+  ProjectBacklogLabelFilterOption,
 } from "~/t3work/t3work-projectBacklogFilterOptions";
 export {
   areProjectBacklogAssigneeFilterScopesEqual,
   parseProjectBacklogAssigneeFilterScope,
   parseProjectBacklogAssigneeFilterScopeRouteValue,
+  parseProjectBacklogSelectedLabels,
+  parseProjectBacklogSelectedLabelsRouteValue,
+  parseProjectBacklogSelectedQuickFilterIds,
+  parseProjectBacklogSelectedQuickFilterIdsRouteValue,
   parseProjectBacklogVisibleIssueTypes,
   parseProjectBacklogVisibleIssueTypesRouteValue,
   serializeProjectBacklogAssigneeFilterScopeRouteValue,
+  serializeProjectBacklogSelectedLabelsRouteValue,
+  serializeProjectBacklogSelectedQuickFilterIdsRouteValue,
   serializeProjectBacklogVisibleIssueTypesRouteValue,
 } from "~/t3work/t3work-projectBacklogFilterSerialization";
 export {
@@ -131,6 +139,7 @@ export function filterProjectBacklogTickets({
   assigneeFilter = PROJECT_BACKLOG_ASSIGNEE_FILTER_ALL,
   assigneeFilterScope = defaultProjectBacklogAssigneeFilterScope,
   visibleIssueTypes = defaultProjectBacklogVisibleIssueTypes,
+  selectedLabels = [],
 }: {
   tickets: readonly ProjectTicket[];
   query: string;
@@ -138,6 +147,7 @@ export function filterProjectBacklogTickets({
   assigneeFilter?: string;
   assigneeFilterScope?: ProjectBacklogAssigneeFilterScope;
   visibleIssueTypes?: ReadonlyArray<ProjectBacklogIssueTypeFilterKey>;
+  selectedLabels?: ReadonlyArray<string>;
 }): ProjectTicket[] {
   const normalizedQuery = query.trim().toLowerCase();
   const resolvedAssigneeFilter = resolveProjectBacklogAssigneeFilter(tickets, assigneeFilter);
@@ -160,10 +170,15 @@ export function filterProjectBacklogTickets({
     parseProjectBacklogVisibleIssueTypes(visibleIssueTypes) ??
       defaultProjectBacklogVisibleIssueTypes,
   );
+  const selectedLabelSet = new Set(selectedLabels);
   return tickets
     .filter((ticket) => visibleIssueTypeSet.has(getProjectBacklogIssueTypeFilterCategory(ticket)))
     .filter((ticket) => matchesFocusFilter(ticket, focusFilter))
     .filter((ticket) => matchesAssigneeFilter(ticket, assigneeFilterContext))
+    .filter((ticket) => {
+      if (selectedLabelSet.size === 0) return true;
+      return (ticket.labels ?? []).some((label) => selectedLabelSet.has(label));
+    })
     .filter((ticket) => {
       if (!normalizedQuery) return true;
       const haystack = buildProjectBacklogSearchHaystack(ticket, ticketById);

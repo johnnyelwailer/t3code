@@ -13,6 +13,7 @@ export type T3workAtlassianBacklogInput = {
   readonly boardId?: string;
   readonly sprintId?: string;
   readonly filterId?: string;
+  readonly quickFilterIds?: ReadonlyArray<string>;
   readonly forceRefresh?: boolean;
   readonly clearProjectCache?: boolean;
 };

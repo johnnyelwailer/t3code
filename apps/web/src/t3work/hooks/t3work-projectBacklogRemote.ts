@@ -34,6 +34,9 @@ export function listProjectBacklog(input: {
     ...(input.selection?.boardId ? { boardId: input.selection.boardId } : {}),
     ...(input.selection?.sprintId ? { sprintId: input.selection.sprintId } : {}),
     ...(input.selection?.filterId ? { filterId: input.selection.filterId } : {}),
+    ...(input.selection?.selectedQuickFilterIds?.length
+      ? { quickFilterIds: input.selection.selectedQuickFilterIds }
+      : {}),
     ...(input.forceRefresh ? { forceRefresh: true } : {}),
     ...(input.clearProjectCache ? { clearProjectCache: true } : {}),
   });
@@ -54,6 +57,9 @@ export function pollProjectBacklog(input: {
     ...(input.selection?.boardId ? { boardId: input.selection.boardId } : {}),
     ...(input.selection?.sprintId ? { sprintId: input.selection.sprintId } : {}),
     ...(input.selection?.filterId ? { filterId: input.selection.filterId } : {}),
+    ...(input.selection?.selectedQuickFilterIds?.length
+      ? { quickFilterIds: input.selection.selectedQuickFilterIds }
+      : {}),
     ...(input.knownFingerprint ? { knownFingerprint: input.knownFingerprint } : {}),
   });
 }

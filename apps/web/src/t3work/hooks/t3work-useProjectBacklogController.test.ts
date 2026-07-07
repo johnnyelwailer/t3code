@@ -19,7 +19,7 @@ describe("project backlog controller helpers", () => {
         },
         { forceRefresh: true },
       ),
-    ).toBe("board=95:sprint=3185:filter=default:refresh:keep:visible");
+    ).toBe("board=95:sprint=3185:filter=default:quickFilters=default:refresh:keep:visible");
 
     expect(
       buildProjectBacklogRequestKey(
@@ -29,7 +29,7 @@ describe("project backlog controller helpers", () => {
         },
         { clearProjectCache: true },
       ),
-    ).toBe("board=95:sprint=default:filter=18860:cached:clear:visible");
+    ).toBe("board=95:sprint=default:filter=18860:quickFilters=default:cached:clear:visible");
   });
 
   it("distinguishes silent force refreshes from visible refresh requests", () => {
@@ -39,7 +39,7 @@ describe("project backlog controller helpers", () => {
     };
 
     expect(buildProjectBacklogRequestKey(selection, { forceRefresh: true, silent: true })).toBe(
-      "board=95:sprint=3185:filter=default:refresh:keep:silent",
+      "board=95:sprint=3185:filter=default:quickFilters=default:refresh:keep:silent",
     );
 
     expect(buildProjectBacklogRequestKey(selection, { forceRefresh: true, silent: true })).not.toBe(

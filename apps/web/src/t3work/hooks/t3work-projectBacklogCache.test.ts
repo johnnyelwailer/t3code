@@ -35,6 +35,7 @@ function createBacklogResponse(
     boards: [],
     sprints: [],
     savedFilters: [],
+    quickFilters: [],
     ...overrides,
   };
 }

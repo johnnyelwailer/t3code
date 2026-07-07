@@ -1,6 +1,7 @@
 import {
   AtlassianIntegrationProvider,
   type AtlassianBacklogBoard,
+  type AtlassianBacklogQuickFilter,
   type AtlassianBacklogSavedFilter,
   type AtlassianBacklogSprint,
 } from "@t3tools/integrations-atlassian";
@@ -24,6 +25,7 @@ export function loadSelection(
     >;
     readonly sprints: ReadonlyArray<AtlassianBacklogSprint>;
     readonly savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
+    readonly quickFilters: ReadonlyArray<AtlassianBacklogQuickFilter>;
     readonly selectedBoardId?: string;
     readonly selectedSprintId?: string;
     readonly selectedFilterId?: string;
@@ -47,6 +49,7 @@ export function loadSelection(
         boards: [],
         sprints: [],
         savedFilters: [],
+        quickFilters: [],
         ...(input.boardId ? { selectedBoardId: input.boardId } : {}),
         ...(input.sprintId ? { selectedSprintId: input.sprintId } : {}),
         ...(input.filterId ? { selectedFilterId: input.filterId } : {}),
@@ -70,6 +73,9 @@ export function loadLiveBacklogPayload(
           ...(selection.selectedBoardId ? { boardId: selection.selectedBoardId } : {}),
           ...(selection.selectedSprintId ? { sprintId: selection.selectedSprintId } : {}),
           ...(selection.selectedFilterJql ? { filterJql: selection.selectedFilterJql } : {}),
+          ...(input.quickFilterIds && input.quickFilterIds.length > 0
+            ? { quickFilterIds: input.quickFilterIds }
+            : {}),
         }),
       "Failed to load Atlassian backlog.",
     );
@@ -92,6 +98,7 @@ export function loadLiveBacklogPayload(
       boards: selection.boards,
       sprints: selection.sprints,
       savedFilters: selection.savedFilters,
+      quickFilters: selection.quickFilters,
       ...(selection.selectedBoardId ? { selectedBoardId: selection.selectedBoardId } : {}),
       ...(selection.selectedSprintId ? { selectedSprintId: selection.selectedSprintId } : {}),
       ...(selection.selectedFilterId ? { selectedFilterId: selection.selectedFilterId } : {}),

@@ -21,6 +21,11 @@ export function buildProjectBacklogSelectionKey(selection?: BacklogSelectionInpu
     `board=${normalizeSelectionKeyPart(selection?.boardId)}`,
     `sprint=${normalizeSelectionKeyPart(selection?.sprintId)}`,
     `filter=${normalizeSelectionKeyPart(selection?.filterId)}`,
+    `quickFilters=${
+      selection?.selectedQuickFilterIds?.length
+        ? [...selection.selectedQuickFilterIds].sort().join(",")
+        : "default"
+    }`,
   ].join(":");
 }
 

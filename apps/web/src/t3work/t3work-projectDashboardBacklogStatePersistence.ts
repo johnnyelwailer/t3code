@@ -2,10 +2,16 @@
 import {
   parseProjectBacklogAssigneeFilterScope,
   parseProjectBacklogAssigneeFilterScopeRouteValue,
+  parseProjectBacklogSelectedLabels,
+  parseProjectBacklogSelectedLabelsRouteValue,
+  parseProjectBacklogSelectedQuickFilterIds,
+  parseProjectBacklogSelectedQuickFilterIdsRouteValue,
   parseProjectBacklogVisibleIssueTypes,
   parseProjectBacklogVisibleIssueTypesRouteValue,
   PROJECT_BACKLOG_ASSIGNEE_FILTER_ALL,
   serializeProjectBacklogAssigneeFilterScopeRouteValue,
+  serializeProjectBacklogSelectedLabelsRouteValue,
+  serializeProjectBacklogSelectedQuickFilterIdsRouteValue,
   serializeProjectBacklogVisibleIssueTypesRouteValue,
   areProjectBacklogAssigneeFilterScopesEqual,
 } from "./t3work-projectBacklogUtils";
@@ -65,6 +71,12 @@ export function readPersistedProjectDashboardBacklogState(
 
     const visibleIssueTypes = parseProjectBacklogVisibleIssueTypes(parsed.visibleIssueTypes);
     if (visibleIssueTypes !== undefined) persisted.visibleIssueTypes = visibleIssueTypes;
+
+    const selectedLabels = parseProjectBacklogSelectedLabels(parsed.selectedLabels);
+    if (selectedLabels !== undefined) persisted.selectedLabels = selectedLabels;
+
+    const quickFilterIds = parseProjectBacklogSelectedQuickFilterIds(parsed.selectedQuickFilterIds);
+    if (quickFilterIds !== undefined) persisted.selectedQuickFilterIds = quickFilterIds;
 
     const viewMode = parseRouteEnum(parsed.viewMode, projectBacklogViewModeValues);
     if (viewMode !== undefined) persisted.viewMode = viewMode;
@@ -144,6 +156,13 @@ export function resolveProjectDashboardBacklogState(input: {
   if (routeVisibleIssueTypes !== undefined) {
     next.visibleIssueTypes = routeVisibleIssueTypes;
   }
+  if ("labels" in search) {
+    next.selectedLabels = parseProjectBacklogSelectedLabelsRouteValue(search.labels) ?? [];
+  }
+  if ("quickFilters" in search) {
+    next.selectedQuickFilterIds =
+      parseProjectBacklogSelectedQuickFilterIdsRouteValue(search.quickFilters) ?? [];
+  }
   if (search.view !== undefined) next.viewMode = search.view;
   if (search.group !== undefined) next.tableGroupBy = search.group;
   if (search.sort !== undefined) next.tableSortBy = search.sort;
@@ -173,6 +192,10 @@ export function buildProjectDashboardBacklogRouteSearch(
     state.assigneeFilterScope,
   );
   const issueTypes = serializeProjectBacklogVisibleIssueTypesRouteValue(state.visibleIssueTypes);
+  const labels = serializeProjectBacklogSelectedLabelsRouteValue(state.selectedLabels);
+  const quickFilters = serializeProjectBacklogSelectedQuickFilterIdsRouteValue(
+    state.selectedQuickFilterIds,
+  );
 
   return {
     q: state.query,
@@ -180,6 +203,8 @@ export function buildProjectDashboardBacklogRouteSearch(
     assignee: state.assigneeFilter,
     ...(assigneeScope !== undefined ? { assigneeScope } : {}),
     ...(issueTypes !== undefined ? { issueTypes } : {}),
+    ...(labels !== undefined ? { labels } : {}),
+    ...(quickFilters !== undefined ? { quickFilters } : {}),
     view: state.viewMode,
     group: state.tableGroupBy,
     sort: state.tableSortBy,
