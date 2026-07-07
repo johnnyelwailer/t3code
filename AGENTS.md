@@ -89,3 +89,4 @@ agents.
 - After `git push`, re-check `gh pr list --head <branch>` **before** `gh pr create` (a push can surface an existing PR).
 - Upstream merges: use a **worktree**, `--no-commit`, resolve, serial regression matrix, then merge back. Known seam files: `ChatView.tsx`, `MessagesTimeline.tsx`. Hand-resolved merges are **consequential** → second-model review (Codex/Cursor/Copilot) queued *before* final verification.
 - Tempo/capacity rules: probe real Tempo plan data first — off-project time may be booked as ISSUE-type plans (e.g. INT-2), not non-issue plans.
+- Upstream merges/syncs: follow the `merge-upstream` skill (`.claude/skills/merge-upstream/SKILL.md`) — worktree, seam files, guard, serial tests, review-before-finalize.
