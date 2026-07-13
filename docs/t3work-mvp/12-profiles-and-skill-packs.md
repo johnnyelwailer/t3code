@@ -2,18 +2,21 @@
 
 ## Purpose
 
-`t3work` should not be positioned as a QA-only product. QA is the first useful bundle,
-but the product is a project-based agent workspace for many kinds of work.
+`t3work` should not be positioned as a QA-only product. QA is the first useful proof
+pack, but the product is a pack-driven agent workspace for many kinds of work.
 
-Profiles and skill packs make that explicit.
+Profiles and skill packs make that explicit. Under the pack-driven vision in
+[Epic 36](./36-workspace-packs-and-distributions.md), profiles and skill packs are
+content types inside broader packs. A pack may ship profiles, skill packs, recipes,
+views, themes, localization, connectors, providers, and policy together.
 
-Profiles are configuration, not a hardcoded product enum.
-
-`t3work` may ship bundled starter profiles, but users and projects should be able to add,
-clone, edit, and replace profiles freely. Runtime behavior must never depend on checks
-like `profile.id === "engineering-copilot"` or `profile.title === "QA Assistant"`.
-All ranking, visibility, and presentation logic should derive from the profile's lower-
-level preference fields.
+Profiles are configuration, not a hardcoded product enum. `t3work` may ship starter
+profiles through a distribution pack as seed configuration, but profiles themselves are
+fully configuration-based. Users, projects, and managed packs should be able to add,
+clone, edit, replace, or force profiles according to policy. Runtime behavior must never
+depend on checks like `profile.id === "engineering-copilot"` or
+`profile.title === "QA Assistant"`. All ranking, visibility, and presentation logic
+should derive from the profile's lower-level preference fields.
 
 ## Concepts
 
@@ -44,9 +47,8 @@ Profiles affect:
   [sidecar](./19-workspace-miniapps.md#sidecar-sections); all profiles share the same
   section id catalog (Filters, Quick actions, QA, Refinement, Planning, Engineering,
   Delivery, Customize, Recent). A QA profile may reorder to surface QA earlier; an
-  engineering profile may collapse Customize. Profile defaults are the second layer in
-  the override stack `bundled defaults → profile defaults → project config → user
-  overrides`; the user can override per workspace via the context-menu hide / pin /
+  engineering profile may collapse Customize. Profile defaults are one input to the pack
+  merge model; the user can override per workspace via the context-menu hide / pin /
   reorder actions ([Epic 19 — Context menus](./19-workspace-miniapps.md#context-menus))
 
 ### Skill Pack
@@ -65,21 +67,74 @@ Examples:
 - Engineering
 - Release
 
-A project can enable multiple skill packs. A user can select one default profile for how
-they want the agent to communicate.
+A project can enable multiple skill packs. A project can also select multiple profiles
+when a user plays more than one role in that project. One selected profile is always the
+primary profile; it controls communication style and priority defaults.
+
+Additional selected profiles contribute role coverage, recipe affinity, skill-pack
+suggestions, artifact preferences, and surface composition.
+
+Example:
+
+```json
+{
+  "primaryProfileId": "product-partner",
+  "profileIds": ["product-partner", "engineering-copilot"]
+}
+```
+
+This means the assistant should speak primarily like a product partner, while still
+surfacing engineering recipes, artifacts, and project views.
+
+### Profile Set
+
+The runtime should resolve a selected profile set into one effective profile at the
+configuration boundary, so downstream recipe ranking and surface code can continue to
+consume a single `T3WorkProfile`-shaped object.
+
+Profile-set rules:
+
+- `primaryProfileId` must be one of `profileIds`.
+- If only one profile is selected, that profile is both selected and primary.
+- If legacy config only has `profileId`, treat it as
+  `{ primaryProfileId: profileId, profileIds: [profileId] }`.
+- Communication style comes from the primary profile unless a later explicit user setting
+  overrides it.
+- Scalar priority fields that affect wording or density come from the primary profile.
+- Arrays such as `preferredArtifactKinds`, `defaultActionFamilies`, and
+  `recommendedSkillPackIds` are merged by stable union, preserving selected-profile order
+  and de-duplicating entries.
+- `defaultRecipeWeights` are merged with primary profile weights taking precedence on
+  conflicts. Secondary profile weights may still introduce recipes absent from the primary
+  profile.
+- `sidecarSections` start from the primary profile's order and append missing sections
+  from secondary profiles; all profiles still share the same topic-section catalog, so
+  profile sets never create profile-name-specific recipe behavior.
+- `hideImplementationComplexity` should follow the primary profile for communication, but
+  capability and recipe visibility should not be hidden solely because the primary profile
+  is non-technical.
+
+The effective profile may use a synthetic id such as
+`profile-set:product-partner+engineering-copilot`, but that id is generated and not a new
+persisted custom profile. Persist selected profile ids and the primary id instead. Only
+persist a generated custom profile when the user explicitly edits and saves the merged
+configuration as its own profile.
+
+Managed packs may force the selected profile set through policy. That is a lock at the
+pack/policy layer, not a profile runtime special case.
 
 ## Package
 
-Skill packs should live in:
+During early implementation, bundled starter skill packs may live in:
 
 ```text
 packages/t3work-skill-packs
 ```
 
-This package owns bundled definitions, not runtime execution.
-
-It should contain starter presets and starter skill packs, not the only legal profile
-definitions in the system.
+This package owns bundled definitions, not runtime execution. Long term, this package is
+a starter distribution-pack source, not the only place skill packs can live. It should
+contain starter presets and starter skill packs, not the only legal profile definitions
+in the system.
 
 Suggested layout:
 
@@ -125,6 +180,15 @@ type T3WorkProfile = {
   preferredArtifactKinds: string[];
   defaultActionFamilies?: string[];
   defaultRecipeWeights: Record<string, number>;
+};
+```
+
+Project setup stores profile selection separately from profile definitions:
+
+```ts
+type T3WorkProjectProfileSelection = {
+  primaryProfileId: string;
+  profileIds: string[];
 };
 ```
 
