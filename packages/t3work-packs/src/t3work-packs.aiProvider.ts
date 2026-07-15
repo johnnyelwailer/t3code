@@ -45,7 +45,10 @@ export const OpenCodeProviderConfiguration = Schema.Union([
 export const AiProviderDefinition = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   id: Identifier,
-  driver: Schema.Literal("opencode"),
+  /** Public routing identity. Packs may name a first-class provider without shipping code. */
+  driver: Identifier,
+  /** Reviewed host implementation used behind the provider identity. */
+  harness: Schema.Literal("opencode"),
   displayName: Schema.String,
   accent: Schema.optional(Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/))),
   icon: Schema.optional(Schema.String),

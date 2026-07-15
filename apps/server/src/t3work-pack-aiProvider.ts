@@ -5,8 +5,6 @@ import {
 } from "@t3tools/contracts";
 import type { LoadedAiProviderDefinition } from "@t3work/packs";
 
-const OPENCODE_DRIVER = ProviderDriverKind.make("opencode");
-
 function openCodeConfigContent(definition: LoadedAiProviderDefinition): string {
   if (definition.configuration.kind === "inline-config") {
     return definition.configuration.configContent;
@@ -49,10 +47,11 @@ export function packAiProvidersToInstanceConfigMap(
     return [
       instanceId,
       {
-        driver: OPENCODE_DRIVER,
+        driver: ProviderDriverKind.make(definition.driver),
         displayName: definition.displayName,
         ...(definition.accent ? { accentColor: definition.accent } : {}),
         ...(definition.iconDataUrl ? { iconDataUrl: definition.iconDataUrl } : {}),
+        configurationSource: "pack",
         config: {
           enabled: true,
           configContent: openCodeConfigContent(definition),

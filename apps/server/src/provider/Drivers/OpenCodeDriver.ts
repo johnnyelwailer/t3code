@@ -12,13 +12,19 @@
  *
  * @module provider/Drivers/OpenCodeDriver
  */
-import { OpenCodeSettings, ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
+import {
+  OpenCodeSettings,
+  ProviderDriverKind,
+  type ProviderSessionStartInput,
+  type ServerProvider,
+} from "@t3tools/contracts";
 import * as Duration from "effect/Duration";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
@@ -94,6 +100,7 @@ const withInstanceIdentity =
     readonly displayName: string | undefined;
     readonly accentColor: string | undefined;
     readonly iconDataUrl: string | undefined;
+    readonly configurationSource: "pack" | undefined;
     readonly continuationGroupKey: string;
   }) =>
   (snapshot: ServerProviderDraft): ServerProvider => ({
@@ -103,6 +110,7 @@ const withInstanceIdentity =
     ...(input.displayName ? { displayName: input.displayName } : {}),
     ...(input.accentColor ? { accentColor: input.accentColor } : {}),
     ...(input.iconDataUrl ? { iconDataUrl: input.iconDataUrl } : {}),
+    ...(input.configurationSource ? { configurationSource: input.configurationSource } : {}),
     continuation: { groupKey: input.continuationGroupKey },
   });
 
@@ -114,7 +122,16 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
   },
   configSchema: OpenCodeSettings,
   defaultConfig: (): OpenCodeSettings => decodeOpenCodeSettings({}),
-  create: ({ instanceId, displayName, accentColor, iconDataUrl, environment, enabled, config }) =>
+  create: ({
+    instanceId,
+    displayName,
+    accentColor,
+    iconDataUrl,
+    configurationSource,
+    environment,
+    enabled,
+    config,
+  }) =>
     Effect.gen(function* () {
       const openCodeRuntime = yield* OpenCodeRuntime;
       const serverConfig = yield* ServerConfig;
@@ -131,6 +148,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         displayName,
         accentColor,
         iconDataUrl,
+        configurationSource,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
       const effectiveConfig = { ...config, enabled } satisfies OpenCodeSettings;
@@ -190,6 +208,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         displayName,
         accentColor,
         iconDataUrl,
+        configurationSource,
         enabled,
         snapshot,
         adapter,
@@ -197,3 +216,73 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
       } satisfies ProviderInstance;
     }),
 };
+
+/**
+ * Exposes the reviewed OpenCode runtime behind a pack-defined provider identity.
+ * The pack supplies data only; executable driver code remains owned by the host.
+ */
+export function makeOpenCodeHarnessDriver(input: {
+  readonly driverKind: ProviderDriverKind;
+  readonly displayName: string;
+}): ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv> {
+  const stampSnapshot = (snapshot: ServerProvider): ServerProvider =>
+    adaptOpenCodeHarnessSnapshot(snapshot, input.driverKind);
+
+  return {
+    ...OpenCodeDriver,
+    driverKind: input.driverKind,
+    metadata: { ...OpenCodeDriver.metadata, displayName: input.displayName },
+    create: (createInput) =>
+      OpenCodeDriver.create(createInput).pipe(
+        Effect.map((instance) => {
+          const continuationIdentity = defaultProviderContinuationIdentity({
+            driverKind: input.driverKind,
+            instanceId: instance.instanceId,
+          });
+          const snapshot = {
+            ...instance.snapshot,
+            getSnapshot: instance.snapshot.getSnapshot.pipe(Effect.map(stampSnapshot)),
+            refresh: instance.snapshot.refresh.pipe(Effect.map(stampSnapshot)),
+            streamChanges: instance.snapshot.streamChanges.pipe(Stream.map(stampSnapshot)),
+          };
+          const adapter = {
+            ...instance.adapter,
+            provider: input.driverKind,
+            startSession: (startInput: ProviderSessionStartInput) =>
+              instance.adapter
+                .startSession(startInput)
+                .pipe(Effect.map((session) => ({ ...session, provider: input.driverKind }))),
+            listSessions: () =>
+              instance.adapter
+                .listSessions()
+                .pipe(
+                  Effect.map((sessions) =>
+                    sessions.map((session) => ({ ...session, provider: input.driverKind })),
+                  ),
+                ),
+            streamEvents: instance.adapter.streamEvents.pipe(
+              Stream.map((event) => ({ ...event, provider: input.driverKind })),
+            ),
+          };
+          return {
+            ...instance,
+            driverKind: input.driverKind,
+            continuationIdentity,
+            snapshot,
+            adapter,
+          } satisfies ProviderInstance;
+        }),
+      ),
+  };
+}
+
+export function adaptOpenCodeHarnessSnapshot(
+  snapshot: ServerProvider,
+  driverKind: ProviderDriverKind,
+): ServerProvider {
+  return {
+    ...snapshot,
+    driver: driverKind,
+    models: snapshot.models.filter((model) => model.isCustom),
+  };
+}

@@ -13,7 +13,8 @@ import {
 const provider = {
   schemaVersion: 1 as const,
   id: "nexi-opencode",
-  driver: "opencode" as const,
+  driver: "nexi" as const,
+  harness: "opencode" as const,
   displayName: "Nexi",
   accent: "#6842ff",
   credentialEnv: "NEXI_API_KEY",
@@ -48,7 +49,7 @@ describe("AI provider definition", () => {
       }),
     ).toThrow();
     expect(() => decodeAiProviderDefinition({ ...provider, credentialEnv: "bad-name" })).toThrow();
-    expect(() => decodeAiProviderDefinition({ ...provider, driver: "shell" })).toThrow();
+    expect(() => decodeAiProviderDefinition({ ...provider, harness: "shell" })).toThrow();
   });
 
   it("loads a matching manifest asset and blocks traversal", async () => {
@@ -69,7 +70,7 @@ describe("AI provider definition", () => {
         contents: { aiProviders: [{ id: provider.id, path: "provider.json" }] },
       });
       await expect(loadManifestAiProviders(root, manifest)).resolves.toMatchObject([
-        { id: "nexi-opencode", driver: "opencode" },
+        { id: "nexi-opencode", driver: "nexi", harness: "opencode" },
       ]);
 
       const escaped = decodeWorkspacePackManifest({

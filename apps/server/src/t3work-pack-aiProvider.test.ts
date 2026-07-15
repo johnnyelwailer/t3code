@@ -8,7 +8,8 @@ it("maps pack provider data to an isolated OpenCode instance", () => {
     {
       schemaVersion: 1,
       id: "nexi",
-      driver: "opencode",
+      driver: "nexi",
+      harness: "opencode",
       displayName: "Nexi",
       accent: "#112233",
       iconDataUrl: "data:image/png;base64,aWNvbg==",
@@ -27,7 +28,7 @@ it("maps pack provider data to an isolated OpenCode instance", () => {
   ]);
 
   const instance = Object.values(result)[0]!;
-  expect(instance.driver).toBe("opencode");
+  expect(instance.driver).toBe("nexi");
   expect(instance.displayName).toBe("Nexi");
   expect(instance.iconDataUrl).toBe("data:image/png;base64,aWNvbg==");
   expect(instance.config).toMatchObject({ customModels: ["nexplore/coding"] });

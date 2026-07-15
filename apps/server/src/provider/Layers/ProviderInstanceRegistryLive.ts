@@ -171,6 +171,7 @@ const buildEntry = <R>(input: {
         displayName: entry.displayName,
         accentColor: entry.accentColor,
         iconDataUrl: entry.iconDataUrl,
+        configurationSource: entry.configurationSource,
         environment: entry.environment ?? [],
         enabled: entry.enabled ?? decodedConfigEnabled(typedConfig) ?? true,
         config: typedConfig,

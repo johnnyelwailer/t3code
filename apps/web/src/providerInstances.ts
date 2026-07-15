@@ -37,6 +37,7 @@ export interface ProviderInstanceEntry {
   readonly displayName: string;
   readonly accentColor?: string | undefined;
   readonly iconDataUrl?: string | undefined;
+  readonly configurationSource?: "pack" | undefined;
   readonly continuationGroupKey?: string | undefined;
   readonly enabled: boolean;
   readonly installed: boolean;
@@ -160,6 +161,7 @@ export function deriveProviderInstanceEntries(
       displayName,
       accentColor: normalizeProviderAccentColor(snapshot.accentColor),
       iconDataUrl: snapshot.iconDataUrl,
+      configurationSource: snapshot.configurationSource,
       continuationGroupKey: snapshot.continuation?.groupKey,
       enabled: snapshot.enabled,
       installed: snapshot.installed,
@@ -196,7 +198,9 @@ export function applyProviderInstanceSettings(
       ? (explicitInstance.enabled ?? true)
       : entry.isDefault
         ? (legacyProviders[entry.driverKind]?.enabled ?? entry.enabled)
-        : false;
+        : entry.configurationSource === "pack"
+          ? entry.enabled
+          : false;
     return enabled === entry.enabled ? entry : { ...entry, enabled };
   });
 }
