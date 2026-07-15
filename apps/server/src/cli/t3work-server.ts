@@ -1,8 +1,11 @@
 import * as Effect from "effect/Effect";
+import * as Config from "effect/Config";
+import * as Option from "effect/Option";
 import { Command, GlobalFlag } from "effect/unstable/cli";
 
 import { ServerConfig, type StartupPresentation } from "../config.ts";
 import { runT3workServer } from "../t3work-server.ts";
+import { inspectConfiguredWorkspacePacks } from "../t3work-pack-host.ts";
 import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
 
 export const runT3workServerCommand = (
@@ -15,6 +18,23 @@ export const runT3workServerCommand = (
   Effect.gen(function* () {
     const logLevel = yield* GlobalFlag.LogLevel;
     const config = yield* resolveServerConfig(flags, logLevel, options);
+    const workspacePacksDir = yield* Config.string("T3WORK_PACKS_DIR").pipe(Config.option);
+    const packDiagnostic = yield* Effect.promise(() =>
+      inspectConfiguredWorkspacePacks(Option.getOrUndefined(workspacePacksDir)),
+    );
+    if (packDiagnostic.enabled) {
+      yield* Effect.logInfo("Workspace pack discovery completed", {
+        root: packDiagnostic.root,
+        packs: (packDiagnostic.resolution?.packs ?? []).map((pack) => ({
+          id: pack.manifest.id,
+          version: pack.manifest.version,
+          scope: pack.manifest.scope ?? "distribution",
+        })),
+        locks: Object.keys(packDiagnostic.resolution?.locks ?? {}).sort(),
+        diagnostics: packDiagnostic.resolution?.diagnostics ?? [],
+        issues: packDiagnostic.issues,
+      });
+    }
     return yield* runT3workServer.pipe(Effect.provideService(ServerConfig, config));
   });
 
