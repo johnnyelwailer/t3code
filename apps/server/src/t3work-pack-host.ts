@@ -20,17 +20,29 @@ export const loadPackProviderOverlay = async (
 ): Promise<ProviderInstanceConfigMap> => {
   const providerPacks = (diagnostic.resolution?.packs ?? []).filter((pack) => {
     const hasProviders = (pack.manifest.contents.aiProviders?.length ?? 0) > 0;
-    if (hasProviders && !pack.manifest.capabilities.includes("ai-provider:opencode")) {
+    if (
+      hasProviders &&
+      !pack.manifest.capabilities.some((capability) => capability.startsWith("ai-provider:"))
+    ) {
       throw new Error(
-        `Pack ${pack.manifest.id} declares AI providers without ai-provider:opencode capability`,
+        `Pack ${pack.manifest.id} declares AI providers without an ai-provider capability`,
       );
     }
     return hasProviders;
   });
   const definitions = await Promise.all(
-    providerPacks.map((pack) =>
-      loadManifestAiProviders(pack.directory, pack.manifest),
-    ),
+    providerPacks.map(async (pack) => {
+      const loaded = await loadManifestAiProviders(pack.directory, pack.manifest);
+      for (const provider of loaded) {
+        const capability = `ai-provider:${provider.driver}`;
+        if (!pack.manifest.capabilities.includes(capability)) {
+          throw new Error(
+            `Pack ${pack.manifest.id} declares AI provider ${provider.id} without ${capability} capability`,
+          );
+        }
+      }
+      return loaded;
+    }),
   );
   return packAiProvidersToInstanceConfigMap(definitions.flat());
 };

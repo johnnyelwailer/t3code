@@ -72,5 +72,5 @@ it("rejects provider assets without the declared host capability", async () => {
         diagnostics: [],
       },
     }),
-  ).rejects.toThrow("without ai-provider:opencode capability");
+  ).rejects.toThrow("without an ai-provider capability");
 });
