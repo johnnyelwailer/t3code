@@ -5,7 +5,12 @@ import { Command, GlobalFlag } from "effect/unstable/cli";
 
 import { ServerConfig, type StartupPresentation } from "../config.ts";
 import { runT3workServer } from "../t3work-server.ts";
-import { inspectConfiguredWorkspacePacks, loadPackProviderOverlay } from "../t3work-pack-host.ts";
+import {
+  inspectConfiguredWorkspacePacks,
+  loadPackAppearanceOverlay,
+  loadPackProviderOverlay,
+} from "../t3work-pack-host.ts";
+import { setPackAppearanceOverlay } from "../t3work-pack-appearanceOverlay.ts";
 import { setPackProviderOverlay } from "../t3work-pack-providerOverlay.ts";
 import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
 
@@ -24,6 +29,17 @@ export const runT3workServerCommand = (
       inspectConfiguredWorkspacePacks(Option.getOrUndefined(workspacePacksDir)),
     );
     if (packDiagnostic.enabled) {
+      const appearanceOverlay = yield* Effect.tryPromise({
+        try: () => loadPackAppearanceOverlay(packDiagnostic),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.tap((overlay) => Effect.sync(() => setPackAppearanceOverlay(overlay))),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack theme loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
       const providerOverlay = yield* Effect.tryPromise({
         try: () => loadPackProviderOverlay(packDiagnostic),
         catch: (cause) => cause,
@@ -46,6 +62,7 @@ export const runT3workServerCommand = (
         diagnostics: packDiagnostic.resolution?.diagnostics ?? [],
         issues: packDiagnostic.issues,
         providerInstances: providerOverlay ? Object.keys(providerOverlay).sort() : [],
+        activeTheme: appearanceOverlay?.themeId,
       });
     }
     return yield* runT3workServer.pipe(Effect.provideService(ServerConfig, config));

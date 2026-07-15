@@ -39,6 +39,7 @@ import { resolveInitialServerAuthGateState } from "../environments/primary";
 import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
 import { isAtlassianOAuthCallbackPath } from "../t3work/hooks/t3work-atlassianOAuthRedirect";
 import { useT3workWorkMode } from "../t3work/t3work-workMode";
+import { T3workPackAppearanceSync } from "../t3work/t3work-PackAppearanceSync";
 import { shellEnvironment } from "../state/shell";
 import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -164,6 +165,7 @@ function RootRouteView() {
     <ToastProvider>
       <AnchoredToastProvider>
         <DocumentTitleSync />
+        <T3workPackAppearanceSync />
         {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
         <RelayClientInstallDialog />
         <SshPasswordPromptDialog />

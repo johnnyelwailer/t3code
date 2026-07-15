@@ -25,12 +25,39 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 
+export const EnvironmentAppearance = Schema.Struct({
+  themeId: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  productName: Schema.optionalKey(TrimmedNonEmptyString),
+  publisher: Schema.optionalKey(TrimmedNonEmptyString),
+  labels: Schema.optionalKey(
+    Schema.Struct({
+      appName: Schema.optionalKey(TrimmedNonEmptyString),
+    }),
+  ),
+  defaultMode: Schema.optionalKey(Schema.Literals(["light", "dark", "system"])),
+  colors: Schema.Struct({
+    light: Schema.Record(Schema.String, Schema.String),
+    dark: Schema.Record(Schema.String, Schema.String),
+  }),
+  typography: Schema.optionalKey(
+    Schema.Struct({
+      sans: Schema.optionalKey(Schema.String),
+      mono: Schema.optionalKey(Schema.String),
+    }),
+  ),
+  shape: Schema.optionalKey(Schema.Struct({ radius: Schema.optionalKey(Schema.String) })),
+  density: Schema.optionalKey(Schema.Number),
+});
+export type EnvironmentAppearance = typeof EnvironmentAppearance.Type;
+
 export const ExecutionEnvironmentDescriptor = Schema.Struct({
   environmentId: EnvironmentId,
   label: TrimmedNonEmptyString,
   platform: ExecutionEnvironmentPlatform,
   serverVersion: TrimmedNonEmptyString,
   capabilities: ExecutionEnvironmentCapabilities,
+  appearance: Schema.optionalKey(EnvironmentAppearance),
 });
 export type ExecutionEnvironmentDescriptor = typeof ExecutionEnvironmentDescriptor.Type;
 

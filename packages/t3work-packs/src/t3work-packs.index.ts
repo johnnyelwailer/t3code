@@ -9,6 +9,13 @@ export {
 export type { LoadedAiProviderDefinition } from "./t3work-packs.aiProvider.ts";
 export { loadAiProviderAsset, loadManifestAiProviders } from "./t3work-packs.aiProviderLoader.ts";
 export {
+  decodeThemeDefinition,
+  defineTheme,
+  ThemeColorTokens,
+  ThemeDefinition,
+} from "./t3work-packs.theme.ts";
+export { loadManifestThemes } from "./t3work-packs.themeLoader.ts";
+export {
   decodeWorkspacePackManifest,
   defineWorkspacePack,
   PackAssetRef,

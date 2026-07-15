@@ -2,7 +2,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
 
-import { inspectConfiguredWorkspacePacks } from "./t3work-pack-host.ts";
+import { inspectConfiguredWorkspacePacks, loadPackAppearanceOverlay } from "./t3work-pack-host.ts";
 
 const roots: string[] = [];
 
@@ -50,5 +50,41 @@ describe("workspace pack host inspection", () => {
     expect(result.enabled).toBe(true);
     expect(result.resolution).toBeUndefined();
     expect(result.issues[0]?.directory).toBe("/definitely/missing/t3work-packs");
+  });
+
+  it("loads a reviewed active theme from the resolved pack", async () => {
+    const root = await NodeFSP.mkdtemp("/tmp/t3work-pack-theme-");
+    roots.push(root);
+    const directory = NodePath.join(root, "theme-pack");
+    await NodeFSP.mkdir(NodePath.join(directory, "themes"), { recursive: true });
+    await NodeFSP.writeFile(
+      NodePath.join(directory, "themes/theme.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: "nexplore",
+        name: "Nexplore",
+        labels: { appName: "Nexi" },
+        colors: { light: { primary: "#f05a00" }, dark: { primary: "#ff6a0a" } },
+      }),
+    );
+    await NodeFSP.writeFile(
+      NodePath.join(directory, "pack.json"),
+      JSON.stringify({
+        id: "theme-pack",
+        name: "Theme",
+        packApiVersion: 1,
+        version: "1.0.0",
+        scope: "distribution",
+        compatibility: { t3workCore: "*" },
+        contents: { themes: [{ id: "nexplore", path: "themes/theme.json" }] },
+        capabilities: ["theme:v1"],
+        hashes: {},
+      }),
+    );
+    const diagnostic = await inspectConfiguredWorkspacePacks(root);
+    await expect(loadPackAppearanceOverlay(diagnostic)).resolves.toMatchObject({
+      themeId: "nexplore",
+      labels: { appName: "Nexi" },
+    });
   });
 });

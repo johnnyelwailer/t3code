@@ -1,10 +1,12 @@
 import {
   discoverLocalWorkspacePacks,
   loadManifestAiProviders,
+  loadManifestThemes,
   resolveWorkspacePacks,
   type WorkspacePackResolution,
 } from "@t3work/packs";
 import type { ProviderInstanceConfigMap } from "@t3tools/contracts";
+import type { EnvironmentAppearance } from "@t3tools/contracts";
 
 import { packAiProvidersToInstanceConfigMap } from "./t3work-pack-aiProvider.ts";
 
@@ -45,6 +47,25 @@ export const loadPackProviderOverlay = async (
     }),
   );
   return packAiProvidersToInstanceConfigMap(definitions.flat());
+};
+
+export const loadPackAppearanceOverlay = async (
+  diagnostic: WorkspacePackHostDiagnostic,
+): Promise<EnvironmentAppearance | undefined> => {
+  const themedPacks = (diagnostic.resolution?.packs ?? []).filter(
+    (pack) => (pack.manifest.contents.themes?.length ?? 0) > 0,
+  );
+  const themes = await Promise.all(
+    themedPacks.map(async (pack) => {
+      if (!pack.manifest.capabilities.includes("theme:v1")) {
+        throw new Error(`Pack ${pack.manifest.id} declares themes without theme:v1 capability`);
+      }
+      return loadManifestThemes(pack.directory, pack.manifest);
+    }),
+  );
+  const active = themes.flat().at(-1);
+  if (!active) return undefined;
+  return { ...active, themeId: active.id };
 };
 
 const errorMessage = (error: unknown): string =>
