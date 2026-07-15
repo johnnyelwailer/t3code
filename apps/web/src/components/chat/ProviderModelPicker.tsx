@@ -69,7 +69,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const duplicateDriverCount = props.instanceEntries.filter(
     (entry) => activeEntry !== null && entry.driverKind === activeEntry.driverKind,
   ).length;
-  const showInstanceBadge = Boolean(activeEntry?.accentColor) || duplicateDriverCount > 1;
+  const showInstanceBadge =
+    Boolean(activeEntry?.accentColor && !activeEntry.iconDataUrl) || duplicateDriverCount > 1;
 
   const setIsMenuOpen = (open: boolean) => {
     props.onOpenChange?.(open);

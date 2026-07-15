@@ -158,7 +158,8 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
             const isHovered = hoveredInstanceId === entry.instanceId;
             const showNewBadge = props.newBadgeInstanceIds?.has(entry.instanceId) ?? false;
             const showInstanceBadge =
-              Boolean(entry.accentColor) || (duplicateDriverCounts.get(entry.driverKind) ?? 0) > 1;
+              Boolean(entry.accentColor && !entry.iconDataUrl) ||
+              (duplicateDriverCounts.get(entry.driverKind) ?? 0) > 1;
 
             const tooltip = isUnavailable
               ? describeUnavailableInstance(entry)
