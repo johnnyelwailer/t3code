@@ -1,3 +1,5 @@
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
 import { expect, it } from "@effect/vitest";
 
 import { packAiProvidersToInstanceConfigMap } from "./t3work-pack-aiProvider.ts";
@@ -73,4 +75,47 @@ it("rejects provider assets without the declared host capability", async () => {
       },
     }),
   ).rejects.toThrow("without an ai-provider capability");
+});
+
+it("loads provider definitions from a trusted pack activation module", async () => {
+  const root = await NodeFSP.mkdtemp("/tmp/t3work-pack-provider-");
+  const directory = NodePath.join(root, "code-pack");
+  await NodeFSP.mkdir(directory);
+  await NodeFSP.writeFile(
+    NodePath.join(directory, "activate.mjs"),
+    `export default ({ defineAgentProvider }) => defineAgentProvider({
+      schemaVersion: 1, id: "code-provider", driver: "code-provider", harness: "opencode",
+      displayName: "Code Provider", accent: "#123456", modelDiscovery: "configured",
+      modelSelection: "fixed", defaultModel: "coding", configuration: {
+        kind: "upstream-provider", provider: { id: "gateway", name: "Gateway",
+          baseURL: "https://example.test/v1", api: "chat-completions", models: [{ id: "coding", name: "Coding" }] }
+      }
+    })`,
+  );
+  const result = await loadPackProviderOverlay({
+    enabled: true,
+    issues: [],
+    resolution: {
+      packs: [
+        {
+          directory,
+          manifest: {
+            id: "code-pack",
+            version: "1.0.0",
+            packApiVersion: 1,
+            name: "Code",
+            compatibility: { t3workCore: "*" },
+            contents: {},
+            entrypoints: { activate: "activate.mjs" },
+            capabilities: ["ai-provider:code-provider"],
+            hashes: {},
+          },
+        },
+      ],
+      locks: {},
+      diagnostics: [],
+    },
+  });
+  expect(Object.values(result)[0]?.displayName).toBe("Code Provider");
+  await NodeFSP.rm(root, { recursive: true });
 });

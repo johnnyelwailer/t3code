@@ -2,6 +2,7 @@ import {
   discoverLocalWorkspacePacks,
   loadManifestAiProviders,
   loadManifestThemes,
+  activateWorkspacePack,
   resolveWorkspacePacks,
   type WorkspacePackResolution,
 } from "@t3work/packs";
@@ -30,42 +31,78 @@ export const loadPackProviderOverlay = async (
         `Pack ${pack.manifest.id} declares AI providers without an ai-provider capability`,
       );
     }
-    return hasProviders;
+    return hasProviders || Boolean(pack.manifest.entrypoints?.activate);
   });
-  const definitions = await Promise.all(
-    providerPacks.map(async (pack) => {
-      const loaded = await loadManifestAiProviders(pack.directory, pack.manifest);
-      for (const provider of loaded) {
-        const capability = `ai-provider:${provider.driver}`;
-        if (!pack.manifest.capabilities.includes(capability)) {
-          throw new Error(
-            `Pack ${pack.manifest.id} declares AI provider ${provider.id} without ${capability} capability`,
-          );
+  const definitions = (
+    await Promise.all(
+      providerPacks.map(async (pack) => {
+        const loaded = await loadManifestAiProviders(pack.directory, pack.manifest);
+        for (const provider of loaded) {
+          const capability = `ai-provider:${provider.driver}`;
+          if (!pack.manifest.capabilities.includes(capability)) {
+            throw new Error(
+              `Pack ${pack.manifest.id} declares AI provider ${provider.id} without ${capability} capability`,
+            );
+          }
         }
-      }
-      return loaded;
-    }),
-  );
-  return packAiProvidersToInstanceConfigMap(definitions.flat());
+        return loaded;
+      }),
+    )
+  ).flat();
+  for (const pack of providerPacks) {
+    await activateWorkspacePack(pack, {
+      defineAgentProvider: (definition) => {
+        definitions.push(definition);
+      },
+      defineTheme: () => undefined,
+      resolveAssetDataUrl: async () => {
+        throw new Error("Asset resolution is only available to pack activation code");
+      },
+    });
+  }
+  return packAiProvidersToInstanceConfigMap(definitions);
 };
 
 export const loadPackAppearanceOverlay = async (
   diagnostic: WorkspacePackHostDiagnostic,
 ): Promise<EnvironmentAppearance | undefined> => {
   const themedPacks = (diagnostic.resolution?.packs ?? []).filter(
-    (pack) => (pack.manifest.contents.themes?.length ?? 0) > 0,
+    (pack) =>
+      (pack.manifest.contents.themes?.length ?? 0) > 0 ||
+      Boolean(pack.manifest.entrypoints?.activate),
   );
   const themes = await Promise.all(
     themedPacks.map(async (pack) => {
-      if (!pack.manifest.capabilities.includes("theme:v1")) {
+      if (
+        (pack.manifest.contents.themes?.length ?? 0) > 0 &&
+        !pack.manifest.capabilities.includes("theme:v1")
+      ) {
         throw new Error(`Pack ${pack.manifest.id} declares themes without theme:v1 capability`);
       }
       return loadManifestThemes(pack.directory, pack.manifest);
     }),
   );
-  const active = themes.flat().at(-1);
+  const activatedThemes: EnvironmentAppearance[] = [];
+  for (const pack of themedPacks) {
+    await activateWorkspacePack(pack, {
+      defineAgentProvider: () => undefined,
+      defineTheme: (theme) => {
+        if (!pack.manifest.capabilities.includes("theme:v1")) {
+          throw new Error(`Pack ${pack.manifest.id} defines a theme without theme:v1 capability`);
+        }
+        activatedThemes.push({ ...theme, themeId: theme.id });
+      },
+      resolveAssetDataUrl: async () => {
+        throw new Error("Asset resolution is only available to pack activation code");
+      },
+    });
+  }
+  const active = [
+    ...themes.flat().map((theme) => ({ ...theme, themeId: theme.id })),
+    ...activatedThemes,
+  ].at(-1);
   if (!active) return undefined;
-  return { ...active, themeId: active.id };
+  return active;
 };
 
 const errorMessage = (error: unknown): string =>
