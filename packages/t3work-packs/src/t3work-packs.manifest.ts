@@ -19,6 +19,7 @@ export const PackAssetRef = Schema.Struct({
   id: Schema.String,
   path: Schema.String,
 });
+export type PackAssetRef = typeof PackAssetRef.Type;
 
 export const WorkspacePackLock = Schema.Struct({
   target: Schema.String,
@@ -48,7 +49,7 @@ export const WorkspacePackManifest = Schema.Struct({
   ),
   contents: Schema.Struct({
     connectors: Schema.optional(Schema.Array(PackModuleRef)),
-    aiProviders: Schema.optional(Schema.Array(PackModuleRef)),
+    aiProviders: Schema.optional(Schema.Array(PackAssetRef)),
     tools: Schema.optional(Schema.Array(PackModuleRef)),
     workflows: Schema.optional(Schema.Array(PackModuleRef)),
     recipes: Schema.optional(Schema.Array(PackModuleRef)),

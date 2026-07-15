@@ -301,6 +301,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
                 openCodeRuntime
                   .startOpenCodeServerProcess({
                     binaryPath: input.binaryPath,
+                    configContent: openCodeSettings.configContent,
                     environment: resolvedEnvironment,
                   })
                   .pipe(

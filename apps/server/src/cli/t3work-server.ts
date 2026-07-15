@@ -5,7 +5,8 @@ import { Command, GlobalFlag } from "effect/unstable/cli";
 
 import { ServerConfig, type StartupPresentation } from "../config.ts";
 import { runT3workServer } from "../t3work-server.ts";
-import { inspectConfiguredWorkspacePacks } from "../t3work-pack-host.ts";
+import { inspectConfiguredWorkspacePacks, loadPackProviderOverlay } from "../t3work-pack-host.ts";
+import { setPackProviderOverlay } from "../t3work-pack-providerOverlay.ts";
 import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
 
 export const runT3workServerCommand = (
@@ -23,6 +24,17 @@ export const runT3workServerCommand = (
       inspectConfiguredWorkspacePacks(Option.getOrUndefined(workspacePacksDir)),
     );
     if (packDiagnostic.enabled) {
+      const providerOverlay = yield* Effect.tryPromise({
+        try: () => loadPackProviderOverlay(packDiagnostic),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.tap((overlay) => Effect.sync(() => setPackProviderOverlay(overlay))),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack provider loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
       yield* Effect.logInfo("Workspace pack discovery completed", {
         root: packDiagnostic.root,
         packs: (packDiagnostic.resolution?.packs ?? []).map((pack) => ({
@@ -33,6 +45,7 @@ export const runT3workServerCommand = (
         locks: Object.keys(packDiagnostic.resolution?.locks ?? {}).sort(),
         diagnostics: packDiagnostic.resolution?.diagnostics ?? [],
         issues: packDiagnostic.issues,
+        providerInstances: providerOverlay ? Object.keys(providerOverlay).sort() : [],
       });
     }
     return yield* runT3workServer.pipe(Effect.provideService(ServerConfig, config));

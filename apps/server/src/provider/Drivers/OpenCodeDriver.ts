@@ -93,6 +93,7 @@ const withInstanceIdentity =
     readonly instanceId: ProviderInstance["instanceId"];
     readonly displayName: string | undefined;
     readonly accentColor: string | undefined;
+    readonly iconDataUrl: string | undefined;
     readonly continuationGroupKey: string;
   }) =>
   (snapshot: ServerProviderDraft): ServerProvider => ({
@@ -101,6 +102,7 @@ const withInstanceIdentity =
     driver: DRIVER_KIND,
     ...(input.displayName ? { displayName: input.displayName } : {}),
     ...(input.accentColor ? { accentColor: input.accentColor } : {}),
+    ...(input.iconDataUrl ? { iconDataUrl: input.iconDataUrl } : {}),
     continuation: { groupKey: input.continuationGroupKey },
   });
 
@@ -112,7 +114,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
   },
   configSchema: OpenCodeSettings,
   defaultConfig: (): OpenCodeSettings => decodeOpenCodeSettings({}),
-  create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
+  create: ({ instanceId, displayName, accentColor, iconDataUrl, environment, enabled, config }) =>
     Effect.gen(function* () {
       const openCodeRuntime = yield* OpenCodeRuntime;
       const serverConfig = yield* ServerConfig;
@@ -128,6 +130,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         instanceId,
         displayName,
         accentColor,
+        iconDataUrl,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
       const effectiveConfig = { ...config, enabled } satisfies OpenCodeSettings;
@@ -186,6 +189,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         continuationIdentity,
         displayName,
         accentColor,
+        iconDataUrl,
         enabled,
         snapshot,
         adapter,

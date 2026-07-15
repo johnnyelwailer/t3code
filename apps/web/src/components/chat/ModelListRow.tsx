@@ -27,6 +27,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
    */
   providerDisplayName: string;
   providerAccentColor?: string | undefined;
+  providerIconDataUrl?: string | undefined;
   isFavorite: boolean;
   isSelected: boolean;
   showProvider: boolean;
@@ -78,7 +79,16 @@ export const ModelListRow = memo(function ModelListRow(props: {
         </div>
         {props.showProvider && (
           <div className="mt-1 flex items-center gap-1.5">
-            {ProviderIcon ? <ProviderIcon className="size-3 shrink-0" /> : null}
+            {props.providerIconDataUrl ? (
+              <img
+                src={props.providerIconDataUrl}
+                alt=""
+                className="size-3 shrink-0 object-contain"
+                aria-hidden
+              />
+            ) : ProviderIcon ? (
+              <ProviderIcon className="size-3 shrink-0" />
+            ) : null}
             <span className="truncate text-xs font-normal leading-snug text-muted-foreground/70">
               {providerLabel}
             </span>

@@ -1,4 +1,14 @@
 export {
+  AiProviderDefinition,
+  decodeAiProviderDefinition,
+  defineAiProvider,
+  OpenCodeModelDefinition,
+  OpenCodeProviderConfiguration,
+  OpenCodeUpstreamProvider,
+} from "./t3work-packs.aiProvider.ts";
+export type { LoadedAiProviderDefinition } from "./t3work-packs.aiProvider.ts";
+export { loadAiProviderAsset, loadManifestAiProviders } from "./t3work-packs.aiProviderLoader.ts";
+export {
   decodeWorkspacePackManifest,
   defineWorkspacePack,
   PackAssetRef,
