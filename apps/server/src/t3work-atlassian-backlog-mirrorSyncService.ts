@@ -11,7 +11,10 @@ import {
   type T3workAtlassianMirrorSyncRequest,
 } from "./t3work-atlassian-backlog-mirrorSyncShared.ts";
 import { computeIncrementalLookbackMinutes } from "./t3work-atlassian-backlog-mirrorSyncShared.ts";
-import { runMirrorIncrementalWalk, runMirrorReconcile } from "./t3work-atlassian-backlog-mirrorSyncWalks.ts";
+import {
+  runMirrorIncrementalWalk,
+  runMirrorReconcile,
+} from "./t3work-atlassian-backlog-mirrorSyncWalks.ts";
 import {
   clearT3workMirrorSyncKickHistory,
   isT3workMirrorSyncIdle,
@@ -209,7 +212,10 @@ function runMirrorLoop(input: T3workAtlassianMirrorSyncRequest, isSuperseded: ()
   });
 }
 
-export { computeIncrementalLookbackMinutes, nextMirrorSleepMs } from "./t3work-atlassian-backlog-mirrorSyncShared.ts";
+export {
+  computeIncrementalLookbackMinutes,
+  nextMirrorSleepMs,
+} from "./t3work-atlassian-backlog-mirrorSyncShared.ts";
 export type { T3workAtlassianMirrorSyncRequest } from "./t3work-atlassian-backlog-mirrorSyncShared.ts";
 export { runMirrorReconcile } from "./t3work-atlassian-backlog-mirrorSyncWalks.ts";
 export { upsertMirrorIssues } from "./t3work-atlassian-backlog-mirrorSyncDb.ts";

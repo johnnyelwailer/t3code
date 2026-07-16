@@ -15,9 +15,9 @@ import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables
 const hasExplicitSelection = (selection?: T3workBacklogSelectionInput): boolean =>
   Boolean(
     selection?.boardId ||
-      selection?.sprintId ||
-      selection?.filterId ||
-      (selection?.quickFilterIds && selection.quickFilterIds.length > 0),
+    selection?.sprintId ||
+    selection?.filterId ||
+    (selection?.quickFilterIds && selection.quickFilterIds.length > 0),
   );
 
 export const serializeBacklogCacheJson = (value: unknown): string => JSON.stringify(value);

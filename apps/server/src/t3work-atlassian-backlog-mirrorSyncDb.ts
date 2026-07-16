@@ -46,8 +46,7 @@ export function upsertMirrorIssues(input: {
         for (const item of input.items) {
           const assigneeAccountId =
             typeof item["assigneeAccountId"] === "string" ? item["assigneeAccountId"] : null;
-          const issueKey =
-            typeof item["displayId"] === "string" ? item["displayId"] : null;
+          const issueKey = typeof item["displayId"] === "string" ? item["displayId"] : null;
           yield* sql`
             INSERT INTO t3work_atlassian_backlog_issues (
               provider,
@@ -107,9 +106,7 @@ export function deleteMirrorIssuesAbsentFromWalk(input: {
         AND external_project_id = ${input.identity.externalProjectId}
     `;
 
-    const toDelete = storedRows
-      .map((r) => r.issueId)
-      .filter((id) => !input.seenIds.has(id));
+    const toDelete = storedRows.map((r) => r.issueId).filter((id) => !input.seenIds.has(id));
 
     if (toDelete.length === 0) return;
 

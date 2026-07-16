@@ -79,7 +79,11 @@ export type AtlassianBacklogSavedFilter = {
   readonly favourite?: boolean;
 };
 
-export type AtlassianBacklogQuickFilter = { readonly id: string; readonly name: string; readonly jql: string };
+export type AtlassianBacklogQuickFilter = {
+  readonly id: string;
+  readonly name: string;
+  readonly jql: string;
+};
 
 export type AtlassianBacklogCacheMetadata = {
   readonly source: "live" | "persisted" | "stale-fallback";

@@ -348,9 +348,7 @@ describe("project backlog utils", () => {
       selectedLabels: ["backend", "urgent"],
     }).map((ticket) => ticket.id);
 
-    expect(filteredIds).toEqual(
-      expect.arrayContaining(["backend-only", "urgent-only", "both"]),
-    );
+    expect(filteredIds).toEqual(expect.arrayContaining(["backend-only", "urgent-only", "both"]));
     expect(filteredIds).toHaveLength(3);
   });
 

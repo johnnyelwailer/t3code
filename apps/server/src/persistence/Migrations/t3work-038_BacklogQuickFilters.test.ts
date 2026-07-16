@@ -15,12 +15,10 @@ layer("t3work-038 BacklogQuickFilters", (it) => {
     }),
   );
 
-  it.effect(
-    "adds quick_filters_json to an existing table and tolerates being run twice",
-    () =>
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`
+  it.effect("adds quick_filters_json to an existing table and tolerates being run twice", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`
           CREATE TABLE IF NOT EXISTS t3work_atlassian_backlog_views (
             provider TEXT NOT NULL,
             account_id TEXT NOT NULL,
@@ -41,7 +39,7 @@ layer("t3work-038 BacklogQuickFilters", (it) => {
           )
         `;
 
-        yield* sql`
+      yield* sql`
           INSERT INTO t3work_atlassian_backlog_views (
             provider, account_id, external_project_id, selection_key,
             issue_ids_json, boards_json, sprints_json, saved_filters_json,
@@ -57,29 +55,29 @@ layer("t3work-038 BacklogQuickFilters", (it) => {
              '["newer"]', '[]', '[]', '[]', '[]', 0)
         `;
 
-        yield* Migration0038;
-        yield* Migration0038;
+      yield* Migration0038;
+      yield* Migration0038;
 
-        const rows = yield* sql<{ name: string }>`
+      const rows = yield* sql<{ name: string }>`
           SELECT name FROM pragma_table_info('t3work_atlassian_backlog_views')
           WHERE name = 'quick_filters_json'
         `;
-        assert.strictEqual(rows.length, 1);
+      assert.strictEqual(rows.length, 1);
 
-        const keys = yield* sql<{ selection_key: string; issue_ids_json: string }>`
+      const keys = yield* sql<{ selection_key: string; issue_ids_json: string }>`
           SELECT selection_key, issue_ids_json
           FROM t3work_atlassian_backlog_views ORDER BY selection_key
         `;
-        assert.deepStrictEqual(
-          keys.map((row) => row.selection_key),
-          [
-            "board=1:sprint=default:filter=default:quickFilters=7",
-            "board=1:sprint=default:filter=default:quickFilters=default",
-            "board=2:sprint=default:filter=default:quickFilters=default",
-          ],
-        );
-        // On a key collision the already-new-format row wins over the legacy one.
-        assert.strictEqual(keys[2]?.issue_ids_json, '["newer"]');
-      }),
+      assert.deepStrictEqual(
+        keys.map((row) => row.selection_key),
+        [
+          "board=1:sprint=default:filter=default:quickFilters=7",
+          "board=1:sprint=default:filter=default:quickFilters=default",
+          "board=2:sprint=default:filter=default:quickFilters=default",
+        ],
+      );
+      // On a key collision the already-new-format row wins over the legacy one.
+      assert.strictEqual(keys[2]?.issue_ids_json, '["newer"]');
+    }),
   );
 });

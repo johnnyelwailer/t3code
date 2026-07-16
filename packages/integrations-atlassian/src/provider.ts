@@ -1709,23 +1709,23 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     const cloudId = await client.getCloudId();
     const boardAri = `ari:cloud:jira-software:${cloudId}:board/${boardId}`;
     const response = await client.postGraphql<{
-        data?: {
-          boardScope?: {
-            customFiltersConfig?: {
-              customFilters?: ReadonlyArray<{
-                id: string;
-                name: string;
-                jql?: string;
-                description?: string;
-              }>;
-            };
+      data?: {
+        boardScope?: {
+          customFiltersConfig?: {
+            customFilters?: ReadonlyArray<{
+              id: string;
+              name: string;
+              jql?: string;
+              description?: string;
+            }>;
           };
         };
-        errors?: ReadonlyArray<{ message: string }>;
-      }>({
-        query: `query BoardCustomFilters($id: ID!) { boardScope(boardId: $id) { customFiltersConfig { customFilters { id name jql description } } } }`,
-        variables: { id: boardAri },
-      });
+      };
+      errors?: ReadonlyArray<{ message: string }>;
+    }>({
+      query: `query BoardCustomFilters($id: ID!) { boardScope(boardId: $id) { customFiltersConfig { customFilters { id name jql description } } } }`,
+      variables: { id: boardAri },
+    });
 
     // A well-formed GraphQL error means the internal customFilters field is
     // not available for this tenant/board — a stable condition, so an empty

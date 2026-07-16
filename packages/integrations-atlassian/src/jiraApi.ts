@@ -237,7 +237,9 @@ export class JiraApiClient {
     if (this.cachedCloudId) {
       return this.cachedCloudId;
     }
-    const tenantInfo = await this.fetchJson<{ cloudId: string }>(`${this.baseUrl}/_edge/tenant_info`);
+    const tenantInfo = await this.fetchJson<{ cloudId: string }>(
+      `${this.baseUrl}/_edge/tenant_info`,
+    );
     if (typeof tenantInfo.cloudId !== "string" || tenantInfo.cloudId.trim().length === 0) {
       throw new AtlassianApiError({
         status: 502,

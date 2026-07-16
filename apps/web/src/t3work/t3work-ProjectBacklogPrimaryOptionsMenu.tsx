@@ -1,7 +1,4 @@
-import type {
-  AtlassianBacklogBoard,
-  AtlassianBacklogSprint,
-} from "~/t3work/backend/t3work-types";
+import type { AtlassianBacklogBoard, AtlassianBacklogSprint } from "~/t3work/backend/t3work-types";
 import {
   MenuGroup,
   MenuGroupLabel,

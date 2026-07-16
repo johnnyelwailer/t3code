@@ -132,7 +132,9 @@ export const updateCachedBacklogViewMetadata = Effect.fn(
         }
       }),
     );
-  }).pipe(Effect.mapError(toPersistenceSqlError("t3work.atlassianBacklogCache.updateViewMetadata")));
+  }).pipe(
+    Effect.mapError(toPersistenceSqlError("t3work.atlassianBacklogCache.updateViewMetadata")),
+  );
 });
 
 export { insertCachedT3workAtlassianBacklogChildIssue } from "./t3work-atlassian-backlog-cacheChildInsert.ts";

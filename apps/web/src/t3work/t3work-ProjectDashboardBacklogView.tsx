@@ -25,13 +25,19 @@ export function ProjectDashboardBacklogView({
   project: ProjectShellProject;
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const { state: backlogState, setState: setBacklogState } =
-    useProjectDashboardBacklogState(project.id);
+  const { state: backlogState, setState: setBacklogState } = useProjectDashboardBacklogState(
+    project.id,
+  );
   const currentUserDisplayName = useAtlassianCurrentUserDisplayName(project.source.accountId);
   const deferredQuery = useDeferredValue(backlogState.query);
   const requestedSelection = useMemo(
     () => buildRequestedBacklogSelection(backlogState),
-    [backlogState.boardId, backlogState.filterId, backlogState.selectedQuickFilterIds, backlogState.sprintId],
+    [
+      backlogState.boardId,
+      backlogState.filterId,
+      backlogState.selectedQuickFilterIds,
+      backlogState.sprintId,
+    ],
   );
   const onOpenTicketRef = useRef(onOpenTicket);
   onOpenTicketRef.current = onOpenTicket;

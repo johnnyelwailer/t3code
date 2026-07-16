@@ -57,15 +57,16 @@ export function runMirrorIncrementalWalk(
 
       if (isSuperseded()) return;
 
-      yield* upsertMirrorIssues({ identity, items: page.items as ReadonlyArray<Record<string, unknown> & { id: string }> });
+      yield* upsertMirrorIssues({
+        identity,
+        items: page.items as ReadonlyArray<Record<string, unknown> & { id: string }>,
+      });
 
       if (!page.nextCursor) return;
       cursor = page.nextCursor;
     }
 
-    yield* Effect.logDebug(
-      "t3work atlassian mirror incremental walk hit page cap",
-    ).pipe(
+    yield* Effect.logDebug("t3work atlassian mirror incremental walk hit page cap").pipe(
       Effect.annotateLogs({
         provider: identity.provider,
         accountId: identity.accountId,
@@ -135,7 +136,10 @@ export function runMirrorReconcile(
 
       if (isSuperseded()) return;
 
-      yield* upsertMirrorIssues({ identity, items: page.items as ReadonlyArray<Record<string, unknown> & { id: string }> });
+      yield* upsertMirrorIssues({
+        identity,
+        items: page.items as ReadonlyArray<Record<string, unknown> & { id: string }>,
+      });
 
       if (!page.nextCursor) {
         walkComplete = true;

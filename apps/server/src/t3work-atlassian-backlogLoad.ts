@@ -110,12 +110,8 @@ export function loadT3workAtlassianBacklog(input: T3workAtlassianBacklogInput) {
             selection: requestSelection,
           });
         }
-        const cachedSelectedBoardId =
-          cachedResponse.selectedBoardId ?? requestSelection.boardId;
-        if (
-          cachedSelectedBoardId &&
-          cachedResponse.quickFilters.length === 0
-        ) {
+        const cachedSelectedBoardId = cachedResponse.selectedBoardId ?? requestSelection.boardId;
+        if (cachedSelectedBoardId && cachedResponse.quickFilters.length === 0) {
           // Quick filters were persisted empty, most likely because Jira
           // rate-limited the original fetch. Since the cache is otherwise
           // valid, nothing would ever re-resolve the selection — self-heal

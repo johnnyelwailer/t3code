@@ -2286,9 +2286,9 @@ describe("AtlassianIntegrationProvider", () => {
       expect(selection.quickFilters).toEqual([
         { id: "1", name: "My Issues", jql: "assignee = currentUser()" },
       ]);
-      expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/gateway/api/graphql"))).toBe(
-        false,
-      );
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).includes("/gateway/api/graphql")),
+      ).toBe(false);
       expect(
         fetchMock.mock.calls.some(([input]) => String(input).includes("/_edge/tenant_info")),
       ).toBe(false);
