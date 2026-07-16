@@ -1,7 +1,6 @@
 import { useCallback, useDeferredValue, useMemo, useRef } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import { ScrollArea } from "~/t3work/components/ui/t3work-scroll-area";
 import { useAtlassianCurrentUserDisplayName } from "~/t3work/hooks/t3work-useAtlassianCurrentUserDisplayName";
 import { useProjectBacklog } from "~/t3work/hooks/t3work-useProjectBacklog";
 import { useProjectDashboardBacklogRecipeSupport } from "~/t3work/hooks/t3work-useProjectDashboardBacklogRecipeSupport";
@@ -13,6 +12,7 @@ import { useProjectDashboardBacklogTableState } from "~/t3work/hooks/t3work-useP
 import { useProjectDashboardBacklogCapacity } from "~/t3work/hooks/t3work-useProjectDashboardBacklogCapacity";
 import { useProjectWorkspaceAutoSync } from "~/t3work/hooks/t3work-useProjectWorkspaceAutoSync";
 import { ProjectDashboardBacklogContent } from "~/t3work/t3work-ProjectDashboardBacklogContent";
+import { ProjectDashboardBacklogViewLayout } from "~/t3work/t3work-ProjectDashboardBacklogViewLayout";
 import { ProjectDashboardBacklogOverviewSection } from "~/t3work/t3work-ProjectDashboardBacklogOverviewSection";
 import { buildProjectDashboardBacklogVisibleSyncState } from "~/t3work/t3work-projectDashboardBacklogVisibleSync";
 import { buildRequestedBacklogSelection } from "~/t3work/t3work-projectDashboardBacklogStateShared";
@@ -190,23 +190,12 @@ export function ProjectDashboardBacklogView({
     />
   );
 
-  if (!isImmersiveView) {
-    return (
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto flex w-full max-w-6xl flex-col space-y-2 p-4 sm:p-6">
-          {overview}
-          {error ? <div className="text-sm text-destructive">{error}</div> : null}
-          {content}
-        </div>
-      </ScrollArea>
-    );
-  }
-
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">{overview}</div>
-      {error ? <div className="shrink-0 px-4 text-sm text-destructive sm:px-6">{error}</div> : null}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{content}</div>
-    </div>
+    <ProjectDashboardBacklogViewLayout
+      overview={overview}
+      content={content}
+      error={error}
+      isImmersiveView={isImmersiveView}
+    />
   );
 }

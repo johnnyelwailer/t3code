@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderInstanceId, type ModelCapabilities } from "@t3tools/contracts";
+import {
+  DEFAULT_MODEL,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ModelCapabilities,
+} from "@t3tools/contracts";
 
 import {
   buildProviderOptionSelectionsFromDescriptors,
@@ -10,6 +15,12 @@ import {
   getProviderOptionDescriptors,
   getProviderOptionBooleanSelectionValue,
   getProviderOptionStringSelectionValue,
+  applyClaudePromptEffortPrefix,
+  isClaudeUltrathinkPrompt,
+  normalizeModelSlug,
+  resolveModelSlugForProvider,
+  resolveSelectableModel,
+  trimOrNull,
 } from "./model.ts";
 
 const codexCaps: ModelCapabilities = createModelCapabilities({

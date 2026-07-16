@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import {
   OrchestrationEngineService,
@@ -37,7 +38,7 @@ const runReactor = () =>
     yield* Effect.scoped(
       Effect.gen(function* () {
         yield* reactor.start();
-        yield* Effect.sleep("10 millis");
+        yield* TestClock.adjust("10 millis");
         yield* reactor.drain;
       }),
     );

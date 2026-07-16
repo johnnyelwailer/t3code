@@ -237,27 +237,19 @@
     view-transition-name: none;
   }
 
-  html[data-t3work-view-transition-types~="t3work-wizard-back"]::view-transition-old(
-      t3work-create-project-step-panel
-    ) {
+  html[data-t3work-view-transition-types~="t3work-wizard-back"]::view-transition-old(t3work-create-project-step-panel) {
     animation-name: t3work-create-project-step-out-back;
   }
 
-  html[data-t3work-view-transition-types~="t3work-wizard-back"]::view-transition-old(
-      t3work-create-project-entry-surface
-    ) {
+  html[data-t3work-view-transition-types~="t3work-wizard-back"]::view-transition-old(t3work-create-project-entry-surface) {
     animation-name: t3work-create-project-entry-out-back;
   }
 
-  html[data-t3work-view-transition-types~="t3work-wizard-back"]::view-transition-new(
-      t3work-create-project-step-panel
-    ) {
+  html[data-t3work-view-transition-types~="t3work-wizard-back"]::view-transition-new(t3work-create-project-step-panel) {
     animation-name: t3work-create-project-step-in-back;
   }
 
-  html[data-t3work-view-transition-types~="t3work-wizard-back"]::view-transition-new(
-      t3work-create-project-entry-surface
-    ) {
+  html[data-t3work-view-transition-types~="t3work-wizard-back"]::view-transition-new(t3work-create-project-entry-surface) {
     animation-name: t3work-create-project-entry-in-back;
   }
 }

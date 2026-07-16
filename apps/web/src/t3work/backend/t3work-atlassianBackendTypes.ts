@@ -1,8 +1,4 @@
 import type {
-  AtlassianAccessibleResource,
-  TokenExchangeResult,
-} from "@t3tools/integrations-atlassian";
-import type {
   ExternalProject,
   IntegrationAccount,
   IntegrationAccountRef,
@@ -11,26 +7,18 @@ import type { ResourcePage, ResourceSnapshot } from "@t3tools/project-context";
 
 import type { TempoCapacityResponse } from "./t3work-atlassianTempoTypes";
 
-export type AtlassianBasicConnectInput = {
-  readonly siteUrl: string;
-  readonly email: string;
-  readonly apiToken: string;
-};
+import type {
+  AtlassianBasicConnectInput,
+  AtlassianOAuthConnectInput,
+  AtlassianOAuthExchangeInput,
+  AtlassianOAuthExchangeResult,
+} from "./t3work-atlassianBackendAuthTypes";
 
-export type AtlassianOAuthConnectInput = {
-  readonly sites: ReadonlyArray<AtlassianAccessibleResource>;
-  readonly token: TokenExchangeResult;
-};
-
-export type AtlassianOAuthExchangeInput = {
-  readonly code: string;
-  readonly codeVerifier: string;
-  readonly redirectUri: string;
-};
-
-export type AtlassianOAuthExchangeResult = {
-  readonly token: TokenExchangeResult;
-  readonly sites: ReadonlyArray<AtlassianAccessibleResource>;
+export type {
+  AtlassianBasicConnectInput,
+  AtlassianOAuthConnectInput,
+  AtlassianOAuthExchangeInput,
+  AtlassianOAuthExchangeResult,
 };
 
 export type AtlassianDownloadedAsset = {
