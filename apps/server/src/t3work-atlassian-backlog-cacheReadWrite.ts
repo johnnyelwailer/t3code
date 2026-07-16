@@ -99,8 +99,7 @@ export const writeCachedT3workAtlassianBacklog = Effect.fn("t3work.atlassianBack
           }
 
           for (const item of input.response.page.items) {
-            const assigneeAccountId =
-              (item as BacklogResourceRef).assigneeAccountId ?? null;
+            const assigneeAccountId = (item as BacklogResourceRef).assigneeAccountId ?? null;
             yield* sql`
             INSERT INTO t3work_atlassian_backlog_issues (
               provider,

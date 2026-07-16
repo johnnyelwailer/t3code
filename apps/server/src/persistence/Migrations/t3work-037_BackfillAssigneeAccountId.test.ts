@@ -46,7 +46,11 @@ layer("t3work-037 BackfillAssigneeAccountId", (it) => {
         `;
 
         // Pre-migration row: column NULL, assignee present in the JSON.
-        yield* insert("IES-1", serializeBacklogCacheJson({ id: "IES-1", assigneeAccountId: "user-a" }), null);
+        yield* insert(
+          "IES-1",
+          serializeBacklogCacheJson({ id: "IES-1", assigneeAccountId: "user-a" }),
+          null,
+        );
         // Pre-migration row without an assignee in the JSON: must stay NULL.
         yield* insert("IES-2", serializeBacklogCacheJson({ id: "IES-2" }), null);
         // Row already written post-migration: must not be overwritten.
@@ -74,5 +78,4 @@ layer("t3work-037 BackfillAssigneeAccountId", (it) => {
         );
       }),
   );
-
 });

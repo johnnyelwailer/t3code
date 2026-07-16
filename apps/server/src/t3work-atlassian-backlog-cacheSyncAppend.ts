@@ -37,8 +37,7 @@ export const appendCachedT3workAtlassianBacklogSyncPage = Effect.fn(
     yield* sql.withTransaction(
       Effect.gen(function* () {
         for (const item of input.items) {
-          const assigneeAccountId =
-            (item as BacklogResourceRef).assigneeAccountId ?? null;
+          const assigneeAccountId = (item as BacklogResourceRef).assigneeAccountId ?? null;
           yield* sql`
             INSERT INTO t3work_atlassian_backlog_issues (
               provider,

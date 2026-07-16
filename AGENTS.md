@@ -82,11 +82,11 @@ agents.
 
 ## Session-learned gotchas (friction-optimizer, 2026-07-07)
 
-- `vp run dev:desktop` hot-reloads **web + desktop only**; the backend runs from the prebuilt `apps/server/dist/bin.mjs`. After server-source changes: `pnpm -C apps/server build:bundle` + restart, or use `dev:server` for a watched backend. **New HTTP routes must be registered in BOTH registries** — `makeT3workRoutesLayer` *and* the route-merge list in `server.ts`. Verify a new endpoint against the actually-running server/port before claiming done.
+- `vp run dev:desktop` hot-reloads **web + desktop only**; the backend runs from the prebuilt `apps/server/dist/bin.mjs`. After server-source changes: `pnpm -C apps/server build:bundle` + restart, or use `dev:server` for a watched backend. **New HTTP routes must be registered in BOTH registries** — `makeT3workRoutesLayer` _and_ the route-merge list in `server.ts`. Verify a new endpoint against the actually-running server/port before claiming done.
 - Run vitest packages **serially** — full concurrent runs die with exit 137 (OOM SIGKILL). A 137 is a kill, not a test failure; re-run that package serially before triaging.
 - Pre-commit hook duplicates lint/test; bypass with `--no-verify` only when test+typecheck already ran green in-session, and say so.
 - Live testing = the **real user path**: never mint tokens, scan storage for credentials, or shim past auth/UI ("NO SHIMS"). If blocked, report the blocker.
 - After `git push`, re-check `gh pr list --head <branch>` **before** `gh pr create` (a push can surface an existing PR).
-- Upstream merges: use a **worktree**, `--no-commit`, resolve, serial regression matrix, then merge back. Known seam files: `ChatView.tsx`, `MessagesTimeline.tsx`. Hand-resolved merges are **consequential** → second-model review (Codex/Cursor/Copilot) queued *before* final verification.
+- Upstream merges: use a **worktree**, `--no-commit`, resolve, serial regression matrix, then merge back. Known seam files: `ChatView.tsx`, `MessagesTimeline.tsx`. Hand-resolved merges are **consequential** → second-model review (Codex/Cursor/Copilot) queued _before_ final verification.
 - Tempo/capacity rules: probe real Tempo plan data first — off-project time may be booked as ISSUE-type plans (e.g. INT-2), not non-issue plans.
 - Upstream merges/syncs: follow the `merge-upstream` skill (`.claude/skills/merge-upstream/SKILL.md`) — worktree, seam files, guard, serial tests, review-before-finalize.

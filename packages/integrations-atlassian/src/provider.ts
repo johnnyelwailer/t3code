@@ -1267,9 +1267,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     return {
       items,
       nextCursor:
-        response.nextPageToken && response.isLast !== true
-          ? response.nextPageToken
-          : undefined,
+        response.nextPageToken && response.isLast !== true ? response.nextPageToken : undefined,
     };
   }
 

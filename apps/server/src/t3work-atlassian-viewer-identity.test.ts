@@ -39,7 +39,9 @@ it.effect(
   "reconnecting (replaceAtlassianAuths) invalidates the cached viewer accountId for a stale user",
   () =>
     Effect.gen(function* () {
-      replaceAtlassianAuths([oauthAuth("cloud-1", "https://example.atlassian.net", "token-old-user")]);
+      replaceAtlassianAuths([
+        oauthAuth("cloud-1", "https://example.atlassian.net", "token-old-user"),
+      ]);
 
       const requestedUrls: string[] = [];
       const fetchMock = vi.fn(async (input: string | URL) => {
@@ -61,7 +63,9 @@ it.effect(
       // A reconnect on the same account id (different Atlassian user) must
       // invalidate the cache so the next resolution re-resolves instead of
       // silently serving the previous person's viewer identity.
-      replaceAtlassianAuths([oauthAuth("cloud-1", "https://example.atlassian.net", "token-new-user")]);
+      replaceAtlassianAuths([
+        oauthAuth("cloud-1", "https://example.atlassian.net", "token-new-user"),
+      ]);
       fetchMock.mockImplementation(async (input: string | URL) => {
         requestedUrls.push(input.toString());
         return Response.json({ accountId: "new-user", displayName: "New User" });
@@ -82,7 +86,9 @@ it.effect(
     });
 
     return Effect.gen(function* () {
-      replaceAtlassianAuths([oauthAuth("cloud-2", "https://example2.atlassian.net", "token-broken")]);
+      replaceAtlassianAuths([
+        oauthAuth("cloud-2", "https://example2.atlassian.net", "token-broken"),
+      ]);
 
       const fetchMock = vi.fn(async () => {
         throw new Error("network unreachable");
@@ -95,7 +101,8 @@ it.effect(
       assert.strictEqual(result, undefined);
       const flattened = entries.flatMap((entry) => (Array.isArray(entry) ? entry : [entry]));
       const textPart = flattened.some(
-        (part) => typeof part === "string" && part.includes("failed to resolve Atlassian viewer accountId"),
+        (part) =>
+          typeof part === "string" && part.includes("failed to resolve Atlassian viewer accountId"),
       );
       const annotationPart = flattened.some(
         (part) =>
@@ -104,7 +111,10 @@ it.effect(
           (part as Record<string, unknown>)["accountId"] === "cloud-2" &&
           (part as Record<string, unknown>)["provider"] === "atlassian",
       );
-      assert.isTrue(textPart, `expected a warning message, got: ${serializeBacklogCacheJson(entries)}`);
+      assert.isTrue(
+        textPart,
+        `expected a warning message, got: ${serializeBacklogCacheJson(entries)}`,
+      );
       assert.isTrue(
         annotationPart,
         `expected the warning to carry accountId/provider, got: ${serializeBacklogCacheJson(entries)}`,

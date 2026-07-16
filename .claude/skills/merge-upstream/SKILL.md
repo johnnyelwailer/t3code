@@ -8,10 +8,12 @@ description: Merge/sync upstream (t3-chat) commits into this fork safely. Use wh
 Codified from session 280089ad (14-commit merge, improvised end-to-end) and the additive-guard architecture.
 
 ## Invariants
+
 - This fork's contract: t3work code stays **additive** (`t3work-*` prefixed files, guard-whitelisted upstream files, ~200 added LOC/file). The guard: `node t3work-additive-guard.mjs`.
 - Known conflict seam files: `apps/web/src/components/ChatView.tsx`, `apps/web/src/components/chat/MessagesTimeline.tsx`, `pnpm-lock.yaml`.
 
 ## Steps
+
 1. **Isolate**: create a worktree off the current feature branch — never merge in the user's checked-out tree.
 2. **Fetch + inspect**: `git fetch upstream && git log --oneline HEAD..upstream/main` — count commits, scan for seam-file touches (`git diff --name-only HEAD...upstream/main | grep -E 'ChatView|MessagesTimeline|package.json|pnpm-lock'`).
 3. **Merge without committing**: `bun run sync:upstream:current` (preferred — surfaces conflicts as standard git conflicts) or `git merge --no-commit upstream/main`.

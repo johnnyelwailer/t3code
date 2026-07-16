@@ -4,7 +4,10 @@ import type { ExternalResourceRef, ResourcePage } from "@t3tools/project-context
 import * as Effect from "effect/Effect";
 
 import { providerForAccount } from "./t3work-atlassian-auth-store.ts";
-import { hasMirrorRowsForProject, readMyWorkIssueRows } from "./t3work-atlassian-backlog-cacheQueries.ts";
+import {
+  hasMirrorRowsForProject,
+  readMyWorkIssueRows,
+} from "./t3work-atlassian-backlog-cacheQueries.ts";
 import { ensureBacklogCacheTables } from "./t3work-atlassian-backlog-cacheTables.ts";
 import { kickT3workAtlassianMirrorSync } from "./t3work-atlassian-backlog-mirrorSyncService.ts";
 import { tryAtlassianPromise } from "./t3work-atlassian-http.ts";
