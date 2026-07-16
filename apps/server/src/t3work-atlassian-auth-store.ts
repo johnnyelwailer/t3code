@@ -14,7 +14,7 @@ import {
   type PersistedAtlassianAuths,
   savePersistedAtlassianAuthsPayload,
 } from "./t3work-atlassian-auth-persistence.ts";
-import { invalidateT3workAtlassianViewerAccountIdCache } from "./t3work-atlassian-viewer-identity.ts";
+import { invalidateT3workAtlassianAuthDependents } from "./t3work-atlassian-auth-changeHooks.ts";
 
 export type BasicConnectInput = {
   readonly auth: {
@@ -198,7 +198,7 @@ export function providerForPersistedAuths() {
 
 export function setAtlassianAuth(accountId: string, auth: JiraApiAuth): void {
   atlassianAuths.set(accountId, auth);
-  invalidateT3workAtlassianViewerAccountIdCache();
+  invalidateT3workAtlassianAuthDependents();
 }
 
 /**
@@ -214,5 +214,5 @@ export function replaceAtlassianAuths(
   for (const entry of entries) {
     atlassianAuths.set(entry.accountId, entry.auth);
   }
-  invalidateT3workAtlassianViewerAccountIdCache();
+  invalidateT3workAtlassianAuthDependents();
 }

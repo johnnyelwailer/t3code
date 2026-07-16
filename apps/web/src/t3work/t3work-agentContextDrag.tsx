@@ -47,6 +47,11 @@ export function useT3WorkAgentContextDrag(input: {
         return;
       }
 
+      // A previous drag source may have unmounted mid-drag without firing
+      // dragend, leaving its record orphaned. Clear it before claiming the
+      // new id so strays cap at ~1 instead of accumulating.
+      clearDragRecord(activeDragId);
+
       const dragId = randomUUID();
       activeDragId = dragId;
       activeDragRecords.set(dragId, { id: dragId, label, capabilities });

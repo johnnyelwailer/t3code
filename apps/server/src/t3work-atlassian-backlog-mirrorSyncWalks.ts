@@ -1,7 +1,9 @@
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
 import { tryAtlassianPromise } from "./t3work-atlassian-http.ts";
+import { pruneStaleT3workAtlassianBacklogViews } from "./t3work-atlassian-backlog-reconcilePrune.ts";
 import {
   burstPause,
   maxPagesPerBurst,
@@ -165,6 +167,16 @@ export function runMirrorReconcile(
     yield* deleteMirrorIssuesAbsentFromWalk({ identity, seenIds }).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("t3work atlassian mirror reconcile prune failed", cause),
+      ),
+    );
+
+    // Also prune view rows (one per board/sprint/filter selection ever
+    // opened) that haven't been refreshed in ~30 days — nothing else ever
+    // deletes them. Degrades to a warning rather than failing the walk.
+    const nowMs = yield* Clock.currentTimeMillis;
+    yield* pruneStaleT3workAtlassianBacklogViews({ identity, nowMs }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("t3work atlassian mirror reconcile view prune failed", cause),
       ),
     );
   });

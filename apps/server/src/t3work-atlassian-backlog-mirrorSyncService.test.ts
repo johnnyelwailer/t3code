@@ -9,7 +9,7 @@
  * relative-JQL incremental filter is covered in the provider unit tests.
  */
 
-import { assert, it } from "@effect/vitest";
+import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -26,8 +26,10 @@ import {
   computeIncrementalLookbackMinutes,
   nextMirrorSleepMs,
   hasActiveT3workAtlassianMirrorSync,
+  isT3workMirrorSyncIdle,
   kickT3workAtlassianMirrorSync,
   runMirrorReconcile,
+  stopAllT3workAtlassianMirrorSyncs,
   upsertMirrorIssues,
 } from "./t3work-atlassian-backlog-mirrorSyncService.ts";
 import { AtlassianMirrorSourceUnavailableError } from "@t3tools/integrations-atlassian";
@@ -148,29 +150,25 @@ mirrorSyncCacheLayer("t3work Atlassian mirror sync service", (it) => {
       }),
   );
 
-  it.effect(
-    "reconcile keeps mirrored rows when the provider reports the source unavailable",
-    () =>
-      Effect.gen(function* () {
-        yield* reconcileWith(
-          providerReturning([{ items: [{ id: "10001", displayId: "PROJ-1" }] }]),
-        );
-        assert.strictEqual(yield* countMirrorRows, 1);
+  it.effect("reconcile keeps mirrored rows when the provider reports the source unavailable", () =>
+    Effect.gen(function* () {
+      yield* reconcileWith(providerReturning([{ items: [{ id: "10001", displayId: "PROJ-1" }] }]));
+      assert.strictEqual(yield* countMirrorRows, 1);
 
-        const unavailableProvider = {
-          listProjectMirrorPage: vi.fn(async () => {
-            throw new AtlassianMirrorSourceUnavailableError({
-              reason: "project-not-found",
-              externalProjectId: "project-1",
-              message: "project lookup failed",
-            });
-          }),
-        } as unknown as AtlassianIntegrationProvider;
+      const unavailableProvider = {
+        listProjectMirrorPage: vi.fn(async () => {
+          throw new AtlassianMirrorSourceUnavailableError({
+            reason: "project-not-found",
+            externalProjectId: "project-1",
+            message: "project lookup failed",
+          });
+        }),
+      } as unknown as AtlassianIntegrationProvider;
 
-        const exit = yield* Effect.exit(reconcileWith(unavailableProvider));
-        assert.ok(Exit.isFailure(exit), "reconcile must fail, not treat it as an empty project");
-        assert.strictEqual(yield* countMirrorRows, 1);
-      }),
+      const exit = yield* Effect.exit(reconcileWith(unavailableProvider));
+      assert.ok(Exit.isFailure(exit), "reconcile must fail, not treat it as an empty project");
+      assert.strictEqual(yield* countMirrorRows, 1);
+    }),
   );
 
   // Distinct identity from the reconcile tests above (own externalProjectId)
@@ -253,10 +251,7 @@ mirrorSyncCacheLayer("t3work Atlassian mirror sync service", (it) => {
 
         const changedJson = yield* readMirrorResourceJson;
         assert.ok(changedJson, "row must still exist");
-        assert.strictEqual(
-          parseJson<{ sprintId: string }>(changedJson ?? null)?.sprintId,
-          "4444",
-        );
+        assert.strictEqual(parseJson<{ sprintId: string }>(changedJson ?? null)?.sprintId, "4444");
       }),
   );
 });
@@ -304,6 +299,44 @@ it("lookback widening: clock going backwards never shrinks below the floor", () 
     15,
   );
 });
+
+describe("isT3workMirrorSyncIdle", () => {
+  it("is not idle while within the TTL", () => {
+    const nowMs = 10 * 60_000;
+    assert.strictEqual(isT3workMirrorSyncIdle({ nowMs, lastKickedMs: nowMs - 29 * 60_000 }), false);
+  });
+
+  it("is idle once the gap since the last kick reaches the 30 m TTL", () => {
+    const nowMs = 60 * 60_000;
+    assert.strictEqual(isT3workMirrorSyncIdle({ nowMs, lastKickedMs: nowMs - 30 * 60_000 }), true);
+  });
+});
+
+// The idle-TTL self-termination itself (30 minutes of real elapsed time
+// between kicks) is not exercised end-to-end here: driving it live real-time
+// would make the suite absurdly slow, and TestClock doesn't apply to this
+// loop (it's a real detached fiber sleeping on the real Effect.sleep as the
+// existing single-flight test's comment explains). `isT3workMirrorSyncIdle`
+// above covers the actual decision logic in isolation instead.
+
+it.live("stopAllT3workAtlassianMirrorSyncs releases every registered loop key", () =>
+  Effect.gen(function* () {
+    const request = {
+      account: {
+        id: "https://stop-all.atlassian.net",
+        provider: "atlassian",
+      } satisfies IntegrationAccountRef,
+      externalProjectId: "project-stop-all",
+    };
+
+    yield* kickT3workAtlassianMirrorSync(request);
+    assert.ok(hasActiveT3workAtlassianMirrorSync(request));
+
+    stopAllT3workAtlassianMirrorSyncs();
+
+    assert.ok(!hasActiveT3workAtlassianMirrorSync(request));
+  }).pipe(Effect.provide(mirrorSyncTestLayer)),
+);
 
 // Runs on the REAL clock (top-level it.live; the layer-scoped `it` has no .live):
 // the loop is a detached fiber doing real async work, so Effect.sleep-based

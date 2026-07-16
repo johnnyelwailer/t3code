@@ -14,6 +14,7 @@ import { buildT3workContextBackgroundEdges } from "./t3work-contextRefreshBackgr
 import { persistT3workContextBackgroundJobBestEffort } from "./t3work-contextRefreshBackgroundPersist.ts";
 import {
   enqueueT3workContextBackgroundItems,
+  releaseT3workContextBackgroundJobIfIdle,
   sortT3workContextBackgroundQueue,
   t3workContextBackgroundTargetDepth,
   type T3workContextBackgroundJob,
@@ -168,6 +169,10 @@ export function runT3workContextBackgroundJob(input: {
     Effect.ensuring(
       Effect.sync(() => {
         input.job.running = false;
+        releaseT3workContextBackgroundJobIfIdle(
+          { workspaceRoot: input.workspaceRoot, rootKey: input.job.rootKey },
+          input.job,
+        );
       }),
     ),
   );

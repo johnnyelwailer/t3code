@@ -35,6 +35,7 @@ export function readCachedAtlassianResourceSnapshot(input: {
         externalProjectId: input.project.source.externalProjectId,
         key: input.key,
       }),
+      { persist: false },
     )?.value ?? null
   );
 }
@@ -52,6 +53,7 @@ export function writeCachedAtlassianResourceSnapshot(input: {
       key: input.key,
     }),
     input.snapshot,
+    { persist: false },
   );
 }
 

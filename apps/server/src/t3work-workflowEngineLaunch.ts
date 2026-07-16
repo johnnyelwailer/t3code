@@ -33,9 +33,7 @@ import type {
 } from "@t3tools/contracts";
 
 import {
-  appendResolvedEntry,
   type JournalStore,
-  resumeWorkflow,
   startWorkflow,
   type SuspendedResult,
   type WorkflowRef,
@@ -49,6 +47,7 @@ import {
   type WorkflowEngineSleep,
 } from "./t3work-workflowEngineBroker.ts";
 import type { T3workWorkflowEngineRegistryShape } from "./t3work-workflowEngineRegistry.ts";
+import { makeControllerResume } from "./t3work-workflowEngineResume.ts";
 
 export type WorkflowLaunchStatus = "completed" | "suspended" | "failed";
 
@@ -69,6 +68,10 @@ export interface WorkflowRunLifecycle {
   readonly recordCompleted: () => Promise<void>;
   /** Mark the run `failed` and clear the pending ask. */
   readonly recordFailed: () => Promise<void>;
+  /** Crash-recovery: if the run row is still `sleeping` on this correlation (its wake reply was
+   * journaled by a process that died before settling), mark it failed so the scheduler stops
+   * re-arming it. No-op otherwise (e.g. a late ask reply on an already-advanced run). */
+  readonly orphanIfSleeping: (correlationId: string) => Promise<void>;
 }
 
 export interface LaunchWorkflowRecipeInput {
@@ -162,23 +165,9 @@ export function createWorkflowRunController(
     return "completed";
   };
 
-  const resume = async (correlationId: string, reply: unknown): Promise<void> => {
-    const wrote = await appendResolvedEntry({
-      ...(input.store === undefined ? {} : { store: input.store }),
-      runsRoot: input.runsRoot,
-      runId: input.runId,
-      correlationId,
-      reply,
-    });
-    if (!wrote) return; // already settled (a late reply after resolution or dismissal)
-    try {
-      await settle(await resumeWorkflow(input.runId, ref, input.args, options));
-    } catch (error) {
-      input.registry.deleteRun(input.runId);
-      await input.lifecycle?.recordFailed();
-      await input.onError?.(error);
-    }
-  };
+  // The concurrency/crash-safe resume closure (see t3work-workflowEngineResume.ts). Extracted to
+  // keep this module under the prefixed-file LOC cap.
+  const resume = makeControllerResume({ input, ref, options, settle });
 
   input.registry.registerRun(input.runId, { resume });
   return { ref, options, settle, resume };

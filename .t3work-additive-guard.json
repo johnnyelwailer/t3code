@@ -36,6 +36,8 @@
     "apps/web/src/components/chat/MessagesTimeline.tsx",
     "apps/web/src/components/chat/MessagesTimeline.test.tsx",
     "apps/web/src/composerDraftStore.ts",
+    "apps/server/src/provider/Layers/EventNdjsonLogger.ts",
+    "apps/server/src/provider/Layers/EventNdjsonLogger.test.ts",
     "apps/server/src/provider/Layers/ClaudeAdapter.ts",
     "apps/server/src/provider/Layers/ClaudeAdapter.test.ts",
     "apps/web/src/routeTree.gen.ts",

@@ -110,6 +110,9 @@ export function usePlanningSpaceEngineEffects(ctxRef: MutableRefObject<PlanningS
       observer.disconnect();
       engine.stop();
       c.engineRef.current = null;
+      if (import.meta.env.DEV) {
+        delete (window as unknown as Record<string, unknown>)["__t3psEngine"];
+      }
     };
   }, []);
 

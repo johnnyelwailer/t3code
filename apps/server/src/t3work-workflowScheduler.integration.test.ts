@@ -25,6 +25,7 @@ import * as NodeURL from "node:url";
 
 import { assert, it } from "@effect/vitest";
 import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { appendResolvedEntry } from "@t3work/sdk";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -54,6 +55,7 @@ import {
   toSchedulerSleepingRun,
   type WorkflowSchedulerClock,
 } from "./t3work-workflowScheduler.ts";
+import { makeSchedulerResume, orphanSleepingRun } from "./t3work-workflowSchedulerResume.ts";
 
 const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3work-exampleTimer.workflow.ts", import.meta.url),
@@ -293,11 +295,110 @@ schedulerLayer("workflow scheduler — DB-backed clock park survives a restart",
       });
 
       yield* Effect.promise(() => scheduler.rearm());
-      assert.strictEqual(manual.armedDelay(), 0); // past-due → 0ms, fires on the next tick
+      // Past-due arms at the 1s floor (not 0), then fires on the next tick — the loop guard.
+      assert.strictEqual(manual.armedDelay(), 1000);
       yield* Effect.promise(() => manual.fire());
 
       assert.deepStrictEqual(completed[0], { slept: true, deadline: deadlineMs });
       assert.strictEqual(Option.getOrThrow(yield* repo.getById({ runId })).status, "completed");
     }),
+  );
+});
+
+schedulerLayer("workflow scheduler — no-op resumes are orphaned, not hot-looped", (it) => {
+  it.effect("a due row whose run is unregistered is orphaned and never re-armed", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkflowRunRepository;
+      const store = yield* WorkflowJournalStore;
+      const runId = "sleep-orphan-unregistered";
+
+      yield* launchTimer(repo, store, runId, HOUR_MS);
+      const sleepingRow = Option.getOrThrow(yield* repo.getById({ runId }));
+      const deadlineMs = DateTime.makeUnsafe(sleepingRow.wakeAt!).epochMilliseconds;
+
+      // No rehydration: the run is NOT registered this uptime (recipe gone / rehydration failed).
+      const registry = makeWorkflowEngineRegistry();
+      // Clock is past the deadline, so the row is due on the first arm.
+      const manual = makeManualClock(deadlineMs + 5000);
+      const scheduler = makeWorkflowScheduler({
+        listSleeping: () =>
+          Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
+            rows
+              .map(toSchedulerSleepingRun)
+              .filter((run): run is NonNullable<typeof run> => run !== undefined),
+          ),
+        resume: makeSchedulerResume({
+          getRun: (rid) => registry.getRun(rid),
+          orphan: (rid, correlationId) => orphanSleepingRun(repo, rid, correlationId),
+        }),
+        clock: manual.clock,
+      });
+
+      yield* Effect.promise(() => scheduler.rearm());
+      // Due → arms at the 1s floor, NOT 0 (the setTimeout(0) hot-loop guard).
+      assert.strictEqual(manual.armedDelay(), 1000);
+
+      // One tick: resume finds no registered run → orphans the row → re-arm finds nothing.
+      yield* Effect.promise(() => manual.fire());
+
+      const orphaned = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.strictEqual(orphaned.status, "failed"); // excluded from future listSleeping
+      assert.isNull(orphaned.wakeAt);
+      assert.isNull(orphaned.pendingCorrelationId);
+      // Bounded: the tick did NOT re-arm a fresh timer — no infinite listSleeping/setTimeout(0).
+      assert.isUndefined(manual.armedDelay());
+    }),
+  );
+
+  it.effect(
+    "a wrote:false wake (journaled pre-crash, never settled) is orphaned, not re-armed",
+    () =>
+      Effect.gen(function* () {
+        const repo = yield* WorkflowRunRepository;
+        const store = yield* WorkflowJournalStore;
+        const runId = "sleep-orphan-wrote-false";
+
+        yield* launchTimer(repo, store, runId, HOUR_MS);
+        const sleepingRow = Option.getOrThrow(yield* repo.getById({ runId }));
+        const deadlineMs = DateTime.makeUnsafe(sleepingRow.wakeAt!).epochMilliseconds;
+        const correlationId = sleepingRow.pendingCorrelationId!;
+
+        // Simulate the crash window: a prior process journaled the wake reply (resolved) but died
+        // before settling, so the run row is still `sleeping`.
+        const wroteFirst = yield* Effect.promise(() =>
+          appendResolvedEntry({ store, runsRoot, runId, correlationId, reply: {} }),
+        );
+        assert.isTrue(wroteFirst); // the prior process's write succeeded
+
+        // Restart: rebuild the resume closure from the DB (still sleeping) and arm a fresh scheduler.
+        const completed: Array<Record<string, unknown>> = [];
+        const registry = yield* rebuildSleepingFromDb(repo, store, completed);
+        const manual = makeManualClock(deadlineMs);
+        const scheduler = makeWorkflowScheduler({
+          listSleeping: () =>
+            Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
+              rows
+                .map(toSchedulerSleepingRun)
+                .filter((run): run is NonNullable<typeof run> => run !== undefined),
+            ),
+          resume: makeSchedulerResume({
+            getRun: (rid) => registry.getRun(rid),
+            orphan: (rid, correlationId) => orphanSleepingRun(repo, rid, correlationId),
+          }),
+          clock: manual.clock,
+        });
+
+        yield* Effect.promise(() => scheduler.rearm());
+        assert.strictEqual(manual.armedDelay(), 1000); // due → floor
+
+        // The tick resumes: appendResolvedEntry now returns wrote:false → orphanIfSleeping fails it.
+        yield* Effect.promise(() => manual.fire());
+
+        const orphaned = Option.getOrThrow(yield* repo.getById({ runId }));
+        assert.strictEqual(orphaned.status, "failed"); // NOT re-armed, NOT falsely completed
+        assert.isUndefined(completed[0]); // the workflow body never re-ran
+        assert.isNull(orphaned.wakeAt);
+        assert.isUndefined(manual.armedDelay()); // bounded: no fresh timer
+      }),
   );
 });

@@ -80,6 +80,15 @@ function scheduleRetry(state: WorkspaceSyncState): void {
   }, delayMs);
 }
 
+function dropStateIfAbandoned(state: WorkspaceSyncState): void {
+  if (state.activeLeases > 0 || state.inFlight) return;
+  clearTimer(state.flushTimer);
+  clearTimer(state.retryTimer);
+  delete state.flushTimer;
+  delete state.retryTimer;
+  syncStateByWorkspaceRoot.delete(state.workspaceRoot);
+}
+
 async function flushWorkspaceSync(state: WorkspaceSyncState): Promise<void> {
   if (state.inFlight || !state.latestRun || !state.latestSignature) return;
   const run = state.latestRun;
@@ -105,6 +114,7 @@ async function flushWorkspaceSync(state: WorkspaceSyncState): Promise<void> {
     if (state.latestSignature === signature && state.revision === revision) {
       state.status = "synced";
       delete state.lastError;
+      dropStateIfAbandoned(state);
       return;
     }
     state.status = "pending";
@@ -121,6 +131,7 @@ async function flushWorkspaceSync(state: WorkspaceSyncState): Promise<void> {
         (waiter) => waiter.reject(error),
       );
       scheduleRetry(state);
+      dropStateIfAbandoned(state);
       return;
     }
     state.status = "pending";
@@ -133,10 +144,17 @@ export function retainProjectWorkspaceSync(workspaceRoot: string): () => void {
   state.activeLeases += 1;
   return () => {
     state.activeLeases = Math.max(0, state.activeLeases - 1);
-    if (state.activeLeases === 0) {
-      clearTimer(state.retryTimer);
-      delete state.retryTimer;
+    if (state.activeLeases > 0) return;
+    if (!state.inFlight) {
+      // No consumers left and nothing running: reject dangling waiters.
+      // An in-flight sync is settled by flushWorkspaceSync's own handler.
+      settleWaiters(
+        state,
+        () => true,
+        (waiter) => waiter.reject(new Error("Workspace sync cancelled: no active consumers.")),
+      );
     }
+    dropStateIfAbandoned(state);
   };
 }
 

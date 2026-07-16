@@ -5,13 +5,21 @@ import * as Effect from "effect/Effect";
 
 import { providerForAccount } from "./t3work-atlassian-auth-store.ts";
 import {
-  computeIncrementalLookbackMinutes,
   nextMirrorSleepMs,
   normalSleepMs,
   reconcileIntervalMs,
   type T3workAtlassianMirrorSyncRequest,
 } from "./t3work-atlassian-backlog-mirrorSyncShared.ts";
+import { computeIncrementalLookbackMinutes } from "./t3work-atlassian-backlog-mirrorSyncShared.ts";
 import { runMirrorIncrementalWalk, runMirrorReconcile } from "./t3work-atlassian-backlog-mirrorSyncWalks.ts";
+import {
+  clearT3workMirrorSyncKickHistory,
+  isT3workMirrorSyncIdle,
+  lastT3workMirrorSyncKickMs,
+  recordT3workMirrorSyncKick,
+} from "./t3work-atlassian-mirrorSyncIdleTracking.ts";
+
+export { isT3workMirrorSyncIdle } from "./t3work-atlassian-mirrorSyncIdleTracking.ts";
 
 // ─── Single-flight map ───────────────────────────────────────────────────────
 
@@ -28,6 +36,20 @@ function mirrorSyncMapKey(input: {
   readonly externalProjectId: string;
 }): string {
   return `${input.account.provider}|${input.account.id}|${input.externalProjectId}`;
+}
+
+/**
+ * Stop every currently-registered mirror sync loop and forget all kick
+ * history. Called from the Atlassian auth replace path (basic/OAuth
+ * (re)connect, test fixture reset) so a disconnected account's loops don't
+ * keep polling Jira with credentials that may no longer be valid for that
+ * project. Clearing `activeMirrorSyncs` makes every running loop's
+ * `isSuperseded()` check return true on its next iteration; the loop's own
+ * `unregister` finalizer is then a no-op (the key is already gone).
+ */
+export function stopAllT3workAtlassianMirrorSyncs(): void {
+  activeMirrorSyncs.clear();
+  clearT3workMirrorSyncKickHistory();
 }
 
 /**
@@ -57,6 +79,7 @@ export function hasActiveT3workAtlassianMirrorSync(input: {
  */
 export function kickT3workAtlassianMirrorSync(input: T3workAtlassianMirrorSyncRequest) {
   const mapKey = mirrorSyncMapKey(input);
+  recordT3workMirrorSyncKick(mapKey);
   if (activeMirrorSyncs.has(mapKey)) {
     return Effect.void;
   }
@@ -95,8 +118,19 @@ function runMirrorLoop(input: T3workAtlassianMirrorSyncRequest, isSuperseded: ()
     let lastSuccessfulWalkMs = 0;
     let sleepMs = normalSleepMs;
 
+    const mapKey = mirrorSyncMapKey(input);
+
     while (true) {
       if (isSuperseded()) return;
+
+      const idleNowMs = yield* Clock.currentTimeMillis;
+      const lastKickedMs = lastT3workMirrorSyncKickMs(mapKey) ?? idleNowMs;
+      if (isT3workMirrorSyncIdle({ nowMs: idleNowMs, lastKickedMs })) {
+        yield* Effect.logDebug(
+          "t3work atlassian mirror sync: no kick within idle TTL; terminating loop",
+        ).pipe(Effect.annotateLogs(identity));
+        return;
+      }
 
       // Re-resolve the provider every iteration instead of using a captured
       // instance: JiraApiClient freezes its auth at construction (no

@@ -6,7 +6,7 @@
  * t3work-PlanningSpaceView.tsx.
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { usePlanningSpaceViewModel } from "./t3work-planningSpaceViewModel";
 import { createPlanningSpaceHandlers } from "./t3work-planningSpaceHandlers";
@@ -59,6 +59,14 @@ export function usePlanningSpaceController(props: PlanningSpaceProps): PlanningS
 
   usePlanningSpaceEngineEffects(ctxRef);
   usePlanningSpacePointerEffect(ctxRef);
+
+  useEffect(() => {
+    return () => {
+      if (refs.toastTimer.current) {
+        clearTimeout(refs.toastTimer.current);
+      }
+    };
+  }, [refs.toastTimer]);
 
   const handleSetSubtaskHours = useCallback(
     (subtaskId: string, seconds: number) => {

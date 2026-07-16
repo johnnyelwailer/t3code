@@ -22,6 +22,7 @@ import {
 import { hashArgs } from "@t3work/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import type {
   WorkflowRun,
@@ -108,6 +109,32 @@ export function makeWorkflowRunLifecycle(opts: {
     recordFailed: () =>
       Effect.runPromise(
         repo.clearPending({ runId: row.runId, status: "failed", updatedAt: opts.nowIso() }),
+      ),
+    // Crash-recovery guard: the scheduler resumed a clock park whose `waitUntil` reply was already
+    // journaled by a PRIOR process that died before settling (appendResolvedEntry → wrote:false).
+    // The run row is stuck `sleeping`, so listSleeping re-arms it forever. Mark it failed — but
+    // ONLY when the row is still sleeping on THIS correlation, so a late/duplicate ask reply on an
+    // already-woken run (now sleeping on a different waitUntil) is never spuriously failed.
+    orphanIfSleeping: (correlationId) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const current = yield* repo.getById({ runId: row.runId });
+          if (
+            Option.isNone(current) ||
+            current.value.status !== "sleeping" ||
+            current.value.pendingCorrelationId !== correlationId
+          )
+            return;
+          yield* repo.clearPending({
+            runId: row.runId,
+            status: "failed",
+            updatedAt: opts.nowIso(),
+          });
+          yield* Effect.logWarning(
+            "workflow scheduler orphaned a sleeping run whose wake reply was resolved before settle",
+            { runId: row.runId, correlationId },
+          );
+        }),
       ),
   };
 }

@@ -3,6 +3,7 @@ import { evaluate } from "@mdx-js/mdx";
 import { MDXProvider, useMDXComponents } from "@mdx-js/react";
 import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
 
+import { BoundedMap } from "~/t3work/lib/t3work-boundedMap";
 import { cn } from "~/t3work/lib/t3work-utils";
 import { RecipeLaunchControlsProvider } from "~/t3work/t3work-recipeActionLaunchControls";
 import type { T3workRecipeQuickStartLaunchCustomization } from "~/t3work/t3work-recipeQuickStartLaunch";
@@ -19,7 +20,10 @@ type RecipeActionViewProps = {
 
 type RecipeActionViewComponent = ComponentType<RecipeActionViewProps>;
 
-const actionViewComponentCache = new Map<string, Promise<RecipeActionViewComponent>>();
+const ACTION_VIEW_CACHE_MAX_ENTRIES = 20;
+const actionViewComponentCache = new BoundedMap<string, Promise<RecipeActionViewComponent>>({
+  maxEntries: ACTION_VIEW_CACHE_MAX_ENTRIES,
+});
 
 export async function compileT3workRecipeActionView(
   source: string,

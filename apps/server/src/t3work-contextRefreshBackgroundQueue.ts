@@ -74,3 +74,23 @@ export function enqueueT3workContextBackgroundItems(
 export function listActiveT3workContextBackgroundJobs(): ReadonlyArray<T3workContextBackgroundJob> {
   return [...activeJobs.values()];
 }
+
+/**
+ * Release a finished job from `activeJobs` so its queue + `seen` set (which
+ * can grow large for wide dependency graphs) don't outlive the run forever.
+ * Only removes the entry when it is genuinely idle (not running, empty
+ * queue) and still the same job instance registered under this key — a kick
+ * that raced in during teardown and replaced/reused the map entry is left
+ * alone. A later kick for the same (workspaceRoot, rootKey) simply creates a
+ * fresh job via `getT3workContextBackgroundJob`.
+ */
+export function releaseT3workContextBackgroundJobIfIdle(
+  input: { readonly workspaceRoot: string; readonly rootKey: string },
+  job: T3workContextBackgroundJob,
+): void {
+  if (job.running || job.queue.length > 0) return;
+  const key = jobKey(input);
+  if (activeJobs.get(key) === job) {
+    activeJobs.delete(key);
+  }
+}

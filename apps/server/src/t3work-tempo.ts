@@ -32,6 +32,7 @@ import {
   type TempoPlan,
   type TempoScheduleDay,
 } from "./t3work-tempoCapacityMath.ts";
+import { withT3workIssueKeyCache } from "./t3work-tempoIssueKeyCache.ts";
 import { loadTempoToken } from "./t3work-tempoTokenStore.ts";
 
 export {
@@ -41,6 +42,7 @@ export {
   type T3workTempoUserCapacity,
 } from "./t3work-tempoCapacityMath.ts";
 export { loadTempoToken, saveTempoToken } from "./t3work-tempoTokenStore.ts";
+export { invalidateT3workTempoIssueKeyCache } from "./t3work-tempoIssueKeyCache.ts";
 
 const TEMPO_BASE_URL = "https://api.tempo.io/4";
 const TEMPO_PAGE_LIMIT = 200;
@@ -112,26 +114,17 @@ function fetchUserPlans(token: string, accountId: string, from: string, to: stri
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Issue project keys never change — memoize across requests. */
-const issueKeyCache = new Map<string, string | null>();
-
 function makeIssueKeyResolver(atlassianAccountId: string) {
   return Effect.gen(function* () {
     const provider = yield* providerForAccount(atlassianAccountId);
-    return async (issueId: string): Promise<string | null> => {
-      const cached = issueKeyCache.get(issueId);
-      if (cached !== undefined) return cached;
-      const key = await Promise.resolve(
-        "getBacklogIssue" in provider
-          ? provider
-              .getBacklogIssue({ accountId: atlassianAccountId, issueIdOrKey: issueId })
-              .then((item) => item?.id ?? null)
-              .catch(() => null)
-          : null,
-      );
-      issueKeyCache.set(issueId, key);
-      return key;
-    };
+    return withT3workIssueKeyCache(async (issueId) => {
+      if (!("getBacklogIssue" in provider)) return null;
+      const item = await provider.getBacklogIssue({
+        accountId: atlassianAccountId,
+        issueIdOrKey: issueId,
+      });
+      return item?.id ?? null;
+    });
   });
 }
 

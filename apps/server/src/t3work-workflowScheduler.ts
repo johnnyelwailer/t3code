@@ -19,7 +19,8 @@
  * The timer lives only in memory, but the deadlines live in the DB. On boot
  * (`rehydrateSuspendedWorkflowRuns`, after it rebuilds each sleeping run's resume closure)
  * {@link WorkflowScheduler.rearm} re-reads the sleeping set and re-arms. A deadline that PASSED
- * during downtime computes a non-negative delay of 0 and fires immediately (catch-up). As runs
+ * during downtime arms at the {@link MIN_DUE_DELAY_MS} floor and fires almost immediately
+ * (catch-up); the floor exists so a due row whose resume is a no-op cannot hot-loop. As runs
  * park or wake at runtime, the lifecycle pokes `rearm` so the soonest-deadline timer stays
  * current.
  *
@@ -40,6 +41,13 @@ import * as Layer from "effect/Layer";
 
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
+import { makeSchedulerResume, orphanSleepingRun } from "./t3work-workflowSchedulerResume.ts";
+
+/** Floor for a re-arm delay of an already-due row. A due row whose resume is a no-op (unregistered
+ * run, or a reply resolved by a crashed process) would otherwise re-arm at delay 0 forever — a
+ * setTimeout(0) hot loop that hammers `listSleeping`. Capping to 1s makes at most one wake attempt
+ * per second while a legitimate in-flight resume settles; the orphan paths remove the dead row. */
+const MIN_DUE_DELAY_MS = 1000;
 
 /** One sleeping run as the scheduler indexes it: which run, its `waitUntil` correlation to
  * resolve, and its wake instant (epoch millis). */
@@ -133,7 +141,10 @@ export function makeWorkflowScheduler(deps: WorkflowSchedulerDeps): WorkflowSche
     clear();
     if (rows.length === 0) return;
     const soonest = Math.min(...rows.map((run) => run.wakeAtMs));
-    const delayMs = Math.max(0, soonest - clock.now());
+    // An already-due deadline arms at the floor, never 0 — see MIN_DUE_DELAY_MS (loop guard). A
+    // future deadline arms at its exact remaining delay.
+    const remaining = soonest - clock.now();
+    const delayMs = remaining <= 0 ? MIN_DUE_DELAY_MS : remaining;
     timer = clock.setTimer(tick, delayMs);
   };
 
@@ -176,11 +187,10 @@ export const T3workWorkflowSchedulerLive = Layer.effect(
           .filter((run): run is SchedulerSleepingRun => run !== undefined),
       );
 
-    const resume = (runId: string, correlationId: string): Promise<void> => {
-      const run = registry.getRun(runId);
-      if (run === undefined) return Promise.resolve(); // not rehydrated this uptime
-      return run.resume(correlationId, {});
-    };
+    const resume = makeSchedulerResume({
+      getRun: (runId) => registry.getRun(runId),
+      orphan: (runId, correlationId) => orphanSleepingRun(repo, runId, correlationId),
+    });
 
     const scheduler = makeWorkflowScheduler({
       listSleeping,

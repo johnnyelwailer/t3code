@@ -105,4 +105,42 @@ describe("t3work integration cache", () => {
       fingerprint: "sha256:abc",
     });
   });
+
+  it("keeps persist:false writes memory-only and skips localStorage", () => {
+    const key = nextCacheKey();
+
+    writeIntegrationCache(key, { id: "memory-only" }, { persist: false });
+
+    expect(readIntegrationCache<{ id: string }>(key)?.value).toEqual({ id: "memory-only" });
+    expect(localStorageMock.getItem(`t3work.integration-cache.v1:${key}`)).toBeNull();
+  });
+
+  it("lazily cleans up stale localStorage entries for persist:false keys", () => {
+    const key = nextCacheKey();
+
+    localStorageMock.setItem(
+      `t3work.integration-cache.v1:${key}`,
+      JSON.stringify({ value: { id: "stale-persisted" }, updatedAt: 1_000 }),
+    );
+
+    expect(readIntegrationCache<{ id: string }>(key, { persist: false })).toBeNull();
+    expect(localStorageMock.getItem(`t3work.integration-cache.v1:${key}`)).toBeNull();
+  });
+
+  it("evicts the least-recently-used entry once the memory cache is full", () => {
+    // Use persist: false so localStorage cannot mask in-memory eviction.
+    const keys = Array.from({ length: 201 }, () => nextCacheKey());
+
+    for (const key of keys) {
+      writeIntegrationCache(key, { id: key }, { persist: false });
+    }
+
+    // The oldest key was evicted from the in-memory LRU cache once the 200
+    // entry cap was exceeded, and persist:false means there is no
+    // localStorage fallback to mask the eviction.
+    expect(readIntegrationCache<{ id: string }>(keys[0]!, { persist: false })).toBeNull();
+    expect(
+      readIntegrationCache<{ id: string }>(keys[keys.length - 1]!, { persist: false })?.value,
+    ).toEqual({ id: keys[keys.length - 1] });
+  });
 });

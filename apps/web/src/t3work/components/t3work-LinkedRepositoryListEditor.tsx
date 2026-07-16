@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/t3work/components/ui/t3work-button";
 import { Input } from "~/t3work/components/ui/t3work-input";
 import { parseRepositoryLabel } from "~/t3work/components/t3work-linkedRepositories";
@@ -27,6 +27,16 @@ export function LinkedRepositoryListEditor({
   helpText?: string;
 }) {
   const [inputFocused, setInputFocused] = useState(false);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current !== null) {
+        clearTimeout(blurTimerRef.current);
+      }
+    };
+  }, []);
+
   const availableOptions = useMemo(() => {
     const deduped = new Set<string>();
     for (const value of searchableRepositoryOptions ?? []) {
@@ -58,7 +68,10 @@ export function LinkedRepositoryListEditor({
           onChange={(event) => setNewRepositoryUrl(event.target.value)}
           onFocus={() => setInputFocused(true)}
           onBlur={() => {
-            window.setTimeout(() => setInputFocused(false), 120);
+            if (blurTimerRef.current !== null) {
+              clearTimeout(blurTimerRef.current);
+            }
+            blurTimerRef.current = setTimeout(() => setInputFocused(false), 120);
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {

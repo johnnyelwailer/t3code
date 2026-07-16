@@ -1,3 +1,5 @@
+import { BoundedMap } from "~/t3work/lib/t3work-boundedMap";
+
 export type IntegrationCacheRecord<T> = {
   readonly value: T;
   readonly updatedAt: number;
@@ -5,7 +7,10 @@ export type IntegrationCacheRecord<T> = {
 };
 
 const STORAGE_PREFIX = "t3work.integration-cache.v1";
-const memoryCache = new Map<string, IntegrationCacheRecord<unknown>>();
+const MAX_MEMORY_ENTRIES = 200;
+const memoryCache = new BoundedMap<string, IntegrationCacheRecord<unknown>>({
+  maxEntries: MAX_MEMORY_ENTRIES,
+});
 
 function storageKey(key: string): string {
   return `${STORAGE_PREFIX}:${key}`;
@@ -47,6 +52,13 @@ export function readIntegrationCache<T>(
   options?: {
     readonly maxAgeMs?: number;
     readonly nowMs?: number;
+    /**
+     * Whether this key is allowed to be persisted to/read from localStorage.
+     * Defaults to true for backwards compatibility. Memory-only caches
+     * (e.g. large resource snapshots) should pass `false` here and also
+     * lazily clean up any stale entries persisted before this flag existed.
+     */
+    readonly persist?: boolean;
   },
 ): IntegrationCacheRecord<T> | null {
   const cached = memoryCache.get(key);
@@ -61,6 +73,16 @@ export function readIntegrationCache<T>(
   }
 
   if (!canUseLocalStorage()) return null;
+
+  if (options?.persist === false) {
+    // Lazily clean up any stale entry written before memory-only opt-out.
+    try {
+      window.localStorage.removeItem(storageKey(key));
+    } catch {
+      // Ignore storage removal failures.
+    }
+    return null;
+  }
 
   try {
     const raw = window.localStorage.getItem(storageKey(key));
@@ -86,6 +108,8 @@ export function writeIntegrationCache<T>(
   options?: {
     readonly updatedAt?: number;
     readonly fingerprint?: string;
+    /** See {@link readIntegrationCache}'s `persist` option. Defaults to true. */
+    readonly persist?: boolean;
   },
 ): void {
   const record: IntegrationCacheRecord<T> = {
@@ -97,6 +121,16 @@ export function writeIntegrationCache<T>(
   memoryCache.set(key, record as IntegrationCacheRecord<unknown>);
 
   if (!canUseLocalStorage()) return;
+
+  if (options?.persist === false) {
+    // Lazily clean up any stale entry written before memory-only opt-out.
+    try {
+      window.localStorage.removeItem(storageKey(key));
+    } catch {
+      // Ignore storage removal failures.
+    }
+    return;
+  }
 
   try {
     window.localStorage.setItem(storageKey(key), JSON.stringify(record));
