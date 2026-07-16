@@ -27,5 +27,6 @@ export function buildT3workMessagesTimelineTestProps() {
     onIsAtEndChange: () => {},
     onAnchorReady: () => {},
     onAnchorSizeChanged: () => {},
+    onManualNavigation: () => {},
   };
 }

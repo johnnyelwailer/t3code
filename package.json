@@ -41,7 +41,7 @@
   },
   "type": "module",
   "scripts": {
-    "prepare": "effect-tsgo patch && node scripts/setup-git-hooks.mjs",
+    "prepare": "effect-tsgo patch && vp config --no-agent && node scripts/setup-git-hooks.mjs",
     "setup:git-hooks": "node scripts/setup-git-hooks.mjs",
     "dev": "node scripts/dev-runner.ts dev",
     "dev:server": "node scripts/dev-runner.ts dev:server",
@@ -122,7 +122,7 @@
   "engines": {
     "node": "^24.13.1"
   },
-  "packageManager": "pnpm@10.24.0",
+  "packageManager": "pnpm@11.10.0",
   "msw": {
     "workerDirectory": [
       "apps/web/public"
