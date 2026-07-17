@@ -26,6 +26,10 @@
     "./tools/t3workRecipes": {
       "types": "./src/tools/t3work-sdk.t3workRecipes.ts",
       "import": "./src/tools/t3work-sdk.t3workRecipes.ts"
+    },
+    "./tools/t3workWorkflow": {
+      "types": "./src/tools/t3work-sdk.workflow.ts",
+      "import": "./src/tools/t3work-sdk.workflow.ts"
     }
   },
   "scripts": {

@@ -63,7 +63,12 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
   const enqueueOneWay = (fn: () => Promise<void>): Promise<void> => enqueue(fn).catch(() => {});
 
   // Live step-status pip (UX slice 1): fire-and-forget — the emitter swallows its own failures.
-  const step = (correlationId: string, kind: string, phase: "started" | "waiting" | "completed", detail?: string): void => {
+  const step = (
+    correlationId: string,
+    kind: string,
+    phase: "started" | "waiting" | "completed",
+    detail?: string,
+  ): void => {
     void deps.stepActivities?.emitSent({
       correlationId,
       stepKind: kind,

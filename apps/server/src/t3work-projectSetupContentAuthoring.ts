@@ -5,11 +5,9 @@ A t3work workflow is a typed TypeScript module (\`<id>.workflow.ts\`) executed d
 
 ## The one rule everything follows from: replay
 
-A workflow body may re-execute from the top at any time (resume after a suspension or restart). Journaled primitives return their recorded result instead of re-running -- so completed effects never run twice. Everything else must be deterministic:
+A workflow body may re-execute from the top at any time (resume after a suspension or restart). Journaled primitives return their recorded result instead of re-running.
 
-- Never call \`Date.now()\`, \`Math.random()\`, raw \`fetch\`, or read files directly in the body -- use \`now()\`, the journaled random/uuid, and \`tools.*\`/\`scripts.*\`. An effect outside a primitive WILL re-run on every replay.
-- Keep side effects inside \`tools.*\`/\`scripts.*\` calls. One primitive call = exactly one real execution, ever.
-- Don't branch on anything non-journaled (env vars, wall clock). Pass varying inputs via \`args\`.
+\`Date.now()\`, \`new Date()\`, \`Math.random()\`, and \`crypto.randomUUID()\` are already safe -- they're overridden to route through the journal, so replay reproduces the same values. What breaks replay is bypassing the primitives: raw \`fetch\`, direct \`fs\` reads, \`process.env\`, or any side effect outside \`tools.*\`/\`scripts.*\`. Keep all effects inside those calls -- one call, one real execution, ever.
 
 ## Make the run visible (required, not decorative)
 
@@ -37,6 +35,6 @@ Declare capabilities honestly: \`user\` for askUser/notifyUser, \`schedule\` for
 
 ## Scale and scope
 
-Match the workflow to what was asked: a one-off task gets a small linear body; "audit thoroughly" justifies fan-out plus a verification phase. Prefer a temporary one-task workflow over over-generalizing; offer to save it as a recipe only after it proves reusable (offer first, never silently).
+Match the workflow to what was asked: a one-off task gets a small linear body; "audit thoroughly" justifies fan-out plus a verification phase. A workflow doesn't need to be a saved recipe -- for a one-off multi-step task, write a temp workflow and run it directly with \`t3work.workflow.run\` (or whatever the run tool is named), no permission-seeking. Save it as a recipe in the background, and only once it's proven reusable.
 `;
 }

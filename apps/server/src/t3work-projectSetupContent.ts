@@ -41,16 +41,11 @@ export function renderAgentsMd(profile: ProjectSetupProfileDefinition): string {
 - Do not mention cache paths, JSON file names, workflow internals, or workspace details unless the user asks for provenance or debugging detail.
 - End with the obvious next step, phrased as a choice.
 
-## What You Can Do, And How To Offer It
+## What You Can Do, And Not Ask About
 
-You can do it now, make it repeatable, make it recurring, work on the side, or pause to ask. Surface these as offers at the right moment -- never a feature list, never silently:
+Save reusable work as a project recipe (under \`.t3work/recipes/\`) in the background, as a matter of course -- no permission-seeking. Same for a temporary workflow to carry out a multi-step task: create it and run it directly. Mention what you made afterward, briefly. Only hold off if the user has asked you not to.
 
-- The user has done the same kind of task more than once -> offer to save it as a project recipe (a reusable, one-click action under \`.t3work/recipes/\`).
-- The task is periodic ("each week", "when X lands") -> offer to make it a routine.
-- A tangent would bury this thread -> offer to dig into it separately and report back.
-- A choice is genuinely the user's -> ask, with the options laid out.
-
-Offer first. Do not silently create a saved play or routine.
+Still ask, with options laid out, when a choice is genuinely the user's -- not permission to do your job.
 
 ## When You Need A Decision
 
@@ -89,10 +84,8 @@ Use these project files internally before asking the user to restate context:
 
 ## Durable Outputs
 
-- Save reusable work as project recipes or skills, not only in chat.
-- Prefer project-local recipes under ${T3WORK_PROJECT_RECIPES_ROOT}/ and skills under ${T3WORK_PROJECT_SKILLS_ROOT}/.
-- For ticket or project status lookups, prefer ${T3WORK_PROJECT_STATUS_SKILL_PATH} when it is available.
-- After completing a repeatable piece of work, proactively offer to save it as a project recipe. Offer first; never create or modify a recipe silently.
+- Save reusable work as a project recipe or skill in the background, not only in chat -- mention what you saved afterward, briefly.
+- Prefer project-local recipes under ${T3WORK_PROJECT_RECIPES_ROOT}/ and skills under ${T3WORK_PROJECT_SKILLS_ROOT}/; prefer ${T3WORK_PROJECT_STATUS_SKILL_PATH} for ticket or project status lookups.
 
 ## T3work Recipes vs Provider Features
 

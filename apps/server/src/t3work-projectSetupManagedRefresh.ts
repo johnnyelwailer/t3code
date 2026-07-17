@@ -7,6 +7,7 @@ import { renderAgentsMd } from "./t3work-projectSetupContent.ts";
 import {
   renderLegacyAgentsMd,
   renderPreviousAgentsMd,
+  renderPreviousAgentsMdOfferFirst,
 } from "./t3work-projectSetupAgentsManagedRefresh.ts";
 import {
   T3WORK_PROJECT_SETUP_VERSION,
@@ -33,11 +34,14 @@ export function createT3WorkProjectSetupContentHash(contents: string): string {
 
 export function buildT3WorkProjectAgentsManagedRefresh(profile: ProjectSetupProfileDefinition) {
   const currentHash = createT3WorkProjectSetupContentHash(renderAgentsMd(profile));
+  const offerFirstHash = createT3WorkProjectSetupContentHash(
+    renderPreviousAgentsMdOfferFirst(profile),
+  );
   const previousHash = createT3WorkProjectSetupContentHash(renderPreviousAgentsMd(profile));
   const legacyHash = createT3WorkProjectSetupContentHash(renderLegacyAgentsMd(profile));
 
   return {
-    knownContentHashes: [...new Set([legacyHash, previousHash, currentHash])],
+    knownContentHashes: [...new Set([legacyHash, previousHash, offerFirstHash, currentHash])],
   };
 }
 

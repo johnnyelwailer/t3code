@@ -39,6 +39,8 @@ export interface BuildRunningRowInput {
   readonly modelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
+  /** Launch origin; defaults to `recipe` (the ephemeral tool path passes `ephemeral`). */
+  readonly origin?: WorkflowRun["origin"];
   readonly nowIso: string;
 }
 
@@ -55,6 +57,7 @@ export function buildRunningWorkflowRunRow(input: BuildRunningRowInput): Workflo
     runtimeMode: input.runtimeMode,
     interactionMode: input.interactionMode,
     status: "running",
+    origin: input.origin ?? "recipe",
     pendingThreadId: null,
     pendingCorrelationId: null,
     pendingKind: null,

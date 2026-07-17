@@ -187,7 +187,10 @@ export async function launchWorkflowRecipe(
   } catch (error) {
     input.registry.deleteRun(input.runId);
     await input.lifecycle?.recordFailed();
-    await controller.stepActivities.emitRun("failed", error instanceof Error ? error.message : String(error));
+    await controller.stepActivities.emitRun(
+      "failed",
+      error instanceof Error ? error.message : String(error),
+    );
     await input.onError?.(error);
     return { runId: input.runId, status: "failed" };
   }

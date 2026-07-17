@@ -47,6 +47,12 @@ export interface T3workToolHandlerClient {
   readonly listRecipes?: () => Promise<unknown>;
   /** Host-provided static workflow validation; result is validated against the tool result schema. */
   readonly validateRecipe?: (input: { readonly path: string }) => Promise<unknown>;
+  /** Host-provided ephemeral workflow launch; result is validated against the tool result schema. */
+  readonly runWorkflow?: (input: {
+    readonly source?: string;
+    readonly workflowPath?: string;
+    readonly args?: unknown;
+  }) => Promise<unknown>;
 }
 
 export interface ToolGroupRef<Id extends string = string> {

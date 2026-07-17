@@ -74,14 +74,15 @@ describe("renderT3WorkProjectSetupFiles", () => {
     expect(agents?.contents).toContain(T3WORK_PROJECT_CONTEXT_ENTRYPOINT_PATH);
     expect(agents?.contents).toContain("prefer a read-only subagent");
     expect(agents?.contents).toContain(
-      "offer to save it as a project recipe (a reusable, one-click action under",
+      "Save reusable work as a project recipe (under `.t3work/recipes/`) in the background",
     );
     expect(agents?.contents).toContain("do it in a separate thread scoped to the right repository");
     expect(agents?.contents).toContain("surface that thread as a link");
-    expect(agents?.contents).toContain("Offer first");
+    expect(agents?.contents).not.toContain("Offer first");
+    expect(agents?.contents).not.toContain("offer to save it as a project recipe");
     expect(agents?.contents).toContain("## T3work Recipes vs Provider Features");
     expect(agents?.contents).toContain("not a Claude Code skill, slash command, or subagent");
-    expect(agents?.contents).toContain("proactively offer to save it as a project recipe");
+    expect(agents?.contents).toContain("mention what you saved afterward");
     expect(agents?.managedRefresh?.knownContentHashes?.length).toBeGreaterThan(0);
     expect(claude?.contents).toBe(agents?.contents);
     expect(claude?.writeMode).toBe("if-missing");
@@ -119,8 +120,15 @@ describe("renderT3WorkProjectSetupFiles", () => {
     expect(recipesAuthoringGuide?.contents).toContain(
       "The one rule everything follows from: replay",
     );
+    expect(recipesAuthoringGuide?.contents).toContain(
+      "are already safe -- they're overridden to route through the journal",
+    );
+    expect(recipesAuthoringGuide?.contents).toContain(
+      "What breaks replay is bypassing the primitives",
+    );
     expect(recipesAuthoringGuide?.contents).toContain("Make the run visible");
     expect(recipesAuthoringGuide?.contents).toContain("## Patterns");
+    expect(recipesAuthoringGuide?.contents).toContain("workflow doesn't need to be a saved recipe");
   });
 
   it("includes managed file hashes in the profile manifest when provided", () => {

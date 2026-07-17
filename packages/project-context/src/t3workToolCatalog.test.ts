@@ -32,15 +32,10 @@ describe("t3workToolCatalog", () => {
   it("lists the implemented tools in catalog order", () => {
     expect(listImplementedT3workToolCatalogEntries().map((tool) => tool.id)).toEqual([
       "t3work.backlog.set_assignee_filter",
-      "t3work.backlog.item.assignee.draft_update",
-      "t3work.backlog.item.estimate.draft_update",
-      "t3work.backlog.item.subtask.draft_create",
-      "t3work.work_item.assignee.draft_update",
-      "t3work.work_item.estimate.draft_update",
-      "t3work.work_item.status.draft_update",
-      "t3work.work_item.description.draft_update",
-      "t3work.work_item.comment.draft_create",
       "t3work.view.read",
+      "t3work.recipe.list",
+      "t3work.recipe.validate",
+      "t3work.workflow.run",
       "t3work.thread.rename",
       "t3work.thread.start_child",
       "t3work.work_item.refresh_context_bundle",
@@ -51,6 +46,9 @@ describe("t3workToolCatalog", () => {
   it("defaults thread tool selection from the catalog", () => {
     expect(DEFAULT_T3WORK_THREAD_TOOL_IDS).toEqual([
       "t3work.view.read",
+      "t3work.recipe.list",
+      "t3work.recipe.validate",
+      "t3work.workflow.run",
       "t3work.thread.rename",
       "t3work.thread.start_child",
       "t3work.work_item.refresh_context_bundle",

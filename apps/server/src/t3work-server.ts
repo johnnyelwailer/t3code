@@ -348,6 +348,9 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
       Layer.provideMerge(T3workThreadToolContextStoreLive),
       Layer.provideMerge(T3workContextRefreshServiceLive),
       Layer.provide(OrchestrationLayerLive),
+      // t3work.workflow.run (ephemeral workflows) drives the same durable-engine singletons;
+      // memoized by reference, so this shares the registry/repo/store/scheduler instances.
+      Layer.provide(WorkflowEngineDurabilityLive),
     ),
   ),
   // The instance registry is the new routing keystone — text generation,

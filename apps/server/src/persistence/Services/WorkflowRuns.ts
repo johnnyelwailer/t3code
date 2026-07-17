@@ -39,6 +39,11 @@ export type WorkflowRunStatus = typeof WorkflowRunStatus.Type;
 export const WorkflowRunPendingKind = Schema.Literals(["thread.turn", "user.input"]);
 export type WorkflowRunPendingKind = typeof WorkflowRunPendingKind.Type;
 
+/** How the run was launched: from a discovered recipe, or agent-authored via
+ * `t3work.workflow.run` (ephemeral — no recipe on disk, source under `.t3work-runs/`). */
+export const WorkflowRunOrigin = Schema.Literals(["recipe", "ephemeral"]);
+export type WorkflowRunOrigin = typeof WorkflowRunOrigin.Type;
+
 export const WorkflowRun = Schema.Struct({
   runId: Schema.String,
   /** Absolute path to the recipe's `.workflow.ts` — re-resolved to a WorkflowRef on boot. */
@@ -54,6 +59,8 @@ export const WorkflowRun = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   status: WorkflowRunStatus,
+  /** Launch origin — `recipe` (discovered recipe) or `ephemeral` (agent-authored, tool-launched). */
+  origin: WorkflowRunOrigin,
   /** The thread the current ask is parked on (a spawned thread for agent() sub-threads). */
   pendingThreadId: Schema.NullOr(Schema.String),
   /** The correlation the run is parked on — an ask reply for `suspended`, the `waitUntil` sent
@@ -110,6 +117,10 @@ export const SetWorkflowRunSleepingInput = Schema.Struct({
 });
 export type SetWorkflowRunSleepingInput = typeof SetWorkflowRunSleepingInput.Type;
 
+/** Count runs of one origin still holding engine resources (running/suspended/sleeping). */
+export const CountLiveWorkflowRunsByOriginInput = Schema.Struct({ origin: WorkflowRunOrigin });
+export type CountLiveWorkflowRunsByOriginInput = typeof CountLiveWorkflowRunsByOriginInput.Type;
+
 /** WorkflowRunRepositoryShape - service API for durable run records. */
 export interface WorkflowRunRepositoryShape {
   /** Insert or replace a run row (keyed by `runId`). */
@@ -134,6 +145,10 @@ export interface WorkflowRunRepositoryShape {
   readonly clearPending: (
     input: ClearWorkflowRunPendingInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Count live (running/suspended/sleeping) runs of one origin — the ephemeral concurrency cap. */
+  readonly countLiveByOrigin: (
+    input: CountLiveWorkflowRunsByOriginInput,
+  ) => Effect.Effect<number, ProjectionRepositoryError>;
   /** Flip to `sleeping` and record the wake deadline + `waitUntil` correlation (Epic 27). */
   readonly setSleeping: (
     input: SetWorkflowRunSleepingInput,

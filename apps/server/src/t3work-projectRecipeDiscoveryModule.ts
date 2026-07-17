@@ -37,9 +37,7 @@ import type { AnyRecipeRef } from "@t3work/sdk";
 import { isRelativePath, resolveWithinRoot } from "./t3work-projectRecipeDiscoveryShared.ts";
 
 /** A `recipe.ts` module loaded fine but did not default-export a `defineRecipe(...)` result. */
-export class T3workRecipeModuleShapeError extends Data.TaggedError(
-  "T3workRecipeModuleShapeError",
-)<{
+export class T3workRecipeModuleShapeError extends Data.TaggedError("T3workRecipeModuleShapeError")<{
   readonly message: string;
 }> {}
 

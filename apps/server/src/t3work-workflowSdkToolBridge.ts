@@ -14,8 +14,11 @@ import type {
   ListRecipesToolResult,
   ValidateRecipeToolResult,
 } from "@t3work/sdk/tools/t3workRecipes";
-// Importing the recipes tool module registers `t3work.recipe.*` in the SDK tool registry.
+import type { RunWorkflowToolResult } from "@t3work/sdk/tools/t3workWorkflow";
+// Importing the tool modules registers `t3work.recipe.*` / `t3work.workflow.run` in the SDK
+// tool registry.
 import "@t3work/sdk/tools/t3workRecipes";
+import "@t3work/sdk/tools/t3workWorkflow";
 
 export class WorkflowSdkBridgeError extends Data.TaggedError("WorkflowSdkBridgeError")<{
   readonly message: string;
@@ -91,6 +94,29 @@ export function executeWorkflowSdkThreadRename(input: {
           },
         }),
       ) as Promise<RenameThreadToolResult>,
+    catch: toWorkflowSdkBridgeError,
+  });
+}
+
+/** Execute `t3work.workflow.run` through the SDK tool registry (arg decode + result check). */
+export function executeWorkflowSdkWorkflowRunTool(input: {
+  readonly toolArgs: unknown;
+  readonly runWorkflow: (args: {
+    readonly source?: string;
+    readonly workflowPath?: string;
+    readonly args?: unknown;
+  }) => Effect.Effect<RunWorkflowToolResult, WorkflowSdkBridgeError>;
+}): Effect.Effect<RunWorkflowToolResult, WorkflowSdkBridgeError> {
+  return Effect.tryPromise({
+    try: () =>
+      executeRegisteredTool(
+        "t3work.workflow.run",
+        input.toolArgs,
+        baseToolHandlerCtx({
+          renameThread: unsupportedRenameThread,
+          runWorkflow: (args) => Effect.runPromise(input.runWorkflow(args)),
+        }),
+      ) as Promise<RunWorkflowToolResult>,
     catch: toWorkflowSdkBridgeError,
   });
 }
