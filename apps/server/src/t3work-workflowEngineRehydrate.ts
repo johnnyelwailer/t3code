@@ -25,8 +25,10 @@
  * these rows. A row whose pending ask is missing is logged and skipped (it cannot be resolved).
  */
 
+import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { ServerConfig } from "./config.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
@@ -35,6 +37,7 @@ import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
 import { makeWorkflowRunLifecycle } from "./t3work-workflowEngineDurability.ts";
 import { createWorkflowRunController } from "./t3work-workflowEngineLaunch.ts";
+import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
 
@@ -136,3 +139,26 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     yield* Effect.logInfo("rehydrated durable workflow runs", { restored, armed });
   },
 );
+
+/**
+ * Boot layer wiring {@link rehydrateSuspendedWorkflowRuns} into server startup (see the file
+ * header for the ordering contract). `Layer.provide` sequences the underlying build — the
+ * merge-all app layer builds sibling layers concurrently (`mergeAllEffect`), so without an
+ * explicit dependency edge the reactor's subscription and this rehydration could race; piping
+ * through `T3workWorkflowEngineReactorLive` forces its build (and the `forkScoped` stream
+ * subscription inside it) to complete before this effect runs, so every restored pending ask
+ * is guaranteed to have a live reactor watching for it. The layer is memoized by reference, so
+ * this does not double-subscribe the reactor when both layers are merged into the same app.
+ *
+ * A rehydration failure is logged, never rethrown — restoring durable runs is best-effort and
+ * must not crash boot.
+ */
+export const T3workWorkflowEngineRehydrateLive = Layer.effectDiscard(
+  rehydrateSuspendedWorkflowRuns().pipe(
+    Effect.catchCause((cause) =>
+      Effect.logError("t3work workflow-engine rehydration failed on boot", {
+        cause: Cause.pretty(cause),
+      }),
+    ),
+  ),
+).pipe(Layer.provide(T3workWorkflowEngineReactorLive));

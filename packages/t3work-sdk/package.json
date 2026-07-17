@@ -22,6 +22,10 @@
     "./tools/t3work": {
       "types": "./src/tools/t3work-sdk.t3work.ts",
       "import": "./src/tools/t3work-sdk.t3work.ts"
+    },
+    "./tools/t3workRecipes": {
+      "types": "./src/tools/t3work-sdk.t3workRecipes.ts",
+      "import": "./src/tools/t3work-sdk.t3workRecipes.ts"
     }
   },
   "scripts": {

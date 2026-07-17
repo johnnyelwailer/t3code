@@ -29,6 +29,7 @@ export {
   jiraRead,
   jiraWrite,
   releaseNotesWrite,
+  t3workRecipeRead,
   t3workThreadWrite,
 } from "./t3work-sdk.groups.ts";
 export { createStoreSink, defaultRunsRoot, FsJournalStore } from "./t3work-sdk.journalStore.ts";
@@ -56,7 +57,9 @@ export {
   withWorkflowRuntime,
 } from "./t3work-sdk.ts";
 export { renameThreadTool } from "./tools/t3work-sdk.t3work.ts";
+export { listRecipesTool, validateRecipeTool } from "./tools/t3work-sdk.t3workRecipes.ts";
 export { deriveWorkflowShape } from "./t3work-sdk.workflowShape.ts";
+export { extractMeta, prepareWorkflow } from "./t3work-sdk.loader.ts";
 
 export type {
   HandleKind,
@@ -124,3 +127,12 @@ export type {
   WorkflowRef,
 } from "./t3work-sdk.ts";
 export type { RenameThreadToolArgs, RenameThreadToolResult } from "./tools/t3work-sdk.t3work.ts";
+export type {
+  ListRecipesToolResult,
+  RecipeListEntry,
+  RecipeToolIssue,
+  RecipeWorkflowMetaSummary,
+  RecipeWorkflowShapeSummary,
+  ValidateRecipeToolArgs,
+  ValidateRecipeToolResult,
+} from "./tools/t3work-sdk.t3workRecipes.ts";

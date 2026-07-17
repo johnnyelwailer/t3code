@@ -15,6 +15,7 @@
  */
 
 import * as Clock from "effect/Clock";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -34,6 +35,13 @@ import {
 import type { AnyRecipeRef } from "@t3work/sdk";
 
 import { isRelativePath, resolveWithinRoot } from "./t3work-projectRecipeDiscoveryShared.ts";
+
+/** A `recipe.ts` module loaded fine but did not default-export a `defineRecipe(...)` result. */
+export class T3workRecipeModuleShapeError extends Data.TaggedError(
+  "T3workRecipeModuleShapeError",
+)<{
+  readonly message: string;
+}> {}
 
 /**
  * Project the SDK `RecipeRef`'s discovery metadata onto a project-recipes `Recipe` so the locked
@@ -80,7 +88,7 @@ function buildMatchInput(context: ProjectRecipeRenderContext): RecipeMatchInput 
  * stack-derived `absolutePath`) so resolution is stable regardless of how the module was loaded;
  * fall back to `absolutePath` for absolute / `file://` author forms.
  */
-function resolveWorkflowPath(
+export function resolveRecipeWorkflowPath(
   pathService: Path.Path,
   recipePath: string,
   ref: AnyRecipeRef,
@@ -90,6 +98,31 @@ function resolveWorkflowPath(
     ? resolveWithinRoot(pathService, recipePath, actionPath)
     : ref.defaultAction.absolutePath;
 }
+
+/**
+ * Import a project-local `recipe.ts` module (cache-busted so edits re-import fresh) and return its
+ * default-exported `defineRecipe(...)` ref. Shared between UI discovery and the agent-facing
+ * recipe tools so both load typed recipes through one path.
+ */
+export const importRecipeModuleRef = Effect.fn("importRecipeModuleRef")(function* (
+  modulePath: string,
+) {
+  const moduleUrl = NodeURL.pathToFileURL(modulePath);
+  moduleUrl.searchParams.set("v", String(yield* Clock.currentTimeMillis));
+  const imported = (yield* Effect.tryPromise(() => import(moduleUrl.toString()))) as {
+    readonly default?: AnyRecipeRef;
+  };
+
+  const ref = imported.default;
+  if (!ref || ref.kind !== "recipe") {
+    return yield* Effect.fail(
+      new T3workRecipeModuleShapeError({
+        message: `recipe.ts must default-export a defineRecipe(...) result: ${modulePath}`,
+      }),
+    );
+  }
+  return ref;
+});
 
 export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecipeModuleAtPath")(
   function* (input: {
@@ -101,18 +134,7 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
   }) {
     const pathService = yield* Path.Path;
 
-    const moduleUrl = NodeURL.pathToFileURL(input.modulePath);
-    moduleUrl.searchParams.set("v", String(yield* Clock.currentTimeMillis));
-    const imported = (yield* Effect.tryPromise(() => import(moduleUrl.toString()))) as {
-      readonly default?: AnyRecipeRef;
-    };
-
-    const ref = imported.default;
-    if (!ref || ref.kind !== "recipe") {
-      throw new Error(
-        `recipe.ts must default-export a defineRecipe(...) result: ${input.modulePath}`,
-      );
-    }
+    const ref = yield* importRecipeModuleRef(input.modulePath);
     if (!ref.surfaces.includes(input.context.surface)) {
       return Option.none<ProjectRecipeDiscovered>();
     }
@@ -122,7 +144,7 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
       return Option.none<ProjectRecipeDiscovered>();
     }
 
-    const workflowPath = resolveWorkflowPath(pathService, input.recipePath, ref);
+    const workflowPath = resolveRecipeWorkflowPath(pathService, input.recipePath, ref);
 
     return Option.some({
       id: ref.id,

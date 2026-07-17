@@ -223,7 +223,12 @@ it.live(
         }),
       );
       assert.strictEqual(launched.status, "suspended");
-      assert.deepStrictEqual(dispatched.slice(0, 2), ["thread.create", "thread.turn.start"]);
+      // Step activities (UX slice 1) interleave with the orchestration commands; the launch
+      // contract is asserted on the non-activity stream.
+      assert.deepStrictEqual(
+        dispatched.filter((type) => type !== "thread.activity.append").slice(0, 2),
+        ["thread.create", "thread.turn.start"],
+      );
 
       // ── 2 + 3. The stub's turn-done events drive the REAL reactor: it assembles the delta
       // text, resolves the agent turn, and the run advances to askUser → parks on user.input.

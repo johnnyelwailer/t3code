@@ -128,6 +128,7 @@ import { t3workThreadToolContextRouteLayer } from "./t3work-thread-tool-context-
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
 import { T3workContextRefreshServiceLive } from "./t3work-contextRefreshService.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
+import { T3workWorkflowEngineRehydrateLive } from "./t3work-workflowEngineRehydrate.ts";
 import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowSchedulerLive } from "./t3work-workflowScheduler.ts";
 import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
@@ -565,6 +566,7 @@ export const makeServerLayer = Layer.unwrap(
       runtimeStateLayer,
       tailscaleServeLayer,
       T3workWorkflowEngineReactorLive,
+      T3workWorkflowEngineRehydrateLive,
       cloudDesiredLinkReconcileLayer,
     );
 

@@ -993,6 +993,10 @@ longer a `recipe.json` / step-union path.
    identically whether the ask was set this uptime or a prior one. Journal compaction/retention
    for completed runs, and multi-instance locking, remain future work (single-instance assumed).
 
+   `rehydrateSuspendedWorkflowRuns` is wired into server boot via
+   `T3workWorkflowEngineRehydrateLive`, sequenced after the reactor layer, in both
+   `apps/server/src/server.ts` and `apps/server/src/t3work-server.ts`.
+
 3. **Per-call model selection for cost discipline.** When `meta.model` declares a default and
    a single `agent` / `askAgent` call wants a cheaper model, the per-call `model:` override
    should be a strict subset of the workflow's declared capability for that provider. Surface

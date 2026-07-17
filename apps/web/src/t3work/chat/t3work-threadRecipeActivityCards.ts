@@ -38,7 +38,7 @@ export function deriveT3workRecipeActivityCardEntries(
 ): T3workRecipeActivityCardEntry[] {
   const entries: T3workRecipeActivityCardEntry[] = [];
 
-  for (const activity of [...activities].toSorted(compareActivitiesByOrder)) {
+  for (const activity of [...activities].toSorted(compareT3workActivitiesByOrder)) {
     if (
       activity.kind === PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH &&
       isProjectRecipeLaunchActivityPayload(activity.payload)
@@ -70,7 +70,8 @@ export function deriveT3workRecipeActivityCardEntries(
   return entries;
 }
 
-function compareActivitiesByOrder(
+/** Timeline order for thread activities: sequence, then createdAt, then lifecycle rank, then id. */
+export function compareT3workActivitiesByOrder(
   left: OrchestrationThreadActivity,
   right: OrchestrationThreadActivity,
 ): number {

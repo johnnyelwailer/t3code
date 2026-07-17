@@ -24,6 +24,7 @@ import { buildPrelaunchView } from "./t3work-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
 import { buildThreadWorkspaceView } from "./t3work-toolBrokerViewWorkspace.ts";
+import { makeRecipeToolHandlers } from "./t3work-toolBrokerRecipeTools.ts";
 import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
 
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
@@ -141,6 +142,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       threadId,
       title,
     });
+  const recipeToolsForThread = makeRecipeToolHandlers({ fileSystem, path, loadThreadProject });
   const startChildThread = makeStartChildThread({
     loadThreadProject,
     orchestration,
@@ -185,6 +187,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
         startChild: (toolArgs) => startChildThread(threadId, toolArgs),
         setBacklogAssigneeFilter: (mode) => setBacklogAssigneeFilter(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,
+        recipeTools: recipeToolsForThread(threadId),
       });
     });
 

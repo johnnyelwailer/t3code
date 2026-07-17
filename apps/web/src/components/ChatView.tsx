@@ -5216,6 +5216,7 @@ function ChatViewContent(props: ChatViewProps) {
                 onAnchorSizeChanged={onTimelineAnchorSizeChanged}
                 contentInsetEndAdjustment={composerOverlayHeight}
                 onIsAtEndChange={onIsAtEndChange}
+                threadActivities={threadActivities}
                 {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
                 {...(dispatchWorkflowDecision ? { dispatchWorkflowDecision } : {})}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}

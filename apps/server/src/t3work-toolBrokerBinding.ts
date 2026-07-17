@@ -12,6 +12,7 @@ import {
 import { TOOL_SPECS, foldResource, resourceResult } from "./t3work-toolBrokerHelpers.ts";
 import { buildBindingState, permissionMessage } from "./t3work-toolBrokerBindingPermissions.ts";
 import { dispatchT3workToolCall } from "./t3work-toolBrokerBindingDispatch.ts";
+import type { T3workRecipeToolHandlers } from "./t3work-toolBrokerBindingRecipes.ts";
 import type { T3workContextRefreshServiceShape } from "./t3work-contextRefreshService.ts";
 
 type CreateBindingInput<
@@ -34,6 +35,7 @@ type CreateBindingInput<
     mode: "current-user",
   ) => Effect.Effect<unknown, TBacklogAssigneeFilterError>;
   readonly refreshContextBundle?: T3workContextRefreshServiceShape;
+  readonly recipeTools?: T3workRecipeToolHandlers;
 };
 
 function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogAssigneeFilterError>(
@@ -77,6 +79,7 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
           }
         : {}),
       ...(input.refreshContextBundle ? { refreshContextBundle: input.refreshContextBundle } : {}),
+      ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
     });
 
   const readResource: T3workToolBinding["readResource"] = ({ server, uri }) => {

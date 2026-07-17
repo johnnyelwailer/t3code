@@ -22,6 +22,11 @@ import {
   callT3workWorkItemRefreshContextBundleEffect,
 } from "./t3work-toolBrokerContextSync.ts";
 import { callT3workRenameTool } from "./t3work-toolBrokerBindingRename.ts";
+import {
+  callT3workRecipeTool,
+  isT3workRecipeTool,
+  type T3workRecipeToolHandlers,
+} from "./t3work-toolBrokerBindingRecipes.ts";
 import type { T3workContextRefreshServiceShape } from "./t3work-contextRefreshService.ts";
 
 export function dispatchT3workToolCall(input: {
@@ -38,6 +43,7 @@ export function dispatchT3workToolCall(input: {
   startChild?: (arguments_: unknown) => Effect.Effect<unknown, string>;
   setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, string>;
   refreshContextBundle?: T3workContextRefreshServiceShape;
+  recipeTools?: T3workRecipeToolHandlers;
 }): ReturnType<T3workToolBinding["callTool"]> {
   const { server, tool, toolArgs, state } = input;
   if (server !== T3WORK_MCP_SERVER_NAME) {
@@ -56,6 +62,14 @@ export function dispatchT3workToolCall(input: {
       toolArgs,
       ...(input.renameThread ? { renameThread: input.renameThread } : {}),
       ...(input.renameThreadResult ? { renameThreadResult: input.renameThreadResult } : {}),
+    });
+  }
+  if (isT3workRecipeTool(tool)) {
+    return callT3workRecipeTool({
+      tool,
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
     });
   }
   if (tool === "t3work.thread.start_child") {

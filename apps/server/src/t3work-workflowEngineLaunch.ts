@@ -41,38 +41,19 @@ import {
   type WorkflowRunResult,
 } from "@t3work/sdk";
 
-import {
-  createWorkflowEngineBroker,
-  type WorkflowEnginePendingAsk,
-  type WorkflowEngineSleep,
-} from "./t3work-workflowEngineBroker.ts";
+import { createWorkflowEngineBroker } from "./t3work-workflowEngineBroker.ts";
+import type { WorkflowRunLifecycle } from "./t3work-workflowEngineBrokerTypes.ts";
 import type { T3workWorkflowEngineRegistryShape } from "./t3work-workflowEngineRegistry.ts";
 import { makeControllerResume } from "./t3work-workflowEngineResume.ts";
+import {
+  createWorkflowStepActivityEmitter,
+  type WorkflowStepActivityEmitter,
+} from "./t3work-workflowEngineStepActivities.ts";
 
 export type WorkflowLaunchStatus = "completed" | "suspended" | "failed";
 
-/**
- * Write-through to the durable `workflow_runs` record. The host implements this over
- * {@link import("./persistence/Services/WorkflowRuns.ts").WorkflowRunRepository}; absent (SDK
- * fs path / tests) the run is purely in-memory.
- */
-export interface WorkflowRunLifecycle {
-  /** Insert the initial `running` row (called once at launch). */
-  readonly recordRunning: () => Promise<void>;
-  /** Flip to `suspended` + record the ask the run parked on (driven by the broker). */
-  readonly recordSuspended: (pending: WorkflowEnginePendingAsk) => Promise<void>;
-  /** Flip to `sleeping` + record the wake deadline the run parked on (Epic 27; driven by the
-   * broker when the body fires `waitUntil`). */
-  readonly recordSleeping: (sleep: WorkflowEngineSleep) => Promise<void>;
-  /** Mark the run `completed` and clear the pending ask. */
-  readonly recordCompleted: () => Promise<void>;
-  /** Mark the run `failed` and clear the pending ask. */
-  readonly recordFailed: () => Promise<void>;
-  /** Crash-recovery: if the run row is still `sleeping` on this correlation (its wake reply was
-   * journaled by a process that died before settling), mark it failed so the scheduler stops
-   * re-arming it. No-op otherwise (e.g. a late ask reply on an already-advanced run). */
-  readonly orphanIfSleeping: (correlationId: string) => Promise<void>;
-}
+// Moved to the types module (LOC cap); re-exported so existing importers stay valid.
+export type { WorkflowRunLifecycle } from "./t3work-workflowEngineBrokerTypes.ts";
 
 export interface LaunchWorkflowRecipeInput {
   readonly runId: string;
@@ -113,6 +94,8 @@ export interface WorkflowRunController {
     result: WorkflowRunResult<unknown> | SuspendedResult,
   ) => Promise<WorkflowLaunchStatus>;
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
+  /** Live step-status sink shared by broker, settle, and resume (UX slice 1). */
+  readonly stepActivities: WorkflowStepActivityEmitter;
 }
 
 /**
@@ -129,7 +112,20 @@ export function createWorkflowRunController(
     path: input.workflowPath,
     absolutePath: input.workflowPath,
   };
+  // The live step-status emitter (UX slice 1). Terminal run activities are emitted HERE — in
+  // settle (completed) and the launch/resume catch (failed) — not in the durability lifecycle:
+  // this controller is the single funnel BOTH the live launch and boot rehydration drive
+  // through, and it already holds `dispatch` + `launchThreadId`, so no seam threading through
+  // makeWorkflowRunLifecycle is needed.
+  const stepActivities = createWorkflowStepActivityEmitter({
+    runId: input.runId,
+    launchThreadId: input.launchThreadId,
+    dispatch: input.dispatch,
+    newId: input.newId,
+    nowIso: input.nowIso,
+  });
   const broker = createWorkflowEngineBroker({
+    stepActivities,
     runId: input.runId,
     projectId: input.projectId,
     modelSelection: input.modelSelection,
@@ -161,16 +157,17 @@ export function createWorkflowRunController(
     if ("suspended" in result) return "suspended"; // parked — the reactor resumes it later
     input.registry.deleteRun(input.runId);
     await input.lifecycle?.recordCompleted();
+    await stepActivities.emitRun("completed");
     await input.onComplete?.(result.result);
     return "completed";
   };
 
   // The concurrency/crash-safe resume closure (see t3work-workflowEngineResume.ts). Extracted to
   // keep this module under the prefixed-file LOC cap.
-  const resume = makeControllerResume({ input, ref, options, settle });
+  const resume = makeControllerResume({ input, ref, options, settle, stepActivities });
 
   input.registry.registerRun(input.runId, { resume });
-  return { ref, options, settle, resume };
+  return { ref, options, settle, resume, stepActivities };
 }
 
 export async function launchWorkflowRecipe(
@@ -190,6 +187,7 @@ export async function launchWorkflowRecipe(
   } catch (error) {
     input.registry.deleteRun(input.runId);
     await input.lifecycle?.recordFailed();
+    await controller.stepActivities.emitRun("failed", error instanceof Error ? error.message : String(error));
     await input.onError?.(error);
     return { runId: input.runId, status: "failed" };
   }
