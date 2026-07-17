@@ -85,12 +85,6 @@ export function callT3workWidgetShowTool(input: {
       }
     }
 
-    yield* deps.registry.put({
-      widgetId,
-      threadId: deps.threadId,
-      tools: parsed.tools,
-    });
-
     const attachment = buildT3workWidgetAttachment({
       widgetId,
       parsed,
@@ -120,6 +114,14 @@ export function callT3workWidgetShowTool(input: {
     if (dispatched._tag === "Failure") {
       return errorResult("Failed to post the widget message to the thread.");
     }
+
+    // Register only after the message dispatch succeeded, so failed dispatches never
+    // consume registry slots (the registry is bounded per thread and globally).
+    yield* deps.registry.put({
+      widgetId,
+      threadId: deps.threadId,
+      tools: parsed.tools,
+    });
 
     return okResult({
       ok: true,

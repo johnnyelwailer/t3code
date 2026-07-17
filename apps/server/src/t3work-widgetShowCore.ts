@@ -5,10 +5,13 @@
 
 import type { T3workMessageWidgetAttachment } from "@t3tools/contracts";
 
+import { resolveWidgetCapabilityPolicy } from "./t3work-widgetCapabilityPolicy.ts";
+
 export const T3WORK_WIDGET_SHOW_TOOL_ID = "t3work.widget.show";
 export const T3WORK_WIDGET_CODE_MAX_BYTES = 128 * 1024;
 const TITLE_MAX_LENGTH = 64;
 const LOADING_MESSAGES_MAX = 8;
+const LOADING_MESSAGE_MAX_LENGTH = 200;
 const TOOLS_MAX = 16;
 
 export type T3workWidgetFormat = "html" | "svg" | "mdx" | "tsx";
@@ -65,7 +68,8 @@ export function parseT3workWidgetShowInput(
   if (widgetCode.length === 0) {
     return { error: "widget_code is required and must be a non-empty string." };
   }
-  if (widgetCode.length > T3WORK_WIDGET_CODE_MAX_BYTES) {
+  // Cap in UTF-8 bytes (what actually gets persisted and shipped), not UTF-16 length.
+  if (new TextEncoder().encode(widgetCode).byteLength > T3WORK_WIDGET_CODE_MAX_BYTES) {
     return {
       error: `widget_code exceeds the ${T3WORK_WIDGET_CODE_MAX_BYTES / 1024} KB limit.`,
     };
@@ -96,10 +100,13 @@ export function parseT3workWidgetShowInput(
     };
   }
 
-  const loadingMessages = readStringArray(args.loading_messages, LOADING_MESSAGES_MAX);
-  if (loadingMessages === undefined) {
+  const rawLoadingMessages = readStringArray(args.loading_messages, LOADING_MESSAGES_MAX);
+  if (rawLoadingMessages === undefined) {
     return { error: "loading_messages must be an array of strings when provided." };
   }
+  const loadingMessages = rawLoadingMessages.map((message) =>
+    message.slice(0, LOADING_MESSAGE_MAX_LENGTH),
+  );
 
   let tools: ReadonlyArray<string> = [];
   if (args.capabilities !== undefined) {
@@ -118,10 +125,24 @@ export function parseT3workWidgetShowInput(
     if (parsedTools === undefined) {
       return { error: "capabilities.tools must be an array of tool-name strings when provided." };
     }
+    // Self-referential tools are rejected: a widget must not be able to recursively spawn
+    // widgets (or otherwise drive the widget bridge) through its own capability allowlist.
+    const selfReferential = parsedTools.find(
+      (tool) => tool === T3WORK_WIDGET_SHOW_TOOL_ID || tool.startsWith("t3work.widget."),
+    );
+    if (selfReferential) {
+      return { error: `capabilities.tools must not include '${selfReferential}'.` };
+    }
     tools = parsedTools;
   }
 
-  return { title, format: resolvedFormat, widgetCode, loadingMessages, tools };
+  // Apply the per-format capability policy (Epic 24 trust gradient). For the live html/svg
+  // tier this permits an explicit allowlist; a future tier whose policy forbids callTool
+  // would have its tools dropped here without changing this call site.
+  const policy = resolveWidgetCapabilityPolicy(resolvedFormat);
+  const effectiveTools = policy.callToolAllowed ? tools : [];
+
+  return { title, format: resolvedFormat, widgetCode, loadingMessages, tools: effectiveTools };
 }
 
 export function buildT3workWidgetArtifactRelativePath(input: {

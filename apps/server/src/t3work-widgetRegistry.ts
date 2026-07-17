@@ -28,13 +28,21 @@ export class T3workWidgetRegistry extends Context.Service<
 >()("t3/t3work-widgetRegistry/T3workWidgetRegistry") {}
 
 const MAX_REGISTRATIONS = 500;
+const MAX_REGISTRATIONS_PER_THREAD = 50;
 
 export function createT3workWidgetRegistry(): T3workWidgetRegistryShape {
   const registrations = new Map<string, T3workWidgetRegistration>();
   return {
     put: (registration) =>
       Effect.sync(() => {
-        // Bounded: evict the oldest entries so a long-lived server cannot grow unbounded.
+        // Bounded globally AND per thread: evict the oldest entries (Map preserves insertion
+        // order) so neither a long-lived server nor a single chatty thread grows unbounded.
+        const sameThread = [...registrations.values()].filter(
+          (entry) => entry.threadId === registration.threadId,
+        );
+        for (let index = 0; index <= sameThread.length - MAX_REGISTRATIONS_PER_THREAD; index += 1) {
+          registrations.delete(sameThread[index]!.widgetId);
+        }
         while (registrations.size >= MAX_REGISTRATIONS) {
           const oldest = registrations.keys().next().value;
           if (oldest === undefined) break;

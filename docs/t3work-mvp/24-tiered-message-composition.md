@@ -785,9 +785,30 @@ srcdoc; the host handles only the fixed message types and never evaluates iframe
 
 This deliberately deviates from the Epic 19 "typed events only" rule: the ad-hoc tier
 exchanges free-form JSON with an untrusted, opaque-origin iframe. The deviation is scoped
-by construction — nonce + source checks, an explicit per-widget tool allowlist, broker
-dispatch (the same permission surface every agent tool call crosses), and a 30s per-call
-timeout. First-party surfaces keep the typed-event contract via T2 views.
+by construction — nonce + source checks on **both** directions of the bridge, an explicit
+per-widget tool allowlist, broker dispatch (the same permission surface every agent tool
+call crosses), argument-size caps (32 KB, client + server), a concurrent-call cap, a
+gesture gate + rate limit on `sendPrompt`, and a 30s per-call timeout. First-party surfaces
+keep the typed-event contract via T2 views.
+
+### Trust gradient across formats
+
+`format` selects the tier pipeline, and the runtime posture tracks how much validation that
+tier passed. Raw `html`/`svg` is the **least-validated** tier (agent markup rendered
+verbatim), so it runs **tightest**; the compiled/whitelisted tiers earn a looser posture by
+passing a gate first. The single seam for this is `resolveWidgetCapabilityPolicy(format)`
+(`apps/server/src/t3work-widgetCapabilityPolicy.ts`). Only html/svg is live today; mdx/tsx
+rows document the intended relaxation (the tool still rejects those formats).
+
+| format       | validation gate                    | network (CSP)              | callTool                      | sendPrompt          | status      |
+| ------------ | ---------------------------------- | -------------------------- | ----------------------------- | ------------------- | ----------- |
+| `html`/`svg` | none (verbatim markup)             | `connect-src 'none'`       | opt-in allowlist (empty=none) | gesture + ratelimit | **live**    |
+| `mdx`        | whitelisted first-party components | validated inline (relaxed) | opt-in allowlist              | gesture + ratelimit | future stub |
+| `tsx`        | compiled + typechecked reg. view   | design-system (full)       | opt-in allowlist              | trusted             | future stub |
+
+The intent is a documented seam and posture, **not** extra hard restrictions on html beyond
+the security fixes above: html/svg still gets a real allowlist and works out of the box; the
+table records why the higher tiers will be allowed to do more.
 
 ## Additive guard impact
 

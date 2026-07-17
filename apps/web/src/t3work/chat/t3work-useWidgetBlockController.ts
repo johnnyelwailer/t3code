@@ -4,34 +4,33 @@
  * services the two bridge verbs — sendPrompt (dispatches a normal user turn on the thread)
  * and callTool (POST /api/t3work/widget/tool-call; the server enforces the capability
  * allowlist through the tool broker). The parent handles only the fixed message types and
- * never evaluates strings from the iframe.
+ * never evaluates strings from the iframe. Pure limits/transport live in the bridge client.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type {
-  ScopedThreadRef,
-  T3workMessageWidgetAttachment,
-  T3workWidgetToolCallResponse,
-} from "@t3tools/contracts";
+import type { ScopedThreadRef, T3workMessageWidgetAttachment } from "@t3tools/contracts";
 import { CommandId, MessageId } from "@t3tools/contracts";
 
 import { useBackend } from "~/t3work/backend/t3work-BackendContext";
 import { useThread } from "~/state/entities";
 import {
+  claimWidgetPromptSlot,
+  isWidgetCallId,
+  postWidgetToolCall,
+  randomWidgetNonce,
+  T3WORK_WIDGET_MAX_HEIGHT,
+  T3WORK_WIDGET_MAX_INFLIGHT_CALLS,
+  T3WORK_WIDGET_MIN_HEIGHT,
+} from "~/t3work/chat/t3work-widgetBridgeClient";
+import {
   buildT3workWidgetSrcdoc,
   collectT3workWidgetThemeCss,
 } from "~/t3work/chat/t3work-widgetSrcdoc";
 
-export const T3WORK_WIDGET_MIN_HEIGHT = 48;
-export const T3WORK_WIDGET_MAX_HEIGHT = 640;
-
-function randomNonce(): string {
-  if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
+export {
+  T3WORK_WIDGET_MAX_HEIGHT,
+  T3WORK_WIDGET_MIN_HEIGHT,
+} from "~/t3work/chat/t3work-widgetBridgeClient";
 
 export function useT3workWidgetBlockController(input: {
   readonly widget: T3workMessageWidgetAttachment["widget"];
@@ -42,7 +41,7 @@ export function useT3workWidgetBlockController(input: {
   const thread = useThread(threadRef);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [height, setHeight] = useState(T3WORK_WIDGET_MIN_HEIGHT);
-  const nonce = useMemo(randomNonce, []);
+  const nonce = useMemo(randomWidgetNonce, []);
   const srcdoc = useMemo(
     () =>
       buildT3workWidgetSrcdoc({
@@ -53,18 +52,30 @@ export function useT3workWidgetBlockController(input: {
     [widget.html, nonce],
   );
 
+  const inflightCallsRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+
   const sendPrompt = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!backend || !thread || !threadRef || trimmed.length === 0) return;
+      if (trimmed.length === 0) return;
+      // Rate limit: widget prompts are user-gesture-gated in the iframe, but cap the parent
+      // side too (keyed by widgetId at module level so remounts cannot reset it) so a
+      // compromised bridge cannot flood the thread; the gesture gate is the primary guard.
+      if (!claimWidgetPromptSlot(widget.widgetId)) {
+        console.warn(`[t3work-widget:${widget.widgetId}] sendPrompt dropped: rate limited.`);
+        return;
+      }
+      if (!backend || !thread || !threadRef) return;
       await backend.dispatchCommand({
         type: "thread.turn.start",
-        commandId: CommandId.make(`web:t3work-widget:turn:${randomNonce()}`),
+        commandId: CommandId.make(`web:t3work-widget:turn:${randomWidgetNonce()}`),
         threadId: threadRef.threadId,
         message: {
-          messageId: MessageId.make(randomNonce()),
+          messageId: MessageId.make(randomWidgetNonce()),
           role: "user",
-          text: trimmed,
+          // Visible attribution: the timeline shows this turn came from the widget.
+          text: `[widget: ${widget.title}] ${trimmed}`,
           attachments: [],
         },
         modelSelection: thread.modelSelection,
@@ -73,39 +84,38 @@ export function useT3workWidgetBlockController(input: {
         createdAt: new Date().toISOString(),
       });
     },
-    [backend, thread, threadRef],
+    [backend, thread, threadRef, widget.widgetId, widget.title],
   );
 
   const callTool = useCallback(
     async (call: { readonly callId: string; readonly tool: string; readonly args: unknown }) => {
       const target = iframeRef.current?.contentWindow;
       if (!target) return;
-      let outcome: T3workWidgetToolCallResponse;
+      let outcome;
       if (!threadRef) {
-        outcome = { ok: false, error: "Widget thread is not available." };
+        outcome = { ok: false as const, error: "Widget thread is not available." };
+      } else if (inflightCallsRef.current >= T3WORK_WIDGET_MAX_INFLIGHT_CALLS) {
+        outcome = { ok: false as const, error: "Too many concurrent widget tool calls." };
       } else {
+        abortRef.current ??= new AbortController();
+        inflightCallsRef.current += 1;
         try {
-          const response = await fetch(
-            `${backend?.httpBaseUrl ?? ""}/api/t3work/widget/tool-call`,
-            {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                threadId: threadRef.threadId,
-                widgetId: widget.widgetId,
-                tool: call.tool,
-                ...(call.args === undefined ? {} : { arguments: call.args }),
-              }),
-            },
-          );
-          outcome = (await response.json()) as T3workWidgetToolCallResponse;
-        } catch {
-          outcome = { ok: false, error: "Widget tool call failed to reach the server." };
+          outcome = await postWidgetToolCall({
+            httpBaseUrl: backend?.httpBaseUrl ?? "",
+            threadId: threadRef.threadId,
+            widgetId: widget.widgetId,
+            tool: call.tool,
+            args: call.args,
+            signal: abortRef.current.signal,
+          });
+        } finally {
+          inflightCallsRef.current -= 1;
         }
       }
       target.postMessage(
         {
           type: "t3work-widget:tool-result",
+          nonce,
           callId: call.callId,
           ok: outcome.ok === true,
           ...(outcome.result === undefined ? {} : { result: outcome.result }),
@@ -114,7 +124,7 @@ export function useT3workWidgetBlockController(input: {
         "*",
       );
     },
-    [backend, threadRef, widget.widgetId],
+    [backend, threadRef, widget.widgetId, nonce],
   );
 
   const handleBridgeMessage = useCallback(
@@ -143,7 +153,7 @@ export function useT3workWidgetBlockController(input: {
           readonly tool?: unknown;
           readonly arguments?: unknown;
         };
-        if (typeof call.callId === "string" && typeof call.tool === "string") {
+        if (isWidgetCallId(call.callId) && typeof call.tool === "string") {
           void callTool({ callId: call.callId, tool: call.tool, args: call.arguments });
         }
       }
@@ -155,6 +165,15 @@ export function useT3workWidgetBlockController(input: {
     window.addEventListener("message", handleBridgeMessage);
     return () => window.removeEventListener("message", handleBridgeMessage);
   }, [handleBridgeMessage]);
+
+  // Abort in-flight widget tool calls when the block unmounts.
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    },
+    [],
+  );
 
   return { iframeRef, srcdoc, height, handleBridgeMessage };
 }
