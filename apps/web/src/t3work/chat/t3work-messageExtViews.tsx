@@ -46,10 +46,21 @@ export function getT3workRenderableAttachments(
 ): ReadonlyArray<import("@t3tools/contracts").T3workMessageAttachment> {
   return (message.t3workExt?.attachments ?? []).filter(
     (attachment) =>
-      attachment.kind !== "view" ||
-      (attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_CARD &&
-        attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION &&
-        attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE),
+      attachment.kind !== "widget" &&
+      (attachment.kind !== "view" ||
+        (attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_CARD &&
+          attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION &&
+          attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE)),
+  );
+}
+
+/** Ad-hoc widget attachments render via the dedicated sandboxed block, not the generic list. */
+export function getT3workWidgetAttachments(
+  message: Pick<ChatMessage, "t3workExt">,
+): ReadonlyArray<import("@t3tools/contracts").T3workMessageWidgetAttachment> {
+  return (message.t3workExt?.attachments ?? []).filter(
+    (attachment): attachment is import("@t3tools/contracts").T3workMessageWidgetAttachment =>
+      attachment.kind === "widget",
   );
 }
 

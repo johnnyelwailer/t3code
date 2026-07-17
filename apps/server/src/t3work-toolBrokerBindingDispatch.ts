@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import {
   T3WORK_MCP_SERVER_NAME,
   type T3workToolBinding,
+  type T3workToolCallResult,
   type T3workTurnToolContext,
 } from "./t3work-toolBroker.ts";
 import {
@@ -38,6 +39,7 @@ export function dispatchT3workToolCall(input: {
   startChild?: (arguments_: unknown) => Effect.Effect<unknown, string>;
   setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, string>;
   refreshContextBundle?: T3workContextRefreshServiceShape;
+  showWidget?: (toolArgs: unknown) => Effect.Effect<T3workToolCallResult>;
 }): ReturnType<T3workToolBinding["callTool"]> {
   const { server, tool, toolArgs, state } = input;
   if (server !== T3WORK_MCP_SERVER_NAME) {
@@ -79,6 +81,12 @@ export function dispatchT3workToolCall(input: {
     return foldResult(input.setBacklogAssigneeFilter(mode), okResult, (message) =>
       errorResult(`Failed to update backlog assignee filter: ${message}`),
     );
+  }
+  if (tool === "t3work.widget.show") {
+    if (!input.showWidget) {
+      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
+    }
+    return input.showWidget(toolArgs);
   }
   if (isT3workDraftMutationTool(tool)) {
     return callT3workDraftMutationToolEffect({ tool, toolArgs, readView: input.readView });

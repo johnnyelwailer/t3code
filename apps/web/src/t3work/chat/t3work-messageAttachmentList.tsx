@@ -95,6 +95,15 @@ function renderAttachmentBody(attachment: T3workMessageAttachment) {
           {renderAttachmentMeta(["View attachment"])}
         </>
       );
+    case "widget":
+      // Widgets normally render via the dedicated sandboxed block; this is the metadata
+      // fallback when one lands in the generic list.
+      return (
+        <>
+          <span className="font-medium text-foreground">{attachment.widget.title}</span>
+          {renderAttachmentMeta(["Widget", attachment.widget.format])}
+        </>
+      );
   }
 }
 
@@ -109,6 +118,7 @@ function attachmentIcon(attachment: T3workMessageAttachment) {
     case "artifact":
       return BoxIcon;
     case "view":
+    case "widget":
       return PanelsTopLeftIcon;
   }
 }

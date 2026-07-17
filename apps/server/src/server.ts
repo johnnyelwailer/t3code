@@ -126,6 +126,8 @@ import { t3workProjectWorkspaceBootstrapRouteLayer } from "./t3work-project-repo
 import { t3workThreadPlacementRouteLayer } from "./t3work-thread-placement-routes.ts";
 import { t3workThreadToolContextRouteLayer } from "./t3work-thread-tool-context-routes.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
+import { t3workWidgetToolCallRouteLayer } from "./t3work-widget-tool-call-route.ts";
+import { T3workWidgetRegistryLive } from "./t3work-widgetRegistry.ts";
 import { T3workContextRefreshServiceLive } from "./t3work-contextRefreshService.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
 import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
@@ -349,6 +351,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(
     T3workToolBrokerLive.pipe(
       Layer.provideMerge(T3workThreadToolContextStoreLive),
+      Layer.provideMerge(T3workWidgetRegistryLive),
       Layer.provideMerge(T3workContextRefreshServiceLive),
       Layer.provide(OrchestrationLayerLive),
     ),
@@ -440,6 +443,7 @@ export const makeRoutesLayer = Layer.mergeAll(
   t3workThreadRecipeWorkflowLaunchRouteLayer,
   t3workThreadWorkflowResolveInputRouteLayer,
   t3workThreadToolContextRouteLayer,
+  t3workWidgetToolCallRouteLayer,
   t3workProjectWorkspaceWriteContextFilesRouteLayer,
   t3workProjectWorkspaceRefreshProjectContextRouteLayer,
   t3workProjectWorkspaceRefreshWorkItemContextRouteLayer,

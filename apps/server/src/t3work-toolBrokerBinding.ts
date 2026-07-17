@@ -34,6 +34,9 @@ type CreateBindingInput<
     mode: "current-user",
   ) => Effect.Effect<unknown, TBacklogAssigneeFilterError>;
   readonly refreshContextBundle?: T3workContextRefreshServiceShape;
+  readonly showWidget?: (
+    toolArgs: unknown,
+  ) => Effect.Effect<import("./t3work-toolBroker.ts").T3workToolCallResult>;
 };
 
 function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogAssigneeFilterError>(
@@ -77,6 +80,7 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
           }
         : {}),
       ...(input.refreshContextBundle ? { refreshContextBundle: input.refreshContextBundle } : {}),
+      ...(input.showWidget ? { showWidget: input.showWidget } : {}),
     });
 
   const readResource: T3workToolBinding["readResource"] = ({ server, uri }) => {

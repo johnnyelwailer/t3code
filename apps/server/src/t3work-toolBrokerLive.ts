@@ -25,6 +25,7 @@ import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
 import { buildThreadWorkspaceView } from "./t3work-toolBrokerViewWorkspace.ts";
 import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
+import { makeT3workWidgetShowBinder } from "./t3work-toolBrokerWidgetShow.ts";
 
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
   const query = yield* ProjectionSnapshotQuery;
@@ -40,6 +41,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
   const projectSetupScriptRunner = Option.getOrUndefined(
     yield* Effect.serviceOption(ProjectSetupScriptRunner),
   );
+  const bindShowWidget = yield* makeT3workWidgetShowBinder();
 
   const loadThreadProject = (threadId: ThreadIdType) =>
     Effect.gen(function* () {
@@ -175,6 +177,11 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       }
 
       return createT3workThreadToolBinding({
+        showWidget: bindShowWidget({
+          threadId,
+          loadThreadProject: () => loadThreadProject(threadId),
+          dispatch: (command) => orchestration.dispatch(command),
+        }),
         threadId,
         toolContext: resolvedToolContext,
         availableToolIds: toolIds,

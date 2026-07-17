@@ -747,6 +747,48 @@ view appears in a context that cannot render React (e.g. exported PDF of a threa
   one model call; T2b is a subagent that takes seconds. The placeholder + async-
   resolve pattern absorbs that latency without blocking the chat.
 
+## `t3work.widget.show`: the unified agent-facing widget tool (shipped slice)
+
+This is the "agent-emits-widgets-inline" unification the References section flags as
+missing. `t3work.widget.show` is the **single** broker tool an agent calls to put a widget
+in the timeline; a `format` parameter selects the tier pipeline underneath. The T1/T2
+architecture above is unchanged — the tool is a dispatch seam in front of it, not a
+parallel system.
+
+- **`format: "html" | "svg"` (shipped)** — the ad-hoc/ephemeral tier and the MCP-UI-style
+  fallback this doc already anticipates for third-party/instant model-authored UI. The
+  widget body is persisted as an Epic 08 RichArtifact (`format: "html"`, content-addressed
+  blob store) and travels on the message as the new `widget` attachment kind — the ad-hoc
+  sibling of the first-party `view` kind in the Epic 16 attachment union. Rendering is a
+  sandboxed iframe (`sandbox="allow-scripts"`, never `allow-same-origin`) with the app's
+  theme CSS variables injected, a transparent background, and auto-sized height.
+- **`format: "mdx"` (reserved)** — will route to the T1 safe-mdx renderer (trusted
+  whitelisted first-party components inline). Calling it today returns a structured
+  not-yet-supported error naming the target pipeline.
+- **`format: "tsx"` (reserved)** — will route to the T2b compose pipeline (full React
+  view, design-system-native, slower). Same structured error today.
+
+The trade-off the tool description states explicitly: html/svg is instant and sandboxed
+but generic; mdx/tsx are design-system-native but staged behind the T1/T2 pipelines.
+T2 registered views remain the first-party path (React + design system + typed props,
+typed-event bridge); `show_widget` html/svg is the zero-ceremony escape hatch.
+
+**Bridge and capability gating.** Inside the iframe the bridge exposes `sendPrompt(text)`
+(posts a normal user turn on the thread) and `window.host.callTool(name, args)` (a
+promise-returning postMessage RPC). Tool calls leave the sandbox only through
+`POST /api/t3work/widget/tool-call`, which dispatches through the `T3workToolBroker`
+binding for the owning thread **and only if** the tool is in the widget's declared
+`capabilities.tools` allowlist — analogous to Epic 31 capability tokens; an empty or
+omitted allowlist means no tool access, and unknown/expired widget ids fail closed. All
+postMessages are validated by source window plus a per-widget nonce embedded in the
+srcdoc; the host handles only the fixed message types and never evaluates iframe strings.
+
+This deliberately deviates from the Epic 19 "typed events only" rule: the ad-hoc tier
+exchanges free-form JSON with an untrusted, opaque-origin iframe. The deviation is scoped
+by construction — nonce + source checks, an explicit per-widget tool allowlist, broker
+dispatch (the same permission surface every agent tool call crosses), and a 30s per-call
+timeout. First-party surfaces keep the typed-event contract via T2 views.
+
 ## Additive guard impact
 
 - **New files (all additive):**

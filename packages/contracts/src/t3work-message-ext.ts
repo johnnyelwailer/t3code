@@ -83,6 +83,34 @@ export const T3workMessageArtifactAttachment = Schema.Struct({
 });
 export type T3workMessageArtifactAttachment = typeof T3workMessageArtifactAttachment.Type;
 
+/** Broker tool names an ad-hoc widget's runtime bridge may call. Empty/omitted = no tool access. */
+export const T3workWidgetCapabilities = Schema.Struct({
+  tools: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+});
+export type T3workWidgetCapabilities = typeof T3workWidgetCapabilities.Type;
+
+/**
+ * An ad-hoc, model-authored widget (Epic 24 ephemeral tier). The sibling of the first-party
+ * `view` kind: `view` renders a registered miniapp with typed props; `widget` renders raw
+ * agent-supplied SVG/HTML in a sandboxed iframe. The widget body is persisted as an Epic 08
+ * RichArtifact (format html) — `artifact` is that durable ref; `html` is the render payload.
+ */
+export const T3workMessageWidgetAttachment = Schema.Struct({
+  kind: Schema.Literal("widget"),
+  widget: Schema.Struct({
+    widgetId: TrimmedNonEmptyString,
+    title: TrimmedNonEmptyString,
+    /** Tier pipeline the widget body targets. Only html/svg render today (sandboxed iframe);
+     * mdx/tsx are reserved for the T1 safe-mdx renderer and T2b compose pipeline. */
+    format: Schema.Literals(["html", "svg", "mdx", "tsx"]),
+    html: Schema.String,
+    artifact: Schema.optional(T3workMessageArtifactRef),
+    capabilities: Schema.optional(T3workWidgetCapabilities),
+    loadingMessages: Schema.optional(Schema.Array(Schema.String)),
+  }),
+});
+export type T3workMessageWidgetAttachment = typeof T3workMessageWidgetAttachment.Type;
+
 export const T3workMessageViewAttachment = Schema.Struct({
   kind: Schema.Literal("view"),
   miniappId: TrimmedNonEmptyString,
@@ -96,6 +124,7 @@ export const T3workMessageAttachment = Schema.Union([
   T3workMessageResourceAttachment,
   T3workMessageArtifactAttachment,
   T3workMessageViewAttachment,
+  T3workMessageWidgetAttachment,
 ]);
 export type T3workMessageAttachment = typeof T3workMessageAttachment.Type;
 
