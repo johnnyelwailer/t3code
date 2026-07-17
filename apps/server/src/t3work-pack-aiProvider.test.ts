@@ -2,8 +2,29 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import { expect, it } from "@effect/vitest";
 
-import { packAiProvidersToInstanceConfigMap } from "./t3work-pack-aiProvider.ts";
+import {
+  openCodeUpstreamConfigContent,
+  packAiProvidersToInstanceConfigMap,
+} from "./t3work-pack-aiProvider.ts";
 import { loadPackProviderOverlay } from "./t3work-pack-host.ts";
+
+const upstream = {
+  id: "nexplore",
+  name: "Nexplore Gateway",
+  baseURL: "https://ai.example.test/v1",
+  api: "chat-completions",
+  models: [{ id: "coding", name: "Coding" }],
+} as const;
+
+it("emits a top-level default model only when defaultModel is provided", () => {
+  expect(JSON.parse(openCodeUpstreamConfigContent({ provider: upstream }))).not.toHaveProperty(
+    "model",
+  );
+  const withDefault = JSON.parse(
+    openCodeUpstreamConfigContent({ provider: upstream, defaultModel: "coding" }),
+  );
+  expect(withDefault.model).toBe("nexplore/coding");
+});
 
 it("maps pack provider data to an isolated OpenCode instance", () => {
   const result = packAiProvidersToInstanceConfigMap([
@@ -116,6 +137,6 @@ it("loads provider definitions from a trusted pack activation module", async () 
       diagnostics: [],
     },
   });
-  expect(Object.values(result)[0]?.displayName).toBe("Code Provider");
+  expect(Object.values(result.configMap)[0]?.displayName).toBe("Code Provider");
   await NodeFSP.rm(root, { recursive: true });
 });

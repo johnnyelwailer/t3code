@@ -4,12 +4,16 @@ import {
   loadManifestThemes,
   activateWorkspacePack,
   resolveWorkspacePacks,
+  type PackProviderDriverDefinition,
   type WorkspacePackResolution,
 } from "@t3work/packs";
-import type { ProviderInstanceConfigMap } from "@t3tools/contracts";
 import type { EnvironmentAppearance } from "@t3tools/contracts";
 
+import { BUILT_IN_DRIVERS } from "./provider/builtInDrivers.ts";
 import { packAiProvidersToInstanceConfigMap } from "./t3work-pack-aiProvider.ts";
+import type { PackProviderOverlay } from "./t3work-pack-providerOverlay.ts";
+
+const BUILT_IN_DRIVER_KINDS = new Set(BUILT_IN_DRIVERS.map((driver) => String(driver.driverKind)));
 
 export type WorkspacePackHostDiagnostic = {
   readonly enabled: boolean;
@@ -20,7 +24,7 @@ export type WorkspacePackHostDiagnostic = {
 
 export const loadPackProviderOverlay = async (
   diagnostic: WorkspacePackHostDiagnostic,
-): Promise<ProviderInstanceConfigMap> => {
+): Promise<PackProviderOverlay> => {
   const providerPacks = (diagnostic.resolution?.packs ?? []).filter((pack) => {
     const hasProviders = (pack.manifest.contents.aiProviders?.length ?? 0) > 0;
     if (
@@ -49,10 +53,19 @@ export const loadPackProviderOverlay = async (
       }),
     )
   ).flat();
+  const driverDefinitions = new Map<string, PackProviderDriverDefinition>();
   for (const pack of providerPacks) {
     await activateWorkspacePack(pack, {
       defineAgentProvider: (definition) => {
         definitions.push(definition);
+      },
+      defineProviderDriver: (definition) => {
+        registerPackDriver(
+          driverDefinitions,
+          pack.manifest.id,
+          pack.manifest.capabilities,
+          definition,
+        );
       },
       defineTheme: () => undefined,
       resolveAssetDataUrl: async () => {
@@ -60,7 +73,38 @@ export const loadPackProviderOverlay = async (
       },
     });
   }
-  return packAiProvidersToInstanceConfigMap(definitions);
+  return {
+    configMap: packAiProvidersToInstanceConfigMap(definitions),
+    driverDefinitions,
+  };
+};
+
+/**
+ * Register one executable driver definition, enforcing the
+ * `provider-driver:<driver>` capability gate and rejecting driver ids that
+ * collide with another pack driver or a built-in driver.
+ */
+const registerPackDriver = (
+  registry: Map<string, PackProviderDriverDefinition>,
+  packId: string,
+  capabilities: ReadonlyArray<string>,
+  definition: PackProviderDriverDefinition,
+): void => {
+  const capability = `provider-driver:${definition.driver}`;
+  if (!capabilities.includes(capability)) {
+    throw new Error(
+      `Pack ${packId} registers provider driver ${definition.driver} without ${capability} capability`,
+    );
+  }
+  if (BUILT_IN_DRIVER_KINDS.has(definition.driver)) {
+    throw new Error(
+      `Pack ${packId} provider driver ${definition.driver} collides with a built-in driver`,
+    );
+  }
+  if (registry.has(definition.driver)) {
+    throw new Error(`Duplicate provider driver id ${definition.driver} (pack ${packId})`);
+  }
+  registry.set(definition.driver, definition);
 };
 
 export const loadPackAppearanceOverlay = async (
@@ -86,6 +130,7 @@ export const loadPackAppearanceOverlay = async (
   for (const pack of themedPacks) {
     await activateWorkspacePack(pack, {
       defineAgentProvider: () => undefined,
+      defineProviderDriver: () => undefined,
       defineTheme: (theme) => {
         if (!pack.manifest.capabilities.includes("theme:v1")) {
           throw new Error(`Pack ${pack.manifest.id} defines a theme without theme:v1 capability`);

@@ -1,3 +1,7 @@
+import type { PackProviderDriverDefinition } from "./provider-driver.ts";
+
+export * from "./provider-driver.ts";
+
 export type PackAssetResolver = (relativePath: string, mimeType: string) => Promise<string>;
 
 export type AgentProviderModel = {
@@ -38,6 +42,17 @@ export type PackThemeDefinition = {
   readonly publisher?: string;
   readonly labels?: { readonly appName?: string };
   readonly defaultMode?: "dark" | "light" | "system";
+  /**
+   * Brand imagery as data URLs. Executable packs resolve pack-local files via
+   * `resolveAssetDataUrl` before registering the theme; JSON themes may use
+   * pack-relative paths instead (the manifest loader resolves them).
+   */
+  readonly brand?: {
+    readonly mark?: string;
+    readonly markDark?: string;
+    readonly wordmark?: string;
+    readonly wordmarkDark?: string;
+  };
   readonly colors: {
     readonly light: Record<string, string>;
     readonly dark: Record<string, string>;
@@ -50,6 +65,7 @@ export type PackThemeDefinition = {
 export type PackActivationContext = {
   readonly pack: { readonly id: string; readonly directory: string };
   readonly defineAgentProvider: (definition: AgentProviderDefinition) => void;
+  readonly defineProviderDriver: (definition: PackProviderDriverDefinition) => void;
   readonly defineTheme: (definition: PackThemeDefinition) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
 };

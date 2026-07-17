@@ -5,20 +5,39 @@ import {
 } from "@t3tools/contracts";
 import type { LoadedAiProviderDefinition } from "@t3work/packs";
 
-function openCodeConfigContent(definition: LoadedAiProviderDefinition): string {
-  if (definition.configuration.kind === "inline-config") {
-    return definition.configuration.configContent;
-  }
+export type OpenCodeUpstreamProviderShape = {
+  readonly id: string;
+  readonly name: string;
+  readonly baseURL: string;
+  readonly api: "chat-completions" | "responses";
+  readonly models: readonly { readonly id: string; readonly name: string }[];
+};
 
-  const upstream = definition.configuration.provider;
+/**
+ * Builds the OpenCode `config.json` `provider` block for an upstream-provider
+ * definition. Shared by the data-only pack path and the executable
+ * `createOpenCodeHarness` host capability so both emit identical config.
+ */
+export function openCodeUpstreamConfigContent(input: {
+  readonly provider: OpenCodeUpstreamProviderShape;
+  readonly credentialEnv?: string | undefined;
+  /**
+   * Optional default model id (unqualified). When present, emits a top-level
+   * OpenCode `model: "<providerId>/<modelId>"` so the harness honors the pack's
+   * declared default. Omitted by the data-only path (behavior unchanged).
+   */
+  readonly defaultModel?: string | undefined;
+}): string {
+  const upstream = input.provider;
   const options: Record<string, unknown> = {
     baseURL: upstream.baseURL,
-    ...(definition.credentialEnv ? { apiKey: `{env:${definition.credentialEnv}}` } : {}),
+    ...(input.credentialEnv ? { apiKey: `{env:${input.credentialEnv}}` } : {}),
   };
   const models = Object.fromEntries(
     upstream.models.map((model) => [model.id, { name: model.name }]),
   );
   return JSON.stringify({
+    ...(input.defaultModel ? { model: `${upstream.id}/${input.defaultModel}` } : {}),
     provider: {
       [upstream.id]: {
         npm: upstream.api === "responses" ? "@ai-sdk/openai" : "@ai-sdk/openai-compatible",
@@ -27,6 +46,16 @@ function openCodeConfigContent(definition: LoadedAiProviderDefinition): string {
         models,
       },
     },
+  });
+}
+
+function openCodeConfigContent(definition: LoadedAiProviderDefinition): string {
+  if (definition.configuration.kind === "inline-config") {
+    return definition.configuration.configContent;
+  }
+  return openCodeUpstreamConfigContent({
+    provider: definition.configuration.provider,
+    credentialEnv: definition.credentialEnv,
   });
 }
 

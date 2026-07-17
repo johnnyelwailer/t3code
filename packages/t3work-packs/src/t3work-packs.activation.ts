@@ -4,11 +4,13 @@ import * as NodeURL from "node:url";
 
 import type { LoadedAiProviderDefinition } from "./t3work-packs.aiProvider.ts";
 import type { WorkspacePackManifest } from "./t3work-packs.manifest.ts";
+import type { PackProviderDriverDefinition } from "./t3work-packs.providerDriver.ts";
 import type { ThemeDefinition } from "./t3work-packs.theme.ts";
 
 export type PackActivationContext = {
   readonly pack: { readonly directory: string; readonly manifest: WorkspacePackManifest };
   readonly defineAgentProvider: (definition: LoadedAiProviderDefinition) => void;
+  readonly defineProviderDriver: (definition: PackProviderDriverDefinition) => void;
   readonly defineTheme: (definition: ThemeDefinition) => void;
   readonly resolveAssetDataUrl: (relativePath: string, mimeType: string) => Promise<string>;
 };

@@ -17,6 +17,21 @@ export {
 export { loadManifestThemes } from "./t3work-packs.themeLoader.ts";
 export { activateWorkspacePack } from "./t3work-packs.activation.ts";
 export type { PackActivationContext, PackActivate } from "./t3work-packs.activation.ts";
+export type {
+  PackDriverCreateInput,
+  PackHostCapabilities,
+  PackOpenCodeHarnessOptions,
+  PackProviderDriverDefinition,
+  PackProviderInstance,
+  PackProviderModel,
+  PackProviderSession,
+  PackProviderSnapshot,
+  PackResumeCursor,
+  PackSendTurnInput,
+  PackSessionStartInput,
+  PackThreadSnapshot,
+  PackTurnStartResult,
+} from "./t3work-packs.providerDriver.ts";
 export {
   decodeWorkspacePackManifest,
   defineWorkspacePack,
