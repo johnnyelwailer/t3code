@@ -9,10 +9,12 @@ import {
 } from "~/t3work/chat/t3work-messageDecisionCard";
 import {
   getT3workRenderableAttachments,
+  getT3workWidgetAttachments,
   getT3workWorkflowCardAttachment,
   T3workMessageAttachmentList,
   T3workWorkflowCardBody,
 } from "~/t3work/chat/t3work-messageExtViews";
+import { T3workWidgetBlock } from "~/t3work/chat/t3work-widgetBlock";
 import {
   getT3workWorkflowShapeAttachment,
   T3workWorkflowShapeCard,
@@ -59,6 +61,7 @@ export function T3workSystemTimelineRow(props: {
       ? (workflowStepRuns?.get(workflowShape.workflowRunId) ?? null)
       : null;
   const genericAttachments = getT3workRenderableAttachments(message);
+  const widgetAttachments = getT3workWidgetAttachments(message);
   const showMessageText =
     message.text.length > 0 &&
     !(workflowDecision && message.text.trim() === workflowDecision.question.trim()) &&
@@ -150,6 +153,18 @@ export function T3workSystemTimelineRow(props: {
             />
           </div>
         ) : null}
+        {widgetAttachments.map((attachment) => (
+          <div
+            key={`t3work-widget:${attachment.widget.widgetId}`}
+            className={
+              showMessageText || workflowShape || workflowCard || workflowDecision
+                ? "mt-3"
+                : undefined
+            }
+          >
+            <T3workWidgetBlock widget={attachment.widget} threadRef={threadRef} />
+          </div>
+        ))}
         {genericAttachments.length > 0 ? (
           <T3workMessageAttachmentList attachments={genericAttachments} />
         ) : null}

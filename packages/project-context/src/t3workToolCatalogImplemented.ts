@@ -72,7 +72,60 @@ const BACKLOG_SET_ASSIGNEE_FILTER_INPUT_SCHEMA = {
   required: ["mode"],
 } as const;
 
+const WIDGET_SHOW_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    title: {
+      type: "string",
+      description:
+        "Short snake_case identifier for this widget (e.g. 'q4_revenue_chart'). Used as the artifact name.",
+      minLength: 1,
+    },
+    widget_code: {
+      type: "string",
+      description:
+        "Raw SVG (starting with <svg>) or an HTML fragment. Do NOT include <!DOCTYPE>, <html>, <head>, or <body> tags. The widget renders in a sandboxed iframe with the app's theme CSS variables available (use var(--background), var(--foreground), var(--muted), var(--border), ...), a transparent background, and no top-level padding. Scripts are allowed. Globals inside the widget: sendPrompt(text) sends a chat message as if the user typed it; window.host.callTool(name, args) returns a Promise with a broker tool result, but only for tools declared in capabilities.tools.",
+      minLength: 1,
+    },
+    format: {
+      type: "string",
+      description:
+        "Widget fidelity tier. 'html'/'svg': instant, sandboxed iframe with theme CSS variables and the sendPrompt/callTool bridge (default; auto-detected from widget_code — starts with <svg → svg, else html). 'mdx': trusted whitelisted first-party components rendered inline (not yet available). 'tsx': full React view via the registered-view compose pipeline — slower, design-system-native (not yet available).",
+      enum: ["html", "svg", "mdx", "tsx"],
+    },
+    loading_messages: {
+      type: "array",
+      description: "Optional short placeholder messages shown while the widget renders.",
+      items: { type: "string" },
+    },
+    capabilities: {
+      type: "object",
+      additionalProperties: false,
+      description:
+        "Optional runtime capabilities. tools is an allowlist of t3work broker tool names the widget's window.host.callTool bridge may invoke. Omitted or empty = no tool access.",
+      properties: {
+        tools: { type: "array", items: { type: "string" } },
+      },
+    },
+  },
+  required: ["title", "widget_code"],
+} as const;
+
 export const IMPLEMENTED_T3WORK_TOOL_CATALOG = {
+  "t3work.widget.show": {
+    id: "t3work.widget.show",
+    label: "Show widget",
+    title: "Show an inline widget in the chat timeline",
+    description:
+      "Show a widget inline in the current thread's chat timeline. Single entry point for all widget fidelities, selected via 'format': html/svg render instantly in a sandboxed iframe with theme CSS variables plus the sendPrompt/callTool bridge; mdx (future) renders trusted whitelisted first-party components inline; tsx (future) composes a full design-system-native React view (slower). The widget body is persisted as a durable artifact. Keep the background transparent and avoid top-level padding.",
+    capabilities: ["write"],
+    kind: "view-state",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: WIDGET_SHOW_INPUT_SCHEMA,
+  },
   "t3work.backlog.set_assignee_filter": {
     id: "t3work.backlog.set_assignee_filter",
     label: "Set backlog assignee filter",

@@ -111,6 +111,9 @@ function describeAgentVisibleAttachment(attachment: T3workMessageAttachment): st
     case "view": {
       return `View attachment: ${attachment.miniappId}`;
     }
+    case "widget": {
+      return `Widget attachment: ${attachment.widget.title} (${attachment.widget.format})`;
+    }
   }
 }
 

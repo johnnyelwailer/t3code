@@ -30,6 +30,7 @@ import { setBacklogAssigneeFilterForContext } from "./t3work-toolBrokerBacklogFi
 import { makeRecipeToolHandlers } from "./t3work-toolBrokerRecipeTools.ts";
 import { makeWorkflowRunToolsForThread } from "./t3work-toolBrokerWorkflowRunLive.ts";
 import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
+import { makeT3workWidgetShowBinder } from "./t3work-toolBrokerWidgetShow.ts";
 
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
   // Host tools every provider may call without an explicit `surface:"t3work"`
@@ -54,6 +55,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
     yield* Effect.serviceOption(ProjectSetupScriptRunner),
   );
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
+  const bindShowWidget = yield* makeT3workWidgetShowBinder();
 
   const loadThreadProject = (threadId: ThreadIdType) =>
     Effect.gen(function* () {
@@ -157,6 +159,11 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       }
 
       return createT3workThreadToolBinding({
+        showWidget: bindShowWidget({
+          threadId,
+          loadThreadProject: () => loadThreadProject(threadId),
+          dispatch: (command) => orchestration.dispatch(command),
+        }),
         threadId,
         toolContext: resolvedToolContext,
         availableToolIds: toolIds,

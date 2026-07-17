@@ -120,6 +120,8 @@ import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
+import { NoopT3workToolBroker, T3workToolBroker } from "./t3work-toolBroker.ts";
+import { T3workWidgetRegistryLive } from "./t3work-widgetRegistry.ts";
 import {
   NoopT3workContextRefreshService,
   T3workContextRefreshService,
@@ -399,6 +401,8 @@ const buildAppUnderTest = (options?: {
       SqlitePersistenceMemory,
       T3workWorkflowEngineRegistryLive,
       T3workThreadToolContextStoreLive,
+      T3workWidgetRegistryLive,
+      Layer.succeed(T3workToolBroker, NoopT3workToolBroker),
       Layer.succeed(T3workContextRefreshService, NoopT3workContextRefreshService),
       WorkflowRunRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory)),
       WorkflowJournalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
