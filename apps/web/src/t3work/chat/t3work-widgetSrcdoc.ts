@@ -54,6 +54,13 @@ const BRIDGE_SCRIPT = `
   var callSeq = 0;
   function post(message) { window.parent.postMessage(message, "*"); }
   window.sendPrompt = function (text) {
+    // Gesture gate: only forward prompts backed by a real user activation inside the
+    // widget (click/keypress), so widget scripts cannot autonomously drive the thread.
+    var activation = navigator.userActivation;
+    if (!activation || !activation.isActive) {
+      console.warn("[t3work-widget] sendPrompt dropped: requires a user gesture.");
+      return;
+    }
     post({ type: "t3work-widget:send-prompt", nonce: nonce, text: String(text) });
   };
   window.host = {
@@ -67,8 +74,11 @@ const BRIDGE_SCRIPT = `
     },
   };
   window.addEventListener("message", function (event) {
+    // Only the embedding host may settle tool calls, and only with the per-widget nonce — a
+    // nested third-party iframe inside the widget could otherwise forge tool results.
+    if (event.source !== window.parent) return;
     var data = event.data;
-    if (!data || data.type !== "t3work-widget:tool-result") return;
+    if (!data || data.type !== "t3work-widget:tool-result" || data.nonce !== nonce) return;
     var entry = pending.get(data.callId);
     if (!entry) return;
     pending.delete(data.callId);
@@ -98,7 +108,13 @@ export function buildT3workWidgetSrcdoc(input: {
     "body { color: var(--foreground, inherit); font-family: var(--font-sans, system-ui, sans-serif); }",
     "img, svg, video, canvas { max-width: 100%; height: auto; }",
   ].join(" ");
+  // CSP first: no external network at all (postMessage is unaffected by connect-src);
+  // scripts/styles are inline by construction, assets must be data: URIs.
+  const csp =
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; " +
+    "img-src data:; font-src data:; connect-src 'none'";
   return [
+    `<meta http-equiv="Content-Security-Policy" content="${csp}">`,
     `<style>${input.themeCss} ${reset}</style>`,
     `<script data-nonce="${input.nonce}">${BRIDGE_SCRIPT}</script>`,
     input.html,

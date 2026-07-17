@@ -122,4 +122,69 @@ describe("buildT3workWidgetSrcdoc", () => {
     expect(srcdoc).toContain("t3work-widget:call-tool");
     expect(srcdoc).toContain("<svg viewBox='0 0 1 1'></svg>");
   });
+
+  it("puts the CSP meta first with connect-src none and no external network", () => {
+    const srcdoc = buildT3workWidgetSrcdoc({ html: "<div/>", nonce: "n", themeCss: "" });
+    const cspIndex = srcdoc.indexOf('http-equiv="Content-Security-Policy"');
+    const styleIndex = srcdoc.indexOf("<style>");
+    const scriptIndex = srcdoc.indexOf("<script");
+    expect(cspIndex).toBeGreaterThanOrEqual(0);
+    // CSP must precede styles and the bridge script.
+    expect(cspIndex).toBeLessThan(styleIndex);
+    expect(cspIndex).toBeLessThan(scriptIndex);
+    expect(srcdoc).toContain("connect-src 'none'");
+    expect(srcdoc).toContain("default-src 'none'");
+    expect(srcdoc).toContain("img-src data:");
+  });
+
+  it("gesture-gates sendPrompt and validates tool-result source + nonce in the bridge", () => {
+    const srcdoc = buildT3workWidgetSrcdoc({ html: "<div/>", nonce: "n", themeCss: "" });
+    // sendPrompt requires a live user activation.
+    expect(srcdoc).toContain("navigator.userActivation");
+    expect(srcdoc).toContain("isActive");
+    // tool-result listener validates it came from the parent AND carries the nonce.
+    expect(srcdoc).toContain("event.source !== window.parent");
+    expect(srcdoc).toContain("data.nonce !== nonce");
+  });
+});
+
+describe("widget bridge client", () => {
+  it("rate-limits prompts per widget and rejects excess", async () => {
+    const { claimWidgetPromptSlot, resetWidgetPromptLimiter } =
+      await import("~/t3work/chat/t3work-widgetBridgeClient");
+    resetWidgetPromptLimiter();
+    expect(claimWidgetPromptSlot("w", 1_000)).toBe(true);
+    // Within the 2s window → dropped.
+    expect(claimWidgetPromptSlot("w", 1_500)).toBe(false);
+    // A different widget is independent.
+    expect(claimWidgetPromptSlot("other", 1_500)).toBe(true);
+    // After the window elapses → allowed again.
+    expect(claimWidgetPromptSlot("w", 4_000)).toBe(true);
+  });
+
+  it("only accepts callIds of the form call-<n>", async () => {
+    const { isWidgetCallId } = await import("~/t3work/chat/t3work-widgetBridgeClient");
+    expect(isWidgetCallId("call-1")).toBe(true);
+    expect(isWidgetCallId("call-42")).toBe(true);
+    expect(isWidgetCallId("evil")).toBe(false);
+    expect(isWidgetCallId("call-")).toBe(false);
+    expect(isWidgetCallId(42)).toBe(false);
+  });
+
+  it("rejects oversized tool-call args before hitting the network", async () => {
+    const { postWidgetToolCall } = await import("~/t3work/chat/t3work-widgetBridgeClient");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const outcome = await postWidgetToolCall({
+      httpBaseUrl: "",
+      threadId: "t1",
+      widgetId: "w1",
+      tool: "t3work.view.read",
+      args: { blob: "x".repeat(33 * 1024) },
+      signal: new AbortController().signal,
+    });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toContain("32 KB");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
 });

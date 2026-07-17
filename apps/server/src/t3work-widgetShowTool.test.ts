@@ -80,6 +80,37 @@ describe("parseT3workWidgetShowInput", () => {
         }),
     );
   });
+
+  it("measures widget_code cap in UTF-8 bytes, not UTF-16 length", () => {
+    // '€' is 1 UTF-16 unit but 3 UTF-8 bytes. 60k of them = 60k units (< 128k length) but
+    // 180k bytes (> 128k cap), so a byte-correct cap must reject it.
+    const euros = "€".repeat(60 * 1024);
+    const parsed = parseT3workWidgetShowInput({ title: "x", widget_code: euros });
+    assert.isTrue("error" in parsed);
+    assert.include((parsed as { error: string }).error, "128 KB");
+  });
+
+  it("truncates each loading_messages item to 200 chars", () => {
+    const parsed = parseT3workWidgetShowInput({
+      title: "x",
+      widget_code: "<div/>",
+      loading_messages: ["a".repeat(500)],
+    });
+    assert.isFalse("error" in parsed);
+    assert.strictEqual(
+      (parsed as { loadingMessages: ReadonlyArray<string> }).loadingMessages[0]?.length,
+      200,
+    );
+  });
+
+  it("rejects self-referential widget tools in the allowlist", () => {
+    const parsed = parseT3workWidgetShowInput({
+      title: "x",
+      widget_code: "<div/>",
+      capabilities: { tools: ["t3work.widget.show"] },
+    });
+    assert.isTrue("error" in parsed);
+  });
 });
 
 describe("callT3workWidgetShowTool", () => {
@@ -116,21 +147,31 @@ describe("callT3workWidgetShowTool", () => {
     assert.strictEqual(commands.length, 0);
   });
 
-  it("fails when the message dispatch fails", async () => {
-    const { registry } = makeDeps();
+  it("fails when the message dispatch fails and does NOT consume a registry slot", async () => {
+    const registry = createT3workWidgetRegistry();
+    const seen: string[] = [];
+    const wrapped = {
+      put: (r: Parameters<typeof registry.put>[0]) => {
+        seen.push(r.widgetId);
+        return registry.put(r);
+      },
+      get: registry.get,
+    };
     const result = await run(
       callT3workWidgetShowTool({
         toolArgs: validArgs,
         deps: {
           threadId: "thread-1",
           workspaceRoot: undefined,
-          registry,
+          registry: wrapped,
           dispatch: () => Effect.fail("boom"),
           persistenceContext: undefined,
         },
       }),
     );
     assert.strictEqual(result.isError, true);
+    // Registration happens only AFTER a successful dispatch.
+    assert.strictEqual(seen.length, 0);
   });
 });
 

@@ -6,30 +6,31 @@
  * after a server restart) and enforces a per-call timeout.
  */
 
-import { ThreadId } from "@t3tools/contracts";
+import { T3workWidgetToolCallRequest, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import { HttpRouter } from "effect/unstable/http";
+import * as Schema from "effect/Schema";
+import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
 
-import {
-  errorResponse,
-  okJson,
-  readJsonBody,
-  T3workAtlassianError,
-  toAtlassianError,
-} from "./t3work-atlassian-http.ts";
+import { browserApiCorsHeaders } from "./httpCors.ts";
+
+import { errorResponse, okJson, readJsonBody, toAtlassianError } from "./t3work-atlassian-http.ts";
 import { T3WORK_MCP_SERVER_NAME, T3workToolBroker } from "./t3work-toolBroker.ts";
 import { T3workWidgetRegistry } from "./t3work-widgetRegistry.ts";
 
 const TOOL_CALL_TIMEOUT_MILLIS = 30_000;
+/** Mirror of the client-side cap (t3work-useWidgetBlockController) on the serialized args. */
+const MAX_ARGS_BYTES = 32 * 1024;
 
-type T3workWidgetToolCallBody = {
-  readonly threadId?: string;
-  readonly widgetId?: string;
-  readonly tool?: string;
-  readonly arguments?: unknown;
-};
+const decodeBody = Schema.decodeUnknownEffect(T3workWidgetToolCallRequest);
+const encodeArgs = Schema.encodeSync(Schema.UnknownFromJsonString);
 
 const denied = (error: string) => okJson({ ok: false, error });
+
+const badRequest = (error: string) =>
+  HttpServerResponse.jsonUnsafe(
+    { ok: false, error },
+    { status: 400, headers: browserApiCorsHeaders },
+  );
 
 export const t3workWidgetToolCallRouteLayer = HttpRouter.add(
   "POST",
@@ -37,17 +38,29 @@ export const t3workWidgetToolCallRouteLayer = HttpRouter.add(
   Effect.gen(function* () {
     const registry = yield* T3workWidgetRegistry;
     const broker = yield* T3workToolBroker;
-    const input = yield* readJsonBody<T3workWidgetToolCallBody>();
+    const rawBody = yield* readJsonBody<unknown>();
+    const decoded = yield* decodeBody(rawBody).pipe(Effect.result);
+    if (decoded._tag === "Failure") {
+      return badRequest("Invalid widget tool-call body.");
+    }
+    const { threadId, widgetId, tool } = decoded.success;
+    const input = decoded.success;
 
-    const threadId = input.threadId?.trim() ?? "";
-    const widgetId = input.widgetId?.trim() ?? "";
-    const tool = input.tool?.trim() ?? "";
-    if (threadId.length === 0 || widgetId.length === 0 || tool.length === 0) {
-      return yield* new T3workAtlassianError({
-        message: "threadId, widgetId, and tool are required.",
-      });
+    // Defense in depth: reject oversized argument payloads server-side too (the client caps
+    // the same, but the route must not trust the client). Measured against the raw request
+    // body's arguments — encode via the schema codec rather than a bare JSON.stringify.
+    const argsBytes =
+      input.arguments === undefined
+        ? 0
+        : new TextEncoder().encode(encodeArgs(input.arguments)).byteLength;
+    if (argsBytes > MAX_ARGS_BYTES) {
+      return badRequest("Widget tool call arguments exceed the 32 KB limit.");
     }
 
+    // NOTE(auth): widgetId + threadId is the only credential here — acceptable under the
+    // current local single-user deployment assumption (same trust domain as the rest of the
+    // t3work HTTP routes). Any future multi-user or remote exposure MUST additionally bind
+    // this call to the requesting session identity before dispatching.
     const registration = yield* registry.get(widgetId);
     if (!registration || registration.threadId !== threadId) {
       return denied(

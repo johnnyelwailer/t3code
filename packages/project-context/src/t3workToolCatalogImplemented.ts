@@ -85,7 +85,7 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
     widget_code: {
       type: "string",
       description:
-        "Raw SVG (starting with <svg>) or an HTML fragment. Do NOT include <!DOCTYPE>, <html>, <head>, or <body> tags. The widget renders in a sandboxed iframe with the app's theme CSS variables available (use var(--background), var(--foreground), var(--muted), var(--border), ...), a transparent background, and no top-level padding. Scripts are allowed. Globals inside the widget: sendPrompt(text) sends a chat message as if the user typed it; window.host.callTool(name, args) returns a Promise with a broker tool result, but only for tools declared in capabilities.tools.",
+        "Raw SVG (starting with <svg>) or an HTML fragment. Do NOT include <!DOCTYPE>, <html>, <head>, or <body> tags. The widget renders in a sandboxed iframe with the app's theme CSS variables available (use var(--background), var(--foreground), var(--muted), var(--border), ...), a transparent background, and no top-level padding. Scripts are allowed, but a strict CSP blocks ALL external network access (no fetch/XHR/WebSockets, no CDN scripts, no remote images/fonts) — inline all CSS/JS and embed assets as data: URIs. Globals inside the widget: sendPrompt(text) sends a chat message as if the user typed it (requires a real user gesture inside the widget, e.g. a button click, and is rate-limited); window.host.callTool(name, args) returns a Promise with a broker tool result, but only for tools declared in capabilities.tools.",
       minLength: 1,
     },
     format: {
