@@ -60,9 +60,17 @@ describe("launchWorkflowRecipe — real launch path", () => {
       },
     });
 
+    // Step activities ride alongside the orchestration commands (UX slice 1); the command
+    // sequence assertions below check the non-activity stream, then the activity stream is
+    // asserted separately at the end.
+    const commandTypes = () =>
+      dispatched.filter((c) => c.type !== "thread.activity.append").map((c) => c.type);
+    const stepActivities = () =>
+      dispatched.flatMap((c) => (c.type === "thread.activity.append" ? [c.activity] : []));
+
     // The first ask (agent's isolated-thread turn) parks the run.
     expect(result.status).toBe("suspended");
-    expect(dispatched.map((c) => c.type)).toEqual(["thread.create", "thread.turn.start"]);
+    expect(commandTypes()).toEqual(["thread.create", "thread.turn.start"]);
 
     const run = registry.getRun(runId);
     expect(run).toBeDefined();
@@ -73,11 +81,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
     await run!.resume(agentAsk!.correlationId, { summary: "Low risk; well tested." });
 
     // Resuming fired the user escalation as a system message into the launching thread.
-    expect(dispatched.map((c) => c.type)).toEqual([
-      "thread.create",
-      "thread.turn.start",
-      "thread.message.upsert",
-    ]);
+    expect(commandTypes()).toEqual(["thread.create", "thread.turn.start", "thread.message.upsert"]);
 
     // Reactor step 2: the user replied in the launching thread.
     const userAsk = registry.takePending(launchThreadId);
@@ -86,5 +90,25 @@ describe("launchWorkflowRecipe — real launch path", () => {
 
     expect(completed).toEqual({ summary: "Low risk; well tested.", merged: true });
     expect(registry.getRun(runId)).toBeUndefined(); // completed runs are unregistered
+
+    // Step activities: every primitive emitted a `t3work.recipe.workflow.step` entry on the
+    // launch thread, and each ask re-emitted the SAME id with its terminal phase (upsert-by-id
+    // is what makes the client timeline update in place).
+    const steps = stepActivities();
+    expect(steps.length).toBeGreaterThanOrEqual(2);
+    for (const activity of steps) {
+      expect(activity.kind).toBe("t3work.recipe.workflow.step");
+      expect(String(activity.id)).toMatch(/^t3work-wf-step:/);
+    }
+    const phasesById = new Map<string, string[]>();
+    for (const activity of steps) {
+      const payload = activity.payload as { phase: string };
+      const id = String(activity.id);
+      phasesById.set(id, [...(phasesById.get(id) ?? []), payload.phase]);
+    }
+    // The user.input ask (`<runId>:2`... seq varies) must go waiting -> completed on one id.
+    const askPhases = [...phasesById.values()].find((p) => p[0] === "waiting");
+    expect(askPhases).toBeDefined();
+    expect(askPhases?.at(-1)).toBe("completed");
   });
 });

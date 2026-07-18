@@ -20,6 +20,7 @@ import {
 import type { AskAffordance } from "@t3work/sdk";
 
 import type { T3workWorkflowEngineRegistryShape } from "./t3work-workflowEngineRegistry.ts";
+import type { WorkflowStepActivityEmitter } from "./t3work-workflowEngineStepActivities.ts";
 
 /** The ask a run is parked on, as the broker knows it when it fires (thread + correlation). */
 export interface WorkflowEnginePendingAsk {
@@ -33,6 +34,29 @@ export interface WorkflowEnginePendingAsk {
 export interface WorkflowEngineSleep {
   readonly correlationId: string;
   readonly deadline: number;
+}
+
+/**
+ * Write-through to the durable `workflow_runs` record. The host implements this over
+ * {@link import("./persistence/Services/WorkflowRuns.ts").WorkflowRunRepository}; absent (SDK
+ * fs path / tests) the run is purely in-memory.
+ */
+export interface WorkflowRunLifecycle {
+  /** Insert the initial `running` row (called once at launch). */
+  readonly recordRunning: () => Promise<void>;
+  /** Flip to `suspended` + record the ask the run parked on (driven by the broker). */
+  readonly recordSuspended: (pending: WorkflowEnginePendingAsk) => Promise<void>;
+  /** Flip to `sleeping` + record the wake deadline the run parked on (Epic 27; driven by the
+   * broker when the body fires `waitUntil`). */
+  readonly recordSleeping: (sleep: WorkflowEngineSleep) => Promise<void>;
+  /** Mark the run `completed` and clear the pending ask. */
+  readonly recordCompleted: () => Promise<void>;
+  /** Mark the run `failed` and clear the pending ask. */
+  readonly recordFailed: () => Promise<void>;
+  /** Crash-recovery: if the run row is still `sleeping` on this correlation (its wake reply was
+   * journaled by a process that died before settling), mark it failed so the scheduler stops
+   * re-arming it. No-op otherwise (e.g. a late ask reply on an already-advanced run). */
+  readonly orphanIfSleeping: (correlationId: string) => Promise<void>;
 }
 
 export interface WorkflowEngineBrokerDeps {
@@ -59,6 +83,12 @@ export interface WorkflowEngineBrokerDeps {
    * {@link recordPending} for the timer wake source. No-op (undefined) on the fs/in-memory path.
    */
   readonly recordSleeping?: (sleep: WorkflowEngineSleep) => Promise<void>;
+  /**
+   * Live step-status sink (UX slice 1 — "no black box"): each fired primitive emits a
+   * `workflow.step` thread activity on the launch thread. Best-effort by construction; absent
+   * on the SDK fs path and in minimal tests.
+   */
+  readonly stepActivities?: WorkflowStepActivityEmitter;
 }
 
 export interface ThreadCreatePayload {

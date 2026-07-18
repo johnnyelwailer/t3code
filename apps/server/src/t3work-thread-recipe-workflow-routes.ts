@@ -24,18 +24,13 @@ import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStor
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { toT3workError } from "./t3work-project-repository-utils.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
-import {
-  buildRunningWorkflowRunRow,
-  makeWorkflowRunLifecycle,
-} from "./t3work-workflowEngineDurability.ts";
+import { launchPreparedWorkflow } from "./t3work-workflowEphemeralLaunch.ts";
 import {
   isProviderInteractionMode,
   isRuntimeMode,
   loadThreadProjectContext,
 } from "./t3work-thread-recipe-workflow-routes-shared.ts";
 import { nowIso } from "./t3work-thread-recipe-workflow-routes-resolve.ts";
-import { launchWorkflowRecipe } from "./t3work-workflowEngineLaunch.ts";
-import { buildWorkflowShapePreviewCommand } from "./t3work-workflowShapePreview.ts";
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
 
@@ -100,29 +95,6 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
 
     const runId = t3workRandomUUID();
     const args = input.launch.parameters ?? {};
-    // Persist the run record + journal in SQLite so a suspend survives a restart (Epic 25
-    // §Open question 2). The lifecycle write-through keeps `workflow_runs` the source of
-    // truth that boot rehydration reads; the in-memory registry stays the reactor's hot index.
-    const lifecycle = makeWorkflowRunLifecycle({
-      repo: runRepository,
-      row: buildRunningWorkflowRunRow({
-        runId,
-        workflowPath,
-        args,
-        launchThreadId: threadIdInput,
-        projectId: thread.projectId,
-        modelSelection,
-        runtimeMode,
-        interactionMode,
-        nowIso: nowIso(),
-      }),
-      nowIso,
-      // When the body fires `waitUntil`, re-arm the scheduler's soonest-deadline timer for the
-      // freshly-slept run (Epic 27).
-      onSleep: () => {
-        void scheduler.rearm();
-      },
-    });
 
     // Stamp the launch thread with a recipe-launch activity BEFORE starting the run. The web
     // composer arms a one-shot "launch this recipe" override while a thread has a recipe
@@ -147,46 +119,31 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       }),
     );
 
-    // Emit the play-as-shape "plan" before the run starts so the user sees WHAT THE RECIPE WILL
-    // DO while it spins up. Best-effort: an unreadable source / underivable shape skips the
-    // preview, and the launch proceeds unchanged.
+    // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
+    // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
+    // `t3work.workflow.run` tool drives through.
     const fileSystem = yield* FileSystem.FileSystem;
-    const shapeSource = yield* fileSystem
-      .readFileString(workflowPath)
-      .pipe(Effect.orElseSucceed(() => null));
-    const shapeCommand =
-      shapeSource === null
-        ? null
-        : buildWorkflowShapePreviewCommand({
-            threadId: threadIdInput,
-            workflowPath,
-            sourceText: shapeSource,
-            runId,
-            newId: () => t3workRandomUUID(),
-            nowIso: nowIso(),
-          });
-    if (shapeCommand) {
-      yield* Effect.promise(() => dispatch(shapeCommand));
-    }
-
-    const result = yield* Effect.promise(() =>
-      launchWorkflowRecipe({
+    const result = yield* launchPreparedWorkflow(
+      {
+        registry,
+        runRepository,
+        journalStore,
+        rearmScheduler: () => scheduler.rearm(),
+        dispatch,
+        fileSystem,
+      },
+      {
         runId,
         workflowPath,
         args,
-        runsRoot: `${project.workspaceRoot}/.t3work-runs`,
+        workspaceRoot: project.workspaceRoot,
         launchThreadId: threadIdInput,
         projectId: thread.projectId,
         modelSelection,
         runtimeMode,
         interactionMode,
-        registry,
-        dispatch,
-        newId: () => t3workRandomUUID(),
-        nowIso,
-        store: journalStore,
-        lifecycle,
-      }),
+        origin: "recipe",
+      },
     );
 
     return okJson({ ok: true, mode: "engine", runId: result.runId, status: result.status });

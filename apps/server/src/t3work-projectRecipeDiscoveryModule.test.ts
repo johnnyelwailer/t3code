@@ -203,7 +203,12 @@ describe("recipe.ts discovery + engine launch", () => {
 
     // Parks on the agent's isolated-thread turn.
     expect(result.status).toBe("suspended");
+    // The step-activity emitter fires a `thread.activity.append` live-status pip ahead of each
+    // real orchestration command it shadows (best-effort; UI observability only — see
+    // t3work-workflowEngineStepActivities.ts).
     expect(dispatched.map((command) => command.type)).toEqual([
+      "thread.activity.append",
+      "thread.activity.append",
       "thread.create",
       "thread.turn.start",
     ]);
@@ -216,10 +221,15 @@ describe("recipe.ts discovery + engine launch", () => {
     expect(agentAsk?.kind).toBe("thread.turn");
     await run!.resume(agentAsk!.correlationId, { summary: "Low risk; well tested." });
 
-    // The user escalation fired as a system message into the launching thread.
+    // The user escalation fired as a system message into the launching thread — preceded by two
+    // more step-activity pips shadowing the resumed turn's resolution and the follow-up ask.
     expect(dispatched.map((command) => command.type)).toEqual([
+      "thread.activity.append",
+      "thread.activity.append",
       "thread.create",
       "thread.turn.start",
+      "thread.activity.append",
+      "thread.activity.append",
       "thread.message.upsert",
     ]);
 

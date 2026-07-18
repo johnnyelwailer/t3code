@@ -19,14 +19,16 @@ import type {
   LaunchWorkflowRecipeInput,
   WorkflowRunController,
 } from "./t3work-workflowEngineLaunch.ts";
+import type { WorkflowStepActivityEmitter } from "./t3work-workflowEngineStepActivities.ts";
 
 export function makeControllerResume(deps: {
   readonly input: LaunchWorkflowRecipeInput;
   readonly ref: WorkflowRef;
   readonly options: WorkflowRunController["options"];
   readonly settle: WorkflowRunController["settle"];
+  readonly stepActivities: WorkflowStepActivityEmitter;
 }): (correlationId: string, reply: unknown) => Promise<void> {
-  const { input, ref, options, settle } = deps;
+  const { input, ref, options, settle, stepActivities } = deps;
   let resuming = false;
   return async (correlationId, reply) => {
     if (resuming) return; // a concurrent resume is settling — don't double-drive or orphan
@@ -43,10 +45,17 @@ export function makeControllerResume(deps: {
         await input.lifecycle?.orphanIfSleeping(correlationId);
         return;
       }
+      // The awaited primitive resolved — flip its live step activity to `completed` (same id →
+      // in-place upsert) before the replay drives to the next suspension.
+      await stepActivities.emitResolved(correlationId, "completed");
       await settle(await resumeWorkflow(input.runId, ref, input.args, options));
     } catch (error) {
       input.registry.deleteRun(input.runId);
       await input.lifecycle?.recordFailed();
+      await stepActivities.emitRun(
+        "failed",
+        error instanceof Error ? error.message : String(error),
+      );
       await input.onError?.(error);
     } finally {
       resuming = false;

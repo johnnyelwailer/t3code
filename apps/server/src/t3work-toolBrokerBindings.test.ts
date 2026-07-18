@@ -301,6 +301,8 @@ describe("T3workToolBroker allowed tool groups", () => {
 
     expect(result.binding?.listServers()[0]?.tools).toEqual({
       "t3work.view.read": expect.objectContaining({ name: "t3work.view.read" }),
+      "t3work.recipe.list": expect.objectContaining({ name: "t3work.recipe.list" }),
+      "t3work.recipe.validate": expect.objectContaining({ name: "t3work.recipe.validate" }),
     });
     expect(result.readResult.structuredContent).toEqual(
       expect.objectContaining({

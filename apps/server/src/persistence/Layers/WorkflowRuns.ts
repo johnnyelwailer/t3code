@@ -9,6 +9,7 @@ import { ModelSelection } from "@t3tools/contracts";
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
   ClearWorkflowRunPendingInput,
+  CountLiveWorkflowRunsByOriginInput,
   GetWorkflowRunInput,
   ListWorkflowRunsByStatusInput,
   SetWorkflowRunPendingInput,
@@ -45,6 +46,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           runtime_mode,
           interaction_mode,
           status,
+          origin,
           pending_thread_id,
           pending_correlation_id,
           pending_kind,
@@ -63,6 +65,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           ${row.runtimeMode},
           ${row.interactionMode},
           ${row.status},
+          ${row.origin},
           ${row.pendingThreadId},
           ${row.pendingCorrelationId},
           ${row.pendingKind},
@@ -81,6 +84,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           runtime_mode = excluded.runtime_mode,
           interaction_mode = excluded.interaction_mode,
           status = excluded.status,
+          origin = excluded.origin,
           pending_thread_id = excluded.pending_thread_id,
           pending_correlation_id = excluded.pending_correlation_id,
           pending_kind = excluded.pending_kind,
@@ -106,6 +110,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           runtime_mode AS "runtimeMode",
           interaction_mode AS "interactionMode",
           status,
+          origin,
           pending_thread_id AS "pendingThreadId",
           pending_correlation_id AS "pendingCorrelationId",
           pending_kind AS "pendingKind",
@@ -133,6 +138,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           runtime_mode AS "runtimeMode",
           interaction_mode AS "interactionMode",
           status,
+          origin,
           pending_thread_id AS "pendingThreadId",
           pending_correlation_id AS "pendingCorrelationId",
           pending_kind AS "pendingKind",
@@ -142,6 +148,20 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
         FROM workflow_runs
         WHERE status = ${status}
         ORDER BY created_at ASC, run_id ASC
+      `,
+  });
+
+  // The ephemeral concurrency cap's index: how many runs of one origin still hold engine
+  // resources (running now, or parked and resumable).
+  const countLiveWorkflowRunRowsByOrigin = SqlSchema.findAll({
+    Request: CountLiveWorkflowRunsByOriginInput,
+    Result: Schema.Struct({ count: Schema.Number }),
+    execute: ({ origin }) =>
+      sql`
+        SELECT COUNT(*) AS "count"
+        FROM workflow_runs
+        WHERE origin = ${origin}
+          AND status IN ('running', 'suspended', 'sleeping')
       `,
   });
 
@@ -217,6 +237,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.listByStatus:query")),
     );
 
+  const countLiveByOrigin: WorkflowRunRepositoryShape["countLiveByOrigin"] = (input) =>
+    countLiveWorkflowRunRowsByOrigin(input).pipe(
+      Effect.map((rows) => rows[0]?.count ?? 0),
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.countLiveByOrigin:query")),
+    );
+
   const setStatus: WorkflowRunRepositoryShape["setStatus"] = (input) =>
     setWorkflowRunStatusRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setStatus:query")),
@@ -241,6 +267,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     upsert,
     getById,
     listByStatus,
+    countLiveByOrigin,
     setStatus,
     setPending,
     clearPending,

@@ -578,6 +578,9 @@ Useful tools:
 
 ```text
 t3work.view.read
+t3work.recipe.list
+t3work.recipe.validate
+t3work.workflow.run
 t3work.thread.rename
 t3work.thread.read_current
 t3work.thread.rename.draft_update

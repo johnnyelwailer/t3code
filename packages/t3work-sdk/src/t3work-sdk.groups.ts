@@ -32,6 +32,13 @@ export const jiraWrite = defineToolGroup({
   description: "Edit Jira issues, add comments, transition workflow state, and update assignments.",
 });
 
+export const t3workRecipeRead = defineToolGroup({
+  id: "t3work.recipe.read",
+  label: "Read t3work project recipes",
+  description:
+    "List discovered t3work project recipes and statically validate recipe workflows without executing them.",
+});
+
 export const t3workThreadWrite = defineToolGroup({
   id: "t3work.thread.write",
   label: "Modify t3work threads",
@@ -49,6 +56,7 @@ export const builtinToolGroups = [
   githubWrite,
   jiraRead,
   jiraWrite,
+  t3workRecipeRead,
   t3workThreadWrite,
   releaseNotesWrite,
 ] as const;

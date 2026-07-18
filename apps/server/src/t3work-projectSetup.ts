@@ -13,6 +13,7 @@ import {
   renderSkillTemplate,
   renderSkillsReadme,
 } from "./t3work-projectSetupContent.ts";
+import { renderRecipeAuthoringGuide } from "./t3work-projectSetupContentAuthoring.ts";
 import { renderBundledRecipeSetupFiles } from "./t3work-projectSetupRecipes.ts";
 import { renderStatusAndContextSkill } from "./t3work-projectSetupStatusSkill.ts";
 import {
@@ -103,6 +104,11 @@ export function renderT3WorkProjectSetupFiles(input?: {
     {
       relativePath: `${T3WORK_PROJECT_RECIPES_ROOT}/README.md`,
       contents: renderRecipesReadme(),
+      writeMode: "if-missing",
+    },
+    {
+      relativePath: `${T3WORK_PROJECT_RECIPES_ROOT}/AUTHORING.md`,
+      contents: renderRecipeAuthoringGuide(),
       writeMode: "if-missing",
     },
     ...renderBundledRecipeSetupFiles(),

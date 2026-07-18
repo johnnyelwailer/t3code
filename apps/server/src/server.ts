@@ -129,6 +129,7 @@ import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStor
 import { T3workContextRefreshServiceLive } from "./t3work-contextRefreshService.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
 import { T3workActorMessageReactorLive } from "./t3work-actorMessageReactor.ts";
+import { T3workWorkflowEngineRehydrateLive } from "./t3work-workflowEngineRehydrate.ts";
 import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowSchedulerLive } from "./t3work-workflowScheduler.ts";
 import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
@@ -352,6 +353,9 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
       Layer.provideMerge(T3workThreadToolContextStoreLive),
       Layer.provideMerge(T3workContextRefreshServiceLive),
       Layer.provide(OrchestrationLayerLive),
+      // t3work.workflow.run (ephemeral workflows) drives the same durable-engine singletons;
+      // memoized by reference, so this shares the registry/repo/store/scheduler instances.
+      Layer.provide(WorkflowEngineDurabilityLive),
     ),
   ),
   // Shared singletons: the launch route registers parked runs in the registry and writes the
@@ -567,6 +571,7 @@ export const makeServerLayer = Layer.unwrap(
       tailscaleServeLayer,
       T3workWorkflowEngineReactorLive,
       T3workActorMessageReactorLive,
+      T3workWorkflowEngineRehydrateLive,
       cloudDesiredLinkReconcileLayer,
     );
 

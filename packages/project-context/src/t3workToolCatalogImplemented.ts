@@ -97,6 +97,77 @@ export const IMPLEMENTED_T3WORK_TOOL_CATALOG = {
     defaultEnabled: true,
     inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
   },
+  "t3work.recipe.list": {
+    id: "t3work.recipe.list",
+    label: "List project recipes",
+    title: "List t3work project recipes",
+    description:
+      "List the t3work project recipes discovered in this project's workspace (.t3work/recipes/) — t3work project recipes are directories bundling a typed recipe.ts module (or legacy recipe.json manifest) with a .workflow.ts the t3work workflow engine runs; they are NOT Claude Code skills or provider-native workflows. Returns each recipe's id, title, shortDescription, surfaces, authoring form ('recipe-ts' typed module vs 'recipe-json' legacy manifest), recipe directory, and resolved workflow path, plus structured errors for recipes that failed to load. Read-only: nothing is written or launched.",
+    capabilities: ["read"],
+    kind: "read",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
+  },
+  "t3work.recipe.validate": {
+    id: "t3work.recipe.validate",
+    label: "Validate recipe workflow",
+    title: "Validate a t3work recipe workflow statically",
+    description:
+      "Statically validate a t3work project recipe workflow (.workflow.ts) — t3work project recipes, NOT Claude Code skills or provider-native workflows. Run this after authoring or editing recipe/workflow files: it loads the file through the SDK loader, extracts the meta block (name, description, input/output fields, capabilities), derives the same play-as-shape preview the UI shows (phases + read/agent/ask/act steps), and returns structured errors ({path, phase: discover|load|meta|shape, message}) precise enough to fix the file from. Accepts a path to a .workflow.ts file or to a recipe directory, relative to the project workspace root; paths outside the workspace are rejected. Read-only and safe: the workflow body is never executed.",
+    capabilities: ["read"],
+    kind: "read",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        path: {
+          type: "string",
+          description:
+            "Path to a .workflow.ts file or a recipe directory, relative to the project workspace root (absolute paths must stay inside the workspace).",
+          minLength: 1,
+        },
+      },
+      required: ["path"],
+    },
+  },
+  "t3work.workflow.run": {
+    id: "t3work.workflow.run",
+    label: "Run ephemeral workflow",
+    title: "Run a temporary t3work workflow in this conversation",
+    description:
+      "Run a temporary t3work workflow immediately in this conversation — a durable, journaled t3work engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline workflow TypeScript, persisted under .t3work-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: .t3work/recipes/AUTHORING.md; validate with t3work.recipe.validate first. Returns {runId, status: completed|suspended|failed, output?, error?}. 'suspended' = waiting on a user decision card in this thread; it resumes on their reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        source: {
+          type: "string",
+          description:
+            "Inline workflow TypeScript (meta + top-level body). Exactly one of source/workflowPath.",
+          minLength: 1,
+        },
+        workflowPath: {
+          type: "string",
+          description:
+            "Path to an existing .workflow.ts, relative to the project workspace root (absolute paths must stay inside the workspace). Exactly one of source/workflowPath.",
+          minLength: 1,
+        },
+        args: {
+          description: "Launch arguments decoded by the workflow's meta.inputs schema.",
+        },
+      },
+    },
+  },
   "t3work.thread.rename": {
     id: "t3work.thread.rename",
     label: "Rename thread",

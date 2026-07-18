@@ -22,6 +22,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION } from "@t3tools/project-recipes";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
 import type { MessageBroker, MessageEnvelope } from "@t3work/sdk";
@@ -35,6 +36,7 @@ import {
   type WaitUntilPayload,
   type WorkflowEngineBrokerDeps,
 } from "./t3work-workflowEngineBrokerTypes.ts";
+import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities.ts";
 
 export type {
   WorkflowEngineBrokerDeps,
@@ -60,10 +62,26 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
   // run rather than parking it forever on a turn that never started.
   const enqueueOneWay = (fn: () => Promise<void>): Promise<void> => enqueue(fn).catch(() => {});
 
+  // Live step-status pip (UX slice 1): fire-and-forget — the emitter swallows its own failures.
+  const step = (
+    correlationId: string,
+    kind: string,
+    phase: "started" | "waiting" | "completed",
+    detail?: string,
+  ): void => {
+    void deps.stepActivities?.emitSent({
+      correlationId,
+      stepKind: kind,
+      phase,
+      ...(detail === undefined ? {} : { detail: workflowStepDetailSnippet(detail) }),
+    });
+  };
+
   const send = async (envelope: MessageEnvelope): Promise<void> => {
     const { correlationId, kind, payload } = envelope;
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
+      step(correlationId, kind, "completed", p.name ?? "Spawn thread");
       await enqueueOneWay(() =>
         deps.dispatch({
           type: "thread.create",
@@ -83,6 +101,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     }
     if (kind === "thread.turn") {
       const p = payload as ThreadTurnPayload;
+      step(correlationId, kind, "started", p.prompt);
       deps.registry.setPending(p.threadId, {
         runId: deps.runId,
         correlationId,
@@ -110,6 +129,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     }
     if (kind === "user.input") {
       const p = payload as UserInputPayload;
+      step(correlationId, kind, "waiting", p.question);
       const affordance = p.affordance ?? { kind: "text" as const };
       deps.registry.setPending(p.threadId, {
         runId: deps.runId,
@@ -159,12 +179,19 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       // has no message) and no resolver settle — the run suspends out of band until the
       // scheduler appends the resolved entry at the deadline.
       const p = payload as WaitUntilPayload;
+      step(
+        correlationId,
+        kind,
+        "waiting",
+        `Sleep until ${DateTime.formatIso(DateTime.makeUnsafe(p.deadline))}`,
+      );
       await deps.recordSleeping?.({ correlationId, deadline: p.deadline });
       return;
     }
     // thread.message — one-way; agent-directed messages read as a user turn-input, user-directed
     // ones as a system (user-visible) note. No turn.start, no pending.
     const p = payload as ThreadMessagePayload;
+    step(correlationId, kind, "completed", p.text);
     await enqueueOneWay(() =>
       deps.dispatch(
         messageUpsert(deps, p.threadId, p.recipient === "agent" ? "user" : "system", p.text),

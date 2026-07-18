@@ -24,6 +24,8 @@ import {
   type ProjectRecipeWorkflowStepKind,
 } from "@t3tools/project-recipes";
 
+import type { ReactNode } from "react";
+
 import { cn } from "~/lib/utils";
 import type { ChatMessage } from "~/types";
 
@@ -70,7 +72,7 @@ const KIND_META: Record<
 };
 
 /** Group steps under the declared phase strip; steps with no (or an unknown) phase lead. */
-function groupSteps(shape: ProjectRecipeWorkflowShapePayload) {
+export function groupT3workShapeSteps(shape: ProjectRecipeWorkflowShapePayload) {
   const titles = shape.phases.map((phase) => phase.title);
   const groups: Array<{ title: string | null; steps: ProjectRecipeWorkflowShapePayload["steps"] }> =
     [];
@@ -83,10 +85,18 @@ function groupSteps(shape: ProjectRecipeWorkflowShapePayload) {
   return groups;
 }
 
-function StepRow({ step }: { step: ProjectRecipeWorkflowShapePayload["steps"][number] }) {
+export function T3workShapeStepRow({
+  step,
+  leading,
+}: {
+  step: ProjectRecipeWorkflowShapePayload["steps"][number];
+  /** Optional live-status slot (spinner/check/clock/error) rendered before the kind icon. */
+  leading?: ReactNode;
+}) {
   const meta = KIND_META[step.kind];
   return (
     <div className="flex items-center gap-2.5">
+      {leading}
       <span className={cn("flex size-5 shrink-0 items-center justify-center", meta.text)}>
         <meta.Icon className="size-3.5" />
       </span>
@@ -104,7 +114,7 @@ function StepRow({ step }: { step: ProjectRecipeWorkflowShapePayload["steps"][nu
 }
 
 export function T3workWorkflowShapeCard({ shape }: { shape: ProjectRecipeWorkflowShapePayload }) {
-  const groups = groupSteps(shape);
+  const groups = groupT3workShapeSteps(shape);
   return (
     <div className="rounded-lg border border-primary/35 bg-background/65 px-4 py-3">
       <div className="mb-2 flex items-center gap-1.5 text-primary">
@@ -139,7 +149,7 @@ export function T3workWorkflowShapeCard({ shape }: { shape: ProjectRecipeWorkflo
                 </p>
               ) : null}
               {group.steps.map((step, stepIndex) => (
-                <StepRow key={`step:${index}:${stepIndex}`} step={step} />
+                <T3workShapeStepRow key={`step:${index}:${stepIndex}`} step={step} />
               ))}
             </div>
           ))}

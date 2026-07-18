@@ -22,6 +22,16 @@ import {
   callT3workWorkItemRefreshContextBundleEffect,
 } from "./t3work-toolBrokerContextSync.ts";
 import { callT3workRenameTool } from "./t3work-toolBrokerBindingRename.ts";
+import {
+  callT3workRecipeTool,
+  isT3workRecipeTool,
+  type T3workRecipeToolHandlers,
+} from "./t3work-toolBrokerBindingRecipes.ts";
+import {
+  callT3workWorkflowRunTool,
+  T3WORK_WORKFLOW_RUN_TOOL_ID,
+} from "./t3work-toolBrokerBindingWorkflowRun.ts";
+import type { T3workWorkflowRunToolHandlers } from "./t3work-toolBrokerWorkflowRunTools.ts";
 import type { T3workContextRefreshServiceShape } from "./t3work-contextRefreshService.ts";
 
 export function dispatchT3workToolCall(input: {
@@ -38,6 +48,8 @@ export function dispatchT3workToolCall(input: {
   startChild?: (arguments_: unknown) => Effect.Effect<unknown, string>;
   setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, string>;
   refreshContextBundle?: T3workContextRefreshServiceShape;
+  recipeTools?: T3workRecipeToolHandlers;
+  workflowRunTools?: T3workWorkflowRunToolHandlers;
 }): ReturnType<T3workToolBinding["callTool"]> {
   const { server, tool, toolArgs, state } = input;
   if (server !== T3WORK_MCP_SERVER_NAME) {
@@ -56,6 +68,21 @@ export function dispatchT3workToolCall(input: {
       toolArgs,
       ...(input.renameThread ? { renameThread: input.renameThread } : {}),
       ...(input.renameThreadResult ? { renameThreadResult: input.renameThreadResult } : {}),
+    });
+  }
+  if (isT3workRecipeTool(tool)) {
+    return callT3workRecipeTool({
+      tool,
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
+    });
+  }
+  if (tool === T3WORK_WORKFLOW_RUN_TOOL_ID) {
+    return callT3workWorkflowRunTool({
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      ...(input.workflowRunTools ? { workflowRunTools: input.workflowRunTools } : {}),
     });
   }
   if (tool === "t3work.thread.start_child") {

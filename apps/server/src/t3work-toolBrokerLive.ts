@@ -25,6 +25,9 @@ import { buildPrelaunchView } from "./t3work-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
 import { buildThreadWorkspaceView } from "./t3work-toolBrokerViewWorkspace.ts";
+import { setBacklogAssigneeFilterForContext } from "./t3work-toolBrokerBacklogFilter.ts";
+import { makeRecipeToolHandlers } from "./t3work-toolBrokerRecipeTools.ts";
+import { makeWorkflowRunToolsForThread } from "./t3work-toolBrokerWorkflowRunLive.ts";
 import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
 
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
@@ -86,56 +89,6 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       };
     });
 
-  const setBacklogAssigneeFilter = (toolContext: T3workTurnToolContext, mode: "current-user") =>
-    Effect.gen(function* () {
-      if (mode !== "current-user") {
-        return yield* Effect.fail("Only the current-user assignee filter mode is supported.");
-      }
-
-      if (!toolContext.state || typeof toolContext.state !== "object") {
-        return yield* Effect.fail("Backlog view state is not available.");
-      }
-
-      const state = toolContext.state as {
-        readonly backlog?: {
-          readonly state?: {
-            readonly assigneeFilter?: unknown;
-          };
-          readonly currentUserDisplayName?: unknown;
-        };
-      };
-      const currentUserDisplayName =
-        typeof state.backlog?.currentUserDisplayName === "string"
-          ? state.backlog.currentUserDisplayName.trim()
-          : "";
-
-      if (currentUserDisplayName.length === 0) {
-        return yield* Effect.fail(
-          "Current user display name is unavailable for this backlog view.",
-        );
-      }
-
-      const currentAssigneeFilter =
-        typeof state.backlog?.state?.assigneeFilter === "string"
-          ? state.backlog.state.assigneeFilter
-          : undefined;
-      const alreadyApplied = currentAssigneeFilter === currentUserDisplayName;
-
-      return {
-        ok: true,
-        applied: !alreadyApplied,
-        promptText: alreadyApplied
-          ? `The dashboard is already filtered to work assigned to ${currentUserDisplayName}.`
-          : `The dashboard is now filtered to work assigned to ${currentUserDisplayName}.`,
-        ...(alreadyApplied
-          ? {}
-          : {
-              viewStatePatch: {
-                assigneeFilter: currentUserDisplayName,
-              },
-            }),
-      };
-    });
   const renameThread = (threadId: ThreadIdType, title: string) =>
     orchestration.dispatch({
       type: "thread.meta.update",
@@ -143,6 +96,15 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       threadId,
       title,
     });
+  const recipeToolsForThread = makeRecipeToolHandlers({ fileSystem, path, loadThreadProject });
+  // `t3work.workflow.run` (ephemeral workflows): the same durable-engine seams the recipe
+  // launch route uses, bound to the calling thread (undefined when the engine isn't wired).
+  const workflowRunToolsForThread = yield* makeWorkflowRunToolsForThread({
+    fileSystem,
+    path,
+    loadThreadProject,
+    dispatch: (command) => Effect.runPromise(orchestration.dispatch(command)).then(() => undefined),
+  });
   const startChildThread = makeStartChildThread({
     loadThreadProject,
     orchestration,
@@ -193,8 +155,13 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
         renameThread: (title) => renameThread(threadId, title),
         renameThreadResult: (title) => ({ ok: true, threadId, title }),
         startChild: (toolArgs) => startChildThread(threadId, toolArgs),
-        setBacklogAssigneeFilter: (mode) => setBacklogAssigneeFilter(resolvedToolContext, mode),
+        setBacklogAssigneeFilter: (mode) =>
+          setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,
+        recipeTools: recipeToolsForThread(threadId),
+        ...(workflowRunToolsForThread
+          ? { workflowRunTools: workflowRunToolsForThread(threadId) }
+          : {}),
       });
     });
 

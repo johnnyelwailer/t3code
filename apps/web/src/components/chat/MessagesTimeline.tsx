@@ -1,6 +1,7 @@
 import {
   type EnvironmentId,
   type MessageId,
+  type OrchestrationThreadActivity,
   type ScopedThreadRef,
   type ServerProviderSkill,
   type TurnId,
@@ -122,6 +123,10 @@ import {
   getT3workRenderableAttachments,
   T3workMessageAttachmentList,
 } from "~/t3work/chat/t3work-messageExtViews";
+import {
+  deriveT3workWorkflowStepRuns,
+  type T3workWorkflowRunProgress,
+} from "~/t3work/chat/t3work-threadWorkflowStepProgress";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -144,6 +149,7 @@ interface TimelineRowSharedState {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   activeWorkflowInputMessageId: string | null;
+  workflowStepRuns: ReadonlyMap<string, T3workWorkflowRunProgress>;
   onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
   dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
   onOpenThread?: ChatViewT3workExtensionProps["onOpenThread"];
@@ -192,6 +198,8 @@ interface MessagesTimelineProps {
   onAnchorSizeChanged: (messageId: MessageId, size: number) => void;
   contentInsetEndAdjustment: number;
   onIsAtEndChange: (isAtEnd: boolean) => void;
+  /** Thread activities feeding the live workflow-step overlay on plan (shape) cards. */
+  threadActivities?: ReadonlyArray<OrchestrationThreadActivity>;
   onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
   dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
   onOpenThread?: ChatViewT3workExtensionProps["onOpenThread"];
@@ -228,6 +236,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onAnchorSizeChanged,
   contentInsetEndAdjustment,
   onIsAtEndChange,
+  threadActivities,
   onSubmitRecipeCardAction,
   dispatchWorkflowDecision,
   onOpenThread,
@@ -438,6 +447,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [timelineEntries],
   );
 
+  const workflowStepRuns = useMemo(
+    () => deriveT3workWorkflowStepRuns(threadActivities ?? []),
+    [threadActivities],
+  );
+
   const sharedState = useMemo<TimelineRowSharedState>(
     () => ({
       timestampFormat,
@@ -453,6 +467,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       activeWorkflowInputMessageId,
+      workflowStepRuns,
       onSubmitRecipeCardAction,
       dispatchWorkflowDecision,
       onOpenThread,
@@ -471,6 +486,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       activeWorkflowInputMessageId,
+      workflowStepRuns,
       onSubmitRecipeCardAction,
       dispatchWorkflowDecision,
       onOpenThread,
@@ -858,6 +874,7 @@ function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message
       message={row.message}
       threadRef={ctx.threadRef}
       activeWorkflowInputMessageId={ctx.activeWorkflowInputMessageId}
+      workflowStepRuns={ctx.workflowStepRuns}
       {...(ctx.onSubmitRecipeCardAction
         ? { onSubmitRecipeCardAction: ctx.onSubmitRecipeCardAction }
         : {})}

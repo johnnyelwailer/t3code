@@ -64,16 +64,25 @@ describe("renderT3WorkProjectSetupFiles", () => {
     const skillTemplate = files.find(
       (file) => file.relativePath === ".t3work/templates/skills/repeatable-workflow/SKILL.md",
     );
+    const recipesAuthoringGuide = files.find(
+      (file) => file.relativePath === ".t3work/recipes/AUTHORING.md",
+    );
 
     expect(agents?.contents).toContain("Use plain, non-technical language");
     expect(agents?.contents).toContain("Do not mention cache paths, JSON file names");
     expect(agents?.contents).toContain("Keep the thread title current as the topic changes.");
     expect(agents?.contents).toContain(T3WORK_PROJECT_CONTEXT_ENTRYPOINT_PATH);
     expect(agents?.contents).toContain("prefer a read-only subagent");
-    expect(agents?.contents).toContain("offer to save it as a one-click play");
+    expect(agents?.contents).toContain(
+      "Save reusable work as a project recipe (under `.t3work/recipes/`) in the background",
+    );
     expect(agents?.contents).toContain("do it in a separate thread scoped to the right repository");
     expect(agents?.contents).toContain("surface that thread as a link");
-    expect(agents?.contents).toContain("Offer first");
+    expect(agents?.contents).not.toContain("Offer first");
+    expect(agents?.contents).not.toContain("offer to save it as a project recipe");
+    expect(agents?.contents).toContain("## T3work Recipes vs Provider Features");
+    expect(agents?.contents).toContain("not a Claude Code skill, slash command, or subagent");
+    expect(agents?.contents).toContain("mention what you saved afterward");
     expect(agents?.managedRefresh?.knownContentHashes?.length).toBeGreaterThan(0);
     expect(claude?.contents).toBe(agents?.contents);
     expect(claude?.writeMode).toBe("if-missing");
@@ -107,6 +116,19 @@ describe("renderT3WorkProjectSetupFiles", () => {
     expect(editRecipeScript?.contents).toContain("prepareEditWorkspace");
     expect(editRecipeScript?.contents).toContain("artifacts/proposed-source.txt");
     expect(skillTemplate?.contents).toContain("use a read-only subagent");
+    expect(recipesAuthoringGuide?.writeMode).toBe("if-missing");
+    expect(recipesAuthoringGuide?.contents).toContain(
+      "The one rule everything follows from: replay",
+    );
+    expect(recipesAuthoringGuide?.contents).toContain(
+      "are already safe -- they're overridden to route through the journal",
+    );
+    expect(recipesAuthoringGuide?.contents).toContain(
+      "What breaks replay is bypassing the primitives",
+    );
+    expect(recipesAuthoringGuide?.contents).toContain("Make the run visible");
+    expect(recipesAuthoringGuide?.contents).toContain("## Patterns");
+    expect(recipesAuthoringGuide?.contents).toContain("workflow doesn't need to be a saved recipe");
   });
 
   it("includes managed file hashes in the profile manifest when provided", () => {

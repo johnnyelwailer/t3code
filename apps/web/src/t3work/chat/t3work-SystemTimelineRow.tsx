@@ -17,11 +17,15 @@ import {
   getT3workWorkflowShapeAttachment,
   T3workWorkflowShapeCard,
 } from "~/t3work/chat/t3work-messageShapeCard";
+import { T3workWorkflowShapeLiveCard } from "~/t3work/chat/t3work-messageShapeCardLive";
+import type { T3workWorkflowRunProgress } from "~/t3work/chat/t3work-threadWorkflowStepProgress";
 
 export function T3workSystemTimelineRow(props: {
   readonly message: ChatMessage;
   readonly threadRef: ScopedThreadRef | null;
   readonly activeWorkflowInputMessageId: string | null;
+  /** Live per-run step progress derived from thread activities (keyed by workflowRunId). */
+  readonly workflowStepRuns?: ReadonlyMap<string, T3workWorkflowRunProgress>;
   readonly onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
   readonly dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
 }) {
@@ -29,6 +33,7 @@ export function T3workSystemTimelineRow(props: {
     message,
     threadRef,
     activeWorkflowInputMessageId,
+    workflowStepRuns,
     onSubmitRecipeCardAction,
     dispatchWorkflowDecision,
   } = props;
@@ -36,6 +41,10 @@ export function T3workSystemTimelineRow(props: {
   const workflowCard = getT3workWorkflowCardAttachment(message);
   const workflowDecision = getT3workWorkflowDecisionAttachment(message);
   const workflowShape = getT3workWorkflowShapeAttachment(message);
+  const workflowShapeProgress =
+    workflowShape?.workflowRunId !== undefined
+      ? (workflowStepRuns?.get(workflowShape.workflowRunId) ?? null)
+      : null;
   const genericAttachments = getT3workRenderableAttachments(message);
   const showMessageText =
     message.text.length > 0 &&
@@ -53,7 +62,11 @@ export function T3workSystemTimelineRow(props: {
         ) : null}
         {workflowShape ? (
           <div className={showMessageText ? "mt-3" : undefined}>
-            <T3workWorkflowShapeCard shape={workflowShape} />
+            {workflowShapeProgress ? (
+              <T3workWorkflowShapeLiveCard shape={workflowShape} progress={workflowShapeProgress} />
+            ) : (
+              <T3workWorkflowShapeCard shape={workflowShape} />
+            )}
           </div>
         ) : null}
         {workflowCard ? (

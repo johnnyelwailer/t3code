@@ -54,6 +54,7 @@ layer("t3work-034_WorkflowDurability", (it) => {
         "interaction_mode",
         "launch_thread_id",
         "model_json",
+        "origin", // added by t3work-039 (ephemeral workflows)
         "pending_correlation_id",
         "pending_kind",
         "pending_thread_id",
