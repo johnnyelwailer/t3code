@@ -50,6 +50,18 @@ export function makeActorSendMessage(input: {
       const source = Option.getOrUndefined(
         yield* query.getThreadDetailById(ThreadId.make(fromThreadId)),
       );
+      if (!source) return yield* Effect.fail(`Sender thread ${fromThreadId} was not found.`);
+      // Authorization boundary: a caller holding a per-thread MCP credential must
+      // not be able to inject a message — and auto-trigger an agent turn — into an
+      // unrelated thread in another project. Delivery is scoped to the sender's
+      // own project. All designed flows (parent↔child, same-project peers) stay
+      // within one project because start_child creates children in the parent's
+      // project; genuine cross-project routing would need its own explicit path.
+      if (source.projectId !== target.projectId) {
+        return yield* Effect.fail(
+          "Actor messages can only be delivered to threads in the same project.",
+        );
+      }
 
       // Loop guard: infer the hop count from the sender's most recent inbound
       // actor message. A fresh (human-initiated) send is hop 0; an agent that
@@ -57,7 +69,7 @@ export function makeActorSendMessage(input: {
       // same chain, and inherits its root thread for observability.
       let inboundHop = -1;
       let inboundRoot: string | undefined;
-      const senderMessages = source?.messages ?? [];
+      const senderMessages = source.messages ?? [];
       for (let index = senderMessages.length - 1; index >= 0; index -= 1) {
         const candidate = senderMessages[index];
         const info = candidate?.t3workExt?.actor;
@@ -77,8 +89,8 @@ export function makeActorSendMessage(input: {
         threadId: target.id,
         messageId: MessageId.make(t3workRandomUUID()),
         fromThreadId: ThreadId.make(fromThreadId),
-        fromTitle: source?.title ?? ThreadId.make(fromThreadId),
-        fromProjectId: source?.projectId ?? target.projectId,
+        fromTitle: source.title ?? ThreadId.make(fromThreadId),
+        fromProjectId: source.projectId,
         text: body,
         urgency: "normal",
         hopCount: NonNegativeInt.make(hopCount),
