@@ -162,6 +162,28 @@ describe("T3workToolBrokerLive", () => {
     ]);
   });
 
+  it("binds generic thread tools without a stored view context", async () => {
+    const orchestrationMock: OrchestrationEngineShape = {
+      readEvents: () => Stream.empty,
+      dispatch: () => Effect.succeed({ sequence: 1 }),
+      streamDomainEvents: Stream.empty,
+    };
+
+    const binding = await Effect.runPromise(
+      Effect.gen(function* () {
+        const broker = yield* T3workToolBroker;
+        return yield* broker.bindSession({ threadId });
+      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+    );
+
+    expect(binding?.listServers()[0]?.tools).toEqual({
+      "t3work.thread.rename": expect.objectContaining({ name: "t3work.thread.rename" }),
+      "t3work.thread.start_child": expect.objectContaining({
+        name: "t3work.thread.start_child",
+      }),
+    });
+  });
+
   it("creates and optionally starts a child session with session-style arguments", async () => {
     const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 11 }));
     const orchestrationMock: OrchestrationEngineShape = {

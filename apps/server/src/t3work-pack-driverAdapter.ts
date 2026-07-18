@@ -36,6 +36,7 @@ import type {
   ProviderThreadSnapshot,
 } from "./provider/Services/ProviderAdapter.ts";
 import { packEventsToStream } from "./t3work-pack-driverEvents.ts";
+import { readPackMcpSession } from "./t3work-pack-driverMcp.ts";
 
 const decodeSession = Schema.decodeUnknownEffect(ProviderSession);
 const decodeTurn = Schema.decodeUnknownEffect(ProviderTurnStartResult);
@@ -102,6 +103,7 @@ export const makePackProviderAdapter = (input: {
         packInstance.startSession({
           threadId: startInput.threadId,
           runtimeMode: startInput.runtimeMode,
+          ...readPackMcpSession(startInput.threadId),
           ...defined("cwd", startInput.cwd),
           ...defined("resumeCursor", startInput.resumeCursor),
           ...defined("modelSelection", startInput.modelSelection),

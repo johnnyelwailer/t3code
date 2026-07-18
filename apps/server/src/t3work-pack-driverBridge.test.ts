@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import type {
   PackProviderDriverDefinition,
   PackProviderInstance,
@@ -14,6 +14,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
+import { clearMcpProviderSession, setMcpProviderSession } from "./mcp/McpProviderSession.ts";
 import { bridgePackProviderDriver } from "./t3work-pack-driverBridge.ts";
 
 const validEvent = {
@@ -145,13 +146,32 @@ describe("bridgePackProviderDriver", () => {
       );
 
       const modelSelection = { instanceId: "nexi", model: "nexi/coding" } as never;
-      yield* instance.adapter.startSession({
-        threadId: ThreadId.make("thread-1"),
-        runtimeMode: "full-access",
-        modelSelection,
-        approvalPolicy: "on-request",
-        sandboxMode: "workspace-write",
+      const startThreadId = ThreadId.make("thread-1");
+      setMcpProviderSession({
+        environmentId: EnvironmentId.make("environment-1"),
+        threadId: startThreadId,
+        providerSessionId: "provider-session-1",
+        providerInstanceId: ProviderInstanceId.make("nexi"),
+        endpoint: "http://127.0.0.1:3000/mcp",
+        authorizationHeader: "Bearer provider-token",
       });
+      yield* instance.adapter
+        .startSession({
+          threadId: startThreadId,
+          runtimeMode: "full-access",
+          modelSelection,
+          approvalPolicy: "on-request",
+          sandboxMode: "workspace-write",
+        })
+        .pipe(Effect.ensuring(Effect.sync(() => clearMcpProviderSession(startThreadId))));
+      expect(startArgs[0]).toEqual(
+        expect.objectContaining({
+          mcp: {
+            endpoint: "http://127.0.0.1:3000/mcp",
+            authorizationHeader: "Bearer provider-token",
+          },
+        }),
+      );
       expect(startArgs[0]?.modelSelection).toEqual({ instanceId: "nexi", model: "nexi/coding" });
       expect(startArgs[0]?.approvalPolicy).toBe("on-request");
       expect(startArgs[0]?.sandboxMode).toBe("workspace-write");

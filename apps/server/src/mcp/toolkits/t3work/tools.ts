@@ -1,0 +1,45 @@
+/**
+ * MCP wrappers for the existing t3work broker catalog. Broker behavior stays in
+ * t3work-toolBrokerBindingDispatch.ts. Adding a host tool means adding it to that
+ * dispatch/catalog once, then adding only a small static Tool.make wrapper here.
+ */
+import * as Schema from "effect/Schema";
+import { Tool, Toolkit } from "effect/unstable/ai";
+
+import { T3workToolBroker } from "../../../t3work-toolBroker.ts";
+import * as McpInvocationContext from "../../McpInvocationContext.ts";
+
+const dependencies = [McpInvocationContext.McpInvocationContext, T3workToolBroker];
+
+export class T3workMcpToolError extends Schema.TaggedErrorClass<T3workMcpToolError>()(
+  "T3workMcpToolError",
+  { message: Schema.String },
+) {}
+
+export const T3workRenameThreadTool = Tool.make("t3work_rename_thread", {
+  description: "Rename the current t3work thread.",
+  parameters: Schema.Struct({ title: Schema.String }),
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
+export const T3workStartChildTool = Tool.make("t3work_start_child", {
+  description: "Create a child t3work session from the current thread.",
+  parameters: Schema.Struct({
+    name: Schema.String,
+    execution_scope: Schema.Literals(["metarepo", "repository"]),
+    ticket_id: Schema.optional(Schema.String),
+    kickoff_prompt: Schema.optional(Schema.String),
+    kickoff_mode: Schema.optional(Schema.Literals(["plan", "interactive", "autopilot"])),
+    model: Schema.optional(Schema.String),
+    reasoning_effort: Schema.optional(Schema.Literals(["low", "medium", "high"])),
+    repo_full_name: Schema.optional(Schema.String),
+    repo_ref: Schema.optional(Schema.String),
+  }),
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
+export const T3workToolkit = Toolkit.make(T3workRenameThreadTool, T3workStartChildTool);

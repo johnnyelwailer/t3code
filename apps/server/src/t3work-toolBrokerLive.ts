@@ -28,6 +28,7 @@ import { buildThreadWorkspaceView } from "./t3work-toolBrokerViewWorkspace.ts";
 import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
 
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
+  const genericThreadToolIds = ["t3work.thread.rename", "t3work.thread.start_child"] as const;
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;
   const contextStore = yield* T3workThreadToolContextStore;
@@ -165,10 +166,18 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
         yield* contextStore.put({ threadId, toolContext });
       }
 
-      const resolvedToolContext = toolContext ?? (yield* contextStore.get(threadId));
-      if (!resolvedToolContext || resolvedToolContext.surface !== "t3work") {
-        return undefined;
-      }
+      const storedToolContext = toolContext ?? (yield* contextStore.get(threadId));
+      const resolvedToolContext =
+        storedToolContext?.surface === "t3work"
+          ? storedToolContext
+          : {
+              surface: "t3work",
+              state: null,
+              tools: genericThreadToolIds.map((id) => ({
+                id,
+                capabilities: ["write" as const],
+              })),
+            };
 
       const toolIds = Array.from(new Set(resolvedToolContext.tools.map((tool) => tool.id)));
       if (toolIds.length === 0) {

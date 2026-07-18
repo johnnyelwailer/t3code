@@ -90,6 +90,8 @@
     "scripts/lib/additive-guard-core.mjs",
     "scripts/lib/additive-guard-cache.mjs",
     "scripts/lib/additive-guard-config.mjs",
-    "scripts/lib/sync-upstream-core.mjs"
+    "scripts/lib/sync-upstream-core.mjs",
+    "apps/server/src/mcp/toolkits/t3work/tools.ts",
+    "apps/server/src/mcp/toolkits/t3work/handlers.ts"
   ]
 }
