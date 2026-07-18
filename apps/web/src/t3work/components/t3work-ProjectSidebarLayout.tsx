@@ -10,6 +10,7 @@ import {
   SidebarTrigger,
 } from "~/t3work/components/ui/t3work-sidebar";
 import { T3workLeftSidebarHeaderToggle } from "~/t3work/t3work-LeftSidebarHeaderToggle";
+import { useT3workPackAppearance } from "~/t3work/t3work-packAppearance";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { isElectron } from "~/env";
 import { LocalWorkspaceSidebarSection } from "./t3work-LocalWorkspaceSidebarSection";
@@ -74,6 +75,8 @@ export function ProjectSidebarLayout({
   onThreadSortOrderChange,
   onThreadPreviewCountChange,
 }: ProjectSidebarLayoutProps) {
+  const appearance = useT3workPackAppearance();
+  const appName = appearance?.labels?.appName ?? "T3 Work";
   const sidebarHeaderClassName = isElectron
     ? "drag-region h-[52px] flex-row items-center gap-2 px-4 py-0 pl-[90px] wco:h-[env(titlebar-area-height)] wco:pl-[calc(env(titlebar-area-x)+1em)]"
     : "gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3";
@@ -83,10 +86,7 @@ export function ProjectSidebarLayout({
       <SidebarHeader className={sidebarHeaderClassName}>
         <div className="flex w-full min-w-0 items-center gap-2">
           <SidebarTrigger className="shrink-0 md:hidden" />
-          <span className="truncate text-sm font-semibold">T3 Work</span>
-          <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
-            Work shell
-          </span>
+          <span className="truncate text-sm font-semibold">{appName}</span>
         </div>
       </SidebarHeader>
 
