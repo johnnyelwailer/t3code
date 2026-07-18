@@ -8,6 +8,7 @@ import {
 } from "~/t3work/t3work-ProjectSetupProfileCards";
 import { T3workCloneProjectSetupProfileDialog } from "~/t3work/t3work-CloneProjectSetupProfileDialog";
 import { T3workProjectSetupConfirmPreviewView } from "~/t3work/t3work-ProjectSetupConfirmPreviewView";
+import { useT3workPackSetupProfiles } from "~/t3work/t3work-packSetupProfiles";
 import type { T3WorkProjectSetupProfileId } from "~/t3work/t3work-projectSetup";
 import type { T3WorkProfile } from "@t3tools/t3work-skill-packs";
 
@@ -40,6 +41,7 @@ export function ConfirmStep({
   customProfile?: T3WorkProfile | undefined;
   onCustomProfileChange: (profile: T3WorkProfile | undefined) => void;
 }) {
+  const packProfiles = useT3workPackSetupProfiles();
   return (
     <section className="space-y-6">
       <div className="space-y-3">
@@ -65,6 +67,7 @@ export function ConfirmStep({
             onCustomProfileChange(undefined);
             onSetupProfileChange(profileId);
           }}
+          profiles={packProfiles}
         />
         <T3workProjectSetupConfirmPreviewView
           profileId={setupProfileId}
@@ -112,10 +115,11 @@ export function CreatingStep({
   repositoryCount: number;
   setupProfileId: T3WorkProjectSetupProfileId;
 }) {
+  const packProfiles = useT3workPackSetupProfiles();
   const title = projectTitle ?? "project";
   const setupProfileTitle =
-    listT3workProjectSetupCardOptions().find((option) => option.id === setupProfileId)?.title ??
-    "Project Partner";
+    listT3workProjectSetupCardOptions(packProfiles).find((option) => option.id === setupProfileId)
+      ?.title ?? "Project Partner";
 
   return (
     <section className="flex min-h-[18rem] items-center justify-center px-2 py-6 sm:min-h-[22rem]">

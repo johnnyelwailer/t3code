@@ -1,6 +1,8 @@
 import type { EnvironmentAppearance } from "@t3tools/contracts";
 import { useSyncExternalStore } from "react";
 
+import { applyT3workPackFavicon, pickT3workPackBrandAsset } from "./t3work-packBrand";
+
 const COLOR_VARIABLES: Readonly<Record<string, string>> = {
   background: "--background",
   foreground: "--foreground",
@@ -38,6 +40,17 @@ const declarations = (colors: Readonly<Record<string, string>>): string =>
     .flatMap(([key, value]) => (COLOR_VARIABLES[key] ? [`${COLOR_VARIABLES[key]}:${value}`] : []))
     .join(";");
 
+function displayFontCss(appearance: EnvironmentAppearance): string {
+  const stack = appearance.typography?.display;
+  if (!stack) return "";
+  const fontFace = appearance.brand?.displayFont
+    ? `@font-face{font-family:"T3work Pack Display";src:url("${appearance.brand.displayFont}");font-weight:100 900;font-display:swap}`
+    : "";
+  // Headings only by design: display faces trade body-copy readability for character.
+  return `${fontFace}
+    h1,h2,h3{font-family:var(--t3work-font-display)}`;
+}
+
 function themeCss(appearance: EnvironmentAppearance): string {
   const sans = appearance.typography?.sans
     ? `--t3work-font-sans:${appearance.typography.sans};`
@@ -45,17 +58,22 @@ function themeCss(appearance: EnvironmentAppearance): string {
   const mono = appearance.typography?.mono
     ? `--t3work-font-mono:${appearance.typography.mono};`
     : "";
+  const display = appearance.typography?.display
+    ? `--t3work-font-display:${appearance.typography.display};`
+    : "";
   const radius = appearance.shape?.radius ? `--radius:${appearance.shape.radius};` : "";
   const density = appearance.density ? `font-size:${appearance.density * 100}%;` : "";
-  return `:root{${declarations(appearance.colors.light)};${sans}${mono}${radius}${density}}
+  return `:root{${declarations(appearance.colors.light)};${sans}${mono}${display}${radius}${density}}
     :root.dark{${declarations(appearance.colors.dark)}}
     body{font-family:var(--t3work-font-sans,"DM Sans Variable",sans-serif)}
-    code,kbd,pre,samp{font-family:var(--t3work-font-mono,"DM Mono",monospace)}`;
+    code,kbd,pre,samp{font-family:var(--t3work-font-mono,"DM Mono",monospace)}
+    ${displayFontCss(appearance)}`;
 }
 
 export function applyT3workPackAppearance(appearance: EnvironmentAppearance | undefined): void {
   activeAppearance = appearance;
   if (typeof document === "undefined") return;
+  applyT3workPackFavicon(pickT3workPackBrandAsset(appearance?.brand, "mark", "light"));
   let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
   if (!appearance) style?.remove();
   else {

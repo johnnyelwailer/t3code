@@ -1,114 +1,49 @@
-import {
-  Bug,
-  ClipboardCheck,
-  Code2,
-  MessageCircleMore,
-  PackageCheck,
-  Sparkles,
-  type LucideIcon,
-} from "lucide-react";
+import type { EnvironmentSetupProfile } from "@t3tools/contracts";
 
 import { cn } from "~/lib/utils";
-import type { BundledT3WorkProfileId } from "@t3tools/t3work-skill-packs";
+import type { T3WorkProjectSetupProfileId } from "~/t3work/t3work-projectSetup";
 import {
-  listT3WorkProjectSetupProfiles,
-  type T3WorkProjectSetupProfileId,
-} from "~/t3work/t3work-projectSetup";
+  listT3workProjectSetupCardOptions,
+  type T3workProjectSetupCardOption,
+} from "~/t3work/t3work-projectSetupProfileCatalog";
 
-type T3workProjectSetupCardOption = {
-  readonly id: T3WorkProjectSetupProfileId;
-  readonly title: string;
-  readonly description: string;
-  readonly eyebrow: string;
-  readonly chips: readonly [string, string];
-  readonly icon: LucideIcon;
-  readonly accentClassName: string;
-  readonly iconClassName: string;
-};
+export { listT3workProjectSetupCardOptions } from "~/t3work/t3work-projectSetupProfileCatalog";
+export type { T3workProjectSetupCardOption } from "~/t3work/t3work-projectSetupProfileCatalog";
 
-const PROFILE_VISUALS: Record<
-  BundledT3WorkProfileId,
-  Omit<T3workProjectSetupCardOption, "id" | "title" | "description">
-> = {
-  "qa-assistant": {
-    eyebrow: "Verify",
-    chips: ["Test matrices", "Repro steps"],
-    icon: Bug,
-    accentClassName:
-      "from-emerald-500/18 via-lime-400/16 to-cyan-400/16 dark:from-emerald-300/18 dark:via-lime-300/14 dark:to-cyan-300/14",
-    iconClassName: "text-emerald-600 dark:text-emerald-300",
-  },
-  "product-partner": {
-    eyebrow: "Friendly",
-    chips: ["Plain language", "Fast summaries"],
-    icon: Sparkles,
-    accentClassName:
-      "from-sky-500/18 via-cyan-400/18 to-emerald-400/16 dark:from-sky-400/20 dark:via-cyan-300/16 dark:to-emerald-300/14",
-    iconClassName: "text-sky-600 dark:text-sky-300",
-  },
-  "support-triage": {
-    eyebrow: "Triage",
-    chips: ["Escalations", "Customer impact"],
-    icon: MessageCircleMore,
-    accentClassName:
-      "from-amber-500/18 via-orange-400/18 to-rose-400/16 dark:from-amber-300/18 dark:via-orange-300/14 dark:to-rose-300/14",
-    iconClassName: "text-amber-600 dark:text-amber-300",
-  },
-  "delivery-coordinator": {
-    eyebrow: "Coordinate",
-    chips: ["Status", "Dependencies"],
-    icon: PackageCheck,
-    accentClassName:
-      "from-cyan-500/18 via-sky-400/16 to-emerald-300/16 dark:from-cyan-300/18 dark:via-sky-300/14 dark:to-emerald-300/14",
-    iconClassName: "text-cyan-600 dark:text-cyan-300",
-  },
-  "verification-guide": {
-    eyebrow: "Guide",
-    chips: ["Checklists", "Release cues"],
-    icon: ClipboardCheck,
-    accentClassName:
-      "from-violet-500/18 via-indigo-400/16 to-sky-400/16 dark:from-violet-300/18 dark:via-indigo-300/14 dark:to-sky-300/14",
-    iconClassName: "text-violet-600 dark:text-violet-300",
-  },
-  "engineering-copilot": {
-    eyebrow: "Build",
-    chips: ["Technical depth", "Verification bias"],
-    icon: Code2,
-    accentClassName:
-      "from-fuchsia-500/18 via-violet-400/16 to-blue-400/16 dark:from-fuchsia-300/18 dark:via-violet-300/14 dark:to-blue-300/14",
-    iconClassName: "text-fuchsia-600 dark:text-fuchsia-300",
-  },
-};
-
-export function listT3workProjectSetupCardOptions(): ReadonlyArray<T3workProjectSetupCardOption> {
-  return listT3WorkProjectSetupProfiles().flatMap((profile) => {
-    const visuals = PROFILE_VISUALS[profile.id as BundledT3WorkProfileId];
-    if (!visuals) return [];
-    return [
-      {
-        id: profile.id,
-        title: profile.title,
-        description: profile.description,
-        eyebrow: visuals.eyebrow,
-        chips: visuals.chips,
-        icon: visuals.icon,
-        accentClassName: visuals.accentClassName,
-        iconClassName: visuals.iconClassName,
-      },
-    ];
-  });
+function CardIcon({ option, compact }: { option: T3workProjectSetupCardOption; compact: boolean }) {
+  if (option.iconSrc) {
+    return (
+      <img
+        src={option.iconSrc}
+        alt=""
+        className={cn(
+          "shrink-0 rounded-xl object-cover",
+          compact ? "size-10" : "size-12",
+        )}
+      />
+    );
+  }
+  const Icon = option.icon;
+  return (
+    <span className={cn("flex shrink-0 items-center justify-center", compact ? "size-10" : "size-11", option.iconClassName)}>
+      <Icon className={cn(compact ? "size-4.5" : "size-5")} />
+    </span>
+  );
 }
 
 export function T3workProjectSetupProfileCards({
   selectedProfileId,
   onSelectProfile,
   compact = false,
+  profiles,
 }: {
   selectedProfileId: T3WorkProjectSetupProfileId;
   onSelectProfile: (profileId: T3WorkProjectSetupProfileId) => void;
   compact?: boolean;
+  /** Pack-contributed profiles; when present they replace the built-in catalog. */
+  profiles?: readonly EnvironmentSetupProfile[] | undefined;
 }) {
-  const options = listT3workProjectSetupCardOptions();
+  const options = listT3workProjectSetupCardOptions(profiles);
 
   return (
     <div
@@ -120,9 +55,7 @@ export function T3workProjectSetupProfileCards({
       }}
     >
       {options.map((option, index) => {
-        const Icon = option.icon;
         const selected = option.id === selectedProfileId;
-
         return (
           <button
             key={option.id}
@@ -142,54 +75,31 @@ export function T3workProjectSetupProfileCards({
           >
             <div
               className={cn(
-                "pointer-events-none absolute inset-0 bg-gradient-to-br opacity-90 transition-opacity duration-300",
+                "pointer-events-none absolute inset-0 bg-gradient-to-br transition-opacity duration-300",
                 option.accentClassName,
-                selected ? "motion-safe:animate-pulse" : "opacity-75 group-hover:opacity-90",
+                selected ? "opacity-100" : "opacity-70 group-hover:opacity-90",
               )}
             />
-            <div className="pointer-events-none absolute -right-10 top-0 size-28 rounded-full bg-white/25 blur-3xl dark:bg-white/10" />
-
             <div className="relative flex h-full flex-col">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">
                     {option.eyebrow}
                   </div>
-                  <h3
-                    className={cn(
-                      "mt-2 font-semibold tracking-tight",
-                      compact ? "text-base" : "text-lg",
-                    )}
-                  >
+                  <h3 className={cn("mt-2 font-semibold tracking-tight", compact ? "text-base" : "text-lg")}>
                     {option.title}
                   </h3>
                 </div>
-                <span
-                  className={cn(
-                    "flex shrink-0 items-center justify-center",
-                    compact ? "size-10" : "size-11",
-                    option.iconClassName,
-                  )}
-                >
-                  <Icon className={cn(compact ? "size-4.5" : "size-5")} />
-                </span>
+                <CardIcon option={option} compact={compact} />
               </div>
 
-              <p
-                className={cn(
-                  "mt-3 text-muted-foreground",
-                  compact ? "text-xs leading-5" : "text-sm leading-6",
-                )}
-              >
+              <p className={cn("mt-3 text-muted-foreground", compact ? "text-xs leading-5" : "text-sm leading-6")}>
                 {option.description}
               </p>
 
               <div className="mt-auto flex flex-wrap gap-2 pt-4">
                 {option.chips.map((chip) => (
-                  <span
-                    key={chip}
-                    className="px-0 py-0 text-[11px] font-medium text-foreground/70 dark:text-foreground/75"
-                  >
+                  <span key={chip} className="text-[11px] font-medium text-foreground/70 dark:text-foreground/75">
                     {chip}
                   </span>
                 ))}

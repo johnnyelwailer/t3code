@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import type { EnvironmentAppearance } from "@t3tools/contracts";
+import type { EnvironmentAppearance, EnvironmentSetupProfile } from "@t3tools/contracts";
 import { useEffect, useState } from "react";
 
 import { Button } from "~/t3work/components/ui/t3work-button";
@@ -33,6 +33,30 @@ async function loadPackAppearance(): Promise<EnvironmentAppearance | undefined> 
   return { ...theme, themeId: theme.id, brand } as unknown as EnvironmentAppearance;
 }
 
+/**
+ * Reads the pack's real setup-profile catalog from the served `profiles.ts`
+ * (single source of truth) so the wizard preview shows the actual pack roles and
+ * illustrations without running the server-side activation entrypoint.
+ */
+async function loadPackSetupProfiles(): Promise<readonly EnvironmentSetupProfile[] | undefined> {
+  const response = await fetch("/pack/profiles.ts");
+  if (!response.ok) return undefined;
+  const source = await response.text();
+  // Seek the array literal after the `=` so the type annotation's `[]` is skipped.
+  const assign = source.indexOf("=", source.indexOf("NEXI_SETUP_PROFILES"));
+  const start = source.indexOf("[", assign);
+  const end = source.lastIndexOf("]");
+  if (assign < 0 || start < 0 || end <= start) return undefined;
+  const entries = JSON.parse(source.slice(start, end + 1)) as ReadonlyArray<
+    EnvironmentSetupProfile & { readonly iconFile: string }
+  >;
+  return entries.map(({ iconFile, ...profile }) => ({
+    ...profile,
+    iconDataUrl: `/pack/assets/profiles/${iconFile}`,
+    ...(profile.id === "product-owner" ? { default: true } : {}),
+  }));
+}
+
 function PaletteTile({ name, value }: { name: string; value: string }) {
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5">
@@ -45,10 +69,16 @@ function PaletteTile({ name, value }: { name: string; value: string }) {
 
 function PackBrandingSheet({ mode }: { mode: "light" | "dark" }) {
   const [appearance, setAppearance] = useState<EnvironmentAppearance | undefined>(undefined);
+  const [setupProfiles, setSetupProfiles] = useState<
+    readonly EnvironmentSetupProfile[] | undefined
+  >(undefined);
   useEffect(() => {
     let live = true;
     void loadPackAppearance().then((loaded) => {
       if (live) setAppearance(loaded);
+    });
+    void loadPackSetupProfiles().then((loaded) => {
+      if (live) setSetupProfiles(loaded);
     });
     return () => {
       live = false;
@@ -117,7 +147,7 @@ function PackBrandingSheet({ mode }: { mode: "light" | "dark" }) {
       </div>
 
       <div className="flex min-h-[720px] flex-col border-t border-border">
-        <T3workSetupWelcomeSurface onCreate={() => undefined} />
+        <T3workSetupWelcomeSurface onCreate={() => undefined} profilesOverride={setupProfiles} />
       </div>
     </div>
   );

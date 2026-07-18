@@ -36,6 +36,15 @@ export const EnvironmentAppearance = Schema.Struct({
     }),
   ),
   defaultMode: Schema.optionalKey(Schema.Literals(["light", "dark", "system"])),
+  brand: Schema.optionalKey(
+    Schema.Struct({
+      mark: Schema.optionalKey(TrimmedNonEmptyString),
+      markDark: Schema.optionalKey(TrimmedNonEmptyString),
+      wordmark: Schema.optionalKey(TrimmedNonEmptyString),
+      wordmarkDark: Schema.optionalKey(TrimmedNonEmptyString),
+      displayFont: Schema.optionalKey(TrimmedNonEmptyString),
+    }),
+  ),
   colors: Schema.Struct({
     light: Schema.Record(Schema.String, Schema.String),
     dark: Schema.Record(Schema.String, Schema.String),
@@ -44,12 +53,30 @@ export const EnvironmentAppearance = Schema.Struct({
     Schema.Struct({
       sans: Schema.optionalKey(Schema.String),
       mono: Schema.optionalKey(Schema.String),
+      display: Schema.optionalKey(Schema.String),
     }),
   ),
   shape: Schema.optionalKey(Schema.Struct({ radius: Schema.optionalKey(Schema.String) })),
   density: Schema.optionalKey(Schema.Number),
 });
 export type EnvironmentAppearance = typeof EnvironmentAppearance.Type;
+
+/**
+ * Presentation view of a pack-contributed project-setup profile ("role"),
+ * surfaced to the first-run setup wizard. Behavior (recipe weights, communication
+ * style) stays server-side and is not part of this client-facing payload.
+ */
+export const EnvironmentSetupProfile = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  title: TrimmedNonEmptyString,
+  description: TrimmedNonEmptyString,
+  badge: TrimmedNonEmptyString,
+  bullets: Schema.Array(TrimmedNonEmptyString),
+  category: Schema.Literals(["product", "delivery", "engineering", "operations", "security"]),
+  iconDataUrl: Schema.optionalKey(TrimmedNonEmptyString),
+  default: Schema.optionalKey(Schema.Boolean),
+});
+export type EnvironmentSetupProfile = typeof EnvironmentSetupProfile.Type;
 
 export const ExecutionEnvironmentDescriptor = Schema.Struct({
   environmentId: EnvironmentId,
@@ -58,6 +85,7 @@ export const ExecutionEnvironmentDescriptor = Schema.Struct({
   serverVersion: TrimmedNonEmptyString,
   capabilities: ExecutionEnvironmentCapabilities,
   appearance: Schema.optionalKey(EnvironmentAppearance),
+  setupProfiles: Schema.optionalKey(Schema.Array(EnvironmentSetupProfile)),
 });
 export type ExecutionEnvironmentDescriptor = typeof ExecutionEnvironmentDescriptor.Type;
 

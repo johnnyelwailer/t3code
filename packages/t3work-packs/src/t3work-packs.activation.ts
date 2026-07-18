@@ -5,6 +5,7 @@ import * as NodeURL from "node:url";
 import type { LoadedAiProviderDefinition } from "./t3work-packs.aiProvider.ts";
 import type { WorkspacePackManifest } from "./t3work-packs.manifest.ts";
 import type { PackProviderDriverDefinition } from "./t3work-packs.providerDriver.ts";
+import type { SetupProfileDefinition } from "./t3work-packs.setupProfile.ts";
 import type { ThemeDefinition } from "./t3work-packs.theme.ts";
 
 export type PackActivationContext = {
@@ -12,6 +13,7 @@ export type PackActivationContext = {
   readonly defineAgentProvider: (definition: LoadedAiProviderDefinition) => void;
   readonly defineProviderDriver: (definition: PackProviderDriverDefinition) => void;
   readonly defineTheme: (definition: ThemeDefinition) => void;
+  readonly defineSetupProfile: (definition: SetupProfileDefinition) => void;
   readonly resolveAssetDataUrl: (relativePath: string, mimeType: string) => Promise<string>;
 };
 export type PackActivate = (context: PackActivationContext) => void | Promise<void>;
