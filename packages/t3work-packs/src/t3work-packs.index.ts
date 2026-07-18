@@ -15,6 +15,12 @@ export {
   ThemeDefinition,
 } from "./t3work-packs.theme.ts";
 export { loadManifestThemes } from "./t3work-packs.themeLoader.ts";
+export {
+  decodeSetupProfileDefinition,
+  defineSetupProfile,
+  SetupProfileDefinition,
+  SetupProfileCommunicationStyle,
+} from "./t3work-packs.setupProfile.ts";
 export { activateWorkspacePack } from "./t3work-packs.activation.ts";
 export type { PackActivationContext, PackActivate } from "./t3work-packs.activation.ts";
 export type {

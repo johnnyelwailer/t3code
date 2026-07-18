@@ -14,6 +14,10 @@ import { APP_BASE_NAME, APP_DISPLAY_NAME, APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppDisplayName } from "../branding.logic";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
+import { OpenAddProjectCommandPaletteProvider } from "../commandPaletteContext";
+
+// Pre-auth surfaces render outside CommandPalette; add-project is a no-op until authenticated.
+const noopOpenAddProject = () => undefined;
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
@@ -40,6 +44,7 @@ import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
 import { isAtlassianOAuthCallbackPath } from "../t3work/hooks/t3work-atlassianOAuthRedirect";
 import { useT3workWorkMode } from "../t3work/t3work-workMode";
 import { T3workPackAppearanceSync } from "../t3work/t3work-PackAppearanceSync";
+import { useT3workPackAppearance } from "../t3work/t3work-packAppearance";
 import { shellEnvironment } from "../state/shell";
 import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -144,7 +149,9 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
-        <Outlet />
+        <OpenAddProjectCommandPaletteProvider openAddProject={noopOpenAddProject}>
+          <Outlet />
+        </OpenAddProjectCommandPaletteProvider>
       </>
     );
   }
@@ -182,9 +189,10 @@ function RootRouteView() {
 function DocumentTitleSync() {
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
+  const packAppName = useT3workPackAppearance()?.labels?.appName;
   const title = resolveServerBackedAppDisplayName({
-    baseName: APP_BASE_NAME,
-    fallbackDisplayName: APP_DISPLAY_NAME,
+    baseName: packAppName ?? APP_BASE_NAME,
+    fallbackDisplayName: packAppName ?? APP_DISPLAY_NAME,
     fallbackStageLabel: APP_STAGE_LABEL,
     primaryServerVersion,
   });

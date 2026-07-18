@@ -31,6 +31,39 @@ describe("theme definition", () => {
     expect(() => decodeThemeDefinition({ ...theme, density: 2 })).toThrow();
   });
 
+  it("decodes brand assets and rejects unsupported values", () => {
+    const branded = { ...theme, brand: { mark: "assets/mark.svg", wordmark: "assets/word.png" } };
+    expect(decodeThemeDefinition(branded)).toMatchObject(branded);
+    expect(() =>
+      decodeThemeDefinition({ ...theme, brand: { mark: "javascript:alert(1)" } }),
+    ).toThrow();
+  });
+
+  it("resolves brand asset paths to data URLs and blocks traversal", async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3work-theme-brand-"));
+    await NodeFSP.mkdir(NodePath.join(root, "assets"));
+    await NodeFSP.writeFile(NodePath.join(root, "assets", "mark.svg"), "<svg/>");
+    const manifest = decodeWorkspacePackManifest({
+      id: "pack",
+      version: "1.0.0",
+      packApiVersion: 1,
+      name: "Pack",
+      compatibility: { t3workCore: "0.x" },
+      capabilities: ["theme:v1"],
+      hashes: {},
+      contents: { themes: [{ id: "nexplore", path: "theme.json" }] },
+    });
+    const write = (brand: Record<string, string>) =>
+      NodeFSP.writeFile(NodePath.join(root, "theme.json"), JSON.stringify({ ...theme, brand }));
+    await write({ mark: "assets/mark.svg" });
+    const [loaded] = await loadManifestThemes(root, manifest);
+    expect(loaded?.brand?.mark).toBe(
+      `data:image/svg+xml;base64,${Buffer.from("<svg/>").toString("base64")}`,
+    );
+    await write({ mark: "../escape.svg" });
+    await expect(loadManifestThemes(root, manifest)).rejects.toThrow(/escapes/);
+  });
+
   it("loads matching assets and blocks traversal", async () => {
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3work-theme-"));
     const manifest = (path: string) =>
