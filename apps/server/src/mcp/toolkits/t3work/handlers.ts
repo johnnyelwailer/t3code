@@ -30,7 +30,28 @@ const callBroker = Effect.fn("T3workMcpToolkit.callBroker")(function* (
   return result.structuredContent ?? result.content;
 });
 
+// Cross-thread delivery uses the dedicated broker.sendMessage API rather than
+// the bound-thread callTool dispatch: the sender is the calling thread and the
+// recipient is an arbitrary target thread, which the bound-tool surface does
+// not model. broker.sendMessage fails with a plain string, mapped here to the
+// toolkit error.
+const sendMessage = Effect.fn("T3workMcpToolkit.sendMessage")(function* (input: {
+  readonly to_thread_id: string;
+  readonly text: string;
+}) {
+  const invocation = yield* McpInvocationContext.McpInvocationContext;
+  const broker = yield* T3workToolBroker;
+  return yield* broker
+    .sendMessage({
+      toThreadId: input.to_thread_id,
+      fromThreadId: invocation.threadId,
+      text: input.text,
+    })
+    .pipe(Effect.mapError((message) => new T3workMcpToolError({ message })));
+});
+
 export const T3workToolkitHandlersLive = T3workToolkit.toLayer({
   t3work_rename_thread: (input) => callBroker("t3work.thread.rename", input),
   t3work_start_child: (input) => callBroker("t3work.thread.start_child", input),
+  t3work_send_message: (input) => sendMessage(input),
 });

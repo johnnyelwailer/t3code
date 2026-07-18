@@ -20,6 +20,7 @@ import {
 } from "./t3work-toolBrokerStartChildContext.ts";
 import {
   appendStartChildHandoffActivities,
+  buildChildKickoffText,
   resolveStartChildHandoffPlacement,
 } from "./t3work-toolBrokerStartChildHandoff.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
@@ -167,7 +168,7 @@ export function makeStartChildThread(input: {
             message: {
               messageId: MessageId.make(t3workRandomUUID()),
               role: "user",
-              text: args.kickoffPrompt,
+              text: buildChildKickoffText(thread, args.kickoffPrompt),
               attachments: [],
             },
             modelSelection,

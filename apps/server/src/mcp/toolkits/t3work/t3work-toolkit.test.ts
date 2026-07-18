@@ -47,6 +47,7 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
     },
   };
   const broker = T3workToolBroker.of({
+    sendMessage: () => Effect.succeed(undefined),
     bindSession: ({ threadId: boundThreadId }) =>
       Effect.succeed(boundThreadId === threadId ? binding : undefined),
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),

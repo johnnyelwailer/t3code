@@ -42,4 +42,27 @@ export const T3workStartChildTool = Tool.make("t3work_start_child", {
   dependencies,
 });
 
-export const T3workToolkit = Toolkit.make(T3workRenameThreadTool, T3workStartChildTool);
+// Cross-thread delivery: routes to the dedicated broker.sendMessage capability
+// (not the bound-thread callTool dispatch), which records a first-class actor
+// message and drives the recipient thread to react. The sender is the calling
+// thread; the recipient reacts and can reply back the same way.
+export const T3workSendMessageTool = Tool.make("t3work_send_message", {
+  description:
+    "Send a message to another agent's thread — e.g. report progress or results " +
+    "back to your parent thread, or hand follow-up work to a child thread. The " +
+    "recipient agent reacts to it automatically, so prefer this over waiting to be " +
+    "polled. Address it with the target thread id.",
+  parameters: Schema.Struct({
+    to_thread_id: Schema.String,
+    text: Schema.String,
+  }),
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
+export const T3workToolkit = Toolkit.make(
+  T3workRenameThreadTool,
+  T3workStartChildTool,
+  T3workSendMessageTool,
+);

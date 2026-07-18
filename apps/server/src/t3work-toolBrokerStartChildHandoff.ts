@@ -4,6 +4,24 @@ import * as Effect from "effect/Effect";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { appendThreadActivity } from "./t3work-toolBrokerStartChildActivity.ts";
 
+/**
+ * Frame a child session's kickoff input with its parent's identity so the child
+ * agent immediately knows who delegated it and where to report back. The *how*
+ * (use t3work_send_message, don't wait to be polled) belongs in the agent's
+ * system prompt; only the parent's per-instance identity is attached here. This
+ * applies to every provider — for input-only drivers (e.g. Pi) this framing is
+ * the sole channel through which the child ever learns its parent thread id.
+ */
+export function buildChildKickoffText(
+  parentThread: { readonly id: ThreadId; readonly title: string },
+  kickoffPrompt: string,
+): string {
+  return (
+    `[Delegated by parent thread «${parentThread.title}» (thread ${parentThread.id}). ` +
+    `Report progress and results back to it with t3work_send_message.]\n\n${kickoffPrompt}`
+  );
+}
+
 export function resolveStartChildHandoffPlacement(input: {
   readonly currentDisplayMode: "embedded" | "thread" | undefined;
   readonly currentTicketId: string | undefined;
