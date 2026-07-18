@@ -15,6 +15,7 @@ import { resolveServerBackedAppDisplayName } from "../branding.logic";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
+import { OpenAddProjectCommandPaletteProvider } from "../commandPaletteContext";
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
@@ -41,6 +42,7 @@ import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
 import { isAtlassianOAuthCallbackPath } from "../t3work/hooks/t3work-atlassianOAuthRedirect";
 import { useT3workWorkMode } from "../t3work/t3work-workMode";
 import { T3workPackAppearanceSync } from "../t3work/t3work-PackAppearanceSync";
+import { useT3workPackAppearance } from "../t3work/t3work-packAppearance";
 import { shellEnvironment } from "../state/shell";
 import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -55,6 +57,9 @@ import {
   createKeybindingsUpdateToastController,
   type KeybindingsUpdateToastController,
 } from "../components/KeybindingsUpdateToast.logic";
+
+// Pre-auth surfaces render outside CommandPalette; add-project is a no-op until authenticated.
+const noopOpenAddProject = () => undefined;
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -145,7 +150,9 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
-        <Outlet />
+        <OpenAddProjectCommandPaletteProvider openAddProject={noopOpenAddProject}>
+          <Outlet />
+        </OpenAddProjectCommandPaletteProvider>
       </>
     );
   }
@@ -184,9 +191,10 @@ function RootRouteView() {
 function DocumentTitleSync() {
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
+  const packAppName = useT3workPackAppearance()?.labels?.appName;
   const title = resolveServerBackedAppDisplayName({
-    baseName: APP_BASE_NAME,
-    fallbackDisplayName: APP_DISPLAY_NAME,
+    baseName: packAppName ?? APP_BASE_NAME,
+    fallbackDisplayName: packAppName ?? APP_DISPLAY_NAME,
     fallbackStageLabel: APP_STAGE_LABEL,
     primaryServerVersion,
   });

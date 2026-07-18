@@ -10,6 +10,7 @@ import {
   SidebarTrigger,
 } from "~/t3work/components/ui/t3work-sidebar";
 import { T3workLeftSidebarHeaderToggle } from "~/t3work/t3work-LeftSidebarHeaderToggle";
+import { T3workPackBrandImage } from "~/t3work/t3work-PackBrandImage";
 import { useT3workPackAppearance } from "~/t3work/t3work-packAppearance";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { isElectron } from "~/env";
@@ -86,6 +87,11 @@ export function ProjectSidebarLayout({
       <SidebarHeader className={sidebarHeaderClassName}>
         <div className="flex w-full min-w-0 items-center gap-2">
           <SidebarTrigger className="shrink-0 md:hidden" />
+          <T3workPackBrandImage
+            brand={appearance?.brand}
+            kind="mark"
+            className="size-5 shrink-0"
+          />
           <span className="truncate text-sm font-semibold">{appName}</span>
         </div>
       </SidebarHeader>

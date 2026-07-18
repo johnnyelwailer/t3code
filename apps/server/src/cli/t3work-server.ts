@@ -11,6 +11,10 @@ import {
   loadPackProviderOverlay,
 } from "../t3work-pack-host.ts";
 import { setPackAppearanceOverlay } from "../t3work-pack-appearanceOverlay.ts";
+import {
+  loadPackSetupProfileOverlay,
+  setPackSetupProfileOverlay,
+} from "../t3work-pack-setupProfileOverlay.ts";
 import { setPackProviderOverlay } from "../t3work-pack-providerOverlay.ts";
 import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
 
@@ -51,6 +55,17 @@ export const runT3workServerCommand = (
           ),
         ),
       );
+      const setupProfileOverlay = yield* Effect.tryPromise({
+        try: () => loadPackSetupProfileOverlay(packDiagnostic),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.tap((profiles) => Effect.sync(() => setPackSetupProfileOverlay(profiles))),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack setup profile loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
       yield* Effect.logInfo("Workspace pack discovery completed", {
         root: packDiagnostic.root,
         packs: (packDiagnostic.resolution?.packs ?? []).map((pack) => ({
@@ -63,6 +78,7 @@ export const runT3workServerCommand = (
         issues: packDiagnostic.issues,
         providerInstances: providerOverlay ? Object.keys(providerOverlay).sort() : [],
         activeTheme: appearanceOverlay?.themeId,
+        setupProfiles: setupProfileOverlay?.map((profile) => profile.id) ?? [],
       });
     }
     return yield* runT3workServer.pipe(Effect.provideService(ServerConfig, config));

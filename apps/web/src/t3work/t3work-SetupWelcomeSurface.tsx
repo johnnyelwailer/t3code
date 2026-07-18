@@ -1,6 +1,11 @@
 import { ArrowRight, BadgeCheck, Sparkles } from "lucide-react";
 
+import type { EnvironmentSetupProfile } from "@t3tools/contracts";
+
 import { Button } from "~/t3work/components/ui/t3work-button";
+import { T3workPackBrandImage } from "~/t3work/t3work-PackBrandImage";
+import { useT3workPackAppearance } from "~/t3work/t3work-packAppearance";
+import { useT3workPackSetupProfiles } from "~/t3work/t3work-packSetupProfiles";
 import {
   listT3workProjectSetupCardOptions,
   T3workProjectSetupProfileCards,
@@ -14,7 +19,7 @@ const SETUP_STEPS = [
   {
     step: "01",
     title: "Pick your style",
-    description: "Choose how technical, concise, and guided t3work should feel.",
+    description: "Choose how technical, concise, and guided the assistant should feel.",
   },
   {
     step: "02",
@@ -28,9 +33,20 @@ const SETUP_STEPS = [
   },
 ] as const;
 
-export function T3workSetupWelcomeSurface({ onCreate }: { onCreate: () => void }) {
+export function T3workSetupWelcomeSurface({
+  onCreate,
+  profilesOverride,
+}: {
+  onCreate: () => void;
+  /** Storybook/preview escape hatch to supply pack profiles without a live server. */
+  profilesOverride?: readonly EnvironmentSetupProfile[] | undefined;
+}) {
+  const appearance = useT3workPackAppearance();
+  const productName = appearance?.labels?.appName ?? "t3work";
+  const livePackProfiles = useT3workPackSetupProfiles();
+  const packProfiles = profilesOverride ?? livePackProfiles;
   const setupProfileId = useT3workProjectSetupProfile();
-  const selectedProfile = listT3workProjectSetupCardOptions().find(
+  const selectedProfile = listT3workProjectSetupCardOptions(packProfiles).find(
     (option) => option.id === setupProfileId,
   );
 
@@ -57,12 +73,18 @@ export function T3workSetupWelcomeSurface({ onCreate }: { onCreate: () => void }
             </div>
 
             <div className="max-w-2xl space-y-3">
+              <T3workPackBrandImage
+                brand={appearance?.brand}
+                kind="wordmark"
+                alt={productName}
+                className="h-6 w-auto"
+              />
               <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                Bring your Jira work into t3work in a few clicks.
+                Bring your Jira work into {productName} in a few clicks.
               </h1>
               <p className="max-w-xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
-                Pick how you want t3work to communicate, connect a Jira project, and start from a
-                workspace that feels ready out of the box.
+                Pick how you want {productName} to communicate, connect a Jira project, and start
+                from a workspace that feels ready out of the box.
               </p>
             </div>
 
@@ -112,6 +134,7 @@ export function T3workSetupWelcomeSurface({ onCreate }: { onCreate: () => void }
             <T3workProjectSetupProfileCards
               selectedProfileId={setupProfileId}
               onSelectProfile={writeT3workProjectSetupProfile}
+              profiles={packProfiles}
             />
           </div>
         </div>

@@ -46,6 +46,7 @@ export type T3WorkProfile = {
 export type T3WorkProfileResolutionSource =
   | "bundled"
   | "project-local"
+  | "pack"
   | "manifest-inline"
   | "fallback";
 
@@ -78,6 +79,8 @@ export type T3WorkProjectProfileManifest = {
 export type ResolveT3WorkProfileInput = {
   readonly profileId?: string;
   readonly projectLocalProfiles?: Readonly<Record<string, T3WorkProfile>>;
+  /** Profiles contributed by an active workspace pack, keyed by id. */
+  readonly packProfiles?: Readonly<Record<string, T3WorkProfile>>;
   readonly manifest?: T3WorkProjectProfileManifest;
   readonly allowFallback?: boolean;
 };
@@ -284,6 +287,10 @@ export function resolveT3WorkProfile(
   const projectLocalProfile = input.projectLocalProfiles?.[requestedProfileId];
   if (projectLocalProfile) {
     return buildResolution(projectLocalProfile, "project-local", requestedProfileId);
+  }
+  const packProfile = input.packProfiles?.[requestedProfileId];
+  if (packProfile) {
+    return buildResolution(packProfile, "pack", requestedProfileId);
   }
   if (
     input.manifest?.profileId === requestedProfileId &&

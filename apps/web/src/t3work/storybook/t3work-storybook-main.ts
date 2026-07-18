@@ -106,8 +106,13 @@ function t3workStorybookResolver(baseDir: string): Plugin {
   };
 }
 
+// Serves a workspace pack directory at /pack so branding stories can preview
+// real distribution themes: T3WORK_STORYBOOK_PACK_DIR=<pack dir> vp run storybook.
+const packDir = process.env.T3WORK_STORYBOOK_PACK_DIR;
+
 const config: StorybookConfig = {
   stories: [`${srcDir}/t3work/stories/**/*.stories.tsx`],
+  staticDirs: packDir ? [{ from: packDir, to: "/pack" }] : [],
   framework: {
     name: "@storybook/react-vite",
     options: {},
