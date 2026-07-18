@@ -43,6 +43,11 @@ export type PackProviderSnapshot = {
 export type PackSessionStartInput = {
   readonly threadId: string;
   readonly runtimeMode: string;
+  /** Provider-scoped access to the host MCP endpoint for this thread. */
+  readonly mcp?: {
+    readonly endpoint: string;
+    readonly authorizationHeader: string;
+  };
   readonly cwd?: string;
   readonly resumeCursor?: PackResumeCursor;
   /** Opaque host `ModelSelection`; forward verbatim. */
