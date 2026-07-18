@@ -657,6 +657,78 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.actor.message": {
+      yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Record the inter-agent message as a first-class `actor`-role message,
+      // attributed to the sending thread, and raise a delivery intent that the
+      // actor-message reactor turns into a reaction turn (see
+      // t3work-actorMessageReactor.ts). Mirrors how `thread.turn.start` emits a
+      // `message-sent` alongside a follow-on intent event.
+      const messageSentEvent: Omit<OrchestrationEvent, "sequence"> = {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-sent",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          role: "actor",
+          text: command.text,
+          t3workExt: {
+            author: {
+              kind: "actor",
+              threadId: command.fromThreadId,
+              projectId: command.fromProjectId,
+              title: command.fromTitle,
+            },
+            displayText: command.text,
+            visibleToUser: true,
+            visibleToAgent: true,
+            actor: {
+              senderThreadId: command.fromThreadId,
+              urgency: command.urgency,
+              hopCount: command.hopCount,
+              rootThreadId: command.rootThreadId,
+            },
+          },
+          turnId: null,
+          streaming: false,
+          createdAt: command.createdAt,
+          updatedAt: command.createdAt,
+        },
+      };
+      const deliveredEvent: Omit<OrchestrationEvent, "sequence"> = {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        causationEventId: messageSentEvent.eventId,
+        type: "thread.actor-message-delivered",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          fromThreadId: command.fromThreadId,
+          fromTitle: command.fromTitle,
+          fromProjectId: command.fromProjectId,
+          text: command.text,
+          urgency: command.urgency,
+          hopCount: command.hopCount,
+          rootThreadId: command.rootThreadId,
+          createdAt: command.createdAt,
+        },
+      };
+      return [messageSentEvent, deliveredEvent];
+    }
+
     case "thread.message.assistant.delta": {
       yield* requireThread({
         readModel,

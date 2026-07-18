@@ -130,6 +130,7 @@ export function ThreadChatView({
     removeContextAttachment,
     resolveWorkflowDecision,
     submitRecipeCardAction,
+    onOpenThread,
   } = useThreadChatComposerState({
     backend,
     projectId,
@@ -182,6 +183,7 @@ export function ThreadChatView({
             onComposerContextAttachmentsConsumed={clearThreadAttachments}
             onSubmitRecipeCardAction={submitRecipeCardAction}
             dispatchWorkflowDecision={resolveWorkflowDecision}
+            onOpenThread={onOpenThread}
           />
         </>
       ) : (

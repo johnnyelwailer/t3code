@@ -99,13 +99,49 @@ export const T3workMessageAttachment = Schema.Union([
 ]);
 export type T3workMessageAttachment = typeof T3workMessageAttachment.Type;
 
-export const T3workMessageAuthor = Schema.Struct({
+export const T3workMessageSystemAuthor = Schema.Struct({
   kind: Schema.Literal("system"),
   workflowRunId: Schema.optional(TrimmedNonEmptyString),
   recipeId: Schema.optional(TrimmedNonEmptyString),
   stepId: Schema.optional(TrimmedNonEmptyString),
 });
+export type T3workMessageSystemAuthor = typeof T3workMessageSystemAuthor.Type;
+
+/**
+ * Author of an inter-agent `actor`-role message: the sending thread (actor),
+ * identified by its thread id + human title so the receiver and the UI can
+ * attribute and navigate to it. `projectId` powers the "open sender thread"
+ * navigation (actors share a project).
+ */
+export const T3workMessageActorAuthor = Schema.Struct({
+  kind: Schema.Literal("actor"),
+  threadId: Schema.String,
+  projectId: Schema.String,
+  title: Schema.String,
+});
+export type T3workMessageActorAuthor = typeof T3workMessageActorAuthor.Type;
+
+export const T3workMessageAuthor = Schema.Union([
+  T3workMessageSystemAuthor,
+  T3workMessageActorAuthor,
+]);
 export type T3workMessageAuthor = typeof T3workMessageAuthor.Type;
+
+export const T3workActorMessageUrgency = Schema.Literals(["normal", "urgent"]);
+export type T3workActorMessageUrgency = typeof T3workActorMessageUrgency.Type;
+
+/**
+ * Inter-agent delivery metadata carried on an `actor`-role message.
+ * `hopCount` / `rootThreadId` back the loop guard (a chain of auto-reactions
+ * cannot run away); `senderThreadId` lets the receiving agent address a reply.
+ */
+export const T3workActorMessageInfo = Schema.Struct({
+  senderThreadId: Schema.String,
+  urgency: T3workActorMessageUrgency,
+  hopCount: Schema.Number,
+  rootThreadId: Schema.String,
+});
+export type T3workActorMessageInfo = typeof T3workActorMessageInfo.Type;
 
 export const T3workMessageStatus = Schema.Literals(["active", "waiting-for-input", "completed"]);
 export type T3workMessageStatus = typeof T3workMessageStatus.Type;
@@ -133,5 +169,7 @@ export const T3workMessageExt = Schema.Struct({
   status: Schema.optional(T3workMessageStatus),
   attachments: Schema.optional(Schema.Array(T3workMessageAttachment)),
   workflowReply: Schema.optional(T3workMessageWorkflowReply),
+  /** Present on an `actor`-role message (inter-agent coordination). */
+  actor: Schema.optional(T3workActorMessageInfo),
 });
 export type T3workMessageExt = typeof T3workMessageExt.Type;

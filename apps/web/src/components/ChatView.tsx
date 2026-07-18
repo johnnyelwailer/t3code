@@ -1011,6 +1011,7 @@ function ChatViewContent(props: ChatViewProps) {
     routeKind === "server" ? props.onSubmitRecipeCardAction : undefined;
   const dispatchWorkflowDecision =
     routeKind === "server" ? props.dispatchWorkflowDecision : undefined;
+  const onOpenThread = routeKind === "server" ? props.onOpenThread : undefined;
   const onBack = routeKind === "server" ? props.onBack : undefined;
   const headerAccessory = routeKind === "server" ? props.headerAccessory : undefined;
   const hideHeader = routeKind === "server" ? props.hideHeader : false;
@@ -5218,6 +5219,7 @@ function ChatViewContent(props: ChatViewProps) {
                 onIsAtEndChange={onIsAtEndChange}
                 {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
                 {...(dispatchWorkflowDecision ? { dispatchWorkflowDecision } : {})}
+                {...(onOpenThread ? { onOpenThread } : {})}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
               />
 

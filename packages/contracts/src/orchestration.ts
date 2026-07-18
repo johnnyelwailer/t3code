@@ -21,7 +21,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
-import { T3workMessageExt } from "./t3work-message-ext.ts";
+import { T3workActorMessageUrgency, T3workMessageExt } from "./t3work-message-ext.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -222,7 +222,39 @@ export const OrchestrationProject = Schema.Struct({
 });
 export type OrchestrationProject = typeof OrchestrationProject.Type;
 
-export const OrchestrationMessageRole = Schema.Literals(["user", "assistant", "system"]);
+const OrchestrationMessageRoleKnown = Schema.Literals(["user", "assistant", "system", "actor"]);
+const ORCHESTRATION_MESSAGE_ROLE_VALUES: ReadonlyArray<string> = [
+  "user",
+  "assistant",
+  "system",
+  "actor",
+];
+/**
+ * Message role.
+ *
+ * `actor` is a first-class inter-agent (actor-to-actor) coordination message —
+ * distinct from `user`, `assistant`, and `system`. It is attributed to the
+ * sending thread and drives the receiving thread's agent to react (see
+ * `thread.actor.message`).
+ *
+ * Decoding is tolerant: an unrecognized role (e.g. one written by a newer
+ * build) decodes to `system` instead of hard-failing, so an older reader
+ * degrades a single message rather than dropping the whole thread snapshot.
+ */
+export const OrchestrationMessageRole = Schema.String.pipe(
+  Schema.decodeTo(
+    OrchestrationMessageRoleKnown,
+    SchemaTransformation.transformOrFail({
+      decode: (raw: string) =>
+        Effect.succeed(
+          (ORCHESTRATION_MESSAGE_ROLE_VALUES.includes(raw)
+            ? raw
+            : "system") as typeof OrchestrationMessageRoleKnown.Encoded,
+        ),
+      encode: (value: typeof OrchestrationMessageRoleKnown.Type) => Effect.succeed(value),
+    }),
+  ),
+);
 export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
 
 export const OrchestrationMessage = Schema.Struct({
@@ -756,6 +788,30 @@ const ThreadMessageUpsertCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+/**
+ * Deliver a first-class inter-agent (actor-to-actor) message into a thread.
+ *
+ * `threadId` is the receiver (the aggregate). The command records the message
+ * as an `actor`-role message attributed to the sender, and raises a
+ * `thread.actor-message-delivered` intent that drives the receiver's agent to
+ * react (see the actor-message reactor). Server-dispatched only, like
+ * `thread.message.upsert`.
+ */
+const ThreadActorMessageCommand = Schema.Struct({
+  type: Schema.Literal("thread.actor.message"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  fromThreadId: ThreadId,
+  fromTitle: TrimmedNonEmptyString,
+  fromProjectId: ProjectId,
+  text: Schema.String,
+  urgency: T3workActorMessageUrgency,
+  hopCount: NonNegativeInt,
+  rootThreadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+
 const ThreadMessageAssistantDeltaCommand = Schema.Struct({
   type: Schema.Literal("thread.message.assistant.delta"),
   commandId: CommandId,
@@ -816,6 +872,7 @@ const ThreadRevertCompleteCommand = Schema.Struct({
 const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageUpsertCommand,
+  ThreadActorMessageCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
   ThreadProposedPlanUpsertCommand,
@@ -843,6 +900,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
   "thread.message-sent",
+  "thread.actor-message-delivered",
   "thread.turn-start-requested",
   "thread.turn-interrupt-requested",
   "thread.approval-response-requested",
@@ -953,6 +1011,20 @@ export const ThreadMessageSentPayload = Schema.Struct({
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
+
+export const ThreadActorMessageDeliveredPayload = Schema.Struct({
+  threadId: ThreadId,
+  messageId: MessageId,
+  fromThreadId: ThreadId,
+  fromTitle: TrimmedNonEmptyString,
+  fromProjectId: ProjectId,
+  text: Schema.String,
+  urgency: T3workActorMessageUrgency,
+  hopCount: NonNegativeInt,
+  rootThreadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+export type ThreadActorMessageDeliveredPayload = typeof ThreadActorMessageDeliveredPayload.Type;
 
 export const ThreadTurnStartRequestedPayload = Schema.Struct({
   threadId: ThreadId,
@@ -1105,6 +1177,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.message-sent"),
     payload: ThreadMessageSentPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.actor-message-delivered"),
+    payload: ThreadActorMessageDeliveredPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

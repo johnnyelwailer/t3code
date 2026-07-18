@@ -20,6 +20,7 @@ import {
   createT3workThreadToolBinding,
 } from "./t3work-toolBrokerBinding.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
+import { makeActorSendMessage } from "./t3work-actorSendMessage.ts";
 import { buildPrelaunchView } from "./t3work-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
@@ -204,7 +205,14 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       }),
     );
 
-  return { bindSession, bindReadOnly } satisfies T3workToolBrokerShape;
+  // Deliver a first-class inter-agent ("actor") message into another thread
+  // (see t3work-actorSendMessage.ts / t3work-actorMessageReactor.ts).
+  const sendMessage: T3workToolBrokerShape["sendMessage"] = makeActorSendMessage({
+    query,
+    orchestration,
+  });
+
+  return { sendMessage, bindSession, bindReadOnly } satisfies T3workToolBrokerShape;
 });
 
 export const T3workToolBrokerLive = Layer.effect(T3workToolBroker, createT3workToolBroker());

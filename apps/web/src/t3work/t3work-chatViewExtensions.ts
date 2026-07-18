@@ -45,4 +45,13 @@ export type ChatViewT3workExtensionProps = {
     readonly value: unknown;
     readonly correlationId: string;
   }) => void | Promise<void>;
+  /**
+   * Open a peer actor thread (same project) — wired to router navigation by the
+   * host and threaded down to the actor-message timeline card. Kept as an
+   * injected callback so the card stays router-agnostic.
+   */
+  readonly onOpenThread?: (input: {
+    readonly projectId: string;
+    readonly threadId: string;
+  }) => void;
 };

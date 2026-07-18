@@ -117,6 +117,7 @@ import {
   findActiveWorkflowInputMessageId,
   T3workSystemTimelineRow,
 } from "~/t3work/chat/t3work-SystemTimelineRow";
+import { T3workActorTimelineRow } from "~/t3work/chat/t3work-ActorTimelineRow";
 import {
   getT3workRenderableAttachments,
   T3workMessageAttachmentList,
@@ -145,6 +146,7 @@ interface TimelineRowSharedState {
   activeWorkflowInputMessageId: string | null;
   onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
   dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
+  onOpenThread?: ChatViewT3workExtensionProps["onOpenThread"];
   onToggleWorkGroup: (groupId: string, anchorElement?: HTMLElement) => void;
 }
 
@@ -192,6 +194,7 @@ interface MessagesTimelineProps {
   onIsAtEndChange: (isAtEnd: boolean) => void;
   onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
   dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
+  onOpenThread?: ChatViewT3workExtensionProps["onOpenThread"];
   onManualNavigation: () => void;
 }
 
@@ -227,6 +230,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onIsAtEndChange,
   onSubmitRecipeCardAction,
   dispatchWorkflowDecision,
+  onOpenThread,
   onManualNavigation,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
@@ -309,6 +313,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   const rawRows = useMemo(
     () =>
+      // Suppress messages flagged `t3workExt.visibleToUser === false` — e.g. the
+      // framed sender-attribution input the actor-message reactor stores as a
+      // hidden `role:"user"` turn prompt. Filtering here (before the minimap and
+      // list derivation) keeps the raw framing out of both the timeline and the
+      // minimap; the agent's reaction and the actor card still render.
       deriveMessagesTimelineRows({
         timelineEntries,
         latestTurn,
@@ -319,7 +328,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         activeTurnStartedAt,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
-      }),
+      }).filter(
+        (row) => !(row.kind === "message" && row.message.t3workExt?.visibleToUser === false),
+      ),
     [
       timelineEntries,
       latestTurn,
@@ -444,6 +455,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeWorkflowInputMessageId,
       onSubmitRecipeCardAction,
       dispatchWorkflowDecision,
+      onOpenThread,
       onToggleWorkGroup,
     }),
     [
@@ -461,6 +473,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeWorkflowInputMessageId,
       onSubmitRecipeCardAction,
       dispatchWorkflowDecision,
+      onOpenThread,
       onToggleWorkGroup,
     ],
   );
@@ -821,6 +834,22 @@ type TimelineMessage = Extract<TimelineEntry, { kind: "message" }>["message"];
 type TimelineWorkEntry = Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"][number];
 type TimelineRow = MessagesTimelineRow;
 
+function ActorTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+  const ctx = use(TimelineRowCtx);
+
+  return (
+    <T3workActorTimelineRow
+      message={row.message}
+      {...(ctx.onOpenThread
+        ? {
+            onOpenSenderThread: (input: { projectId: string; threadId: string }) =>
+              ctx.onOpenThread?.(input),
+          }
+        : {})}
+    />
+  );
+}
+
 function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
 
@@ -866,6 +895,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       ) : null}
       {row.kind === "message" && row.message.role === "system" ? (
         <SystemTimelineRow row={row} />
+      ) : null}
+      {row.kind === "message" && row.message.role === "actor" ? (
+        <ActorTimelineRow row={row} />
       ) : null}
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}

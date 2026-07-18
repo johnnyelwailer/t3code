@@ -8,6 +8,7 @@ import type { BackendApi } from "~/t3work/backend/t3work-types";
 import { prepareThreadContextAttachments } from "~/t3work/chat/t3work-prepareThreadContextAttachments";
 import { launchPendingRecipeWorkflowTurn } from "~/t3work/chat/t3work-recipeWorkflowLaunch";
 import { isThreadWaitingForRecipeInput } from "~/t3work/chat/t3work-recipeAwaitingInput";
+import { useT3workOpenSenderThread } from "~/t3work/chat/t3work-useOpenSenderThread";
 import { useAddToChatComposerDropTarget } from "~/t3work/hooks/t3work-useAddToChatComposerDropTarget";
 import { useT3WorkAddToChatStore } from "~/t3work/t3work-addToChatStore";
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
@@ -178,6 +179,9 @@ export function useThreadChatComposerState(input: {
     ],
   );
 
+  // Peer-actor navigation for the actor-message card (actors share a project).
+  const onOpenThread = useT3workOpenSenderThread();
+
   return {
     clearThreadAttachments,
     composerDropTarget,
@@ -188,5 +192,6 @@ export function useThreadChatComposerState(input: {
     removeContextAttachment,
     resolveWorkflowDecision,
     submitRecipeCardAction,
+    onOpenThread,
   };
 }

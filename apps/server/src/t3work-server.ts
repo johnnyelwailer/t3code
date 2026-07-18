@@ -121,6 +121,7 @@ import {
 import { t3workThreadPlacementRouteLayer } from "./t3work-thread-placement-routes.ts";
 import { t3workThreadToolContextRouteLayer } from "./t3work-thread-tool-context-routes.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
+import { T3workActorMessageReactorLive } from "./t3work-actorMessageReactor.ts";
 import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
 import { T3workContextRefreshServiceLive } from "./t3work-contextRefreshService.ts";
 import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
@@ -538,6 +539,7 @@ export const makeT3workServerLayer = Layer.unwrap(
       runtimeStateLayer,
       tailscaleServeLayer,
       T3workWorkflowEngineReactorLive,
+      T3workActorMessageReactorLive,
     );
 
     return serverApplicationLayer.pipe(
