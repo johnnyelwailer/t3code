@@ -52,7 +52,7 @@ describe("T3workProjectSetupProfileCards", () => {
     );
     expect(markup).toContain('data-profile-id="nexi-dev"');
     expect(markup).toContain('src="data:image/png;base64,AAAA"');
-    expect(markup).toContain("Address PR feedback");
+    expect(markup).toContain("Developer");
     // Built-in generic profiles must not leak in when a pack owns the catalog.
     expect(markup).not.toContain('data-profile-id="engineering-copilot"');
   });
