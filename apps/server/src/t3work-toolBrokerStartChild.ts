@@ -6,11 +6,11 @@ import type { OrchestrationEngineShape } from "./orchestration/Services/Orchestr
 import type { T3workThreadToolContextStoreShape } from "./t3work-threadToolContextStore.ts";
 import { type T3workStartChildLoadThreadProject } from "./t3work-toolBrokerStartChildActivity.ts";
 import {
-  buildStartChildModelSelection,
   mapKickoffModeToInteractionMode,
   readModelSelectionReasoningEffort,
   readStartChildArgs,
 } from "./t3work-toolBrokerStartChildArgs.ts";
+import { resolveChildModel } from "./t3work-toolBrokerStartChildProvider.ts";
 import {
   hasLinkedRepositoryStartChildServices,
   hasProjectSetupScriptRunner,
@@ -60,7 +60,8 @@ export function makeStartChildThread(input: {
         requestedTicketId: args.ticketId,
         threadId: thread.id,
       });
-      const modelSelection = buildStartChildModelSelection(baseModelSelection, args);
+      const { listProviders } = input.services;
+      const modelSelection = yield* resolveChildModel(baseModelSelection, args, listProviders);
       const interactionMode = mapKickoffModeToInteractionMode(args.kickoffMode);
       const createdAt = DateTime.formatIso(yield* DateTime.now),
         requestedKickoffMode = args.kickoffMode ?? (args.kickoffPrompt ? "interactive" : undefined);
@@ -198,6 +199,7 @@ export function makeStartChildThread(input: {
         started,
         interactionMode,
         runtimeMode: thread.runtimeMode,
+        provider: modelSelection.instanceId,
         model: modelSelection.model,
         ...(args.model ? { requestedModel: args.model } : {}),
         setupScriptStatus,

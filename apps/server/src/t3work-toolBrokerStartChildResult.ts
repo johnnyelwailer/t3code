@@ -13,6 +13,7 @@ export function buildStartChildResult(input: {
   readonly started: boolean;
   readonly interactionMode: ProviderInteractionMode;
   readonly runtimeMode: RuntimeMode;
+  readonly provider: string;
   readonly model: string;
   readonly requestedModel?: string;
   readonly setupScriptStatus: "not-requested" | "no-script" | "started" | "failed";
@@ -34,6 +35,7 @@ export function buildStartChildResult(input: {
     started: input.started,
     interaction_mode: input.interactionMode,
     runtime_mode: input.runtimeMode,
+    provider: input.provider,
     model: input.model,
     ...(input.requestedModel && input.requestedModel !== input.model
       ? { model_normalized_from: input.requestedModel }

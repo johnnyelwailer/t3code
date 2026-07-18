@@ -12,6 +12,7 @@ export type T3workStartChildArgs = {
   readonly ticketId?: string;
   readonly kickoffPrompt?: string;
   readonly kickoffMode?: T3workStartChildKickoffMode;
+  readonly provider?: string;
   readonly model?: string;
   readonly reasoningEffort?: T3workStartChildReasoningEffort;
   readonly repoFullName?: string;
@@ -37,6 +38,10 @@ const START_CHILD_EXECUTION_SCOPES = new Set<T3workStartChildExecutionScope>([
   "repository",
 ]);
 
+/** A non-empty trimmed string from an unknown candidate value, else undefined. */
+const trimmedArg = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+
 export const readStartChildArgs = (value: unknown): T3workStartChildArgsResult => {
   if (!value || typeof value !== "object" || globalThis.Array.isArray(value)) {
     return {
@@ -52,6 +57,7 @@ export const readStartChildArgs = (value: unknown): T3workStartChildArgsResult =
     readonly kickoff_prompt?: unknown;
     readonly kickoff_mode?: unknown;
     readonly execution_scope?: unknown;
+    readonly provider?: unknown;
     readonly model?: unknown;
     readonly reasoning_effort?: unknown;
     readonly repo_full_name?: unknown;
@@ -136,18 +142,10 @@ export const readStartChildArgs = (value: unknown): T3workStartChildArgsResult =
     reasoningEffort = normalized;
   }
 
-  const model =
-    typeof candidate.model === "string" && candidate.model.trim().length > 0
-      ? candidate.model.trim()
-      : undefined;
-  const repoFullName =
-    typeof candidate.repo_full_name === "string" && candidate.repo_full_name.trim().length > 0
-      ? candidate.repo_full_name.trim()
-      : undefined;
-  const repoRef =
-    typeof candidate.repo_ref === "string" && candidate.repo_ref.trim().length > 0
-      ? candidate.repo_ref.trim()
-      : undefined;
+  const provider = trimmedArg(candidate.provider);
+  const model = trimmedArg(candidate.model);
+  const repoFullName = trimmedArg(candidate.repo_full_name);
+  const repoRef = trimmedArg(candidate.repo_ref);
 
   if (executionScope === "repository" && !repoFullName) {
     return {
@@ -172,6 +170,7 @@ export const readStartChildArgs = (value: unknown): T3workStartChildArgsResult =
       ...(ticketId ? { ticketId } : {}),
       ...(kickoffPrompt ? { kickoffPrompt } : {}),
       ...(kickoffMode ? { kickoffMode } : {}),
+      ...(provider ? { provider } : {}),
       ...(model ? { model } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(repoFullName ? { repoFullName } : {}),

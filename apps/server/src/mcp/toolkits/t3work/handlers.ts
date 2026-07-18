@@ -54,4 +54,5 @@ export const T3workToolkitHandlersLive = T3workToolkit.toLayer({
   t3work_rename_thread: (input) => callBroker("t3work.thread.rename", input),
   t3work_start_child: (input) => callBroker("t3work.thread.start_child", input),
   t3work_send_message: (input) => sendMessage(input),
+  t3work_workflow_run: (input) => callBroker("t3work.workflow.run", input),
 });

@@ -1,0 +1,104 @@
+/**
+ * Cross-provider resolution for start_child: a parent may spawn a child on a
+ * different configured provider instance. These check the pure decision logic —
+ * inherit-vs-switch, model validity, and the unusable/unknown rejections.
+ */
+import type { ModelSelection, ServerProvider } from "@t3tools/contracts";
+import { describe, expect, it } from "vite-plus/test";
+
+import { resolveStartChildModelSelection } from "./t3work-toolBrokerStartChildProvider.ts";
+
+const makeProvider = (
+  instanceId: string,
+  modelSlugs: ReadonlyArray<string>,
+  over: Partial<ServerProvider> = {},
+): ServerProvider =>
+  ({
+    instanceId,
+    driver: instanceId,
+    enabled: true,
+    installed: true,
+    models: modelSlugs.map((slug) => ({ slug, name: slug, isCustom: false, capabilities: null })),
+    ...over,
+  }) as unknown as ServerProvider;
+
+// Fictional model slugs so the shared model-slug normalizer is an identity here
+// and the assertions test THIS resolver's decisions, not the model catalog.
+const parent = {
+  instanceId: "nexplore",
+  model: "nexplore-a",
+  options: [],
+} as unknown as ModelSelection;
+
+const providers: ReadonlyArray<ServerProvider> = [
+  makeProvider("nexplore", ["nexplore-a"]),
+  makeProvider("claude", ["claude-a", "claude-b"]),
+  makeProvider("codex", ["codex-a"]),
+  makeProvider("offline", ["offline-a"], { enabled: false }),
+];
+
+describe("resolveStartChildModelSelection", () => {
+  it("inherits the parent's provider when none is requested", () => {
+    const result = resolveStartChildModelSelection({ parentModelSelection: parent, providers });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.instanceId).toBe("nexplore");
+  });
+
+  it("runs the child on a different provider + model (cross-provider)", () => {
+    const result = resolveStartChildModelSelection({
+      parentModelSelection: parent,
+      requestedProvider: "codex",
+      requestedModel: "codex-a",
+      providers,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.instanceId).toBe("codex");
+      expect(result.value.model).toBe("codex-a");
+    }
+  });
+
+  it("defaults to the target provider's first model when none is requested", () => {
+    const result = resolveStartChildModelSelection({
+      parentModelSelection: parent,
+      requestedProvider: "claude",
+      providers,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.instanceId).toBe("claude");
+      expect(result.value.model).toBe("claude-a");
+    }
+  });
+
+  it("rejects an unknown provider instance", () => {
+    const result = resolveStartChildModelSelection({
+      parentModelSelection: parent,
+      requestedProvider: "nope",
+      providers,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("Unknown provider instance");
+  });
+
+  it("rejects a disabled / unavailable provider", () => {
+    const result = resolveStartChildModelSelection({
+      parentModelSelection: parent,
+      requestedProvider: "offline",
+      providers,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("cannot run a child");
+  });
+
+  it("rejects a model the target provider does not offer", () => {
+    const result = resolveStartChildModelSelection({
+      parentModelSelection: parent,
+      requestedProvider: "claude",
+      requestedModel: "codex-a",
+      providers,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("is not available on provider instance");
+  });
+});

@@ -219,6 +219,10 @@ type StartChildThreadInput = {
   execution_scope: "metarepo" | "repository";
   kickoff_prompt?: string;
   kickoff_mode?: "plan" | "interactive" | "autopilot";
+  // Optional provider instance id to run the child on a DIFFERENT provider than the
+  // parent (cross-provider handoff, e.g. a Claude parent spawning a Codex child).
+  // Omitted = inherit the parent's provider. `model` must be one of that provider's models.
+  provider?: string;
   model?: string;
   reasoning_effort?: "low" | "medium" | "high";
   repo_full_name?: string;
@@ -234,6 +238,7 @@ type StartChildThreadResult = {
   started: boolean;
   interaction_mode: "plan" | "default";
   runtime_mode: "approval-required" | "auto-accept-edits" | "full-access";
+  provider: string;
   model: string;
   requested_kickoff_mode?: "plan" | "interactive" | "autopilot";
   reasoning_effort?: string;

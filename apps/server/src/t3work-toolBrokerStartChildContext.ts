@@ -1,3 +1,4 @@
+import type { ServerProvider } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as FileSystem from "effect/FileSystem";
@@ -31,6 +32,8 @@ export type T3workStartChildServices = {
   readonly sourceControlProviders: SourceControlProviderRegistry["Service"];
   readonly gitWorkflow: GitWorkflowService["Service"];
   readonly projectSetupScriptRunner: ProjectSetupScriptRunner["Service"];
+  /** Live provider snapshots, used to resolve a cross-provider child model selection. */
+  readonly listProviders: () => Effect.Effect<ReadonlyArray<ServerProvider>>;
 };
 
 export type T3workStartChildLinkedRepositoryServices = Pick<

@@ -9,6 +9,7 @@ import { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
+import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import {
   T3workToolBroker,
@@ -31,7 +32,14 @@ import { makeWorkflowRunToolsForThread } from "./t3work-toolBrokerWorkflowRunLiv
 import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
 
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
-  const genericThreadToolIds = ["t3work.thread.rename", "t3work.thread.start_child"] as const;
+  // Host tools every provider may call without an explicit `surface:"t3work"`
+  // tool-context (e.g. a pack driver reaching the /mcp endpoint): thread rename,
+  // child spawning, and running an ephemeral runbook (workflow).
+  const genericThreadToolIds = [
+    "t3work.thread.rename",
+    "t3work.thread.start_child",
+    "t3work.workflow.run",
+  ] as const;
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;
   const contextStore = yield* T3workThreadToolContextStore;
@@ -45,6 +53,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
   const projectSetupScriptRunner = Option.getOrUndefined(
     yield* Effect.serviceOption(ProjectSetupScriptRunner),
   );
+  const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
 
   const loadThreadProject = (threadId: ThreadIdType) =>
     Effect.gen(function* () {
@@ -115,6 +124,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       ...(gitWorkflow ? { gitWorkflow } : {}),
       ...(sourceControlProviders ? { sourceControlProviders } : {}),
       ...(projectSetupScriptRunner ? { projectSetupScriptRunner } : {}),
+      ...(providerRegistry ? { listProviders: () => providerRegistry.getProviders } : {}),
     },
   });
 

@@ -32,6 +32,11 @@ export const T3workStartChildTool = Tool.make("t3work_start_child", {
     ticket_id: Schema.optional(Schema.String),
     kickoff_prompt: Schema.optional(Schema.String),
     kickoff_mode: Schema.optional(Schema.Literals(["plan", "interactive", "autopilot"])),
+    // Optional provider instance id to run the child on a DIFFERENT provider than
+    // the parent (e.g. spawn a Codex child from a Claude parent for cross-provider
+    // review). Omit to inherit the parent's provider; `model` must be one of that
+    // provider's models.
+    provider: Schema.optional(Schema.String),
     model: Schema.optional(Schema.String),
     reasoning_effort: Schema.optional(Schema.Literals(["low", "medium", "high"])),
     repo_full_name: Schema.optional(Schema.String),
@@ -61,8 +66,30 @@ export const T3workSendMessageTool = Tool.make("t3work_send_message", {
   dependencies,
 });
 
+// Ephemeral "runbook": run a short multi-step workflow immediately in this
+// conversation, defined inline via `source` (persisted per-run, no approval
+// gate). Routes to the existing t3work.workflow.run broker tool. Prefer this
+// over walking multi-step tasks by hand; on a `failed` status, fix the source
+// and run again.
+export const T3workWorkflowRunTool = Tool.make("t3work_workflow_run", {
+  description:
+    "Run a temporary runbook (workflow) immediately in this conversation. Pass " +
+    "`source` with the inline workflow TypeScript, or `workflowPath` for a saved " +
+    "one, plus optional `args`. No approval needed. Returns {runId, status: " +
+    "completed|suspended|failed, error?}; on `failed`, fix the source and re-run.",
+  parameters: Schema.Struct({
+    source: Schema.optional(Schema.String),
+    workflowPath: Schema.optional(Schema.String),
+    args: Schema.optional(Schema.Unknown),
+  }),
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
 export const T3workToolkit = Toolkit.make(
   T3workRenameThreadTool,
   T3workStartChildTool,
   T3workSendMessageTool,
+  T3workWorkflowRunTool,
 );
