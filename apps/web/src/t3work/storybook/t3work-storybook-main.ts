@@ -4,7 +4,7 @@ import babel from "@rolldown/plugin-babel";
 import { reactCompilerPreset } from "@vitejs/plugin-react";
 import type { StorybookConfig } from "@storybook/react-vite";
 import * as NodeURL from "node:url";
-import { createRequire } from "node:module";
+import * as NodeModule from "node:module";
 import { mergeConfig, type Plugin } from "vite";
 
 const srcDir =
@@ -64,8 +64,8 @@ function resolveExportTarget(value: unknown): string | null {
 function buildStorybookResolveMap(baseDir: string): Map<string, string> {
   const map = new Map<string, string>();
   // `require`/URL only (no node:fs/node:path — those trip the Effect tsgo rule).
-  const req = createRequire(`${baseDir}/t3work-storybook-resolver.cjs`);
-  const reactViteReq = createRequire(req.resolve("@storybook/react-vite/package.json"));
+  const req = NodeModule.createRequire(`${baseDir}/t3work-storybook-resolver.cjs`);
+  const reactViteReq = NodeModule.createRequire(req.resolve("@storybook/react-vite/package.json"));
   const sbPkgPath = reactViteReq.resolve("storybook/package.json");
   const sbPkgUrl = NodeURL.pathToFileURL(sbPkgPath);
   const pkg = reactViteReq("storybook/package.json") as { exports?: Record<string, unknown> };
