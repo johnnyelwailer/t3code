@@ -52,6 +52,8 @@ export type PackThemeDefinition = {
     readonly markDark?: string;
     readonly wordmark?: string;
     readonly wordmarkDark?: string;
+    /** Heading-only font (ttf/otf/woff2); body text keeps the sans stack. */
+    readonly displayFont?: string;
   };
   readonly colors: {
     readonly light: Record<string, string>;
@@ -62,11 +64,59 @@ export type PackThemeDefinition = {
   readonly density?: number;
 };
 
+export type PackSetupProfileCategory =
+  | "product"
+  | "delivery"
+  | "engineering"
+  | "operations"
+  | "security";
+
+export type PackSetupProfileAudience =
+  | "mixed"
+  | "qa"
+  | "product"
+  | "support"
+  | "delivery"
+  | "engineering";
+
+/**
+ * A project-setup profile ("role") the pack contributes to the first-run wizard.
+ * Carries both presentation (card visuals) and behavior (communication style,
+ * recipe weights) so a distribution fully owns its role catalog. `iconDataUrl`
+ * is resolved by the pack via `resolveAssetDataUrl` (same convention as provider
+ * icons and theme brand assets).
+ */
+export type PackSetupProfileDefinition = {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly badge: string;
+  readonly bullets: readonly string[];
+  readonly category: PackSetupProfileCategory;
+  readonly iconDataUrl?: string;
+  readonly audience: PackSetupProfileAudience;
+  readonly communicationStyle: {
+    readonly technicalDepth: "low" | "medium" | "high";
+    readonly brevity: "short" | "balanced" | "detailed";
+    readonly guidanceStyle: "guided" | "balanced" | "expert";
+    readonly defaultLanguage?: string;
+  };
+  readonly preferredArtifactKinds: readonly string[];
+  readonly recipeWeights: Readonly<Record<string, number>>;
+  readonly recommendedSkillPackIds: readonly string[];
+  readonly hideImplementationComplexity: boolean;
+  readonly tags?: readonly string[];
+  readonly defaultActionFamilies?: readonly string[];
+  /** Marks this as the pre-selected profile when the pack's catalog is active. */
+  readonly default?: boolean;
+};
+
 export type PackActivationContext = {
   readonly pack: { readonly id: string; readonly directory: string };
   readonly defineAgentProvider: (definition: AgentProviderDefinition) => void;
   readonly defineProviderDriver: (definition: PackProviderDriverDefinition) => void;
   readonly defineTheme: (definition: PackThemeDefinition) => void;
+  readonly defineSetupProfile: (definition: PackSetupProfileDefinition) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
 };
 
@@ -89,5 +139,15 @@ export const defineAgentProvider = <const T extends AgentProviderDefinition>(def
 
 export const defineTheme = <const T extends PackThemeDefinition>(definition: T): T => {
   assertIdentifier(definition.id, "Theme id");
+  return definition;
+};
+
+export const defineSetupProfile = <const T extends PackSetupProfileDefinition>(
+  definition: T,
+): T => {
+  assertIdentifier(definition.id, "Setup profile id");
+  if (definition.bullets.length === 0) {
+    throw new Error(`Setup profile ${definition.id} must define at least one bullet`);
+  }
   return definition;
 };

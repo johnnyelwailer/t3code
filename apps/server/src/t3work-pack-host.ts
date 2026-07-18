@@ -68,6 +68,7 @@ export const loadPackProviderOverlay = async (
         );
       },
       defineTheme: () => undefined,
+      defineSetupProfile: () => undefined,
       resolveAssetDataUrl: async () => {
         throw new Error("Asset resolution is only available to pack activation code");
       },
@@ -137,6 +138,7 @@ export const loadPackAppearanceOverlay = async (
         }
         activatedThemes.push({ ...theme, themeId: theme.id });
       },
+      defineSetupProfile: () => undefined,
       resolveAssetDataUrl: async () => {
         throw new Error("Asset resolution is only available to pack activation code");
       },

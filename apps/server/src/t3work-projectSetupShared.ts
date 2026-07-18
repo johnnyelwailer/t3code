@@ -8,6 +8,8 @@ import {
   type T3WorkProjectProfileManifest,
 } from "@t3tools/t3work-skill-packs";
 
+import { getPackProfilesForResolver } from "./t3work-pack-setupProfileOverlay.ts";
+
 export const T3WORK_PROJECT_SETUP_VERSION = 1;
 export const T3WORK_PROJECT_AGENTS_PATH = "AGENTS.md";
 export const T3WORK_PROJECT_CLAUDE_PATH = "CLAUDE.md";
@@ -46,7 +48,11 @@ export const T3WORK_PROJECT_SETUP_PROFILES = T3WORK_PROFILES;
 export function resolveT3WorkProjectSetupProfileId(
   profileId: string | undefined,
 ): T3WorkProjectSetupProfileId {
-  return resolveT3WorkProfile(profileId ? { profileId } : {}).profile.id;
+  const packProfiles = getPackProfilesForResolver();
+  return resolveT3WorkProfile({
+    ...(profileId ? { profileId } : {}),
+    ...(packProfiles ? { packProfiles } : {}),
+  }).profile.id;
 }
 
 export function resolveT3WorkProjectSetupProfile(input: {
@@ -55,11 +61,13 @@ export function resolveT3WorkProjectSetupProfile(input: {
   readonly projectLocalProfiles?: Readonly<Record<string, T3WorkProfile>>;
   readonly manifest?: T3WorkProjectProfileManifest;
 }) {
+  const packProfiles = getPackProfilesForResolver();
   const resolution = resolveT3WorkProfile({
     ...(input.profileId !== undefined ? { profileId: input.profileId } : {}),
     ...(input.projectLocalProfiles !== undefined
       ? { projectLocalProfiles: input.projectLocalProfiles }
       : {}),
+    ...(packProfiles ? { packProfiles } : {}),
     ...(input.manifest !== undefined ? { manifest: input.manifest } : {}),
   });
   const packIds = input.enabledSkillPackIds ?? input.manifest?.enabledSkillPackIds;
