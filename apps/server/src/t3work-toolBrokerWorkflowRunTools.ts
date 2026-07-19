@@ -8,7 +8,7 @@
  */
 import type { ModelSelection, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
-import type { RunWorkflowToolResult } from "@t3work/sdk";
+import type { RunWorkflowToolResult, WorkflowRunIntent } from "@t3work/sdk";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
@@ -29,6 +29,7 @@ export interface RunWorkflowHandlerArgs {
   readonly source?: string | undefined;
   readonly workflowPath?: string | undefined;
   readonly args?: unknown;
+  readonly intent: WorkflowRunIntent;
 }
 
 export type T3workWorkflowRunToolHandlers = {
@@ -56,7 +57,7 @@ type LoadThreadProject<E> = (threadId: ThreadId) => Effect.Effect<
 export function makeWorkflowRunToolHandlers<E>(deps: {
   readonly fileSystem?: FileSystem.FileSystem | undefined;
   readonly path?: Path.Path | undefined;
-  readonly launch: Omit<PreparedWorkflowLaunchDeps, "fileSystem">;
+  readonly launch: Omit<PreparedWorkflowLaunchDeps, "fileSystem" | "path">;
   readonly loadThreadProject: LoadThreadProject<E>;
 }): (threadId: ThreadId) => T3workWorkflowRunToolHandlers {
   const { fileSystem, path } = deps;
@@ -105,11 +106,12 @@ export function makeWorkflowRunToolHandlers<E>(deps: {
         let output: unknown;
         let runError: unknown;
         const result = yield* launchPreparedWorkflow(
-          { ...deps.launch, fileSystem },
+          { ...deps.launch, fileSystem, path },
           {
             runId,
             workflowPath,
             args: args.args ?? {},
+            intent: args.intent,
             workspaceRoot,
             launchThreadId: threadId,
             projectId: thread.projectId,

@@ -1,9 +1,4 @@
-import {
-  CommandId,
-  EventId,
-  type OrchestrationCommand,
-  ThreadId,
-} from "@t3tools/contracts";
+import { CommandId, EventId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
 
 import type {
   ThreadCreatePayload,
@@ -27,9 +22,12 @@ export async function dispatchWorkflowChild(
     interactionMode: deps.interactionMode,
     branch: null,
     worktreePath: null,
+    retention: payload.retention ?? "ephemeral",
     createdAt,
   });
-  if (deps.launchThreadId === undefined) return;
+  // The child thread must exist for its turn and the inline Work log's Open
+  // thread action, but one-shot workflow children do not become navigation.
+  if (deps.launchThreadId === undefined || payload.retention !== "retained") return;
   await deps.dispatch(
     buildWorkflowChildPlacementCommand({
       parentThreadId: deps.launchThreadId,
@@ -58,7 +56,7 @@ export function buildWorkflowChildPlacementCommand(input: {
       id: EventId.make(`t3work-wf-placement:${input.workflowRunId}:${input.childThreadId}`),
       tone: "info",
       kind: "t3work.handoff.created",
-      summary: `Created from workflow thread ${input.parentThreadId}`,
+      summary: "Created by workflow",
       payload: {
         parentThreadId: input.parentThreadId,
         childThreadId: input.childThreadId,

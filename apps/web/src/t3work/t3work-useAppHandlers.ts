@@ -11,7 +11,6 @@ import type {
   TicketKickoffThreadInput,
 } from "~/t3work/t3work-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
-import type { ViewState } from "~/t3work/t3work-types";
 import { enqueueThreadKickoffAttachments } from "~/t3work/t3work-enqueueThreadKickoffAttachments";
 import { useLocalWorkspaceCommands } from "~/t3work/hooks/t3work-useLocalWorkspaceCommands";
 import {
@@ -20,23 +19,7 @@ import {
   openEmbeddedProjectThread,
   selectProjectThread,
 } from "~/t3work/t3work-appThreadMutations";
-
-type AppHandlersInput = {
-  store: ReturnType<typeof useProjectStore>;
-  activeView: ViewState | null;
-  onOpenHome: (() => void) | undefined;
-  onOpenDashboard:
-    | ((
-        projectId: string,
-        dashboardMode?: ProjectDashboardMode,
-        embeddedThreadId?: string | null,
-      ) => void)
-    | undefined;
-  onOpenTicket:
-    | ((projectId: string, ticketId: string, embeddedThreadId?: string | null) => void)
-    | undefined;
-  onOpenThread: ((projectId: string, threadId: string) => void) | undefined;
-};
+import type { AppHandlersInput } from "~/t3work/t3work-appHandlersTypes";
 
 export function useAppHandlers({
   store,
@@ -60,9 +43,14 @@ export function useAppHandlers({
     (projectId: string) => {
       const resolvedProjectId = store.resolveProjectId(projectId);
       store.selectProject(resolvedProjectId);
+      if (store.looseWorkspaceProjects.some((project) => project.id === resolvedProjectId)) {
+        store.setView(null);
+        onOpenHome?.();
+        return;
+      }
       onOpenDashboard?.(resolvedProjectId);
     },
-    [onOpenDashboard, store],
+    [onOpenDashboard, onOpenHome, store],
   );
 
   const handleSelectProjectDashboardMode = useCallback(

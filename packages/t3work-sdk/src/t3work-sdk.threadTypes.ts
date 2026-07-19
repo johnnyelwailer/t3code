@@ -52,6 +52,8 @@ export interface AskUserOpts<R = string> extends AskOpts<R> {
 export interface SpawnThreadOpts {
   readonly name?: string;
   readonly model?: ModelSelection;
+  /** Ephemeral children stay out of the sidebar; retained children are durable and visible. */
+  readonly retention?: "ephemeral" | "retained";
 }
 
 /** The one Thread type, shared by the ambient launching thread and any spawned one. */

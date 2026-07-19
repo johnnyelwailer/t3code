@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Config from "effect/Config";
+import * as Data from "effect/Data";
 import * as Option from "effect/Option";
 import { Command, GlobalFlag } from "effect/unstable/cli";
 
@@ -9,6 +10,7 @@ import {
   inspectConfiguredWorkspacePacks,
   loadPackAppearanceOverlay,
   loadPackProviderOverlay,
+  loadPackWorkflowRepairPolicy,
 } from "../t3work-pack-host.ts";
 import { setPackAppearanceOverlay } from "../t3work-pack-appearanceOverlay.ts";
 import {
@@ -16,7 +18,12 @@ import {
   setPackSetupProfileOverlay,
 } from "../t3work-pack-setupProfileOverlay.ts";
 import { setPackProviderOverlay } from "../t3work-pack-providerOverlay.ts";
+import { setWorkflowRepairPolicy } from "../t3work-workflowRepairPolicy.ts";
 import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
+
+class WorkspacePackLoadError extends Data.TaggedError("WorkspacePackLoadError")<{
+  readonly cause: unknown;
+}> {}
 
 export const runT3workServerCommand = (
   flags: CliServerFlags,
@@ -35,7 +42,7 @@ export const runT3workServerCommand = (
     if (packDiagnostic.enabled) {
       const appearanceOverlay = yield* Effect.tryPromise({
         try: () => loadPackAppearanceOverlay(packDiagnostic),
-        catch: (cause) => cause,
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
         Effect.tap((overlay) => Effect.sync(() => setPackAppearanceOverlay(overlay))),
         Effect.catch((cause) =>
@@ -46,7 +53,7 @@ export const runT3workServerCommand = (
       );
       const providerOverlay = yield* Effect.tryPromise({
         try: () => loadPackProviderOverlay(packDiagnostic),
-        catch: (cause) => cause,
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
         Effect.tap((overlay) => Effect.sync(() => setPackProviderOverlay(overlay))),
         Effect.catch((cause) =>
@@ -57,11 +64,22 @@ export const runT3workServerCommand = (
       );
       const setupProfileOverlay = yield* Effect.tryPromise({
         try: () => loadPackSetupProfileOverlay(packDiagnostic),
-        catch: (cause) => cause,
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
         Effect.tap((profiles) => Effect.sync(() => setPackSetupProfileOverlay(profiles))),
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack setup profile loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackWorkflowRepairPolicy(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((policy) => Effect.sync(() => setWorkflowRepairPolicy(policy ?? {}))),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack workflow repair policy loading failed", { cause }).pipe(
             Effect.as(undefined),
           ),
         ),

@@ -4,7 +4,6 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   type ModelSelection,
   ProjectId,
-  ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Console from "effect/Console";
@@ -35,6 +34,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import { T3workThreadToolContextEvictionReactor } from "./t3work-threadToolContextEvictionReactor.ts";
+import { getConfiguredDefaultModelSelection } from "./configuredDefaultModelSelection.ts";
 import {
   formatHeadlessServeOutput,
   formatHostForUrl,
@@ -166,16 +166,8 @@ export const launchStartupHeartbeat = recordStartupHeartbeat.pipe(
 // thread's composer) selects. Upstream default stays Codex; a distribution can
 // override it without hardcoding a provider in core by setting the env seam
 // below (e.g. the Nexplore pack points it at its own instance + model).
-export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => {
-  const envInstanceId = process.env.T3WORK_DEFAULT_MODEL_INSTANCE_ID?.trim();
-  const envModel = process.env.T3WORK_DEFAULT_MODEL?.trim();
-  return {
-    instanceId: ProviderInstanceId.make(
-      envInstanceId && envInstanceId.length > 0 ? envInstanceId : "codex",
-    ),
-    model: envModel && envModel.length > 0 ? envModel : DEFAULT_MODEL,
-  };
-};
+export const getAutoBootstrapDefaultModelSelection = (): ModelSelection =>
+  getConfiguredDefaultModelSelection(DEFAULT_MODEL);
 
 export const resolveWelcomeBase = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig.ServerConfig;

@@ -114,6 +114,10 @@ export const T3workWorkflowEngineReactorLive = Layer.effectDiscard(
           : workflowReply !== undefined
             ? workflowReply.value
             : text;
+      if (pending.resolveLive) {
+        yield* Effect.promise(() => pending.resolveLive!(reply));
+        return;
+      }
       yield* Effect.promise(() => run.resume(pending.correlationId, reply));
     });
 

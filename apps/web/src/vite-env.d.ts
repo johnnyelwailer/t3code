@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_WS_URL: string;
   readonly VITE_HOSTED_APP_URL: string;
   readonly VITE_HOSTED_APP_CHANNEL: string;
+  readonly VITE_T3WORK_DEFAULT_MODEL_INSTANCE_ID?: string;
+  readonly VITE_T3WORK_DEFAULT_MODEL?: string;
   readonly VITE_CLERK_PUBLISHABLE_KEY: string;
   readonly VITE_CLERK_JWT_TEMPLATE: string;
   readonly VITE_RELAY_OTLP_TRACES_URL: string;

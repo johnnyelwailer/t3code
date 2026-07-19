@@ -5642,6 +5642,74 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect(
+    "keeps ephemeral repair upserts out of the live shell stream used by Local workspaces",
+    () =>
+      Effect.gen(function* () {
+        const repairThreadId = ThreadId.make("run:repair:1");
+        const now = "2026-07-19T00:00:00.000Z";
+        const ephemeralRepairCreated: Extract<OrchestrationEvent, { type: "thread.created" }> = {
+          sequence: 1,
+          eventId: EventId.make("event-repair-created"),
+          aggregateKind: "thread",
+          aggregateId: repairThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("command-repair-created"),
+          causationEventId: null,
+          correlationId: null,
+          metadata: {},
+          type: "thread.created",
+          payload: {
+            threadId: repairThreadId,
+            projectId: defaultProjectId,
+            title: "Workflow repair",
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            retention: "ephemeral",
+            createdAt: now,
+            updatedAt: now,
+          },
+        };
+        const repairDetail = {
+          ...makeDefaultOrchestrationReadModel().threads[0]!,
+          id: repairThreadId,
+          projectId: defaultProjectId,
+          title: "Workflow repair",
+          retention: "ephemeral" as const,
+        };
+        yield* buildAppUnderTest({
+          layers: {
+            orchestrationEngine: { streamDomainEvents: Stream.make(ephemeralRepairCreated) },
+            projectionSnapshotQuery: {
+              getThreadShellById: () =>
+                Effect.succeed(
+                  Option.some(
+                    makeDefaultOrchestrationThreadShell({
+                      id: repairThreadId,
+                      title: "Workflow repair",
+                    }),
+                  ),
+                ),
+              getThreadDetailById: () => Effect.succeed(Option.some(repairDetail)),
+            },
+          },
+        });
+
+        const wsUrl = yield* getWsServerUrl("/ws");
+        const items = yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.subscribeShell]({}).pipe(Stream.runCollect),
+          ),
+        );
+
+        assert.equal(items.length, 1);
+        assert.equal(items[0]?.kind, "snapshot");
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("enriches replayed project events with repository identity metadata", () =>
     Effect.gen(function* () {
       const repositoryIdentity = {

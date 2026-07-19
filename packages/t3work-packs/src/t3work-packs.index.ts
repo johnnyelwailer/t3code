@@ -22,7 +22,11 @@ export {
   SetupProfileCommunicationStyle,
 } from "./t3work-packs.setupProfile.ts";
 export { activateWorkspacePack } from "./t3work-packs.activation.ts";
-export type { PackActivationContext, PackActivate } from "./t3work-packs.activation.ts";
+export type {
+  PackActivationContext,
+  PackActivate,
+  WorkflowRepairPolicyDefinition,
+} from "./t3work-packs.activation.ts";
 export type {
   PackDriverCreateInput,
   PackHostCapabilities,
@@ -36,6 +40,7 @@ export type {
   PackSendTurnInput,
   PackSessionStartInput,
   PackThreadSnapshot,
+  PackTextGeneration,
   PackTurnStartResult,
 } from "./t3work-packs.providerDriver.ts";
 export {

@@ -95,6 +95,8 @@ export interface WorkflowEngineBrokerDeps {
 export interface ThreadCreatePayload {
   readonly threadId: string;
   readonly name?: string;
+  /** Omitted is ephemeral, preserving one-shot agent() as a hidden child. */
+  readonly retention?: "ephemeral" | "retained";
 }
 export interface ThreadTurnPayload {
   readonly threadId: string;

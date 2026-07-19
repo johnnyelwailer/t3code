@@ -617,6 +617,27 @@ const makeWsRpcLayer = (
       const toShellStreamEvent = (
         event: OrchestrationEvent,
       ): Effect.Effect<Option.Option<OrchestrationShellStreamEvent>, never, never> => {
+        // A shell event is consumed directly by the Local workspaces sidebar.
+        // The initial shell snapshot excludes ephemeral threads, but a plain
+        // thread-shell lookup includes them so that Open thread still works.
+        // Check the detail retention before forwarding a live upsert; otherwise
+        // repair children leak into navigation until the next full reload.
+        const retainedThreadShellUpsert = (threadId: ThreadId) =>
+          Effect.all([
+            projectionSnapshotQuery.getThreadShellById(threadId),
+            projectionSnapshotQuery.getThreadDetailById(threadId),
+          ]).pipe(
+            Effect.map(([thread, detail]) =>
+              Option.isSome(detail) && detail.value.retention === "ephemeral"
+                ? Option.none<OrchestrationShellStreamEvent>()
+                : Option.map(thread, (nextThread) => ({
+                    kind: "thread-upserted" as const,
+                    sequence: event.sequence,
+                    thread: nextThread,
+                  })),
+            ),
+            Effect.orElseSucceed(() => Option.none()),
+          );
         switch (event.type) {
           case "project.created":
           case "project.meta-updated":
@@ -648,32 +669,12 @@ const makeWsRpcLayer = (
               }),
             );
           case "thread.unarchived":
-            return projectionSnapshotQuery.getThreadShellById(event.payload.threadId).pipe(
-              Effect.map((thread) =>
-                Option.map(thread, (nextThread) => ({
-                  kind: "thread-upserted" as const,
-                  sequence: event.sequence,
-                  thread: nextThread,
-                })),
-              ),
-              Effect.orElseSucceed(() => Option.none()),
-            );
+            return retainedThreadShellUpsert(event.payload.threadId);
           default:
             if (event.aggregateKind !== "thread") {
               return Effect.succeed(Option.none());
             }
-            return projectionSnapshotQuery
-              .getThreadShellById(ThreadId.make(event.aggregateId))
-              .pipe(
-                Effect.map((thread) =>
-                  Option.map(thread, (nextThread) => ({
-                    kind: "thread-upserted" as const,
-                    sequence: event.sequence,
-                    thread: nextThread,
-                  })),
-                ),
-                Effect.orElseSucceed(() => Option.none()),
-              );
+            return retainedThreadShellUpsert(ThreadId.make(event.aggregateId));
         }
       };
 

@@ -97,7 +97,12 @@ export function parseT3workViewFromPath(
   }
 
   if (segments.length === 4 && segments[2] === T3WORK_THREAD_SEGMENT && segments[3]) {
-    return { type: "thread", projectId, threadId: segments[3] };
+    return {
+      type: "thread",
+      projectId,
+      threadId: segments[3],
+      ...(embeddedThreadId ? { embeddedThreadId } : {}),
+    };
   }
 
   return null;

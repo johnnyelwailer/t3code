@@ -53,6 +53,7 @@ import Migration0037 from "./Migrations/t3work-037_BackfillAssigneeAccountId.ts"
 import Migration0038 from "./Migrations/t3work-038_BacklogQuickFilters.ts";
 import Migration0039 from "./Migrations/t3work-039_WorkflowOrigin.ts";
 import Migration0040 from "./Migrations/t3work-040_ProjectionThreadMessageSequence.ts";
+import Migration0041 from "./Migrations/t3work-041_ProjectionThreadRetention.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -105,6 +106,7 @@ export const migrationEntries = [
   [38, "BacklogQuickFilters", Migration0038],
   [39, "WorkflowOrigin", Migration0039],
   [40, "ProjectionThreadMessageSequence", Migration0040],
+  [41, "ProjectionThreadRetention", Migration0041],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

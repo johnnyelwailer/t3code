@@ -18,10 +18,11 @@ import type {
   ProviderInteractionMode,
   RuntimeMode,
 } from "@t3tools/contracts";
-import type { JournalStore } from "@t3work/sdk";
+import type { JournalStore, WorkflowRunIntent } from "@t3work/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import type * as FileSystem from "effect/FileSystem";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 
 import type {
   WorkflowRunOrigin,
@@ -38,6 +39,11 @@ import {
 } from "./t3work-workflowEngineLaunch.ts";
 import type { T3workWorkflowEngineRegistryShape } from "./t3work-workflowEngineRegistry.ts";
 import { buildWorkflowShapePreviewCommand } from "./t3work-workflowShapePreview.ts";
+import {
+  replaceEphemeralWorkflowSourceAtomically,
+  writeEphemeralWorkflowRepairAudit,
+} from "./t3work-workflowEphemeralSource.ts";
+import { getWorkflowRepairPolicy } from "./t3work-workflowRepairPolicy.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
@@ -52,12 +58,22 @@ export interface PreparedWorkflowLaunchDeps {
   readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
   /** Backs the best-effort shape preview; absent = preview skipped, launch unchanged. */
   readonly fileSystem?: FileSystem.FileSystem | undefined;
+  /** Needed only to verify and atomically replace an ephemeral workflow source. */
+  readonly path?: Path.Path | undefined;
+  /** Distribution policy. Omitted uses Nexi's default of three bounded attempts. */
+  readonly repairMaxAttempts?: number;
+  readonly repairModelSelection?: "inherit" | ModelSelection;
+  readonly repairTotalTimeBudgetMs?: number;
 }
 
 export interface PreparedWorkflowLaunchInput {
   readonly runId: string;
   readonly workflowPath: string;
   readonly args: unknown;
+  /** Agent-supplied contract; present for ephemeral workflow-tool launches. */
+  readonly intent?: WorkflowRunIntent;
+  /** Bounded host repair attempts; zero disables repair. */
+  readonly repairMaxAttempts?: number;
   readonly workspaceRoot: string;
   readonly launchThreadId: string | undefined;
   readonly projectId: ProjectId;
@@ -75,6 +91,13 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
   deps: PreparedWorkflowLaunchDeps,
   input: PreparedWorkflowLaunchInput,
 ) {
+  const repairPolicy = getWorkflowRepairPolicy();
+  const pathService = deps.path;
+  const ephemeralWorkflowPath =
+    pathService === undefined
+      ? undefined
+      : pathService.join(input.workspaceRoot, ".t3work-runs", input.runId, "workflow.ts");
+  const canReplaceEphemeralSource = input.workflowPath === ephemeralWorkflowPath;
   const lifecycle = makeWorkflowRunLifecycle({
     repo: deps.runRepository,
     row: buildRunningWorkflowRunRow({
@@ -137,6 +160,42 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       lifecycle,
       ...(input.onComplete === undefined ? {} : { onComplete: input.onComplete }),
       ...(input.onError === undefined ? {} : { onError: input.onError }),
+      ...(input.intent === undefined || !canReplaceEphemeralSource
+        ? {}
+        : { repairIntent: input.intent }),
+      repairMaxAttempts:
+        input.repairMaxAttempts ?? deps.repairMaxAttempts ?? repairPolicy.maxAttempts,
+      repairModelSelection: deps.repairModelSelection ?? repairPolicy.modelSelection,
+      repairTotalTimeBudgetMs: deps.repairTotalTimeBudgetMs ?? repairPolicy.totalTimeBudgetMs,
+      ...(deps.fileSystem === undefined || pathService === undefined
+        ? {}
+        : {
+            readWorkflowSource: () =>
+              Effect.runPromise(deps.fileSystem!.readFileString(input.workflowPath)),
+            replaceWorkflowSource: (source: string) =>
+              Effect.runPromise(
+                replaceEphemeralWorkflowSourceAtomically({
+                  runsRoot: `${input.workspaceRoot}/.t3work-runs`,
+                  runId: input.runId,
+                  source,
+                }).pipe(
+                  Effect.provideService(FileSystem.FileSystem, deps.fileSystem!),
+                  Effect.provideService(Path.Path, pathService!),
+                ),
+              ).then(() => undefined),
+            recordRepairAudit: (audit) =>
+              Effect.runPromise(
+                writeEphemeralWorkflowRepairAudit({
+                  runsRoot: `${input.workspaceRoot}/.t3work-runs`,
+                  runId: input.runId,
+                  timestamp: nowIso(),
+                  ...audit,
+                }).pipe(
+                  Effect.provideService(FileSystem.FileSystem, deps.fileSystem!),
+                  Effect.provideService(Path.Path, pathService!),
+                ),
+              ).then(() => undefined),
+          }),
     }),
   );
   return result;

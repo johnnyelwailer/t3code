@@ -13,14 +13,17 @@ import type {
 import { useAddToChat } from "~/t3work/hooks/t3work-useAddToChat";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3work/hooks/t3work-createProjectBootstrap";
 import { SidebarMenuButton, SidebarMenuSub } from "~/t3work/components/ui/t3work-sidebar";
-import { ThreadRow } from "./t3work-ProjectSidebarThreadRow";
 import { LocalWorkspaceSidebarRowActions } from "./t3work-LocalWorkspaceSidebarRowActions";
 import { buildProjectSidebarAddToChatRequest } from "./t3work-projectSidebarAddToChatRequests";
 import { sortThreads } from "./t3work-projectSidebarShared";
+import { ProjectSidebarThreadTreeRows } from "./t3work-ProjectSidebarThreadTreeRows";
+import {
+  buildProjectSidebarThreadTree,
+  countProjectSidebarThreadBranches,
+} from "./t3work-projectSidebarThreadTree";
 import {
   getSidebarProjectState,
   getSidebarStandaloneButtonClassName,
-  getSidebarThreadState,
 } from "./t3work-projectSidebarItemState";
 import { useLocalWorkspaceRowState } from "./t3work-useLocalWorkspaceRowState";
 
@@ -77,11 +80,13 @@ export function LocalWorkspaceSidebarRow({
     () => sortThreads(projectThreads, threadSortOrder),
     [projectThreads, threadSortOrder],
   );
-  const visibleThreads =
-    sortedProjectThreads.length > threadPreviewCount
-      ? sortedProjectThreads.slice(0, threadPreviewCount)
-      : sortedProjectThreads;
-  const hiddenThreadCount = Math.max(0, sortedProjectThreads.length - visibleThreads.length);
+  const threadTree = useMemo(
+    () => buildProjectSidebarThreadTree(sortedProjectThreads),
+    [sortedProjectThreads],
+  );
+  const visibleRootThreads = threadTree.rootThreads.slice(0, threadPreviewCount);
+  const visibleThreadCount = countProjectSidebarThreadBranches(visibleRootThreads, threadTree);
+  const hiddenThreadCount = Math.max(0, sortedProjectThreads.length - visibleThreadCount);
   const projectState = getSidebarProjectState({ view, projectId: project.id });
 
   const {
@@ -174,17 +179,16 @@ export function LocalWorkspaceSidebarRow({
 
       {expanded ? (
         <SidebarMenuSub className="mx-1 mt-1 mb-1.5 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 py-0.5">
-          {visibleThreads.map((thread) => (
-            <ThreadRow
-              key={thread.id}
-              thread={thread}
-              state={getSidebarThreadState({ view, threadId: thread.id })}
-              workspacePath={workspaceRoot}
-              onSelect={() => onSelectThread(project.id, thread.id)}
-              onDelete={() => onDeleteThread(thread.id)}
-              onRename={(newTitle) => onRenameThread(thread.id, newTitle)}
-            />
-          ))}
+          <ProjectSidebarThreadTreeRows
+            projectId={project.id}
+            roots={visibleRootThreads}
+            tree={threadTree}
+            view={view}
+            workspacePath={workspaceRoot}
+            onSelectThread={onSelectThread}
+            onDeleteThread={onDeleteThread}
+            onRenameThread={onRenameThread}
+          />
           {hiddenThreadCount > 0 ? (
             <div className="px-2 py-1 text-[10px] text-muted-foreground/60">
               +{hiddenThreadCount} more

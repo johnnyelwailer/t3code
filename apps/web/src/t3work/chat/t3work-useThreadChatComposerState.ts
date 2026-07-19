@@ -180,7 +180,7 @@ export function useThreadChatComposerState(input: {
   );
 
   // Peer-actor navigation for the actor-message card (actors share a project).
-  const onOpenThread = useT3workOpenSenderThread();
+  const onOpenThread = useT3workOpenSenderThread(input.threadId);
 
   return {
     clearThreadAttachments,

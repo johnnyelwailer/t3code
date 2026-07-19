@@ -33,9 +33,15 @@ function readRequestedThreadIds(value: ReadonlyArray<string> | undefined): strin
 
 export function resolveT3workThreadPlacement(input: {
   readonly threadId: string;
+  readonly retention?: "ephemeral" | "retained" | null;
   readonly row: T3workThreadPlacementRow | null | undefined;
   readonly toolContext: T3workTurnToolContext | undefined;
 }): T3workThreadPlacement | null {
+  // Placement metadata can outlive a workflow child. It must never revive an
+  // ephemeral thread in either project or Local workspaces navigation.
+  if (input.retention === "ephemeral") {
+    return null;
+  }
   const ticketId = input.row?.ticketId ?? readTicketIdFromThreadToolContext(input.toolContext);
 
   if (!input.row?.parentThreadId && !ticketId) {
@@ -61,19 +67,45 @@ function loadT3workThreadPlacements(
     const toolContextStore = yield* T3workThreadToolContextStore;
     const placements = yield* Effect.forEach(threadIds, (threadId) =>
       Effect.gen(function* () {
+        const threadRows = yield* sql<{ readonly retention: "ephemeral" | "retained" | null }>`
+          SELECT retention
+          FROM projection_threads
+          WHERE thread_id = ${threadId}
+            AND deleted_at IS NULL
+          LIMIT 1
+        `;
         const rows = yield* sql<T3workThreadPlacementRow>`
           SELECT
-            NULLIF(TRIM(CAST(json_extract(payload_json, '$.parentThreadId') AS TEXT)), '') AS "parentThreadId",
-            NULLIF(TRIM(CAST(json_extract(payload_json, '$.ticketId') AS TEXT)), '') AS "ticketId"
-          FROM projection_thread_activities
-          WHERE thread_id = ${threadId}
-            AND kind = 't3work.handoff.created'
-          ORDER BY created_at DESC, activity_id DESC
-          LIMIT 1
+            COALESCE(
+              (
+                SELECT NULLIF(TRIM(CAST(json_extract(payload_json, '$.parentThreadId') AS TEXT)), '')
+                FROM projection_thread_activities
+                WHERE thread_id = ${threadId} AND kind = 't3work.handoff.created'
+                ORDER BY created_at DESC, activity_id DESC LIMIT 1
+              ),
+              (
+                SELECT thread_id FROM projection_thread_activities
+                WHERE kind = 't3work.handoff.started'
+                  AND json_extract(payload_json, '$.childThreadId') = ${threadId}
+                ORDER BY created_at DESC, activity_id DESC LIMIT 1
+              )
+            ) AS "parentThreadId",
+            (
+              SELECT NULLIF(TRIM(CAST(json_extract(payload_json, '$.ticketId') AS TEXT)), '')
+              FROM projection_thread_activities
+              WHERE thread_id = ${threadId} AND kind = 't3work.handoff.created'
+              ORDER BY created_at DESC, activity_id DESC LIMIT 1
+            ) AS "ticketId"
         `;
 
         const toolContext = yield* toolContextStore.get(ThreadId.make(threadId));
-        return resolveT3workThreadPlacement({ threadId, row: rows[0], toolContext });
+        const retention = threadRows[0]?.retention;
+        return resolveT3workThreadPlacement({
+          threadId,
+          ...(retention === undefined ? {} : { retention }),
+          row: rows[0],
+          toolContext,
+        });
       }),
     );
 

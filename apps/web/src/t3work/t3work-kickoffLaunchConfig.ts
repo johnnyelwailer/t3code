@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { DEFAULT_MODEL, DEFAULT_RUNTIME_MODE, ProviderInstanceId } from "@t3tools/contracts";
+import { DEFAULT_RUNTIME_MODE } from "@t3tools/contracts";
 import type {
   ModelSelection,
   ProviderInteractionMode,
@@ -18,6 +18,7 @@ import { usePrimarySettings } from "~/hooks/useSettings";
 import { DEFAULT_T3WORK_THREAD_TOOL_IDS } from "~/t3work/t3work-threadToolContext";
 import { runtimeModeConfig } from "~/t3work/t3work-ticketKickoffRuntimeConfig";
 import type { T3workThreadToolId } from "~/t3work/t3work-types";
+import { getConfiguredDefaultModelSelection } from "~/configuredDefaultModelSelection";
 
 type ProviderSettingsSnapshot = {
   readonly providerInstances: Record<string, { readonly enabled?: boolean } | undefined>;
@@ -33,10 +34,7 @@ export type T3workKickoffLaunchConfig = {
 
 export function createDefaultT3workKickoffLaunchConfig(): T3workKickoffLaunchConfig {
   return {
-    selection: {
-      instanceId: ProviderInstanceId.make("codex"),
-      model: DEFAULT_MODEL,
-    },
+    selection: getConfiguredDefaultModelSelection(),
     runtimeMode: DEFAULT_RUNTIME_MODE,
     interactionMode: "default",
     selectedToolIds: DEFAULT_T3WORK_THREAD_TOOL_IDS,
@@ -112,8 +110,9 @@ export function useT3workKickoffComposerState(providers: ReadonlyArray<ServerPro
     }
     return options;
   }, [providerInstanceEntries]);
-  const [selectedInstanceId, setSelectedInstanceId] = useState(ProviderInstanceId.make("codex"));
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const configuredDefault = useMemo(getConfiguredDefaultModelSelection, []);
+  const [selectedInstanceId, setSelectedInstanceId] = useState(configuredDefault.instanceId);
+  const [selectedModel, setSelectedModel] = useState(configuredDefault.model);
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>(DEFAULT_RUNTIME_MODE);
   const [interactionMode, setInteractionMode] = useState<ProviderInteractionMode>("default");
 
@@ -135,13 +134,13 @@ export function useT3workKickoffComposerState(providers: ReadonlyArray<ServerPro
 
   useEffect(() => {
     if (selectedProviderModels.length === 0) {
-      setSelectedModel(DEFAULT_MODEL);
+      setSelectedModel(configuredDefault.model);
       return;
     }
     if (!selectedProviderModels.some((model) => model.slug === selectedModel)) {
       setSelectedModel(selectedProviderModels[0]!.slug);
     }
-  }, [selectedModel, selectedProviderModels]);
+  }, [configuredDefault.model, selectedModel, selectedProviderModels]);
 
   const showInteractionModeToggle = selectedProviderEntry
     ? getProviderInteractionModeToggle(enabledAvailableProviders, selectedProviderEntry.driverKind)

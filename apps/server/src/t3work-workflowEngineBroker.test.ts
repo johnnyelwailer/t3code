@@ -1,0 +1,54 @@
+import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { createModelSelection } from "@t3tools/shared/model";
+import { describe, expect, it } from "vite-plus/test";
+
+import { createWorkflowEngineBroker } from "./t3work-workflowEngineBroker.ts";
+import { makeWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
+
+describe("createWorkflowEngineBroker", () => {
+  it("settles black-boxed asks live without recording a durable pending entry", async () => {
+    const registry = makeWorkflowEngineRegistry();
+    const dispatched: OrchestrationCommand[] = [];
+    const durablePending: unknown[] = [];
+    const resolved: unknown[] = [];
+    const broker = createWorkflowEngineBroker({
+      runId: "run-1",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry,
+      dispatch: async (command) => {
+        dispatched.push(command);
+      },
+      recordPending: async (pending) => {
+        durablePending.push(pending);
+      },
+      newId: () => "id-1",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+
+    const send = broker.send(
+      {
+        correlationId: "run-1:blackbox:1",
+        kind: "thread.turn",
+        payload: { threadId: "child-1", prompt: "Review this" },
+      },
+      {
+        resolve: (reply) => resolved.push(reply),
+        reject: () => {},
+      },
+    );
+
+    const pending = registry.takePending("child-1");
+    await Promise.resolve();
+    expect(pending?.resolveLive).toBeDefined();
+    expect(durablePending).toEqual([]);
+    expect(dispatched.map((command) => command.type)).toEqual(["thread.turn.start"]);
+
+    await pending!.resolveLive!({ summary: "Looks good" });
+    await send;
+
+    expect(resolved).toEqual([{ summary: "Looks good" }]);
+  });
+});

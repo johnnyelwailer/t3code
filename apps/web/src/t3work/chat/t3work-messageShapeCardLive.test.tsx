@@ -1,162 +1,16 @@
 // @vitest-environment jsdom
-/**
- * Live workflow-step overlay on the plan (shape) card:
- *   • derivation groups `t3work.recipe.workflow.step` activities per run, orders by the
- *     numeric journal seq in the stepId, keeps the LATEST phase per stepId, and splits the
- *     run-level terminal activity (`run:<runId>`) out of the step list;
- *   • the timeline overlays each plan step with its live status (spinner / check / clock /
- *     error), appends executed steps the plan has no row for, and keeps unexecuted plan
- *     steps neutral;
- *   • a re-emission of the same stepId (started → completed) renders ONCE, as completed;
- *   • the run-level terminal activity renders the completed/failed banner.
- */
-
-import { EventId, MessageId, type OrchestrationThreadActivity } from "@t3tools/contracts";
-import {
-  PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
-  PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
-  type ProjectRecipeWorkflowStepActivityPayload,
-} from "@t3tools/project-recipes";
-import { type ReactNode, type Ref } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vite-plus/test";
-import type { LegendListRef } from "@legendapp/list/react";
-
-import { buildT3workMessagesTimelineTestProps } from "~/t3work/chat/t3work-messagesTimelineTestProps";
+import { EventId } from "@t3tools/contracts";
+import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
+import { describe, expect, it } from "vite-plus/test";
 import { deriveT3workWorkflowStepRuns } from "~/t3work/chat/t3work-threadWorkflowStepProgress";
-
-import type { ChatMessage } from "~/types";
-
-vi.mock("@legendapp/list/react", async () => {
-  const LegendList = (props: {
-    data: Array<{ id: string }>;
-    keyExtractor: (item: { id: string }) => string;
-    renderItem: (args: { item: { id: string } }) => ReactNode;
-    ListHeaderComponent?: ReactNode;
-    ListFooterComponent?: ReactNode;
-    ref?: Ref<LegendListRef>;
-  }) => (
-    <div>
-      {props.ListHeaderComponent}
-      {props.data.map((item) => (
-        <div key={props.keyExtractor(item)}>{props.renderItem({ item })}</div>
-      ))}
-      {props.ListFooterComponent}
-    </div>
-  );
-
-  return { LegendList };
-});
-
-window.matchMedia ??= ((query: string) => ({
-  matches: false,
-  media: query,
-  onchange: null,
-  addEventListener: () => {},
-  removeEventListener: () => {},
-  addListener: () => {},
-  removeListener: () => {},
-  dispatchEvent: () => false,
-})) as unknown as typeof window.matchMedia;
-
-const RUN_ID = "run-1";
-
-function stepActivity(
-  payload: ProjectRecipeWorkflowStepActivityPayload,
-  overrides?: { createdAt?: string; sequence?: number },
-): OrchestrationThreadActivity {
-  return {
-    id: EventId.make(`t3work-wf-step:${payload.stepId}`),
-    tone: payload.phase === "failed" ? "error" : "info",
-    kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
-    summary: `Workflow step ${payload.phase}: ${payload.detail ?? payload.stepKind}`,
-    payload,
-    turnId: null,
-    createdAt: overrides?.createdAt ?? "2026-07-17T10:00:00.000Z",
-    ...(overrides?.sequence === undefined ? {} : { sequence: overrides.sequence }),
-  };
-}
-
-function step(
-  seq: number,
-  stepKind: string,
-  phase: ProjectRecipeWorkflowStepActivityPayload["phase"],
-  extra?: { detail?: string; error?: string },
-): ProjectRecipeWorkflowStepActivityPayload {
-  return {
-    workflowRunId: RUN_ID,
-    stepId: `${RUN_ID}:${seq}`,
-    stepKind,
-    phase,
-    ...(extra?.detail === undefined ? {} : { detail: extra.detail }),
-    ...(extra?.error === undefined ? {} : { error: extra.error }),
-  };
-}
-
-function runActivity(phase: "completed" | "failed", error?: string): OrchestrationThreadActivity {
-  return stepActivity(
-    {
-      workflowRunId: RUN_ID,
-      stepId: `run:${RUN_ID}`,
-      stepKind: "run",
-      phase,
-      ...(error === undefined ? {} : { error }),
-    },
-    { createdAt: "2026-07-17T10:05:00.000Z" },
-  );
-}
-
-function shapeMessage(): ChatMessage {
-  return {
-    id: MessageId.make("message-shape-live-1"),
-    role: "system",
-    text: "Plan: shape.pr-review",
-    streaming: false,
-    createdAt: "2026-07-17T09:59:00.000Z",
-    updatedAt: "2026-07-17T09:59:00.000Z",
-    turnId: null,
-    t3workExt: {
-      visibleToUser: true,
-      attachments: [
-        {
-          kind: "view",
-          miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
-          props: {
-            name: "shape.pr-review",
-            phases: [{ title: "Review" }, { title: "Decide" }],
-            steps: [
-              { phase: "Review", kind: "read", label: "github.pullRequest.get" },
-              { phase: "Review", kind: "agent", label: "Summarize the risk" },
-              { phase: "Decide", kind: "ask", label: "Merge it?" },
-              { phase: "Decide", kind: "act", label: "github.pullRequest.merge" },
-            ],
-            workflowRunId: RUN_ID,
-          },
-        },
-      ],
-    },
-  };
-}
-
-async function renderTimeline(
-  activities: ReadonlyArray<OrchestrationThreadActivity>,
-): Promise<string> {
-  const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
-  const message = shapeMessage();
-  return renderToStaticMarkup(
-    <MessagesTimeline
-      {...buildT3workMessagesTimelineTestProps()}
-      threadActivities={activities}
-      timelineEntries={[
-        { id: "timeline-0", kind: "message" as const, createdAt: message.createdAt, message },
-      ]}
-    />,
-  );
-}
-
-function countOccurrences(markup: string, needle: string): number {
-  return markup.split(needle).length - 1;
-}
+import {
+  countOccurrences,
+  renderTimeline,
+  RUN_ID,
+  runActivity,
+  step,
+  stepActivity,
+} from "~/t3work/chat/t3work-messageShapeCardLive.testSupport";
 
 describe("deriveT3workWorkflowStepRuns", () => {
   it("groups by run, orders by journal seq, keeps the latest phase, and splits the run row", () => {
@@ -224,15 +78,40 @@ describe("live workflow step overlay on the plan card", () => {
       stepActivity(step(2, "thread.turn", "started"), { sequence: 2 }),
     ]);
 
-    // plan chrome still owns the card
-    expect(markup).toContain("The plan");
+    // workflow chrome still owns the card
     expect(markup).toContain("shape.pr-review");
+    expect(markup).not.toContain("The plan");
+    expect(markup).not.toContain(">System<");
     // step 1 completed, step 2 running, steps 3+4 not executed yet
     expect(countOccurrences(markup, 'data-step-status="completed"')).toBe(1);
     expect(countOccurrences(markup, 'data-step-status="started"')).toBe(1);
     expect(countOccurrences(markup, 'data-step-status="pending"')).toBe(2);
+    // Executed summaries and pending rows share the exact inset, so every status icon lines up.
+    expect(countOccurrences(markup, 'data-step-row-shell="interactive"')).toBe(2);
+    expect(countOccurrences(markup, 'data-step-row-shell="static"')).toBe(2);
+    expect(countOccurrences(markup, "rounded-md px-1 py-0.5")).toBe(4);
     // run not terminal yet — no banner
     expect(markup).not.toContain("data-run-status");
+  }, 30000);
+
+  it("keeps work logs inside expandable steps and links child threads", async () => {
+    const markup = await renderTimeline(
+      [
+        stepActivity(
+          step(1, "thread.turn", "completed", {
+            detail: "Reviewed the implementation",
+            projectId: "project-1",
+            threadId: "child-1",
+          }),
+        ),
+      ],
+      () => {},
+    );
+
+    expect(markup).toContain("<details");
+    expect(markup).toContain("Work log");
+    expect(markup).toContain("Reviewed the implementation");
+    expect(markup).toContain("Open thread");
   }, 30000);
 
   it("renders waiting and failed statuses without duplicating the ask content", async () => {
@@ -250,7 +129,7 @@ describe("live workflow step overlay on the plan card", () => {
     expect(countOccurrences(markup, "Merge it?")).toBe(1); // the plan label, not a duplicate
   }, 30000);
 
-  it("appends executed steps that do not fit the static plan as extra rows", async () => {
+  it("keeps unknown executed steps in chronological order with a human fallback title", async () => {
     const markup = await renderTimeline([
       stepActivity(step(1, "read", "completed"), { sequence: 1 }),
       stepActivity(step(2, "thread.turn", "completed"), { sequence: 2 }),
@@ -261,9 +140,30 @@ describe("live workflow step overlay on the plan card", () => {
       }),
     ]);
 
-    expect(markup).toContain("Additional steps");
-    expect(countOccurrences(markup, 'data-step-extra="true"')).toBe(1);
+    expect(markup).not.toContain("Additional steps");
+    expect(countOccurrences(markup, 'data-step-runtime="unknown"')).toBe(1);
+    expect(markup).toContain("Agent task");
+    // Runtime detail remains an expandable work log, never a row title or raw kind badge.
     expect(markup).toContain("Retry the merge");
+    expect(markup).not.toContain(">THREAD.TURN<");
+  }, 30000);
+
+  it("hides thread creation and inserts unknown work before later plan rows", async () => {
+    const markup = await renderTimeline([
+      stepActivity(step(1, "thread.create", "completed", { detail: "internal setup" }), {
+        sequence: 1,
+      }),
+      stepActivity(step(2, "thread.turn", "completed"), { sequence: 2 }),
+      stepActivity(step(3, "custom.operation", "completed", { detail: "raw work detail" }), {
+        sequence: 3,
+      }),
+      stepActivity(step(4, "user.input", "waiting", { detail: "Merge it?" }), { sequence: 4 }),
+    ]);
+
+    expect(markup).not.toContain("internal setup");
+    expect(markup).toContain("Additional workflow work");
+    expect(markup).not.toContain("custom.operation");
+    expect(markup.indexOf("Workflow step")).toBeLessThan(markup.indexOf("Merge it?"));
   }, 30000);
 
   it("renders a re-emitted step (started then completed) once, as completed", async () => {
@@ -296,7 +196,42 @@ describe("live workflow step overlay on the plan card", () => {
 
   it("keeps the static plan card when no step activities exist for the run", async () => {
     const markup = await renderTimeline([]);
-    expect(markup).toContain("The plan");
+    expect(markup).toContain("shape.pr-review");
+    expect(markup).not.toContain("The plan");
     expect(markup).not.toContain("data-step-status");
+  }, 30000);
+  it("renders repair phases as host-authored labels, never runtime details", async () => {
+    const markup = await renderTimeline([
+      stepActivity(step(1, "workflow.self-heal", "started", { detail: "Analysing failure" }), {
+        sequence: 1,
+      }),
+      stepActivity(step(2, "workflow.self-heal", "started", { detail: "Repairing workflow" }), {
+        sequence: 2,
+      }),
+      stepActivity(step(3, "workflow.self-heal", "started", { detail: "Resuming workflow" }), {
+        sequence: 3,
+      }),
+      stepActivity(
+        step(4, "workflow.self-heal", "failed", {
+          detail: "Repair attempt failed",
+          error: "nexplore/coding should never be a row title",
+        }),
+        { sequence: 4 },
+      ),
+    ]);
+
+    const labels = [
+      "Analysing failure",
+      "Repairing workflow",
+      "Resuming workflow",
+      "Repair attempt failed",
+    ];
+    for (const label of labels) expect(markup).toContain(label);
+    expect(labels.map((label) => markup.indexOf(label))).toEqual(
+      [...labels.map((label) => markup.indexOf(label))].toSorted((a, b) => a - b),
+    );
+    expect(markup).not.toContain(">workflow.self-heal<");
+    expect(markup).not.toContain("nexplore/coding should never be a row title");
+    expect(markup).toContain("Final error");
   }, 30000);
 });

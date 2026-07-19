@@ -2,7 +2,7 @@
 // @vitest-environment jsdom
 /**
  * The play-as-shape "plan" card (recipe-UX design pass): the `t3work.workflow.shape` view
- * renders in the timeline as a distinct bordered card — the phase strip plus the ordered,
+ * renders in the timeline as a distinct bordered card — phase headers plus the ordered,
  * kind-tagged step list (read / agent / ask / act). The launch message's short text echo is
  * suppressed; the card owns the header.
  */
@@ -99,15 +99,37 @@ async function renderTimeline(messages: ReadonlyArray<ChatMessage>) {
 }
 
 describe("workflow shape card in the timeline", () => {
-  it("renders the plan header, phase strip, and kind-tagged steps", async () => {
+  it("keeps authored steps in order when a phase appears again later", async () => {
+    const { groupT3workShapeSteps } = await import("~/t3work/chat/t3work-messageShapeCard");
+    const groups = groupT3workShapeSteps({
+      name: "ordered",
+      description: undefined,
+      phases: [{ title: "Review" }, { title: "Decide" }],
+      steps: [
+        { phase: "Review", kind: "read", label: "Read first" },
+        { phase: "Decide", kind: "ask", label: "Ask second" },
+        { phase: "Review", kind: "act", label: "Act third" },
+      ],
+      workflowRunId: "run-ordered",
+    });
+
+    expect(groups.map((group) => group.title)).toEqual(["Review", "Decide", "Review"]);
+    expect(groups.flatMap((group) => group.steps.map((step) => step.label))).toEqual([
+      "Read first",
+      "Ask second",
+      "Act third",
+    ]);
+  });
+
+  it("renders the workflow title, ordered phase headers, and kind-tagged steps", async () => {
     const markup = await renderTimeline([shapeMessage("message-shape-1")]);
 
-    expect(markup).toContain("The plan");
     expect(markup).toContain("shape.pr-review");
     expect(markup).toContain("Summarize a PR, then ask the user whether to merge it.");
-    // phase strip
-    expect(markup).toContain("1. Review");
-    expect(markup).toContain("2. Decide");
+    expect(markup).not.toContain("The plan");
+    // phase headers sit immediately before their ordered steps
+    expect(markup.indexOf("Review")).toBeLessThan(markup.indexOf("github.pullRequest.get"));
+    expect(markup.indexOf("Decide")).toBeLessThan(markup.indexOf("Merge it?"));
     // kind-tagged steps
     expect(markup).toContain("github.pullRequest.get");
     expect(markup).toContain("github.pullRequest.merge");

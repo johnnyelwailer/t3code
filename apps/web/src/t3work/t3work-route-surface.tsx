@@ -170,8 +170,8 @@ export function T3workRouteSurface() {
           }}
           onProjectCreated={(project: ProjectShellProject) => {
             void navigate({
-              to: "/t3work/projects/$projectId",
-              params: { projectId: project.id },
+              to: project.source.provider === "local" ? "/t3work" : "/t3work/projects/$projectId",
+              ...(project.source.provider === "local" ? {} : { params: { projectId: project.id } }),
               search: buildRouteSearch(search),
             });
           }}

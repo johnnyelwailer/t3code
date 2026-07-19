@@ -42,6 +42,11 @@ import {
 const threadId = ThreadId.make("thread-eph");
 const projectId = ProjectId.make("proj-eph");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
+const intent = {
+  goal: "Calculate or collect the requested workflow result.",
+  expectedOutcome: "A validated workflow result.",
+  guardrails: ["Do not modify files outside the workflow run directory."],
+} as const;
 
 const PURE_SUM_SOURCE = `
 import { Schema } from "effect";
@@ -130,13 +135,27 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
         const errorText = (result: { readonly structuredContent?: unknown }) =>
           String((result.structuredContent as { readonly error?: unknown } | undefined)?.error);
 
-        const both = yield* call({ source: "return 1;", workflowPath: "x.workflow.ts" });
+        const both = yield* call({ source: "return 1;", workflowPath: "x.workflow.ts", intent });
         assert.isTrue(both.isError);
         assert.include(errorText(both), "exactly one");
 
-        const neither = yield* call({});
+        const neither = yield* call({ intent });
         assert.isTrue(neither.isError);
         assert.include(errorText(neither), "exactly one");
+
+        const blankGoal = yield* call({
+          source: PURE_SUM_SOURCE,
+          intent: { ...intent, goal: "  " },
+        });
+        assert.isTrue(blankGoal.isError);
+        assert.include(errorText(blankGoal), "nonblank intent.goal");
+
+        const blankGuardrail = yield* call({
+          source: PURE_SUM_SOURCE,
+          intent: { ...intent, guardrails: [" "] },
+        });
+        assert.isTrue(blankGuardrail.isError);
+        assert.include(errorText(blankGuardrail), "nonblank guardrail");
       }),
     ),
   );
@@ -149,6 +168,7 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
         const result = yield* handlers.runWorkflow({
           source: PURE_SUM_SOURCE,
           args: { a: 2, b: 40 },
+          intent,
         });
 
         assert.strictEqual(result.status, "completed");
@@ -174,6 +194,7 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
           const result = yield* handlers.runWorkflow({
             source: ASK_USER_SOURCE,
             args: { question: "Ship it?" },
+            intent,
           });
 
           assert.strictEqual(result.status, "suspended");
@@ -199,7 +220,7 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
       Effect.gen(function* () {
         const { handlers } = yield* makeHarness();
         const result = yield* handlers
-          .runWorkflow({ workflowPath: "../outside.workflow.ts" })
+          .runWorkflow({ workflowPath: "../outside.workflow.ts", intent })
           .pipe(Effect.result);
         assert.strictEqual(result._tag, "Failure");
         if (result._tag === "Failure") {
@@ -233,7 +254,7 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
         }
 
         const result = yield* handlers
-          .runWorkflow({ source: PURE_SUM_SOURCE, args: { a: 1, b: 1 } })
+          .runWorkflow({ source: PURE_SUM_SOURCE, args: { a: 1, b: 1 }, intent })
           .pipe(Effect.result);
         assert.strictEqual(result._tag, "Failure");
         if (result._tag === "Failure") {
@@ -256,6 +277,7 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
         const after = yield* handlers.runWorkflow({
           source: PURE_SUM_SOURCE,
           args: { a: 1, b: 1 },
+          intent,
         });
         assert.strictEqual(after.status, "completed");
       }),

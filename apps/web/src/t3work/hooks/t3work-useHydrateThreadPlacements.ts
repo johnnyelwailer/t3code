@@ -18,6 +18,9 @@ export function readMissingThreadPlacementIds(input: {
   const existingThreads = new Map(input.threads.map((thread) => [thread.id, thread] as const));
 
   return input.liveThreads.flatMap((thread) => {
+    if (thread.retention === "ephemeral") {
+      return [];
+    }
     const existingThread = existingThreads.get(thread.id);
     const livePlacement = readT3workThreadPlacementFromActivities(thread);
     return existingThread?.parentThreadId ||
@@ -41,7 +44,7 @@ export function mergeFetchedThreadPlacements(input: {
 
   for (const placement of input.placements) {
     const liveThread = liveThreadById.get(placement.threadId);
-    if (!liveThread) {
+    if (!liveThread || liveThread.retention === "ephemeral") {
       continue;
     }
 

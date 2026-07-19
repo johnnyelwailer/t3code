@@ -8,12 +8,25 @@ import type { PackProviderDriverDefinition } from "./t3work-packs.providerDriver
 import type { SetupProfileDefinition } from "./t3work-packs.setupProfile.ts";
 import type { ThemeDefinition } from "./t3work-packs.theme.ts";
 
+export type WorkflowRepairPolicyDefinition = {
+  readonly maxAttempts?: number;
+  readonly totalTimeBudgetMs?: number;
+  readonly modelSelection?:
+    | "inherit"
+    | {
+        readonly instanceId: string;
+        readonly model: string;
+        readonly options?: Record<string, unknown>;
+      };
+};
+
 export type PackActivationContext = {
   readonly pack: { readonly directory: string; readonly manifest: WorkspacePackManifest };
   readonly defineAgentProvider: (definition: LoadedAiProviderDefinition) => void;
   readonly defineProviderDriver: (definition: PackProviderDriverDefinition) => void;
   readonly defineTheme: (definition: ThemeDefinition) => void;
   readonly defineSetupProfile: (definition: SetupProfileDefinition) => void;
+  readonly defineWorkflowRepairPolicy: (definition: WorkflowRepairPolicyDefinition) => void;
   readonly resolveAssetDataUrl: (relativePath: string, mimeType: string) => Promise<string>;
 };
 export type PackActivate = (context: PackActivationContext) => void | Promise<void>;

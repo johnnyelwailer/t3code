@@ -12,7 +12,7 @@ export const meta = {
 } as const;
 
 const Summary = Schema.Struct({ summary: Schema.String });
-const worker = spawnThread({ name: "summarize" });
+const worker = spawnThread({ name: "summarize", retention: "retained" });
 const reply = await worker.askAgent("summarize the thread", { schema: Summary });
 worker.notifyAgent("thanks");
 

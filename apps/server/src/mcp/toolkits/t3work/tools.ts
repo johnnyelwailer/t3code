@@ -75,11 +75,17 @@ export const T3workSendMessageTool = Tool.make("t3work_send_message", {
 export const T3workWorkflowRunTool = Tool.make("t3work_workflow_run", {
   description:
     `${T3WORK_WORKFLOW_TAGLINE} Pass \`source\` (the orchestration body) or \`workflowPath\`, ` +
-    "plus optional `args`. Returns {runId, status: completed|suspended|failed, output?, error?}.",
+    "required `intent` ({goal, expectedOutcome, guardrails}), and optional `args`. Returns " +
+    "{runId, status: completed|suspended|failed, output?, error?}.",
   parameters: Schema.Struct({
     source: Schema.optional(Schema.String),
     workflowPath: Schema.optional(Schema.String),
     args: Schema.optional(Schema.Unknown),
+    intent: Schema.Struct({
+      goal: Schema.String,
+      expectedOutcome: Schema.String,
+      guardrails: Schema.Array(Schema.String),
+    }),
   }),
   success: Schema.Unknown,
   failure: T3workMcpToolError,

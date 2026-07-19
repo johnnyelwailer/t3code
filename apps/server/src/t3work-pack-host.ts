@@ -12,6 +12,7 @@ import type { EnvironmentAppearance } from "@t3tools/contracts";
 import { BUILT_IN_DRIVERS } from "./provider/builtInDrivers.ts";
 import { packAiProvidersToInstanceConfigMap } from "./t3work-pack-aiProvider.ts";
 import type { PackProviderOverlay } from "./t3work-pack-providerOverlay.ts";
+export { loadPackWorkflowRepairPolicy } from "./t3work-pack-workflowRepairPolicy.ts";
 
 const BUILT_IN_DRIVER_KINDS = new Set(BUILT_IN_DRIVERS.map((driver) => String(driver.driverKind)));
 
@@ -69,6 +70,7 @@ export const loadPackProviderOverlay = async (
       },
       defineTheme: () => undefined,
       defineSetupProfile: () => undefined,
+      defineWorkflowRepairPolicy: () => undefined,
       resolveAssetDataUrl: async () => {
         throw new Error("Asset resolution is only available to pack activation code");
       },
@@ -139,6 +141,7 @@ export const loadPackAppearanceOverlay = async (
         activatedThemes.push({ ...theme, themeId: theme.id });
       },
       defineSetupProfile: () => undefined,
+      defineWorkflowRepairPolicy: () => undefined,
       resolveAssetDataUrl: async () => {
         throw new Error("Asset resolution is only available to pack activation code");
       },

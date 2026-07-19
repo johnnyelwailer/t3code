@@ -42,3 +42,24 @@ export function readT3workThreadPlacementFromActivities(
 
   return {};
 }
+
+export function indexT3workChildParentThreads(
+  threads: ReadonlyArray<Pick<Thread, "id" | "activities">>,
+): ReadonlyMap<string, string> {
+  const parentByChildId = new Map<string, string>();
+
+  for (const thread of threads) {
+    const activities = Array.isArray(thread.activities) ? thread.activities : [];
+    for (const activity of activities) {
+      if (activity.kind !== "t3work.handoff.started") continue;
+      const payload =
+        activity.payload && typeof activity.payload === "object" && !Array.isArray(activity.payload)
+          ? (activity.payload as Record<string, unknown>)
+          : null;
+      const childThreadId = payload ? readNonEmptyString(payload.childThreadId) : undefined;
+      if (childThreadId) parentByChildId.set(childThreadId, thread.id);
+    }
+  }
+
+  return parentByChildId;
+}

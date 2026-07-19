@@ -79,6 +79,8 @@ describe("durable workflow engine — Thread model", () => {
       "thread.create",
       "thread.turn",
     ]);
+    expect(broker.sent[0]?.payload).toMatchObject({ retention: "ephemeral" });
+    expect(broker.sent[2]?.payload).toMatchObject({ retention: "ephemeral" });
     const { bySeq, byCorrelation } = readJournalEntries(journalFilePath(runsRoot, run.runId));
     expect(bySeq.size).toBe(4);
     expect(byCorrelation.size).toBe(2); // the two turns resolved
@@ -106,6 +108,9 @@ describe("durable workflow engine — Thread model", () => {
     expect(bySeq.get(2)).toMatchObject({ kind: "thread.turn", phase: "sent" });
     expect(bySeq.get(3)).toMatchObject({ kind: "thread.message", phase: "sent" });
     expect(byCorrelation.size).toBe(1); // only the turn was answered
+
+    const create = broker.sent.find((e) => e.kind === "thread.create");
+    expect(create?.payload).toMatchObject({ retention: "retained" });
 
     const followUp = broker.sent.find((e) => e.kind === "thread.message");
     expect((followUp?.payload as { threadId?: string }).threadId).toBe(`${run.runId}:1`);

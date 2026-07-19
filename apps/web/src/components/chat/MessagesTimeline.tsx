@@ -881,6 +881,7 @@ function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message
       {...(ctx.dispatchWorkflowDecision
         ? { dispatchWorkflowDecision: ctx.dispatchWorkflowDecision }
         : {})}
+      {...(ctx.onOpenThread ? { onOpenThread: ctx.onOpenThread } : {})}
     />
   );
 }

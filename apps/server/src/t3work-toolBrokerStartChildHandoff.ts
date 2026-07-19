@@ -30,11 +30,7 @@ export function resolveStartChildHandoffPlacement(input: {
 }): { readonly parentThreadId?: ThreadId; readonly ticketId?: string } {
   const ticketId = input.requestedTicketId ?? input.currentTicketId;
   return {
-    ...(input.currentDisplayMode === "embedded" &&
-    input.currentTicketId &&
-    ticketId === input.currentTicketId
-      ? { parentThreadId: input.threadId }
-      : {}),
+    parentThreadId: input.threadId,
     ...(ticketId ? { ticketId } : {}),
   };
 }

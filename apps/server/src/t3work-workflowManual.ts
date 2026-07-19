@@ -31,6 +31,17 @@ export const T3WORK_WORKFLOW_TAGLINE =
  */
 export const T3WORK_WORKFLOW_MANUAL = `AGENT-ORCHESTRATION MANUAL — what 't3work.workflow.run' runs.
 
+REQUIRED INTENT (pass this beside source/workflowPath)
+Every run must declare its contract:
+
+  intent: {
+    goal: 'Find concrete regressions in this change',
+    expectedOutcome: 'A ranked report with file references and verification status',
+    guardrails: ['Do not change files', 'Mark uncertainty clearly'],
+  }
+
+goal and expectedOutcome must be nonblank. guardrails must contain at least one nonblank item.
+
 WHAT THIS IS FOR
 It gives agents a STRUCTURE to follow: split a task into parts, run agents in parallel
 or in sequence, force each part to return a specific result contract, then compose those
@@ -44,8 +55,9 @@ findings", "for each of these N modules spawn an agent to analyze it, then rank 
 results", "research X across several sub-questions, dedupe, verify".
 
 FORMAT (the 'source' you pass)
-It is a workflow BODY in TypeScript. There are NO import statements — the engine
-injects all globals. The very first statement is a pure 'export const meta' literal;
+It is a workflow BODY in TypeScript. The engine injects the orchestration globals.
+Import only { Schema } from "effect" when you need typed agent results or a structured
+user decision. Do not import Node APIs. The meta export must precede executable code;
 after that, the body runs top-to-bottom.
 
   export const meta = {
@@ -70,8 +82,11 @@ INJECTED GLOBALS (no imports; call them directly)
 - agent(prompt, opts?)        one-shot agent on a fresh isolated thread; returns its text,
                               or a validated value with opts.schema. opts.model can pick a
                               different provider/model per call.
-- spawnThread({name?,model?}) a retained multi-turn thread; then t.askAgent(prompt,opts?),
-                              t.notifyAgent(msg), t.askUser(question,opts?), t.notifyUser(msg).
+- spawnThread({name?,model?,retention?}) makes a multi-turn thread; it is ephemeral by default
+                              (hidden from the sidebar but inspectable inline). Set
+                              retention: 'retained' only when it must remain sidebar-visible.
+                              Then t.askAgent(prompt,opts?), t.notifyAgent(msg),
+                              t.askUser(question,opts?), t.notifyUser(msg).
 - thread                      the chat this runbook was launched from (undefined if headless).
 - parallel(thunks)            run () => ...  thunks concurrently (barrier). A failed thunk -> null.
 - pipeline(items, ...stages)  per-item fan-out through stages, no barrier between them.
@@ -81,9 +96,17 @@ INJECTED GLOBALS (no imports; call them directly)
 - args                        the workflow input (validated against meta.inputs if declared).
 
 RULES
-- No 'import'/'require' and no Node APIs (no fs, path, process). Use the globals above.
-- 'meta' must be the first statement and a plain literal (no function calls in it).
+- No Node APIs (no fs, path, process) and no require(). Use the globals above.
+- 'meta' must be the first exported declaration and a plain literal (no function calls in it).
 - Prefer parallel()/pipeline() for fan-out; use phase()/log() so progress is visible.
+- For human input, add capabilities: ['user']. Prefer thread.askUser(...) so the decision
+  appears in the launch thread. A spawned child's askUser is also routed to that launch thread.
+- Structured choice example:
+    import { Schema } from "effect"
+    export const meta = { name: 'approve', capabilities: ['user'] } as const
+    const Choice = Schema.Literals(['approve', 'revise'])
+    const decision = await thread.askUser('Choose:', { schema: Choice })
+  An arbitrary options array is not supported; use a Schema so the UI can render controls.
 - Return the final result at the end.
 
 RESULT

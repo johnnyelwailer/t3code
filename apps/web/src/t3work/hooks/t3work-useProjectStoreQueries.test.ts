@@ -9,6 +9,34 @@ import {
 } from "./t3work-threadBridge.testSupport";
 
 describe("resolveProjectThreadsForQuery", () => {
+  it("keeps an ephemeral thread with old placement metadata out of the local workspace sidebar", () => {
+    const storedProjects = [makeStoredProject()];
+    const repairThread = makeProjectThread({
+      id: "run:repair:1",
+      projectId: "stored-project",
+      parentThreadId: "launch-thread",
+      ticketId: "PROJ-123",
+      retention: "ephemeral",
+      title: "Workflow repair",
+    });
+
+    expect(
+      resolveProjectThreadsForQuery({
+        projectId: "stored-project",
+        projects: storedProjects,
+        threads: [repairThread],
+        liveProjects: [makeLiveProject()],
+        liveThreads: [
+          {
+            id: "run:repair:1",
+            projectId: ProjectId.make("live-project"),
+            retention: "ephemeral",
+          } as never,
+        ],
+      }),
+    ).toEqual([]);
+  });
+
   it("does not show a stored ticket thread again under a loose workspace", () => {
     const storedProjects = [
       makeStoredProject({

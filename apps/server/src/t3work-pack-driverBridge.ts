@@ -64,6 +64,36 @@ const unsupportedTextGeneration = (driver: ProviderDriverKind): TextGeneration["
   };
 };
 
+const bridgePackTextGeneration = (
+  packInstance: Awaited<ReturnType<PackProviderDriverDefinition["create"]>>,
+  driver: ProviderDriverKind,
+): TextGeneration["Service"] => {
+  const service = packInstance.textGeneration;
+  if (!service) return unsupportedTextGeneration(driver);
+
+  const attempt = <A>(operation: string, run: () => Promise<A>) =>
+    Effect.tryPromise({
+      try: run,
+      catch: (cause) =>
+        new TextGenerationError({
+          operation,
+          detail: `Provider driver '${driver}' text generation failed: ${errorDetail(cause)}`,
+          cause,
+        }),
+    });
+
+  return {
+    generateCommitMessage: (input) =>
+      attempt("generateCommitMessage", () => service.generateCommitMessage(input)),
+    generatePrContent: (input) =>
+      attempt("generatePrContent", () => service.generatePrContent(input)),
+    generateBranchName: (input) =>
+      attempt("generateBranchName", () => service.generateBranchName(input)),
+    generateThreadTitle: (input) =>
+      attempt("generateThreadTitle", () => service.generateThreadTitle(input)),
+  };
+};
+
 export const bridgePackProviderDriver = (
   definition: PackProviderDriverDefinition,
 ): ProviderDriver<unknown, never> => {
@@ -169,7 +199,7 @@ export const bridgePackProviderDriver = (
           enabled,
           snapshot,
           adapter,
-          textGeneration: unsupportedTextGeneration(driverKind),
+          textGeneration: bridgePackTextGeneration(packInstance, driverKind),
         } satisfies ProviderInstance;
       }),
   };

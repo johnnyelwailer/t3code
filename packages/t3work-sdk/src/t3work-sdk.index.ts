@@ -58,7 +58,11 @@ export {
 } from "./t3work-sdk.ts";
 export { renameThreadTool } from "./tools/t3work-sdk.t3work.ts";
 export { listRecipesTool, validateRecipeTool } from "./tools/t3work-sdk.t3workRecipes.ts";
-export type { RunWorkflowToolArgs, RunWorkflowToolResult } from "./tools/t3work-sdk.workflow.ts";
+export type {
+  RunWorkflowToolArgs,
+  RunWorkflowToolResult,
+  WorkflowRunIntent,
+} from "./tools/t3work-sdk.workflow.ts";
 export { runWorkflowTool } from "./tools/t3work-sdk.workflow.ts";
 export { deriveWorkflowShape } from "./t3work-sdk.workflowShape.ts";
 export { extractMeta, prepareWorkflow } from "./t3work-sdk.loader.ts";

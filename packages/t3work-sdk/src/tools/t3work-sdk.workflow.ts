@@ -9,6 +9,14 @@ import * as Schema from "effect/Schema";
 import { t3workThreadWrite } from "../t3work-sdk.groups.ts";
 import { defineTool } from "../t3work-sdk.ts";
 
+/** The explicit contract an ephemeral workflow must satisfy. */
+export const WorkflowRunIntent = Schema.Struct({
+  goal: Schema.String,
+  expectedOutcome: Schema.String,
+  guardrails: Schema.Array(Schema.String),
+});
+export type WorkflowRunIntent = typeof WorkflowRunIntent.Type;
+
 export const RunWorkflowToolArgs = Schema.Struct({
   /** Inline workflow TypeScript source; persisted under `.t3work-runs/<runId>/workflow.ts`. */
   source: Schema.optional(Schema.String),
@@ -16,6 +24,8 @@ export const RunWorkflowToolArgs = Schema.Struct({
   workflowPath: Schema.optional(Schema.String),
   /** Launch args decoded by the workflow's `meta.inputs` schema. */
   args: Schema.optional(Schema.Unknown),
+  /** Required execution contract for the workflow. */
+  intent: WorkflowRunIntent,
 });
 export type RunWorkflowToolArgs = typeof RunWorkflowToolArgs.Type;
 
@@ -43,6 +53,24 @@ export const runWorkflowTool = defineTool({
         "t3work.workflow.run requires exactly one of 'source' (inline workflow TypeScript) or 'workflowPath' (existing .workflow.ts in the workspace).",
       );
     }
+    const intent = {
+      goal: args.intent.goal.trim(),
+      expectedOutcome: args.intent.expectedOutcome.trim(),
+      guardrails: args.intent.guardrails.map((guardrail) => guardrail.trim()),
+    };
+    if (intent.goal.length === 0 || intent.expectedOutcome.length === 0) {
+      throw new Error(
+        "t3work.workflow.run requires nonblank intent.goal and intent.expectedOutcome.",
+      );
+    }
+    if (
+      intent.guardrails.length === 0 ||
+      intent.guardrails.some((guardrail) => guardrail.length === 0)
+    ) {
+      throw new Error(
+        "t3work.workflow.run requires intent.guardrails with at least one nonblank guardrail.",
+      );
+    }
     if (!ctx.t3work?.runWorkflow) {
       throw new Error("t3work.workflow.run requires a t3work workflow client in ToolHandlerCtx.");
     }
@@ -50,6 +78,7 @@ export const runWorkflowTool = defineTool({
     return (await ctx.t3work.runWorkflow({
       ...(source.length > 0 ? { source } : { workflowPath }),
       ...(args.args === undefined ? {} : { args: args.args }),
+      intent,
     })) as RunWorkflowToolResult;
   },
 });

@@ -14,7 +14,7 @@ import type {
   ListRecipesToolResult,
   ValidateRecipeToolResult,
 } from "@t3work/sdk/tools/t3workRecipes";
-import type { RunWorkflowToolResult } from "@t3work/sdk/tools/t3workWorkflow";
+import type { RunWorkflowToolResult, WorkflowRunIntent } from "@t3work/sdk/tools/t3workWorkflow";
 // Importing the tool modules registers `t3work.recipe.*` / `t3work.workflow.run` in the SDK
 // tool registry.
 import "@t3work/sdk/tools/t3workRecipes";
@@ -105,6 +105,7 @@ export function executeWorkflowSdkWorkflowRunTool(input: {
     readonly source?: string;
     readonly workflowPath?: string;
     readonly args?: unknown;
+    readonly intent: WorkflowRunIntent;
   }) => Effect.Effect<RunWorkflowToolResult, WorkflowSdkBridgeError>;
 }): Effect.Effect<RunWorkflowToolResult, WorkflowSdkBridgeError> {
   return Effect.tryPromise({

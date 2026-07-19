@@ -29,7 +29,7 @@ export function resolveProjectThreadsForQuery(input: {
     remapProjectThreadToStoredProject(thread, projects, liveProjects),
   );
   const localThreads = remappedLocalThreads.filter(
-    (thread) => thread.projectId === resolvedProjectId,
+    (thread) => thread.projectId === resolvedProjectId && thread.retention !== "ephemeral",
   );
   const claimedThreadIds = new Set(
     remappedLocalThreads
@@ -37,10 +37,17 @@ export function resolveProjectThreadsForQuery(input: {
       .map((thread) => thread.id),
   );
   const liveProjectThreads = liveThreads
-    .filter((thread) => thread.projectId === canonicalProjectId && !claimedThreadIds.has(thread.id))
+    .filter(
+      (thread) =>
+        thread.projectId === canonicalProjectId &&
+        thread.retention !== "ephemeral" &&
+        !claimedThreadIds.has(thread.id),
+    )
     .map((thread) => mapLiveThreadToProjectThread(thread, resolvedProjectId));
 
-  return mergeProjectThreads([...localThreads, ...liveProjectThreads]);
+  return mergeProjectThreads([...localThreads, ...liveProjectThreads]).filter(
+    (thread) => thread.retention !== "ephemeral",
+  );
 }
 
 export function useProjectStoreQueries(input: {

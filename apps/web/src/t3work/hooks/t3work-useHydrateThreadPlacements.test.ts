@@ -128,6 +128,24 @@ describe("t3work-useHydrateThreadPlacements", () => {
     ).toEqual([]);
   });
 
+  it("does not merge an old placement row for an ephemeral repair child after reload", () => {
+    expect(
+      mergeFetchedThreadPlacements({
+        threads: [],
+        storedProjects: [makeStoredProject()],
+        liveProjects: [makeLiveProject()],
+        liveThreads: [makeLiveThread({ id: "run:repair:1", retention: "ephemeral" })],
+        placements: [
+          {
+            threadId: ThreadId.make("run:repair:1"),
+            parentThreadId: ThreadId.make("launch-thread"),
+            ticketId: "PROJ-123",
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
   it("hydrates fetched placements into local shadow threads", () => {
     expect(
       mergeFetchedThreadPlacements({

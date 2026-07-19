@@ -1,4 +1,3 @@
-import { DEFAULT_MODEL, ProviderInstanceId } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { T3WorkProfile } from "@t3tools/t3work-skill-packs";
@@ -6,6 +5,7 @@ import type { T3WorkProfile } from "@t3tools/t3work-skill-packs";
 import type { BackendApi } from "~/t3work/backend/t3work-types";
 import { syncProjectWorkspaceContext } from "~/t3work/t3work-projectWorkspaceSync";
 import { randomUUID } from "~/lib/utils";
+import { getConfiguredDefaultModelSelection } from "~/configuredDefaultModelSelection";
 
 import { applyWorkspaceBootstrapToProject } from "./t3work-createProjectBootstrap";
 import { isWorkProject } from "~/t3work/t3work-isWorkProject";
@@ -28,10 +28,7 @@ export async function finalizeCreatedProject(input: {
     title: input.project.title,
     workspaceRoot: input.project.workspace.rootPath,
     createWorkspaceRootIfMissing: true,
-    defaultModelSelection: {
-      instanceId: ProviderInstanceId.make("codex"),
-      model: DEFAULT_MODEL,
-    },
+    defaultModelSelection: getConfiguredDefaultModelSelection(),
     createdAt: new Date().toISOString(),
   });
 

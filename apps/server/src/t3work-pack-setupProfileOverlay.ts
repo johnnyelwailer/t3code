@@ -24,9 +24,7 @@ export function getPackSetupProfiles(): readonly SetupProfileDefinition[] | unde
 }
 
 /** Behavior view mapped to the skill-packs profile shape for the setup resolver. */
-export function getPackProfilesForResolver():
-  | Readonly<Record<string, T3WorkProfile>>
-  | undefined {
+export function getPackProfilesForResolver(): Readonly<Record<string, T3WorkProfile>> | undefined {
   if (!overlay) return undefined;
   const map: Record<string, T3WorkProfile> = {};
   for (const profile of overlay) {
@@ -88,6 +86,7 @@ export const loadPackSetupProfileOverlay = async (
         }
         collected.push(decodeSetupProfileDefinition(definition));
       },
+      defineWorkflowRepairPolicy: () => undefined,
       resolveAssetDataUrl: async () => {
         throw new Error("Asset resolution is only available to pack activation code");
       },

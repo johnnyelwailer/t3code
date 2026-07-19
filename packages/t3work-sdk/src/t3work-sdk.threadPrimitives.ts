@@ -142,7 +142,8 @@ export function createThreadPrimitives(deps: {
       askVerb<R>("thread.turn", threadId, p, withThreadModel(o, threadModel)),
     notifyAgent: (msg: string) => notify(threadId, "agent", msg),
     askUser: has("user")
-      ? <R>(q: string, o?: AskUserOpts<R>) => askVerb<R>("user.input", threadId, q, o)
+      ? <R>(q: string, o?: AskUserOpts<R>) =>
+          askVerb<R>("user.input", deps.launchThreadId ?? threadId, q, o)
       : (denied("user", "askUser") as Thread["askUser"]),
     notifyUser: has("user")
       ? (msg: string) => notify(threadId, "user", msg)
@@ -151,7 +152,11 @@ export function createThreadPrimitives(deps: {
 
   const spawnThread = (opts?: SpawnThreadOpts): Thread => {
     const model = opts?.model ?? deps.defaultModel;
-    const args = opts?.name === undefined ? {} : { name: opts.name };
+    const retention = opts?.retention ?? "ephemeral";
+    const args = {
+      ...(opts?.name === undefined ? {} : { name: opts.name }),
+      retention,
+    };
     const threadId = dispatch.sendOneWay({
       kind: "thread.create",
       refId: "thread.create",
@@ -164,7 +169,9 @@ export function createThreadPrimitives(deps: {
             payload: {
               threadId: correlationId,
               ...(opts?.name === undefined ? {} : { name: opts.name }),
+              ...(opts?.retention === undefined ? {} : { retention: opts.retention }),
               ...(model === undefined ? {} : { model }),
+              retention,
             },
           },
           resolver,

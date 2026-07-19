@@ -386,6 +386,7 @@ export const OrchestrationThread = Schema.Struct({
   ),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  retention: Schema.optional(Schema.Literals(["ephemeral", "retained"])),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
   /** In-process admission reservation between turn request and provider session start. */
   turnStartPending: Schema.optional(Schema.Boolean),
@@ -568,6 +569,7 @@ const ThreadCreateCommand = Schema.Struct({
   ),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  retention: Schema.optional(Schema.Literals(["ephemeral", "retained"])),
   createdAt: IsoDateTime,
 });
 
@@ -958,6 +960,7 @@ export const ThreadCreatedPayload = Schema.Struct({
   ),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  retention: Schema.optional(Schema.Literals(["ephemeral", "retained"])),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });

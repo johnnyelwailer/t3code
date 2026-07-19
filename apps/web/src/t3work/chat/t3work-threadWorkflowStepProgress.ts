@@ -27,6 +27,8 @@ export interface T3workWorkflowStepEntry {
   readonly phase: ProjectRecipeWorkflowStepPhase;
   readonly detail?: string;
   readonly error?: string;
+  readonly projectId?: string;
+  readonly threadId?: string;
 }
 
 export interface T3workWorkflowRunProgress {
@@ -89,6 +91,8 @@ export function deriveT3workWorkflowStepRuns(
       phase: payload.phase,
       ...(payload.detail === undefined ? {} : { detail: payload.detail }),
       ...(payload.error === undefined ? {} : { error: payload.error }),
+      ...(payload.projectId === undefined ? {} : { projectId: payload.projectId }),
+      ...(payload.threadId === undefined ? {} : { threadId: payload.threadId }),
     });
   }
 

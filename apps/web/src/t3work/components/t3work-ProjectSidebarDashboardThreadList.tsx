@@ -1,7 +1,8 @@
+import { useMemo } from "react";
 import { SidebarMenuSub } from "~/t3work/components/ui/t3work-sidebar";
 import type { ProjectThread, ViewState } from "~/t3work/t3work-types";
-import { ThreadRow } from "./t3work-ProjectSidebarThreadRow";
-import { getSidebarThreadState } from "./t3work-projectSidebarItemState";
+import { ProjectSidebarThreadTreeRows } from "./t3work-ProjectSidebarThreadTreeRows";
+import { buildProjectSidebarThreadTree } from "./t3work-projectSidebarThreadTree";
 
 type ProjectSidebarDashboardThreadListProps = {
   projectId: string;
@@ -22,24 +23,25 @@ export function ProjectSidebarDashboardThreadList({
   onDeleteThread,
   onRenameThread,
 }: ProjectSidebarDashboardThreadListProps) {
+  const threadTree = useMemo(() => buildProjectSidebarThreadTree(threads), [threads]);
+
   if (threads.length === 0) {
     return null;
   }
 
   return (
     <SidebarMenuSub className="mx-1 -mt-0.5 mb-1 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 py-0.5">
-      {threads.map((thread) => (
-        <ThreadRow
-          key={thread.id}
-          thread={thread}
-          variant="issue"
-          state={getSidebarThreadState({ view, threadId: thread.id })}
-          workspacePath={workspaceRoot}
-          onSelect={() => onSelectThread(projectId, thread.id)}
-          onDelete={() => onDeleteThread(thread.id)}
-          onRename={(newTitle) => onRenameThread(thread.id, newTitle)}
-        />
-      ))}
+      <ProjectSidebarThreadTreeRows
+        projectId={projectId}
+        roots={threadTree.rootThreads}
+        tree={threadTree}
+        view={view}
+        workspacePath={workspaceRoot}
+        variant="issue"
+        onSelectThread={onSelectThread}
+        onDeleteThread={onDeleteThread}
+        onRenameThread={onRenameThread}
+      />
     </SidebarMenuSub>
   );
 }

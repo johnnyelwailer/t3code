@@ -33,6 +33,20 @@ describe("resolveT3workThreadPlacement", () => {
     });
   });
 
+  it("does not return an old placement row for an ephemeral thread", () => {
+    expect(
+      resolveT3workThreadPlacement({
+        threadId: "run:repair:1",
+        retention: "ephemeral",
+        row: {
+          parentThreadId: "launch-thread",
+          ticketId: "PROJ-123",
+        },
+        toolContext: makeToolContext("PROJ-999"),
+      }),
+    ).toBeNull();
+  });
+
   it("falls back to synced tool-context ticket placement when there is no handoff row", () => {
     expect(
       resolveT3workThreadPlacement({

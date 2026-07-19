@@ -14,10 +14,14 @@ import {
 import { AppDashboardPane } from "~/t3work/t3work-AppDashboardPane";
 import { AppMainContentHomeBrowser } from "~/t3work/t3work-AppMainContentHomeBrowser";
 import { AppThreadPane } from "~/t3work/t3work-AppThreadPane";
-import { isHomeProjectId } from "~/t3work/t3work-homeProject";
 import { useThreadResolutionDebug } from "~/t3work/t3work-useThreadResolutionDebug";
 import { useHomeProjectChat, useSyncActiveChatTarget } from "./t3work-AppMainContentShell";
 import { useProjectWorkspaceAutoSync } from "~/t3work/hooks/t3work-useProjectWorkspaceAutoSync";
+import {
+  resolveEmbeddedThread,
+  resolveThreadProject,
+  resolveWorkHomeProject,
+} from "~/t3work/t3work-appMainContentResolution";
 
 type MainContentProps = {
   view: ViewState | null;
@@ -75,12 +79,12 @@ export function AppMainContent({
     getThreadsForProject,
   });
   const showInitialSetup = !view && (reopenInitialSetup || allProjects.length === 0);
-  const homeProject =
-    !showInitialSetup && !view
-      ? (allProjects.find((candidate) => candidate.id === selectedProjectId) ??
-        allProjects[0] ??
-        null)
-      : null;
+  const homeProject = resolveWorkHomeProject({
+    allProjects,
+    selectedProjectId,
+    showInitialSetup,
+    hasRouteView: Boolean(view),
+  });
   const homeChatProjectThreads = homeChatProject ? getThreadsForProject(homeChatProject.id) : [];
   const homeBrowser = (
     <AppMainContentHomeBrowser
@@ -108,15 +112,17 @@ export function AppMainContent({
   });
 
   const activeThreadId = readActiveThreadIdFromView(view);
-  const threadProject =
-    activeThreadId && view
-      ? (allProjects.find((candidate) => candidate.id === view.projectId) ??
-        (view.type === "thread" && isHomeProjectId(view.projectId) ? homeChatProject : null))
-      : null;
+  const threadProject = resolveThreadProject({
+    activeThreadId,
+    view,
+    allProjects,
+    homeChatProject,
+  });
   const threadProjectThreads = threadProject ? getThreadsForProject(threadProject.id) : [];
   const resolvedThread = activeThreadId
     ? (threadProjectThreads.find((candidate) => candidate.id === activeThreadId) ?? null)
     : null;
+  const embeddedThread = resolveEmbeddedThread(view, threadProjectThreads);
   const viewProject = view
     ? (allProjects.find((candidate) => candidate.id === view.projectId) ?? null)
     : null;
@@ -172,6 +178,7 @@ export function AppMainContent({
         view={view}
         threadProject={threadProject}
         resolvedThread={resolvedThread}
+        embeddedThread={embeddedThread}
         onOpenTicket={onOpenTicket}
         onOpenEmbeddedThread={onOpenEmbeddedThread}
         onThreadKickoffConsumed={onThreadKickoffConsumed}

@@ -12,6 +12,7 @@ export function AppThreadPane({
   view,
   threadProject,
   resolvedThread,
+  embeddedThread,
   onOpenTicket,
   onOpenEmbeddedThread,
   onThreadKickoffConsumed,
@@ -21,6 +22,7 @@ export function AppThreadPane({
   view: Extract<ViewState, { type: "thread" }>;
   threadProject: ProjectShellProject | null;
   resolvedThread: ProjectThread | null;
+  embeddedThread: ProjectThread | null;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onOpenEmbeddedThread: (projectId: string, threadId: string) => void;
   onThreadKickoffConsumed: (threadId: string) => void;
@@ -52,7 +54,7 @@ export function AppThreadPane({
     });
   }, [canGoBack, onBackToDashboard, onOpenTicket, resolvedThread?.ticketId, view.projectId]);
 
-  return (
+  const parentChat = (
     <ThreadChatView
       threadId={view.threadId}
       projectId={view.projectId}
@@ -114,5 +116,35 @@ export function AppThreadPane({
       }}
       onBack={handleBack}
     />
+  );
+
+  if (!embeddedThread) {
+    return parentChat;
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-1 divide-x divide-border overflow-hidden">
+      <div className="flex min-w-0 flex-1">{parentChat}</div>
+      <div className="flex min-w-0 flex-1">
+        <ThreadChatView
+          threadId={embeddedThread.id}
+          projectId={view.projectId}
+          projectTitle={threadProject?.title ?? view.projectId}
+          {...(threadProject?.workspace?.rootPath
+            ? { projectWorkspaceRoot: threadProject.workspace.rootPath }
+            : {})}
+          title={embeddedThread.title}
+          hideHeader
+          embeddedMode
+          {...(embeddedThread.ticketId ? { ticketId: embeddedThread.ticketId } : {})}
+          {...(embeddedThread.ticketDisplayId
+            ? { ticketDisplayId: embeddedThread.ticketDisplayId }
+            : {})}
+          {...(embeddedThread.selectedToolIds !== undefined
+            ? { selectedToolIds: embeddedThread.selectedToolIds }
+            : {})}
+        />
+      </div>
+    </div>
   );
 }

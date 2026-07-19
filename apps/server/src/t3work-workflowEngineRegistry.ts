@@ -35,6 +35,8 @@ export interface WorkflowPendingAsk {
    * only (not persisted): after a restart-rehydration it is absent and the route check degrades
    * gracefully — the SDK still schema-validates the reply on resume. */
   readonly affordance?: AskAffordance;
+  /** Black-boxed composition asks settle in-memory inside the still-running composition. */
+  readonly resolveLive?: (reply: unknown) => Promise<void>;
 }
 
 export interface WorkflowRegisteredRun {

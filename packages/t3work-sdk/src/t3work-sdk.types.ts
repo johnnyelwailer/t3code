@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import type { MessageBroker } from "./t3work-sdk.broker.ts";
 import type { AnyRecipeRef } from "./t3work-sdk.recipeTypes.ts";
+import type { WorkflowRunIntent } from "./tools/t3work-sdk.workflow.ts";
 
 export type {
   AnyRecipeRef,
@@ -52,6 +53,7 @@ export interface T3workToolHandlerClient {
     readonly source?: string;
     readonly workflowPath?: string;
     readonly args?: unknown;
+    readonly intent: WorkflowRunIntent;
   }) => Promise<unknown>;
 }
 

@@ -4,6 +4,18 @@ export * from "./provider-driver.ts";
 
 export type PackAssetResolver = (relativePath: string, mimeType: string) => Promise<string>;
 
+export type WorkflowRepairPolicyDefinition = {
+  readonly totalTimeBudgetMs?: number;
+  readonly maxAttempts?: number;
+  readonly modelSelection?:
+    | "inherit"
+    | {
+        readonly instanceId: string;
+        readonly model: string;
+        readonly options?: Record<string, unknown>;
+      };
+};
+
 export type AgentProviderModel = {
   readonly id: string;
   readonly name: string;
@@ -117,6 +129,7 @@ export type PackActivationContext = {
   readonly defineProviderDriver: (definition: PackProviderDriverDefinition) => void;
   readonly defineTheme: (definition: PackThemeDefinition) => void;
   readonly defineSetupProfile: (definition: PackSetupProfileDefinition) => void;
+  readonly defineWorkflowRepairPolicy: (definition: WorkflowRepairPolicyDefinition) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
 };
 

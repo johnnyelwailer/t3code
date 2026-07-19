@@ -181,6 +181,7 @@ describe("T3workToolBrokerLive", () => {
       "t3work.thread.start_child": expect.objectContaining({
         name: "t3work.thread.start_child",
       }),
+      "t3work.workflow.run": expect.objectContaining({ name: "t3work.workflow.run" }),
     });
   });
 
@@ -276,7 +277,6 @@ describe("T3workToolBrokerLive", () => {
             modelSelection: {
               instanceId: "codex",
               model: "gpt-5.4",
-              options: [{ id: "reasoningEffort", value: "high" }],
             },
           }),
         ],
@@ -316,12 +316,11 @@ describe("T3workToolBrokerLive", () => {
             interactionMode: "plan",
             message: expect.objectContaining({
               role: "user",
-              text: "Investigate the flaky checkout flow",
+              text: expect.stringContaining("Investigate the flaky checkout flow"),
             }),
             modelSelection: {
               instanceId: "codex",
               model: "gpt-5.4",
-              options: [{ id: "reasoningEffort", value: "high" }],
             },
           }),
         ],
@@ -329,7 +328,7 @@ describe("T3workToolBrokerLive", () => {
     );
   });
 
-  it("attaches a child session at the ticket root for non-embedded or retargeted handoffs", async () => {
+  it("attaches a retargeted child session beneath its parent", async () => {
     const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 17 }));
     const orchestrationMock: OrchestrationEngineShape = {
       readEvents: () => Stream.empty,
@@ -395,11 +394,11 @@ describe("T3workToolBrokerLive", () => {
       expect.objectContaining({
         childThreadId,
         childTitle: "Sibling ticket session",
+        parentThreadId: threadId,
         parentTitle: "Original title",
         ticketId: "proj-456",
       }),
     );
-    expect(childCreatedActivity?.activity.payload).not.toHaveProperty("parentThreadId");
   });
 
   it("creates a child session without optional repo services", async () => {

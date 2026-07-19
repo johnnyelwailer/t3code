@@ -1,28 +1,4 @@
-/**
- * Launches a recipe's `.workflow.ts` through the durable engine (Epic 25 §Host wiring) — the
- * repointed replacement for the deleted step-union launch path.
- *
- * It builds the per-run orchestration broker, registers a `resume` closure (so the reactor can
- * drive the run forward when a turn completes or the user replies), then calls
- * `startWorkflow`. A run that fires an ask verb returns a `SuspendedResult` and is parked; the
- * registry keeps its `resume` alive until the reply lands. A completed run is unregistered.
- *
- * ── Durability (Epic 25 §Open question 2) ────────────────────────────────────
- * Two optional seams make a parked run survive a restart, and the {@link createWorkflowRunController}
- * that wires them is shared with boot rehydration so a restored run behaves identically:
- *   • `store` — a {@link JournalStore} (the host's SQLite store). Threaded into startWorkflow /
- *     resumeWorkflow / appendResolvedEntry so the journal is DB-backed, not on local disk.
- *   • `lifecycle` — a {@link WorkflowRunLifecycle} write-through to `workflow_runs`: `recordRunning`
- *     on launch, `recordSuspended` when an ask parks the run (driven by the broker, which knows
- *     the pending thread/correlation/kind), `recordCompleted`/`recordFailed` on settle. The
- *     in-memory registry stays the reactor's hot index; the DB is the source of truth a boot
- *     rehydration reads to rebuild this controller.
- * Both default to undefined — the SDK-style fs path (and the launch test) run unchanged.
- *
- * The Promise/Effect bridge: orchestration commands run via the injected `dispatch`, so the
- * Promise-based engine can drive the Effect-based host. `resume` re-enters `resumeWorkflow`,
- * which replays journaled asks (NOT re-firing the broker) and only fires past the frontier.
- */
+/** Durable workflow launch and the per-run resume controller. */
 
 import type {
   ModelSelection,
@@ -50,6 +26,8 @@ import {
   type WorkflowStepActivityEmitter,
 } from "./t3work-workflowEngineStepActivities.ts";
 import { deliverWorkflowCompletion } from "./t3work-workflowCompletionMessage.ts";
+import type { WorkflowRepairIntent } from "./t3work-workflowSelfHeal.ts";
+import { tryWorkflowRepair } from "./t3work-workflowEngineRepair.ts";
 
 export type WorkflowLaunchStatus = "completed" | "suspended" | "failed";
 
@@ -80,6 +58,23 @@ export interface LaunchWorkflowRecipeInput {
   readonly onComplete?: (output: unknown) => Promise<void>;
   /** Optional sink for an uncaught run failure. */
   readonly onError?: (error: unknown) => Promise<void>;
+  /** Present only for agent-authored ephemeral source runs. */
+  readonly repairIntent?: WorkflowRepairIntent;
+  /** Resolved distribution policy; clamped by the core repair funnel. */
+  readonly repairMaxAttempts?: number;
+  /** Inherit the calling model unless the distribution supplies a repair model. */
+  readonly repairModelSelection?: "inherit" | ModelSelection;
+  /** Shared repair budget across all hidden child attempts. */
+  readonly repairTotalTimeBudgetMs?: number;
+  readonly readWorkflowSource?: () => Promise<string>;
+  readonly replaceWorkflowSource?: (source: string) => Promise<void>;
+  readonly recordRepairAudit?: (audit: {
+    readonly attempt: number;
+    readonly originalError: string;
+    readonly outcome: "recovered" | "failed";
+    readonly summary?: string;
+    readonly reason?: string;
+  }) => Promise<void>;
 }
 
 export interface LaunchWorkflowRecipeResult {
@@ -98,6 +93,11 @@ export interface WorkflowRunController {
   /** Live step-status sink shared by broker, settle, and resume (UX slice 1). */
   readonly stepActivities: WorkflowStepActivityEmitter;
 }
+
+export {
+  awaitWorkflowRepairChildReply,
+  remainingWorkflowRepairBudget,
+} from "./t3work-workflowEngineRepair.ts";
 
 /**
  * Build the per-run broker + resume closure and register the run, WITHOUT starting it. Shared
@@ -120,6 +120,7 @@ export function createWorkflowRunController(
   // makeWorkflowRunLifecycle is needed.
   const stepActivities = createWorkflowStepActivityEmitter({
     runId: input.runId,
+    projectId: input.projectId,
     launchThreadId: input.launchThreadId,
     dispatch: input.dispatch,
     newId: input.newId,
@@ -195,6 +196,8 @@ export async function launchWorkflowRecipe(
     );
     return { runId: input.runId, status };
   } catch (error) {
+    const repaired = await tryWorkflowRepair(input, controller, error);
+    if (repaired) return { runId: input.runId, status: "completed" };
     input.registry.deleteRun(input.runId);
     await input.lifecycle?.recordFailed();
     await controller.stepActivities.emitRun(

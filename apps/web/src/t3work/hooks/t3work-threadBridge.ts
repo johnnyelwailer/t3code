@@ -6,7 +6,10 @@ import {
   mergeProjectThreadLocalState,
   upsertProjectThreadLocalState,
 } from "~/t3work/t3work-threadToolContext";
-import { readT3workThreadPlacementFromActivities } from "~/t3work/hooks/t3work-threadHandoffMetadata";
+import {
+  indexT3workChildParentThreads,
+  readT3workThreadPlacementFromActivities,
+} from "~/t3work/hooks/t3work-threadHandoffMetadata";
 import { resolveStoredProjectId } from "./t3work-threadProjectResolution";
 
 export {
@@ -42,6 +45,7 @@ export function mapLiveThreadToProjectThread(
           : thread.session?.status === "stopped" || thread.archivedAt
             ? "completed"
             : "idle",
+    ...(thread.retention !== undefined ? { retention: thread.retention } : {}),
     // A clock-parked routine (Epic 27): carry the server-computed wake instant so the sidebar
     // pill reads "Sleeping until <time>". Absent when no run on this thread is sleeping.
     ...(thread.sleepingUntil !== undefined ? { sleepingUntil: thread.sleepingUntil } : {}),
@@ -65,16 +69,20 @@ export function syncLiveThreadMetadataToLocalState(input: {
   liveThreads: ReadonlyArray<Thread>;
 }): ProjectThread[] {
   let nextThreads = input.threads as ProjectThread[];
+  const parentByChildId = indexT3workChildParentThreads(input.liveThreads);
 
   for (const liveThread of input.liveThreads) {
-    const shadowThread = mapLiveThreadToProjectThread(
+    const mappedThread = mapLiveThreadToProjectThread(
       liveThread,
       resolveStoredProjectId(liveThread.projectId, input.storedProjects, input.liveProjects),
     );
-
-    if (!shadowThread.parentThreadId && !shadowThread.ticketId) {
-      continue;
-    }
+    const inferredParentThreadId = parentByChildId.get(liveThread.id);
+    const shadowThread = {
+      ...mappedThread,
+      ...(!mappedThread.parentThreadId && inferredParentThreadId
+        ? { parentThreadId: inferredParentThreadId }
+        : {}),
+    };
 
     nextThreads = upsertProjectThreadLocalState(nextThreads, shadowThread);
   }

@@ -11,18 +11,18 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 
-export function useT3workOpenSenderThread(): (input: {
-  projectId: string;
-  threadId: string;
-}) => void {
+export function useT3workOpenSenderThread(
+  parentThreadId: string,
+): (input: { projectId: string; threadId: string }) => void {
   const navigate = useNavigate();
   return useCallback(
     (input: { projectId: string; threadId: string }) => {
       void navigate({
         to: "/t3work/projects/$projectId/threads/$threadId",
-        params: { projectId: input.projectId, threadId: input.threadId },
+        params: { projectId: input.projectId, threadId: parentThreadId },
+        search: { chatThreadId: input.threadId },
       });
     },
-    [navigate],
+    [navigate, parentThreadId],
   );
 }

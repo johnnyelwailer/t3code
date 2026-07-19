@@ -80,10 +80,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
         command.type === "thread.activity.append" &&
         command.activity.kind === "t3work.handoff.created",
     );
-    expect(childPlacement).toMatchObject({
-      threadId: `${runId}:1`,
-      activity: { payload: { parentThreadId: launchThreadId } },
-    });
+    expect(childPlacement).toBeUndefined(); // agent() child is ephemeral unless explicitly retained
 
     const run = registry.getRun(runId);
     expect(run).toBeDefined();
@@ -104,8 +101,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
     expect(completed).toEqual({ summary: "Low risk; well tested.", merged: true });
     expect(registry.getRun(runId)).toBeUndefined(); // completed runs are unregistered
     const completionMessage = dispatched.find(
-      (command) =>
-        command.type === "thread.message.upsert" && command.message.role === "assistant",
+      (command) => command.type === "thread.message.upsert" && command.message.role === "assistant",
     );
     expect(completionMessage).toMatchObject({
       threadId: launchThreadId,
@@ -134,5 +130,12 @@ describe("launchWorkflowRecipe — real launch path", () => {
     const askPhases = [...phasesById.values()].find((p) => p[0] === "waiting");
     expect(askPhases).toBeDefined();
     expect(askPhases?.at(-1)).toBe("completed");
+    expect(
+      steps.some(
+        (activity) =>
+          (activity.payload as { projectId?: string; threadId?: string }).projectId === "proj-1" &&
+          (activity.payload as { threadId?: string }).threadId === `${runId}:1`,
+      ),
+    ).toBe(true);
   });
 });

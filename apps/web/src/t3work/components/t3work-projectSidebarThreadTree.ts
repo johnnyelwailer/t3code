@@ -1,9 +1,13 @@
 import type { ProjectThread } from "~/t3work/t3work-types";
 
-export function buildProjectSidebarThreadTree(threads: ReadonlyArray<ProjectThread>): {
+export type ProjectSidebarThreadTree = {
   rootThreads: ProjectThread[];
   childThreadsByParentId: Map<string, ProjectThread[]>;
-} {
+};
+
+export function buildProjectSidebarThreadTree(
+  threads: ReadonlyArray<ProjectThread>,
+): ProjectSidebarThreadTree {
   const threadIds = new Set(threads.map((thread) => thread.id));
   const rootThreads: ProjectThread[] = [];
   const childThreadsByParentId = new Map<string, ProjectThread[]>();
@@ -27,4 +31,18 @@ export function buildProjectSidebarThreadTree(threads: ReadonlyArray<ProjectThre
     rootThreads,
     childThreadsByParentId,
   };
+}
+
+export function countProjectSidebarThreadBranches(
+  roots: ReadonlyArray<ProjectThread>,
+  tree: ProjectSidebarThreadTree,
+): number {
+  const visited = new Set<string>();
+  const visit = (thread: ProjectThread): void => {
+    if (visited.has(thread.id)) return;
+    visited.add(thread.id);
+    for (const child of tree.childThreadsByParentId.get(thread.id) ?? []) visit(child);
+  };
+  for (const root of roots) visit(root);
+  return visited.size;
 }

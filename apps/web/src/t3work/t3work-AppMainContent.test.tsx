@@ -158,7 +158,7 @@ describe("AppMainContent", () => {
     expect(markup).not.toContain("home-empty");
   });
 
-  it("reopens the setup welcome surface without the chat sidecar", () => {
+  it("shows the home surface instead of a dashboard for a loose workspace", () => {
     const markup = renderToStaticMarkup(
       <AppMainContent
         view={null}
@@ -166,7 +166,6 @@ describe("AppMainContent", () => {
         selectedProjectId={looseProject.id}
         projects={[looseProject]}
         allProjects={[looseProject]}
-        reopenInitialSetup
         getThreadsForProject={(projectId) =>
           projectId === looseProject.id ? [looseProjectThread] : []
         }
@@ -190,7 +189,7 @@ describe("AppMainContent", () => {
       />,
     );
 
-    expect(markup).toContain("home-empty:no-aside");
+    expect(markup).toContain("home-empty:aside");
     expect(markup).not.toContain("dashboard:Loose workspace");
   });
 });

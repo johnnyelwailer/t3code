@@ -90,6 +90,38 @@ export type PackThreadSnapshot = {
   readonly turns: readonly unknown[];
 };
 
+export type PackTextGeneration = {
+  generateCommitMessage(input: {
+    readonly cwd: string;
+    readonly branch: string | null;
+    readonly stagedSummary: string;
+    readonly stagedPatch: string;
+    readonly includeBranch?: boolean;
+    readonly modelSelection: unknown;
+  }): Promise<{ readonly subject: string; readonly body: string; readonly branch?: string }>;
+  generatePrContent(input: {
+    readonly cwd: string;
+    readonly baseBranch: string;
+    readonly headBranch: string;
+    readonly commitSummary: string;
+    readonly diffSummary: string;
+    readonly diffPatch: string;
+    readonly modelSelection: unknown;
+  }): Promise<{ readonly title: string; readonly body: string }>;
+  generateBranchName(input: {
+    readonly cwd: string;
+    readonly message: string;
+    readonly attachments?: readonly unknown[] | undefined;
+    readonly modelSelection: unknown;
+  }): Promise<{ readonly branch: string }>;
+  generateThreadTitle(input: {
+    readonly cwd: string;
+    readonly message: string;
+    readonly attachments?: readonly unknown[] | undefined;
+    readonly modelSelection: unknown;
+  }): Promise<{ readonly title: string }>;
+};
+
 /**
  * Host capabilities handed to a pack driver's `create`. `createOpenCodeHarness`
  * lets a pack compose the reviewed host OpenCode harness and decorate it —
@@ -138,6 +170,7 @@ export type PackProviderInstance = {
   listSessions(): Promise<readonly PackProviderSession[]>;
   readThread(threadId: string): Promise<PackThreadSnapshot>;
   rollbackThread(threadId: string, numTurns: number): Promise<PackThreadSnapshot>;
+  readonly textGeneration?: PackTextGeneration;
   stopAll(): Promise<void>;
   events(): AsyncIterable<unknown>;
   dispose(): Promise<void>;

@@ -114,6 +114,21 @@ describe("createT3workTurnToolContext", () => {
           capabilities: ["read"],
         },
         {
+          id: "t3work.recipe.list",
+          label: "List project recipes",
+          capabilities: ["read"],
+        },
+        {
+          id: "t3work.recipe.validate",
+          label: "Validate recipe workflow",
+          capabilities: ["read"],
+        },
+        {
+          id: "t3work.workflow.run",
+          label: "Run ephemeral workflow",
+          capabilities: ["write"],
+        },
+        {
           id: "t3work.thread.rename",
           label: "Rename thread",
           capabilities: ["write"],

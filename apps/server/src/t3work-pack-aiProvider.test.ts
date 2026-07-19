@@ -1,6 +1,8 @@
-import * as NodeFSP from "node:fs/promises";
-import * as NodePath from "node:path";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 
 import {
   openCodeUpstreamConfigContent,
@@ -98,13 +100,19 @@ it("rejects provider assets without the declared host capability", async () => {
   ).rejects.toThrow("without an ai-provider capability");
 });
 
-it("loads provider definitions from a trusted pack activation module", async () => {
-  const root = await NodeFSP.mkdtemp("/tmp/t3work-pack-provider-");
-  const directory = NodePath.join(root, "code-pack");
-  await NodeFSP.mkdir(directory);
-  await NodeFSP.writeFile(
-    NodePath.join(directory, "activate.mjs"),
-    `export default ({ defineAgentProvider }) => defineAgentProvider({
+const nodeLayer = it.layer(NodeServices.layer);
+
+nodeLayer("pack AI provider activation", (it) => {
+  it.effect("loads provider definitions from a trusted pack activation module", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-pack-provider-" });
+      const directory = path.join(root, "code-pack");
+      yield* fileSystem.makeDirectory(directory);
+      yield* fileSystem.writeFileString(
+        path.join(directory, "activate.mjs"),
+        `export default ({ defineAgentProvider }) => defineAgentProvider({
       schemaVersion: 1, id: "code-provider", driver: "code-provider", harness: "opencode",
       displayName: "Code Provider", accent: "#123456", modelDiscovery: "configured",
       modelSelection: "fixed", defaultModel: "coding", configuration: {
@@ -112,31 +120,34 @@ it("loads provider definitions from a trusted pack activation module", async () 
           baseURL: "https://example.test/v1", api: "chat-completions", models: [{ id: "coding", name: "Coding" }] }
       }
     })`,
-  );
-  const result = await loadPackProviderOverlay({
-    enabled: true,
-    issues: [],
-    resolution: {
-      packs: [
-        {
-          directory,
-          manifest: {
-            id: "code-pack",
-            version: "1.0.0",
-            packApiVersion: 1,
-            name: "Code",
-            compatibility: { t3workCore: "*" },
-            contents: {},
-            entrypoints: { activate: "activate.mjs" },
-            capabilities: ["ai-provider:code-provider"],
-            hashes: {},
+      );
+      const result = yield* Effect.tryPromise(() =>
+        loadPackProviderOverlay({
+          enabled: true,
+          issues: [],
+          resolution: {
+            packs: [
+              {
+                directory,
+                manifest: {
+                  id: "code-pack",
+                  version: "1.0.0",
+                  packApiVersion: 1,
+                  name: "Code",
+                  compatibility: { t3workCore: "*" },
+                  contents: {},
+                  entrypoints: { activate: "activate.mjs" },
+                  capabilities: ["ai-provider:code-provider"],
+                  hashes: {},
+                },
+              },
+            ],
+            locks: {},
+            diagnostics: [],
           },
-        },
-      ],
-      locks: {},
-      diagnostics: [],
-    },
-  });
-  expect(Object.values(result.configMap)[0]?.displayName).toBe("Code Provider");
-  await NodeFSP.rm(root, { recursive: true });
+        }),
+      );
+      expect(Object.values(result.configMap)[0]?.displayName).toBe("Code Provider");
+    }),
+  );
 });

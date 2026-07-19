@@ -28,6 +28,7 @@ export function T3workSystemTimelineRow(props: {
   readonly workflowStepRuns?: ReadonlyMap<string, T3workWorkflowRunProgress>;
   readonly onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
   readonly dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
+  readonly onOpenThread?: ChatViewT3workExtensionProps["onOpenThread"];
 }) {
   const {
     message,
@@ -36,6 +37,7 @@ export function T3workSystemTimelineRow(props: {
     workflowStepRuns,
     onSubmitRecipeCardAction,
     dispatchWorkflowDecision,
+    onOpenThread,
   } = props;
 
   const workflowCard = getT3workWorkflowCardAttachment(message);
@@ -51,6 +53,22 @@ export function T3workSystemTimelineRow(props: {
     !(workflowDecision && message.text.trim() === workflowDecision.question.trim()) &&
     !workflowShape;
 
+  if (workflowShape) {
+    return (
+      <div className="max-w-[92%]">
+        {workflowShapeProgress ? (
+          <T3workWorkflowShapeLiveCard
+            shape={workflowShape}
+            progress={workflowShapeProgress}
+            {...(onOpenThread ? { onOpenThread } : {})}
+          />
+        ) : (
+          <T3workWorkflowShapeCard shape={workflowShape} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-start gap-1">
       <div className="max-w-[92%] rounded-2xl border border-border/70 bg-muted/25 px-4 py-3">
@@ -60,17 +78,8 @@ export function T3workSystemTimelineRow(props: {
         {showMessageText ? (
           <p className="text-sm leading-6 text-foreground/90">{message.text}</p>
         ) : null}
-        {workflowShape ? (
-          <div className={showMessageText ? "mt-3" : undefined}>
-            {workflowShapeProgress ? (
-              <T3workWorkflowShapeLiveCard shape={workflowShape} progress={workflowShapeProgress} />
-            ) : (
-              <T3workWorkflowShapeCard shape={workflowShape} />
-            )}
-          </div>
-        ) : null}
         {workflowCard ? (
-          <div className={showMessageText || workflowShape ? "mt-3" : undefined}>
+          <div className={showMessageText ? "mt-3" : undefined}>
             <T3workWorkflowCardBody
               workflowCard={workflowCard}
               {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
@@ -78,7 +87,7 @@ export function T3workSystemTimelineRow(props: {
           </div>
         ) : null}
         {workflowDecision ? (
-          <div className={showMessageText || workflowShape || workflowCard ? "mt-3" : undefined}>
+          <div className={showMessageText || workflowCard ? "mt-3" : undefined}>
             <T3workWorkflowDecisionCard
               decision={workflowDecision}
               active={activeWorkflowInputMessageId === message.id}

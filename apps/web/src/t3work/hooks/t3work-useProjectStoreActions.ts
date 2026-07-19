@@ -4,6 +4,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import { buildExistingProjectThreadViewState } from "~/t3work/t3work-projectThreadViewState";
 import { upsertProjectThreadLocalState } from "~/t3work/t3work-threadToolContext";
 import type { ProjectThread, ViewState } from "~/t3work/t3work-types";
+import { isWorkProject } from "~/t3work/t3work-isWorkProject";
 
 import { persistStoredProjects } from "./t3work-projectStorePersistence";
 import { saveStoredProjects, upsertProjectBySource } from "./t3work-projectStoreUtils";
@@ -37,7 +38,7 @@ export function useProjectStoreActions(input: {
       });
       setSelectedProjectId(project.id);
       setExpandedProjectIds((prev) => new Set(prev).add(project.id));
-      setView({ type: "dashboard", projectId: project.id });
+      setView(isWorkProject(project) ? { type: "dashboard", projectId: project.id } : null);
     },
     [setExpandedProjectIds, setSelectedProjectId, setStoredProjects, setView],
   );

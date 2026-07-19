@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  DEFAULT_MODEL,
   DEFAULT_RUNTIME_MODE,
-  ProviderInstanceId,
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
@@ -15,6 +13,7 @@ import {
 import { runThreadBootstrap } from "~/t3work/chat/t3work-runThreadBootstrap";
 import type { T3workTurnToolContext } from "~/t3work/t3work-threadToolContext";
 import type { T3workKickoffWorkflow } from "~/t3work/t3work-types";
+import { getConfiguredDefaultModelSelection } from "~/configuredDefaultModelSelection";
 import {
   recordThreadBootstrapFailure,
   recordThreadBootstrapPlan,
@@ -137,12 +136,7 @@ export function useThreadBootstrap({
     }
 
     const createdAt = new Date().toISOString();
-    const kickoffModelSelection =
-      initialModelSelection ??
-      ({
-        instanceId: ProviderInstanceId.make("codex"),
-        model: DEFAULT_MODEL,
-      } as ModelSelection);
+    const kickoffModelSelection = initialModelSelection ?? getConfiguredDefaultModelSelection();
     const kickoffRuntimeMode = initialRuntimeMode ?? DEFAULT_RUNTIME_MODE;
     const kickoffInteractionMode = initialInteractionMode ?? ("default" as ProviderInteractionMode);
     void runThreadBootstrap({

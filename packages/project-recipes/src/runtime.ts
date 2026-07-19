@@ -145,6 +145,8 @@ export const ProjectRecipeWorkflowStepActivityPayload = Schema.Struct({
   phase: ProjectRecipeWorkflowStepPhase,
   detail: Schema.optional(Schema.String),
   error: Schema.optional(Schema.String),
+  projectId: Schema.optional(Schema.String),
+  threadId: Schema.optional(Schema.String),
 });
 export type ProjectRecipeWorkflowStepActivityPayload =
   typeof ProjectRecipeWorkflowStepActivityPayload.Type;

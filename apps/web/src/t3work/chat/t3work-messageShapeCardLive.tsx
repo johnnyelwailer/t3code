@@ -8,8 +8,9 @@
  * RECONCILIATION: the shape is a static AST-derived plan; runtime steps arrive by journal seq
  * and may not match 1:1 (loops, parallel branches). The plan is treated as a skeleton —
  * executed steps map onto plan steps by order (i-th executed step ↔ i-th plan step in display
- * order); executed steps beyond the plan are APPENDED as extra rows; plan steps not yet
- * executed stay neutral. The run-level terminal activity drives the completed/failed banner.
+ * order); unknown runtime steps remain in their journal position with a human fallback label;
+ * plan steps not yet executed stay neutral. The run-level terminal activity drives the
+ * completed/failed banner.
  *
  * A `waiting` row shows ONLY the waiting state — the ask itself is rendered by the sibling
  * decision card ({@link ./t3work-messageDecisionCard.tsx}); no duplication here.
@@ -28,11 +29,13 @@ import type {
 } from "@t3tools/project-recipes";
 
 import { cn } from "~/lib/utils";
-import { groupT3workShapeSteps, T3workShapeStepRow } from "~/t3work/chat/t3work-messageShapeCard";
+import { T3workShapeStepRow } from "~/t3work/chat/t3work-messageShapeCard";
 import type {
   T3workWorkflowRunProgress,
   T3workWorkflowStepEntry,
 } from "~/t3work/chat/t3work-threadWorkflowStepProgress";
+import { T3workWorkflowStepDetails } from "~/t3work/chat/t3work-WorkflowStepDetails";
+import { reconcileT3workWorkflowShapeProgress } from "./t3work-workflowShapeProgress";
 
 type StepStatus = ProjectRecipeWorkflowStepPhase | "pending";
 
@@ -57,16 +60,40 @@ function StepStatusIcon({ status }: { status: StepStatus }) {
   );
 }
 
-/** An executed step the plan has no row for (loop iteration, parallel branch, ...). */
-function ExtraStepRow({ step }: { step: T3workWorkflowStepEntry }) {
+function fallbackRuntimeLabel(step: T3workWorkflowStepEntry): string {
+  switch (step.stepKind) {
+    case "workflow.self-heal":
+      // The server supplies only these host-authored labels. Do not expose the repair
+      // prompt, provider/model identity, or internal runtime kind in the card.
+      return step.phase === "failed"
+        ? "Repair attempt failed"
+        : step.phase === "completed"
+          ? "Workflow recovered"
+          : step.detail === "Repairing workflow"
+            ? "Repairing workflow"
+            : step.detail === "Resuming workflow"
+              ? "Resuming workflow"
+              : "Analysing failure";
+    case "thread.turn":
+      return "Agent task";
+    case "user.input":
+      return "Awaiting your input";
+    case "read":
+      return "Review information";
+    case "act":
+      return "Apply changes";
+    default:
+      return "Additional workflow work";
+  }
+}
+
+/** An executed step the authored plan has no row for (loop iteration, parallel branch, ...). */
+function RuntimeStepRow({ step }: { step: T3workWorkflowStepEntry }) {
   return (
-    <div className="flex items-center gap-2.5" data-step-extra="true">
+    <div className="flex items-center gap-2.5" data-step-runtime="unknown">
       <StepStatusIcon status={step.phase} />
       <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">
-        {step.detail ?? step.stepKind}
-      </span>
-      <span className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {step.stepKind}
+        {fallbackRuntimeLabel(step)}
       </span>
     </div>
   );
@@ -100,78 +127,76 @@ function RunStatusBanner({ run }: { run: NonNullable<T3workWorkflowRunProgress["
 export function T3workWorkflowShapeLiveCard({
   shape,
   progress,
+  onOpenThread,
 }: {
   shape: ProjectRecipeWorkflowShapePayload;
   progress: T3workWorkflowRunProgress;
+  onOpenThread?: (input: { projectId: string; threadId: string }) => void;
 }) {
-  const groups = groupT3workShapeSteps(shape);
-  const planCount = groups.reduce((count, group) => count + group.steps.length, 0);
-  const extras = progress.steps.slice(planCount);
-  // Flat display index across groups — the i-th plan row takes the i-th executed step's phase.
-  let flatIndex = 0;
+  const { rows } = reconcileT3workWorkflowShapeProgress(shape.steps, progress.steps);
+  const waiting = progress.steps.some((step) => step.phase === "waiting");
 
   return (
     <div className="rounded-lg border border-primary/35 bg-background/65 px-4 py-3">
       <div className="mb-2 flex items-center gap-1.5 text-primary">
         <RouteIcon className="size-3.5" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide">The plan</span>
+        {shape.name ? (
+          <span className="text-sm font-semibold text-foreground">{shape.name}</span>
+        ) : null}
         {progress.run === null ? (
           <span className="ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-            <LoaderCircleIcon className="size-3 animate-spin" />
-            running
+            {waiting ? (
+              <ClockIcon className="size-3" />
+            ) : (
+              <LoaderCircleIcon className="size-3 animate-spin" />
+            )}
+            {waiting ? "waiting" : "running"}
           </span>
         ) : null}
       </div>
-      {shape.name ? <p className="text-sm font-semibold text-foreground">{shape.name}</p> : null}
       {shape.description ? (
-        <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{shape.description}</p>
+        <p className="text-sm leading-6 text-muted-foreground">{shape.description}</p>
       ) : null}
 
-      {shape.phases.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {shape.phases.map((phase, index) => (
-            <span
-              key={`phase:${index}:${phase.title}`}
-              className="rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground"
-            >
-              {index + 1}. {phase.title}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {planCount > 0 || extras.length > 0 ? (
-        <div className="mt-3 space-y-3">
-          {groups.map((group, index) => (
-            <div key={`group:${index}:${group.title ?? "_"}`} className="space-y-1.5">
-              {group.title ? (
-                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65">
-                  {group.title}
-                </p>
-              ) : null}
-              {group.steps.map((step, stepIndex) => {
-                const executed = progress.steps[flatIndex];
-                flatIndex += 1;
-                return (
-                  <T3workShapeStepRow
-                    key={`step:${index}:${stepIndex}`}
+      {rows.length > 0 ? (
+        <div className="mt-3 space-y-1.5">
+          {(() => {
+            let priorPlanPhase: string | null = null;
+            return rows.map((row, index) => {
+              const step = row.runtimeStep;
+              const planStep = row.planStep;
+              const phaseTitle = planStep?.phase ?? null;
+              const showPhaseHeader = phaseTitle !== null && phaseTitle !== priorPlanPhase;
+              if (planStep) priorPlanPhase = phaseTitle;
+              return (
+                <div
+                  key={step?.stepId ?? `plan:${index}:${planStep?.label ?? "step"}`}
+                  className="space-y-1.5"
+                >
+                  {showPhaseHeader ? (
+                    <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65">
+                      {phaseTitle}
+                    </p>
+                  ) : null}
+                  <T3workWorkflowStepDetails
                     step={step}
-                    leading={<StepStatusIcon status={executed?.phase ?? "pending"} />}
-                  />
-                );
-              })}
-            </div>
-          ))}
-          {extras.length > 0 ? (
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65">
-                Additional steps
-              </p>
-              {extras.map((step) => (
-                <ExtraStepRow key={step.stepId} step={step} />
-              ))}
-            </div>
-          ) : null}
+                    hideDetail={step?.detail === planStep?.label}
+                    redactDetail={step?.stepKind === "workflow.self-heal"}
+                    {...(onOpenThread ? { onOpenThread } : {})}
+                  >
+                    {planStep ? (
+                      <T3workShapeStepRow
+                        step={planStep}
+                        leading={<StepStatusIcon status={step?.phase ?? "pending"} />}
+                      />
+                    ) : step ? (
+                      <RuntimeStepRow step={step} />
+                    ) : null}
+                  </T3workWorkflowStepDetails>
+                </div>
+              );
+            });
+          })()}
         </div>
       ) : (
         <p className="mt-3 text-xs text-muted-foreground/70">No steps to preview.</p>

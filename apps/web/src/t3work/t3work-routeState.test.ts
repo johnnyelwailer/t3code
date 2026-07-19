@@ -41,7 +41,7 @@ describe("t3work route state", () => {
     });
   });
 
-  it("leaves standalone thread routes unchanged", () => {
+  it("keeps the parent thread route while opening a child in its right pane", () => {
     expect(
       parseT3workViewFromPath("/t3work/projects/acme/threads/thread-123", {
         chatThreadId: "thread-456",
@@ -50,6 +50,7 @@ describe("t3work route state", () => {
       type: "thread",
       projectId: "acme",
       threadId: "thread-123",
+      embeddedThreadId: "thread-456",
     });
   });
 });

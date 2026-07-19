@@ -45,6 +45,8 @@ export type ProjectThread = {
   selectedToolIds?: ReadonlyArray<T3workThreadToolId>;
   kickoffWorkflow?: T3workKickoffWorkflow;
   status: "idle" | "running" | "completed" | "error";
+  /** Workflow repair/one-shot child threads may be opened directly but are never navigation. */
+  retention?: "ephemeral" | "retained";
   /** ISO instant a scheduled-workflow run on this thread is sleeping until (Epic 27), or
    * absent when no run is clock-parked. Drives the "Sleeping until <time>" status pill.
    * Sourced from `workflow_runs.wake_at`, joined onto the thread shell DTO by launch_thread_id. */
@@ -113,6 +115,7 @@ export type ViewState =
       type: "thread";
       projectId: string;
       threadId: string;
+      embeddedThreadId?: string;
     };
 
 export function readActiveThreadIdFromView(view: ViewState | null): string | null {

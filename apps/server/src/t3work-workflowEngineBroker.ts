@@ -38,12 +38,15 @@ import {
 } from "./t3work-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities.ts";
 import { dispatchWorkflowChild } from "./t3work-workflowChildPlacement.ts";
+import { createWorkflowLiveSettlement } from "./t3work-workflowLiveSettlement.ts";
 
 export type {
   WorkflowEngineBrokerDeps,
   WorkflowEnginePendingAsk,
   WorkflowEngineSleep,
 } from "./t3work-workflowEngineBrokerTypes.ts";
+
+type ReplyResolver = Parameters<MessageBroker["send"]>[1];
 
 /** Attachment refs from the workflow are opaque payload (SDK black-box rule); only refs that
  * satisfy the message contract render as resource cards — anything else is dropped, never fatal. */
@@ -57,8 +60,6 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     tail = next.catch(() => {});
     return next;
   };
-  // One-way verbs (thread.create / thread.message) are fired floating by the SDK, so a
-  // dispatch rejection would become an unhandled rejection; swallow it (best-effort delivery).
   // Ask verbs (thread.turn / user.input) are awaited, so their failures propagate and fail the
   // run rather than parking it forever on a turn that never started.
   const enqueueOneWay = (fn: () => Promise<void>): Promise<void> => enqueue(fn).catch(() => {});
@@ -69,32 +70,45 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     kind: string,
     phase: "started" | "waiting" | "completed",
     detail?: string,
+    threadId?: string,
   ): void => {
     void deps.stepActivities?.emitSent({
       correlationId,
       stepKind: kind,
       phase,
       ...(detail === undefined ? {} : { detail: workflowStepDetailSnippet(detail) }),
+      ...(threadId === undefined ? {} : { threadId }),
     });
   };
 
-  const send = async (envelope: MessageEnvelope): Promise<void> => {
+  const send = async (envelope: MessageEnvelope, resolver: ReplyResolver): Promise<void> => {
     const { correlationId, kind, payload } = envelope;
+    const isLiveCompositionAsk = correlationId.startsWith(`${deps.runId}:blackbox:`);
+    const makeLiveSettlement = () =>
+      createWorkflowLiveSettlement({
+        beforeResolve: () =>
+          deps.stepActivities?.emitResolved(correlationId, "completed") ?? Promise.resolve(),
+        resolve: resolver.resolve,
+      });
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
-      step(correlationId, kind, "completed", p.name ?? "Spawn thread");
+      step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
       await enqueueOneWay(() => dispatchWorkflowChild(deps, p));
       return;
     }
     if (kind === "thread.turn") {
       const p = payload as ThreadTurnPayload;
-      step(correlationId, kind, "started", p.prompt);
+      step(correlationId, kind, "started", p.prompt, p.threadId);
+      const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
       deps.registry.setPending(p.threadId, {
         runId: deps.runId,
         correlationId,
         kind: "thread.turn",
+        ...(liveSettlement ? { resolveLive: liveSettlement.resolve } : {}),
       });
-      await deps.recordPending?.({ threadId: p.threadId, correlationId, kind: "thread.turn" });
+      if (!liveSettlement) {
+        await deps.recordPending?.({ threadId: p.threadId, correlationId, kind: "thread.turn" });
+      }
       await enqueue(() =>
         deps.dispatch({
           type: "thread.turn.start",
@@ -112,19 +126,24 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
           createdAt: deps.nowIso(),
         }),
       );
+      await liveSettlement?.completed;
       return;
     }
     if (kind === "user.input") {
       const p = payload as UserInputPayload;
-      step(correlationId, kind, "waiting", p.question);
+      step(correlationId, kind, "waiting", p.question, p.threadId);
       const affordance = p.affordance ?? { kind: "text" as const };
+      const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
       deps.registry.setPending(p.threadId, {
         runId: deps.runId,
         correlationId,
         kind: "user.input",
         affordance,
+        ...(liveSettlement ? { resolveLive: liveSettlement.resolve } : {}),
       });
-      await deps.recordPending?.({ threadId: p.threadId, correlationId, kind: "user.input" });
+      if (!liveSettlement) {
+        await deps.recordPending?.({ threadId: p.threadId, correlationId, kind: "user.input" });
+      }
       // Tag the escalation message as awaiting the user's answer (with the owning run) so the UI
       // can render it as a guided prompt and route the reply back to this run rather than a
       // free-form chat turn. An ask that is renderable as a decision card (a choice affordance,
@@ -158,6 +177,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
           }),
         ),
       );
+      await liveSettlement?.completed;
       return;
     }
     if (kind === "wait.until") {
@@ -178,7 +198,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     // thread.message — one-way; agent-directed messages read as a user turn-input, user-directed
     // ones as a system (user-visible) note. No turn.start, no pending.
     const p = payload as ThreadMessagePayload;
-    step(correlationId, kind, "completed", p.text);
+    step(correlationId, kind, "completed", p.text, p.threadId);
     await enqueueOneWay(() =>
       deps.dispatch(
         messageUpsert(deps, p.threadId, p.recipient === "agent" ? "user" : "system", p.text),

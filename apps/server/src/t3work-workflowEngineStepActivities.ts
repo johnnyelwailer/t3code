@@ -28,6 +28,10 @@ export interface WorkflowStepSentInput {
   readonly phase: ProjectRecipeWorkflowStepPhase;
   /** Human label — tool refId / prompt or question snippet / wake time. */
   readonly detail?: string;
+  /** Human-readable terminal error, shown only in the expandable work log. */
+  readonly error?: string;
+  /** Thread this primitive operates on; lets the plan card navigate to child work. */
+  readonly threadId?: string;
 }
 
 export interface WorkflowStepActivityEmitter {
@@ -53,10 +57,12 @@ interface SentStepRecord {
   readonly stepKind: string;
   readonly detail: string | undefined;
   readonly createdAt: string;
+  readonly threadId: string | undefined;
 }
 
 export function createWorkflowStepActivityEmitter(opts: {
   readonly runId: string;
+  readonly projectId: string;
   /** Activities land on the launch thread; a headless run (undefined) emits nothing. */
   readonly launchThreadId: string | undefined;
   readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
@@ -101,6 +107,7 @@ export function createWorkflowStepActivityEmitter(opts: {
         stepKind: input.stepKind,
         detail: input.detail,
         createdAt,
+        threadId: input.threadId,
       });
       return append(
         input.correlationId,
@@ -110,8 +117,11 @@ export function createWorkflowStepActivityEmitter(opts: {
           stepKind: input.stepKind,
           phase: input.phase,
           ...(input.detail === undefined ? {} : { detail: input.detail }),
+          ...(input.error === undefined ? {} : { error: input.error }),
+          projectId: opts.projectId,
+          ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
         },
-        `Workflow step ${input.phase}: ${input.detail ?? input.stepKind}`,
+        input.detail ?? "Workflow activity",
         createdAt,
       );
     },
@@ -127,6 +137,8 @@ export function createWorkflowStepActivityEmitter(opts: {
           phase,
           ...(sent?.detail === undefined ? {} : { detail: sent.detail }),
           ...(error === undefined ? {} : { error }),
+          projectId: opts.projectId,
+          ...(sent?.threadId === undefined ? {} : { threadId: sent.threadId }),
         },
         `Workflow step ${phase}: ${sent?.detail ?? sent?.stepKind ?? correlationId}`,
         sent?.createdAt ?? opts.nowIso(),
@@ -140,6 +152,7 @@ export function createWorkflowStepActivityEmitter(opts: {
           stepId: `run:${opts.runId}`,
           stepKind: "run",
           phase,
+          projectId: opts.projectId,
           ...(error === undefined ? {} : { error }),
         },
         phase === "completed" ? "Workflow run completed" : "Workflow run failed",

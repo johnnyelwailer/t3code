@@ -9,7 +9,7 @@
 
 import * as NodeFS from "node:fs";
 
-import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   budgetWorkflow,
@@ -134,9 +134,21 @@ describe("durable workflow engine — composition primitives", () => {
     patchJournalLine(journalFilePath(runsRoot, runId), 1, (e) => {
       e["result"] = { v: { deadline: future } };
     });
-    const t0 = Date.now();
-    await resumeWorkflow(runId, waitWorkflow, { ms: 20 }, base);
-    expect(Date.now() - t0).toBeGreaterThanOrEqual(200); // slept the remaining ~250ms
+
+    vi.useFakeTimers();
+    try {
+      let settled = false;
+      const resumed = resumeWorkflow(runId, waitWorkflow, { ms: 20 }, base).then((value) => {
+        settled = true;
+        return value;
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(false); // resume is held at the timer checkpoint
+      await vi.advanceTimersByTimeAsync(250);
+      expect(completed(await resumed).result).toEqual({ done: true });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("raises ReplayDriftError when a recorded wait argsHash no longer matches", async () => {

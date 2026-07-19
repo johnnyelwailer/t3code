@@ -1,7 +1,13 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ProjectThread } from "~/t3work/t3work-types";
-import { buildProjectSidebarThreadTree } from "./t3work-projectSidebarThreadTree";
+import { ProjectSidebarThreadTreeRows } from "./t3work-ProjectSidebarThreadTreeRows";
+import {
+  buildProjectSidebarThreadTree,
+  countProjectSidebarThreadBranches,
+} from "./t3work-projectSidebarThreadTree";
 
 function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
   return {
@@ -43,5 +49,37 @@ describe("buildProjectSidebarThreadTree", () => {
 
     expect(tree.rootThreads).toEqual([orphanThread]);
     expect(tree.childThreadsByParentId.size).toBe(0);
+  });
+
+  it("counts a visible root and all of its nested descendants", () => {
+    const parent = createThread({ id: "parent" });
+    const child = createThread({ id: "child", parentThreadId: "parent" });
+    const grandchild = createThread({ id: "grandchild", parentThreadId: "child" });
+    const hiddenRoot = createThread({ id: "hidden-root" });
+    const tree = buildProjectSidebarThreadTree([parent, child, grandchild, hiddenRoot]);
+
+    expect(countProjectSidebarThreadBranches([parent], tree)).toBe(3);
+  });
+
+  it("renders descendant controls expanded by default", () => {
+    const parent = createThread({ id: "parent", title: "Parent" });
+    const child = createThread({ id: "child", title: "Child", parentThreadId: "parent" });
+    const tree = buildProjectSidebarThreadTree([parent, child]);
+    const markup = renderToStaticMarkup(
+      createElement(ProjectSidebarThreadTreeRows, {
+        projectId: "project-1",
+        roots: tree.rootThreads,
+        tree,
+        view: null,
+        workspacePath: null,
+        onSelectThread: () => {},
+        onDeleteThread: () => {},
+        onRenameThread: () => {},
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Collapse child threads for Parent"');
+    expect(markup).toContain('aria-expanded="true"');
+    expect(markup).toContain("Child");
   });
 });
