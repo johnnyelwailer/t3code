@@ -119,16 +119,17 @@ describe("live workflow step overlay on the plan card", () => {
     expect(countOccurrences(markup, 'data-step-status="pending"')).toBe(2);
     expect(countOccurrences(markup, "animate-spin")).toBe(1);
     expect(markup).not.toContain("lucide-clock");
-    // Executed summaries and pending rows share the exact inset, so every status icon lines up.
-    expect(countOccurrences(markup, 'data-step-row-shell="interactive"')).toBe(2);
-    expect(countOccurrences(markup, 'data-step-row-shell="static"')).toBe(2);
+    // Rows with no human detail stay plain. They must not become expandable just to show
+    // `thread.turn` or another journal implementation name.
+    expect(countOccurrences(markup, 'data-step-row-shell="interactive"')).toBe(0);
+    expect(countOccurrences(markup, 'data-step-row-shell="static"')).toBe(4);
     expect(countOccurrences(markup, "rounded-md px-1 py-0.5")).toBe(4);
     // run not terminal yet — no banner
     expect(markup).not.toContain("data-run-status");
     expect(markup).toContain("Waiting for agent");
   }, 30000);
 
-  it("keeps work logs inside expandable steps and links child threads", async () => {
+  it("keeps useful details expandable and hides journal implementation names", async () => {
     const markup = await renderTimeline(
       [
         stepActivity(
@@ -143,7 +144,8 @@ describe("live workflow step overlay on the plan card", () => {
     );
 
     expect(markup).toContain("<details");
-    expect(markup).toContain("Work log");
+    expect(markup).not.toContain("Work log");
+    expect(markup).not.toContain("thread.turn");
     expect(markup).toContain("Reviewed the implementation");
     expect(markup).toContain("Open thread");
   }, 30000);

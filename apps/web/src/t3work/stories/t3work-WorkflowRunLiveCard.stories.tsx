@@ -134,3 +134,27 @@ export const FailedRun: Story = {
     },
   },
 };
+
+/** A workflow child step can open its own thread without exposing runtime internals. */
+export const ChildThread: Story = {
+  args: {
+    shape,
+    progress: {
+      runId: "run-release-42",
+      steps: [
+        { stepId: "run-release-42:1", seq: 1, stepKind: "tool.call", phase: "completed" },
+        {
+          stepId: "run-release-42:2",
+          seq: 2,
+          stepKind: "thread.turn",
+          phase: "started",
+          detail: "Draft the release notes",
+          projectId: "project-release",
+          threadId: "thread-release-notes",
+        },
+      ],
+      run: null,
+    },
+    onOpenThread: (input) => console.info("Open workflow child thread", input),
+  },
+};

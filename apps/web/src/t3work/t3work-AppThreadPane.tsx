@@ -118,7 +118,8 @@ export function AppThreadPane({
     />
   );
 
-  if (!embeddedThread) {
+  const embeddedThreadId = embeddedThread?.id ?? view.embeddedThreadId;
+  if (!embeddedThreadId) {
     return parentChat;
   }
 
@@ -127,20 +128,24 @@ export function AppThreadPane({
       <div className="flex min-w-0 flex-1">{parentChat}</div>
       <div className="flex min-w-0 flex-1">
         <ThreadChatView
-          threadId={embeddedThread.id}
+          // A workflow child can arrive in the route before the sidebar/store
+          // projection catches up. Render the known route target immediately;
+          // the thread view fetches its own server state and the title updates
+          // when the projection arrives.
+          threadId={embeddedThreadId}
           projectId={view.projectId}
           projectTitle={threadProject?.title ?? view.projectId}
           {...(threadProject?.workspace?.rootPath
             ? { projectWorkspaceRoot: threadProject.workspace.rootPath }
             : {})}
-          title={embeddedThread.title}
+          title={embeddedThread?.title ?? "Workflow thread"}
           hideHeader
           embeddedMode
-          {...(embeddedThread.ticketId ? { ticketId: embeddedThread.ticketId } : {})}
-          {...(embeddedThread.ticketDisplayId
+          {...(embeddedThread?.ticketId ? { ticketId: embeddedThread.ticketId } : {})}
+          {...(embeddedThread?.ticketDisplayId
             ? { ticketDisplayId: embeddedThread.ticketDisplayId }
             : {})}
-          {...(embeddedThread.selectedToolIds !== undefined
+          {...(embeddedThread?.selectedToolIds !== undefined
             ? { selectedToolIds: embeddedThread.selectedToolIds }
             : {})}
         />

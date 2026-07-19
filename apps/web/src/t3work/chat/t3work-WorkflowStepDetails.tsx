@@ -23,6 +23,40 @@ export function T3workWorkflowStepDetails(props: {
   }
 
   const canOpenThread = Boolean(step.projectId && step.threadId && onOpenThread);
+  // `thread.turn`, `thread.create`, and similar values are journal implementation
+  // details. They must never become a visible "work log" just because an agent
+  // step has no authored detail.
+  const detail = redactDetail
+    ? "Final error"
+    : hideDetail
+      ? step.error
+      : (step.detail ?? step.error);
+  const hasDetail = Boolean(detail?.trim());
+
+  const openThread = canOpenThread ? (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onOpenThread?.({ projectId: step.projectId!, threadId: step.threadId! });
+      }}
+    >
+      Open thread
+      <ExternalLinkIcon className="size-3" />
+    </button>
+  ) : null;
+
+  if (!hasDetail) {
+    return (
+      <div className={STEP_ROW_SHELL_CLASS_NAME} data-step-row-shell="static">
+        {children}
+        {openThread ? <div className="ml-7 mt-0.5">{openThread}</div> : null}
+      </div>
+    );
+  }
+
   return (
     <details className="group/step rounded-md open:bg-muted/25">
       <summary
@@ -32,27 +66,11 @@ export function T3workWorkflowStepDetails(props: {
         {children}
       </summary>
       <div className="mx-7 mb-1.5 mt-1 border-l border-border/60 pl-3 text-xs text-muted-foreground">
-        <p className="font-medium uppercase tracking-wide text-muted-foreground/70">Work log</p>
-        <p className="mt-1 whitespace-pre-wrap leading-5">
-          {redactDetail
-            ? "Final error"
-            : hideDetail
-              ? (step.error ?? step.stepKind)
-              : (step.detail ?? step.error ?? step.stepKind)}
-        </p>
-        {step.error && step.detail && !redactDetail ? (
+        <p className="whitespace-pre-wrap leading-5">{detail}</p>
+        {step.error && step.detail && !redactDetail && step.error !== detail ? (
           <p className="mt-1 text-destructive">{step.error}</p>
         ) : null}
-        {canOpenThread ? (
-          <button
-            type="button"
-            className="mt-1.5 inline-flex items-center gap-1 font-medium text-primary hover:underline"
-            onClick={() => onOpenThread?.({ projectId: step.projectId!, threadId: step.threadId! })}
-          >
-            Open thread
-            <ExternalLinkIcon className="size-3" />
-          </button>
-        ) : null}
+        {openThread ? <div className="mt-1.5">{openThread}</div> : null}
       </div>
     </details>
   );
