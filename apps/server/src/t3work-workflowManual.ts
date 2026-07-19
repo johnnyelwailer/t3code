@@ -128,6 +128,9 @@ INJECTED GLOBALS (no imports; call them directly)
                               Then t.askAgent(prompt,opts?), t.notifyAgent(msg),
                               t.askUser(question,opts?), t.notifyUser(msg).
 - thread                      the chat this runbook was launched from (undefined if headless).
+- thread.showWidget({ title, widgetCode, format? }) renders sandboxed inline HTML/SVG through
+                              the typed widget attachment pipeline. Requires 'user'. Use this
+                              for interactive/rich UI; notifyUser is plain text only.
 - parallel(thunks)            run () => ...  thunks concurrently (barrier). A failed thunk -> null.
 - pipeline(items, ...stages)  per-item fan-out through stages, no barrier between them.
 - phase(title)                start a progress group (title should match a meta.phases title).
@@ -189,6 +192,8 @@ RULES
   combined context-and-actions card by passing relevant resource refs as attachments when they
   are available. Otherwise call thread.notifyUser(...) with a concise evidence summary, then
   call askUser. Never make the user reconstruct context from earlier agent or tool results.
+- Never pass HTML/SVG to notifyUser; it rejects markup. Use thread.showWidget({ title,
+  widgetCode, format: 'html' }) so content is sandboxed and rendered as a typed widget.
 - Structured choice example:
     import { Schema } from "effect"
     export const meta = { name: 'approve', capabilities: ['user'] } as const

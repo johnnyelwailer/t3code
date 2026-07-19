@@ -12,6 +12,25 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3workToolBroker];
 
+/** Canonical broker tools exposed through provider-safe MCP names. Keep this registry beside
+ * the toolkit; the parity test requires every implemented catalog tool to be mapped or named
+ * in the explicit policy-exclusion set. */
+export const T3WORK_MCP_CANONICAL_TOOL_MAP = {
+  t3work_rename_thread: "t3work.thread.rename",
+  t3work_start_child: "t3work.thread.start_child",
+  t3work_workflow_run: "t3work.workflow.run",
+  t3work_show_widget: "t3work.widget.show",
+} as const;
+
+export const T3WORK_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = new Set([
+  "t3work.backlog.set_assignee_filter",
+  "t3work.view.read",
+  "t3work.recipe.list",
+  "t3work.recipe.validate",
+  "t3work.work_item.refresh_context_bundle",
+  "t3work.project.refresh_context_bundle",
+]);
+
 export class T3workMcpToolError extends Schema.TaggedErrorClass<T3workMcpToolError>()(
   "T3workMcpToolError",
   { message: Schema.String },

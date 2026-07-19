@@ -186,6 +186,18 @@ export function T3workSystemTimelineRow(props: {
     );
   }
 
+  const workflowNotification =
+    message.t3workExt?.author?.kind === "system" &&
+    message.t3workExt.author.workflowRunId !== undefined &&
+    !workflowCard &&
+    genericAttachments.length === 0 &&
+    widgetAttachments.length === 0;
+  if (workflowNotification) {
+    return showMessageText ? (
+      <p className="max-w-[92%] text-sm leading-6 text-foreground/90">{message.text}</p>
+    ) : null;
+  }
+
   return (
     <div className="flex flex-col items-start gap-1">
       <div className="max-w-[92%] rounded-2xl border border-border/70 bg-muted/25 px-4 py-3">

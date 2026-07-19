@@ -6,6 +6,72 @@ import { createWorkflowEngineBroker } from "./t3work-workflowEngineBroker.ts";
 import { makeWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 
 describe("createWorkflowEngineBroker", () => {
+  it("routes workflow widgets through a typed widget attachment and rejects notifyUser HTML", async () => {
+    const dispatched: OrchestrationCommand[] = [];
+    let id = 0;
+    const broker = createWorkflowEngineBroker({
+      runId: "run-widget",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry: makeWorkflowEngineRegistry(),
+      dispatch: async (command) => void dispatched.push(command),
+      newId: () => `id-${++id}`,
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+
+    await broker.send(
+      {
+        correlationId: "run-widget:1",
+        kind: "thread.message",
+        payload: {
+          threadId: "parent-1",
+          recipient: "user",
+          text: "",
+          widget: {
+            title: "release approval",
+            widgetCode: "<button>Approve</button>",
+            format: "html",
+          },
+        },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+    const widgetMessage = dispatched.find((command) => command.type === "thread.message.upsert");
+    expect(widgetMessage).toMatchObject({
+      type: "thread.message.upsert",
+      message: {
+        text: "",
+        t3workExt: {
+          visibleToAgent: false,
+          attachments: [
+            {
+              kind: "widget",
+              widget: { title: "release_approval", html: "<button>Approve</button>" },
+            },
+          ],
+        },
+      },
+    });
+
+    await expect(
+      broker.send(
+        {
+          correlationId: "run-widget:2",
+          kind: "thread.message",
+          payload: {
+            threadId: "parent-1",
+            recipient: "user",
+            text: "<div>unsafe raw widget</div>",
+          },
+        },
+        { resolve: () => {}, reject: () => {} },
+      ),
+    ).rejects.toThrow("notifyUser accepts plain text only");
+    expect(dispatched).toHaveLength(1);
+  });
+
   it("persists an ask continuation before dispatching the child turn", async () => {
     const events: string[] = [];
     const broker = createWorkflowEngineBroker({

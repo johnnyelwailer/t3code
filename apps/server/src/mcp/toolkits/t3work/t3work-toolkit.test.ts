@@ -1,5 +1,6 @@
 import { expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { listImplementedT3workToolCatalogEntries } from "@t3tools/project-context/t3workToolCatalog";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { McpSchema, McpServer } from "effect/unstable/ai";
@@ -7,6 +8,18 @@ import { McpSchema, McpServer } from "effect/unstable/ai";
 import { T3workToolBroker, type T3workToolBinding } from "../../../t3work-toolBroker.ts";
 import { T3workToolkitRegistrationLive } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import {
+  T3WORK_MCP_CANONICAL_TOOL_MAP,
+  T3WORK_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS,
+} from "./tools.ts";
+
+it("maps or explicitly policy-excludes every canonical implemented tool", () => {
+  const exposed: ReadonlySet<string> = new Set(Object.values(T3WORK_MCP_CANONICAL_TOOL_MAP));
+  const missing = listImplementedT3workToolCatalogEntries()
+    .map((tool) => tool.id)
+    .filter((id) => !exposed.has(id) && !T3WORK_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS.has(id));
+  expect(missing).toEqual([]);
+});
 
 const threadId = ThreadId.make("thread-t3work-mcp-test");
 const invocation: McpInvocationContext.McpInvocationScope = {

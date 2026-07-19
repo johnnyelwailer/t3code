@@ -259,4 +259,37 @@ describe("MessagesTimeline recipe cards", () => {
     expect(markup).not.toContain(">System<");
     expect(markup).not.toContain(">Release approval<");
   }, 10000);
+
+  it("renders plain workflow notifications without generic System chrome", async () => {
+    const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildT3workMessagesTimelineTestProps()}
+        timelineEntries={[
+          {
+            id: "timeline-workflow-notification",
+            kind: "message",
+            createdAt: "2026-03-17T19:12:31.000Z",
+            message: {
+              id: MessageId.make("message-workflow-notification"),
+              role: "system",
+              text: "Review finished.",
+              streaming: false,
+              createdAt: "2026-03-17T19:12:31.000Z",
+              updatedAt: "2026-03-17T19:12:31.000Z",
+              turnId: null,
+              t3workExt: {
+                author: { kind: "system", workflowRunId: "run-1" },
+                visibleToUser: true,
+                visibleToAgent: false,
+              },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Review finished.");
+    expect(markup).not.toContain(">System<");
+  }, 10000);
 });

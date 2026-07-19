@@ -116,6 +116,12 @@ export interface ThreadMessagePayload {
   readonly threadId: string;
   readonly recipient: "agent" | "user";
   readonly text: string;
+  readonly widget?: {
+    readonly title: string;
+    readonly widgetCode: string;
+    readonly format?: "html" | "svg";
+    readonly loadingMessages?: ReadonlyArray<string>;
+  };
 }
 export interface UserInputPayload {
   readonly threadId: string;

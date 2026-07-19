@@ -23,6 +23,7 @@ import { decodeWithSchema } from "./t3work-sdk.internal.ts";
 import type {
   AskOpts,
   AskUserOpts,
+  ShowWidgetInput,
   SpawnThreadOpts,
   Thread,
   WorkflowThreadPrimitives,
@@ -33,6 +34,7 @@ export type {
   AskOpts,
   AskUserAttachment,
   AskUserOpts,
+  ShowWidgetInput,
   SpawnThreadOpts,
   Thread,
   ThreadRef,
@@ -121,10 +123,25 @@ export function createThreadPrimitives(deps: {
   };
 
   const notify = (threadId: string, recipient: "agent" | "user", text: string): void => {
+    if (recipient === "user" && /<\/?[a-z][^>]*>/i.test(text)) {
+      throw new TypeError(
+        "notifyUser accepts plain text only. Use thread.showWidget({ title, widgetCode }) for HTML or SVG.",
+      );
+    }
     const payload = { threadId, recipient, text };
     dispatch.sendOneWay({
       kind: "thread.message",
       refId: "thread.message",
+      args: payload,
+      fire: fireEnvelope("thread.message", payload),
+    });
+  };
+
+  const showWidget = (threadId: string, input: ShowWidgetInput): void => {
+    const payload = { threadId, recipient: "user" as const, text: "", widget: input };
+    dispatch.sendOneWay({
+      kind: "thread.message",
+      refId: "thread.showWidget",
       args: payload,
       fire: fireEnvelope("thread.message", payload),
     });
@@ -158,6 +175,9 @@ export function createThreadPrimitives(deps: {
     notifyUser: has("user")
       ? (msg: string) => notify(threadId, "user", msg)
       : (denied("user", "notifyUser") as Thread["notifyUser"]),
+    showWidget: has("user")
+      ? (input: ShowWidgetInput) => showWidget(threadId, input)
+      : (denied("user", "showWidget") as Thread["showWidget"]),
   });
 
   const spawnThread = (opts?: SpawnThreadOpts): Thread => {

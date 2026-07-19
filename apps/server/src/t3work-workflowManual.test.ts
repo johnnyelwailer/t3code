@@ -36,6 +36,8 @@ describe("agent-orchestration help contract", () => {
     expect(help).toContain("Before askUser, surface the relevant results or evidence");
     expect(help).toContain("resource refs as attachments");
     expect(help).toContain("thread.notifyUser(...) with a concise evidence summary");
+    expect(help).toContain("thread.showWidget({ title, widgetCode, format? })");
+    expect(help).toContain("Never pass HTML/SVG to notifyUser");
     expect(help).toContain("Never make the user reconstruct context");
   });
 });

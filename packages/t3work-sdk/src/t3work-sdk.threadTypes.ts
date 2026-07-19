@@ -58,12 +58,21 @@ export interface SpawnThreadOpts {
   readonly retention?: "ephemeral" | "retained";
 }
 
+/** Sandboxed inline widget shown in a thread. HTML/SVG must be a fragment. */
+export interface ShowWidgetInput {
+  readonly title: string;
+  readonly widgetCode: string;
+  readonly format?: "html" | "svg";
+  readonly loadingMessages?: ReadonlyArray<string>;
+}
+
 /** The one Thread type, shared by the ambient launching thread and any spawned one. */
 export interface Thread {
   askAgent<R = string>(prompt: string, opts?: AskOpts<R>): Promise<R>;
   notifyAgent(msg: string): void;
   askUser<R = string>(question: string, opts?: AskUserOpts<R>): Promise<R>;
   notifyUser(msg: string): void;
+  showWidget(input: ShowWidgetInput): void;
   readonly id: ThreadRef;
 }
 

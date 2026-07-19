@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import { t3workHelp } from "../../../t3work-help.ts";
 import { T3WORK_MCP_SERVER_NAME, T3workToolBroker } from "../../../t3work-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
-import { T3workMcpToolError, T3workToolkit } from "./tools.ts";
+import { T3WORK_MCP_CANONICAL_TOOL_MAP, T3workMcpToolError, T3workToolkit } from "./tools.ts";
 
 const callBroker = Effect.fn("T3workMcpToolkit.callBroker")(function* (
   tool: string,
@@ -52,10 +52,14 @@ const sendMessage = Effect.fn("T3workMcpToolkit.sendMessage")(function* (input: 
 });
 
 export const T3workToolkitHandlersLive = T3workToolkit.toLayer({
-  t3work_rename_thread: (input) => callBroker("t3work.thread.rename", input),
-  t3work_start_child: (input) => callBroker("t3work.thread.start_child", input),
+  t3work_rename_thread: (input) =>
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_rename_thread, input),
+  t3work_start_child: (input) =>
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_start_child, input),
   t3work_send_message: (input) => sendMessage(input),
-  t3work_workflow_run: (input) => callBroker("t3work.workflow.run", input),
-  t3work_show_widget: (input) => callBroker("t3work.widget.show", input),
+  t3work_workflow_run: (input) =>
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_workflow_run, input),
+  t3work_show_widget: (input) =>
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_show_widget, input),
   t3work_help: (input) => Effect.succeed(t3workHelp(input.topic)),
 });

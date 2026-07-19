@@ -40,6 +40,10 @@ import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities
 import { dispatchWorkflowChild } from "./t3work-workflowChildPlacement.ts";
 import { fromWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3work-workflowLiveSettlement.ts";
+import {
+  buildT3workWidgetAttachment,
+  parseT3workWidgetShowInput,
+} from "./t3work-widgetShowCore.ts";
 
 export type {
   WorkflowEngineBrokerDeps,
@@ -232,11 +236,60 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     // thread.message — one-way; agent-directed messages read as a user turn-input, user-directed
     // ones as a system (user-visible) note. No turn.start, no pending.
     const p = payload as ThreadMessagePayload;
+    if (p.widget !== undefined) {
+      // Workflow semantic adapter: reuse the canonical widget parser/attachment factory rather
+      // than duplicating validation or inventing a second rendering contract.
+      const parsed = parseT3workWidgetShowInput({
+        title: p.widget.title,
+        widget_code: p.widget.widgetCode,
+        ...(p.widget.format === undefined ? {} : { format: p.widget.format }),
+        ...(p.widget.loadingMessages === undefined
+          ? {}
+          : { loading_messages: p.widget.loadingMessages }),
+      });
+      if ("error" in parsed) throw new Error(`Invalid workflow widget: ${parsed.error}`);
+      const attachment = buildT3workWidgetAttachment({
+        widgetId: deps.newId(),
+        parsed,
+        artifactRelativePath: undefined,
+      });
+      step(correlationId, kind, "completed", parsed.title, p.threadId);
+      await runPrimitive(() =>
+        enqueueOneWay(() =>
+          deps.dispatch(
+            messageUpsert(deps, p.threadId, "system", "", {
+              author: { kind: "system", workflowRunId: deps.runId },
+              visibleToUser: true,
+              visibleToAgent: false,
+              attachments: [attachment],
+            }),
+          ),
+        ),
+      );
+      return;
+    }
+    if (p.recipient === "user" && /<\/?[a-z][^>]*>/i.test(p.text)) {
+      throw new Error(
+        "notifyUser accepts plain text only. Use thread.showWidget({ title, widgetCode }) for HTML or SVG.",
+      );
+    }
     step(correlationId, kind, "completed", p.text, p.threadId);
     await runPrimitive(() =>
       enqueueOneWay(() =>
         deps.dispatch(
-          messageUpsert(deps, p.threadId, p.recipient === "agent" ? "user" : "system", p.text),
+          messageUpsert(
+            deps,
+            p.threadId,
+            p.recipient === "agent" ? "user" : "system",
+            p.text,
+            p.recipient === "user"
+              ? {
+                  author: { kind: "system", workflowRunId: deps.runId },
+                  visibleToUser: true,
+                  visibleToAgent: false,
+                }
+              : undefined,
+          ),
         ),
       ),
     );
