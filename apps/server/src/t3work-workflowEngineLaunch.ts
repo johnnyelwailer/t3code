@@ -49,6 +49,7 @@ import {
   createWorkflowStepActivityEmitter,
   type WorkflowStepActivityEmitter,
 } from "./t3work-workflowEngineStepActivities.ts";
+import { deliverWorkflowCompletion } from "./t3work-workflowCompletionMessage.ts";
 
 export type WorkflowLaunchStatus = "completed" | "suspended" | "failed";
 
@@ -127,6 +128,7 @@ export function createWorkflowRunController(
   const broker = createWorkflowEngineBroker({
     stepActivities,
     runId: input.runId,
+    ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
     projectId: input.projectId,
     modelSelection: input.modelSelection,
     runtimeMode: input.runtimeMode,
@@ -158,6 +160,14 @@ export function createWorkflowRunController(
     input.registry.deleteRun(input.runId);
     await input.lifecycle?.recordCompleted();
     await stepActivities.emitRun("completed");
+    await deliverWorkflowCompletion({
+      launchThreadId: input.launchThreadId,
+      workflowRunId: input.runId,
+      output: result.result,
+      dispatch: input.dispatch,
+      newId: input.newId,
+      nowIso: input.nowIso,
+    });
     await input.onComplete?.(result.result);
     return "completed";
   };

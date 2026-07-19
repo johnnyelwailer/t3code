@@ -37,6 +37,7 @@ import {
   type WorkflowEngineBrokerDeps,
 } from "./t3work-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities.ts";
+import { dispatchWorkflowChild } from "./t3work-workflowChildPlacement.ts";
 
 export type {
   WorkflowEngineBrokerDeps,
@@ -82,21 +83,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
       step(correlationId, kind, "completed", p.name ?? "Spawn thread");
-      await enqueueOneWay(() =>
-        deps.dispatch({
-          type: "thread.create",
-          commandId: CommandId.make(`t3work-wf:create:${deps.newId()}`),
-          threadId: ThreadId.make(p.threadId),
-          projectId: deps.projectId,
-          title: p.name ?? "Workflow thread",
-          modelSelection: deps.modelSelection,
-          runtimeMode: deps.runtimeMode,
-          interactionMode: deps.interactionMode,
-          branch: null,
-          worktreePath: null,
-          createdAt: deps.nowIso(),
-        }),
-      );
+      await enqueueOneWay(() => dispatchWorkflowChild(deps, p));
       return;
     }
     if (kind === "thread.turn") {

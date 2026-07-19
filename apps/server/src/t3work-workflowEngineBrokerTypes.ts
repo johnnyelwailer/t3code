@@ -61,6 +61,7 @@ export interface WorkflowRunLifecycle {
 
 export interface WorkflowEngineBrokerDeps {
   readonly runId: string;
+  readonly launchThreadId?: string;
   readonly projectId: ProjectId;
   readonly modelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;

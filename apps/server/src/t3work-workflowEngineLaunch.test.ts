@@ -66,11 +66,24 @@ describe("launchWorkflowRecipe — real launch path", () => {
     const commandTypes = () =>
       dispatched.filter((c) => c.type !== "thread.activity.append").map((c) => c.type);
     const stepActivities = () =>
-      dispatched.flatMap((c) => (c.type === "thread.activity.append" ? [c.activity] : []));
+      dispatched.flatMap((c) =>
+        c.type === "thread.activity.append" && c.activity.kind === "t3work.recipe.workflow.step"
+          ? [c.activity]
+          : [],
+      );
 
     // The first ask (agent's isolated-thread turn) parks the run.
     expect(result.status).toBe("suspended");
     expect(commandTypes()).toEqual(["thread.create", "thread.turn.start"]);
+    const childPlacement = dispatched.find(
+      (command) =>
+        command.type === "thread.activity.append" &&
+        command.activity.kind === "t3work.handoff.created",
+    );
+    expect(childPlacement).toMatchObject({
+      threadId: `${runId}:1`,
+      activity: { payload: { parentThreadId: launchThreadId } },
+    });
 
     const run = registry.getRun(runId);
     expect(run).toBeDefined();
@@ -90,6 +103,17 @@ describe("launchWorkflowRecipe — real launch path", () => {
 
     expect(completed).toEqual({ summary: "Low risk; well tested.", merged: true });
     expect(registry.getRun(runId)).toBeUndefined(); // completed runs are unregistered
+    const completionMessage = dispatched.find(
+      (command) =>
+        command.type === "thread.message.upsert" && command.message.role === "assistant",
+    );
+    expect(completionMessage).toMatchObject({
+      threadId: launchThreadId,
+      message: {
+        messageId: `t3work-wf-result:${runId}`,
+        text: expect.stringContaining('"merged": true'),
+      },
+    });
 
     // Step activities: every primitive emitted a `t3work.recipe.workflow.step` entry on the
     // launch thread, and each ask re-emitted the SAME id with its terminal phase (upsert-by-id

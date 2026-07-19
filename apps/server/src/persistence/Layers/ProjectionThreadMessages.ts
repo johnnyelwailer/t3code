@@ -61,6 +61,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           attachments_json,
           t3work_ext_json,
           is_streaming,
+          sequence,
           created_at,
           updated_at
         )
@@ -87,6 +88,18 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
             )
           ),
           ${row.isStreaming ? 1 : 0},
+          COALESCE(
+            (
+              SELECT sequence
+              FROM projection_thread_messages
+              WHERE message_id = ${row.messageId}
+            ),
+            (
+              SELECT COALESCE(MAX(sequence), -1) + 1
+              FROM projection_thread_messages
+              WHERE thread_id = ${row.threadId}
+            )
+          ),
           ${row.createdAt},
           ${row.updatedAt}
         )
@@ -151,11 +164,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           updated_at AS "updatedAt"
         FROM projection_thread_messages
         WHERE thread_id = ${threadId}
-        -- rowid (monotonic insertion order) tiebreak, not the random message_id
-        -- UUID: a user message and its reply share a created_at (the reply keeps
-        -- its turn-start stamp across streaming), so a UUID tiebreak orders them
-        -- randomly — "reply above the sent message".
-        ORDER BY created_at ASC, rowid ASC
+        ORDER BY sequence ASC, rowid ASC
       `,
   });
 
