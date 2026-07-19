@@ -22,8 +22,8 @@ export const T3WORK_WORKFLOW_TAGLINE =
   "Agent orchestration: run a structure that fans work out to several agents (parallel " +
   "or in sequence), enforces result contracts, and offloads trivial/known/repeatable steps " +
   "to scripts and tools so agents don't burn tokens on them. Use for complex or long work; " +
-  "for a simple single-agent task, just do it directly — do not write one of these. The " +
-  "authoring syntax is returned in the error if a run fails to parse.";
+  "for a simple single-agent task, just do it directly — do not write one of these. For the " +
+  'authoring syntax, call t3work_help("agent-orchestration") first.';
 
 /**
  * The full manual. Kept compact but complete enough that a small model can

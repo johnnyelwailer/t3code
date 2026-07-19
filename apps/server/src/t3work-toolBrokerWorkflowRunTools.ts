@@ -9,7 +9,6 @@
 import type { ModelSelection, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import type { RunWorkflowToolResult } from "@t3work/sdk";
-import { T3WORK_WORKFLOW_MANUAL } from "./t3work-workflowManual.ts";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
@@ -132,14 +131,14 @@ export function makeWorkflowRunToolHandlers<E>(deps: {
           runId: result.runId,
           status: result.status,
           ...(result.status === "completed" && output !== undefined ? { output } : {}),
-          // On failure, append the runbook manual so the calling agent can
-          // self-correct the source (the #1 failure is authoring a plain script
-          // instead of an agent-orchestration workflow body).
+          // On failure, point the calling agent at the on-demand manual rather
+          // than dumping it inline (the #1 failure is authoring a plain script
+          // instead of an agent-orchestration body). Keeps the result lean.
           ...(result.status === "failed"
             ? {
                 error:
                   (runError === undefined ? "Workflow run failed." : errorMessage(runError)) +
-                  `\n\n${T3WORK_WORKFLOW_MANUAL}`,
+                  ' — for the authoring syntax call t3work_help("agent-orchestration").',
               }
             : {}),
         } satisfies RunWorkflowToolResult;

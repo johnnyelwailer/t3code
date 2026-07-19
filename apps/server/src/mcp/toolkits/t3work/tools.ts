@@ -86,9 +86,22 @@ export const T3workWorkflowRunTool = Tool.make("t3work_workflow_run", {
   dependencies,
 });
 
+// On-demand reference docs — one generic tool for any topic (see t3work-help.ts),
+// so tool descriptions stay lean and agents discover detail proactively.
+export const T3workHelpTool = Tool.make("t3work_help", {
+  description:
+    'Get t3work reference docs on demand. Pass a topic slug (e.g. "agent-orchestration" for ' +
+    "how to author a t3work_workflow_run body); omit `topic` to list available topics.",
+  parameters: Schema.Struct({ topic: Schema.optional(Schema.String) }),
+  success: Schema.String,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
 export const T3workToolkit = Toolkit.make(
   T3workRenameThreadTool,
   T3workStartChildTool,
   T3workSendMessageTool,
   T3workWorkflowRunTool,
+  T3workHelpTool,
 );
