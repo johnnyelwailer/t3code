@@ -9,6 +9,9 @@ import {
   awaitWorkflowRepairChildReply,
   remainingWorkflowRepairBudget,
 } from "./t3work-workflowEngineLaunch.ts";
+import { workflowRepairIsStopped } from "./t3work-workflowEngineRepair.ts";
+import { makeWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
+import { workflowAdmissionQueue } from "./t3work-workflowAdmissionQueue.ts";
 import { validateWorkflowRepairCandidate } from "./t3work-workflowRepairGuardrails.ts";
 
 const intent = {
@@ -49,6 +52,15 @@ const run = async (overrides: Partial<Parameters<typeof coordinateWorkflowRepair
 };
 
 describe("workflow self-heal coordinator", () => {
+  it("never starts or resumes self-heal after a Stop tombstone", () => {
+    const registry = makeWorkflowEngineRegistry();
+    registry.registerRun("stopped-repair", { resume: async () => {}, cancel: () => {} });
+    workflowAdmissionQueue.cancel("stopped-repair");
+    expect(
+      workflowRepairIsStopped({ runId: "stopped-repair", registry }, { isCancelled: () => false }),
+    ).toBe(true);
+    workflowAdmissionQueue.resetForTests();
+  });
   it("rejects repaired meta that widens capabilities and accepts an equal envelope", () => {
     const original =
       'export const meta = { name: "safe", capabilities: ["user"], toolGroups: ["read"], permissions: ["view"] };\nthread.askUser("go");';
@@ -74,6 +86,14 @@ describe("workflow self-heal coordinator", () => {
   it("accepts only the exact repair-child JSON protocol", () => {
     expect(
       parseWorkflowRepairChildResult(
+        '{"safeToResume":true,"correctedWorkflow":"thread.askUser()","summary":"fixed"}',
+      ),
+    ).toEqual({ outcome: "fixed", updatedSource: "thread.askUser()", summary: "fixed" });
+    expect(
+      parseWorkflowRepairChildResult('{"safeToResume":false,"cancelReason":"unsafe change"}'),
+    ).toEqual({ outcome: "cannot-fix", reason: "unsafe change" });
+    expect(
+      parseWorkflowRepairChildResult(
         '{"outcome":"fixed","updatedSource":"thread.askUser()","summary":"fixed"}',
       ),
     ).toEqual({ outcome: "fixed", updatedSource: "thread.askUser()", summary: "fixed" });
@@ -86,6 +106,11 @@ describe("workflow self-heal coordinator", () => {
       ),
     ).toBeNull();
     expect(parseWorkflowRepairChildResult("```json\n{}\n```")).toBeNull();
+    expect(
+      parseWorkflowRepairChildResult(
+        '{"safeToResume":true,"correctedWorkflow":"x","summary":"y","extra":true}',
+      ),
+    ).toBeNull();
   });
   it("repairs once in the same run/card boundary", async () => {
     const { result, phases, calls } = await run();

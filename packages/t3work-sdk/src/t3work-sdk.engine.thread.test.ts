@@ -45,6 +45,7 @@ import {
 } from "./t3work-sdk.index.ts";
 import { journalFilePath } from "./t3work-sdk.journal.ts";
 import { readJournalEntries } from "./t3work-sdk.journalReader.ts";
+import { workflowChildTitleFromPrompt } from "./t3work-sdk.threadPrimitives.ts";
 
 beforeEach(resetCounters);
 afterAll(cleanupRunsRoot);
@@ -62,6 +63,15 @@ const launchBase = (broker: ReturnType<typeof createMockBroker>) =>
   ({ runsRoot, tools: [], broker, launchThreadId: "launch-thread" }) as const;
 
 describe("durable workflow engine — Thread model", () => {
+  it("normalizes and truncates the legacy prompt-derived child title", () => {
+    expect(workflowChildTitleFromPrompt("  Review   API\ncompatibility  ")).toBe(
+      "Review API compatibility",
+    );
+    const title = workflowChildTitleFromPrompt("x".repeat(100));
+    expect(title).toHaveLength(80);
+    expect(title.endsWith("…")).toBe(true);
+  });
+
   it("runs agent() one-shots (text + schema) and replays without re-firing the broker", async () => {
     const broker = createMockBroker(
       resolveTurnsBy([
@@ -81,6 +91,12 @@ describe("durable workflow engine — Thread model", () => {
     ]);
     expect(broker.sent[0]?.payload).toMatchObject({ retention: "ephemeral" });
     expect(broker.sent[2]?.payload).toMatchObject({ retention: "ephemeral" });
+    expect(broker.sent[0]?.payload).toMatchObject({ name: "summarize cats" });
+    expect(broker.sent[2]?.payload).toMatchObject({ name: "Classify cat sentiment" });
+    expect(broker.sent[3]?.payload).toMatchObject({
+      label: "Classify cat sentiment",
+      prompt: expect.stringContaining("classify cats"),
+    });
     const { bySeq, byCorrelation } = readJournalEntries(journalFilePath(runsRoot, run.runId));
     expect(bySeq.size).toBe(4);
     expect(byCorrelation.size).toBe(2); // the two turns resolved

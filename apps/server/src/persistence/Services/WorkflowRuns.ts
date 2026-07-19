@@ -27,11 +27,14 @@ import type { ProjectionRepositoryError } from "../Errors.ts";
  * clock-parked sibling of `suspended` (Epic 27): a run parked on `waitUntil`, woken by the
  * scheduler at its `wake_at` rather than by an event. */
 export const WorkflowRunStatus = Schema.Literals([
+  "queued",
   "running",
   "suspended",
   "sleeping",
+  "paused",
   "completed",
   "failed",
+  "cancelled",
 ]);
 export type WorkflowRunStatus = typeof WorkflowRunStatus.Type;
 
@@ -88,6 +91,13 @@ export const SetWorkflowRunStatusInput = Schema.Struct({
 });
 export type SetWorkflowRunStatusInput = typeof SetWorkflowRunStatusInput.Type;
 
+/** Resume a paused run to the parked state encoded by its retained pending columns. */
+export const ResumePausedWorkflowRunInput = Schema.Struct({
+  runId: Schema.String,
+  updatedAt: IsoDateTime,
+});
+export type ResumePausedWorkflowRunInput = typeof ResumePausedWorkflowRunInput.Type;
+
 /** Flip a run to `suspended` and record the ask it is parked on, in one update. */
 export const SetWorkflowRunPendingInput = Schema.Struct({
   runId: Schema.String,
@@ -136,6 +146,10 @@ export interface WorkflowRunRepositoryShape {
   /** Set a run's status (without touching the pending ask). */
   readonly setStatus: (
     input: SetWorkflowRunStatusInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Restore `paused` to `suspended` or `sleeping` without losing its parked continuation. */
+  readonly resumePaused: (
+    input: ResumePausedWorkflowRunInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
   /** Flip to `suspended` and record the pending ask (fired when an ask verb suspends). */
   readonly setPending: (

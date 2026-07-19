@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { ProviderInstanceId } from "@t3tools/contracts";
 import type { PackProviderDriverDefinition, PackProviderInstance } from "@t3work/packs";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { bridgePackProviderDriver } from "./t3work-pack-driverBridge.ts";
 
@@ -32,6 +33,7 @@ const instance: PackProviderInstance = {
     generatePrContent: async () => ({ title: "Pack PR", body: "## Summary" }),
     generateBranchName: async () => ({ branch: "pack-branch" }),
     generateThreadTitle: async () => ({ title: "Pack title" }),
+    generateStructured: async () => ({ status: "Checking pack status" }),
   },
   stopAll: async () => {},
   events: async function* () {},
@@ -63,6 +65,13 @@ describe("pack text generation bridge", () => {
         modelSelection: { instanceId: ProviderInstanceId.make("custom-pack"), model: "pack/model" },
       });
       expect(result).toEqual({ title: "Pack title" });
+      const structured = yield* built.textGeneration.generateStructured!({
+        cwd: "/tmp",
+        prompt: "Summarize status",
+        outputSchema: Schema.Struct({ status: Schema.String }),
+        modelSelection: { instanceId: ProviderInstanceId.make("custom-pack"), model: "pack/model" },
+      });
+      expect(structured).toEqual({ status: "Checking pack status" });
     }),
   );
 });

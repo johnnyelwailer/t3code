@@ -16,6 +16,20 @@ export type WorkflowRepairPolicyDefinition = {
       };
 };
 
+export type WorkflowAgentModelPolicyDefinition = {
+  readonly modelSelection:
+    | "inherit"
+    | {
+        readonly instanceId: string;
+        readonly model: string;
+        readonly options?: Record<string, unknown>;
+      };
+};
+
+export type WorkflowEphemeralConcurrencyPolicyDefinition = {
+  readonly maxActiveSteps: number | "unlimited";
+};
+
 export type AgentProviderModel = {
   readonly id: string;
   readonly name: string;
@@ -130,6 +144,10 @@ export type PackActivationContext = {
   readonly defineTheme: (definition: PackThemeDefinition) => void;
   readonly defineSetupProfile: (definition: PackSetupProfileDefinition) => void;
   readonly defineWorkflowRepairPolicy: (definition: WorkflowRepairPolicyDefinition) => void;
+  readonly defineWorkflowAgentModelPolicy: (definition: WorkflowAgentModelPolicyDefinition) => void;
+  readonly defineWorkflowEphemeralConcurrencyPolicy: (
+    definition: WorkflowEphemeralConcurrencyPolicyDefinition,
+  ) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
 };
 

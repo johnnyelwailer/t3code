@@ -29,6 +29,7 @@ import type {
   WorkflowRunRepositoryShape,
 } from "./persistence/Services/WorkflowRuns.ts";
 import type { WorkflowRunLifecycle } from "./t3work-workflowEngineLaunch.ts";
+import { workflowAdmissionQueue } from "./t3work-workflowAdmissionQueue.ts";
 
 export interface BuildRunningRowInput {
   readonly runId: string;
@@ -82,8 +83,43 @@ export function makeWorkflowRunLifecycle(opts: {
   readonly onSleep?: () => void;
 }): WorkflowRunLifecycle {
   const { repo, row } = opts;
+  const admissionManaged = row.origin === "ephemeral";
+  const releaseAdmission = (): void => {
+    if (admissionManaged) workflowAdmissionQueue.release(row.runId);
+  };
   return {
     recordRunning: () => Effect.runPromise(repo.upsert(row)),
+    recordActive: async () => {
+      if (
+        workflowAdmissionQueue.isCancelled(row.runId) ||
+        workflowAdmissionQueue.isPaused(row.runId)
+      )
+        return false;
+      if (admissionManaged) {
+        await Effect.runPromise(
+          repo.setStatus({ runId: row.runId, status: "queued", updatedAt: opts.nowIso() }),
+        );
+        const queued = await Effect.runPromise(repo.getById({ runId: row.runId }));
+        if (
+          Option.isNone(queued) ||
+          queued.value.status === "cancelled" ||
+          queued.value.status === "paused"
+        )
+          return false;
+        if (!(await workflowAdmissionQueue.acquire(row.runId))) return false;
+        if (
+          workflowAdmissionQueue.isCancelled(row.runId) ||
+          workflowAdmissionQueue.isPaused(row.runId)
+        )
+          return false;
+      }
+      await Effect.runPromise(
+        repo.setStatus({ runId: row.runId, status: "running", updatedAt: opts.nowIso() }),
+      );
+      const activeRow = await Effect.runPromise(repo.getById({ runId: row.runId }));
+      return Option.isSome(activeRow) && activeRow.value.status === "running";
+    },
+    releaseActive: releaseAdmission,
     recordSuspended: (pending) =>
       Effect.runPromise(
         repo.setPending({
@@ -103,16 +139,17 @@ export function makeWorkflowRunLifecycle(opts: {
           updatedAt: opts.nowIso(),
         }),
       ).then(() => {
+        releaseAdmission();
         opts.onSleep?.();
       }),
     recordCompleted: () =>
       Effect.runPromise(
         repo.clearPending({ runId: row.runId, status: "completed", updatedAt: opts.nowIso() }),
-      ),
+      ).then(releaseAdmission),
     recordFailed: () =>
       Effect.runPromise(
         repo.clearPending({ runId: row.runId, status: "failed", updatedAt: opts.nowIso() }),
-      ),
+      ).then(releaseAdmission),
     // Crash-recovery guard: the scheduler resumed a clock park whose `waitUntil` reply was already
     // journaled by a PRIOR process that died before settling (appendResolvedEntry → wrote:false).
     // The run row is stuck `sleeping`, so listSleeping re-arms it forever. Mark it failed — but
@@ -124,7 +161,7 @@ export function makeWorkflowRunLifecycle(opts: {
           const current = yield* repo.getById({ runId: row.runId });
           if (
             Option.isNone(current) ||
-            current.value.status !== "sleeping" ||
+            (current.value.status !== "sleeping" && current.value.status !== "running") ||
             current.value.pendingCorrelationId !== correlationId
           )
             return;
@@ -133,6 +170,7 @@ export function makeWorkflowRunLifecycle(opts: {
             status: "failed",
             updatedAt: opts.nowIso(),
           });
+          releaseAdmission();
           yield* Effect.logWarning(
             "workflow scheduler orphaned a sleeping run whose wake reply was resolved before settle",
             { runId: row.runId, correlationId },

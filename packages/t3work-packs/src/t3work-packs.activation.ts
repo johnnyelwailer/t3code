@@ -20,6 +20,20 @@ export type WorkflowRepairPolicyDefinition = {
       };
 };
 
+export type WorkflowAgentModelPolicyDefinition = {
+  readonly modelSelection:
+    | "inherit"
+    | {
+        readonly instanceId: string;
+        readonly model: string;
+        readonly options?: Record<string, unknown>;
+      };
+};
+
+export type WorkflowEphemeralConcurrencyPolicyDefinition = {
+  readonly maxActiveSteps: number | "unlimited";
+};
+
 export type PackActivationContext = {
   readonly pack: { readonly directory: string; readonly manifest: WorkspacePackManifest };
   readonly defineAgentProvider: (definition: LoadedAiProviderDefinition) => void;
@@ -27,6 +41,10 @@ export type PackActivationContext = {
   readonly defineTheme: (definition: ThemeDefinition) => void;
   readonly defineSetupProfile: (definition: SetupProfileDefinition) => void;
   readonly defineWorkflowRepairPolicy: (definition: WorkflowRepairPolicyDefinition) => void;
+  readonly defineWorkflowAgentModelPolicy: (definition: WorkflowAgentModelPolicyDefinition) => void;
+  readonly defineWorkflowEphemeralConcurrencyPolicy: (
+    definition: WorkflowEphemeralConcurrencyPolicyDefinition,
+  ) => void;
   readonly resolveAssetDataUrl: (relativePath: string, mimeType: string) => Promise<string>;
 };
 export type PackActivate = (context: PackActivationContext) => void | Promise<void>;

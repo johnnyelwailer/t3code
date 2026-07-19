@@ -9,6 +9,7 @@
  */
 
 import * as NodeFS from "node:fs";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -30,14 +31,18 @@ import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStor
 import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import { buildRunningWorkflowRunRow } from "./t3work-workflowEngineDurability.ts";
 import { makeWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
+import {
+  buildRunningWorkflowRunRow,
+  makeWorkflowRunLifecycle,
+} from "./t3work-workflowEngineDurability.ts";
 import { callT3workWorkflowRunTool } from "./t3work-toolBrokerBindingWorkflowRun.ts";
 import {
   makeWorkflowRunToolHandlers,
-  T3WORK_EPHEMERAL_RUN_CAP,
   type T3workWorkflowRunToolHandlers,
 } from "./t3work-toolBrokerWorkflowRunTools.ts";
+import { workflowAdmissionQueue } from "./t3work-workflowAdmissionQueue.ts";
+import { setWorkflowEphemeralConcurrencyPolicy } from "./t3work-workflowEphemeralConcurrencyPolicy.ts";
 
 const threadId = ThreadId.make("thread-eph");
 const projectId = ProjectId.make("proj-eph");
@@ -74,6 +79,21 @@ const decision = await thread.askUser(input.question, { schema: Decision });
 return { approved: decision.approved };
 `;
 
+const waitForRunStatus = Effect.fn("waitForRunStatus")(function* (
+  repo: typeof WorkflowRunRepository.Service,
+  runId: string,
+  status: "completed" | "suspended",
+) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const row = yield* repo.getById({ runId });
+    if (Option.isSome(row) && row.value.status === status) return row.value;
+    // Detached workflow fibers run on the live runtime. Poll with a real timer rather than the
+    // @effect/vitest virtual clock, which does not advance while this test waits.
+    yield* Effect.promise(() => sleep(10));
+  }
+  return yield* Effect.fail(`workflow ${runId} did not reach ${status}`);
+});
+
 const testLayer = it.layer(
   Layer.mergeAll(
     WorkflowRunRepositoryLive.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
@@ -93,11 +113,12 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
     prefix: "t3work-ephemeral-run-",
   });
   const dispatched: OrchestrationCommand[] = [];
+  const registry = makeWorkflowEngineRegistry();
   const handlers = makeWorkflowRunToolHandlers({
     fileSystem,
     path,
     launch: {
-      registry: makeWorkflowEngineRegistry(),
+      registry,
       runRepository: repo,
       journalStore: store,
       rearmScheduler: () => Promise.resolve(),
@@ -117,7 +138,7 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
         },
       }),
   })(threadId);
-  return { handlers, dispatched, workspaceRoot, repo };
+  return { handlers, dispatched, workspaceRoot, repo, registry };
 });
 
 testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
@@ -171,13 +192,12 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
           intent,
         });
 
-        assert.strictEqual(result.status, "completed");
-        assert.deepStrictEqual(result.output, { sum: 42 });
+        assert.strictEqual(result.status, "accepted");
         // The source file must OUTLIVE the call — resume/rehydrate re-read it from disk.
         const workflowFile = `${workspaceRoot}/.t3work-runs/${result.runId}/workflow.ts`;
         assert.isTrue(NodeFS.existsSync(workflowFile));
 
-        const row = Option.getOrThrow(yield* repo.getById({ runId: result.runId }));
+        const row = yield* waitForRunStatus(repo, result.runId, "completed");
         assert.strictEqual(row.status, "completed");
         assert.strictEqual(row.origin, "ephemeral");
       }),
@@ -197,7 +217,7 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
             intent,
           });
 
-          assert.strictEqual(result.status, "suspended");
+          assert.strictEqual(result.status, "accepted");
 
           // The ask posted a decision-card message into the CALLING thread and parked there.
           const cards = dispatched.filter(
@@ -205,7 +225,7 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
           );
           assert.isAbove(cards.length, 0);
 
-          const row = Option.getOrThrow(yield* repo.getById({ runId: result.runId }));
+          const row = yield* waitForRunStatus(repo, result.runId, "suspended");
           assert.strictEqual(row.status, "suspended");
           assert.strictEqual(row.origin, "ephemeral");
           assert.strictEqual(row.launchThreadId, threadId);
@@ -230,56 +250,137 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
     ),
   );
 
-  it.effect(`caps live ephemeral runs at ${T3WORK_EPHEMERAL_RUN_CAP} without writing files`, () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const { handlers, workspaceRoot, repo } = yield* makeHarness();
-
-        // Fill the cap with live (suspended/running/sleeping-equivalent) ephemeral rows.
-        for (let index = 0; index < T3WORK_EPHEMERAL_RUN_CAP; index += 1) {
-          yield* repo.upsert(
-            buildRunningWorkflowRunRow({
-              runId: `live-${index}`,
-              workflowPath: `${workspaceRoot}/.t3work-runs/live-${index}/workflow.ts`,
-              args: {},
-              launchThreadId: threadId,
-              projectId,
-              modelSelection,
-              runtimeMode: "full-access",
-              interactionMode: "default",
-              origin: "ephemeral",
-              nowIso: "2026-07-17T00:00:00.000Z",
+  it.effect(
+    "accepts a valid run immediately and durably queues it until FIFO capacity is free",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          workflowAdmissionQueue.resetForTests();
+          setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 1 });
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              workflowAdmissionQueue.resetForTests();
+              setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 8 });
             }),
           );
-        }
+          yield* Effect.promise(() => workflowAdmissionQueue.acquire("blocker"));
+          const { handlers, workspaceRoot, repo } = yield* makeHarness();
 
-        const result = yield* handlers
-          .runWorkflow({ source: PURE_SUM_SOURCE, args: { a: 1, b: 1 }, intent })
-          .pipe(Effect.result);
-        assert.strictEqual(result._tag, "Failure");
-        if (result._tag === "Failure") {
-          assert.include(result.failure, "cap reached");
-        }
-        // Rejected BEFORE writing anything: no new run directory appeared.
-        const entries = NodeFS.existsSync(`${workspaceRoot}/.t3work-runs`)
-          ? NodeFS.readdirSync(`${workspaceRoot}/.t3work-runs`)
-          : [];
-        assert.deepStrictEqual(entries, []);
-
-        // Terminal runs do NOT count against the cap.
-        for (let index = 0; index < T3WORK_EPHEMERAL_RUN_CAP; index += 1) {
-          yield* repo.clearPending({
-            runId: `live-${index}`,
-            status: "completed",
-            updatedAt: "2026-07-17T00:00:01.000Z",
+          const result = yield* handlers.runWorkflow({
+            source: PURE_SUM_SOURCE,
+            args: { a: 2, b: 3 },
+            intent,
           });
-        }
-        const after = yield* handlers.runWorkflow({
-          source: PURE_SUM_SOURCE,
-          args: { a: 1, b: 1 },
-          intent,
+          assert.strictEqual(result.status, "accepted");
+          assert.isTrue(
+            NodeFS.existsSync(`${workspaceRoot}/.t3work-runs/${result.runId}/workflow.ts`),
+          );
+          assert.strictEqual(
+            Option.getOrThrow(yield* repo.getById({ runId: result.runId })).status,
+            "queued",
+          );
+          workflowAdmissionQueue.release("blocker");
+          const completed = yield* waitForRunStatus(repo, result.runId, "completed");
+          assert.strictEqual(completed.status, "completed");
+        }),
+      ),
+  );
+
+  it.effect("a racing Stop tombstone prevents recordActive from reviving a cancelled run", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        workflowAdmissionQueue.resetForTests();
+        const { repo, workspaceRoot } = yield* makeHarness();
+        const row = {
+          ...buildRunningWorkflowRunRow({
+            runId: "stop-race",
+            workflowPath: `${workspaceRoot}/stop-race.workflow.ts`,
+            args: {},
+            launchThreadId: threadId,
+            projectId,
+            modelSelection,
+            runtimeMode: "full-access" as const,
+            interactionMode: "default" as const,
+            origin: "ephemeral" as const,
+            nowIso: "2026-07-19T00:00:00.000Z",
+          }),
+          status: "queued" as const,
+        };
+        yield* repo.upsert(row);
+        const lifecycle = makeWorkflowRunLifecycle({
+          repo,
+          row,
+          nowIso: () => "2026-07-19T00:00:01.000Z",
         });
-        assert.strictEqual(after.status, "completed");
+        const activating = lifecycle.recordActive();
+        workflowAdmissionQueue.cancel(row.runId);
+        yield* repo.clearPending({
+          runId: row.runId,
+          status: "cancelled",
+          updatedAt: "2026-07-19T00:00:02.000Z",
+        });
+        assert.isFalse(yield* Effect.promise(() => activating));
+        assert.strictEqual(
+          Option.getOrThrow(yield* repo.getById({ runId: row.runId })).status,
+          "cancelled",
+        );
+      }),
+    ),
+  );
+
+  it.effect("a sleeping wake queued for capacity cannot overwrite a racing Pause", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        workflowAdmissionQueue.resetForTests();
+        setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 1 });
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            workflowAdmissionQueue.resetForTests();
+            setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 8 });
+          }),
+        );
+        yield* Effect.promise(() => workflowAdmissionQueue.acquire("wake-blocker"));
+        const { repo, workspaceRoot } = yield* makeHarness();
+        const row = buildRunningWorkflowRunRow({
+          runId: "pause-wake-race",
+          workflowPath: `${workspaceRoot}/pause-wake.workflow.ts`,
+          args: {},
+          launchThreadId: threadId,
+          projectId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          origin: "ephemeral",
+          nowIso: "2026-07-19T00:00:00.000Z",
+        });
+        yield* repo.upsert(row);
+        yield* repo.setSleeping({
+          runId: row.runId,
+          wakeAt: "2026-07-19T00:10:00.000Z",
+          correlationId: `${row.runId}:1`,
+          updatedAt: "2026-07-19T00:00:01.000Z",
+        });
+        const lifecycle = makeWorkflowRunLifecycle({
+          repo,
+          row,
+          nowIso: () => "2026-07-19T00:00:02.000Z",
+        });
+        const activating = lifecycle.recordActive();
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          if (workflowAdmissionQueue.snapshot().queued.includes(row.runId)) break;
+          yield* Effect.yieldNow;
+        }
+        yield* repo.setStatus({
+          runId: row.runId,
+          status: "paused",
+          updatedAt: "2026-07-19T00:00:03.000Z",
+        });
+        workflowAdmissionQueue.release("wake-blocker");
+        assert.isFalse(yield* Effect.promise(() => activating));
+        assert.strictEqual(
+          Option.getOrThrow(yield* repo.getById({ runId: row.runId })).status,
+          "paused",
+        );
       }),
     ),
   );

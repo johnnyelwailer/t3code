@@ -102,7 +102,11 @@ describe("workflow self-heal — real host integration", () => {
       ]),
     );
     await repair!.resolveLive!(
-      JSON.stringify({ outcome: "fixed", updatedSource: fixedSource, summary: "removed throw" }),
+      JSON.stringify({
+        safeToResume: true,
+        correctedWorkflow: fixedSource,
+        summary: "removed throw",
+      }),
     );
     expect(await launch).toEqual({ runId, status: "completed" });
 
@@ -164,7 +168,10 @@ describe("workflow self-heal — real host integration", () => {
     const runId = "invalid-then-fixed";
     const workflowPath = NodePath.join(root, runId, "workflow.ts");
     NodeFS.mkdirSync(NodePath.dirname(workflowPath), { recursive: true });
-    NodeFS.writeFileSync(workflowPath, "this is not valid workflow TypeScript");
+    NodeFS.writeFileSync(
+      workflowPath,
+      'export const meta = { name: "self-heal", capabilities: ["user"] };\nthis is not valid workflow TypeScript',
+    );
     const registry = makeWorkflowEngineRegistry();
     const commands: OrchestrationCommand[] = [];
     const launch = launchWorkflowRecipe({

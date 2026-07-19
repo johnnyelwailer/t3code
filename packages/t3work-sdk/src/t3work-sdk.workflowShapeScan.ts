@@ -51,21 +51,44 @@ function classifyToolScript(lastSegment: string): WorkflowStepKind {
   return READ_VERBS.some((verb) => lowered.startsWith(verb)) ? "read" : "act";
 }
 
-/** The statically-knowable text of a string / template-literal arg (with `${expr}` kept as
- * source text), or null when the arg is dynamic (a variable, a call, …). */
+/** The statically-knowable human text of a string / template-literal arg. Dynamic template
+ * expressions are omitted: source placeholders such as `${cycle}` must never leak into UI. */
 function staticStringLabel(
   ts: typeof TsApi,
   node: TsApi.Node | undefined,
-  sf: TsApi.SourceFile,
+  _sf: TsApi.SourceFile,
 ): string | null {
   if (node === undefined) return null;
   if (ts.isStringLiteralLike(node)) return truncate(node.text);
   if (ts.isTemplateExpression(node)) {
     let text = node.head.text;
     for (const span of node.templateSpans) {
-      text += `\${${span.expression.getText(sf)}}${span.literal.text}`;
+      text += span.literal.text;
     }
     return truncate(text);
+  }
+  return null;
+}
+
+/** A literal `label` property from an options object, when one is present. */
+function explicitCallLabel(
+  ts: typeof TsApi,
+  call: TsApi.CallExpression,
+  sf: TsApi.SourceFile,
+): string | null {
+  const options = call.arguments[1];
+  if (options === undefined || !ts.isObjectLiteralExpression(options)) return null;
+  for (const property of options.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const name = property.name;
+    if (
+      !(
+        (ts.isIdentifier(name) && name.text === "label") ||
+        (ts.isStringLiteralLike(name) && name.text === "label")
+      )
+    )
+      continue;
+    return staticStringLabel(ts, property.initializer, sf);
   }
   return null;
 }
@@ -97,7 +120,10 @@ function classifyCall(
       const title = staticStringLabel(ts, arg0, sf);
       if (title !== null) sink.onPhase(title);
     } else if (callee.text === "agent") {
-      sink.onStep("agent", staticStringLabel(ts, arg0, sf) ?? "Agent turn");
+      sink.onStep(
+        "agent",
+        explicitCallLabel(ts, call, sf) ?? staticStringLabel(ts, arg0, sf) ?? "Agent turn",
+      );
     }
     return;
   }
@@ -105,11 +131,17 @@ function classifyCall(
   if (!ts.isPropertyAccessExpression(callee)) return;
   const name = callee.name.text;
   if (name === "askAgent") {
-    sink.onStep("agent", staticStringLabel(ts, arg0, sf) ?? "Ask the agent");
+    sink.onStep(
+      "agent",
+      explicitCallLabel(ts, call, sf) ?? staticStringLabel(ts, arg0, sf) ?? "Ask the agent",
+    );
     return;
   }
   if (name === "askUser") {
-    sink.onStep("ask", staticStringLabel(ts, arg0, sf) ?? "Ask the user");
+    sink.onStep(
+      "ask",
+      explicitCallLabel(ts, call, sf) ?? staticStringLabel(ts, arg0, sf) ?? "Ask the user",
+    );
     return;
   }
   const root = rootIdentifier(ts, callee);

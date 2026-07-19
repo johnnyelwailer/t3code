@@ -99,6 +99,7 @@ import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
+import { workflowCompletionDisplayText } from "../../t3work/chat/t3work-workflowCompletionDisplayText";
 
 import {
   buildInlineTerminalContextText,
@@ -150,8 +151,10 @@ interface TimelineRowSharedState {
   onToggleTurnFold: (turnId: TurnId) => void;
   activeWorkflowInputMessageId: string | null;
   workflowStepRuns: ReadonlyMap<string, T3workWorkflowRunProgress>;
+  workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
   onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
   dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
+  onControlWorkflow?: ChatViewT3workExtensionProps["onControlWorkflow"];
   onOpenThread?: ChatViewT3workExtensionProps["onOpenThread"];
   onToggleWorkGroup: (groupId: string, anchorElement?: HTMLElement) => void;
 }
@@ -200,10 +203,16 @@ interface MessagesTimelineProps {
   onIsAtEndChange: (isAtEnd: boolean) => void;
   /** Thread activities feeding the live workflow-step overlay on plan (shape) cards. */
   threadActivities?: ReadonlyArray<OrchestrationThreadActivity>;
+  workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
   onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
   dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
+  onControlWorkflow?: ChatViewT3workExtensionProps["onControlWorkflow"];
   onOpenThread?: ChatViewT3workExtensionProps["onOpenThread"];
   onManualNavigation: () => void;
+  workflowCardNavigationRequest?: {
+    readonly messageId: MessageId;
+    readonly requestId: number;
+  } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,10 +246,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   contentInsetEndAdjustment,
   onIsAtEndChange,
   threadActivities,
+  workflowRunStatus,
   onSubmitRecipeCardAction,
   dispatchWorkflowDecision,
+  onControlWorkflow,
   onOpenThread,
   onManualNavigation,
+  workflowCardNavigationRequest,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
@@ -353,6 +365,20 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     ],
   );
   const rows = useStableRows(rawRows);
+  useEffect(() => {
+    if (!workflowCardNavigationRequest) return;
+    const rowIndex = rows.findIndex(
+      (row) => row.kind === "message" && row.message.id === workflowCardNavigationRequest.messageId,
+    );
+    if (rowIndex < 0) return;
+    onManualNavigation();
+    void listRef.current?.scrollToIndex({
+      index: rowIndex,
+      animated: true,
+      viewPosition: 0,
+      viewOffset: 24,
+    });
+  }, [listRef, onManualNavigation, rows, workflowCardNavigationRequest]);
   const minimapItems = useMemo(() => deriveTimelineMinimapItems(rows), [rows]);
   const [timelineViewportElement, setTimelineViewportElement] = useState<HTMLDivElement | null>(
     null,
@@ -468,8 +494,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleTurnFold,
       activeWorkflowInputMessageId,
       workflowStepRuns,
+      ...(workflowRunStatus ? { workflowRunStatus } : {}),
       onSubmitRecipeCardAction,
       dispatchWorkflowDecision,
+      onControlWorkflow,
       onOpenThread,
       onToggleWorkGroup,
     }),
@@ -487,8 +515,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleTurnFold,
       activeWorkflowInputMessageId,
       workflowStepRuns,
+      workflowRunStatus,
       onSubmitRecipeCardAction,
       dispatchWorkflowDecision,
+      onControlWorkflow,
       onOpenThread,
       onToggleWorkGroup,
     ],
@@ -856,6 +886,9 @@ function ActorTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message"
   return (
     <T3workActorTimelineRow
       message={row.message}
+      {...(ctx.markdownCwd ? { markdownCwd: ctx.markdownCwd } : {})}
+      {...(ctx.threadRef ? { threadRef: ctx.threadRef } : {})}
+      skills={ctx.skills}
       {...(ctx.onOpenThread
         ? {
             onOpenSenderThread: (input: { projectId: string; threadId: string }) =>
@@ -875,12 +908,14 @@ function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message
       threadRef={ctx.threadRef}
       activeWorkflowInputMessageId={ctx.activeWorkflowInputMessageId}
       workflowStepRuns={ctx.workflowStepRuns}
+      {...(ctx.workflowRunStatus ? { workflowRunStatus: ctx.workflowRunStatus } : {})}
       {...(ctx.onSubmitRecipeCardAction
         ? { onSubmitRecipeCardAction: ctx.onSubmitRecipeCardAction }
         : {})}
       {...(ctx.dispatchWorkflowDecision
         ? { dispatchWorkflowDecision: ctx.dispatchWorkflowDecision }
         : {})}
+      {...(ctx.onControlWorkflow ? { onControlWorkflow: ctx.onControlWorkflow } : {})}
       {...(ctx.onOpenThread ? { onOpenThread: ctx.onOpenThread } : {})}
     />
   );
@@ -1082,7 +1117,11 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
 
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
-  const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+  const messageText = row.message.text
+    ? workflowCompletionDisplayText(row.message.id, row.message.text)
+    : row.message.streaming
+      ? ""
+      : "(empty response)";
 
   return (
     <>

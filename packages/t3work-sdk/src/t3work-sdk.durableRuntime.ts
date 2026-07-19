@@ -41,6 +41,8 @@ export interface DurableRuntimeConfig {
   readonly runId?: string;
   /** Resolved Handle replies read from the journal, keyed by correlationId (25.4). */
   readonly resolved?: ReadonlyMap<string, ResolvedEntry>;
+  readonly beforePrimitive?: () => Promise<boolean>;
+  readonly afterPrimitive?: () => void;
 }
 
 /** A {@link T.WorkflowRuntime} backed by a per-run journal with replay + drift detection. */
@@ -124,6 +126,8 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
     toolCtx: config.toolCtx,
     scriptCtx: config.scriptCtx,
     scriptNames: config.scriptNames,
+    ...(config.beforePrimitive === undefined ? {} : { beforePrimitive: config.beforePrimitive }),
+    ...(config.afterPrimitive === undefined ? {} : { afterPrimitive: config.afterPrimitive }),
   });
 
   // Handle-pattern dispatch shares this runtime's `seq` seat, so a sent entry's seq — and

@@ -146,6 +146,10 @@ export function ThreadChatView({
     contextAttachments.length > 0 ? (
       <ContextAttachmentStrip attachments={contextAttachments} onRemove={removeContextAttachment} />
     ) : null;
+  const controlWorkflow = backend?.controlWorkflow
+    ? ({ workflowRunId, action }: { workflowRunId: string; action: "pause" | "resume" | "stop" }) =>
+        backend.controlWorkflow!({ threadId, workflowRunId, action })
+    : undefined;
 
   if (!environmentId) {
     return <div className="flex h-full min-h-0 flex-1 bg-background" />;
@@ -183,6 +187,7 @@ export function ThreadChatView({
             onComposerContextAttachmentsConsumed={clearThreadAttachments}
             onSubmitRecipeCardAction={submitRecipeCardAction}
             dispatchWorkflowDecision={resolveWorkflowDecision}
+            {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
             onOpenThread={onOpenThread}
           />
         </>

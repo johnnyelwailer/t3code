@@ -22,7 +22,13 @@ function CardIcon({ option, compact }: { option: T3workProjectSetupCardOption; c
   }
   const Icon = option.icon;
   return (
-    <span className={cn("flex shrink-0 items-center justify-center", compact ? "size-11" : "size-12", option.iconClassName)}>
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center",
+        compact ? "size-11" : "size-12",
+        option.iconClassName,
+      )}
+    >
       <Icon className={cn(compact ? "size-5" : "size-6")} />
     </span>
   );
@@ -77,24 +83,29 @@ export function T3workProjectSetupProfileCards({
                 selected ? "opacity-100" : "opacity-70 group-hover:opacity-90",
               )}
             />
-            <div className="relative flex h-full items-start gap-3">
+            <div className="relative grid h-full grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2">
               <CardIcon option={option} compact={compact} />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0">
                 <div className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
                   {option.eyebrow}
                 </div>
-                <h3 className={cn("mt-1 font-semibold tracking-tight", compact ? "text-base" : "text-lg")}>
-                  {option.title}
-                </h3>
-                <p
+                <h3
                   className={cn(
-                    "mt-1.5 line-clamp-2 text-muted-foreground",
-                    compact ? "text-xs leading-5" : "text-sm leading-6",
+                    "mt-1 font-semibold tracking-tight",
+                    compact ? "text-base" : "text-lg",
                   )}
                 >
-                  {option.description}
-                </p>
+                  {option.title}
+                </h3>
               </div>
+              <p
+                className={cn(
+                  "col-span-2 line-clamp-2 text-muted-foreground",
+                  compact ? "text-xs leading-5" : "text-sm leading-6",
+                )}
+              >
+                {option.description}
+              </p>
             </div>
           </button>
         );

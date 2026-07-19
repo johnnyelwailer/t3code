@@ -402,3 +402,79 @@ schedulerLayer("workflow scheduler — no-op resumes are orphaned, not hot-loope
       }),
   );
 });
+
+schedulerLayer("workflow scheduler — concurrent rearm", (it) => {
+  it.effect("admits every due run before waiting for a slow first settlement", () =>
+    Effect.gen(function* () {
+      const nowMs = DateTime.makeUnsafe(nowIso()).epochMilliseconds;
+      const manual = makeManualClock(nowMs);
+      let releaseFirst!: () => void;
+      const first = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let reads = 0;
+      const calls: string[] = [];
+      const scheduler = makeWorkflowScheduler({
+        listSleeping: () => {
+          reads += 1;
+          return Promise.resolve(
+            reads <= 2
+              ? [
+                  { runId: "first", correlationId: "first:1", wakeAtMs: nowMs },
+                  { runId: "second", correlationId: "second:1", wakeAtMs: nowMs },
+                ]
+              : [],
+          );
+        },
+        resume: (runId) => {
+          calls.push(runId);
+          return runId === "first" ? first : Promise.resolve();
+        },
+        clock: manual.clock,
+      });
+
+      yield* Effect.promise(() => scheduler.rearm());
+      const firing = manual.fire();
+      yield* Effect.promise(() => Promise.resolve());
+      assert.deepStrictEqual(calls, ["first", "second"]);
+      releaseFirst();
+      yield* Effect.promise(() => firing);
+      assert.isUndefined(manual.armedDelay());
+    }),
+  );
+
+  it.effect("serializes stale DB reads so the newest deadline owns the timer", () =>
+    Effect.gen(function* () {
+      let releaseFirst!: () => void;
+      const firstBlocked = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let calls = 0;
+      const nowMs = DateTime.makeUnsafe(nowIso()).epochMilliseconds;
+      const manual = makeManualClock(nowMs);
+      const scheduler = makeWorkflowScheduler({
+        listSleeping: async () => {
+          calls += 1;
+          if (calls === 1) {
+            await firstBlocked;
+            return [{ runId: "old", correlationId: "old:1", wakeAtMs: nowMs + 60_000 }];
+          }
+          return [{ runId: "new", correlationId: "new:1", wakeAtMs: nowMs + 5_000 }];
+        },
+        resume: () => Promise.resolve(),
+        clock: manual.clock,
+      });
+
+      const oldRearm = scheduler.rearm();
+      const newRearm = scheduler.rearm();
+      yield* Effect.promise(() => Promise.resolve());
+      // The second DB read must not start until the first read + arm finishes.
+      assert.strictEqual(calls, 1);
+      releaseFirst();
+      yield* Effect.promise(() => Promise.all([oldRearm, newRearm]));
+
+      assert.strictEqual(calls, 2);
+      assert.strictEqual(manual.armedDelay(), 5_000);
+    }),
+  );
+});

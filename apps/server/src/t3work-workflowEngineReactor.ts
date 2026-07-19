@@ -37,6 +37,7 @@ import * as Stream from "effect/Stream";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
+import { stopWorkflowsOwnedByThread } from "./t3work-workflowStopCascade.ts";
 
 type ThreadMessageSentEvent = Extract<OrchestrationEvent, { type: "thread.message-sent" }>;
 
@@ -134,11 +135,36 @@ export const T3workWorkflowEngineReactorLive = Layer.effectDiscard(
       );
 
     const worker = yield* makeDrainableWorker(processSafely);
+    // A durable resume may replay into a live composition (for example parallel(agent(...))).
+    // That replay waits for its live child turns. If those replies use the same serial worker,
+    // the worker waits for the replay while the replay waits for events queued behind itself.
+    // Keep live settlements ordered on a separate lane so they can unblock the parent replay.
+    const liveWorker = yield* makeDrainableWorker(processSafely);
+
+    const stopOwnedWorkflows = Effect.fn("stopOwnedWorkflows")(function* (
+      event: Extract<OrchestrationEvent, { type: "thread.turn-interrupt-requested" }>,
+    ) {
+      yield* Effect.promise(() =>
+        stopWorkflowsOwnedByThread({
+          registry,
+          threadId: event.payload.threadId,
+          createdAt: event.payload.createdAt,
+          dispatch: (command) =>
+            Effect.runPromise(orchestration.dispatch(command)).then(() => undefined),
+        }),
+      );
+    });
 
     yield* Effect.forkScoped(
-      Stream.runForEach(orchestration.streamDomainEvents, (event) =>
-        event.type === "thread.message-sent" ? worker.enqueue(event) : Effect.void,
-      ),
+      Stream.runForEach(orchestration.streamDomainEvents, (event) => {
+        if (event.type === "thread.message-sent") {
+          return registry.peekPending(event.payload.threadId)?.resolveLive === undefined
+            ? worker.enqueue(event)
+            : liveWorker.enqueue(event);
+        }
+        if (event.type === "thread.turn-interrupt-requested") return stopOwnedWorkflows(event);
+        return Effect.void;
+      }),
     );
   }),
 );

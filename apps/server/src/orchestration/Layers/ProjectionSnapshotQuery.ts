@@ -151,6 +151,39 @@ const SleepingWakeAtRowSchema = Schema.Struct({
 const SleepingWakeAtByThreadRowSchema = Schema.Struct({
   wakeAt: IsoDateTime,
 });
+// Latest durable workflow state per launch thread. This wins over provider-session state: a
+// suspended workflow may be waiting on a child agent while the launch thread itself is idle.
+const WorkflowRunStatusRowSchema = Schema.Struct({
+  threadId: ThreadId,
+  runId: Schema.String,
+  status: Schema.Literals([
+    "running",
+    "suspended",
+    "sleeping",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
+  ]),
+  pendingKind: Schema.NullOr(Schema.Literals(["thread.turn", "user.input"])),
+  wakeAt: Schema.NullOr(IsoDateTime),
+  updatedAt: IsoDateTime,
+});
+const WorkflowRunStatusByThreadRowSchema = Schema.Struct({
+  runId: Schema.String,
+  status: Schema.Literals([
+    "running",
+    "suspended",
+    "sleeping",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
+  ]),
+  pendingKind: Schema.NullOr(Schema.Literals(["thread.turn", "user.input"])),
+  wakeAt: Schema.NullOr(IsoDateTime),
+  updatedAt: IsoDateTime,
+});
 
 const REQUIRED_SNAPSHOT_PROJECTORS = [
   ORCHESTRATION_PROJECTOR_NAMES.projects,
@@ -986,6 +1019,33 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  const listWorkflowRunStatusRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: WorkflowRunStatusRowSchema,
+    execute: () => sql`
+      SELECT runs.launch_thread_id AS "threadId", runs.run_id AS "runId", runs.status, runs.pending_kind AS "pendingKind",
+        runs.wake_at AS "wakeAt", runs.updated_at AS "updatedAt"
+      FROM workflow_runs runs
+      WHERE runs.launch_thread_id IS NOT NULL
+        AND runs.run_id = (
+          SELECT candidate.run_id
+          FROM workflow_runs candidate
+          WHERE candidate.launch_thread_id = runs.launch_thread_id
+          ORDER BY candidate.updated_at DESC, candidate.run_id DESC
+          LIMIT 1
+        )
+    `,
+  });
+  const getWorkflowRunStatusByThread = SqlSchema.findOneOption({
+    Request: ThreadIdLookupInput,
+    Result: WorkflowRunStatusByThreadRowSchema,
+    execute: ({ threadId }) => sql`
+      SELECT run_id AS "runId", status, pending_kind AS "pendingKind", wake_at AS "wakeAt", updated_at AS "updatedAt"
+      FROM workflow_runs WHERE launch_thread_id = ${threadId}
+      ORDER BY updated_at DESC, run_id DESC LIMIT 1
+    `,
+  });
+
   const getSnapshot: ProjectionSnapshotQueryShape["getSnapshot"] = () =>
     sql
       .withTransaction(
@@ -1518,6 +1578,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               ),
             ),
           ),
+          listWorkflowRunStatusRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getShellSnapshot:listWorkflowRunStatus:query",
+                "ProjectionSnapshotQuery.getShellSnapshot:listWorkflowRunStatus:decodeRows",
+              ),
+            ),
+          ),
         ]),
       )
       .pipe(
@@ -1530,6 +1598,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               latestTurnRows,
               stateRows,
               sleepingWakeAtRows,
+              workflowRunStatusRows,
             ] = rows;
             let updatedAt: string | null = null;
             for (const row of projectRows) {
@@ -1564,6 +1633,21 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             const sleepingUntilByThread = new Map(
               sleepingWakeAtRows.map((row) => [row.threadId, row.wakeAt] as const),
             );
+            const workflowRunStatusByThread = new Map(
+              workflowRunStatusRows.map(
+                (row) =>
+                  [
+                    row.threadId,
+                    {
+                      runId: row.runId,
+                      status: row.status,
+                      pendingKind: row.pendingKind,
+                      wakeAt: row.wakeAt,
+                      updatedAt: row.updatedAt,
+                    },
+                  ] as const,
+              ),
+            );
 
             const snapshot = {
               snapshotSequence: computeSnapshotSequence(stateRows),
@@ -1597,7 +1681,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   hasPendingApprovals: row.pendingApprovalCount > 0,
                   hasPendingUserInput: row.pendingUserInputCount > 0,
                   hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
+                  ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
+                  ...(row.childStatusUpdatedAt != null
+                    ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
+                    : {}),
                   ...(sleepingUntil !== undefined ? { sleepingUntil } : {}),
+                  ...(workflowRunStatusByThread.has(row.threadId)
+                    ? { workflowRunStatus: workflowRunStatusByThread.get(row.threadId)! }
+                    : {}),
                 } satisfies OrchestrationThreadShell);
               }),
               updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
@@ -1731,6 +1822,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   hasPendingApprovals: row.pendingApprovalCount > 0,
                   hasPendingUserInput: row.pendingUserInputCount > 0,
                   hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
+                  ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
+                  ...(row.childStatusUpdatedAt != null
+                    ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
+                    : {}),
                 }),
               ),
               updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
@@ -1979,6 +2074,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         hasPendingApprovals: threadRow.value.pendingApprovalCount > 0,
         hasPendingUserInput: threadRow.value.pendingUserInputCount > 0,
         hasActionableProposedPlan: threadRow.value.hasActionableProposedPlan > 0,
+        ...(threadRow.value.childStatus != null
+          ? { childStatus: threadRow.value.childStatus }
+          : {}),
+        ...(threadRow.value.childStatusUpdatedAt != null
+          ? { childStatusUpdatedAt: threadRow.value.childStatusUpdatedAt }
+          : {}),
         ...(Option.isSome(sleepingRow) ? { sleepingUntil: sleepingRow.value.wakeAt } : {}),
       } satisfies OrchestrationThreadShell);
     });

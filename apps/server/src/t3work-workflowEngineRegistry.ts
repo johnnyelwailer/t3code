@@ -43,12 +43,22 @@ export interface WorkflowRegisteredRun {
   /** Append the resolved reply for `correlationId` and replay the run to completion or its
    * next suspension. Created by the launch so it carries the ref + options. */
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
+  /** Prevent a detached controller from publishing a later terminal result. */
+  readonly cancel: () => void;
 }
 
 export interface T3workWorkflowEngineRegistryShape {
   readonly registerRun: (runId: string, run: WorkflowRegisteredRun) => void;
   readonly deleteRun: (runId: string) => void;
   readonly getRun: (runId: string) => WorkflowRegisteredRun | undefined;
+  readonly cancelRun: (runId: string) => void;
+  readonly removePendingForRun: (runId: string) => void;
+  readonly registerOwnership: (runId: string, launchThreadId: string | undefined) => void;
+  readonly registerMasterStop: (runId: string, stop: () => Promise<void>) => void;
+  readonly masterStopForRun: (runId: string) => Promise<void>;
+  readonly runsOwnedByThread: (threadId: string) => ReadonlyArray<string>;
+  readonly registerChildThread: (runId: string, threadId: string) => void;
+  readonly childThreadsForRun: (runId: string) => ReadonlyArray<string>;
   readonly setPending: (threadId: string, pending: WorkflowPendingAsk) => void;
   /** Read and remove the pending ask for a thread (first matching reply wins). */
   readonly takePending: (threadId: string) => WorkflowPendingAsk | undefined;
@@ -69,6 +79,9 @@ export class T3workWorkflowEngineRegistry extends Context.Service<
 export function makeWorkflowEngineRegistry(): T3workWorkflowEngineRegistryShape {
   const runs = new Map<string, WorkflowRegisteredRun>();
   const pendingByThread = new Map<string, WorkflowPendingAsk>();
+  const launchThreadByRun = new Map<string, string>();
+  const childThreadsByRun = new Map<string, Set<string>>();
+  const masterStopByRun = new Map<string, () => Promise<void>>();
 
   return {
     registerRun: (runId, run) => {
@@ -76,8 +89,40 @@ export function makeWorkflowEngineRegistry(): T3workWorkflowEngineRegistryShape 
     },
     deleteRun: (runId) => {
       runs.delete(runId);
+      launchThreadByRun.delete(runId);
+      childThreadsByRun.delete(runId);
+      masterStopByRun.delete(runId);
     },
     getRun: (runId) => runs.get(runId),
+    cancelRun: (runId) => {
+      runs.get(runId)?.cancel();
+      runs.delete(runId);
+      for (const [threadId, pending] of pendingByThread) {
+        if (pending.runId === runId) pendingByThread.delete(threadId);
+      }
+      launchThreadByRun.delete(runId);
+      masterStopByRun.delete(runId);
+    },
+    removePendingForRun: (runId) => {
+      for (const [threadId, pending] of pendingByThread) {
+        if (pending.runId === runId) pendingByThread.delete(threadId);
+      }
+    },
+    registerOwnership: (runId, launchThreadId) => {
+      if (launchThreadId !== undefined) launchThreadByRun.set(runId, launchThreadId);
+    },
+    registerMasterStop: (runId, stop) => masterStopByRun.set(runId, stop),
+    masterStopForRun: (runId) => masterStopByRun.get(runId)?.() ?? Promise.resolve(),
+    runsOwnedByThread: (threadId) =>
+      [...launchThreadByRun.entries()]
+        .filter(([, owner]) => owner === threadId)
+        .map(([runId]) => runId),
+    registerChildThread: (runId, threadId) => {
+      const children = childThreadsByRun.get(runId) ?? new Set<string>();
+      children.add(threadId);
+      childThreadsByRun.set(runId, children);
+    },
+    childThreadsForRun: (runId) => [...(childThreadsByRun.get(runId) ?? [])],
     setPending: (threadId, pending) => {
       pendingByThread.set(threadId, pending);
     },

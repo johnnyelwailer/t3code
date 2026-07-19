@@ -19,9 +19,10 @@ import {
   launchPreparedWorkflow,
   type PreparedWorkflowLaunchDeps,
 } from "./t3work-workflowEphemeralLaunch.ts";
+import { DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS } from "./t3work-workflowEphemeralConcurrencyPolicy.ts";
 
 /** Max ephemeral runs holding engine resources (running/suspended/sleeping) at once (spec D8). */
-export const T3WORK_EPHEMERAL_RUN_CAP = 8;
+export const T3WORK_EPHEMERAL_RUN_CAP = DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS;
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -82,16 +83,6 @@ export function makeWorkflowRunToolHandlers<E>(deps: {
           return yield* Effect.fail("Current t3work thread has no model selection to run with.");
         }
 
-        // Concurrency cap BEFORE writing anything to disk (spec D8).
-        const liveRuns = yield* deps.launch.runRepository
-          .countLiveByOrigin({ origin: "ephemeral" })
-          .pipe(Effect.mapError(errorMessage));
-        if (liveRuns >= T3WORK_EPHEMERAL_RUN_CAP) {
-          return yield* Effect.fail(
-            `Ephemeral workflow cap reached: ${liveRuns} runs are live (max ${T3WORK_EPHEMERAL_RUN_CAP}). Wait for one to complete or answer its pending decision, then retry.`,
-          );
-        }
-
         const runId = t3workRandomUUID();
         const workflowPath = yield* resolveRunWorkflowPath({
           fileSystem,
@@ -101,11 +92,16 @@ export function makeWorkflowRunToolHandlers<E>(deps: {
           args,
         });
 
-        // Capture the settle sinks so a completed output / failure message rides back to the
-        // agent in the tool result (a failed run still returns ok:true + the error to fix).
-        let output: unknown;
-        let runError: unknown;
-        const result = yield* launchPreparedWorkflow(
+        // Do not tie durable workflow execution to the MCP/HTTP request lifetime. A long timer
+        // or agent turn can outlive that request by hours. The daemon owns lifecycle writes,
+        // registry parking, scheduler wake-ups, and the same visible workflow card.
+        let admittedResolve: (() => void) | undefined;
+        let admittedReject: ((error: unknown) => void) | undefined;
+        const admitted = new Promise<void>((resolve, reject) => {
+          admittedResolve = resolve;
+          admittedReject = reject;
+        });
+        const detached = launchPreparedWorkflow(
           { ...deps.launch, fileSystem, path },
           {
             runId,
@@ -119,30 +115,16 @@ export function makeWorkflowRunToolHandlers<E>(deps: {
             runtimeMode: thread.runtimeMode,
             interactionMode: thread.interactionMode,
             origin: "ephemeral",
-            onComplete: async (value) => {
-              output = value;
-            },
-            onError: async (error) => {
-              runError = error;
-            },
+            onAdmitted: async () => admittedResolve?.(),
           },
-        );
+        ).pipe(Effect.tapError((error) => Effect.sync(() => admittedReject?.(error))));
+        yield* detached.pipe(Effect.forkDetach({ startImmediately: true }));
+        yield* Effect.promise(() => admitted).pipe(Effect.mapError(errorMessage));
 
         return {
           ok: true as const,
-          runId: result.runId,
-          status: result.status,
-          ...(result.status === "completed" && output !== undefined ? { output } : {}),
-          // On failure, point the calling agent at the on-demand manual rather
-          // than dumping it inline (the #1 failure is authoring a plain script
-          // instead of an agent-orchestration body). Keeps the result lean.
-          ...(result.status === "failed"
-            ? {
-                error:
-                  (runError === undefined ? "Workflow run failed." : errorMessage(runError)) +
-                  ' — for the authoring syntax call t3work_help("agent-orchestration").',
-              }
-            : {}),
+          runId,
+          status: "accepted" as const,
         } satisfies RunWorkflowToolResult;
       });
     },

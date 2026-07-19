@@ -117,6 +117,7 @@ import {
   t3workThreadRecipeWorkflowLaunchRouteLayer,
   t3workThreadWorkflowResolveInputRouteLayer,
 } from "./t3work-thread-recipe-workflow-routes.ts";
+import { t3workThreadWorkflowControlRouteLayer } from "./t3work-thread-workflow-control-route.ts";
 import {
   t3workGitHubAssetRouteLayer,
   t3workGitHubInboxRouteLayer,
@@ -129,6 +130,7 @@ import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStor
 import { T3workContextRefreshServiceLive } from "./t3work-contextRefreshService.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
 import { T3workActorMessageReactorLive } from "./t3work-actorMessageReactor.ts";
+import { T3workChildStatusReactorLive } from "./t3work-childStatusReactor.ts";
 import { T3workWorkflowEngineRehydrateLive } from "./t3work-workflowEngineRehydrate.ts";
 import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowSchedulerLive } from "./t3work-workflowScheduler.ts";
@@ -443,6 +445,7 @@ export const makeRoutesLayer = Layer.mergeAll(
   t3workProjectWorkspaceDiscoverRecipesRouteLayer,
   t3workThreadPlacementRouteLayer,
   t3workThreadRecipeWorkflowLaunchRouteLayer,
+  t3workThreadWorkflowControlRouteLayer,
   t3workThreadWorkflowResolveInputRouteLayer,
   t3workThreadToolContextRouteLayer,
   t3workProjectWorkspaceWriteContextFilesRouteLayer,
@@ -571,6 +574,7 @@ export const makeServerLayer = Layer.unwrap(
       tailscaleServeLayer,
       T3workWorkflowEngineReactorLive,
       T3workActorMessageReactorLive,
+      T3workChildStatusReactorLive,
       T3workWorkflowEngineRehydrateLive,
       cloudDesiredLinkReconcileLayer,
     );

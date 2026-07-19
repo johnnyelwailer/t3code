@@ -613,6 +613,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             pendingUserInputCount: 0,
             hasActionableProposedPlan: 0,
             deletedAt: null,
+            childStatus: null,
+            childStatusUpdatedAt: null,
           });
           return;
 
@@ -662,6 +664,13 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...(event.payload.branch !== undefined ? { branch: event.payload.branch } : {}),
             ...(event.payload.worktreePath !== undefined
               ? { worktreePath: event.payload.worktreePath }
+              : {}),
+            ...(event.payload.childStatus !== undefined
+              ? {
+                  childStatus: event.payload.childStatus,
+                  childStatusUpdatedAt:
+                    event.payload.childStatusUpdatedAt ?? event.payload.updatedAt,
+                }
               : {}),
             updatedAt: event.payload.updatedAt,
           });

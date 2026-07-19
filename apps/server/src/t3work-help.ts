@@ -8,7 +8,7 @@
  *
  * @module t3work-help
  */
-import { T3WORK_WORKFLOW_MANUAL } from "./t3work-workflowManual.ts";
+import { T3WORK_TIMERS_MANUAL, T3WORK_WORKFLOW_MANUAL } from "./t3work-workflowManual.ts";
 
 export interface T3workHelpTopic {
   readonly slug: string;
@@ -24,8 +24,14 @@ const TOPICS: ReadonlyArray<T3workHelpTopic> = [
     slug: "agent-orchestration",
     title: "Agent orchestration (t3work_workflow_run)",
     summary:
-      "How to author the body you pass to t3work_workflow_run — fan-out, sequencing, injected globals, meta block.",
+      "How to author t3work_workflow_run bodies — fan-out, sequencing, durable timers/routines, injected globals, and meta.",
     body: T3WORK_WORKFLOW_MANUAL,
+  },
+  {
+    slug: "timers",
+    title: "Durable workflow timers and routines",
+    summary: "Exact waitUntil/now syntax for one-shot waits and recurring durable routines.",
+    body: T3WORK_TIMERS_MANUAL,
   },
 ];
 
@@ -37,6 +43,9 @@ const ALIASES: Readonly<Record<string, string>> = {
   runbooks: "agent-orchestration",
   orchestration: "agent-orchestration",
   "workflow-run": "agent-orchestration",
+  timer: "timers",
+  schedule: "timers",
+  scheduling: "timers",
 };
 
 const indexText = (): string =>

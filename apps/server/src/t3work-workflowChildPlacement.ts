@@ -4,11 +4,13 @@ import type {
   ThreadCreatePayload,
   WorkflowEngineBrokerDeps,
 } from "./t3work-workflowEngineBrokerTypes.ts";
+import { fromWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
 
 export async function dispatchWorkflowChild(
   deps: WorkflowEngineBrokerDeps,
   payload: ThreadCreatePayload,
 ): Promise<void> {
+  deps.registry.registerChildThread(deps.runId, payload.threadId);
   const childTitle = payload.name ?? "Workflow thread";
   const createdAt = deps.nowIso();
   await deps.dispatch({
@@ -17,7 +19,8 @@ export async function dispatchWorkflowChild(
     threadId: ThreadId.make(payload.threadId),
     projectId: deps.projectId,
     title: childTitle,
-    modelSelection: deps.modelSelection,
+    modelSelection:
+      payload.model === undefined ? deps.modelSelection : fromWorkflowModelSelection(payload.model),
     runtimeMode: deps.runtimeMode,
     interactionMode: deps.interactionMode,
     branch: null,

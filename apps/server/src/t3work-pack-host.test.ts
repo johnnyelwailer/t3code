@@ -8,6 +8,8 @@ import * as Path from "effect/Path";
 import {
   inspectConfiguredWorkspacePacks,
   loadPackAppearanceOverlay,
+  loadPackWorkflowAgentModelPolicy,
+  loadPackWorkflowEphemeralConcurrencyPolicy,
   loadPackWorkflowRepairPolicy,
 } from "./t3work-pack-host.ts";
 
@@ -134,6 +136,76 @@ nodeLayer("workspace pack host inspection", (it) => {
         maxAttempts: 3,
         modelSelection: { instanceId: "nexplore", model: "nexplore/coding" },
       });
+    }),
+  );
+
+  it.effect("loads a workflow child-agent model policy from pack activation", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3work-pack-agent-model-",
+      });
+      const directory = path.join(root, "nexi");
+      yield* fileSystem.makeDirectory(directory);
+      yield* fileSystem.writeFileString(
+        path.join(directory, "activate.mjs"),
+        'export const activate = ({ defineWorkflowAgentModelPolicy }) => defineWorkflowAgentModelPolicy({ modelSelection: { instanceId: "nexplore", model: "nexplore/coding" } });',
+      );
+      yield* fileSystem.writeFileString(
+        path.join(directory, "pack.json"),
+        JSON.stringify({
+          id: "nexi",
+          name: "Nexi",
+          packApiVersion: 1,
+          version: "1.0.0",
+          scope: "distribution",
+          compatibility: { t3workCore: "*" },
+          contents: {},
+          capabilities: ["workflow-agent-model-policy:v1"],
+          entrypoints: { activate: "activate.mjs" },
+          hashes: {},
+        }),
+      );
+      const diagnostic = yield* Effect.tryPromise(() => inspectConfiguredWorkspacePacks(root));
+      const policy = yield* Effect.tryPromise(() => loadPackWorkflowAgentModelPolicy(diagnostic));
+      expect(policy).toEqual({ instanceId: "nexplore", model: "nexplore/coding" });
+    }),
+  );
+
+  it.effect("loads an unlimited ephemeral workflow concurrency policy", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3work-pack-concurrency-",
+      });
+      const directory = path.join(root, "nexi");
+      yield* fileSystem.makeDirectory(directory);
+      yield* fileSystem.writeFileString(
+        path.join(directory, "activate.mjs"),
+        "export const activate = ({ defineWorkflowEphemeralConcurrencyPolicy }) => defineWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 16 });",
+      );
+      yield* fileSystem.writeFileString(
+        path.join(directory, "pack.json"),
+        JSON.stringify({
+          id: "nexi",
+          name: "Nexi",
+          packApiVersion: 1,
+          version: "1.0.0",
+          scope: "distribution",
+          compatibility: { t3workCore: "*" },
+          contents: {},
+          capabilities: ["workflow-ephemeral-concurrency-policy:v1"],
+          entrypoints: { activate: "activate.mjs" },
+          hashes: {},
+        }),
+      );
+      const diagnostic = yield* Effect.tryPromise(() => inspectConfiguredWorkspacePacks(root));
+      const policy = yield* Effect.tryPromise(() =>
+        loadPackWorkflowEphemeralConcurrencyPolicy(diagnostic),
+      );
+      expect(policy).toEqual({ maxActiveSteps: 16 });
     }),
   );
 });

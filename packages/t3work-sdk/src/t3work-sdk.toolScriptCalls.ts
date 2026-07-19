@@ -19,6 +19,8 @@ export interface ToolScriptCallsDeps {
   readonly toolCtx: T.ToolHandlerCtx;
   readonly scriptCtx: T.ScriptHandlerCtx;
   readonly scriptNames: ReadonlyMap<T.AnyScriptRef, string>;
+  readonly beforePrimitive?: () => Promise<boolean>;
+  readonly afterPrimitive?: () => void;
 }
 
 /** Build the `callTool` / `callScript` pair for a durable runtime. */
@@ -26,6 +28,17 @@ export function createToolScriptCalls(deps: ToolScriptCallsDeps): {
   readonly callTool: <I, R>(ref: T.ToolRef<I, R>, args: I) => Promise<R>;
   readonly callScript: <I, O>(ref: T.ScriptRef<I, O>, args: I) => Promise<O>;
 } {
+  const executePrimitive = async <R>(execute: () => Promise<R>): Promise<R> => {
+    if ((await deps.beforePrimitive?.()) === false) throw new WorkflowError("Workflow was stopped");
+    try {
+      return await execute();
+    } finally {
+      deps.afterPrimitive?.();
+      if ((await deps.beforePrimitive?.()) === false) {
+        throw new WorkflowError("Workflow was stopped");
+      }
+    }
+  };
   const callTool = async <I, R>(ref: T.ToolRef<I, R>, args: I): Promise<R> => {
     const decodedArgs = await decodeWithSchema(
       ref.args,
@@ -37,9 +50,12 @@ export function createToolScriptCalls(deps: ToolScriptCallsDeps): {
       refId: ref.id,
       args: decodedArgs,
       exec: () =>
-        withWorkflowRuntime(deps.blackBox, () =>
-          executeRegisteredTool(ref.id, decodedArgs, deps.toolCtx),
-        ) as Promise<R>,
+        executePrimitive(
+          () =>
+            withWorkflowRuntime(deps.blackBox, () =>
+              executeRegisteredTool(ref.id, decodedArgs, deps.toolCtx),
+            ) as Promise<R>,
+        ),
       decodeRecorded: (recorded) =>
         decodeWithSchema(ref.result, recorded, `Invalid recorded result for tool '${ref.id}'`),
     });
@@ -61,9 +77,12 @@ export function createToolScriptCalls(deps: ToolScriptCallsDeps): {
       args: decodedArgs,
       replay: ref.replay,
       exec: () =>
-        withWorkflowRuntime(deps.blackBox, () =>
-          executeScriptHandler(ref, decodedArgs, deps.scriptCtx),
-        ) as Promise<O>,
+        executePrimitive(
+          () =>
+            withWorkflowRuntime(deps.blackBox, () =>
+              executeScriptHandler(ref, decodedArgs, deps.scriptCtx),
+            ) as Promise<O>,
+        ),
       decodeRecorded: (recorded) =>
         decodeWithSchema(ref.outputs, recorded, `Invalid recorded result for script '${refId}'`),
     });

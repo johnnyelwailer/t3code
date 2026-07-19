@@ -32,7 +32,8 @@ export type RunWorkflowToolArgs = typeof RunWorkflowToolArgs.Type;
 export const RunWorkflowToolResult = Schema.Struct({
   ok: Schema.Literal(true),
   runId: Schema.String,
-  status: Schema.Literals(["completed", "suspended", "failed"]),
+  /** `accepted` means the durable server owns the run; watch its workflow card for progress. */
+  status: Schema.Literals(["accepted", "completed", "suspended", "failed"]),
   /** The validated workflow output — present only when status is `completed`. */
   output: Schema.optional(Schema.Unknown),
   /** The run's failure message — present only when status is `failed`; fix and re-run. */

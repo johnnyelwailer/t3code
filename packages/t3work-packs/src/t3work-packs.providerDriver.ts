@@ -105,6 +105,12 @@ export type PackTextGeneration = {
     readonly attachments?: readonly unknown[] | undefined;
     readonly modelSelection: unknown;
   }): Promise<{ readonly title: string }>;
+  /** Out-of-band structured generation; host validates against its requested schema. */
+  generateStructured?(input: {
+    readonly cwd: string;
+    readonly prompt: string;
+    readonly modelSelection: unknown;
+  }): Promise<unknown>;
 };
 
 export type PackOpenCodeHarnessOptions = {

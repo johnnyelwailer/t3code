@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 import { EventId } from "@t3tools/contracts";
 import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import { deriveT3workWorkflowStepRuns } from "~/t3work/chat/t3work-threadWorkflowStepProgress";
+import {
+  formatWorkflowStepDue,
+  T3workWorkflowShapeLiveCard,
+  workflowControlErrorMessage,
+} from "~/t3work/chat/t3work-messageShapeCardLive";
 import {
   countOccurrences,
   renderTimeline,
@@ -10,6 +16,7 @@ import {
   runActivity,
   step,
   stepActivity,
+  TEST_WORKFLOW_SHAPE,
 } from "~/t3work/chat/t3work-messageShapeCardLive.testSupport";
 
 describe("deriveT3workWorkflowStepRuns", () => {
@@ -69,7 +76,30 @@ describe("deriveT3workWorkflowStepRuns", () => {
   });
 });
 
+describe("workflow controls", () => {
+  it("maps a missing development route to a visible restart instruction", () => {
+    expect(workflowControlErrorMessage(new Error("Request failed: 404 Not Found"))).toContain(
+      "Server restart required",
+    );
+  });
+
+  it("shows queued capacity feedback on the workflow card", async () => {
+    const markup = await renderTimeline([runActivity("started")], undefined, { status: "queued" });
+    expect(markup).toContain("Queued · starts when capacity is free");
+  });
+});
+
 describe("live workflow step overlay on the plan card", () => {
+  it("formats compact locale-aware timer metadata", () => {
+    const now = new Date("2026-04-01T12:00:00.000Z");
+    const options = { now, locale: "en-US", timeZone: "UTC" };
+    expect(formatWorkflowStepDue("2026-04-01T12:00:05.000Z", options)).toBe("in 5 sec");
+    expect(formatWorkflowStepDue("2026-04-01T12:03:00.000Z", options)).toBe("in 3 min");
+    expect(formatWorkflowStepDue("2026-04-01T21:00:00.000Z", options)).toBe("9:00 PM");
+    expect(formatWorkflowStepDue("2026-04-02T09:00:00.000Z", options)).toBe("tomorrow");
+    expect(formatWorkflowStepDue("2026-04-06T09:00:00.000Z", options)).toBe("Mon, Apr 6");
+  });
+
   it("overlays plan steps with live statuses and keeps unexecuted steps neutral", async () => {
     const markup = await renderTimeline([
       stepActivity(step(1, "read", "completed", { detail: "github.pullRequest.get" }), {
@@ -82,16 +112,20 @@ describe("live workflow step overlay on the plan card", () => {
     expect(markup).toContain("shape.pr-review");
     expect(markup).not.toContain("The plan");
     expect(markup).not.toContain(">System<");
-    // step 1 completed, step 2 running, steps 3+4 not executed yet
+    // step 1 completed, step 2 is actively running, steps 3+4 not executed yet
     expect(countOccurrences(markup, 'data-step-status="completed"')).toBe(1);
+    expect(countOccurrences(markup, 'data-step-status="waiting"')).toBe(0);
     expect(countOccurrences(markup, 'data-step-status="started"')).toBe(1);
     expect(countOccurrences(markup, 'data-step-status="pending"')).toBe(2);
+    expect(countOccurrences(markup, "animate-spin")).toBe(1);
+    expect(markup).not.toContain("lucide-clock");
     // Executed summaries and pending rows share the exact inset, so every status icon lines up.
     expect(countOccurrences(markup, 'data-step-row-shell="interactive"')).toBe(2);
     expect(countOccurrences(markup, 'data-step-row-shell="static"')).toBe(2);
     expect(countOccurrences(markup, "rounded-md px-1 py-0.5")).toBe(4);
     // run not terminal yet — no banner
     expect(markup).not.toContain("data-run-status");
+    expect(markup).toContain("Waiting for agent");
   }, 30000);
 
   it("keeps work logs inside expandable steps and links child threads", async () => {
@@ -114,6 +148,31 @@ describe("live workflow step overlay on the plan card", () => {
     expect(markup).toContain("Open thread");
   }, 30000);
 
+  it("keeps the authored label and renders generated child status in that step row", () => {
+    const activities = [
+      stepActivity(
+        step(1, "thread.turn", "started", {
+          detail: "Summarize the risk",
+          projectId: "project-1",
+          threadId: "child-1",
+        }),
+      ),
+    ];
+    const progress = deriveT3workWorkflowStepRuns(activities).get(RUN_ID)!;
+    const markup = renderToStaticMarkup(
+      <T3workWorkflowShapeLiveCard
+        shape={TEST_WORKFLOW_SHAPE}
+        progress={progress}
+        childStatuses={{ "child-1": "Checking retry behavior" }}
+      />,
+    );
+
+    expect(markup).toContain("Summarize the risk");
+    expect(markup).toContain('data-step-child-status="Checking retry behavior"');
+    expect(markup).toContain("Checking retry behavior");
+    expect(markup).not.toContain("data-workflow-child-status");
+  });
+
   it("renders waiting and failed statuses without duplicating the ask content", async () => {
     const markup = await renderTimeline([
       stepActivity(step(1, "read", "completed"), { sequence: 1 }),
@@ -125,8 +184,11 @@ describe("live workflow step overlay on the plan card", () => {
     expect(countOccurrences(markup, 'data-step-status="completed"')).toBe(2);
     expect(countOccurrences(markup, 'data-step-status="waiting"')).toBe(1);
     expect(countOccurrences(markup, 'data-step-status="failed"')).toBe(1);
+    expect(markup).toContain("lucide-circle-dashed");
+    expect(markup).not.toContain("lucide-clock");
     // the waiting row shows only status — the ask question is the decision card's job
     expect(countOccurrences(markup, "Merge it?")).toBe(1); // the plan label, not a duplicate
+    expect(markup).toContain("Waiting for your answer");
   }, 30000);
 
   it("keeps unknown executed steps in chronological order with a human fallback title", async () => {
@@ -142,10 +204,56 @@ describe("live workflow step overlay on the plan card", () => {
 
     expect(markup).not.toContain("Additional steps");
     expect(countOccurrences(markup, 'data-step-runtime="unknown"')).toBe(1);
-    expect(markup).toContain("Agent task");
+    expect(markup).toContain("Retry the merge");
     // Runtime detail remains an expandable work log, never a row title or raw kind badge.
     expect(markup).toContain("Retry the merge");
     expect(markup).not.toContain(">THREAD.TURN<");
+  }, 30000);
+
+  it("uses the clock only for unresolved scheduled work", async () => {
+    const markup = await renderTimeline(
+      [
+        stepActivity(
+          step(1, "wait.until", "started", { detail: "Sleep until 2026-07-20T09:00:00.000Z" }),
+        ),
+      ],
+      undefined,
+      { status: "sleeping" },
+    );
+
+    expect(countOccurrences(markup, 'data-step-status="scheduled"')).toBe(1);
+    expect(countOccurrences(markup, 'data-step-status="started"')).toBe(0);
+    expect(countOccurrences(markup, "data-step-due")).toBe(1);
+    expect(markup).toContain("lucide-clock");
+  }, 30000);
+
+  it("spins only the individual row that is actively working", async () => {
+    const activeMarkup = await renderTimeline([
+      stepActivity(step(1, "read", "started", { detail: "github.pullRequest.get" })),
+    ]);
+    expect(countOccurrences(activeMarkup, "animate-spin")).toBe(1);
+    expect(activeMarkup).toContain('data-run-live-status="Running');
+
+    const waitingMarkup = await renderTimeline([
+      stepActivity(step(1, "thread.turn", "started", { detail: "Summarize the risk" })),
+    ]);
+    expect(countOccurrences(waitingMarkup, "animate-spin")).toBe(1);
+    expect(waitingMarkup).not.toContain("lucide-clock");
+  }, 30000);
+
+  it("animates preparation but keeps starting and terminal setup states static", async () => {
+    const preparingMarkup = await renderTimeline([
+      stepActivity(step(1, "workflow.self-heal", "started", { detail: "Repairing workflow" })),
+    ]);
+    expect(preparingMarkup).toContain("Getting workflow ready");
+    expect(preparingMarkup).not.toContain(">Repairing workflow<");
+    expect(countOccurrences(preparingMarkup, "animate-spin")).toBe(1);
+
+    const startingMarkup = await renderTimeline([
+      stepActivity(step(1, "workflow.self-heal", "started", { detail: "Resuming workflow" })),
+    ]);
+    expect(startingMarkup).toContain("Starting workflow");
+    expect(countOccurrences(startingMarkup, "animate-spin")).toBe(0);
   }, 30000);
 
   it("hides thread creation and inserts unknown work before later plan rows", async () => {
@@ -194,13 +302,44 @@ describe("live workflow step overlay on the plan card", () => {
     expect(failedMarkup).toContain("boom");
   }, 30000);
 
+  it("shows pause only at parked boundaries, resume while paused, and stop while live", async () => {
+    const waiting = [stepActivity(step(1, "thread.turn", "started"))];
+    const suspendedMarkup = await renderTimeline(waiting, undefined, { status: "suspended" });
+    expect(suspendedMarkup).toContain('aria-label="Pause workflow"');
+    expect(suspendedMarkup).toContain('aria-label="More workflow actions"');
+    expect(suspendedMarkup).not.toContain('aria-label="Stop workflow"');
+    expect(suspendedMarkup).not.toContain('aria-label="Resume workflow"');
+
+    const runningMarkup = await renderTimeline(waiting, undefined, { status: "running" });
+    expect(runningMarkup).not.toContain('aria-label="Pause workflow"');
+    expect(runningMarkup).toContain('aria-label="More workflow actions"');
+    expect(runningMarkup).not.toContain('aria-label="Stop workflow"');
+
+    const pausedMarkup = await renderTimeline([...waiting, runActivity("paused")], undefined, {
+      status: "paused",
+    });
+    expect(pausedMarkup).toContain('aria-label="Resume workflow"');
+    expect(pausedMarkup).toContain('aria-label="More workflow actions"');
+    expect(pausedMarkup).toContain("Run paused");
+
+    const stoppedMarkup = await renderTimeline([...waiting, runActivity("cancelled")], undefined, {
+      status: "cancelled",
+    });
+    expect(stoppedMarkup).toContain("Run stopped");
+    expect(stoppedMarkup).toContain('data-step-status="cancelled"');
+    expect(stoppedMarkup).not.toContain('data-step-status="started"');
+    expect(stoppedMarkup).not.toContain("animate-spin");
+    expect(stoppedMarkup).not.toContain('aria-label="Stop workflow"');
+    expect(stoppedMarkup).not.toContain('aria-label="More workflow actions"');
+  }, 30000);
+
   it("keeps the static plan card when no step activities exist for the run", async () => {
     const markup = await renderTimeline([]);
     expect(markup).toContain("shape.pr-review");
     expect(markup).not.toContain("The plan");
     expect(markup).not.toContain("data-step-status");
   }, 30000);
-  it("renders repair phases as host-authored labels, never runtime details", async () => {
+  it("renders repair as one compact card state and not a duplicate generic work log", async () => {
     const markup = await renderTimeline([
       stepActivity(step(1, "workflow.self-heal", "started", { detail: "Analysing failure" }), {
         sequence: 1,
@@ -220,18 +359,12 @@ describe("live workflow step overlay on the plan card", () => {
       ),
     ]);
 
-    const labels = [
-      "Analysing failure",
-      "Repairing workflow",
-      "Resuming workflow",
-      "Repair attempt failed",
-    ];
-    for (const label of labels) expect(markup).toContain(label);
-    expect(labels.map((label) => markup.indexOf(label))).toEqual(
-      [...labels.map((label) => markup.indexOf(label))].toSorted((a, b) => a - b),
-    );
+    expect(markup).toContain('data-workflow-repair-status="Needs attention"');
+    expect(markup).toContain("Needs attention");
+    expect(markup).not.toContain("Analysing failure");
+    expect(markup).not.toContain("Repair attempt failed");
+    expect(markup).not.toContain("Work Log");
     expect(markup).not.toContain(">workflow.self-heal<");
     expect(markup).not.toContain("nexplore/coding should never be a row title");
-    expect(markup).toContain("Final error");
   }, 30000);
 });

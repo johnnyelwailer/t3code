@@ -91,6 +91,31 @@ const bridgePackTextGeneration = (
       attempt("generateBranchName", () => service.generateBranchName(input)),
     generateThreadTitle: (input) =>
       attempt("generateThreadTitle", () => service.generateThreadTitle(input)),
+    ...(service.generateStructured
+      ? {
+          generateStructured: (input) =>
+            attempt("generateStructured", () =>
+              service.generateStructured!({
+                cwd: input.cwd,
+                prompt: input.prompt,
+                modelSelection: input.modelSelection,
+              }),
+            ).pipe(
+              Effect.flatMap((value) =>
+                Schema.decodeEffect(input.outputSchema)(value).pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new TextGenerationError({
+                        operation: "generateStructured",
+                        detail: `Provider driver '${driver}' returned invalid structured output.`,
+                        cause,
+                      }),
+                  ),
+                ),
+              ),
+            ) as never,
+        }
+      : {}),
   };
 };
 

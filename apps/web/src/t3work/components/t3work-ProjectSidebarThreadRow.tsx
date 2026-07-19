@@ -113,7 +113,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
       ref={rowRef}
       size="sm"
       isActive={state.isSelected}
-      className={`group/thread-row-button h-7 w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none focus-visible:ring-1 focus-visible:ring-inset ${getSidebarWrappedButtonClassName(
+      className={`group/thread-row-button ${thread.childStatus ? "h-auto min-h-7 py-1" : "h-7"} w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none focus-visible:ring-1 focus-visible:ring-inset ${getSidebarWrappedButtonClassName(
         state,
       )}`}
       onClick={onSelect}
@@ -147,7 +147,17 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="min-w-0 flex-1 truncate text-xs">{thread.title}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-xs">{thread.title}</span>
+            {thread.childStatus ? (
+              <span
+                data-child-status={thread.childStatus}
+                className="block truncate text-[10px] text-muted-foreground/75"
+              >
+                {thread.childStatus}
+              </span>
+            ) : null}
+          </span>
         )}
       </div>
       <div className="ml-auto flex shrink-0 items-center">

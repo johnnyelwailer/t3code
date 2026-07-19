@@ -49,6 +49,8 @@ import {
 } from "./t3work-workflowEngineDurability.ts";
 import { launchWorkflowRecipe } from "./t3work-workflowEngineLaunch.ts";
 import { rehydrateSuspendedWorkflowRuns } from "./t3work-workflowEngineRehydrate.ts";
+import { workflowAdmissionQueue } from "./t3work-workflowAdmissionQueue.ts";
+import { setWorkflowEphemeralConcurrencyPolicy } from "./t3work-workflowEphemeralConcurrencyPolicy.ts";
 import {
   makeWorkflowEngineRegistry,
   T3workWorkflowEngineRegistry,
@@ -77,6 +79,56 @@ const stubEngine: OrchestrationEngineShape = {
   streamDomainEvents: Stream.never,
 };
 const OrchestrationEngineTestLive = Layer.succeed(OrchestrationEngineService, stubEngine);
+
+it.live("rehydrates durable queued runs and promotes them when FIFO capacity opens", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      workflowAdmissionQueue.resetForTests();
+      setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 1 });
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          workflowAdmissionQueue.resetForTests();
+          setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 8 });
+        }),
+      );
+      yield* Effect.promise(() => workflowAdmissionQueue.acquire("restart-blocker"));
+      const repo = yield* WorkflowRunRepository;
+      const runId = "rehydrate-queued";
+      const workflowPath = NodePath.join(cwd, "rehydrate-queued.workflow.ts");
+      NodeFS.writeFileSync(
+        workflowPath,
+        'import { Schema } from "effect"; export const Inputs = Schema.Struct({}); export const Outputs = Schema.Struct({ ok: Schema.Boolean }); export const meta = { name: "queued", inputs: Inputs, outputs: Outputs } as const; return { ok: true };',
+      );
+      yield* repo.upsert({
+        ...buildRunningWorkflowRunRow({
+          runId,
+          workflowPath,
+          args: {},
+          launchThreadId: "queued-thread",
+          projectId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          origin: "ephemeral",
+          nowIso: nowIso(),
+        }),
+        status: "queued",
+      });
+
+      yield* rehydrateSuspendedWorkflowRuns();
+      yield* waitUntil(
+        () => workflowAdmissionQueue.snapshot().queued.includes(runId),
+        "queued run to rebuild its admission waiter",
+      );
+      workflowAdmissionQueue.release("restart-blocker");
+      yield* waitUntil(
+        () => workflowAdmissionQueue.snapshot().active.length === 0,
+        "queued run to finish after promotion",
+      );
+      assert.strictEqual(Option.getOrThrow(yield* repo.getById({ runId })).status, "completed");
+    }),
+  ).pipe(Effect.provide(TestLayer)),
+);
 
 // Mirrors `WorkflowEngineDurabilityLive` in server.ts / t3work-server.ts, over the in-memory
 // SQLite layer instead of the real one.

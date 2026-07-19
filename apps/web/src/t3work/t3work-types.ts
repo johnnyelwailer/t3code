@@ -51,6 +51,24 @@ export type ProjectThread = {
    * absent when no run is clock-parked. Drives the "Sleeping until <time>" status pill.
    * Sourced from `workflow_runs.wake_at`, joined onto the thread shell DTO by launch_thread_id. */
   sleepingUntil?: string;
+  workflowRunStatus?: {
+    readonly runId?: string;
+    readonly status:
+      | "queued"
+      | "running"
+      | "suspended"
+      | "sleeping"
+      | "paused"
+      | "completed"
+      | "failed"
+      | "cancelled";
+    readonly pendingKind: "thread.turn" | "user.input" | null;
+    readonly wakeAt: string | null;
+    readonly updatedAt: string;
+  };
+  /** Compact server-generated summary for a child thread; never a chat message. */
+  childStatus?: string | null;
+  childStatusUpdatedAt?: string | null;
 };
 
 export type ThreadMessage = {
@@ -134,7 +152,21 @@ export type ProjectSortOrder = "updated_at" | "created_at";
 export type ThreadSortOrder = "updated_at" | "created_at";
 
 export type ThreadStatusPill = {
-  label: "Working" | "Completed" | "Error" | "Idle" | "Sleeping";
+  label:
+    | "Running"
+    | "Waiting for agent"
+    | "Waiting for your answer"
+    | "Scheduled"
+    | "Paused"
+    | "Stopped"
+    | "Complete"
+    | "Needs attention"
+    | "Queued"
+    | "Working"
+    | "Completed"
+    | "Error"
+    | "Idle"
+    | "Sleeping";
   /** Optional trailing context for the pill — the wake time for a `Sleeping` routine
    * ("until Mon 09:00"), shown after the label in its tooltip. */
   detail?: string;

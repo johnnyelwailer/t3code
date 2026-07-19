@@ -25,6 +25,8 @@ export { activateWorkspacePack } from "./t3work-packs.activation.ts";
 export type {
   PackActivationContext,
   PackActivate,
+  WorkflowAgentModelPolicyDefinition,
+  WorkflowEphemeralConcurrencyPolicyDefinition,
   WorkflowRepairPolicyDefinition,
 } from "./t3work-packs.activation.ts";
 export type {

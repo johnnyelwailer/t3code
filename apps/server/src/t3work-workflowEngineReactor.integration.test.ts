@@ -72,6 +72,9 @@ import {
 const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3work-exampleReview.workflow.ts", import.meta.url),
 );
+const parallelWorkflowPath = NodeURL.fileURLToPath(
+  new URL("../__fixtures__/t3work-parallelAgentsAfterResume.workflow.ts", import.meta.url),
+);
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-reactor-"));
 
 const projectId = ProjectId.make("proj-reactor");
@@ -267,7 +270,108 @@ it.live(
         merged: true,
       });
       assert.isUndefined(registry.getRun(runId));
+
+      // A duplicated/late user event cannot settle the consumed ask again.
+      yield* orchestration.dispatch({
+        type: "thread.message.upsert",
+        commandId: CommandId.make("reactor-user-reply-duplicate"),
+        threadId: ThreadId.make(launchThreadId),
+        message: {
+          messageId: MessageId.make("reactor-user-reply-msg-duplicate"),
+          role: "user",
+          text: '{"merge":false}',
+          turnId: null,
+          streaming: false,
+        },
+        createdAt: ISO,
+      });
+      yield* Effect.sleep(Duration.millis(20));
+      assert.strictEqual(completed.length, 1);
     }).pipe(Effect.provide(TestLayer)),
+);
+
+it.live("settles all parallel live agent replies while the parent replay is in progress", () =>
+  Effect.gen(function* () {
+    const orchestration = yield* OrchestrationEngineService;
+    const registry = yield* T3workWorkflowEngineRegistry;
+    yield* Effect.sleep(Duration.millis(100));
+
+    const runId = "reactor-parallel-run";
+    const launchThreadId = "reactor-parallel-launch";
+    yield* orchestration.dispatch({
+      type: "project.create",
+      commandId: CommandId.make("reactor-parallel-project"),
+      projectId,
+      title: "Parallel Reactor Project",
+      workspaceRoot: "/tmp/reactor-parallel-project",
+      defaultModelSelection: modelSelection,
+      createdAt: ISO,
+    });
+    yield* orchestration.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make("reactor-parallel-launch-thread"),
+      threadId: ThreadId.make(launchThreadId),
+      projectId,
+      title: "Parallel launch thread",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdAt: ISO,
+    });
+
+    const commands: OrchestrationCommand[] = [];
+    const completed: unknown[] = [];
+    const errors: unknown[] = [];
+    let seq = 0;
+    const launched = yield* Effect.promise(() =>
+      launchWorkflowRecipe({
+        runId,
+        workflowPath: parallelWorkflowPath,
+        args: {},
+        runsRoot,
+        launchThreadId,
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        registry,
+        dispatch: (command) => {
+          commands.push(command);
+          return Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
+        },
+        newId: () => `parallel-id-${(seq += 1)}`,
+        nowIso: () => ISO,
+        onComplete: async (output) => {
+          completed.push(output);
+        },
+        onError: async (error) => {
+          errors.push(error);
+        },
+      }),
+    );
+    assert.strictEqual(launched.status, "suspended");
+
+    yield* waitUntil(
+      () => completed.length === 1 || errors.length === 1,
+      "parallel live children to settle",
+    );
+    assert.deepStrictEqual(errors, []);
+    assert.deepStrictEqual(completed[0], { count: 3 });
+    assert.strictEqual(
+      commands.filter((command) => command.type === "thread.turn.start").length,
+      4,
+    );
+    assert.isTrue(
+      commands.some(
+        (command) =>
+          command.type === "thread.message.upsert" &&
+          command.message.text === "Parallel children complete",
+      ),
+    );
+    assert.isUndefined(registry.getRun(runId));
+  }).pipe(Effect.provide(TestLayer)),
 );
 
 afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));

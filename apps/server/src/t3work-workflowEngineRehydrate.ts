@@ -36,10 +36,14 @@ import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStor
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
 import { makeWorkflowRunLifecycle } from "./t3work-workflowEngineDurability.ts";
-import { createWorkflowRunController } from "./t3work-workflowEngineLaunch.ts";
+import {
+  createWorkflowRunController,
+  launchWorkflowRecipe,
+} from "./t3work-workflowEngineLaunch.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
+import { resolveWorkflowAgentModel } from "./t3work-workflowAgentModelPolicy.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
@@ -56,7 +60,22 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
 
     const suspended = yield* repo.listByStatus({ status: "suspended" });
     const sleeping = yield* repo.listByStatus({ status: "sleeping" });
-    if (suspended.length === 0 && sleeping.length === 0) return;
+    const paused = yield* repo.listByStatus({ status: "paused" });
+    const queued = yield* repo.listByStatus({ status: "queued" });
+    // A process died while executing a non-idempotent live step. Never blindly replay it at
+    // boot: surface Needs attention instead of leaving a forever-running orphan.
+    const running = yield* repo.listByStatus({ status: "running" });
+    for (const run of running) {
+      yield* repo.setStatus({ runId: run.runId, status: "failed", updatedAt: nowIso() });
+      yield* Effect.logWarning("marked interrupted running workflow failed", { runId: run.runId });
+    }
+    if (
+      suspended.length === 0 &&
+      sleeping.length === 0 &&
+      paused.length === 0 &&
+      queued.length === 0
+    )
+      return;
 
     // The journal lives in the DB (store), so `runsRoot` only backs the workspace-root default
     // for tool scratch files; the server cwd matches the bootstrapped project's workspace.
@@ -85,6 +104,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         launchThreadId: run.launchThreadId ?? undefined,
         projectId: run.projectId,
         modelSelection: run.modelSelection,
+        defaultAgentModelSelection: resolveWorkflowAgentModel(run.modelSelection),
         runtimeMode: run.runtimeMode,
         interactionMode: run.interactionMode,
         registry,
@@ -94,7 +114,53 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         store,
         lifecycle,
       });
+      registry.registerMasterStop(run.runId, () =>
+        Effect.runPromise(
+          repo.clearPending({ runId: run.runId, status: "cancelled", updatedAt: nowIso() }),
+        ),
+      );
     };
+
+    // Durable queued rows preserve FIFO order (`listByStatus` sorts by creation time). Each
+    // detached starter waits on the same fair permit queue used by fresh launches.
+    for (const run of queued) {
+      const lifecycle = makeWorkflowRunLifecycle({
+        repo,
+        row: run,
+        nowIso,
+        onSleep: () => {
+          void scheduler.rearm();
+        },
+      });
+      registry.registerOwnership(run.runId, run.launchThreadId ?? undefined);
+      registry.registerMasterStop(run.runId, () =>
+        Effect.runPromise(
+          repo.clearPending({ runId: run.runId, status: "cancelled", updatedAt: nowIso() }),
+        ),
+      );
+      yield* Effect.promise(async () => {
+        if (!(await lifecycle.recordActive())) return;
+        await launchWorkflowRecipe({
+          runId: run.runId,
+          workflowPath: run.workflowPath,
+          args: run.args,
+          runsRoot,
+          launchThreadId: run.launchThreadId ?? undefined,
+          projectId: run.projectId,
+          modelSelection: run.modelSelection,
+          defaultAgentModelSelection: resolveWorkflowAgentModel(run.modelSelection),
+          runtimeMode: run.runtimeMode,
+          interactionMode: run.interactionMode,
+          registry,
+          dispatch,
+          newId: () => t3workRandomUUID(),
+          nowIso,
+          store,
+          lifecycle,
+          lifecycleAlreadyRunning: true,
+        });
+      }).pipe(Effect.forkDetach({ startImmediately: true }));
+    }
 
     let restored = 0;
     for (const run of suspended) {
@@ -130,6 +196,19 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
       // reactor pending ask — the clock, not an event, resolves a sleeping run.
       rebuildController(run);
       armed += 1;
+    }
+
+    // Paused runs keep their parked ask/timer data, but have no live event or clock wake source.
+    // Rebuild only the controller so an explicit Resume can restore the same continuation.
+    for (const run of paused) {
+      if (run.pendingCorrelationId === null) {
+        yield* Effect.logWarning("skipping paused workflow run with no continuation", {
+          runId: run.runId,
+        });
+        continue;
+      }
+      rebuildController(run);
+      restored += 1;
     }
 
     // Arm the single soonest-deadline timer over every rebuilt sleeping run. A past-due deadline

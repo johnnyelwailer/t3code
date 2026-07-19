@@ -25,6 +25,8 @@ export interface T3workWorkflowStepEntry {
   readonly seq: number | null;
   readonly stepKind: string;
   readonly phase: ProjectRecipeWorkflowStepPhase;
+  /** Timestamp of the latest activity update for human waiting/elapsed copy. */
+  readonly updatedAt?: string;
   readonly detail?: string;
   readonly error?: string;
   readonly projectId?: string;
@@ -89,6 +91,7 @@ export function deriveT3workWorkflowStepRuns(
       seq: parseStepSeq(payload.stepId),
       stepKind: payload.stepKind,
       phase: payload.phase,
+      ...(activity.createdAt === undefined ? {} : { updatedAt: activity.createdAt }),
       ...(payload.detail === undefined ? {} : { detail: payload.detail }),
       ...(payload.error === undefined ? {} : { error: payload.error }),
       ...(payload.projectId === undefined ? {} : { projectId: payload.projectId }),

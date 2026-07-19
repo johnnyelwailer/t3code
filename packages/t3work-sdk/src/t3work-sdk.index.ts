@@ -111,6 +111,7 @@ export type {
   IntegrationClient,
   IntegrationMethod,
   ModelRef,
+  ModelSelection,
   RecipeApplicabilitySpec,
   RecipeBrevity,
   RecipeDetailDensity,

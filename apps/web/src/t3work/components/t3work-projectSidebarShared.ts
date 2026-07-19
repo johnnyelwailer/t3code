@@ -23,23 +23,143 @@ export const TICKET_VIEW_LABELS: Record<TicketViewMode, string> = {
   tree: "Hierarchy",
 };
 
-/** Render a scheduled-workflow wake instant as the `Sleeping` pill's trailing detail
- * ("until Mon 09:00"). Tolerates a malformed instant with a generic suffix. */
-export function formatSleepingUntil(wakeAtIso: string): string {
+export interface DueLabelOptions {
+  /** Injectable for deterministic rendering tests. */
+  readonly now?: Date;
+  readonly locale?: string;
+  readonly timeZone?: string;
+}
+
+/** Render a scheduled-workflow wake instant as a short human deadline. */
+export function formatSleepingUntil(wakeAtIso: string, options: DueLabelOptions = {}): string {
   const date = new Date(wakeAtIso);
-  if (Number.isNaN(date.getTime())) return "until later";
-  const formatted = new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
-    hour: "2-digit",
+  if (Number.isNaN(date.getTime())) return "Due later";
+  const now = options.now ?? new Date();
+  const diffMs = date.getTime() - now.getTime();
+  if (diffMs <= 0) return "Due now";
+  const minutes = Math.ceil(diffMs / 60_000);
+  if (minutes < 60) return `Due in ${minutes} min`;
+
+  // Compare calendar dates in the viewer's timezone, not elapsed hours. This stays correct
+  // close to midnight and over daylight-saving changes.
+  const calendarDay = (value: Date) => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: options.timeZone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    })
+      .formatToParts(value)
+      .reduce<Record<string, string>>((result, part) => {
+        result[part.type] = part.value;
+        return result;
+      }, {});
+    return Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)) / 86_400_000;
+  };
+  const formattedTime = new Intl.DateTimeFormat(options.locale, {
+    timeZone: options.timeZone,
+    hour: "numeric",
     minute: "2-digit",
   }).format(date);
-  return `until ${formatted}`;
+  const daysAway = calendarDay(date) - calendarDay(now);
+  if (daysAway === 0) return `Due today at ${formattedTime}`;
+  if (daysAway === 1) {
+    return `Due tomorrow at ${formattedTime}`;
+  }
+  const formattedDate = new Intl.DateTimeFormat(options.locale, {
+    timeZone: options.timeZone,
+    month: "short",
+    day: "numeric",
+  }).format(date);
+  return `Due ${formattedDate} at ${formattedTime}`;
 }
 
 export function resolveThreadStatusPill(thread: {
   status: ProjectThread["status"];
   sleepingUntil?: string;
+  workflowRunStatus?: ProjectThread["workflowRunStatus"];
 }): ThreadStatusPill | null {
+  const run = thread.workflowRunStatus;
+  if (run !== undefined) {
+    const waitingSince = formatRelativeTime(run.updatedAt);
+    if (run.status === "queued") {
+      return {
+        label: "Queued",
+        detail: "Starts when capacity is free",
+        colorClass: "text-slate-500 dark:text-slate-300/80",
+        dotClass: "bg-slate-400 dark:bg-slate-300/80",
+        pulse: false,
+      };
+    }
+    if (run.status === "suspended") {
+      return run.pendingKind === "user.input"
+        ? {
+            label: "Waiting for your answer",
+            detail: `Waiting since ${waitingSince}`,
+            colorClass: "text-amber-600 dark:text-amber-300/90",
+            dotClass: "bg-amber-500 dark:bg-amber-300/90",
+            pulse: false,
+          }
+        : {
+            label: "Waiting for agent",
+            detail: `Waiting since ${waitingSince}`,
+            colorClass: "text-sky-600 dark:text-sky-300/80",
+            dotClass: "bg-sky-500 dark:bg-sky-300/80",
+            pulse: false,
+          };
+    }
+    if (run.status === "sleeping") {
+      return {
+        label: "Scheduled",
+        detail: run.wakeAt ? formatSleepingUntil(run.wakeAt) : "Due later",
+        colorClass: "text-slate-500 dark:text-slate-300/80",
+        dotClass: "bg-slate-400 dark:bg-slate-300/80",
+        pulse: false,
+      };
+    }
+    if (run.status === "paused") {
+      return {
+        label: "Paused",
+        detail: `Paused ${waitingSince}`,
+        colorClass: "text-muted-foreground",
+        dotClass: "bg-muted-foreground",
+        pulse: false,
+      };
+    }
+    if (run.status === "cancelled") {
+      return {
+        label: "Stopped",
+        detail: `Stopped ${waitingSince}`,
+        colorClass: "text-muted-foreground",
+        dotClass: "bg-muted-foreground",
+        pulse: false,
+      };
+    }
+    if (run.status === "running")
+      return {
+        label: "Running",
+        detail: `Active ${waitingSince}`,
+        colorClass: "text-sky-600 dark:text-sky-300/80",
+        dotClass: "bg-sky-500 dark:bg-sky-300/80",
+        pulse: true,
+      };
+    if (run.status === "completed")
+      return {
+        label: "Complete",
+        detail: `Last activity ${waitingSince}`,
+        colorClass: "text-emerald-600 dark:text-emerald-300/90",
+        dotClass: "bg-emerald-500 dark:bg-emerald-300/90",
+        pulse: false,
+      };
+    if (run.status === "failed")
+      return {
+        label: "Needs attention",
+        detail: `Last activity ${waitingSince}`,
+        colorClass: "text-red-600 dark:text-red-300/90",
+        dotClass: "bg-red-500 dark:bg-red-300/90",
+        pulse: false,
+      };
+  }
   // A scheduled-workflow run parked on the clock (Epic 27): dormant, woken at `wake_at`. Takes
   // precedence over the derived run status so the dormant thread reads "Sleeping until <time>".
   if (thread.sleepingUntil !== undefined && thread.sleepingUntil !== "") {
@@ -80,6 +200,15 @@ export function resolveThreadStatusPill(thread: {
 
 export function resolveProjectStatusIndicator(threads: ProjectThread[]): ThreadStatusPill | null {
   const priority: Record<ThreadStatusPill["label"], number> = {
+    Running: 3,
+    "Waiting for agent": 2,
+    "Waiting for your answer": 2,
+    Scheduled: 1,
+    Paused: 1,
+    Stopped: 0,
+    Complete: 1,
+    "Needs attention": 2,
+    Queued: 1,
     Working: 3,
     Error: 2,
     Sleeping: 1,

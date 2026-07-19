@@ -97,6 +97,8 @@ const defaultClock: WorkflowSchedulerClock = {
 export function makeWorkflowScheduler(deps: WorkflowSchedulerDeps): WorkflowScheduler {
   const clock = deps.clock ?? defaultClock;
   let timer: unknown;
+  let stopped = false;
+  let rearmTail: Promise<void> = Promise.resolve();
 
   const clear = (): void => {
     if (timer !== undefined) {
@@ -116,16 +118,20 @@ export function makeWorkflowScheduler(deps: WorkflowSchedulerDeps): WorkflowSche
       // Fire only the genuinely-due deadlines. A timer that fired a hair early leaves the run for
       // the next arm (the re-arm below computes its small remaining delay) — self-correcting.
       const due = rows.filter((run) => run.wakeAtMs <= nowMs);
-      for (const run of due) {
-        try {
-          await deps.resume(run.runId, run.correlationId);
-        } catch (error) {
-          deps.onWarn?.("workflow scheduler failed to resume a sleeping run", {
-            runId: run.runId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
+      // Let every due run claim its fair admission position before awaiting settlement. A slow
+      // first run must not prevent later due runs from even entering the admission queue.
+      await Promise.all(
+        due.map(async (run) => {
+          try {
+            await deps.resume(run.runId, run.correlationId);
+          } catch (error) {
+            deps.onWarn?.("workflow scheduler failed to resume a sleeping run", {
+              runId: run.runId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }),
+      );
       await rearm();
     } catch (error) {
       deps.onWarn?.("workflow scheduler tick failed", {
@@ -134,10 +140,9 @@ export function makeWorkflowScheduler(deps: WorkflowSchedulerDeps): WorkflowSche
     }
   };
 
-  const rearm = async (): Promise<void> => {
+  const performRearm = async (): Promise<void> => {
     const rows = await deps.listSleeping();
-    // Clear AFTER the await so a concurrent rearm's freshly-armed timer is the one we replace —
-    // the last writer wins and exactly one timer survives (no leak).
+    if (stopped) return;
     clear();
     if (rows.length === 0) return;
     const soonest = Math.min(...rows.map((run) => run.wakeAtMs));
@@ -148,7 +153,21 @@ export function makeWorkflowScheduler(deps: WorkflowSchedulerDeps): WorkflowSche
     timer = clock.setTimer(tick, delayMs);
   };
 
-  return { rearm, stop: clear };
+  // Serialize DB reads + timer replacement. Without this lane, an older slow listSleeping()
+  // result can arrive after a newer one and replace the correct timer with a stale deadline.
+  const rearm = (): Promise<void> => {
+    const next = rearmTail.then(performRearm, performRearm);
+    rearmTail = next.catch(() => undefined);
+    return next;
+  };
+
+  return {
+    rearm,
+    stop: () => {
+      stopped = true;
+      clear();
+    },
+  };
 }
 
 /** Map a sleeping `workflow_runs` row to the scheduler's index shape, or `undefined` if it is

@@ -6,12 +6,17 @@ export function createWorkflowLiveSettlement(input: {
   const completed = new Promise<void>((resolve) => {
     finish = resolve;
   });
+  let settling: Promise<void> | undefined;
   return {
     completed,
-    resolve: async (reply: unknown) => {
-      await input.beforeResolve();
-      input.resolve(reply);
-      finish();
+    resolve: (reply: unknown) => {
+      if (settling !== undefined) return settling;
+      settling = (async () => {
+        await input.beforeResolve();
+        input.resolve(reply);
+        finish();
+      })();
+      return settling;
     },
   };
 }

@@ -100,6 +100,14 @@ export function createMockBackend(): BackendApi {
       return undefined;
     },
 
+    async controlWorkflow(input) {
+      return {
+        ok: true,
+        status:
+          input.action === "stop" ? "cancelled" : input.action === "pause" ? "paused" : "suspended",
+      };
+    },
+
     async listThreadPlacements() {
       return [];
     },

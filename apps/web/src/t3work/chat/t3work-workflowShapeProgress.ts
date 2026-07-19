@@ -7,14 +7,31 @@ export interface T3workWorkflowShapeProgressRow {
   readonly planStep?: ProjectRecipeWorkflowShapeStep;
   /** The live execution event, when this is not merely a future plan row. */
   readonly runtimeStep?: T3workWorkflowStepEntry;
+  /** Authored phase that gives an unmatched runtime step useful visual context. */
+  readonly phase?: string | null;
 }
 
 function stepMatchesPlan(
   plan: ProjectRecipeWorkflowShapeStep,
   runtime: T3workWorkflowStepEntry,
 ): boolean {
-  if (plan.kind === "agent") return runtime.stepKind === "thread.turn";
-  if (plan.kind === "ask") return runtime.stepKind === "user.input";
+  if (runtime.stepKind === "wait.until") {
+    return /\b(wait|schedule|pause|delay)\b/i.test(plan.label);
+  }
+  // Agent/user calls from dynamic parallel work can repeat at runtime while their static source
+  // has only one call site. Once a runtime label is available, require it to match the authored
+  // label. Otherwise a second parallel turn could incorrectly light up a later phase.
+  if (plan.kind === "agent" || plan.kind === "ask") {
+    const expectedKind = plan.kind === "agent" ? "thread.turn" : "user.input";
+    if (runtime.stepKind !== expectedKind) return false;
+    if (runtime.detail === undefined) return true; // legacy activity payload
+    const detail = runtime.detail.replaceAll(/\s+/g, " ").trim().toLowerCase();
+    const label = plan.label.replaceAll(/\s+/g, " ").trim().toLowerCase();
+    if (detail === label) return true;
+    // Older runtimes appended prompt/output-contract instructions to the authored label.
+    // Match only at a word boundary so a short label cannot consume unrelated future work.
+    return detail.startsWith(`${label} `) || detail.startsWith(`${label}:`);
+  }
   if (["thread.create", "thread.turn", "user.input"].includes(runtime.stepKind)) return false;
   if (plan.kind === runtime.stepKind) return true;
 
@@ -38,16 +55,32 @@ export function reconcileT3workWorkflowShapeProgress(
 } {
   const visibleRuntime = runtime.filter((step) => step.stepKind !== "thread.create");
   const used = new Set<number>();
-  let cursor = 0;
-  const planSteps = plan.map((planStep) => {
+  const planSteps = plan.map((planStep, planIndex) => {
     const index = visibleRuntime.findIndex(
-      (runtimeStep, candidate) =>
-        candidate >= cursor && !used.has(candidate) && stepMatchesPlan(planStep, runtimeStep),
+      (runtimeStep, candidate) => !used.has(candidate) && stepMatchesPlan(planStep, runtimeStep),
     );
-    if (index < 0) return undefined;
-    used.add(index);
-    cursor = index + 1;
-    return visibleRuntime[index];
+    if (index >= 0) {
+      used.add(index);
+      return visibleRuntime[index];
+    }
+    // The host deliberately keeps user-input detail generic ("Awaiting your input") so prompts
+    // are not duplicated. If exactly one ask remains, its identity is still unambiguous.
+    if (planStep.kind === "ask") {
+      const candidates = visibleRuntime
+        .map((runtimeStep, candidate) => ({ runtimeStep, candidate }))
+        .filter(
+          ({ runtimeStep, candidate }) =>
+            !used.has(candidate) && runtimeStep.stepKind === "user.input",
+        );
+      const remainingAskPlans = plan
+        .slice(planIndex)
+        .filter((candidate) => candidate.kind === "ask").length;
+      if (candidates.length === 1 && remainingAskPlans === 1) {
+        used.add(candidates[0]!.candidate);
+        return candidates[0]!.runtimeStep;
+      }
+    }
+    return undefined;
   });
 
   const planIndexByRuntimeIndex = new Map<number, number>();
@@ -57,24 +90,27 @@ export function reconcileT3workWorkflowShapeProgress(
     if (runtimeIndex >= 0) planIndexByRuntimeIndex.set(runtimeIndex, planIndex);
   }
 
-  const rows: T3workWorkflowShapeProgressRow[] = [];
-  let nextPlanIndex = 0;
+  // Authored order is the stable display order. Parallel replies may settle in any journal order;
+  // using that order for the card made completed asks appear before still-rendered research rows.
+  const rows: T3workWorkflowShapeProgressRow[] = plan.map((planStep, planIndex) => ({
+    planStep,
+    ...(planSteps[planIndex] ? { runtimeStep: planSteps[planIndex] } : {}),
+  }));
+  const insertedByAnchor = new Map<number, number>();
   for (const [runtimeIndex, runtimeStep] of visibleRuntime.entries()) {
-    const planIndex = planIndexByRuntimeIndex.get(runtimeIndex);
-    if (planIndex === undefined) {
-      rows.push({ runtimeStep });
-      continue;
-    }
-    while (nextPlanIndex < planIndex) {
-      rows.push({ planStep: plan[nextPlanIndex]! });
-      nextPlanIndex += 1;
-    }
-    rows.push({ planStep: plan[planIndex]!, runtimeStep });
-    nextPlanIndex = planIndex + 1;
-  }
-  while (nextPlanIndex < plan.length) {
-    rows.push({ planStep: plan[nextPlanIndex]! });
-    nextPlanIndex += 1;
+    if (planIndexByRuntimeIndex.has(runtimeIndex)) continue;
+    const priorMatches = [...planIndexByRuntimeIndex.entries()].filter(
+      ([matchedRuntimeIndex]) => matchedRuntimeIndex < runtimeIndex,
+    );
+    const anchorPlanIndex = priorMatches.toSorted(([left], [right]) => right - left)[0]?.[1] ?? -1;
+    const priorInsertions = insertedByAnchor.get(anchorPlanIndex) ?? 0;
+    const insertionIndex = anchorPlanIndex + 1 + priorInsertions;
+    rows.splice(insertionIndex, 0, {
+      runtimeStep,
+      phase:
+        anchorPlanIndex >= 0 ? (plan[anchorPlanIndex]?.phase ?? null) : (plan[0]?.phase ?? null),
+    });
+    insertedByAnchor.set(anchorPlanIndex, priorInsertions + 1);
   }
 
   return {

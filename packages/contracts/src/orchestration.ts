@@ -375,6 +375,25 @@ export const OrchestrationLatestTurn = Schema.Struct({
 });
 export type OrchestrationLatestTurn = typeof OrchestrationLatestTurn.Type;
 
+/** Durable workflow-engine state joined from `workflow_runs` for the launch thread. */
+export const OrchestrationWorkflowRunStatus = Schema.Struct({
+  runId: Schema.optional(Schema.String),
+  status: Schema.Literals([
+    "queued",
+    "running",
+    "suspended",
+    "sleeping",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
+  ]),
+  pendingKind: Schema.NullOr(Schema.Literals(["thread.turn", "user.input"])),
+  wakeAt: Schema.NullOr(IsoDateTime),
+  updatedAt: IsoDateTime,
+});
+export type OrchestrationWorkflowRunStatus = typeof OrchestrationWorkflowRunStatus.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -405,6 +424,10 @@ export const OrchestrationThread = Schema.Struct({
    * the soonest `wake_at` of its `sleeping` workflow_runs. Omitted when no run is clock-parked.
    * Read-only — sourced from the run record, never written through the thread. */
   sleepingUntil: Schema.optional(IsoDateTime),
+  workflowRunStatus: Schema.optional(OrchestrationWorkflowRunStatus),
+  /** Background-only summary of meaningful child-thread work. Never enters chat context. */
+  childStatus: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  childStatusUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
 });
 export type OrchestrationThread = typeof OrchestrationThread.Type;
 
@@ -452,6 +475,10 @@ export const OrchestrationThreadShell = Schema.Struct({
    * the soonest `wake_at` of its `sleeping` workflow_runs. Omitted when no run is clock-parked.
    * Drives the sidebar's "Sleeping until <time>" pill. Read-only — sourced from the run record. */
   sleepingUntil: Schema.optional(IsoDateTime),
+  workflowRunStatus: Schema.optional(OrchestrationWorkflowRunStatus),
+  /** Background-only summary of meaningful child-thread work. */
+  childStatus: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  childStatusUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
 });
 export type OrchestrationThreadShell = typeof OrchestrationThreadShell.Type;
 
@@ -600,6 +627,7 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   expectedBranch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  childStatus: Schema.optional(TrimmedNonEmptyString),
 });
 
 const ThreadRuntimeModeSetCommand = Schema.Struct({
@@ -987,6 +1015,8 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   modelSelection: Schema.optional(ModelSelection),
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  childStatus: Schema.optional(TrimmedNonEmptyString),
+  childStatusUpdatedAt: Schema.optional(IsoDateTime),
   updatedAt: IsoDateTime,
 });
 

@@ -22,6 +22,9 @@ const input = Schema.decodeSync(Inputs)(args);
 const summary = await agent(`summarize ${input.topic}`);
 
 const Sentiment = Schema.Struct({ sentiment: Schema.String });
-const classified = await agent(`classify ${input.topic}`, { schema: Sentiment });
+const classified = await agent(`classify ${input.topic}`, {
+  label: "Classify cat sentiment",
+  schema: Sentiment,
+});
 
 return { summary, sentiment: classified.sentiment };

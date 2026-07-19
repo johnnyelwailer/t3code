@@ -31,8 +31,8 @@ describe("deriveWorkflowShape", () => {
     expect(shape.phases).toEqual([{ title: "Review" }, { title: "Decide" }]);
     expect(shape.steps).toEqual([
       { phase: "Review", kind: "read", label: "github.pullRequest.get" },
-      { phase: "Review", kind: "agent", label: "Summarize the risk of: ${pr.title}" },
-      { phase: "Decide", kind: "ask", label: 'Merge "${pr.title}"? ${review.risk}' },
+      { phase: "Review", kind: "agent", label: "Summarize the risk of:" },
+      { phase: "Decide", kind: "ask", label: 'Merge ""?' },
       { phase: "Decide", kind: "act", label: "github.pullRequest.merge" },
     ]);
   });
@@ -53,6 +53,36 @@ describe("deriveWorkflowShape", () => {
     expect(shape.steps).toEqual([
       { phase: "Only", kind: "agent", label: "do a thing" },
       { phase: "Only", kind: "act", label: "publishNotes" },
+    ]);
+  });
+
+  it("uses explicit workflow labels instead of exposing full prompts", () => {
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/labels.workflow.ts",
+      sourceText: [
+        `export const meta = { name: "x.labels" } as const;`,
+        `await agent(dynamicPrompt, { label: "Review changes" });`,
+        `await thread.askUser(dynamicQuestion, { label: "Approve release" });`,
+      ].join("\n"),
+    });
+
+    expect(shape.steps).toEqual([
+      { phase: null, kind: "agent", label: "Review changes" },
+      { phase: null, kind: "ask", label: "Approve release" },
+    ]);
+  });
+
+  it("keeps template source placeholders out of user-facing labels", () => {
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/template-label.workflow.ts",
+      sourceText: [
+        `export const meta = { name: "x.template-label" } as const;`,
+        "await agent(`Recurring health check cycle ${cycle}`);",
+      ].join("\n"),
+    });
+
+    expect(shape.steps).toEqual([
+      { phase: null, kind: "agent", label: "Recurring health check cycle" },
     ]);
   });
 

@@ -22,13 +22,13 @@ function makeThread(overrides: Partial<ProjectThread>): ProjectThread {
 }
 
 describe("resolveThreadStatusPill — sleeping (Epic 27)", () => {
-  it("renders a clock-parked routine as 'Sleeping until <time>'", () => {
+  it("renders a clock-parked routine with a human due label", () => {
     const pill = resolveThreadStatusPill(
       makeThread({ status: "idle", sleepingUntil: "2026-06-15T09:00:00.000Z" }),
     );
     expect(pill?.label).toBe("Sleeping");
     expect(pill?.pulse).toBe(false);
-    expect(pill?.detail).toMatch(/^until .*\d{1,2}:\d{2}/); // "until <weekday> HH:MM"
+    expect(pill?.detail).toMatch(/^Due /);
   });
 
   it("prefers the sleeping pill over the derived run status while parked", () => {
@@ -53,14 +53,108 @@ describe("resolveThreadStatusPill — sleeping (Epic 27)", () => {
   });
 });
 
+describe("resolveThreadStatusPill — durable workflow run", () => {
+  const at = "2026-06-14T08:00:00.000Z";
+
+  it("shows a suspended agent turn as waiting, not running", () => {
+    const pill = resolveThreadStatusPill(
+      makeThread({
+        status: "running",
+        workflowRunStatus: {
+          status: "suspended",
+          pendingKind: "thread.turn",
+          wakeAt: null,
+          updatedAt: at,
+        },
+      }),
+    );
+    expect(pill?.label).toBe("Waiting for agent");
+    expect(pill?.pulse).toBe(false);
+    expect(pill?.detail).toMatch(/^Waiting since /);
+  });
+
+  it("uses plain durable labels for each terminal and scheduled state", () => {
+    const queued = resolveThreadStatusPill(
+      makeThread({
+        workflowRunStatus: { status: "queued", pendingKind: null, wakeAt: null, updatedAt: at },
+      }),
+    );
+    expect(queued?.label).toBe("Queued");
+    expect(queued?.detail).toBe("Starts when capacity is free");
+    expect(
+      resolveThreadStatusPill(
+        makeThread({
+          workflowRunStatus: {
+            status: "suspended",
+            pendingKind: "user.input",
+            wakeAt: null,
+            updatedAt: at,
+          },
+        }),
+      )?.label,
+    ).toBe("Waiting for your answer");
+    expect(
+      resolveThreadStatusPill(
+        makeThread({
+          workflowRunStatus: {
+            status: "sleeping",
+            pendingKind: null,
+            wakeAt: "2026-06-15T09:00:00.000Z",
+            updatedAt: at,
+          },
+        }),
+      )?.label,
+    ).toBe("Scheduled");
+    expect(
+      resolveThreadStatusPill(
+        makeThread({
+          workflowRunStatus: {
+            status: "completed",
+            pendingKind: null,
+            wakeAt: null,
+            updatedAt: at,
+          },
+        }),
+      )?.label,
+    ).toBe("Complete");
+    expect(
+      resolveThreadStatusPill(
+        makeThread({
+          workflowRunStatus: { status: "failed", pendingKind: null, wakeAt: null, updatedAt: at },
+        }),
+      )?.label,
+    ).toBe("Needs attention");
+  });
+});
+
 describe("formatSleepingUntil", () => {
-  it("renders an 'until <time>' phrase for a valid wake instant", () => {
-    const detail = formatSleepingUntil("2026-06-15T09:00:00.000Z");
-    expect(detail.startsWith("until ")).toBe(true);
-    expect(detail).toMatch(/\d{1,2}:\d{2}/);
+  const fixed = { now: new Date("2026-06-14T08:58:10.000Z"), locale: "en-US", timeZone: "UTC" };
+
+  it("renders minutes remaining from an injected clock", () => {
+    expect(formatSleepingUntil("2026-06-14T09:00:00.000Z", fixed)).toBe("Due in 2 min");
+  });
+
+  it("renders tomorrow's clock time from an injected clock", () => {
+    expect(formatSleepingUntil("2026-06-15T09:00:00.000Z", fixed)).toBe("Due tomorrow at 9:00 AM");
+  });
+
+  it("keeps the next calendar day as tomorrow late in the day", () => {
+    const late = { now: new Date("2026-06-14T20:00:00.000Z"), locale: "en-US", timeZone: "UTC" };
+    expect(formatSleepingUntil("2026-06-15T09:00:00.000Z", late)).toBe("Due tomorrow at 9:00 AM");
+  });
+
+  it("uses calendar days across daylight-saving time", () => {
+    const beforeDst = {
+      now: new Date("2026-03-08T01:00:00.000Z"), // Mar 7, 8:00 PM EST
+      locale: "en-US",
+      timeZone: "America/New_York",
+    };
+    expect(formatSleepingUntil("2026-03-08T13:00:00.000Z", beforeDst)).toBe(
+      "Due tomorrow at 9:00 AM",
+    );
   });
 
   it("degrades gracefully for an unparseable instant", () => {
-    expect(formatSleepingUntil("not-a-date")).toBe("until later");
+    expect(formatSleepingUntil("not-a-date")).toBe("Due later");
   });
 });

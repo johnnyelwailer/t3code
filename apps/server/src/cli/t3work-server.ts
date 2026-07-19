@@ -10,6 +10,8 @@ import {
   inspectConfiguredWorkspacePacks,
   loadPackAppearanceOverlay,
   loadPackProviderOverlay,
+  loadPackWorkflowAgentModelPolicy,
+  loadPackWorkflowEphemeralConcurrencyPolicy,
   loadPackWorkflowRepairPolicy,
 } from "../t3work-pack-host.ts";
 import { setPackAppearanceOverlay } from "../t3work-pack-appearanceOverlay.ts";
@@ -19,6 +21,12 @@ import {
 } from "../t3work-pack-setupProfileOverlay.ts";
 import { setPackProviderOverlay } from "../t3work-pack-providerOverlay.ts";
 import { setWorkflowRepairPolicy } from "../t3work-workflowRepairPolicy.ts";
+import { setWorkflowAgentModelPolicy } from "../t3work-workflowAgentModelPolicy.ts";
+import {
+  DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS,
+  setWorkflowEphemeralConcurrencyPolicy,
+} from "../t3work-workflowEphemeralConcurrencyPolicy.ts";
+import { workflowAdmissionQueue } from "../t3work-workflowAdmissionQueue.ts";
 import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
 
 class WorkspacePackLoadError extends Data.TaggedError("WorkspacePackLoadError")<{
@@ -82,6 +90,35 @@ export const runT3workServerCommand = (
           Effect.logWarning("Workspace pack workflow repair policy loading failed", { cause }).pipe(
             Effect.as(undefined),
           ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackWorkflowAgentModelPolicy(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((policy) => Effect.sync(() => setWorkflowAgentModelPolicy(policy ?? "inherit"))),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack workflow agent model policy loading failed", {
+            cause,
+          }).pipe(Effect.as(undefined)),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackWorkflowEphemeralConcurrencyPolicy(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((policy) =>
+          Effect.sync(() => {
+            setWorkflowEphemeralConcurrencyPolicy(
+              policy ?? { maxActiveSteps: DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS },
+            );
+            workflowAdmissionQueue.reconfigure();
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack ephemeral workflow concurrency policy loading failed", {
+            cause,
+          }).pipe(Effect.as(undefined)),
         ),
       );
       yield* Effect.logInfo("Workspace pack discovery completed", {

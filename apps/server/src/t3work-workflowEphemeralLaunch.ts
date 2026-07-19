@@ -44,6 +44,8 @@ import {
   writeEphemeralWorkflowRepairAudit,
 } from "./t3work-workflowEphemeralSource.ts";
 import { getWorkflowRepairPolicy } from "./t3work-workflowRepairPolicy.ts";
+import { resolveWorkflowAgentModel } from "./t3work-workflowAgentModelPolicy.ts";
+import { workflowAdmissionQueue } from "./t3work-workflowAdmissionQueue.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
@@ -83,6 +85,8 @@ export interface PreparedWorkflowLaunchInput {
   readonly origin: WorkflowRunOrigin;
   readonly onComplete?: (output: unknown) => Promise<void>;
   readonly onError?: (error: unknown) => Promise<void>;
+  /** Resolves only after the run row and its visible shape card have been committed. */
+  readonly onAdmitted?: () => Promise<void>;
 }
 
 /** Launch a prepared workflow through the durable engine; never fails (a run failure settles
@@ -100,22 +104,39 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
   const canReplaceEphemeralSource = input.workflowPath === ephemeralWorkflowPath;
   const lifecycle = makeWorkflowRunLifecycle({
     repo: deps.runRepository,
-    row: buildRunningWorkflowRunRow({
-      runId: input.runId,
-      workflowPath: input.workflowPath,
-      args: input.args,
-      launchThreadId: input.launchThreadId,
-      projectId: input.projectId,
-      modelSelection: input.modelSelection,
-      runtimeMode: input.runtimeMode,
-      interactionMode: input.interactionMode,
-      origin: input.origin,
-      nowIso: nowIso(),
-    }),
+    row: {
+      ...buildRunningWorkflowRunRow({
+        runId: input.runId,
+        workflowPath: input.workflowPath,
+        args: input.args,
+        launchThreadId: input.launchThreadId,
+        projectId: input.projectId,
+        modelSelection: input.modelSelection,
+        runtimeMode: input.runtimeMode,
+        interactionMode: input.interactionMode,
+        origin: input.origin,
+        nowIso: nowIso(),
+      }),
+      ...(input.origin === "ephemeral" ? { status: "queued" as const } : {}),
+    },
     nowIso,
     onSleep: () => {
       void deps.rearmScheduler();
     },
+  });
+  // Admission is durable before any detached execution starts. A request disconnect after this
+  // point leaves a recoverable run row, never an invisible source-only orphan.
+  yield* Effect.promise(() => lifecycle.recordRunning());
+  deps.registry.registerOwnership(input.runId, input.launchThreadId);
+  deps.registry.registerMasterStop(input.runId, async () => {
+    workflowAdmissionQueue.cancel(input.runId);
+    await Effect.runPromise(
+      deps.runRepository.clearPending({
+        runId: input.runId,
+        status: "cancelled",
+        updatedAt: nowIso(),
+      }),
+    );
   });
 
   // Best-effort play-as-shape "plan" so the user sees WHAT THE WORKFLOW WILL DO while it spins
@@ -140,6 +161,17 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       yield* Effect.promise(() => deps.dispatch(shapeCommand));
     }
   }
+  if (input.onAdmitted !== undefined) {
+    yield* Effect.promise(input.onAdmitted);
+  }
+
+  if (!(yield* Effect.promise(() => lifecycle.recordActive()))) {
+    return { runId: input.runId, status: "suspended" as const };
+  }
+  if (input.origin === "ephemeral" && workflowAdmissionQueue.isCancelled(input.runId)) {
+    lifecycle.releaseActive();
+    return { runId: input.runId, status: "suspended" as const };
+  }
 
   const result: LaunchWorkflowRecipeResult = yield* Effect.promise(() =>
     launchWorkflowRecipe({
@@ -150,6 +182,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       launchThreadId: input.launchThreadId,
       projectId: input.projectId,
       modelSelection: input.modelSelection,
+      defaultAgentModelSelection: resolveWorkflowAgentModel(input.modelSelection),
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
       registry: deps.registry,
@@ -158,6 +191,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       nowIso,
       store: deps.journalStore,
       lifecycle,
+      lifecycleAlreadyRunning: true,
       ...(input.onComplete === undefined ? {} : { onComplete: input.onComplete }),
       ...(input.onError === undefined ? {} : { onError: input.onError }),
       ...(input.intent === undefined || !canReplaceEphemeralSource

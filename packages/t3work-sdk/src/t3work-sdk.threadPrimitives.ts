@@ -41,6 +41,15 @@ export type {
 
 /** One attempt + two corrective retries. */
 const MAX_SCHEMA_ATTEMPTS = 3;
+const CHILD_TITLE_MAX_LENGTH = 80;
+
+/** Human-readable compatibility title for older agent calls that supplied no label. */
+export const workflowChildTitleFromPrompt = (prompt: string): string => {
+  const normalized = prompt.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) return "Workflow task";
+  if (normalized.length <= CHILD_TITLE_MAX_LENGTH) return normalized;
+  return `${normalized.slice(0, CHILD_TITLE_MAX_LENGTH - 1).trimEnd()}…`;
+};
 
 export function createThreadPrimitives(deps: {
   readonly dispatch: HandleDispatch;
@@ -85,6 +94,7 @@ export function createThreadPrimitives(deps: {
       const payload = {
         threadId,
         [promptField]: prompt,
+        ...(opts?.label === undefined ? {} : { label: opts.label }),
         ...plan.renderFields,
         ...(model === undefined ? {} : { model }),
       };
@@ -181,7 +191,10 @@ export function createThreadPrimitives(deps: {
   };
 
   const agent = <R = string>(prompt: string, opts?: AskOpts<R>): Promise<R> =>
-    spawnThread(opts?.model === undefined ? {} : { model: opts.model }).askAgent(prompt, opts);
+    spawnThread({
+      name: opts?.label?.trim() || workflowChildTitleFromPrompt(prompt),
+      ...(opts?.model === undefined ? {} : { model: opts.model }),
+    }).askAgent(prompt, opts);
 
   return {
     thread:

@@ -120,6 +120,13 @@ export type PackTextGeneration = {
     readonly attachments?: readonly unknown[] | undefined;
     readonly modelSelection: unknown;
   }): Promise<{ readonly title: string }>;
+  /** Out-of-band structured generation. The host validates the returned value against its
+   * requested schema; this call never creates or appends to a provider thread. */
+  generateStructured?(input: {
+    readonly cwd: string;
+    readonly prompt: string;
+    readonly modelSelection: unknown;
+  }): Promise<unknown>;
 };
 
 /**

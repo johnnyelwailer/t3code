@@ -93,10 +93,16 @@ export function groupT3workShapeSteps(shape: ProjectRecipeWorkflowShapePayload) 
 export function T3workShapeStepRow({
   step,
   leading,
+  trailing,
+  hideKindLabel = false,
 }: {
   step: ProjectRecipeWorkflowShapePayload["steps"][number];
   /** Optional live-status slot (spinner/check/clock/error) rendered before the kind icon. */
   leading?: ReactNode;
+  /** Optional compact live metadata aligned at the right edge. */
+  trailing?: ReactNode;
+  /** Live metadata may replace the redundant kind badge to keep the row compact. */
+  hideKindLabel?: boolean;
 }) {
   const meta = KIND_META[step.kind];
   return (
@@ -106,14 +112,17 @@ export function T3workShapeStepRow({
         <meta.Icon className="size-3.5" />
       </span>
       <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">{step.label}</span>
-      <span
-        className={cn(
-          "shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-          meta.text,
-        )}
-      >
-        {meta.label}
-      </span>
+      {trailing}
+      {!hideKindLabel ? (
+        <span
+          className={cn(
+            "shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+            meta.text,
+          )}
+        >
+          {meta.label}
+        </span>
+      ) : null}
     </div>
   );
 }

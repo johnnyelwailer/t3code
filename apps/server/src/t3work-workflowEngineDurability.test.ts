@@ -69,6 +69,44 @@ const durabilityLayer = it.layer(
 );
 
 durabilityLayer("workflow durability — DB-backed suspend survives a restart", (it) => {
+  it.effect("pauses and resumes the same retained ask continuation", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkflowRunRepository;
+      const runId = "durable-paused-ask";
+      yield* repo.upsert(
+        buildRunningWorkflowRunRow({
+          runId,
+          workflowPath,
+          args: {},
+          launchThreadId: "launch-paused",
+          projectId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          nowIso: nowIso(),
+        }),
+      );
+      yield* repo.setPending({
+        runId,
+        pendingThreadId: "child-paused",
+        pendingCorrelationId: `${runId}:1`,
+        pendingKind: "thread.turn",
+        updatedAt: nowIso(),
+      });
+      yield* repo.setStatus({ runId, status: "paused", updatedAt: nowIso() });
+
+      const paused = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.strictEqual(paused.status, "paused");
+      assert.strictEqual(paused.pendingCorrelationId, `${runId}:1`);
+      assert.strictEqual(paused.pendingThreadId, "child-paused");
+
+      yield* repo.resumePaused({ runId, updatedAt: nowIso() });
+      const resumed = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.strictEqual(resumed.status, "suspended");
+      assert.strictEqual(resumed.pendingCorrelationId, `${runId}:1`);
+    }),
+  );
+
   it.effect("resumes a run suspended on askUser across a simulated restart and completes", () =>
     Effect.gen(function* () {
       const repo = yield* WorkflowRunRepository;

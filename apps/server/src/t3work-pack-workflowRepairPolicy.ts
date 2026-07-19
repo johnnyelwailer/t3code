@@ -29,6 +29,8 @@ export const loadPackWorkflowRepairPolicy = async (
         }
         policy = definition;
       },
+      defineWorkflowAgentModelPolicy: () => undefined,
+      defineWorkflowEphemeralConcurrencyPolicy: () => undefined,
       resolveAssetDataUrl: async () => {
         throw new Error("Asset resolution is only available to pack activation code");
       },

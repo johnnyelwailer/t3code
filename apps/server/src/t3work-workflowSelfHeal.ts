@@ -37,6 +37,30 @@ export const parseWorkflowRepairChildResult = (
     const parsed: unknown = JSON.parse(value);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     const record = parsed as Record<string, unknown>;
+    // Current protocol. `safeToResume` is an explicit host gate: a model must never cause a
+    // same-run resume merely by returning source-shaped text. `correctedWorkflow` is the full
+    // replacement (not a patch), so the atomic writer has one unambiguous target.
+    if (record.safeToResume === true) {
+      if (
+        Object.keys(record).length !== 3 ||
+        typeof record.correctedWorkflow !== "string" ||
+        typeof record.summary !== "string" ||
+        !record.correctedWorkflow.trim() ||
+        !record.summary.trim()
+      )
+        return null;
+      return { outcome: "fixed", updatedSource: record.correctedWorkflow, summary: record.summary };
+    }
+    if (record.safeToResume === false) {
+      if (
+        Object.keys(record).length !== 2 ||
+        typeof record.cancelReason !== "string" ||
+        !record.cancelReason.trim()
+      )
+        return null;
+      return { outcome: "cannot-fix", reason: record.cancelReason };
+    }
+    // Compatibility for already-running repair children. New children receive the protocol above.
     if (record.outcome === "fixed") {
       if (
         Object.keys(record).length !== 3 ||

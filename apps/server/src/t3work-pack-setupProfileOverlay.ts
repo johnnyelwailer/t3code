@@ -87,6 +87,8 @@ export const loadPackSetupProfileOverlay = async (
         collected.push(decodeSetupProfileDefinition(definition));
       },
       defineWorkflowRepairPolicy: () => undefined,
+      defineWorkflowAgentModelPolicy: () => undefined,
+      defineWorkflowEphemeralConcurrencyPolicy: () => undefined,
       resolveAssetDataUrl: async () => {
         throw new Error("Asset resolution is only available to pack activation code");
       },

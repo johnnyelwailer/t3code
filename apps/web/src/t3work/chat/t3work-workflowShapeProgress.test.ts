@@ -7,6 +7,7 @@ const runtimeStep = (stepKind: string, phase: "completed" | "waiting", seq: numb
   seq,
   stepKind,
   phase,
+  updatedAt: "2026-07-19T12:00:00.000Z",
 });
 
 describe("reconcileT3workWorkflowShapeProgress", () => {
@@ -67,6 +68,75 @@ describe("reconcileT3workWorkflowShapeProgress", () => {
       "Investigate",
       "custom.operation",
       "Publish result",
+    ]);
+  });
+
+  it("does not map repeated labelled parallel turns onto a future phase", () => {
+    const result = reconcileT3workWorkflowShapeProgress(
+      [
+        { phase: "Parallel review", kind: "agent", label: "Review change" },
+        { phase: "Synthesis", kind: "agent", label: "Write summary" },
+      ],
+      [
+        { ...runtimeStep("thread.turn", "completed", 1), detail: "Review change" },
+        { ...runtimeStep("thread.turn", "completed", 2), detail: "Review change" },
+      ],
+    );
+
+    expect(result.planSteps.map((step) => step?.detail)).toEqual(["Review change", undefined]);
+    expect(result.rows.map((row) => row.planStep?.label ?? row.runtimeStep?.detail)).toEqual([
+      "Review change",
+      "Review change",
+      "Write summary",
+    ]);
+  });
+
+  it("keeps an unlabeled agent turn under the first authored phase", () => {
+    const result = reconcileT3workWorkflowShapeProgress(
+      [{ phase: "DEMO", kind: "agent", label: "Reply OK" }],
+      [{ ...runtimeStep("thread.turn", "waiting", 1), detail: "Reply only with OK." }],
+    );
+
+    expect(result.planSteps).toEqual([undefined]);
+    expect(result.rows).toEqual([
+      expect.objectContaining({
+        runtimeStep: expect.objectContaining({ detail: "Reply only with OK." }),
+        phase: "DEMO",
+      }),
+      expect.objectContaining({ planStep: expect.objectContaining({ label: "Reply OK" }) }),
+    ]);
+  });
+
+  it("matches a legacy prompt that starts with the authored label", () => {
+    const result = reconcileT3workWorkflowShapeProgress(
+      [{ phase: "DEMO", kind: "agent", label: "Reply OK" }],
+      [
+        {
+          ...runtimeStep("thread.turn", "waiting", 1),
+          detail: "Reply OK Respond with ONLY a single JSON value matching the required schema.",
+        },
+      ],
+    );
+
+    expect(result.rows).toEqual([
+      expect.objectContaining({
+        planStep: expect.objectContaining({ label: "Reply OK" }),
+        runtimeStep: expect.objectContaining({ stepKind: "thread.turn" }),
+      }),
+    ]);
+  });
+
+  it("matches scheduled runtime work to an authored wait row", () => {
+    const result = reconcileT3workWorkflowShapeProgress(
+      [{ phase: "Review", kind: "agent", label: "Wait for review window" }],
+      [{ ...runtimeStep("wait.until", "waiting", 1), detail: "2026-07-20T09:00:00.000Z" }],
+    );
+
+    expect(result.rows).toEqual([
+      expect.objectContaining({
+        planStep: expect.objectContaining({ label: "Wait for review window" }),
+        runtimeStep: expect.objectContaining({ stepKind: "wait.until" }),
+      }),
     ]);
   });
 });

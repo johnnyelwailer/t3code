@@ -13,9 +13,10 @@
  *
  * @module t3work-ActorTimelineRow
  */
-import { useState } from "react";
-import { CornerUpRightIcon } from "lucide-react";
+import { ChevronRightIcon, CornerUpRightIcon } from "lucide-react";
+import type { ScopedThreadRef, ServerProviderSkill } from "@t3tools/contracts";
 
+import ChatMarkdown from "~/components/ChatMarkdown";
 import type { ChatMessage } from "~/types";
 import { cn } from "~/lib/utils";
 
@@ -31,9 +32,11 @@ function readActorAuthor(
 export function T3workActorTimelineRow(props: {
   readonly message: ChatMessage;
   readonly onOpenSenderThread?: (input: { projectId: string; threadId: string }) => void;
+  readonly markdownCwd?: string;
+  readonly threadRef?: ScopedThreadRef;
+  readonly skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
 }) {
-  const { message, onOpenSenderThread } = props;
-  const [expanded, setExpanded] = useState(false);
+  const { message, onOpenSenderThread, markdownCwd, threadRef, skills } = props;
 
   const author = readActorAuthor(message);
   const actor = message.t3workExt?.actor;
@@ -43,11 +46,16 @@ export function T3workActorTimelineRow(props: {
   const senderProjectId = author?.projectId;
   const urgency = actor?.urgency ?? "normal";
 
-  const summary =
+  const summarySource =
     message.t3workExt?.displayText && message.t3workExt.displayText.length > 0
       ? message.t3workExt.displayText
       : message.text;
-  const hasMoreDetail = summary.trim() !== message.text.trim() && message.text.length > 0;
+  const normalizedPreview = summarySource.replaceAll(/\s+/g, " ").trim();
+  const summary =
+    normalizedPreview.length <= 120
+      ? normalizedPreview
+      : `${normalizedPreview.slice(0, 119).trimEnd()}…`;
+  const hasBody = message.text.trim().length > 0;
   const canOpenSender =
     onOpenSenderThread !== undefined &&
     senderThreadId !== undefined &&
@@ -55,58 +63,57 @@ export function T3workActorTimelineRow(props: {
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <div className="max-w-[92%] rounded-xl border border-border/60 bg-muted/25 px-3.5 py-2.5">
-        <div className="mb-1.5 flex items-center gap-1.5 text-muted-foreground">
-          <CornerUpRightIcon className="size-3.5 shrink-0 opacity-70" />
-          <p className="text-[11px] font-medium uppercase tracking-wide">
-            Message from{" "}
-            <span className="font-semibold text-foreground/80">{senderTitle}</span>
-          </p>
-          {urgency === "urgent" ? (
-            <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
-              Urgent
+      <details className="group/actor max-w-[92%] rounded-xl border border-border/60 bg-muted/25">
+        <summary className="cursor-pointer list-none px-3.5 py-2.5 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <CornerUpRightIcon className="size-3.5 shrink-0 opacity-70" />
+            <span className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide">
+              Message from <span className="font-semibold text-foreground/80">{senderTitle}</span>
+            </span>
+            {urgency === "urgent" ? (
+              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                Urgent
+              </span>
+            ) : null}
+            <ChevronRightIcon className="size-3.5 shrink-0 transition-transform group-open/actor:rotate-90" />
+          </span>
+          {summary ? (
+            <span className="mt-1.5 block line-clamp-2 text-sm leading-5 text-foreground/80">
+              {summary}
             </span>
           ) : null}
-        </div>
+        </summary>
 
-        {summary.length > 0 ? (
-          <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/85">{summary}</p>
-        ) : null}
-
-        {hasMoreDetail && expanded ? (
-          <p className="mt-2.5 whitespace-pre-wrap border-t border-border/50 pt-2.5 text-sm leading-6 text-muted-foreground">
-            {message.text}
-          </p>
-        ) : null}
-
-        {canOpenSender || hasMoreDetail ? (
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            {canOpenSender ? (
-              <button
-                type="button"
-                className={cn(
-                  "text-xs font-medium text-muted-foreground underline-offset-2",
-                  "transition-colors hover:text-foreground hover:underline",
-                )}
-                onClick={() =>
-                  onOpenSenderThread({ projectId: senderProjectId, threadId: senderThreadId })
-                }
-              >
-                Open sender thread
-              </button>
+        {hasBody || canOpenSender ? (
+          <div className="border-t border-border/50 px-3.5 py-2.5">
+            {hasBody ? (
+              <ChatMarkdown
+                text={message.text}
+                cwd={markdownCwd}
+                {...(threadRef ? { threadRef } : {})}
+                {...(skills ? { skills } : {})}
+                className="text-sm leading-6 text-foreground/85"
+              />
             ) : null}
-            {hasMoreDetail ? (
-              <button
-                type="button"
-                className="text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
-                onClick={() => setExpanded((value) => !value)}
-              >
-                {expanded ? "Hide detail" : "Show full detail"}
-              </button>
+            {canOpenSender ? (
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className={cn(
+                    "text-xs font-medium text-muted-foreground underline-offset-2",
+                    "transition-colors hover:text-foreground hover:underline",
+                  )}
+                  onClick={() =>
+                    onOpenSenderThread({ projectId: senderProjectId, threadId: senderThreadId })
+                  }
+                >
+                  Open sender thread
+                </button>
+              </div>
             ) : null}
           </div>
         ) : null}
-      </div>
+      </details>
     </div>
   );
 }

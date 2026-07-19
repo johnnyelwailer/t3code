@@ -59,6 +59,14 @@ export interface BackendApi {
     /** The decision card's ask — rejected by the server if it is no longer the pending one. */
     readonly correlationId?: string;
   }) => Promise<void>;
+  readonly controlWorkflow?: (input: {
+    readonly threadId: string;
+    readonly workflowRunId: string;
+    readonly action: "pause" | "resume" | "stop";
+  }) => Promise<{
+    readonly ok: boolean;
+    readonly status: "suspended" | "sleeping" | "paused" | "cancelled";
+  }>;
   readonly listThreadPlacements: (input: {
     readonly threadIds?: ReadonlyArray<string>;
   }) => Promise<ReadonlyArray<T3workThreadPlacement>>;

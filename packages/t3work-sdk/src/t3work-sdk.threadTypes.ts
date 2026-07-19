@@ -17,6 +17,8 @@ export interface ThreadRef {
 
 /** Options for an ask verb (`agent` / `askAgent` / `askUser`). */
 export interface AskOpts<R = string> {
+  /** Short human-facing workflow label. Kept separate from the full agent/user prompt. */
+  readonly label?: string;
   readonly schema?: Schema.Schema<R>;
   readonly model?: ModelSelection;
 }

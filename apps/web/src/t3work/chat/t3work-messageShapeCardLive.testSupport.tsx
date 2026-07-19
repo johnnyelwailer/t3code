@@ -3,6 +3,7 @@ import { EventId, MessageId, type OrchestrationThreadActivity } from "@t3tools/c
 import {
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
   PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
+  type ProjectRecipeWorkflowShapePayload,
   type ProjectRecipeWorkflowStepActivityPayload,
 } from "@t3tools/project-recipes";
 import { type ReactNode, type Ref } from "react";
@@ -43,6 +44,17 @@ window.matchMedia ??= ((query: string) => ({
 })) as unknown as typeof window.matchMedia;
 
 export const RUN_ID = "run-1";
+export const TEST_WORKFLOW_SHAPE: ProjectRecipeWorkflowShapePayload = {
+  name: "shape.pr-review",
+  phases: [{ title: "Review" }, { title: "Decide" }],
+  steps: [
+    { phase: "Review", kind: "read", label: "github.pullRequest.get" },
+    { phase: "Review", kind: "agent", label: "Summarize the risk" },
+    { phase: "Decide", kind: "ask", label: "Merge it?" },
+    { phase: "Decide", kind: "act", label: "github.pullRequest.merge" },
+  ],
+  workflowRunId: RUN_ID,
+};
 
 export function stepActivity(
   payload: ProjectRecipeWorkflowStepActivityPayload,
@@ -79,7 +91,7 @@ export function step(
 }
 
 export function runActivity(
-  phase: "completed" | "failed",
+  phase: "completed" | "failed" | "paused" | "cancelled" | "started",
   error?: string,
 ): OrchestrationThreadActivity {
   return stepActivity(
@@ -109,17 +121,7 @@ function shapeMessage(): ChatMessage {
         {
           kind: "view",
           miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
-          props: {
-            name: "shape.pr-review",
-            phases: [{ title: "Review" }, { title: "Decide" }],
-            steps: [
-              { phase: "Review", kind: "read", label: "github.pullRequest.get" },
-              { phase: "Review", kind: "agent", label: "Summarize the risk" },
-              { phase: "Decide", kind: "ask", label: "Merge it?" },
-              { phase: "Decide", kind: "act", label: "github.pullRequest.merge" },
-            ],
-            workflowRunId: RUN_ID,
-          },
+          props: TEST_WORKFLOW_SHAPE,
         },
       ],
     },
@@ -129,6 +131,17 @@ function shapeMessage(): ChatMessage {
 export async function renderTimeline(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
   onOpenThread?: (input: { projectId: string; threadId: string }) => void,
+  control?: {
+    status:
+      | "queued"
+      | "running"
+      | "suspended"
+      | "sleeping"
+      | "paused"
+      | "completed"
+      | "failed"
+      | "cancelled";
+  },
 ): Promise<string> {
   const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
   const message = shapeMessage();
@@ -136,6 +149,18 @@ export async function renderTimeline(
     <MessagesTimeline
       {...buildT3workMessagesTimelineTestProps()}
       threadActivities={activities}
+      {...(control
+        ? {
+            workflowRunStatus: {
+              runId: RUN_ID,
+              status: control.status,
+              pendingKind: control.status === "suspended" ? ("thread.turn" as const) : null,
+              wakeAt: control.status === "sleeping" ? "2026-07-20T09:00:00.000Z" : null,
+              updatedAt: "2026-07-17T10:00:00.000Z",
+            },
+            onControlWorkflow: async () => ({ status: "paused" as const }),
+          }
+        : {})}
       {...(onOpenThread ? { onOpenThread } : {})}
       timelineEntries={[
         { id: "timeline-0", kind: "message" as const, createdAt: message.createdAt, message },

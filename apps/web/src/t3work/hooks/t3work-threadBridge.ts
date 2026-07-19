@@ -49,6 +49,18 @@ export function mapLiveThreadToProjectThread(
     // A clock-parked routine (Epic 27): carry the server-computed wake instant so the sidebar
     // pill reads "Sleeping until <time>". Absent when no run on this thread is sleeping.
     ...(thread.sleepingUntil !== undefined ? { sleepingUntil: thread.sleepingUntil } : {}),
+    ...(thread.workflowRunStatus !== undefined
+      ? {
+          workflowRunStatus: {
+            ...thread.workflowRunStatus,
+            runId: thread.workflowRunStatus.runId ?? "",
+          },
+        }
+      : {}),
+    ...(thread.childStatus !== undefined ? { childStatus: thread.childStatus } : {}),
+    ...(thread.childStatusUpdatedAt !== undefined
+      ? { childStatusUpdatedAt: thread.childStatusUpdatedAt }
+      : {}),
   };
 }
 

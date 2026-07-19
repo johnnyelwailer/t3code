@@ -28,6 +28,7 @@ import {
 import { deliverWorkflowCompletion } from "./t3work-workflowCompletionMessage.ts";
 import type { WorkflowRepairIntent } from "./t3work-workflowSelfHeal.ts";
 import { tryWorkflowRepair } from "./t3work-workflowEngineRepair.ts";
+import { toWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
 
 export type WorkflowLaunchStatus = "completed" | "suspended" | "failed";
 
@@ -44,6 +45,8 @@ export interface LaunchWorkflowRecipeInput {
   readonly launchThreadId: string | undefined;
   readonly projectId: ProjectId;
   readonly modelSelection: ModelSelection;
+  /** Default for workflow agent steps; absent inherits the launch thread model. */
+  readonly defaultAgentModelSelection?: ModelSelection;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
   readonly registry: T3workWorkflowEngineRegistryShape;
@@ -54,6 +57,8 @@ export interface LaunchWorkflowRecipeInput {
   readonly store?: JournalStore;
   /** Write-through to the durable run record; no-op when absent. */
   readonly lifecycle?: WorkflowRunLifecycle;
+  /** Admission already durably wrote the running row before detached execution. */
+  readonly lifecycleAlreadyRunning?: boolean;
   /** Optional sink for the validated workflow output when the run completes. */
   readonly onComplete?: (output: unknown) => Promise<void>;
   /** Optional sink for an uncaught run failure. */
@@ -92,6 +97,7 @@ export interface WorkflowRunController {
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
   /** Live step-status sink shared by broker, settle, and resume (UX slice 1). */
   readonly stepActivities: WorkflowStepActivityEmitter;
+  readonly isCancelled: () => boolean;
 }
 
 export {
@@ -108,6 +114,7 @@ export {
 export function createWorkflowRunController(
   input: LaunchWorkflowRecipeInput,
 ): WorkflowRunController {
+  let cancelled = false;
   const ref: WorkflowRef = {
     kind: "workflow",
     path: input.workflowPath,
@@ -141,6 +148,8 @@ export function createWorkflowRunController(
     ...(input.lifecycle === undefined
       ? {}
       : {
+          beforePrimitive: () => input.lifecycle!.recordActive(),
+          afterPrimitive: () => input.lifecycle!.releaseActive(),
           recordPending: (pending) => input.lifecycle!.recordSuspended(pending),
           recordSleeping: (sleep) => input.lifecycle!.recordSleeping(sleep),
         }),
@@ -150,6 +159,15 @@ export function createWorkflowRunController(
     broker,
     tools: [],
     scripts: {},
+    defaultModel: toWorkflowModelSelection(
+      input.defaultAgentModelSelection ?? input.modelSelection,
+    ),
+    ...(input.lifecycle === undefined
+      ? {}
+      : {
+          beforePrimitive: () => input.lifecycle!.recordActive(),
+          afterPrimitive: () => input.lifecycle!.releaseActive(),
+        }),
     ...(input.store === undefined ? {} : { store: input.store }),
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
   };
@@ -157,9 +175,10 @@ export function createWorkflowRunController(
   const settle = async (
     result: WorkflowRunResult<unknown> | SuspendedResult,
   ): Promise<WorkflowLaunchStatus> => {
+    if (cancelled) return "suspended";
     if ("suspended" in result) return "suspended"; // parked — the reactor resumes it later
-    input.registry.deleteRun(input.runId);
     await input.lifecycle?.recordCompleted();
+    if (cancelled) return "suspended";
     await stepActivities.emitRun("completed");
     await deliverWorkflowCompletion({
       launchThreadId: input.launchThreadId,
@@ -170,22 +189,36 @@ export function createWorkflowRunController(
       nowIso: input.nowIso,
     });
     await input.onComplete?.(result.result);
+    input.registry.deleteRun(input.runId);
     return "completed";
   };
 
   // The concurrency/crash-safe resume closure (see t3work-workflowEngineResume.ts). Extracted to
   // keep this module under the prefixed-file LOC cap.
-  const resume = makeControllerResume({ input, ref, options, settle, stepActivities });
+  const resume = makeControllerResume({
+    input,
+    ref,
+    options,
+    settle,
+    stepActivities,
+    isCancelled: () => cancelled,
+  });
 
-  input.registry.registerRun(input.runId, { resume });
-  return { ref, options, settle, resume, stepActivities };
+  input.registry.registerRun(input.runId, {
+    resume,
+    cancel: () => {
+      cancelled = true;
+    },
+  });
+  input.registry.registerOwnership(input.runId, input.launchThreadId);
+  return { ref, options, settle, resume, stepActivities, isCancelled: () => cancelled };
 }
 
 export async function launchWorkflowRecipe(
   input: LaunchWorkflowRecipeInput,
 ): Promise<LaunchWorkflowRecipeResult> {
   const controller = createWorkflowRunController(input);
-  await input.lifecycle?.recordRunning();
+  if (!input.lifecycleAlreadyRunning) await input.lifecycle?.recordRunning();
 
   try {
     const status = await controller.settle(
@@ -196,6 +229,7 @@ export async function launchWorkflowRecipe(
     );
     return { runId: input.runId, status };
   } catch (error) {
+    if (controller.isCancelled()) return { runId: input.runId, status: "suspended" };
     const repaired = await tryWorkflowRepair(input, controller, error);
     if (repaired) return { runId: input.runId, status: "completed" };
     input.registry.deleteRun(input.runId);

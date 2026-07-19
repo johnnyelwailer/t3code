@@ -48,7 +48,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pending_approval_count,
           pending_user_input_count,
           has_actionable_proposed_plan,
-          deleted_at
+          deleted_at,
+          child_status,
+          child_status_updated_at
         )
         VALUES (
           ${row.threadId},
@@ -68,7 +70,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.pendingApprovalCount},
           ${row.pendingUserInputCount},
           ${row.hasActionableProposedPlan},
-          ${row.deletedAt}
+          ${row.deletedAt},
+          ${row.childStatus},
+          ${row.childStatusUpdatedAt}
         )
         ON CONFLICT (thread_id)
         DO UPDATE SET
@@ -88,7 +92,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pending_approval_count = excluded.pending_approval_count,
           pending_user_input_count = excluded.pending_user_input_count,
           has_actionable_proposed_plan = excluded.has_actionable_proposed_plan,
-          deleted_at = excluded.deleted_at
+          deleted_at = excluded.deleted_at,
+          child_status = excluded.child_status,
+          child_status_updated_at = excluded.child_status_updated_at
       `,
   });
 
@@ -115,7 +121,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
+          deleted_at AS "deletedAt",
+          child_status AS "childStatus",
+          child_status_updated_at AS "childStatusUpdatedAt"
         FROM projection_threads
         WHERE thread_id = ${threadId}
       `,
@@ -144,7 +152,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
+          deleted_at AS "deletedAt",
+          child_status AS "childStatus",
+          child_status_updated_at AS "childStatusUpdatedAt"
         FROM projection_threads
         WHERE project_id = ${projectId}
         ORDER BY created_at ASC, thread_id ASC
@@ -158,6 +168,19 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
         DELETE FROM projection_threads
         WHERE thread_id = ${threadId}
       `,
+  });
+
+  const updateChildStatusRow = SqlSchema.void({
+    Request: Schema.Struct({
+      threadId: GetProjectionThreadInput.fields.threadId,
+      status: Schema.String,
+      updatedAt: ProjectionThread.fields.updatedAt,
+    }),
+    execute: ({ threadId, status, updatedAt }) =>
+      sql`UPDATE projection_threads
+          SET child_status = ${status}, child_status_updated_at = ${updatedAt}
+          WHERE thread_id = ${threadId}
+            AND (child_status_updated_at IS NULL OR child_status_updated_at <= ${updatedAt})`,
   });
 
   const upsert: ProjectionThreadRepositoryShape["upsert"] = (row) =>
@@ -179,12 +202,17 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
     deleteProjectionThreadRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.deleteById:query")),
     );
+  const updateChildStatus: ProjectionThreadRepositoryShape["updateChildStatus"] = (input) =>
+    updateChildStatusRow(input).pipe(
+      Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.updateChildStatus:query")),
+    );
 
   return {
     upsert,
     getById,
     listByProjectId,
     deleteById,
+    updateChildStatus,
   } satisfies ProjectionThreadRepositoryShape;
 });
 

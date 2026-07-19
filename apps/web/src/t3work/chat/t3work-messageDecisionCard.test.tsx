@@ -193,6 +193,7 @@ describe("workflow decision card in the timeline", () => {
     const markup = await renderTimeline([decisionMessage("message-decision-1")]);
 
     expect(markup).toContain("Needs your input");
+    expect(markup).not.toContain(">System<");
     expect(markup).toContain(QUESTION);
     // The card owns the question; the message text must not duplicate it above the card.
     expect(markup.split(QUESTION)).toHaveLength(2);

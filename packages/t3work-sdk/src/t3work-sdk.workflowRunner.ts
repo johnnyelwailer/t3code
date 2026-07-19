@@ -98,6 +98,12 @@ export async function executeRun<O>(opts: {
     nowIso,
     runId: opts.runId,
     resolved: byCorrelation,
+    ...(opts.options.beforePrimitive === undefined
+      ? {}
+      : { beforePrimitive: opts.options.beforePrimitive }),
+    ...(opts.options.afterPrimitive === undefined
+      ? {}
+      : { afterPrimitive: opts.options.afterPrimitive }),
   });
   try {
     const primitives = buildWorkflowPrimitives({

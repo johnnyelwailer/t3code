@@ -12,6 +12,7 @@ import {
   CountLiveWorkflowRunsByOriginInput,
   GetWorkflowRunInput,
   ListWorkflowRunsByStatusInput,
+  ResumePausedWorkflowRunInput,
   SetWorkflowRunPendingInput,
   SetWorkflowRunSleepingInput,
   SetWorkflowRunStatusInput,
@@ -161,7 +162,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
         SELECT COUNT(*) AS "count"
         FROM workflow_runs
         WHERE origin = ${origin}
-          AND status IN ('running', 'suspended', 'sleeping')
+          AND status IN ('running', 'suspended', 'sleeping', 'paused')
       `,
   });
 
@@ -172,6 +173,23 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
         UPDATE workflow_runs
         SET status = ${status}, updated_at = ${updatedAt}
         WHERE run_id = ${runId}
+          AND status != 'cancelled'
+          AND (status != 'paused' OR ${status} IN ('paused', 'cancelled'))
+      `,
+  });
+
+  const resumePausedWorkflowRunRow = SqlSchema.void({
+    Request: ResumePausedWorkflowRunInput,
+    execute: ({ runId, updatedAt }) =>
+      sql`
+        UPDATE workflow_runs
+        SET status = CASE
+              WHEN pending_kind IS NOT NULL THEN 'suspended'
+              WHEN wake_at IS NOT NULL THEN 'sleeping'
+              ELSE status
+            END,
+            updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND status = 'paused'
       `,
   });
 
@@ -186,7 +204,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             pending_kind = ${pendingKind},
             wake_at = NULL,
             updated_at = ${updatedAt}
-        WHERE run_id = ${runId}
+        WHERE run_id = ${runId} AND status != 'cancelled'
       `,
   });
 
@@ -201,7 +219,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             pending_kind = NULL,
             wake_at = NULL,
             updated_at = ${updatedAt}
-        WHERE run_id = ${runId}
+        WHERE run_id = ${runId} AND status != 'cancelled'
       `,
   });
 
@@ -218,7 +236,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             pending_correlation_id = ${correlationId},
             pending_kind = NULL,
             updated_at = ${updatedAt}
-        WHERE run_id = ${runId}
+        WHERE run_id = ${runId} AND status != 'cancelled'
       `,
   });
 
@@ -248,6 +266,11 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setStatus:query")),
     );
 
+  const resumePaused: WorkflowRunRepositoryShape["resumePaused"] = (input) =>
+    resumePausedWorkflowRunRow(input).pipe(
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.resumePaused:query")),
+    );
+
   const setPending: WorkflowRunRepositoryShape["setPending"] = (input) =>
     setWorkflowRunPendingRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setPending:query")),
@@ -269,6 +292,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     listByStatus,
     countLiveByOrigin,
     setStatus,
+    resumePaused,
     setPending,
     clearPending,
     setSleeping,

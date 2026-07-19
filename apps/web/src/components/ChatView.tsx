@@ -253,6 +253,12 @@ import {
   resolveServerConfigVersionMismatch,
 } from "../versionSkew";
 import { useAssetUrls } from "../assets/assetUrls";
+import {
+  deriveT3workActiveWorkflowDockItems,
+  T3workActiveWorkflowDock,
+  type T3workActiveWorkflowDockItem,
+} from "~/t3work/chat/t3work-activeWorkflowDock";
+import { deriveT3workWorkflowStepRuns } from "~/t3work/chat/t3work-threadWorkflowStepProgress";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
@@ -1012,6 +1018,7 @@ function ChatViewContent(props: ChatViewProps) {
     routeKind === "server" ? props.onSubmitRecipeCardAction : undefined;
   const dispatchWorkflowDecision =
     routeKind === "server" ? props.dispatchWorkflowDecision : undefined;
+  const onControlWorkflow = routeKind === "server" ? props.onControlWorkflow : undefined;
   const onOpenThread = routeKind === "server" ? props.onOpenThread : undefined;
   const onBack = routeKind === "server" ? props.onBack : undefined;
   const headerAccessory = routeKind === "server" ? props.headerAccessory : undefined;
@@ -2107,6 +2114,25 @@ function ChatViewContent(props: ChatViewProps) {
       deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
   );
+  const activeWorkflowDockItems = useMemo(
+    () =>
+      deriveT3workActiveWorkflowDockItems(
+        timelineEntries,
+        deriveT3workWorkflowStepRuns(threadActivities),
+        activeThread?.workflowRunStatus,
+      ),
+    [activeThread?.workflowRunStatus, threadActivities, timelineEntries],
+  );
+  const [workflowCardNavigationRequest, setWorkflowCardNavigationRequest] = useState<{
+    messageId: MessageId;
+    requestId: number;
+  } | null>(null);
+  const openWorkflowCard = useCallback((item: T3workActiveWorkflowDockItem) => {
+    setWorkflowCardNavigationRequest((current) => ({
+      messageId: item.messageId,
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
+  }, []);
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
   const turnDiffSummaryByAssistantMessageId = useMemo(() => {
@@ -5221,10 +5247,15 @@ function ChatViewContent(props: ChatViewProps) {
                 contentInsetEndAdjustment={composerOverlayHeight}
                 onIsAtEndChange={onIsAtEndChange}
                 threadActivities={threadActivities}
+                {...(activeThread.workflowRunStatus
+                  ? { workflowRunStatus: activeThread.workflowRunStatus }
+                  : {})}
                 {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
                 {...(dispatchWorkflowDecision ? { dispatchWorkflowDecision } : {})}
+                {...(onControlWorkflow ? { onControlWorkflow } : {})}
                 {...(onOpenThread ? { onOpenThread } : {})}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
+                workflowCardNavigationRequest={workflowCardNavigationRequest}
               />
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
@@ -5269,6 +5300,11 @@ function ChatViewContent(props: ChatViewProps) {
               </div>
               <div className="chat-composer-horizontal-inset">
                 <div className="pointer-events-auto relative z-10 isolate">
+                  <T3workActiveWorkflowDock
+                    items={activeWorkflowDockItems}
+                    className="mx-auto max-w-3xl rounded-t-xl"
+                    onOpen={openWorkflowCard}
+                  />
                   <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
                   {composerContextAttachmentSlot}
                   <div className="relative z-10">

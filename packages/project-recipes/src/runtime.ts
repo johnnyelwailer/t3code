@@ -134,7 +134,9 @@ export const ProjectRecipeWorkflowStepPhase = Schema.Literals([
   "started",
   "completed",
   "waiting",
+  "paused",
   "failed",
+  "cancelled",
 ]);
 export type ProjectRecipeWorkflowStepPhase = typeof ProjectRecipeWorkflowStepPhase.Type;
 
@@ -248,6 +250,19 @@ export const LaunchProjectRecipeWorkflowResponse = Schema.Struct({
   completionActivity: Schema.optional(ProjectRecipeDeterministicCompletionActivity),
 });
 export type LaunchProjectRecipeWorkflowResponse = typeof LaunchProjectRecipeWorkflowResponse.Type;
+
+export const ControlProjectRecipeWorkflowRequest = Schema.Struct({
+  threadId: Schema.String,
+  workflowRunId: Schema.String,
+  action: Schema.Literals(["pause", "resume", "stop"]),
+});
+export type ControlProjectRecipeWorkflowRequest = typeof ControlProjectRecipeWorkflowRequest.Type;
+
+export const ControlProjectRecipeWorkflowResponse = Schema.Struct({
+  ok: Schema.Boolean,
+  status: Schema.Literals(["suspended", "sleeping", "paused", "cancelled"]),
+});
+export type ControlProjectRecipeWorkflowResponse = typeof ControlProjectRecipeWorkflowResponse.Type;
 
 export const SubmitProjectRecipeCardActionResponse = Schema.Struct({
   ok: Schema.Boolean,

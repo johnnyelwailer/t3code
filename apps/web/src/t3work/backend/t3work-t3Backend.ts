@@ -102,6 +102,14 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     );
   }
 
+  async function controlWorkflow(input: Parameters<NonNullable<BackendApi["controlWorkflow"]>>[0]) {
+    return postJson<typeof input, Awaited<ReturnType<NonNullable<BackendApi["controlWorkflow"]>>>>(
+      httpBaseUrl,
+      "/api/t3work/thread/workflow/control",
+      input,
+    );
+  }
+
   const atlassian = {
     ...createAtlassianBackendApi(httpBaseUrl),
     ...createAtlassianPollingBackendApi(httpBaseUrl),
@@ -123,6 +131,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     launchRecipeWorkflow,
     submitRecipeCardAction,
     resolveWorkflowInput,
+    controlWorkflow,
     listThreadPlacements,
     syncThreadToolContext,
     atlassian,

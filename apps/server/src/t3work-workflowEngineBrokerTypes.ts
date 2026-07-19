@@ -17,7 +17,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 
-import type { AskAffordance } from "@t3work/sdk";
+import type { AskAffordance, ModelSelection as WorkflowModelSelection } from "@t3work/sdk";
 
 import type { T3workWorkflowEngineRegistryShape } from "./t3work-workflowEngineRegistry.ts";
 import type { WorkflowStepActivityEmitter } from "./t3work-workflowEngineStepActivities.ts";
@@ -44,6 +44,11 @@ export interface WorkflowEngineSleep {
 export interface WorkflowRunLifecycle {
   /** Insert the initial `running` row (called once at launch). */
   readonly recordRunning: () => Promise<void>;
+  /** A parked continuation was claimed and is executing its next atomic segment. */
+  /** Wait for a fair execution permit; false means the queued run was cancelled. */
+  readonly recordActive: () => Promise<boolean>;
+  /** Yield after one dispatched primitive so another workflow may take the next turn. */
+  readonly releaseActive: () => void;
   /** Flip to `suspended` + record the ask the run parked on (driven by the broker). */
   readonly recordSuspended: (pending: WorkflowEnginePendingAsk) => Promise<void>;
   /** Flip to `sleeping` + record the wake deadline the run parked on (Epic 27; driven by the
@@ -53,9 +58,8 @@ export interface WorkflowRunLifecycle {
   readonly recordCompleted: () => Promise<void>;
   /** Mark the run `failed` and clear the pending ask. */
   readonly recordFailed: () => Promise<void>;
-  /** Crash-recovery: if the run row is still `sleeping` on this correlation (its wake reply was
-   * journaled by a process that died before settling), mark it failed so the scheduler stops
-   * re-arming it. No-op otherwise (e.g. a late ask reply on an already-advanced run). */
+  /** Crash-recovery: if this correlation still owns a sleeping or newly-claimed active row and
+   * its reply was already journaled, mark it failed. Correlation pinning protects newer work. */
   readonly orphanIfSleeping: (correlationId: string) => Promise<void>;
 }
 
@@ -90,17 +94,23 @@ export interface WorkflowEngineBrokerDeps {
    * on the SDK fs path and in minimal tests.
    */
   readonly stepActivities?: WorkflowStepActivityEmitter;
+  readonly beforePrimitive?: () => Promise<boolean>;
+  readonly afterPrimitive?: () => void;
 }
 
 export interface ThreadCreatePayload {
   readonly threadId: string;
   readonly name?: string;
+  readonly model?: WorkflowModelSelection;
   /** Omitted is ephemeral, preserving one-shot agent() as a hidden child. */
   readonly retention?: "ephemeral" | "retained";
 }
 export interface ThreadTurnPayload {
   readonly threadId: string;
   readonly prompt: string;
+  readonly model?: WorkflowModelSelection;
+  /** Short human-facing status label, separate from the provider prompt. */
+  readonly label?: string;
 }
 export interface ThreadMessagePayload {
   readonly threadId: string;
@@ -110,6 +120,8 @@ export interface ThreadMessagePayload {
 export interface UserInputPayload {
   readonly threadId: string;
   readonly question: string;
+  /** Short human-facing status label, separate from the user question. */
+  readonly label?: string;
   /** Serializable descriptor of the reply affordance, derived from the ask's schema by the
    * SDK (`schemaToAffordance`). Absent on payloads from older journals → treated as text. */
   readonly affordance?: AskAffordance;

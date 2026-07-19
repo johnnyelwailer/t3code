@@ -24,6 +24,9 @@ describe("T3workProjectSetupProfileCards", () => {
     expect(markup).toContain('data-profile-id="engineering-copilot"');
     expect(markup).toContain('data-selected="true"');
     expect(markup).toContain('aria-pressed="true"');
+    // The descriptive copy gets the full card width below the logo/title row.
+    expect(markup).toContain("grid-cols-[auto_minmax(0,1fr)]");
+    expect(markup).toContain("col-span-2 line-clamp-2 text-muted-foreground");
   });
 
   it("renders pack-contributed profiles with badge, bullets and illustration", () => {

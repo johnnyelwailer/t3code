@@ -524,7 +524,7 @@ describe("remapProjectThreadToStoredProject", () => {
 
     const pill = resolveThreadStatusPill(projectThread);
     expect(pill?.label).toBe("Sleeping");
-    expect(pill?.detail).toMatch(/^until /);
+    expect(pill?.detail).toBe("Due now");
   });
 
   it("omits sleepingUntil and renders no sleeping pill when no run is clock-parked", () => {

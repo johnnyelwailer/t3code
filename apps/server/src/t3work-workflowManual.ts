@@ -25,6 +25,41 @@ export const T3WORK_WORKFLOW_TAGLINE =
   "for a simple single-agent task, just do it directly — do not write one of these. For the " +
   'authoring syntax, call t3work_help("agent-orchestration") first.';
 
+export const T3WORK_TIMERS_MANUAL = `DURABLE TIMERS — t3work workflow scheduling.
+
+Use the injected waitUntil(epochMs) and now() globals. Add the schedule capability.
+Do not import timer libraries, poll, use setTimeout, run a shell sleep, or rely on external cron.
+
+One-shot wait (short waits of seconds show "Scheduled" / a due time in the workflow UI):
+
+  export const meta = {
+    name: 'short-reminder',
+    capabilities: ['schedule', 'user'],
+  } as const
+  const SECOND = 1000
+  await waitUntil(now() + 30 * SECOND)
+  await thread.notifyUser('Thirty seconds passed.')
+  return { reminded: true }
+
+Recurring pattern (the workflow loop is the schedule):
+
+  export const meta = {
+    name: 'daily-review',
+    capabilities: ['schedule', 'user'],
+  } as const
+  const DAY = 24 * 60 * 60 * 1000
+  while (true) {
+    await waitUntil(now() + DAY)
+    const result = await agent('Review current risks.', { label: 'Review daily risks' })
+    await thread.notifyUser(result)
+  }
+
+waitUntil persists the run as sleeping with its wake deadline. It releases active agent work,
+survives server restarts, and resumes immediately during restart recovery when the deadline is
+already overdue. now() is journaled, so replay derives the same deadline. Seconds, minutes,
+hours, and days use the same API. The UI may round very short remaining times to "Due now";
+that is display rounding, not polling or a lost timer.`;
+
 /**
  * The full manual. Kept compact but complete enough that a small model can
  * author a valid runbook from it alone, and fix one from the error path.
@@ -69,19 +104,24 @@ after that, the body runs top-to-bottom.
   phase('Review')
   const dims = ['correctness', 'security', 'performance']
   const findings = await parallel(
-    dims.map((d) => () => agent(\`Review the change for \${d} issues. List concrete findings.\`))
+    dims.map((d) => () => agent(
+      \`Review the change for \${d} issues. List concrete findings.\`,
+      { label: \`Review \${d}\` },
+    ))
   )
 
   phase('Synthesize')
   const report = await agent(
-    \`Merge these reviews into one ranked report:\\n\${findings.filter(Boolean).join('\\n---\\n')}\`
+    \`Merge these reviews into one ranked report:\\n\${findings.filter(Boolean).join('\\n---\\n')}\`,
+    { label: 'Synthesize reviews' },
   )
   return report
 
 INJECTED GLOBALS (no imports; call them directly)
 - agent(prompt, opts?)        one-shot agent on a fresh isolated thread; returns its text,
                               or a validated value with opts.schema. opts.model can pick a
-                              different provider/model per call.
+                              different provider/model per call. Always pass a concise,
+                              human-facing opts.label describing the work.
 - spawnThread({name?,model?,retention?}) makes a multi-turn thread; it is ephemeral by default
                               (hidden from the sidebar but inspectable inline). Set
                               retention: 'retained' only when it must remain sidebar-visible.
@@ -93,7 +133,51 @@ INJECTED GLOBALS (no imports; call them directly)
 - phase(title)                start a progress group (title should match a meta.phases title).
 - log(message)                emit a narrator line.
 - tools.<group>.<name>(args)  call a host tool (group must be listed in meta.capabilities).
+- now()                      journaled epoch milliseconds; replay returns the same value.
+- waitUntil(epochMs)         durable scheduler wait. Requires capabilities: ['schedule'].
+                              The run is persisted as sleeping with a wake time, survives
+                              server restarts, and catches up immediately when an overdue
+                              deadline is found after restart.
 - args                        the workflow input (validated against meta.inputs if declared).
+
+DURABLE TIMERS AND ROUTINES
+For the focused timer reference and copyable examples, call t3work_help("timers").
+Use waitUntil(now() + durationMs) for seconds, minutes, hours, or days. Do not poll, call a
+shell sleep command, use setTimeout, or rely on external cron. waitUntil parks the run without
+holding an agent turn; the host scheduler owns the wake-up.
+
+One-off reminder:
+
+  export const meta = {
+    name: 'review-reminder',
+    capabilities: ['schedule', 'user'],
+  } as const
+  const HOUR = 60 * 60 * 1000
+  await waitUntil(now() + 3 * HOUR)
+  await thread.notifyUser('The review window is due.')
+  return { reminded: true }
+
+Recurring interval pattern (the loop is the schedule):
+
+  export const meta = {
+    name: 'daily-check',
+    capabilities: ['schedule', 'user'],
+  } as const
+  const DAY = 24 * 60 * 60 * 1000
+  while (true) {
+    await waitUntil(now() + DAY)
+    const result = await agent(
+      'Check the current state and report only actionable changes.',
+      { label: 'Check daily changes' },
+    )
+    await thread.notifyUser(result)
+  }
+
+Each now() value and deadline is journaled, so replay is deterministic. A restart does not
+restart the interval or lose the timer. If the server was down past the deadline, scheduler
+recovery resumes the run instead of waiting another full interval. For a fixed wall-clock
+calendar schedule, compute the next epoch deadline with replay-safe pure arithmetic from now(),
+then pass it to waitUntil.
 
 RULES
 - No Node APIs (no fs, path, process) and no require(). Use the globals above.
@@ -105,10 +189,12 @@ RULES
     import { Schema } from "effect"
     export const meta = { name: 'approve', capabilities: ['user'] } as const
     const Choice = Schema.Literals(['approve', 'revise'])
-    const decision = await thread.askUser('Choose:', { schema: Choice })
+    const decision = await thread.askUser('Choose:', { schema: Choice, label: 'Choose action' })
   An arbitrary options array is not supported; use a Schema so the UI can render controls.
 - Return the final result at the end.
 
 RESULT
-Returns { runId, status: 'completed'|'suspended'|'failed', output?, error? }.
+Returns { runId, status: 'accepted'|'completed'|'suspended'|'failed', output?, error? }.
+accepted means the durable host owns the run. Do not launch it again or poll it; sleeping and
+other progress updates arrive through the existing thread/workflow UI.
 On 'failed', read 'error', fix the source per this manual, and run it again.`;

@@ -38,6 +38,7 @@ import {
 } from "./t3work-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities.ts";
 import { dispatchWorkflowChild } from "./t3work-workflowChildPlacement.ts";
+import { fromWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3work-workflowLiveSettlement.ts";
 
 export type {
@@ -63,6 +64,18 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
   // Ask verbs (thread.turn / user.input) are awaited, so their failures propagate and fail the
   // run rather than parking it forever on a turn that never started.
   const enqueueOneWay = (fn: () => Promise<void>): Promise<void> => enqueue(fn).catch(() => {});
+  const runPrimitive = async (
+    fn: () => Promise<void>,
+    beforeDispatch?: () => Promise<void>,
+  ): Promise<void> => {
+    if ((await deps.beforePrimitive?.()) === false) throw new Error("Workflow was stopped");
+    try {
+      await beforeDispatch?.();
+      await fn();
+    } finally {
+      deps.afterPrimitive?.();
+    }
+  };
 
   // Live step-status pip (UX slice 1): fire-and-forget — the emitter swallows its own failures.
   const step = (
@@ -93,12 +106,12 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
       step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
-      await enqueueOneWay(() => dispatchWorkflowChild(deps, p));
+      await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p)));
       return;
     }
     if (kind === "thread.turn") {
       const p = payload as ThreadTurnPayload;
-      step(correlationId, kind, "started", p.prompt, p.threadId);
+      step(correlationId, kind, "started", p.label ?? p.prompt, p.threadId);
       const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
       deps.registry.setPending(p.threadId, {
         runId: deps.runId,
@@ -106,32 +119,42 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
         kind: "thread.turn",
         ...(liveSettlement ? { resolveLive: liveSettlement.resolve } : {}),
       });
-      if (!liveSettlement) {
-        await deps.recordPending?.({ threadId: p.threadId, correlationId, kind: "thread.turn" });
-      }
-      await enqueue(() =>
-        deps.dispatch({
-          type: "thread.turn.start",
-          commandId: CommandId.make(`t3work-wf:turn:${deps.newId()}`),
-          threadId: ThreadId.make(p.threadId),
-          message: {
-            messageId: MessageId.make(deps.newId()),
-            role: "user",
-            text: p.prompt,
-            attachments: [],
-          },
-          modelSelection: deps.modelSelection,
-          runtimeMode: deps.runtimeMode,
-          interactionMode: deps.interactionMode,
-          createdAt: deps.nowIso(),
-        }),
+      await runPrimitive(
+        () =>
+          enqueue(() =>
+            deps.dispatch({
+              type: "thread.turn.start",
+              commandId: CommandId.make(`t3work-wf:turn:${deps.newId()}`),
+              threadId: ThreadId.make(p.threadId),
+              message: {
+                messageId: MessageId.make(deps.newId()),
+                role: "user",
+                text: p.prompt,
+                attachments: [],
+              },
+              modelSelection:
+                p.model === undefined ? deps.modelSelection : fromWorkflowModelSelection(p.model),
+              runtimeMode: deps.runtimeMode,
+              interactionMode: deps.interactionMode,
+              createdAt: deps.nowIso(),
+            }),
+          ),
+        liveSettlement
+          ? undefined
+          : async () => {
+              await deps.recordPending?.({
+                threadId: p.threadId,
+                correlationId,
+                kind: "thread.turn",
+              });
+            },
       );
       await liveSettlement?.completed;
       return;
     }
     if (kind === "user.input") {
       const p = payload as UserInputPayload;
-      step(correlationId, kind, "waiting", p.question, p.threadId);
+      step(correlationId, kind, "waiting", p.label ?? p.question, p.threadId);
       const affordance = p.affordance ?? { kind: "text" as const };
       const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
       deps.registry.setPending(p.threadId, {
@@ -141,9 +164,6 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
         affordance,
         ...(liveSettlement ? { resolveLive: liveSettlement.resolve } : {}),
       });
-      if (!liveSettlement) {
-        await deps.recordPending?.({ threadId: p.threadId, correlationId, kind: "user.input" });
-      }
       // Tag the escalation message as awaiting the user's answer (with the owning run) so the UI
       // can render it as a guided prompt and route the reply back to this run rather than a
       // free-form chat turn. An ask that is renderable as a decision card (a choice affordance,
@@ -151,31 +171,43 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       // refs; a plain text ask keeps today's bare message + composer.
       const resources = (p.attachments ?? []).filter(isMessageResourceRef);
       const renderAsCard = affordance.kind !== "text" || resources.length > 0;
-      await enqueue(() =>
-        deps.dispatch(
-          messageUpsert(deps, p.threadId, "system", p.question, {
-            author: { kind: "system", workflowRunId: deps.runId },
-            status: "waiting-for-input",
-            visibleToUser: true,
-            ...(renderAsCard
-              ? {
-                  attachments: [
-                    {
-                      kind: "view" as const,
-                      miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
-                      props: {
-                        question: p.question,
-                        affordance,
-                        correlationId,
-                        workflowRunId: deps.runId,
-                      },
-                    },
-                    ...resources.map((resource) => ({ kind: "resource" as const, resource })),
-                  ],
-                }
-              : {}),
-          }),
-        ),
+      await runPrimitive(
+        () =>
+          enqueue(() =>
+            deps.dispatch(
+              messageUpsert(deps, p.threadId, "system", p.question, {
+                author: { kind: "system", workflowRunId: deps.runId },
+                status: "waiting-for-input",
+                visibleToUser: true,
+                ...(renderAsCard
+                  ? {
+                      attachments: [
+                        {
+                          kind: "view" as const,
+                          miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
+                          props: {
+                            question: p.question,
+                            affordance,
+                            correlationId,
+                            workflowRunId: deps.runId,
+                          },
+                        },
+                        ...resources.map((resource) => ({ kind: "resource" as const, resource })),
+                      ],
+                    }
+                  : {}),
+              }),
+            ),
+          ),
+        liveSettlement
+          ? undefined
+          : async () => {
+              await deps.recordPending?.({
+                threadId: p.threadId,
+                correlationId,
+                kind: "user.input",
+              });
+            },
       );
       await liveSettlement?.completed;
       return;
@@ -192,16 +224,20 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
         "waiting",
         `Sleep until ${DateTime.formatIso(DateTime.makeUnsafe(p.deadline))}`,
       );
-      await deps.recordSleeping?.({ correlationId, deadline: p.deadline });
+      await runPrimitive(async () => {
+        await deps.recordSleeping?.({ correlationId, deadline: p.deadline });
+      });
       return;
     }
     // thread.message — one-way; agent-directed messages read as a user turn-input, user-directed
     // ones as a system (user-visible) note. No turn.start, no pending.
     const p = payload as ThreadMessagePayload;
     step(correlationId, kind, "completed", p.text, p.threadId);
-    await enqueueOneWay(() =>
-      deps.dispatch(
-        messageUpsert(deps, p.threadId, p.recipient === "agent" ? "user" : "system", p.text),
+    await runPrimitive(() =>
+      enqueueOneWay(() =>
+        deps.dispatch(
+          messageUpsert(deps, p.threadId, p.recipient === "agent" ? "user" : "system", p.text),
+        ),
       ),
     );
   };

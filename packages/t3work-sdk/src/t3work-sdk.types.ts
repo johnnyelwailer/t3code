@@ -204,4 +204,7 @@ export interface WorkflowRunOptions {
   readonly broker?: MessageBroker;
   readonly launchThreadId?: string;
   readonly defaultModel?: ModelSelection;
+  /** Host fairness hooks around live tool/script primitives. Replayed entries do not call them. */
+  readonly beforePrimitive?: () => Promise<boolean>;
+  readonly afterPrimitive?: () => void;
 }
