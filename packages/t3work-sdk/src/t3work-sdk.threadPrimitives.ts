@@ -123,11 +123,6 @@ export function createThreadPrimitives(deps: {
   };
 
   const notify = (threadId: string, recipient: "agent" | "user", text: string): void => {
-    if (recipient === "user" && /<\/?[a-z][^>]*>/i.test(text)) {
-      throw new TypeError(
-        "notifyUser accepts plain text only. Use thread.showWidget({ title, widgetCode }) for HTML or SVG.",
-      );
-    }
     const payload = { threadId, recipient, text };
     dispatch.sendOneWay({
       kind: "thread.message",

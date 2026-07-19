@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { PanelRightOpenIcon } from "lucide-react";
+import { PanelRightOpenIcon, XIcon } from "lucide-react";
 import { useCanGoBack } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { ThreadChatView } from "~/t3work/chat/t3work-ThreadChatView";
@@ -15,6 +15,7 @@ export function AppThreadPane({
   embeddedThread,
   onOpenTicket,
   onOpenEmbeddedThread,
+  onCloseEmbeddedThread,
   onThreadKickoffConsumed,
   onRememberFullThread,
   onBackToDashboard,
@@ -25,6 +26,7 @@ export function AppThreadPane({
   embeddedThread: ProjectThread | null;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onOpenEmbeddedThread: (projectId: string, threadId: string) => void;
+  onCloseEmbeddedThread: () => void;
   onThreadKickoffConsumed: (threadId: string) => void;
   onRememberFullThread: (threadId: string) => void;
   onBackToDashboard: (projectId: string) => void;
@@ -126,7 +128,17 @@ export function AppThreadPane({
   return (
     <div className="flex h-full min-h-0 flex-1 divide-x divide-border overflow-hidden">
       <div className="flex min-w-0 flex-1">{parentChat}</div>
-      <div className="flex min-w-0 flex-1">
+      <div className="relative flex min-w-0 flex-1">
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          className="absolute right-2 top-2 z-10 shrink-0 text-muted-foreground/80"
+          onClick={() => runT3workViewTransition(onCloseEmbeddedThread)}
+          aria-label="Close side-by-side thread"
+          title="Close side-by-side thread"
+        >
+          <XIcon className="size-4" />
+        </Button>
         <ThreadChatView
           // A workflow child can arrive in the route before the sidebar/store
           // projection catches up. Render the known route target immediately;

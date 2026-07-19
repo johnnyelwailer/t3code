@@ -56,6 +56,28 @@ type ReplyResolver = Parameters<MessageBroker["send"]>[1];
 /** Attachment refs from the workflow are opaque payload (SDK black-box rule); only refs that
  * satisfy the message contract render as resource cards — anything else is dropped, never fatal. */
 const isMessageResourceRef = Schema.is(T3workMessageExternalResourceRef);
+const TRUSTED_HTML_FRAGMENT = /<\/?[a-z][^>]*>/i;
+
+function workflowWidgetAttachment(input: {
+  readonly widgetId: string;
+  readonly title: string;
+  readonly widgetCode: string;
+  readonly format?: "html" | "svg";
+  readonly loadingMessages?: ReadonlyArray<string>;
+}) {
+  const parsed = parseT3workWidgetShowInput({
+    title: input.title,
+    widget_code: input.widgetCode,
+    ...(input.format === undefined ? {} : { format: input.format }),
+    ...(input.loadingMessages === undefined ? {} : { loading_messages: input.loadingMessages }),
+  });
+  if ("error" in parsed) throw new Error(`Invalid workflow widget: ${parsed.error}`);
+  return buildT3workWidgetAttachment({
+    widgetId: input.widgetId,
+    parsed,
+    artifactRelativePath: undefined,
+  });
+}
 
 export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): MessageBroker {
   // Serialize dispatches so a floated `thread.create` lands before the `thread.turn` it precedes.
@@ -174,12 +196,23 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       // or attached resources) additionally carries the `workflow.decision` view + the resource
       // refs; a plain text ask keeps today's bare message + composer.
       const resources = (p.attachments ?? []).filter(isMessageResourceRef);
-      const renderAsCard = affordance.kind !== "text" || resources.length > 0;
+      const htmlContext = TRUSTED_HTML_FRAGMENT.test(p.question)
+        ? workflowWidgetAttachment({
+            widgetId: deps.newId(),
+            title: p.label?.trim() || "workflow_input",
+            widgetCode: p.question,
+          })
+        : undefined;
+      const visibleQuestion = htmlContext
+        ? p.label?.trim() || "Respond to this request"
+        : p.question;
+      const renderAsCard =
+        affordance.kind !== "text" || resources.length > 0 || htmlContext !== undefined;
       await runPrimitive(
         () =>
           enqueue(() =>
             deps.dispatch(
-              messageUpsert(deps, p.threadId, "system", p.question, {
+              messageUpsert(deps, p.threadId, "system", visibleQuestion, {
                 author: { kind: "system", workflowRunId: deps.runId },
                 status: "waiting-for-input",
                 visibleToUser: true,
@@ -190,12 +223,13 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
                           kind: "view" as const,
                           miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
                           props: {
-                            question: p.question,
+                            question: visibleQuestion,
                             affordance,
                             correlationId,
                             workflowRunId: deps.runId,
                           },
                         },
+                        ...(htmlContext ? [htmlContext] : []),
                         ...resources.map((resource) => ({ kind: "resource" as const, resource })),
                       ],
                     }
@@ -239,21 +273,16 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     if (p.widget !== undefined) {
       // Workflow semantic adapter: reuse the canonical widget parser/attachment factory rather
       // than duplicating validation or inventing a second rendering contract.
-      const parsed = parseT3workWidgetShowInput({
+      const attachment = workflowWidgetAttachment({
+        widgetId: deps.newId(),
         title: p.widget.title,
-        widget_code: p.widget.widgetCode,
+        widgetCode: p.widget.widgetCode,
         ...(p.widget.format === undefined ? {} : { format: p.widget.format }),
         ...(p.widget.loadingMessages === undefined
           ? {}
-          : { loading_messages: p.widget.loadingMessages }),
+          : { loadingMessages: p.widget.loadingMessages }),
       });
-      if ("error" in parsed) throw new Error(`Invalid workflow widget: ${parsed.error}`);
-      const attachment = buildT3workWidgetAttachment({
-        widgetId: deps.newId(),
-        parsed,
-        artifactRelativePath: undefined,
-      });
-      step(correlationId, kind, "completed", parsed.title, p.threadId);
+      step(correlationId, kind, "completed", p.widget.title, p.threadId);
       await runPrimitive(() =>
         enqueueOneWay(() =>
           deps.dispatch(
@@ -268,10 +297,26 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       );
       return;
     }
-    if (p.recipient === "user" && /<\/?[a-z][^>]*>/i.test(p.text)) {
-      throw new Error(
-        "notifyUser accepts plain text only. Use thread.showWidget({ title, widgetCode }) for HTML or SVG.",
+    if (p.recipient === "user" && TRUSTED_HTML_FRAGMENT.test(p.text)) {
+      const attachment = workflowWidgetAttachment({
+        widgetId: deps.newId(),
+        title: "workflow_notification",
+        widgetCode: p.text,
+      });
+      step(correlationId, kind, "completed", "Workflow notification", p.threadId);
+      await runPrimitive(() =>
+        enqueueOneWay(() =>
+          deps.dispatch(
+            messageUpsert(deps, p.threadId, "system", "", {
+              author: { kind: "system", workflowRunId: deps.runId },
+              visibleToUser: true,
+              visibleToAgent: false,
+              attachments: [attachment],
+            }),
+          ),
+        ),
       );
+      return;
     }
     step(correlationId, kind, "completed", p.text, p.threadId);
     await runPrimitive(() =>

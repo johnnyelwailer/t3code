@@ -36,6 +36,7 @@ type MainContentProps = {
   onOpenThread: (projectId: string, threadId: string) => void;
   onOpenFullThread: (projectId: string, threadId: string) => void;
   onOpenEmbeddedThread: (projectId: string, threadId: string) => void;
+  onCloseEmbeddedThread?: () => void;
   onKickoffProjectThread: (input: ProjectKickoffThreadInput) => void;
   onKickoffTicketThread: (input: TicketKickoffThreadInput) => void;
   onThreadKickoffConsumed: (threadId: string) => void;
@@ -64,6 +65,7 @@ export function AppMainContent({
   onOpenThread,
   onOpenFullThread,
   onOpenEmbeddedThread,
+  onCloseEmbeddedThread,
   onKickoffProjectThread,
   onBackToDashboard,
   onCreate,
@@ -181,6 +183,9 @@ export function AppMainContent({
         embeddedThread={embeddedThread}
         onOpenTicket={onOpenTicket}
         onOpenEmbeddedThread={onOpenEmbeddedThread}
+        onCloseEmbeddedThread={() =>
+          onCloseEmbeddedThread?.() ?? onOpenFullThread(view.projectId, view.threadId)
+        }
         onThreadKickoffConsumed={onThreadKickoffConsumed}
         onRememberFullThread={(threadId) => onThreadDisplayModeChange(threadId, "thread")}
         onBackToDashboard={onBackToDashboard}

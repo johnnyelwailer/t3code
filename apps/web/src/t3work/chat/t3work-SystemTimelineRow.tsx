@@ -133,6 +133,13 @@ export function T3workSystemTimelineRow(props: {
             {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
           />
         ) : null}
+        {widgetAttachments.map((attachment) => (
+          <T3workWidgetBlock
+            key={`t3work-widget:${attachment.widget.widgetId}`}
+            widget={attachment.widget}
+            threadRef={threadRef}
+          />
+        ))}
         <T3workWorkflowDecisionCard
           decision={workflowDecision}
           active={
@@ -158,11 +165,26 @@ export function T3workSystemTimelineRow(props: {
         {genericAttachments.length > 0 ? (
           <T3workMessageAttachmentList attachments={genericAttachments} />
         ) : null}
-        {widgetAttachments.map((attachment) => (
-          <div key={`t3work-widget:${attachment.widget.widgetId}`}>
-            <T3workWidgetBlock widget={attachment.widget} threadRef={threadRef} />
-          </div>
-        ))}
+      </div>
+    );
+  }
+
+  const trustedHistoricalHtml =
+    message.t3workExt?.author?.kind === "system" &&
+    message.t3workExt.author.workflowRunId !== undefined &&
+    /<\/?[a-z][^>]*>/i.test(message.text);
+  if (trustedHistoricalHtml) {
+    return (
+      <div className="w-full max-w-[92%]">
+        <T3workWidgetBlock
+          widget={{
+            widgetId: `historical-workflow:${message.id}`,
+            title: "workflow_notification",
+            format: message.text.trimStart().startsWith("<svg") ? "svg" : "html",
+            html: message.text,
+          }}
+          threadRef={threadRef}
+        />
       </div>
     );
   }

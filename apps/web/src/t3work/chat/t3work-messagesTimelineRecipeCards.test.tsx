@@ -1,5 +1,8 @@
 import { MessageId } from "@t3tools/contracts";
-import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_CARD } from "@t3tools/project-recipes";
+import {
+  PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_CARD,
+  PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
+} from "@t3tools/project-recipes";
 import { type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
@@ -290,6 +293,96 @@ describe("MessagesTimeline recipe cards", () => {
     );
 
     expect(markup).toContain("Review finished.");
+    expect(markup).not.toContain(">System<");
+  }, 10000);
+
+  it("sandbox-promotes historical workflow HTML instead of showing literal system text", async () => {
+    const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildT3workMessagesTimelineTestProps()}
+        timelineEntries={[
+          {
+            id: "timeline-historical-html",
+            kind: "message",
+            createdAt: "2026-03-17T19:12:32.000Z",
+            message: {
+              id: MessageId.make("message-historical-html"),
+              role: "system",
+              text: "<div><strong>Legacy workflow widget</strong></div>",
+              streaming: false,
+              createdAt: "2026-03-17T19:12:32.000Z",
+              updatedAt: "2026-03-17T19:12:32.000Z",
+              turnId: null,
+              t3workExt: {
+                author: { kind: "system", workflowRunId: "run-legacy" },
+                visibleToUser: true,
+                visibleToAgent: false,
+              },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('data-widget-id="historical-workflow:message-historical-html"');
+    expect(markup).toContain("Legacy workflow widget");
+    expect(markup).not.toContain(">System<");
+  }, 10000);
+
+  it("renders sandboxed askUser HTML context before the decision actions", async () => {
+    const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildT3workMessagesTimelineTestProps()}
+        timelineEntries={[
+          {
+            id: "timeline-html-decision",
+            kind: "message",
+            createdAt: "2026-03-17T19:12:33.000Z",
+            message: {
+              id: MessageId.make("message-html-decision"),
+              role: "system",
+              text: "Release decision",
+              streaming: false,
+              createdAt: "2026-03-17T19:12:33.000Z",
+              updatedAt: "2026-03-17T19:12:33.000Z",
+              turnId: null,
+              t3workExt: {
+                author: { kind: "system", workflowRunId: "run-decision" },
+                status: "waiting-for-input",
+                visibleToUser: true,
+                attachments: [
+                  {
+                    kind: "view",
+                    miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
+                    props: {
+                      question: "Release decision",
+                      affordance: { kind: "choice", options: ["approve", "reject"] },
+                      correlationId: "run-decision:1",
+                      workflowRunId: "run-decision",
+                    },
+                  },
+                  {
+                    kind: "widget",
+                    widget: {
+                      widgetId: "decision-context",
+                      title: "release_decision",
+                      format: "html",
+                      html: "<section>Release evidence</section>",
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup.indexOf('data-widget-id="decision-context"')).toBeLessThan(
+      markup.indexOf("approve"),
+    );
     expect(markup).not.toContain(">System<");
   }, 10000);
 });

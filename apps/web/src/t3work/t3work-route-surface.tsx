@@ -168,6 +168,18 @@ export function T3workRouteSurface() {
               search: buildRouteSearch(search),
             });
           }}
+          onCloseEmbeddedThread={() => {
+            void navigate({
+              to: pathname,
+              // Keep the current parent route and all of its search state; only close the pane.
+              search: (current) => {
+                const { chatThreadId: _ignoredChatThreadId, ...rest } = current;
+                return rest;
+              },
+              replace: true,
+              resetScroll: false,
+            });
+          }}
           onProjectCreated={(project: ProjectShellProject) => {
             void navigate({
               to: project.source.provider === "local" ? "/t3work" : "/t3work/projects/$projectId",

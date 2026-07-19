@@ -6,7 +6,7 @@ import { createWorkflowEngineBroker } from "./t3work-workflowEngineBroker.ts";
 import { makeWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 
 describe("createWorkflowEngineBroker", () => {
-  it("routes workflow widgets through a typed widget attachment and rejects notifyUser HTML", async () => {
+  it("routes explicit, notifyUser, and askUser HTML through typed widget attachments", async () => {
     const dispatched: OrchestrationCommand[] = [];
     let id = 0;
     const broker = createWorkflowEngineBroker({
@@ -55,21 +55,63 @@ describe("createWorkflowEngineBroker", () => {
       },
     });
 
-    await expect(
-      broker.send(
-        {
-          correlationId: "run-widget:2",
-          kind: "thread.message",
-          payload: {
-            threadId: "parent-1",
-            recipient: "user",
-            text: "<div>unsafe raw widget</div>",
-          },
+    await broker.send(
+      {
+        correlationId: "run-widget:2",
+        kind: "thread.message",
+        payload: {
+          threadId: "parent-1",
+          recipient: "user",
+          text: "<div>Trusted workflow notification</div>",
         },
-        { resolve: () => {}, reject: () => {} },
-      ),
-    ).rejects.toThrow("notifyUser accepts plain text only");
-    expect(dispatched).toHaveLength(1);
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+    expect(dispatched[1]).toMatchObject({
+      type: "thread.message.upsert",
+      message: {
+        text: "",
+        t3workExt: {
+          attachments: [
+            {
+              kind: "widget",
+              widget: { html: "<div>Trusted workflow notification</div>" },
+            },
+          ],
+        },
+      },
+    });
+
+    await broker.send(
+      {
+        correlationId: "run-widget:3",
+        kind: "user.input",
+        payload: {
+          threadId: "parent-1",
+          question: "<section><strong>Approve release?</strong></section>",
+          label: "Release decision",
+          affordance: { kind: "choice", options: ["approve", "reject"] },
+        },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+    expect(dispatched[2]).toMatchObject({
+      type: "thread.message.upsert",
+      message: {
+        text: "Release decision",
+        t3workExt: {
+          status: "waiting-for-input",
+          attachments: [
+            { kind: "view", props: { question: "Release decision" } },
+            {
+              kind: "widget",
+              widget: { html: "<section><strong>Approve release?</strong></section>" },
+            },
+          ],
+        },
+      },
+    });
+    expect(dispatched).toHaveLength(3);
   });
 
   it("persists an ask continuation before dispatching the child turn", async () => {
