@@ -7,6 +7,7 @@ import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
 import { T3workToolBroker } from "../../../t3work-toolBroker.ts";
+import { T3WORK_WORKFLOW_TAGLINE } from "../../../t3work-workflowManual.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3workToolBroker];
@@ -73,10 +74,8 @@ export const T3workSendMessageTool = Tool.make("t3work_send_message", {
 // and run again.
 export const T3workWorkflowRunTool = Tool.make("t3work_workflow_run", {
   description:
-    "Run a temporary runbook (workflow) immediately in this conversation. Pass " +
-    "`source` with the inline workflow TypeScript, or `workflowPath` for a saved " +
-    "one, plus optional `args`. No approval needed. Returns {runId, status: " +
-    "completed|suspended|failed, error?}; on `failed`, fix the source and re-run.",
+    `${T3WORK_WORKFLOW_TAGLINE} Pass \`source\` (the orchestration body) or \`workflowPath\`, ` +
+    "plus optional `args`. Returns {runId, status: completed|suspended|failed, output?, error?}.",
   parameters: Schema.Struct({
     source: Schema.optional(Schema.String),
     workflowPath: Schema.optional(Schema.String),
