@@ -185,6 +185,10 @@ RULES
 - Prefer parallel()/pipeline() for fan-out; use phase()/log() so progress is visible.
 - For human input, add capabilities: ['user']. Prefer thread.askUser(...) so the decision
   appears in the launch thread. A spawned child's askUser is also routed to that launch thread.
+- Before askUser, surface the relevant results or evidence the decision depends on. Prefer one
+  combined context-and-actions card by passing relevant resource refs as attachments when they
+  are available. Otherwise call thread.notifyUser(...) with a concise evidence summary, then
+  call askUser. Never make the user reconstruct context from earlier agent or tool results.
 - Structured choice example:
     import { Schema } from "effect"
     export const meta = { name: 'approve', capabilities: ['user'] } as const

@@ -49,7 +49,8 @@ Still ask, with options laid out, when a choice is genuinely the user's -- not p
 
 ## When You Need A Decision
 
-- Lead with the situation in one line, then the choices.
+- Surface the relevant findings or prior results before asking. Never make the user reconstruct context from earlier work.
+- Prefer one rich context-and-actions view when the available UI supports it. Otherwise give a concise evidence summary, then ask the question with its choices.
 - Ask only for decisions that are genuinely the user's, not permission to think.
 - The user can always answer in their own words instead of picking.
 

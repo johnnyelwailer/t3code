@@ -129,7 +129,7 @@ describe("live workflow step overlay on the plan card", () => {
     expect(markup).toContain("Waiting for agent");
   }, 30000);
 
-  it("keeps useful details expandable and hides journal implementation names", async () => {
+  it("makes a child step row the thread navigation target and hides journal implementation names", async () => {
     const markup = await renderTimeline(
       [
         stepActivity(
@@ -143,11 +143,12 @@ describe("live workflow step overlay on the plan card", () => {
       () => {},
     );
 
-    expect(markup).toContain("<details");
     expect(markup).not.toContain("Work log");
     expect(markup).not.toContain("thread.turn");
-    expect(markup).toContain("Reviewed the implementation");
-    expect(markup).toContain("Open thread");
+    expect(markup).toContain('data-step-row-shell="thread-link"');
+    expect(markup).toContain('aria-label="Open step thread"');
+    expect(markup).toContain("lucide-chevron-right");
+    expect(markup).not.toContain("Open thread");
   }, 30000);
 
   it("keeps the authored label and renders generated child status in that step row", () => {

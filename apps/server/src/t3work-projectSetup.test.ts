@@ -78,6 +78,11 @@ describe("renderT3WorkProjectSetupFiles", () => {
     );
     expect(agents?.contents).toContain("do it in a separate thread scoped to the right repository");
     expect(agents?.contents).toContain("surface that thread as a link");
+    expect(agents?.contents).toContain(
+      "Surface the relevant findings or prior results before asking",
+    );
+    expect(agents?.contents).toContain("Prefer one rich context-and-actions view");
+    expect(agents?.contents).toContain("give a concise evidence summary, then ask the question");
     expect(agents?.contents).not.toContain("Offer first");
     expect(agents?.contents).not.toContain("offer to save it as a project recipe");
     expect(agents?.contents).toContain("## T3work Recipes vs Provider Features");

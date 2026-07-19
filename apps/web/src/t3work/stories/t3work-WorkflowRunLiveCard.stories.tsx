@@ -135,7 +135,7 @@ export const FailedRun: Story = {
   },
 };
 
-/** A workflow child step can open its own thread without exposing runtime internals. */
+/** A workflow child step is one keyboard-accessible row link, with a right chevron. */
 export const ChildThread: Story = {
   args: {
     shape,

@@ -30,4 +30,12 @@ describe("agent-orchestration help contract", () => {
     expect(timers).toContain("already overdue");
     expect(timers).toContain('round very short remaining times to "Due now"');
   });
+
+  it("requires evidence context before a user decision", () => {
+    const help = t3workHelp("agent-orchestration");
+    expect(help).toContain("Before askUser, surface the relevant results or evidence");
+    expect(help).toContain("resource refs as attachments");
+    expect(help).toContain("thread.notifyUser(...) with a concise evidence summary");
+    expect(help).toContain("Never make the user reconstruct context");
+  });
 });

@@ -1,4 +1,4 @@
-import { ExternalLinkIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { T3workWorkflowStepEntry } from "~/t3work/chat/t3work-threadWorkflowStepProgress";
@@ -33,26 +33,31 @@ export function T3workWorkflowStepDetails(props: {
       : (step.detail ?? step.error);
   const hasDetail = Boolean(detail?.trim());
 
-  const openThread = canOpenThread ? (
-    <button
-      type="button"
-      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onOpenThread?.({ projectId: step.projectId!, threadId: step.threadId! });
-      }}
-    >
-      Open thread
-      <ExternalLinkIcon className="size-3" />
-    </button>
-  ) : null;
+  // A child step's detail belongs in its thread. Make the whole row the destination instead
+  // of presenting a second, easy-to-miss "Open thread" target below it. A native button keeps
+  // Enter/Space keyboard navigation intact without nesting an interactive control in <summary>.
+  if (canOpenThread) {
+    return (
+      <button
+        type="button"
+        className={`${STEP_ROW_SHELL_CLASS_NAME} group flex w-full items-center gap-2 text-left hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
+        data-step-row-shell="thread-link"
+        aria-label="Open step thread"
+        onClick={() => onOpenThread?.({ projectId: step.projectId!, threadId: step.threadId! })}
+      >
+        <span className="min-w-0 flex-1">{children}</span>
+        <ChevronRightIcon
+          aria-hidden="true"
+          className="size-4 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5"
+        />
+      </button>
+    );
+  }
 
   if (!hasDetail) {
     return (
       <div className={STEP_ROW_SHELL_CLASS_NAME} data-step-row-shell="static">
         {children}
-        {openThread ? <div className="ml-7 mt-0.5">{openThread}</div> : null}
       </div>
     );
   }
@@ -70,7 +75,6 @@ export function T3workWorkflowStepDetails(props: {
         {step.error && step.detail && !redactDetail && step.error !== detail ? (
           <p className="mt-1 text-destructive">{step.error}</p>
         ) : null}
-        {openThread ? <div className="mt-1.5">{openThread}</div> : null}
       </div>
     </details>
   );
