@@ -151,7 +151,11 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           updated_at AS "updatedAt"
         FROM projection_thread_messages
         WHERE thread_id = ${threadId}
-        ORDER BY created_at ASC, message_id ASC
+        -- rowid (monotonic insertion order) tiebreak, not the random message_id
+        -- UUID: a user message and its reply share a created_at (the reply keeps
+        -- its turn-start stamp across streaming), so a UUID tiebreak orders them
+        -- randomly — "reply above the sent message".
+        ORDER BY created_at ASC, rowid ASC
       `,
   });
 

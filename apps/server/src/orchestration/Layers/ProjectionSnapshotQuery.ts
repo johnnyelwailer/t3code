@@ -433,7 +433,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM projection_thread_messages
-        ORDER BY thread_id ASC, created_at ASC, message_id ASC
+        -- rowid (insertion order) tiebreak, not the random message_id UUID: a
+        -- message and its reply can share a created_at, so a UUID tiebreak orders
+        -- them randomly. See ProjectionThreadMessages listing query.
+        ORDER BY thread_id ASC, created_at ASC, rowid ASC
       `,
   });
 
@@ -798,7 +801,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           updated_at AS "updatedAt"
         FROM projection_thread_messages
         WHERE thread_id = ${threadId}
-        ORDER BY created_at ASC, message_id ASC
+        -- rowid (insertion order) tiebreak, not the random message_id UUID.
+        ORDER BY created_at ASC, rowid ASC
       `,
   });
 
