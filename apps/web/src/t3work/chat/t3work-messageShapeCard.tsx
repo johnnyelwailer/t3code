@@ -2,7 +2,7 @@
 /**
  * The play-as-shape "plan" card (recipe-UX design pass) — renders the `t3work.workflow.shape`
  * view a recipe-launch system message carries: a distinct bordered card showing WHAT THE RECIPE
- * WILL DO. The workflow title sits at the top, then the ordered, kind-tagged step list with
+ * WILL DO. The workflow title sits at the top, then the ordered, kind-marked step list with
  * phase headers immediately before the relevant steps. Each step carries the four-kind
  * icon/color vocabulary (read / agent / ask / act).
  *
@@ -108,12 +108,15 @@ export function T3workShapeStepRow({
   return (
     <div className="flex items-center gap-2.5">
       {leading}
-      <span className={cn("flex size-5 shrink-0 items-center justify-center", meta.text)}>
+      <span
+        className={cn("flex size-5 shrink-0 items-center justify-center", meta.text)}
+        title={step.kind === "agent" ? "Agent step" : undefined}
+      >
         <meta.Icon className="size-3.5" />
       </span>
       <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">{step.label}</span>
       {trailing}
-      {!hideKindLabel ? (
+      {!hideKindLabel && step.kind !== "agent" ? (
         <span
           className={cn(
             "shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",

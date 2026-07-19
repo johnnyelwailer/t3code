@@ -3,7 +3,7 @@
 /**
  * The play-as-shape "plan" card (recipe-UX design pass): the `t3work.workflow.shape` view
  * renders in the timeline as a distinct bordered card — phase headers plus the ordered,
- * kind-tagged step list (read / agent / ask / act). The launch message's short text echo is
+ * kind-marked step list (read / agent / ask / act). The launch message's short text echo is
  * suppressed; the card owns the header.
  */
 
@@ -121,7 +121,7 @@ describe("workflow shape card in the timeline", () => {
     ]);
   });
 
-  it("renders the workflow title, ordered phase headers, and kind-tagged steps", async () => {
+  it("renders the workflow title, ordered phase headers, and compact step kinds", async () => {
     const markup = await renderTimeline([shapeMessage("message-shape-1")]);
 
     expect(markup).toContain("shape.pr-review");
@@ -130,11 +130,12 @@ describe("workflow shape card in the timeline", () => {
     // phase headers sit immediately before their ordered steps
     expect(markup.indexOf("Review")).toBeLessThan(markup.indexOf("github.pullRequest.get"));
     expect(markup.indexOf("Decide")).toBeLessThan(markup.indexOf("Merge it?"));
-    // kind-tagged steps
+    // Agent uses its labelled robot icon only; ask remains explicitly tagged for user action.
     expect(markup).toContain("github.pullRequest.get");
     expect(markup).toContain("github.pullRequest.merge");
     expect(markup).toContain("Read");
-    expect(markup).toContain("Agent");
+    expect(markup).toContain('title="Agent step"');
+    expect(markup).not.toContain(">Agent<");
     expect(markup).toContain("Ask");
     expect(markup).toContain("Act");
     // the card owns the header — the message text echo must not double up above it

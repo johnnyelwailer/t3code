@@ -41,7 +41,7 @@ const shape = {
   workflowRunId: "run-release-42",
 } as const;
 
-/** Mid-flight: two done, one waiting on the user, one sleeping, one failed. */
+/** Mid-flight: Agent rows use the titled robot icon, while ASK remains a visible action tag. */
 export const MidFlight: Story = {
   args: {
     shape,
