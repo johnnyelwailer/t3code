@@ -60,16 +60,26 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3work_rename_thread",
-      arguments: { title: "Renamed through MCP" },
+      name: "t3work_show_widget",
+      arguments: {
+        title: "MCP widget",
+        widget_code: "<button>Continue</button>",
+        format: "html",
+        capabilities: { tools: ["t3work.thread.rename"] },
+      },
     });
 
     expect(result.structuredContent).toEqual({ ok: true });
     expect(calls).toEqual([
       {
         threadId,
-        tool: "t3work.thread.rename",
-        args: { title: "Renamed through MCP" },
+        tool: "t3work.widget.show",
+        args: {
+          title: "MCP widget",
+          widget_code: "<button>Continue</button>",
+          format: "html",
+          capabilities: { tools: ["t3work.thread.rename"] },
+        },
       },
     ]);
   }).pipe(

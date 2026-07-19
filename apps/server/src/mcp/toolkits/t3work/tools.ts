@@ -92,6 +92,28 @@ export const T3workWorkflowRunTool = Tool.make("t3work_workflow_run", {
   dependencies,
 });
 
+// Render an inline, sandboxed HTML/SVG widget in the calling thread. This is a
+// current-thread operation: the handler deliberately goes through the bound
+// broker surface, so normal thread resolution and tool-group policy still apply.
+export const T3workShowWidgetTool = Tool.make("t3work_show_widget", {
+  description:
+    "Show an inline widget in the current t3work thread. Use a small HTML or SVG fragment " +
+    "(not a complete document). The optional capabilities.tools allowlist controls which " +
+    "t3work broker tools the widget may call.",
+  parameters: Schema.Struct({
+    title: Schema.String,
+    widget_code: Schema.String,
+    format: Schema.optional(Schema.Literals(["html", "svg"])),
+    loading_messages: Schema.optional(Schema.Array(Schema.String)),
+    capabilities: Schema.optional(
+      Schema.Struct({ tools: Schema.optional(Schema.Array(Schema.String)) }),
+    ),
+  }),
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
 // On-demand reference docs — one generic tool for any topic (see t3work-help.ts),
 // so tool descriptions stay lean and agents discover detail proactively.
 export const T3workHelpTool = Tool.make("t3work_help", {
@@ -109,5 +131,6 @@ export const T3workToolkit = Toolkit.make(
   T3workStartChildTool,
   T3workSendMessageTool,
   T3workWorkflowRunTool,
+  T3workShowWidgetTool,
   T3workHelpTool,
 );

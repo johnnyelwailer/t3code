@@ -40,6 +40,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
     "t3work.thread.rename",
     "t3work.thread.start_child",
     "t3work.workflow.run",
+    "t3work.widget.show",
   ] as const;
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;
