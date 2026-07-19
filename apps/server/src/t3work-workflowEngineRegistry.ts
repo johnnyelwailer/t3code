@@ -37,6 +37,8 @@ export interface WorkflowPendingAsk {
   readonly affordance?: AskAffordance;
   /** Black-boxed composition asks settle in-memory inside the still-running composition. */
   readonly resolveLive?: (reply: unknown) => Promise<void>;
+  /** Settle an in-memory waiter when its owning run is cancelled. */
+  readonly cancelLive?: () => void;
 }
 
 export interface WorkflowRegisteredRun {
@@ -98,7 +100,10 @@ export function makeWorkflowEngineRegistry(): T3workWorkflowEngineRegistryShape 
       runs.get(runId)?.cancel();
       runs.delete(runId);
       for (const [threadId, pending] of pendingByThread) {
-        if (pending.runId === runId) pendingByThread.delete(threadId);
+        if (pending.runId === runId) {
+          pendingByThread.delete(threadId);
+          pending.cancelLive?.();
+        }
       }
       launchThreadByRun.delete(runId);
       masterStopByRun.delete(runId);

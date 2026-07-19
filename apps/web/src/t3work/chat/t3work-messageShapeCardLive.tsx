@@ -17,6 +17,7 @@
  */
 import {
   CheckCircle2Icon,
+  ChevronRightIcon,
   CircleAlertIcon,
   CircleDashedIcon,
   ClockIcon,
@@ -319,32 +320,46 @@ function inferredRunStatus(
   return "running";
 }
 
-function repairStatus(steps: ReadonlyArray<T3workWorkflowStepEntry>): string | null {
+function repairStatus(steps: ReadonlyArray<T3workWorkflowStepEntry>): {
+  readonly label: string;
+  readonly reason?: string;
+  readonly step: T3workWorkflowStepEntry;
+} | null {
   const latest = [...steps].reverse().find((step) => step.stepKind === "workflow.self-heal");
   if (latest === undefined) return null;
-  if (latest.phase === "failed") return "Needs attention";
-  if (latest.phase === "completed") return "Workflow ready";
-  if (latest.detail === "Resuming workflow") return "Starting workflow";
+  const reason = [...steps]
+    .reverse()
+    .find((step) => step.stepKind === "workflow.self-heal" && step.error)?.error;
+  if (latest.phase === "failed") return { label: "Needs attention", step: latest };
+  if (latest.phase === "completed") return { label: "Workflow ready", step: latest };
+  if (latest.detail === "Resuming workflow")
+    return { label: "Starting workflow", ...(reason ? { reason } : {}), step: latest };
   // Self-heal/repair internals stay out of normal UI.
-  return "Getting workflow ready";
+  return { label: "Getting workflow ready", ...(reason ? { reason } : {}), step: latest };
 }
 
-function RepairStatusStrip({ status }: { status: string }) {
+function RepairStatusStrip({
+  repair,
+  onOpenThread,
+}: {
+  repair: NonNullable<ReturnType<typeof repairStatus>>;
+  onOpenThread?: (input: { projectId: string; threadId: string }) => void;
+}) {
+  const { label: status, reason, step } = repair;
   const needsAttention = status === "Needs attention";
   const ready = status === "Workflow ready";
   const activelyPreparing = status === "Getting workflow ready";
-  return (
-    <div
-      data-workflow-repair-status={status}
-      className={cn(
-        "mt-3 flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium",
-        needsAttention
-          ? "border-destructive/40 bg-destructive/10 text-destructive"
-          : ready
-            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-            : "border-primary/25 bg-primary/5 text-foreground/80",
-      )}
-    >
+  const canOpenThread = Boolean(step.projectId && step.threadId && onOpenThread);
+  const className = cn(
+    "mt-3 flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs font-medium",
+    needsAttention
+      ? "border-destructive/40 bg-destructive/10 text-destructive"
+      : ready
+        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+        : "border-primary/25 bg-primary/5 text-foreground/80",
+  );
+  const content = (
+    <>
       {needsAttention ? (
         <CircleAlertIcon className="size-3.5 shrink-0" />
       ) : ready ? (
@@ -354,8 +369,24 @@ function RepairStatusStrip({ status }: { status: string }) {
       ) : (
         <CircleDashedIcon className="size-3.5 shrink-0 text-muted-foreground" />
       )}
-      {status}
-    </div>
+      <span className="min-w-0 flex-1">
+        <span className="block">{status}</span>
+        {reason ? <span className="mt-0.5 block font-normal opacity-80">{reason}</span> : null}
+      </span>
+      {canOpenThread ? <ChevronRightIcon className="size-4 shrink-0" aria-hidden="true" /> : null}
+    </>
+  );
+  return (
+    <button
+      type="button"
+      data-workflow-repair-status={status}
+      className={className}
+      disabled={!canOpenThread}
+      aria-label={canOpenThread ? "Open workflow repair thread" : undefined}
+      onClick={() => onOpenThread?.({ projectId: step.projectId!, threadId: step.threadId! })}
+    >
+      {content}
+    </button>
   );
 }
 
@@ -409,8 +440,6 @@ export function T3workWorkflowShapeLiveCard({
     activeWaitAt === undefined
       ? -1
       : rows.findIndex((row) => row.planStep !== undefined && row.runtimeStep === undefined);
-  const liveLabel = liveRunLabel(progress.steps);
-  const repair = repairStatus(progress.steps);
   useEffect(() => {
     if (localStatus === undefined || workflowRunStatus === undefined) return;
     if (
@@ -425,6 +454,19 @@ export function T3workWorkflowShapeLiveCard({
     serverStatus === "completed" || serverStatus === "failed" || serverStatus === "cancelled"
       ? serverStatus
       : (localStatus ?? serverStatus ?? inferredRunStatus(progress));
+  // Repair entries are historical workflow activity. Once a run is terminal, they must not
+  // keep a stale spinner/"Getting workflow ready" strip visible after Stop succeeds.
+  const repair = ["completed", "failed", "cancelled"].includes(status)
+    ? null
+    : repairStatus(progress.steps);
+  const liveLabel =
+    status === "cancelled"
+      ? "Stopped"
+      : status === "completed"
+        ? "Completed"
+        : status === "failed"
+          ? "Failed"
+          : liveRunLabel(progress.steps);
   const queued = status === "queued";
   const canPause = status === "suspended" || status === "sleeping";
   const canResume = status === "paused";
@@ -537,7 +579,9 @@ export function T3workWorkflowShapeLiveCard({
       {shape.description ? (
         <p className="text-sm leading-6 text-muted-foreground">{shape.description}</p>
       ) : null}
-      {repair ? <RepairStatusStrip status={repair} /> : null}
+      {repair ? (
+        <RepairStatusStrip repair={repair} {...(onOpenThread ? { onOpenThread } : {})} />
+      ) : null}
 
       {rows.length > 0 ? (
         <div className="mt-3 space-y-1.5">

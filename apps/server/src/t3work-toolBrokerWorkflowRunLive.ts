@@ -10,6 +10,7 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
@@ -19,6 +20,16 @@ import {
 } from "./t3work-toolBrokerWorkflowRunTools.ts";
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
+import { TextGeneration } from "./textGeneration/TextGeneration.ts";
+
+const WorkflowRepairOutput = Schema.Union([
+  Schema.Struct({
+    safeToResume: Schema.Literal(true),
+    correctedWorkflow: Schema.String,
+    summary: Schema.String,
+  }),
+  Schema.Struct({ safeToResume: Schema.Literal(false), cancelReason: Schema.String }),
+]);
 
 type LoadThreadProjectLike = Parameters<typeof makeWorkflowRunToolHandlers>[0] extends {
   loadThreadProject: infer L;
@@ -41,6 +52,7 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
     const runRepository = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowRunRepository));
     const journalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowJournalStore));
     const scheduler = Option.getOrUndefined(yield* Effect.serviceOption(T3workWorkflowScheduler));
+    const textGeneration = Option.getOrUndefined(yield* Effect.serviceOption(TextGeneration));
     if (!registry || !runRepository || !journalStore || !scheduler) {
       return undefined;
     }
@@ -54,6 +66,19 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
         journalStore,
         rearmScheduler: () => scheduler.rearm(),
         dispatch: deps.dispatch,
+        ...(textGeneration?.generateStructured === undefined
+          ? {}
+          : {
+              generateRepairStructured: ({ prompt, modelSelection }) =>
+                Effect.runPromise(
+                  textGeneration.generateStructured!({
+                    cwd: process.cwd(),
+                    prompt,
+                    outputSchema: WorkflowRepairOutput,
+                    modelSelection,
+                  }),
+                ),
+            }),
       },
     }) as (threadId: ThreadId) => T3workWorkflowRunToolHandlers;
   },

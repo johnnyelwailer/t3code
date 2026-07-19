@@ -95,7 +95,9 @@ export const T3workWorkflowRunTool = Tool.make("t3work_workflow_run", {
   description:
     `${T3WORK_WORKFLOW_TAGLINE} Pass \`source\` (the orchestration body) or \`workflowPath\`, ` +
     "required `intent` ({goal, expectedOutcome, guardrails}), and optional `args`. Returns " +
-    "{runId, status: completed|suspended|failed, output?, error?}.",
+    "{runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. " +
+    "After a successful workflow-ui handoff, end the current turn with no assistant prose; " +
+    "the workflow card owns progress and user decisions.",
   parameters: Schema.Struct({
     source: Schema.optional(Schema.String),
     workflowPath: Schema.optional(Schema.String),

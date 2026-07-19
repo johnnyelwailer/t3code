@@ -40,4 +40,11 @@ describe("agent-orchestration help contract", () => {
     expect(help).toContain("workflow HTML passed to notifyUser or askUser");
     expect(help).toContain("Never make the user reconstruct context");
   });
+
+  it("hands successful workflow launches to the workflow UI without host follow-up prose", () => {
+    const help = t3workHelp("agent-orchestration");
+    expect(help).toContain("handoff: 'workflow-ui'");
+    expect(help).toMatch(/end the\s+current host turn immediately/);
+    expect(help).toContain("user decisions");
+  });
 });

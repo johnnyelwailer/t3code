@@ -267,6 +267,48 @@ describe("live workflow step overlay on the plan card", () => {
     expect(countOccurrences(startingMarkup, "animate-spin")).toBe(0);
   }, 30000);
 
+  it("clears stale workflow preparation when a stopped run still has a repair activity", async () => {
+    const stoppedMarkup = await renderTimeline(
+      [stepActivity(step(1, "workflow.self-heal", "started", { detail: "Repairing workflow" }))],
+      undefined,
+      { status: "cancelled" },
+    );
+
+    expect(stoppedMarkup).toContain('data-run-live-status="Stopped"');
+    expect(stoppedMarkup).not.toContain("Getting workflow ready");
+    expect(stoppedMarkup).not.toContain("data-workflow-repair-status");
+    expect(stoppedMarkup).not.toContain('data-run-live-status="Running');
+    expect(stoppedMarkup).not.toContain("animate-spin");
+  }, 30000);
+
+  it("shows the repair reason and opens its hidden child thread from the repair strip", async () => {
+    const markup = await renderTimeline(
+      [
+        stepActivity(
+          step(1, "workflow.self-heal", "started", {
+            detail: "Analysing failure",
+            error: "Release validation timed out",
+          }),
+          { sequence: 1 },
+        ),
+        stepActivity(
+          step(2, "workflow.self-heal", "started", {
+            detail: "Repairing workflow",
+            projectId: "project-1",
+            threadId: "run-1:repair:1",
+          }),
+          { sequence: 2 },
+        ),
+      ],
+      () => {},
+    );
+
+    expect(markup).toContain('data-workflow-repair-status="Getting workflow ready"');
+    expect(markup).toContain("Release validation timed out");
+    expect(markup).toContain('aria-label="Open workflow repair thread"');
+    expect(markup).toContain("lucide-chevron-right");
+  }, 30000);
+
   it("hides thread creation and inserts unknown work before later plan rows", async () => {
     const markup = await renderTimeline([
       stepActivity(step(1, "thread.create", "completed", { detail: "internal setup" }), {

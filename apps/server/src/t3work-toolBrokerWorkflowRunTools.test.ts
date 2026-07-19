@@ -142,6 +142,30 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
 });
 
 testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
+  it.effect("returns an explicit workflow-UI handoff through the broker result", () =>
+    Effect.gen(function* () {
+      const result = yield* callT3workWorkflowRunTool({
+        scopeLabel: "for this thread.",
+        toolArgs: { source: PURE_SUM_SOURCE, intent },
+        workflowRunTools: {
+          runWorkflow: () =>
+            Effect.succeed({
+              ok: true as const,
+              runId: "run-handoff",
+              status: "accepted" as const,
+              handoff: "workflow-ui" as const,
+            }),
+        },
+      });
+
+      assert.deepInclude(result.structuredContent, {
+        status: "accepted",
+        handoff: "workflow-ui",
+      });
+      assert.include(result.content[0]?.text ?? "", '"handoff": "workflow-ui"');
+    }),
+  );
+
   it.effect("rejects a call with BOTH source and workflowPath, and one with NEITHER", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -193,6 +217,7 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
         });
 
         assert.strictEqual(result.status, "accepted");
+        assert.strictEqual(result.handoff, "workflow-ui");
         // The source file must OUTLIVE the call — resume/rehydrate re-read it from disk.
         const workflowFile = `${workspaceRoot}/.t3work-runs/${result.runId}/workflow.ts`;
         assert.isTrue(NodeFS.existsSync(workflowFile));
@@ -218,6 +243,7 @@ testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
           });
 
           assert.strictEqual(result.status, "accepted");
+          assert.strictEqual(result.handoff, "workflow-ui");
 
           // The ask posted a decision-card message into the CALLING thread and parked there.
           const cards = dispatched.filter(

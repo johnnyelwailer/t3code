@@ -125,6 +125,7 @@ export function makeWorkflowRunToolHandlers<E>(deps: {
           ok: true as const,
           runId,
           status: "accepted" as const,
+          handoff: "workflow-ui" as const,
         } satisfies RunWorkflowToolResult;
       });
     },

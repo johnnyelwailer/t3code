@@ -44,6 +44,81 @@ const waitForRepair = async (
 };
 
 describe("workflow self-heal — real host integration", () => {
+  it("uses host structured generation without creating a tool-capable repair thread", async () => {
+    const runId = "structured-no-tools";
+    const workflowPath = NodePath.join(root, runId, "workflow.ts");
+    NodeFS.mkdirSync(NodePath.dirname(workflowPath), { recursive: true });
+    NodeFS.writeFileSync(workflowPath, brokenSource);
+    const registry = makeWorkflowEngineRegistry();
+    const commands: OrchestrationCommand[] = [];
+    const result = await launchWorkflowRecipe({
+      runId,
+      workflowPath,
+      args: {},
+      runsRoot: root,
+      launchThreadId: "launch-thread",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("original"), "original-model"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry,
+      dispatch: async (command) => {
+        commands.push(command);
+      },
+      newId: () => crypto.randomUUID(),
+      nowIso: () => "2026-07-19T00:00:00.000Z",
+      repairIntent: { goal: "finish", expectedOutcome: "valid result", guardrails: [] },
+      allowRepairThreadFallback: false,
+      generateRepairStructured: async () => ({
+        safeToResume: true,
+        correctedWorkflow: fixedSource,
+        summary: "fixed without tools",
+      }),
+      readWorkflowSource: async () => NodeFS.readFileSync(workflowPath, "utf8"),
+      replaceWorkflowSource: async (source) => NodeFS.writeFileSync(workflowPath, source),
+    });
+
+    expect(result).toEqual({ runId, status: "completed" });
+    expect(commands.some((command) => command.type === "thread.create")).toBe(false);
+    expect(NodeFS.readFileSync(workflowPath, "utf8")).toBe(fixedSource);
+  });
+
+  it("settles an active repair immediately when the run is stopped", async () => {
+    const runId = "stop-active-repair";
+    const workflowPath = NodePath.join(root, runId, "workflow.ts");
+    NodeFS.mkdirSync(NodePath.dirname(workflowPath), { recursive: true });
+    NodeFS.writeFileSync(workflowPath, brokenSource);
+    const registry = makeWorkflowEngineRegistry();
+    const launch = launchWorkflowRecipe({
+      runId,
+      workflowPath,
+      args: {},
+      runsRoot: root,
+      launchThreadId: "launch-thread",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("original"), "original-model"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry,
+      dispatch: async () => {},
+      newId: () => crypto.randomUUID(),
+      nowIso: () => "2026-07-19T00:00:00.000Z",
+      repairIntent: { goal: "finish", expectedOutcome: "valid result", guardrails: [] },
+      readWorkflowSource: async () => NodeFS.readFileSync(workflowPath, "utf8"),
+      replaceWorkflowSource: async () => {},
+    });
+
+    const childId = `${runId}:repair:1`;
+    for (let attempt = 0; attempt < 40 && registry.peekPending(childId) === undefined; attempt += 1)
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(registry.peekPending(childId)).toBeDefined();
+
+    registry.cancelRun(runId);
+
+    expect(await launch).toEqual({ runId, status: "suspended" });
+    expect(registry.peekPending(childId)).toBeUndefined();
+  });
+
   it("repairs atomically and resumes the same run without replaying completed work or creating UI children", async () => {
     const runId = "self-heal-run";
     const workflowPath = NodePath.join(root, runId, "workflow.ts");

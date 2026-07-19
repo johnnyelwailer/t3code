@@ -34,6 +34,9 @@ export const RunWorkflowToolResult = Schema.Struct({
   runId: Schema.String,
   /** `accepted` means the durable server owns the run; watch its workflow card for progress. */
   status: Schema.Literals(["accepted", "completed", "suspended", "failed"]),
+  /** The workflow UI owns all follow-up. The calling host agent must end its current turn
+   * without adding explanatory prose after a successful handoff. */
+  handoff: Schema.Literal("workflow-ui"),
   /** The validated workflow output — present only when status is `completed`. */
   output: Schema.optional(Schema.Unknown),
   /** The run's failure message — present only when status is `failed`; fix and re-run. */

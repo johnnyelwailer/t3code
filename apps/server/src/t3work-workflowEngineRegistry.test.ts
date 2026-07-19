@@ -6,16 +6,19 @@ describe("workflow engine registry controls", () => {
   it("cancels the controller and removes every pending wake source for the run", () => {
     const registry = makeWorkflowEngineRegistry();
     const cancel = vi.fn();
+    const cancelLive = vi.fn();
     registry.registerRun("run-1", { resume: async () => {}, cancel });
     registry.setPending("thread-1", {
       runId: "run-1",
       correlationId: "run-1:1",
       kind: "thread.turn",
+      cancelLive,
     });
 
     registry.cancelRun("run-1");
 
     expect(cancel).toHaveBeenCalledOnce();
+    expect(cancelLive).toHaveBeenCalledOnce();
     expect(registry.getRun("run-1")).toBeUndefined();
     expect(registry.peekPending("thread-1")).toBeUndefined();
   });

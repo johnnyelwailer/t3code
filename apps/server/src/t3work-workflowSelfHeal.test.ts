@@ -82,6 +82,15 @@ describe("workflow self-heal coordinator", () => {
         absolutePath: "/tmp/safe.workflow.ts",
       }),
     ).toBeNull();
+
+    const plainOriginal = original.replace("export const meta", "const meta");
+    expect(
+      validateWorkflowRepairCandidate({
+        originalSource: plainOriginal,
+        replacementSource: valid,
+        absolutePath: "/tmp/plain-to-exported.workflow.ts",
+      }),
+    ).toBe(valid);
   });
   it("accepts only the exact repair-child JSON protocol", () => {
     expect(

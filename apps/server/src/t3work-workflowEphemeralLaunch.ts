@@ -35,6 +35,7 @@ import {
 } from "./t3work-workflowEngineDurability.ts";
 import {
   launchWorkflowRecipe,
+  type LaunchWorkflowRecipeInput,
   type LaunchWorkflowRecipeResult,
 } from "./t3work-workflowEngineLaunch.ts";
 import type { T3workWorkflowEngineRegistryShape } from "./t3work-workflowEngineRegistry.ts";
@@ -66,6 +67,7 @@ export interface PreparedWorkflowLaunchDeps {
   readonly repairMaxAttempts?: number;
   readonly repairModelSelection?: "inherit" | ModelSelection;
   readonly repairTotalTimeBudgetMs?: number;
+  readonly generateRepairStructured?: LaunchWorkflowRecipeInput["generateRepairStructured"];
 }
 
 export interface PreparedWorkflowLaunchInput {
@@ -201,6 +203,10 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
         input.repairMaxAttempts ?? deps.repairMaxAttempts ?? repairPolicy.maxAttempts,
       repairModelSelection: deps.repairModelSelection ?? repairPolicy.modelSelection,
       repairTotalTimeBudgetMs: deps.repairTotalTimeBudgetMs ?? repairPolicy.totalTimeBudgetMs,
+      ...(deps.generateRepairStructured === undefined
+        ? {}
+        : { generateRepairStructured: deps.generateRepairStructured }),
+      allowRepairThreadFallback: false,
       ...(deps.fileSystem === undefined || pathService === undefined
         ? {}
         : {

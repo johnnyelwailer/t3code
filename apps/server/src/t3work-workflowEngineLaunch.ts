@@ -71,6 +71,13 @@ export interface LaunchWorkflowRecipeInput {
   readonly repairModelSelection?: "inherit" | ModelSelection;
   /** Shared repair budget across all hidden child attempts. */
   readonly repairTotalTimeBudgetMs?: number;
+  /** Host-owned structured generation. Unlike a repair thread, this surface exposes no tools. */
+  readonly generateRepairStructured?: (input: {
+    readonly prompt: string;
+    readonly modelSelection: ModelSelection;
+  }) => Promise<unknown>;
+  /** Legacy low-level-test seam. Production ephemeral launch disables tool-capable repair turns. */
+  readonly allowRepairThreadFallback?: boolean;
   readonly readWorkflowSource?: () => Promise<string>;
   readonly replaceWorkflowSource?: (source: string) => Promise<void>;
   readonly recordRepairAudit?: (audit: {
@@ -232,6 +239,9 @@ export async function launchWorkflowRecipe(
     if (controller.isCancelled()) return { runId: input.runId, status: "suspended" };
     const repaired = await tryWorkflowRepair(input, controller, error);
     if (repaired) return { runId: input.runId, status: "completed" };
+    // Stop may arrive while the hidden repair child is active. Do not overwrite the durable
+    // stopped state with a later failure or leave callers waiting for the repair deadline.
+    if (controller.isCancelled()) return { runId: input.runId, status: "suspended" };
     input.registry.deleteRun(input.runId);
     await input.lifecycle?.recordFailed();
     await controller.stepActivities.emitRun(

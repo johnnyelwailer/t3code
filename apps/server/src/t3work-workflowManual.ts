@@ -205,7 +205,8 @@ RULES
 - Return the final result at the end.
 
 RESULT
-Returns { runId, status: 'accepted'|'completed'|'suspended'|'failed', output?, error? }.
-accepted means the durable host owns the run. Do not launch it again or poll it; sleeping and
-other progress updates arrive through the existing thread/workflow UI.
+Returns { runId, status: 'accepted'|'completed'|'suspended'|'failed', handoff: 'workflow-ui', output?, error? }.
+accepted means the durable host owns the run. A successful workflow-ui handoff means end the
+current host turn immediately with no follow-up assistant prose. Do not launch it again or poll
+it; sleeping, user decisions, and other progress arrive through the existing workflow UI.
 On 'failed', read 'error', fix the source per this manual, and run it again.`;

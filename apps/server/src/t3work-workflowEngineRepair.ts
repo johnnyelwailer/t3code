@@ -54,6 +54,10 @@ export async function tryWorkflowRepair(
       ? input.modelSelection
       : input.repairModelSelection;
   const priorReasons: string[] = [];
+  const repairFailureReason = (error instanceof Error ? error.message : String(error))
+    .replaceAll(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
   const deadline =
     (await Effect.runPromise(Clock.currentTimeMillis)) +
     Math.max(1_000, input.repairTotalTimeBudgetMs ?? 900_000);
@@ -67,6 +71,7 @@ export async function tryWorkflowRepair(
     const source = await input.readWorkflowSource?.().catch(() => null);
     if (source === null || source === undefined) return false;
     let repairReason: string | undefined;
+    let repairChildId: string | undefined;
     const result = await coordinateWorkflowRepair({
       origin: "ephemeral",
       repairAttempts: attempt,
@@ -78,8 +83,6 @@ export async function tryWorkflowRepair(
       workspaceRoot: input.runsRoot,
       generateRepair: async ({ source, failure, intent, args, workspaceRoot }) => {
         if (stopped()) throw new Error("Workflow was stopped");
-        const childId = `${input.runId}:repair:${attempt + 1}`;
-        input.registry.registerChildThread(input.runId, childId);
         const prompt = [
           "Repair this t3work workflow. Return exact JSON only.",
           'Return exact JSON only: {"safeToResume":true,"correctedWorkflow":"...","summary":"..."} or {"safeToResume":false,"cancelReason":"..."}.',
@@ -94,6 +97,45 @@ export async function tryWorkflowRepair(
           `Workspace root: ${workspaceRoot}`,
           `Source:\n${source}`,
         ].join("\n\n");
+        if (input.generateRepairStructured !== undefined) {
+          try {
+            const generated = await input.generateRepairStructured({
+              prompt,
+              modelSelection: repairModelSelection,
+            });
+            const parsed = parseWorkflowRepairChildResult(JSON.stringify(generated));
+            if (parsed?.outcome === "fixed")
+              return {
+                kind: "replacement" as const,
+                source: parsed.updatedSource,
+                summary: parsed.summary,
+              };
+            return {
+              kind: "cannotRepair" as const,
+              reason:
+                parsed?.outcome === "cannot-fix"
+                  ? parsed.reason
+                  : "Repair generator returned invalid structured output.",
+            };
+          } catch (cause) {
+            return {
+              kind: "cannotRepair" as const,
+              reason: cause instanceof Error ? cause.message : String(cause),
+            };
+          }
+        }
+
+        if (input.allowRepairThreadFallback === false)
+          return {
+            kind: "cannotRepair" as const,
+            reason: "Structured repair generation is unavailable.",
+          };
+
+        // Compatibility fallback. Production wiring uses structured generation above, which
+        // exposes no shell, file, browser, or other tools to the repair model.
+        const childId = `${input.runId}:repair:${attempt + 1}`;
+        repairChildId = childId;
+        input.registry.registerChildThread(input.runId, childId);
         const replyPromise = new Promise<string>((resolve, reject) => {
           void (async () => {
             if (stopped()) throw new Error("Workflow was stopped");
@@ -122,6 +164,7 @@ export async function tryWorkflowRepair(
               resolveLive: async (value) => {
                 resolve(typeof value === "string" ? value : JSON.stringify(value));
               },
+              cancelLive: () => reject(new Error("Workflow was stopped")),
             });
             await input.dispatch({
               type: "thread.turn.start",
@@ -218,6 +261,10 @@ export async function tryWorkflowRepair(
                     ? "Workflow recovered"
                     : "Repair attempt failed",
           ...(phase === "failed" && detail !== undefined ? { error: detail } : {}),
+          ...(phase === "analysing" && repairFailureReason.length > 0
+            ? { error: repairFailureReason }
+            : {}),
+          ...(repairChildId === undefined ? {} : { threadId: repairChildId }),
         });
       },
     });
