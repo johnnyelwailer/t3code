@@ -4285,6 +4285,11 @@ function ChatViewContent(props: ChatViewProps) {
         failure = startResult;
       } else {
         turnStartSucceeded = true;
+        // The sent message consumed its context attachments — clear them so the
+        // auto-injected workspace/project context isn't re-prepended to every
+        // follow-up turn (first message is enough). Mirrors the kickoff and the
+        // override branches above, which already clear on success.
+        onComposerContextAttachmentsConsumed?.();
       }
     }
 

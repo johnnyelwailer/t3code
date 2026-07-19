@@ -162,10 +162,20 @@ export const launchStartupHeartbeat = recordStartupHeartbeat.pipe(
   Effect.asVoid,
 );
 
-export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
-  instanceId: ProviderInstanceId.make("codex"),
-  model: DEFAULT_MODEL,
-});
+// The default model a freshly auto-bootstrapped project (and therefore a new
+// thread's composer) selects. Upstream default stays Codex; a distribution can
+// override it without hardcoding a provider in core by setting the env seam
+// below (e.g. the Nexplore pack points it at its own instance + model).
+export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => {
+  const envInstanceId = process.env.T3WORK_DEFAULT_MODEL_INSTANCE_ID?.trim();
+  const envModel = process.env.T3WORK_DEFAULT_MODEL?.trim();
+  return {
+    instanceId: ProviderInstanceId.make(
+      envInstanceId && envInstanceId.length > 0 ? envInstanceId : "codex",
+    ),
+    model: envModel && envModel.length > 0 ? envModel : DEFAULT_MODEL,
+  };
+};
 
 export const resolveWelcomeBase = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig.ServerConfig;
