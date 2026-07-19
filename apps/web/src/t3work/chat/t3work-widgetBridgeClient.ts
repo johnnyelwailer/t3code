@@ -7,7 +7,8 @@
 import type { T3workWidgetToolCallResponse } from "@t3tools/contracts";
 
 export const T3WORK_WIDGET_MIN_HEIGHT = 48;
-export const T3WORK_WIDGET_MAX_HEIGHT = 640;
+/** Pathological-content ceiling; normal widgets grow with their content so chat owns scrolling. */
+export const T3WORK_WIDGET_MAX_HEIGHT = 4_096;
 /** Min interval between widget-originated prompts; excess is dropped with a warning. */
 export const T3WORK_WIDGET_PROMPT_INTERVAL_MS = 2_000;
 /** Max concurrent in-flight callTool requests per widget; excess rejected immediately. */

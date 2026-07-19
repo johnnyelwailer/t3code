@@ -17,6 +17,7 @@ vi.mock("~/state/entities", () => ({ useThread: () => null }));
 
 import { T3workWidgetBlock } from "~/t3work/chat/t3work-widgetBlock";
 import {
+  buildT3workWidgetPromptTransport,
   T3WORK_WIDGET_MAX_HEIGHT,
   T3WORK_WIDGET_MIN_HEIGHT,
 } from "~/t3work/chat/t3work-useWidgetBlockController";
@@ -72,6 +73,8 @@ describe("T3workWidgetBlock", () => {
     expect(iframe.srcdoc).toContain("callTool");
     expect(readNonce(iframe).length).toBeGreaterThan(0);
     expect(iframe.style.height).toBe(`${T3WORK_WIDGET_MIN_HEIGHT}px`);
+    expect(container?.textContent).not.toContain(widget.title);
+    expect(container?.textContent).not.toContain(widget.loadingMessages[0]);
   });
 
   it("applies clamped resize messages from the iframe source with the right nonce", () => {
@@ -91,6 +94,8 @@ describe("T3workWidgetBlock", () => {
       height: 10_000,
     });
     expect(iframe.style.height).toBe(`${T3WORK_WIDGET_MAX_HEIGHT}px`);
+    expect(T3WORK_WIDGET_MAX_HEIGHT).toBeGreaterThan(3_000);
+    expect(iframe.style.overflow).toBe("");
   });
 
   it("ignores messages with a wrong nonce or foreign source", () => {
@@ -145,6 +150,26 @@ describe("buildT3workWidgetSrcdoc", () => {
     // tool-result listener validates it came from the parent AND carries the nonce.
     expect(srcdoc).toContain("event.source !== window.parent");
     expect(srcdoc).toContain("data.nonce !== nonce");
+    expect(srcdoc).toContain("ResizeObserver");
+    expect(srcdoc).toContain("document.documentElement.scrollHeight");
+  });
+});
+
+describe("widget prompt transport", () => {
+  it("is hidden from the timeline, readable by the agent, and marked as non-workflow input", () => {
+    const transport = buildT3workWidgetPromptTransport({
+      widgetId: "artifact-123",
+      widgetTitle: "release_approval",
+      text: "Approve",
+    });
+
+    expect(transport.text).toBe("Widget “release approval” action: Approve");
+    expect(transport.t3workExt).toEqual({
+      displayText: "Approve",
+      visibleToUser: false,
+      visibleToAgent: true,
+      widgetReply: { widgetId: "artifact-123", widgetTitle: "release approval" },
+    });
   });
 });
 

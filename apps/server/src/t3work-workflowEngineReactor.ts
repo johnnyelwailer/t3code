@@ -70,6 +70,11 @@ export const T3workWorkflowEngineReactorLive = Layer.effectDiscard(
       }
       if (role !== "assistant" && role !== "user") return;
 
+      // A widget action starts an agent turn, but is not an answer to a workflow decision.
+      // Ignore it before taking the pending ask so a widget beside an askUser card cannot
+      // accidentally resume the workflow with its button label.
+      if (role === "user" && event.payload.t3workExt?.widgetReply !== undefined) return;
+
       const pending = registry.takePending(threadId);
       if (pending === undefined) {
         assistantTextByMessageId.delete(messageId);

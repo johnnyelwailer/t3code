@@ -12,8 +12,12 @@ export async function stopWorkflowsOwnedByThread(input: {
   for (const runId of input.registry.runsOwnedByThread(input.threadId)) {
     const children = input.registry.childThreadsForRun(runId);
     workflowAdmissionQueue.cancel(runId);
-    await input.registry.masterStopForRun(runId);
+    // Start the durable write while its callback is still registered, then synchronously close
+    // the hot run/pending-ask window before awaiting I/O. Otherwise a user reply can validate
+    // against the pending ask and resume the workflow while stop is waiting on persistence.
+    const durableStop = input.registry.masterStopForRun(runId);
     input.registry.cancelRun(runId);
+    await durableStop;
     for (const childThreadId of children) {
       await input.dispatch({
         type: "thread.turn.interrupt",

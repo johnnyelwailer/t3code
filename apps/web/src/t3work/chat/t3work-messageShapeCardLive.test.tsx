@@ -123,6 +123,8 @@ describe("live workflow step overlay on the plan card", () => {
     // `thread.turn` or another journal implementation name.
     expect(countOccurrences(markup, 'data-step-row-shell="interactive"')).toBe(0);
     expect(countOccurrences(markup, 'data-step-row-shell="static"')).toBe(4);
+    expect(countOccurrences(markup, "data-step-row-navigation-slot")).toBe(4);
+    expect(markup).not.toContain("lucide-chevron-right");
     expect(countOccurrences(markup, "rounded-md px-1 py-0.5")).toBe(4);
     // run not terminal yet — no banner
     expect(markup).not.toContain("data-run-status");
@@ -148,6 +150,12 @@ describe("live workflow step overlay on the plan card", () => {
     expect(markup).toContain('data-step-row-shell="thread-link"');
     expect(markup).toContain('aria-label="Open step thread"');
     expect(markup).toContain("lucide-chevron-right");
+    // Every row owns the same fixed-width end slot; only the child-thread row fills it.
+    expect(countOccurrences(markup, "data-step-row-navigation-slot")).toBe(
+      countOccurrences(markup, 'data-step-row-shell="static"') +
+        countOccurrences(markup, 'data-step-row-shell="thread-link"'),
+    );
+    expect(countOccurrences(markup, "lucide-chevron-right")).toBe(1);
     expect(markup).not.toContain("Open thread");
   }, 30000);
 

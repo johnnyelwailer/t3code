@@ -37,6 +37,12 @@ beforeAll(() => {
     }),
     addEventListener: () => {},
     removeEventListener: () => {},
+    getComputedStyle: () => ({
+      colorScheme: "dark",
+      length: 0,
+      item: () => "",
+      getPropertyValue: () => "",
+    }),
     requestAnimationFrame: (callback: FrameRequestCallback) => {
       callback(0);
       return 0;
@@ -207,5 +213,50 @@ describe("MessagesTimeline recipe cards", () => {
     expect(markup).toContain("Implementation plan");
     expect(markup).toContain(".t3work/artifacts/plan.md");
     expect(markup).toContain("t3work.custom-view");
+  }, 10000);
+
+  it("renders a widget without generic System chrome or artifact transport text", async () => {
+    const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildT3workMessagesTimelineTestProps()}
+        timelineEntries={[
+          {
+            id: "timeline-widget",
+            kind: "message",
+            createdAt: "2026-03-17T19:12:30.000Z",
+            message: {
+              id: MessageId.make("message-widget"),
+              role: "system",
+              text: "",
+              streaming: false,
+              createdAt: "2026-03-17T19:12:30.000Z",
+              updatedAt: "2026-03-17T19:12:30.000Z",
+              turnId: null,
+              t3workExt: {
+                visibleToUser: true,
+                visibleToAgent: false,
+                attachments: [
+                  {
+                    kind: "widget",
+                    widget: {
+                      widgetId: "artifact-transport-id",
+                      title: "Release approval",
+                      format: "html",
+                      html: "<button>Approve</button>",
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('data-widget-id="artifact-transport-id"');
+    expect(markup).toContain("Approve");
+    expect(markup).not.toContain(">System<");
+    expect(markup).not.toContain(">Release approval<");
   }, 10000);
 });

@@ -135,7 +135,7 @@ export const FailedRun: Story = {
   },
 };
 
-/** A workflow child step is one keyboard-accessible row link, with a right chevron. */
+/** Every row keeps the same end slot; the child-thread row is a keyboard link with a chevron. */
 export const ChildThread: Story = {
   args: {
     shape,

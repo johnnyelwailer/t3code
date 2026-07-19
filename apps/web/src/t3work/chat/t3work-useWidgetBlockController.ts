@@ -32,6 +32,28 @@ export {
   T3WORK_WIDGET_MIN_HEIGHT,
 } from "~/t3work/chat/t3work-widgetBridgeClient";
 
+function humanizeWidgetTitle(title: string): string {
+  return title.replaceAll(/[_-]+/g, " ").replaceAll(/\s+/g, " ").trim();
+}
+
+/** Build the hidden, agent-visible envelope for an explicit user action inside a widget. */
+export function buildT3workWidgetPromptTransport(input: {
+  readonly widgetId: string;
+  readonly widgetTitle: string;
+  readonly text: string;
+}) {
+  const widgetTitle = humanizeWidgetTitle(input.widgetTitle) || "Widget";
+  return {
+    text: `Widget “${widgetTitle}” action: ${input.text.trim()}`,
+    t3workExt: {
+      displayText: input.text.trim(),
+      visibleToUser: false,
+      visibleToAgent: true,
+      widgetReply: { widgetId: input.widgetId, widgetTitle },
+    },
+  } as const;
+}
+
 export function useT3workWidgetBlockController(input: {
   readonly widget: T3workMessageWidgetAttachment["widget"];
   readonly threadRef: ScopedThreadRef | null;
@@ -67,6 +89,11 @@ export function useT3workWidgetBlockController(input: {
         return;
       }
       if (!backend || !thread || !threadRef) return;
+      const transport = buildT3workWidgetPromptTransport({
+        widgetId: widget.widgetId,
+        widgetTitle: widget.title,
+        text: trimmed,
+      });
       await backend.dispatchCommand({
         type: "thread.turn.start",
         commandId: CommandId.make(`web:t3work-widget:turn:${randomWidgetNonce()}`),
@@ -74,9 +101,9 @@ export function useT3workWidgetBlockController(input: {
         message: {
           messageId: MessageId.make(randomWidgetNonce()),
           role: "user",
-          // Visible attribution: the timeline shows this turn came from the widget.
-          text: `[widget: ${widget.title}] ${trimmed}`,
+          text: transport.text,
           attachments: [],
+          t3workExt: transport.t3workExt,
         },
         modelSelection: thread.modelSelection,
         runtimeMode: thread.runtimeMode,

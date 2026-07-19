@@ -34,6 +34,7 @@ export function collectT3workWidgetThemeCss(root?: HTMLElement): string {
   }
   const element = root ?? document.documentElement;
   const computed = window.getComputedStyle(element);
+  const colorScheme = computed.colorScheme.includes("dark") ? "dark" : "light";
   const names = new Set<string>(FALLBACK_THEME_VARIABLES);
   for (let index = 0; index < computed.length; index += 1) {
     const name = computed.item(index);
@@ -44,7 +45,7 @@ export function collectT3workWidgetThemeCss(root?: HTMLElement): string {
     const value = computed.getPropertyValue(name).trim();
     if (value.length > 0) declarations.push(`${name}: ${value};`);
   }
-  return `:root { ${declarations.join(" ")} color-scheme: inherit; }`;
+  return `:root { ${declarations.join(" ")} color-scheme: ${colorScheme}; }`;
 }
 
 const BRIDGE_SCRIPT = `

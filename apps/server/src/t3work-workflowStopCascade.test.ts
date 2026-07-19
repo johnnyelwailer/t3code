@@ -32,4 +32,42 @@ describe("stopWorkflowsOwnedByThread", () => {
       expect.objectContaining({ type: "thread.turn.interrupt", threadId: "child-b" }),
     ]);
   });
+
+  it("withdraws a pending ask before awaiting the durable stop", async () => {
+    const registry = makeWorkflowEngineRegistry();
+    let finishDurableStop: (() => void) | undefined;
+    const durableStop = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDurableStop = resolve;
+        }),
+    );
+    const cancelController = vi.fn();
+    registry.registerRun("run-racing-ask", {
+      resume: async () => {},
+      cancel: cancelController,
+    });
+    registry.registerOwnership("run-racing-ask", "master");
+    registry.registerMasterStop("run-racing-ask", durableStop);
+    registry.setPending("master", {
+      runId: "run-racing-ask",
+      correlationId: "run-racing-ask:1",
+      kind: "user.input",
+    });
+
+    const stopping = stopWorkflowsOwnedByThread({
+      registry,
+      threadId: "master",
+      createdAt: "2026-07-19T00:00:00.000Z",
+      dispatch: async () => {},
+    });
+
+    expect(durableStop).toHaveBeenCalledOnce();
+    expect(cancelController).toHaveBeenCalledOnce();
+    expect(registry.getRun("run-racing-ask")).toBeUndefined();
+    expect(registry.peekPending("master")).toBeUndefined();
+
+    finishDurableStop?.();
+    await stopping;
+  });
 });

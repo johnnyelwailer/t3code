@@ -9,8 +9,17 @@
  *   • a text affordance renders no buttons — the freeform composer stays the reply path.
  */
 
-import { EnvironmentId, MessageId } from "@t3tools/contracts";
-import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION } from "@t3tools/project-recipes";
+import {
+  EnvironmentId,
+  EventId,
+  MessageId,
+  type OrchestrationThreadActivity,
+  type OrchestrationWorkflowRunStatus,
+} from "@t3tools/contracts";
+import {
+  PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
+  PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
+} from "@t3tools/project-recipes";
 import { act, createRef, type ReactNode, type Ref } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -105,6 +114,29 @@ function decisionMessage(id: string): ChatMessage {
   };
 }
 
+function decisionMessageWithWidget(id: string): ChatMessage {
+  const message = decisionMessage(id);
+  const attachments = message.t3workExt?.attachments ?? [];
+  return {
+    ...message,
+    t3workExt: {
+      ...message.t3workExt!,
+      attachments: [
+        ...attachments,
+        {
+          kind: "widget",
+          widget: {
+            widgetId: "decision-context",
+            title: "Release context",
+            format: "html",
+            html: "<p>Widget context</p>",
+          },
+        },
+      ],
+    },
+  };
+}
+
 function userReply(id: string, text: string): ChatMessage {
   return {
     id: MessageId.make(id),
@@ -117,12 +149,18 @@ function userReply(id: string, text: string): ChatMessage {
   };
 }
 
-async function renderTimeline(messages: ReadonlyArray<ChatMessage>) {
+async function renderTimeline(
+  messages: ReadonlyArray<ChatMessage>,
+  workflowRunStatus?: OrchestrationWorkflowRunStatus,
+  threadActivities?: ReadonlyArray<OrchestrationThreadActivity>,
+) {
   const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
   return renderToStaticMarkup(
     <MessagesTimeline
       {...buildT3workMessagesTimelineTestProps()}
       dispatchWorkflowDecision={async () => {}}
+      {...(workflowRunStatus ? { workflowRunStatus } : {})}
+      {...(threadActivities ? { threadActivities } : {})}
       timelineEntries={messages.map((message, index) => ({
         id: `timeline-${index}`,
         kind: "message" as const,
@@ -214,6 +252,66 @@ describe("workflow decision card in the timeline", () => {
 
     expect(markup).toContain('disabled=""');
     expect(markup).not.toContain("…or reply in the composer below.");
+  }, 10000);
+
+  it("withdraws decision actions when its workflow was stopped", async () => {
+    const markup = await renderTimeline([decisionMessage("message-decision-1")], {
+      runId: "run-1",
+      status: "cancelled",
+      pendingKind: null,
+      wakeAt: null,
+      updatedAt: "2026-06-09T00:01:00.000Z",
+    });
+
+    expect(markup).toContain('data-workflow-decision-status="unavailable"');
+    expect(markup).toContain(
+      "This question is no longer available because the workflow was stopped.",
+    );
+    expect(markup).not.toContain("ship-now");
+    expect(markup).not.toContain("…or reply in the composer below.");
+    expect(markup).not.toContain(">System<");
+  }, 10000);
+
+  it("keeps an old stopped run's decision withdrawn after a newer run becomes current", async () => {
+    const stoppedRunActivity: OrchestrationThreadActivity = {
+      id: EventId.make("activity-run-1-stopped"),
+      tone: "info",
+      kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
+      summary: "Workflow stopped",
+      payload: {
+        workflowRunId: "run-1",
+        stepId: "run:run-1",
+        stepKind: "run",
+        phase: "cancelled",
+      },
+      turnId: null,
+      createdAt: "2026-06-09T00:01:00.000Z",
+    };
+    const markup = await renderTimeline(
+      [decisionMessage("message-decision-1")],
+      {
+        runId: "run-2",
+        status: "running",
+        pendingKind: null,
+        wakeAt: null,
+        updatedAt: "2026-06-09T00:02:00.000Z",
+      },
+      [stoppedRunActivity],
+    );
+
+    expect(markup).toContain('data-workflow-decision-status="unavailable"');
+    expect(markup).toContain(
+      "This question is no longer available because the workflow was stopped.",
+    );
+    expect(markup).not.toContain("ship-now");
+  }, 10000);
+
+  it("keeps widget context beside a decision card", async () => {
+    const markup = await renderTimeline([decisionMessageWithWidget("message-decision-widget")]);
+
+    expect(markup).toContain('data-widget-id="decision-context"');
+    expect(markup).toContain("Release context");
+    expect(markup).toContain("Needs your input");
   }, 10000);
 });
 

@@ -23,6 +23,35 @@ import { T3workWorkflowShapeLiveCard } from "~/t3work/chat/t3work-messageShapeCa
 import type { T3workWorkflowRunProgress } from "~/t3work/chat/t3work-threadWorkflowStepProgress";
 import { useMergedThreads } from "~/t3work/t3work-mergedThreads";
 
+const TERMINAL_WORKFLOW_STATUSES = new Set(["completed", "failed", "cancelled"]);
+
+function workflowDecisionUnavailableMessage(
+  decision: ReturnType<typeof getT3workWorkflowDecisionAttachment>,
+  workflowRunStatus: import("@t3tools/contracts").OrchestrationWorkflowRunStatus | undefined,
+  workflowRunProgress: T3workWorkflowRunProgress | undefined,
+): string | undefined {
+  if (!decision) {
+    return undefined;
+  }
+  const historicalTerminalPhase = workflowRunProgress?.run?.phase;
+  const currentRunTerminalStatus =
+    workflowRunStatus !== undefined &&
+    workflowRunStatus.runId === decision.workflowRunId &&
+    TERMINAL_WORKFLOW_STATUSES.has(workflowRunStatus.status)
+      ? workflowRunStatus.status
+      : undefined;
+  const terminalStatus =
+    historicalTerminalPhase !== undefined && TERMINAL_WORKFLOW_STATUSES.has(historicalTerminalPhase)
+      ? historicalTerminalPhase
+      : currentRunTerminalStatus;
+  if (terminalStatus === undefined) {
+    return undefined;
+  }
+  return terminalStatus === "cancelled"
+    ? "This question is no longer available because the workflow was stopped."
+    : "This question is no longer available because the workflow has ended.";
+}
+
 export function T3workSystemTimelineRow(props: {
   readonly message: ChatMessage;
   readonly threadRef: ScopedThreadRef | null;
@@ -55,6 +84,13 @@ export function T3workSystemTimelineRow(props: {
 
   const workflowCard = getT3workWorkflowCardAttachment(message);
   const workflowDecision = getT3workWorkflowDecisionAttachment(message);
+  const decisionUnavailableMessage = workflowDecisionUnavailableMessage(
+    workflowDecision,
+    workflowRunStatus,
+    workflowDecision?.workflowRunId
+      ? workflowStepRuns?.get(workflowDecision.workflowRunId)
+      : undefined,
+  );
   const workflowShape = getT3workWorkflowShapeAttachment(message);
   const workflowShapeProgress =
     workflowShape?.workflowRunId !== undefined
@@ -88,12 +124,23 @@ export function T3workSystemTimelineRow(props: {
     );
   }
 
-  if (workflowDecision && !workflowCard) {
+  if (workflowDecision) {
     return (
       <div className="flex max-w-[92%] flex-col items-start gap-2">
+        {workflowCard ? (
+          <T3workWorkflowCardBody
+            workflowCard={workflowCard}
+            {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
+          />
+        ) : null}
         <T3workWorkflowDecisionCard
           decision={workflowDecision}
-          active={activeWorkflowInputMessageId === message.id}
+          active={
+            activeWorkflowInputMessageId === message.id && decisionUnavailableMessage === undefined
+          }
+          {...(decisionUnavailableMessage
+            ? { unavailableMessage: decisionUnavailableMessage }
+            : {})}
           onChoose={
             dispatchWorkflowDecision && threadRef
               ? async ({ choice, value, correlationId }) => {
@@ -111,6 +158,30 @@ export function T3workSystemTimelineRow(props: {
         {genericAttachments.length > 0 ? (
           <T3workMessageAttachmentList attachments={genericAttachments} />
         ) : null}
+        {widgetAttachments.map((attachment) => (
+          <div key={`t3work-widget:${attachment.widget.widgetId}`}>
+            <T3workWidgetBlock widget={attachment.widget} threadRef={threadRef} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const widgetOnly =
+    widgetAttachments.length > 0 &&
+    !showMessageText &&
+    !workflowCard &&
+    genericAttachments.length === 0;
+  if (widgetOnly) {
+    return (
+      <div className="flex w-full max-w-[92%] flex-col items-start gap-2">
+        {widgetAttachments.map((attachment) => (
+          <T3workWidgetBlock
+            key={`t3work-widget:${attachment.widget.widgetId}`}
+            widget={attachment.widget}
+            threadRef={threadRef}
+          />
+        ))}
       </div>
     );
   }
@@ -129,27 +200,6 @@ export function T3workSystemTimelineRow(props: {
             <T3workWorkflowCardBody
               workflowCard={workflowCard}
               {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
-            />
-          </div>
-        ) : null}
-        {workflowDecision ? (
-          <div className={showMessageText || workflowCard ? "mt-3" : undefined}>
-            <T3workWorkflowDecisionCard
-              decision={workflowDecision}
-              active={activeWorkflowInputMessageId === message.id}
-              onChoose={
-                dispatchWorkflowDecision && threadRef
-                  ? async ({ choice, value, correlationId }) => {
-                      await dispatchWorkflowDecision({
-                        threadId: threadRef.threadId,
-                        messageId: message.id,
-                        text: choice,
-                        value,
-                        correlationId,
-                      });
-                    }
-                  : undefined
-              }
             />
           </div>
         ) : null}

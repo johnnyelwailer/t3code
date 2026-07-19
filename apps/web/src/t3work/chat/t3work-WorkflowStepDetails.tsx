@@ -5,6 +5,25 @@ import type { T3workWorkflowStepEntry } from "~/t3work/chat/t3work-threadWorkflo
 
 const STEP_ROW_SHELL_CLASS_NAME = "rounded-md px-1 py-0.5";
 
+/** Keep the kind badge's right edge stable whether this row opens a child thread or not. */
+function StepRowContent(props: { children: ReactNode; navigable?: boolean }) {
+  const { children, navigable = false } = props;
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <div className="min-w-0 flex-1">{children}</div>
+      <span
+        aria-hidden="true"
+        className="flex size-4 shrink-0 items-center justify-center"
+        data-step-row-navigation-slot
+      >
+        {navigable ? (
+          <ChevronRightIcon className="size-4 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" />
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
 export function T3workWorkflowStepDetails(props: {
   readonly step: T3workWorkflowStepEntry | undefined;
   readonly hideDetail?: boolean;
@@ -17,7 +36,7 @@ export function T3workWorkflowStepDetails(props: {
   if (!step) {
     return (
       <div className={STEP_ROW_SHELL_CLASS_NAME} data-step-row-shell="static">
-        {children}
+        <StepRowContent>{children}</StepRowContent>
       </div>
     );
   }
@@ -45,11 +64,7 @@ export function T3workWorkflowStepDetails(props: {
         aria-label="Open step thread"
         onClick={() => onOpenThread?.({ projectId: step.projectId!, threadId: step.threadId! })}
       >
-        <span className="min-w-0 flex-1">{children}</span>
-        <ChevronRightIcon
-          aria-hidden="true"
-          className="size-4 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5"
-        />
+        <StepRowContent navigable>{children}</StepRowContent>
       </button>
     );
   }
@@ -57,7 +72,7 @@ export function T3workWorkflowStepDetails(props: {
   if (!hasDetail) {
     return (
       <div className={STEP_ROW_SHELL_CLASS_NAME} data-step-row-shell="static">
-        {children}
+        <StepRowContent>{children}</StepRowContent>
       </div>
     );
   }
@@ -68,7 +83,7 @@ export function T3workWorkflowStepDetails(props: {
         className={`${STEP_ROW_SHELL_CLASS_NAME} cursor-pointer list-none hover:bg-muted/35 [&::-webkit-details-marker]:hidden`}
         data-step-row-shell="interactive"
       >
-        {children}
+        <StepRowContent>{children}</StepRowContent>
       </summary>
       <div className="mx-7 mb-1.5 mt-1 border-l border-border/60 pl-3 text-xs text-muted-foreground">
         <p className="whitespace-pre-wrap leading-5">{detail}</p>

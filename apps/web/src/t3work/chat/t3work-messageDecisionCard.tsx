@@ -109,12 +109,15 @@ function DecisionButton(props: {
 export function T3workWorkflowDecisionCard(props: {
   decision: ProjectRecipeWorkflowDecisionPayload;
   active: boolean;
+  /** Terminal runs withdraw their pending ask; do not leave dead reply controls in the timeline. */
+  unavailableMessage?: string | undefined;
   onChoose?: WorkflowDecisionChooseHandler | undefined;
 }) {
-  const { decision, active, onChoose } = props;
+  const { decision, active, unavailableMessage, onChoose } = props;
   const [submitting, setSubmitting] = useState<string | null>(null);
   const affordance = decision.affordance;
-  const locked = !active || !onChoose || submitting !== null;
+  const unavailable = unavailableMessage !== undefined;
+  const locked = unavailable || !active || !onChoose || submitting !== null;
 
   // Every affordance funnels through one submit: optimistic-lock on the chosen label, post the
   // structured value, release the lock when the round-trip settles.
@@ -136,7 +139,16 @@ export function T3workWorkflowDecisionCard(props: {
       </div>
       <p className="text-sm leading-6 text-foreground">{decision.question}</p>
 
-      {affordance.kind === "choice" ? (
+      {unavailable ? (
+        <p
+          className="mt-3 text-xs text-muted-foreground"
+          data-workflow-decision-status="unavailable"
+        >
+          {unavailableMessage}
+        </p>
+      ) : null}
+
+      {!unavailable && affordance.kind === "choice" ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {affordance.options.map((option) => (
             <DecisionButton
@@ -155,7 +167,7 @@ export function T3workWorkflowDecisionCard(props: {
         </div>
       ) : null}
 
-      {affordance.kind === "boolean" ? (
+      {!unavailable && affordance.kind === "boolean" ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {([true, false] as const).map((bool) => {
             const label = bool
@@ -175,7 +187,7 @@ export function T3workWorkflowDecisionCard(props: {
         </div>
       ) : null}
 
-      {affordance.kind === "form" ? (
+      {!unavailable && affordance.kind === "form" ? (
         <T3workWorkflowDecisionForm
           fields={affordance.fields}
           disabled={!active || !onChoose}
@@ -184,7 +196,7 @@ export function T3workWorkflowDecisionCard(props: {
         />
       ) : null}
 
-      {active ? (
+      {active && !unavailable ? (
         <p className="mt-2 text-xs text-muted-foreground">
           {affordance.kind === "text"
             ? "Reply in the composer below."

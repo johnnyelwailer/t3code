@@ -190,6 +190,17 @@ export const T3workMessageWorkflowReply = Schema.Struct({
 });
 export type T3workMessageWorkflowReply = typeof T3workMessageWorkflowReply.Type;
 
+/**
+ * Metadata for a user action emitted by an inline widget. The action starts a normal agent turn,
+ * but it is transport rather than a direct reply to a parked workflow `askUser`; the workflow
+ * reactor therefore must not consume it as pending input.
+ */
+export const T3workMessageWidgetReply = Schema.Struct({
+  widgetId: TrimmedNonEmptyString,
+  widgetTitle: TrimmedNonEmptyString,
+});
+export type T3workMessageWidgetReply = typeof T3workMessageWidgetReply.Type;
+
 export const T3workMessageExt = Schema.Struct({
   author: Schema.optional(T3workMessageAuthor),
   displayText: Schema.optional(Schema.String),
@@ -198,6 +209,7 @@ export const T3workMessageExt = Schema.Struct({
   status: Schema.optional(T3workMessageStatus),
   attachments: Schema.optional(Schema.Array(T3workMessageAttachment)),
   workflowReply: Schema.optional(T3workMessageWorkflowReply),
+  widgetReply: Schema.optional(T3workMessageWidgetReply),
   /** Present on an `actor`-role message (inter-agent coordination). */
   actor: Schema.optional(T3workActorMessageInfo),
 });

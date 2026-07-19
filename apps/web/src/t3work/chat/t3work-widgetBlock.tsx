@@ -16,7 +16,6 @@ export function T3workWidgetBlock(props: {
 }) {
   const { widget, threadRef } = props;
   const { iframeRef, srcdoc, height } = useT3workWidgetBlockController({ widget, threadRef });
-  const loadingMessage = widget.loadingMessages?.[0];
 
   return (
     <div className="w-full overflow-hidden rounded-xl border border-border/55 bg-background/65">
@@ -26,16 +25,10 @@ export function T3workWidgetBlock(props: {
         sandbox="allow-scripts"
         srcDoc={srcdoc}
         className="block w-full border-0"
-        style={{ height, overflow: "auto" }}
+        style={{ height }}
         data-widget-id={widget.widgetId}
         data-widget-format={widget.format}
       />
-      <div className="flex items-center justify-between border-t border-border/40 px-3 py-1.5">
-        <span className="text-[11px] text-muted-foreground">{widget.title}</span>
-        {loadingMessage ? (
-          <span className="text-[11px] text-muted-foreground/70">{loadingMessage}</span>
-        ) : null}
-      </div>
     </div>
   );
 }

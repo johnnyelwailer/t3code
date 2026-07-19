@@ -239,6 +239,32 @@ it.live(
         createdAt: ISO,
       });
 
+      // A widget action is a hidden agent turn, not a direct answer to askUser. It must not
+      // consume the pending decision even though it is stored as a user-role message.
+      yield* orchestration.dispatch({
+        type: "thread.message.upsert",
+        commandId: CommandId.make("decision-widget-action"),
+        threadId: ThreadId.make(launchThreadId),
+        message: {
+          messageId: MessageId.make("decision-widget-action-msg"),
+          role: "user",
+          text: "Widget “release context” action: Approve",
+          turnId: null,
+          streaming: false,
+          t3workExt: {
+            visibleToUser: false,
+            visibleToAgent: true,
+            widgetReply: { widgetId: "release-widget", widgetTitle: "release context" },
+          },
+        },
+        createdAt: ISO,
+      });
+      yield* Effect.sleep(Duration.millis(20));
+      assert.strictEqual(
+        registry.peekPending(launchThreadId)?.correlationId,
+        pending?.correlationId,
+      );
+
       // ── 3b. The route-shaped reply (display text + structured workflowReply pinned to the
       // pending ask) lands as a real domain event; the REAL reactor resolves with the
       // structured value. Completing with "hold" proves the stale "ship-now" was ignored AND
