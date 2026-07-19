@@ -11,17 +11,8 @@
  * through the engine seam. The turn message is `visibleToUser: false` so the UI
  * hides the raw framing and shows the actor card instead.
  *
- * F2 — the host has no turn queue; two turn-starts on one thread corrupt the
- * session. The {@link makeT3workActorMailbox} `reacting` flag plus a read-model
- * busy check serialize reactions to one in flight per thread. Events are consumed
- * on a single fiber (`Stream.runForEach`), so handling never interleaves; the
- * flag bridges the projection-lag window after dispatch, and drain re-checks
- * liveness against the projection (not just the event), so a stale idle signal
- * cannot start a second turn.
- *
- * Events: `thread.actor-message-delivered` (enqueue + drain within the hop cap,
- * else surface-only); `thread.session-set` leaving running/starting (turn end →
- * clear flag + drain); `thread.turn-diff-completed` (secondary settle → drain).
+ * F2 — the shared decider admission guard plus this mailbox serialize turns.
+ * Delivered messages enqueue; turn-settle events clear and drain the mailbox.
  * Phase 1 is `normal` urgency only; `urgent` interrupt + per-pair rate cap are
  * Phase 2 (the seams are already in place).
  *
@@ -38,6 +29,8 @@ import * as Stream from "effect/Stream";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { makeT3workActorMailbox, type T3workActorMailboxEntry } from "./t3work-actorMailbox.ts";
+import { rehydrateActorMailbox } from "./t3work-actorMailboxRehydrate.ts";
+import { buildActorReactionInput } from "./t3work-actorReactionInput.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
 
 /**
@@ -48,18 +41,6 @@ import { t3workRandomUUID } from "./t3work-random.ts";
  */
 export const T3WORK_ACTOR_MESSAGE_HOP_CAP = 6;
 
-const buildFramedInput = (entry: T3workActorMailboxEntry): string =>
-  [
-    `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +
-      `urgency ${entry.urgency}]`,
-    "",
-    entry.text,
-    "",
-    "[This message is from another agent actor, not a human user. You are an autonomous " +
-      "actor: decide whether and how to act on it, then continue your own work. To reply to " +
-      `the sender, use your send-message tool addressed to thread ${entry.fromThreadId}.]`,
-  ].join("\n");
-
 export const T3workActorMessageReactorLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const engine = yield* OrchestrationEngineService;
@@ -67,9 +48,10 @@ export const T3workActorMessageReactorLive = Layer.effectDiscard(
     const mailbox = yield* makeT3workActorMailbox;
 
     const loadThread = (threadId: string) =>
-      query
-        .getThreadDetailById(ThreadId.make(threadId))
-        .pipe(Effect.orElseSucceed(() => Option.none()), Effect.map(Option.getOrUndefined));
+      query.getThreadDetailById(ThreadId.make(threadId)).pipe(
+        Effect.orElseSucceed(() => Option.none()),
+        Effect.map(Option.getOrUndefined),
+      );
 
     const isThreadBusy = (thread: {
       readonly session: { readonly status: string } | null;
@@ -100,7 +82,7 @@ export const T3workActorMessageReactorLive = Layer.effectDiscard(
             message: {
               messageId: MessageId.make(t3workRandomUUID()),
               role: "user",
-              text: buildFramedInput(entry),
+              text: buildActorReactionInput(entry),
               attachments: [],
               t3workExt: {
                 visibleToUser: false,
@@ -119,11 +101,17 @@ export const T3workActorMessageReactorLive = Layer.effectDiscard(
           })
           .pipe(
             Effect.catch((error) =>
-              Effect.logWarning("actor-message reaction turn failed to start", {
-                threadId,
-                fromThreadId: entry.fromThreadId,
-                error,
-              }).pipe(Effect.andThen(mailbox.clearReacting(threadId))),
+              mailbox.requeueFailed(threadId, entry).pipe(
+                Effect.flatMap((willRetry) =>
+                  Effect.logWarning("actor-message reaction turn failed to start", {
+                    threadId,
+                    fromThreadId: entry.fromThreadId,
+                    dispatchAttempts: entry.dispatchAttempts + 1,
+                    willRetry,
+                    error,
+                  }),
+                ),
+              ),
             ),
           );
       });
@@ -171,6 +159,7 @@ export const T3workActorMessageReactorLive = Layer.effectDiscard(
           hopCount: payload.hopCount,
           rootThreadId: payload.rootThreadId,
           createdAt: payload.createdAt,
+          dispatchAttempts: 0,
         });
         yield* tryDrain(payload.threadId);
       });
@@ -207,5 +196,11 @@ export const T3workActorMessageReactorLive = Layer.effectDiscard(
       );
 
     yield* Effect.forkScoped(Stream.runForEach(engine.streamDomainEvents, handleSafely));
+    yield* rehydrateActorMailbox({
+      engine,
+      mailbox,
+      hopCap: T3WORK_ACTOR_MESSAGE_HOP_CAP,
+      tryDrain,
+    });
   }),
 );

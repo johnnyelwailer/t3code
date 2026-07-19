@@ -18,6 +18,7 @@ import * as Option from "effect/Option";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { deriveActorReplyContext } from "./t3work-actorReactionContext.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
 
 const normalizeError = (error: unknown): string =>
@@ -63,24 +64,12 @@ export function makeActorSendMessage(input: {
         );
       }
 
-      // Loop guard: infer the hop count from the sender's most recent inbound
-      // actor message. A fresh (human-initiated) send is hop 0; an agent that
-      // reacts to an actor message and messages on carries hop + 1 along the
-      // same chain, and inherits its root thread for observability.
-      let inboundHop = -1;
-      let inboundRoot: string | undefined;
-      const senderMessages = source.messages ?? [];
-      for (let index = senderMessages.length - 1; index >= 0; index -= 1) {
-        const candidate = senderMessages[index];
-        const info = candidate?.t3workExt?.actor;
-        if (candidate?.role === "actor" && info && typeof info.hopCount === "number") {
-          inboundHop = info.hopCount;
-          inboundRoot = info.rootThreadId;
-          break;
-        }
-      }
-      const hopCount = inboundHop + 1;
-      const rootThreadId = inboundRoot ?? fromThreadId;
+      // The latest user message is the active turn input. Actor reactions stamp
+      // their ancestry there; later inbound actor cards cannot reset this chain.
+      const { hopCount, rootThreadId } = deriveActorReplyContext(
+        source.messages ?? [],
+        fromThreadId,
+      );
 
       const createdAt = DateTime.formatIso(yield* DateTime.now);
       yield* orchestration.dispatch({

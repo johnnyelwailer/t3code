@@ -3,7 +3,7 @@
  * different configured provider instance. These check the pure decision logic —
  * inherit-vs-switch, model validity, and the unusable/unknown rejections.
  */
-import type { ModelSelection, ServerProvider } from "@t3tools/contracts";
+import { ProviderDriverKind, type ModelSelection, type ServerProvider } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveStartChildModelSelection } from "./t3work-toolBrokerStartChildProvider.ts";
@@ -100,5 +100,51 @@ describe("resolveStartChildModelSelection", () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("is not available on provider instance");
+  });
+
+  it("keeps a validated snapshot slug when the instance id resembles another driver", () => {
+    const result = resolveStartChildModelSelection({
+      parentModelSelection: parent,
+      requestedProvider: "codex",
+      requestedModel: "gpt-5",
+      providers: [
+        makeProvider("codex", ["gpt-5"], {
+          driver: ProviderDriverKind.make("claudeAgent"),
+        }),
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.model).toBe("gpt-5");
+  });
+
+  it("maps reasoning effort through the target model capability descriptor", () => {
+    const target = makeProvider("target", ["model"], {
+      driver: ProviderDriverKind.make("custom-driver"),
+      models: [
+        {
+          slug: "model",
+          name: "Model",
+          isCustom: false,
+          capabilities: {
+            optionDescriptors: [
+              {
+                id: "effort",
+                label: "Effort",
+                type: "select",
+                options: [{ id: "high", label: "High" }],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const result = resolveStartChildModelSelection({
+      parentModelSelection: parent,
+      requestedProvider: "target",
+      reasoningEffort: "high",
+      providers: [target],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.options).toEqual([{ id: "effort", value: "high" }]);
   });
 });

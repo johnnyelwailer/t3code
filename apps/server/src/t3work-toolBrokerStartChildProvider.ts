@@ -105,12 +105,19 @@ export function resolveStartChildModelSelection(
 ): ResolveStartChildModelSelectionResult {
   const requested = input.requestedProvider?.trim();
   if (!requested) {
+    const target = input.providers.find(
+      (provider) => provider.instanceId === input.parentModelSelection.instanceId,
+    );
     return {
       ok: true,
-      value: buildStartChildModelSelection(input.parentModelSelection, {
-        ...(input.requestedModel ? { model: input.requestedModel } : {}),
-        ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-      }),
+      value: buildStartChildModelSelection(
+        input.parentModelSelection,
+        {
+          ...(input.requestedModel ? { model: input.requestedModel } : {}),
+          ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+        },
+        target,
+      ),
     };
   }
 
@@ -142,9 +149,13 @@ export function resolveStartChildModelSelection(
   };
   return {
     ok: true,
-    value: buildStartChildModelSelection(base, {
-      ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-    }),
+    value: buildStartChildModelSelection(
+      base,
+      {
+        ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+      },
+      target,
+    ),
   };
 }
 

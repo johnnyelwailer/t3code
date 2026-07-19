@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 
 import {
   buildStartChildModelSelection,
@@ -17,6 +17,29 @@ describe("buildStartChildModelSelection", () => {
       {
         model: "gpt-5",
         reasoningEffort: "medium",
+      },
+      {
+        driver: ProviderDriverKind.make("codex"),
+        models: [
+          {
+            slug: "gpt-5.4",
+            name: "GPT",
+            isCustom: false,
+            capabilities: {
+              optionDescriptors: [
+                {
+                  id: "reasoningEffort",
+                  label: "Reasoning",
+                  type: "select",
+                  options: [
+                    { id: "low", label: "Low" },
+                    { id: "medium", label: "Medium" },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
       },
     );
 

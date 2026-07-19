@@ -32,6 +32,7 @@ export interface T3workActorMailboxEntry {
   readonly hopCount: number;
   readonly rootThreadId: string;
   readonly createdAt: string;
+  readonly dispatchAttempts: number;
 }
 
 interface ThreadMailboxState {
@@ -43,7 +44,7 @@ const EMPTY: ThreadMailboxState = { queue: [], reacting: false };
 
 export interface T3workActorMailboxShape {
   /** Append an actor message to a thread's queue. */
-  readonly enqueue: (threadId: string, entry: T3workActorMailboxEntry) => Effect.Effect<void>;
+  readonly enqueue: (threadId: string, entry: T3workActorMailboxEntry) => Effect.Effect<boolean>;
   /**
    * Atomically claim the next entry for a thread: if the thread is not already
    * reacting and has a queued entry, flip `reacting` on and return that entry;
@@ -54,6 +55,11 @@ export interface T3workActorMailboxShape {
   ) => Effect.Effect<T3workActorMailboxEntry | undefined>;
   /** Release the reacting flag (called when the thread's turn ends). */
   readonly clearReacting: (threadId: string) => Effect.Effect<void>;
+  /** Release a failed claim and retry it at the front, up to the attempt cap. */
+  readonly requeueFailed: (
+    threadId: string,
+    entry: T3workActorMailboxEntry,
+  ) => Effect.Effect<boolean>;
   /** Whether a reaction turn is currently in flight for the thread. */
   readonly isReacting: (threadId: string) => Effect.Effect<boolean>;
 }
@@ -61,17 +67,29 @@ export interface T3workActorMailboxShape {
 export const makeT3workActorMailbox: Effect.Effect<T3workActorMailboxShape> = Effect.gen(
   function* () {
     const state = yield* Ref.make(new Map<string, ThreadMailboxState>());
+    const knownMessageIds = yield* Ref.make(new Set<string>());
 
     const read = (map: Map<string, ThreadMailboxState>, threadId: string): ThreadMailboxState =>
       map.get(threadId) ?? EMPTY;
 
     const enqueue: T3workActorMailboxShape["enqueue"] = (threadId, entry) =>
-      Ref.update(state, (map) => {
-        const current = read(map, threadId);
-        const next = new Map(map);
-        next.set(threadId, { ...current, queue: [...current.queue, entry] });
-        return next;
-      });
+      Ref.modify(knownMessageIds, (known) => {
+        if (known.has(entry.messageId)) return [false, known] as const;
+        const next = new Set(known);
+        next.add(entry.messageId);
+        return [true, next] as const;
+      }).pipe(
+        Effect.tap((fresh) =>
+          fresh
+            ? Ref.update(state, (map) => {
+                const current = read(map, threadId);
+                const next = new Map(map);
+                next.set(threadId, { ...current, queue: [...current.queue, entry] });
+                return next;
+              })
+            : Effect.void,
+        ),
+      );
 
     const takeNextForDispatch: T3workActorMailboxShape["takeNextForDispatch"] = (threadId) =>
       Ref.modify(state, (map) => {
@@ -96,9 +114,24 @@ export const makeT3workActorMailbox: Effect.Effect<T3workActorMailboxShape> = Ef
         return next;
       });
 
+    const requeueFailed: T3workActorMailboxShape["requeueFailed"] = (threadId, entry) =>
+      Ref.modify(state, (map) => {
+        const current = read(map, threadId);
+        const attempts = entry.dispatchAttempts + 1;
+        const retry = attempts < 3;
+        const next = new Map(map);
+        next.set(threadId, {
+          queue: retry
+            ? [{ ...entry, dispatchAttempts: attempts }, ...current.queue]
+            : current.queue,
+          reacting: false,
+        });
+        return [retry, next] as const;
+      });
+
     const isReacting: T3workActorMailboxShape["isReacting"] = (threadId) =>
       Ref.get(state).pipe(Effect.map((map) => read(map, threadId).reacting));
 
-    return { enqueue, takeNextForDispatch, clearReacting, isReacting };
+    return { enqueue, takeNextForDispatch, clearReacting, requeueFailed, isReacting };
   },
 );

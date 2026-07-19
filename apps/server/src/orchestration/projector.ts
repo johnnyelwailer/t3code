@@ -443,6 +443,15 @@ export function projectEvent(
         };
       });
 
+    case "thread.turn-start-requested":
+      return Effect.succeed({
+        ...nextBase,
+        threads: updateThread(nextBase.threads, event.payload.threadId, {
+          turnStartPending: true,
+          updatedAt: event.occurredAt,
+        }),
+      });
+
     case "thread.session-set":
       return Effect.gen(function* () {
         const payload = yield* decodeForEvent(
@@ -470,6 +479,7 @@ export function projectEvent(
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, {
             session,
+            turnStartPending: false,
             latestTurn:
               session.status === "running" && session.activeTurnId !== null
                 ? {

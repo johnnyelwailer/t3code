@@ -91,7 +91,7 @@ export interface T3workToolBrokerShape {
    * (never role `user`/`system`) and drives the receiving thread's agent to
    * react to it (auto-run a turn). The canonical use is a delegated child thread
    * reporting progress/results back to its parent, which then reacts. The hop
-   * count is inferred from the sender's most recent inbound actor message.
+   * count is derived from the sender's active reaction turn input.
    */
   readonly sendMessage: (input: {
     readonly toThreadId: string;

@@ -1,6 +1,4 @@
-import { type ModelSelection, type ProviderInteractionMode } from "@t3tools/contracts";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
-import { resolveModelSlugForProvider } from "@t3tools/shared/model";
+import { type ProviderInteractionMode } from "@t3tools/contracts";
 
 export type T3workStartChildKickoffMode = "plan" | "interactive" | "autopilot";
 export type T3workStartChildReasoningEffort = "low" | "medium" | "high";
@@ -183,31 +181,7 @@ export const mapKickoffModeToInteractionMode = (
   kickoffMode: T3workStartChildKickoffMode | undefined,
 ): ProviderInteractionMode => (kickoffMode === "plan" ? "plan" : "default");
 
-export const buildStartChildModelSelection = (
-  baseModelSelection: ModelSelection,
-  input: Pick<T3workStartChildArgs, "model" | "reasoningEffort">,
-): ModelSelection => {
-  const nextModel = input.model ?? baseModelSelection.model;
-  const normalizedModel = resolveModelSlugForProvider(
-    baseModelSelection.instanceId as never,
-    nextModel,
-  );
-  const nextSelections = input.reasoningEffort
-    ? [
-        ...(baseModelSelection.options ?? []).filter(
-          (selection) => selection.id !== "reasoningEffort",
-        ),
-        { id: "reasoningEffort", value: input.reasoningEffort } as const,
-      ]
-    : baseModelSelection.options;
-
-  return {
-    ...baseModelSelection,
-    model: normalizedModel,
-    ...(nextSelections ? { options: nextSelections } : {}),
-  };
-};
-
-export const readModelSelectionReasoningEffort = (
-  modelSelection: ModelSelection,
-): string | undefined => getModelSelectionStringOptionValue(modelSelection, "reasoningEffort");
+export {
+  buildStartChildModelSelection,
+  readModelSelectionReasoningEffort,
+} from "./t3work-toolBrokerStartChildModel.ts";

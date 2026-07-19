@@ -413,6 +413,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const sessionStatus = targetThread.session?.status;
+      const turnIsBusy =
+        targetThread.turnStartPending === true ||
+        sessionStatus === "starting" ||
+        sessionStatus === "running" ||
+        targetThread.latestTurn?.state === "running";
+      if (turnIsBusy) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' already has a turn in progress.`,
+        });
+      }
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({
