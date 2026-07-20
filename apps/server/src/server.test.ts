@@ -5712,6 +5712,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.equal(items.length, 1);
         assert.equal(items[0]?.kind, "snapshot");
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("buffers thread events published while the initial snapshot loads", () =>
     Effect.gen(function* () {
       const thread = makeDefaultOrchestrationReadModel().threads[0]!;

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as T3workRouteImport } from './routes/t3work'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PairRouteImport } from './routes/pair'
+import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as T3workNewRouteImport } from './routes/t3work.new'
@@ -23,6 +24,7 @@ import { Route as SettingsDiagnosticsRouteImport } from './routes/settings.diagn
 import { Route as SettingsConnectionsRouteImport } from './routes/settings.connections'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
+import { Route as ConnectCallbackRouteImport } from './routes/connect_.callback'
 import { Route as T3workProjectsProjectIdRouteImport } from './routes/t3work.projects.$projectId'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
@@ -42,6 +44,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const PairRoute = PairRouteImport.update({
   id: '/pair',
   path: '/pair',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConnectRoute = ConnectRouteImport.update({
+  id: '/connect',
+  path: '/connect',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChatRoute = ChatRouteImport.update({
@@ -98,6 +105,11 @@ const OauthCallbackRoute = OauthCallbackRouteImport.update({
   path: '/oauth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConnectCallbackRoute = ConnectCallbackRouteImport.update({
+  id: '/connect_/callback',
+  path: '/connect/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const T3workProjectsProjectIdRoute = T3workProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
@@ -129,9 +141,11 @@ const T3workProjectsProjectIdThreadsThreadIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
+  '/connect': typeof ConnectRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3work': typeof T3workRouteWithChildren
+  '/connect/callback': typeof ConnectCallbackRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
@@ -148,9 +162,11 @@ export interface FileRoutesByFullPath {
   '/t3work/projects/$projectId/tickets/$ticketId': typeof T3workProjectsProjectIdTicketsTicketIdRoute
 }
 export interface FileRoutesByTo {
+  '/connect': typeof ConnectRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3work': typeof T3workRouteWithChildren
+  '/connect/callback': typeof ConnectCallbackRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
@@ -170,9 +186,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_chat': typeof ChatRouteWithChildren
+  '/connect': typeof ConnectRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/t3work': typeof T3workRouteWithChildren
+  '/connect_/callback': typeof ConnectCallbackRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
@@ -193,9 +211,11 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/connect'
     | '/pair'
     | '/settings'
     | '/t3work'
+    | '/connect/callback'
     | '/oauth/callback'
     | '/settings/archived'
     | '/settings/connections'
@@ -212,9 +232,11 @@ export interface FileRouteTypes {
     | '/t3work/projects/$projectId/tickets/$ticketId'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/connect'
     | '/pair'
     | '/settings'
     | '/t3work'
+    | '/connect/callback'
     | '/oauth/callback'
     | '/settings/archived'
     | '/settings/connections'
@@ -233,9 +255,11 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_chat'
+    | '/connect'
     | '/pair'
     | '/settings'
     | '/t3work'
+    | '/connect_/callback'
     | '/oauth/callback'
     | '/settings/archived'
     | '/settings/connections'
@@ -255,9 +279,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
+  ConnectRoute: typeof ConnectRoute
   PairRoute: typeof PairRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   T3workRoute: typeof T3workRouteWithChildren
+  ConnectCallbackRoute: typeof ConnectCallbackRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
 }
 
@@ -282,6 +308,13 @@ declare module '@tanstack/react-router' {
       path: '/pair'
       fullPath: '/pair'
       preLoaderRoute: typeof PairRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connect': {
+      id: '/connect'
+      path: '/connect'
+      fullPath: '/connect'
+      preLoaderRoute: typeof ConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_chat': {
@@ -359,6 +392,13 @@ declare module '@tanstack/react-router' {
       path: '/oauth/callback'
       fullPath: '/oauth/callback'
       preLoaderRoute: typeof OauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connect_/callback': {
+      id: '/connect_/callback'
+      path: '/connect/callback'
+      fullPath: '/connect/callback'
+      preLoaderRoute: typeof ConnectCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/t3work/projects/$projectId': {
@@ -470,9 +510,11 @@ const T3workRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
+  ConnectRoute: ConnectRoute,
   PairRoute: PairRoute,
   SettingsRoute: SettingsRouteWithChildren,
   T3workRoute: T3workRouteWithChildren,
+  ConnectCallbackRoute: ConnectCallbackRoute,
   OauthCallbackRoute: OauthCallbackRoute,
 }
 export const routeTree = rootRouteImport
