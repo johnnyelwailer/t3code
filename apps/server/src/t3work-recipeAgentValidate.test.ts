@@ -311,6 +311,18 @@ describe("validateInlineWorkflowSourceForAgent", () => {
     });
   });
 
+  it("bounds hostile meta-head execution instead of hanging (vm timeout)", () => {
+    const source = ["while (true) {}", 'export const meta = { name: "hostile" };'].join("\n");
+
+    const start = Date.now();
+    const result = validateInlineWorkflowSourceForAgent(source);
+    const elapsed = Date.now() - start;
+
+    expect(result.ok).toBe(false);
+    expect(elapsed).toBeLessThan(10_000);
+    expect(result.errors.some((error) => error.phase === "meta")).toBe(true);
+  });
+
   it("reports a structured 'meta' issue for inline source with garbage/missing meta", () => {
     const result = validateInlineWorkflowSourceForAgent(BROKEN_META_WORKFLOW);
 

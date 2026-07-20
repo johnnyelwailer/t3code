@@ -135,7 +135,13 @@ export function extractMeta(
   NodeVM.createContext(context);
   let result: unknown;
   try {
-    result = NodeVM.runInContext(prepared.metaScript, context, { filename: source.absolutePath });
+    // Bounded: the meta head is agent-supplied (e.g. t3work.recipe.validate on inline
+    // source), and runInContext without a timeout would let `while(true){}` before
+    // `meta` block the server thread. 2s is generous for a pure literal.
+    result = NodeVM.runInContext(prepared.metaScript, context, {
+      filename: source.absolutePath,
+      timeout: 2000,
+    });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new WorkflowLoadError(
