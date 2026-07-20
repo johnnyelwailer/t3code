@@ -19,6 +19,7 @@ export const T3WORK_MCP_CANONICAL_TOOL_MAP = {
   t3work_rename_thread: "t3work.thread.rename",
   t3work_start_child: "t3work.thread.start_child",
   t3work_workflow_run: "t3work.workflow.run",
+  t3work_workflow_status: "t3work.workflow.status",
   t3work_show_widget: "t3work.widget.show",
 } as const;
 
@@ -93,7 +94,8 @@ export const T3workSendMessageTool = Tool.make("t3work_send_message", {
 // and run again.
 export const T3workWorkflowRunTool = Tool.make("t3work_workflow_run", {
   description:
-    `${T3WORK_WORKFLOW_TAGLINE} Pass \`source\` (the orchestration body) or \`workflowPath\`, ` +
+    `${T3WORK_WORKFLOW_TAGLINE} Pass \`source\` (the orchestration body — MUST be workflow ` +
+    "TypeScript starting with `export const meta = {...}`, NEVER YAML or JSON) or `workflowPath`, " +
     "required `intent` ({goal, expectedOutcome, guardrails}), and optional `args`. Returns " +
     "{runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. " +
     "After a successful workflow-ui handoff, end the current turn with no assistant prose; " +
@@ -108,6 +110,19 @@ export const T3workWorkflowRunTool = Tool.make("t3work_workflow_run", {
       guardrails: Schema.Array(Schema.String),
     }),
   }),
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
+// Read-only observability for a run launched via t3work_workflow_run: what it's
+// doing now and what (if anything) to do next. Routes to the t3work.workflow.status
+// broker tool. Prefer this over guessing from silence after a workflow-ui handoff.
+export const T3workWorkflowStatusTool = Tool.make("t3work_workflow_status", {
+  description:
+    "Observe a workflow run: status, what it's waiting on, and next-step hint. Omit runId to " +
+    "list recent runs.",
+  parameters: Schema.Struct({ runId: Schema.optional(Schema.String) }),
   success: Schema.Unknown,
   failure: T3workMcpToolError,
   dependencies,
@@ -152,6 +167,7 @@ export const T3workToolkit = Toolkit.make(
   T3workStartChildTool,
   T3workSendMessageTool,
   T3workWorkflowRunTool,
+  T3workWorkflowStatusTool,
   T3workShowWidgetTool,
   T3workHelpTool,
 );

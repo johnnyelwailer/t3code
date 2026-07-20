@@ -11,6 +11,7 @@ import {
   ClearWorkflowRunPendingInput,
   CountLiveWorkflowRunsByOriginInput,
   GetWorkflowRunInput,
+  ListRecentWorkflowRunsInput,
   ListWorkflowRunsByStatusInput,
   ResumePausedWorkflowRunInput,
   SetWorkflowRunPendingInput,
@@ -152,6 +153,37 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
+  // Observability listing (t3work.workflow.status list mode) — most recently touched runs,
+  // any status, newest first. Not used for boot rehydration (that scans by status).
+  const listRecentWorkflowRunRows = SqlSchema.findAll({
+    Request: ListRecentWorkflowRunsInput,
+    Result: WorkflowRunDbRow,
+    execute: ({ limit }) =>
+      sql`
+        SELECT
+          run_id AS "runId",
+          workflow_path AS "workflowPath",
+          args_json AS "args",
+          args_hash AS "argsHash",
+          launch_thread_id AS "launchThreadId",
+          project_id AS "projectId",
+          model_json AS "modelSelection",
+          runtime_mode AS "runtimeMode",
+          interaction_mode AS "interactionMode",
+          status,
+          origin,
+          pending_thread_id AS "pendingThreadId",
+          pending_correlation_id AS "pendingCorrelationId",
+          pending_kind AS "pendingKind",
+          wake_at AS "wakeAt",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM workflow_runs
+        ORDER BY updated_at DESC, run_id DESC
+        LIMIT ${limit}
+      `,
+  });
+
   // The ephemeral concurrency cap's index: how many runs of one origin still hold engine
   // resources (running now, or parked and resumable).
   const countLiveWorkflowRunRowsByOrigin = SqlSchema.findAll({
@@ -255,6 +287,11 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.listByStatus:query")),
     );
 
+  const listRecent: WorkflowRunRepositoryShape["listRecent"] = (input) =>
+    listRecentWorkflowRunRows(input).pipe(
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.listRecent:query")),
+    );
+
   const countLiveByOrigin: WorkflowRunRepositoryShape["countLiveByOrigin"] = (input) =>
     countLiveWorkflowRunRowsByOrigin(input).pipe(
       Effect.map((rows) => rows[0]?.count ?? 0),
@@ -290,6 +327,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     upsert,
     getById,
     listByStatus,
+    listRecent,
     countLiveByOrigin,
     setStatus,
     resumePaused,

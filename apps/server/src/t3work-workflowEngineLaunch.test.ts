@@ -107,7 +107,9 @@ describe("launchWorkflowRecipe — real launch path", () => {
       threadId: launchThreadId,
       message: {
         messageId: `t3work-wf-result:${runId}`,
-        text: expect.stringContaining('"merged": true'),
+        // formatWorkflowOutput deliberately prefers the readable `summary` field
+        // over a raw JSON dump of the full output record.
+        text: "Low risk; well tested.",
       },
     });
 
@@ -137,5 +139,59 @@ describe("launchWorkflowRecipe — real launch path", () => {
           (activity.payload as { threadId?: string }).threadId === `${runId}:1`,
       ),
     ).toBe(true);
+  });
+
+  it("delivers a failure message to the launching thread when a run fails terminally", async () => {
+    // Regression: a failed run only emitted Work Log step activities — no message ever
+    // reached the launching conversation, so the agent hallucinated "still running".
+    const registry = makeWorkflowEngineRegistry();
+    const dispatched: OrchestrationCommand[] = [];
+    const dispatch = async (command: OrchestrationCommand): Promise<void> => {
+      dispatched.push(command);
+    };
+    // Invalid source (the YAML-instead-of-TS authoring failure seen live).
+    const badPath = NodePath.join(runsRoot, "bad.workflow.ts");
+    NodeFS.writeFileSync(badPath, "thread:\n  - agent: not typescript\n");
+    let seq = 0;
+    let failed: unknown;
+
+    const runId = "wf-fail-run";
+    const launchThreadId = "launch-2";
+    const result = await launchWorkflowRecipe({
+      runId,
+      workflowPath: badPath,
+      args: {},
+      runsRoot,
+      launchThreadId,
+      projectId: ProjectId.make("proj-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("inst-1"), "model-x"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry,
+      dispatch,
+      newId: () => `fid-${(seq += 1)}`,
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+      onError: async (error) => {
+        failed = error;
+      },
+    });
+
+    expect(result.status).toBe("failed");
+    expect(failed).toBeDefined();
+    expect(registry.getRun(runId)).toBeUndefined();
+    // Failure and completion share ONE terminal message id per run, so whichever
+    // outcome lands last overwrites the other instead of contradicting it.
+    const failureMessage = dispatched.find(
+      (command) =>
+        command.type === "thread.message.upsert" &&
+        String(command.message.messageId) === `t3work-wf-result:${runId}`,
+    );
+    expect(failureMessage).toMatchObject({
+      threadId: launchThreadId,
+      message: {
+        role: "assistant",
+        text: expect.stringContaining("Workflow run failed"),
+      },
+    });
   });
 });

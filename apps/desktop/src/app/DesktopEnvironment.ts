@@ -182,7 +182,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
     browserArtifactsDir: path.join(stateDir, "browser-artifacts"),
     rootDir,
     appRoot,
-    backendEntryPath: path.join(appRoot, "apps/server/dist/bin.mjs"),
+    // Dev-only escape hatch so a distribution can boot an alternate server
+    // variant (e.g. the t3work entry) as the local backend; mirrors the
+    // devRemoteT3ServerEntryPath override and is ignored in packaged builds.
+    backendEntryPath:
+      isDevelopment && !input.isPackaged && Option.isSome(config.devBackendEntryPath)
+        ? config.devBackendEntryPath.value
+        : path.join(appRoot, "apps/server/dist/bin.mjs"),
     backendCwd: input.isPackaged ? homeDirectory : appRoot,
     preloadPath: path.join(input.dirname, "preload.cjs"),
     appUpdateYmlPath: input.isPackaged

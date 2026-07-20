@@ -59,11 +59,45 @@ describe("buildWorkflowShapePreviewCommand", () => {
     });
   });
 
-  it("returns null for a source with no phases and no steps", () => {
+  it("falls back to a minimal shape (never null) for a source with no phases and no steps", () => {
     const command = buildWorkflowShapePreviewCommand({
       ...baseInput,
       sourceText: `export const meta = { name: "empty" } as const;\nreturn 1;`,
     });
-    expect(command).toBeNull();
+
+    expect(command).not.toBeNull();
+    if (command.type !== "thread.message.upsert") {
+      throw new Error("expected a thread.message.upsert command");
+    }
+    const attachment = command.message.t3workExt?.attachments?.[0];
+    if (attachment?.kind !== "view") throw new Error("expected a view attachment");
+    expect(attachment.props).toMatchObject({
+      name: "shape.demo",
+      phases: [],
+      steps: [],
+      workflowRunId: "run-1",
+    });
+  });
+
+  it("falls back to a minimal shape (never null) when derivation throws", () => {
+    const command = buildWorkflowShapePreviewCommand({
+      ...baseInput,
+      workflowPath: "/abs/broken-workflow.ts",
+      sourceText: "export const meta = {{{ not valid typescript at all (((",
+    });
+
+    expect(command).not.toBeNull();
+    if (command.type !== "thread.message.upsert") {
+      throw new Error("expected a thread.message.upsert command");
+    }
+    expect(command.message.text).toBe("Plan: broken-workflow");
+    const attachment = command.message.t3workExt?.attachments?.[0];
+    if (attachment?.kind !== "view") throw new Error("expected a view attachment");
+    expect(attachment.props).toMatchObject({
+      name: "broken-workflow",
+      phases: [],
+      steps: [],
+      workflowRunId: "run-1",
+    });
   });
 });

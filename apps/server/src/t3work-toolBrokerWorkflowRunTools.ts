@@ -20,6 +20,7 @@ import {
   type PreparedWorkflowLaunchDeps,
 } from "./t3work-workflowEphemeralLaunch.ts";
 import { DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS } from "./t3work-workflowEphemeralConcurrencyPolicy.ts";
+import { precheckWorkflowSource } from "./t3work-workflowSourcePrecheck.ts";
 
 /** Max ephemeral runs holding engine resources (running/suspended/sleeping) at once (spec D8). */
 export const T3WORK_EPHEMERAL_RUN_CAP = DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS;
@@ -144,6 +145,10 @@ function resolveRunWorkflowPath(input: {
   const { fileSystem, path, workspaceRoot, runId, args } = input;
   const source = args.source?.trim() ?? "";
   if (source.length > 0) {
+    const precheckError = precheckWorkflowSource(source);
+    if (precheckError !== null) {
+      return Effect.fail(precheckError);
+    }
     const runDirectory = path.join(workspaceRoot, ".t3work-runs", runId);
     const workflowPath = path.join(runDirectory, "workflow.ts");
     return fileSystem

@@ -125,6 +125,8 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
     onSleep: () => {
       void deps.rearmScheduler();
     },
+    dispatch: deps.dispatch,
+    newId: () => t3workRandomUUID(),
   });
   // Admission is durable before any detached execution starts. A request disconnect after this
   // point leaves a recoverable run row, never an invisible source-only orphan.

@@ -24,6 +24,9 @@ export function orphanSleepingRun(
   repo: WorkflowRunRepositoryShape,
   runId: string,
   correlationId: string,
+  /** Present when the scheduler can post to the launching thread — the orphaned
+   * run then notifies the conversation instead of failing with only a log line. */
+  deliverFailure?: (launchThreadId: string | undefined, errorText: string) => Promise<void>,
 ): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -43,6 +46,14 @@ export function orphanSleepingRun(
         "workflow scheduler orphaned a sleeping run with no registered resume closure",
         { runId, correlationId },
       );
+      if (deliverFailure !== undefined) {
+        yield* Effect.promise(() =>
+          deliverFailure(
+            current.value.launchThreadId ?? undefined,
+            "This run's scheduled wake-up fired, but the run could not be restored (its source or state was gone).",
+          ),
+        );
+      }
     }),
   );
 }

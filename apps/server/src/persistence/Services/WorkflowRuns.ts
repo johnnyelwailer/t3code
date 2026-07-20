@@ -84,6 +84,10 @@ export type GetWorkflowRunInput = typeof GetWorkflowRunInput.Type;
 export const ListWorkflowRunsByStatusInput = Schema.Struct({ status: WorkflowRunStatus });
 export type ListWorkflowRunsByStatusInput = typeof ListWorkflowRunsByStatusInput.Type;
 
+/** The N most recently updated runs, any status — backs `t3work.workflow.status`'s list mode. */
+export const ListRecentWorkflowRunsInput = Schema.Struct({ limit: Schema.Number });
+export type ListRecentWorkflowRunsInput = typeof ListRecentWorkflowRunsInput.Type;
+
 export const SetWorkflowRunStatusInput = Schema.Struct({
   runId: Schema.String,
   status: WorkflowRunStatus,
@@ -142,6 +146,10 @@ export interface WorkflowRunRepositoryShape {
   /** All run rows in a given status (boot rehydration reads `"suspended"`). */
   readonly listByStatus: (
     input: ListWorkflowRunsByStatusInput,
+  ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
+  /** The N most recently updated runs, any status (observability listing, not boot rehydration). */
+  readonly listRecent: (
+    input: ListRecentWorkflowRunsInput,
   ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
   /** Set a run's status (without touching the pending ask). */
   readonly setStatus: (
