@@ -399,7 +399,11 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
       ServerSecretStore.layer,
-      CloudCliTokenManager.layer.pipe(Layer.provide(ServerSecretStore.layer)),
+      // Upstream: the CLI token manager now also drives the external launcher.
+      CloudCliTokenManager.layer.pipe(
+        Layer.provide(ServerSecretStore.layer),
+        Layer.provide(ExternalLauncher.layer),
+      ),
       CloudManagedEndpointRuntimeLive,
     ),
   ),

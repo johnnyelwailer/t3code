@@ -137,7 +137,12 @@ function RootRouteView() {
     };
   }, [pathname]);
 
-  if (pathname === "/pair" || isAtlassianOAuthCallbackPath(pathname)) {
+  if (
+    pathname === "/pair" ||
+    pathname === "/connect" ||
+    pathname.startsWith("/connect/") ||
+    isAtlassianOAuthCallbackPath(pathname)
+  ) {
     return (
       <>
         <DocumentTitleSync />

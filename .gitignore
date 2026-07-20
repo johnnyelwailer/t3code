@@ -38,6 +38,9 @@ apps/desktop/.dev-electron-supervisor.pid
 apps/server/~/.t3code/
 ~/.t3code/
 .t3work-runs/
+.showcase/
+apps/mobile/.showcase/
+artifacts/app-store/screenshots/
 node_modules/
 .alchemy/
 *.log
