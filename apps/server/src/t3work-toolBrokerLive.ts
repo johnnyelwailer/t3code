@@ -27,6 +27,7 @@ import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
 import { buildThreadWorkspaceView } from "./t3work-toolBrokerViewWorkspace.ts";
 import { setBacklogAssigneeFilterForContext } from "./t3work-toolBrokerBacklogFilter.ts";
+import { bindChildProviderCatalog } from "./t3work-childProviderCatalog.ts";
 import { makeRecipeToolHandlers } from "./t3work-toolBrokerRecipeTools.ts";
 import { makeWorkflowRunToolsForThread } from "./t3work-toolBrokerWorkflowRunLive.ts";
 import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
@@ -56,6 +57,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
     yield* Effect.serviceOption(ProjectSetupScriptRunner),
   );
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
+  bindChildProviderCatalog(providerRegistry);
   const bindShowWidget = yield* makeT3workWidgetShowBinder();
 
   const loadThreadProject = (threadId: ThreadIdType) =>

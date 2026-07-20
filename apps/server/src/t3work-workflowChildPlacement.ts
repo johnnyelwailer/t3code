@@ -1,14 +1,22 @@
-import { CommandId, EventId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  EventId,
+  type ModelSelection,
+  type OrchestrationCommand,
+  ThreadId,
+} from "@t3tools/contracts";
 
 import type {
   ThreadCreatePayload,
   WorkflowEngineBrokerDeps,
 } from "./t3work-workflowEngineBrokerTypes.ts";
-import { fromWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
 
 export async function dispatchWorkflowChild(
   deps: WorkflowEngineBrokerDeps,
   payload: ThreadCreatePayload,
+  // Pre-resolved by the broker BEFORE this fire-and-forget path (see the `thread.create`
+  // branch in t3work-workflowEngineBroker.ts) so validation failures reject the send.
+  modelSelection: ModelSelection,
 ): Promise<void> {
   deps.registry.registerChildThread(deps.runId, payload.threadId);
   const childTitle = payload.name ?? "Workflow thread";
@@ -19,8 +27,7 @@ export async function dispatchWorkflowChild(
     threadId: ThreadId.make(payload.threadId),
     projectId: deps.projectId,
     title: childTitle,
-    modelSelection:
-      payload.model === undefined ? deps.modelSelection : fromWorkflowModelSelection(payload.model),
+    modelSelection,
     runtimeMode: deps.runtimeMode,
     interactionMode: deps.interactionMode,
     branch: null,
