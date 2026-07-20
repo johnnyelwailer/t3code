@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- reads the fixture workflow source at module load.
 import * as NodeFS from "node:fs";
 import * as NodeURL from "node:url";
 
