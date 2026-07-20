@@ -1,4 +1,5 @@
 /** Durable workflow launch and the per-run resume controller. */
+// @effect-diagnostics globalConsole:off -- onComplete sink failure log in a plain Promise path, outside any Effect runtime.
 
 import type {
   ModelSelection,

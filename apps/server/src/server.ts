@@ -361,6 +361,17 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
       // t3work.workflow.run (ephemeral workflows) drives the same durable-engine singletons;
       // memoized by reference, so this shares the registry/repo/store/scheduler instances.
       Layer.provide(WorkflowEngineDurabilityLive),
+      // ProviderRegistryLive appears EARLIER in the outer pipe below, but `provideMerge`
+      // only feeds a layer's output into layers accumulated BEFORE it in the chain — the
+      // broker (which resolves ProviderRegistry via `Effect.serviceOption`) never saw it, so
+      // `t3work.thread.start_child` with an explicit provider always failed with "Unknown
+      // provider instance … Available: none". Providing it directly here shares the outer
+      // instance via layer memoization; its own requirements (config, instance registry,
+      // platform) are satisfied by the later outer provideMerges. NOTE: GitWorkflowService/
+      // SourceControlProviderRegistry/ProjectSetupScriptRunner have the same visibility gap,
+      // but providing VcsLayerLive here would leak its ProjectionSnapshotQuery/
+      // TerminalManager requirements out of this composed layer — fix separately.
+      Layer.provide(ProviderRegistryLive),
     ),
   ),
   // Shared singletons: the launch route registers parked runs in the registry and writes the

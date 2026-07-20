@@ -6,7 +6,12 @@
 import { ProviderDriverKind, type ModelSelection, type ServerProvider } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveStartChildModelSelection } from "./t3work-toolBrokerStartChildProvider.ts";
+import * as Effect from "effect/Effect";
+
+import {
+  resolveChildModel,
+  resolveStartChildModelSelection,
+} from "./t3work-toolBrokerStartChildProvider.ts";
 
 const makeProvider = (
   instanceId: string,
@@ -146,5 +151,19 @@ describe("resolveStartChildModelSelection", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.options).toEqual([{ id: "effort", value: "high" }]);
+  });
+});
+
+describe("resolveChildModel", () => {
+  it("fails distinctly when a provider is requested but the registry isn't wired", async () => {
+    const exit = await Effect.runPromiseExit(
+      resolveChildModel(parent, { provider: "codex" }, undefined),
+    );
+    expect(exit._tag).toBe("Failure");
+    if (exit._tag === "Failure") {
+      const message = String(exit.cause);
+      expect(message).toContain("Provider registry is not wired into this server build");
+      expect(message).toContain("codex");
+    }
   });
 });

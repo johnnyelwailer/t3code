@@ -203,9 +203,12 @@ describe("createWorkflowEngineBroker", () => {
       },
       { resolve: () => {}, reject: () => {} },
     );
-    const pending = registry.takePending("child-1");
-    for (let attempt = 0; dispatched.length === 0 && attempt < 10; attempt += 1) {
+    // Explicit-model turns resolve the child model BEFORE recording pending state, so
+    // pending appears only after the resolution microtask(s) — poll for it.
+    let pending = registry.takePending("child-1");
+    for (let attempt = 0; pending === undefined && attempt < 10; attempt += 1) {
       await Promise.resolve();
+      pending = registry.takePending("child-1");
     }
     await pending!.resolveLive!("done");
     await turn;

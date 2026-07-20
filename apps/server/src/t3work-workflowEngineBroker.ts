@@ -38,7 +38,7 @@ import {
 } from "./t3work-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities.ts";
 import { dispatchWorkflowChild } from "./t3work-workflowChildPlacement.ts";
-import { fromWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
+import { resolveWorkflowChildModel } from "./t3work-workflowChildModel.ts";
 import { createWorkflowLiveSettlement } from "./t3work-workflowLiveSettlement.ts";
 import {
   buildT3workWidgetAttachment,
@@ -131,12 +131,24 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       });
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
+      // Resolve BEFORE registering/dispatching: enqueueOneWay swallows dispatch errors, so an
+      // invalid provider/model must reject this send() while the SDK still observes it.
+      const modelSelection =
+        p.model === undefined
+          ? deps.modelSelection
+          : await resolveWorkflowChildModel(deps.modelSelection, p.model);
       step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
-      await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p)));
+      await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p, modelSelection)));
       return;
     }
     if (kind === "thread.turn") {
       const p = payload as ThreadTurnPayload;
+      // Resolve BEFORE recording pending state (registry + durable recordPending): an invalid
+      // provider/model must reject this ask cleanly, not park the run on an undispatched turn.
+      const modelSelection =
+        p.model === undefined
+          ? deps.modelSelection
+          : await resolveWorkflowChildModel(deps.modelSelection, p.model);
       step(correlationId, kind, "started", p.label ?? p.prompt, p.threadId);
       const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
       deps.registry.setPending(p.threadId, {
@@ -158,8 +170,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
                 text: p.prompt,
                 attachments: [],
               },
-              modelSelection:
-                p.model === undefined ? deps.modelSelection : fromWorkflowModelSelection(p.model),
+              modelSelection,
               runtimeMode: deps.runtimeMode,
               interactionMode: deps.interactionMode,
               createdAt: deps.nowIso(),

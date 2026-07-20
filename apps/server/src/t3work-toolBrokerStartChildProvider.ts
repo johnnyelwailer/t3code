@@ -171,6 +171,12 @@ export function resolveChildModel(
   listProviders: (() => Effect.Effect<ReadonlyArray<ServerProvider>>) | undefined,
 ): Effect.Effect<ModelSelection, string> {
   return Effect.gen(function* () {
+    if (args.provider && !listProviders) {
+      return yield* Effect.fail(
+        `Provider registry is not wired into this server build; cannot resolve provider ` +
+          `instance '${args.provider}' for start_child.`,
+      );
+    }
     const providers = listProviders ? yield* listProviders() : [];
     const result = resolveStartChildModelSelection({
       parentModelSelection: baseModelSelection,

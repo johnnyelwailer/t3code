@@ -1,3 +1,4 @@
+// @effect-diagnostics globalConsole:off -- fire-and-forget delivery failure log in a plain Promise path, outside any Effect runtime.
 import { CommandId, MessageId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
 
 import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities.ts";
