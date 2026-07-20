@@ -36,13 +36,16 @@ import { makeT3workWidgetShowBinder } from "./t3work-toolBrokerWidgetShow.ts";
 const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () {
   // Host tools every provider may call without an explicit `surface:"t3work"`
   // tool-context (e.g. a pack driver reaching the /mcp endpoint): thread rename,
-  // child spawning, and running an ephemeral runbook (workflow).
+  // child spawning, running an ephemeral runbook (workflow), and inspecting/
+  // validating saved or inline recipe workflows.
   const genericThreadToolIds = [
     "t3work.thread.rename",
     "t3work.thread.start_child",
     "t3work.workflow.run",
     "t3work.workflow.status",
     "t3work.widget.show",
+    "t3work.recipe.list",
+    "t3work.recipe.validate",
   ] as const;
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;

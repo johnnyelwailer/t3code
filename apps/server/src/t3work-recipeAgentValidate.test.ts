@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import { describe, expect, it } from "vite-plus/test";
 
 import { validateProjectRecipeWorkflowForAgent } from "./t3work-recipeAgentValidate.ts";
+import { validateInlineWorkflowSourceForAgent } from "./t3work-recipeAgentValidateStatic.ts";
 
 // Temp workspaces live under `__fixtures__` (not the OS tmpdir) so a typed `recipe.ts`'s
 // `import("@t3work/sdk")` resolves via the monorepo's node_modules chain, the same way
@@ -285,5 +286,39 @@ describe("validateProjectRecipeWorkflowForAgent", () => {
         }).pipe(Effect.provide(NodeServices.layer)),
       ),
     );
+  });
+});
+
+describe("validateInlineWorkflowSourceForAgent", () => {
+  it("validates a well-formed inline workflow source with meta and shape populated", () => {
+    const result = validateInlineWorkflowSourceForAgent(VALID_WORKFLOW);
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.workflowPath).toBe("<inline>");
+    expect(result.meta).toMatchObject({
+      name: "agent-validate.valid",
+      description: "Summarize a PR title.",
+      capabilities: ["user"],
+      inputFields: ["prTitle"],
+      outputFields: ["summary"],
+      phases: [{ title: "Review" }],
+    });
+    expect(result.shape).toMatchObject({
+      name: "agent-validate.valid",
+      phases: [{ title: "Review" }],
+      steps: [{ phase: "Review", kind: "agent" }],
+    });
+  });
+
+  it("reports a structured 'meta' issue for inline source with garbage/missing meta", () => {
+    const result = validateInlineWorkflowSourceForAgent(BROKEN_META_WORKFLOW);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({
+      phase: "meta",
+      message: expect.stringContaining("meta.name"),
+    });
   });
 });

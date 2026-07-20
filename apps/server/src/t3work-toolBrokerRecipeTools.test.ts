@@ -66,6 +66,46 @@ describe("makeRecipeToolHandlers", () => {
     }
   });
 
+  it("validates inline 'source' even when FileSystem/Path are unavailable", async () => {
+    const handlers = makeRecipeToolHandlers({
+      fileSystem: undefined,
+      path: undefined,
+      loadThreadProject: () => Effect.fail("loadThreadProject should not be called for source"),
+    })(threadId);
+
+    const result = await Effect.runPromise(
+      handlers
+        .validateRecipe({ source: `export const meta = { description: "no name here" };` })
+        .pipe(Effect.result),
+    );
+
+    expect(result._tag).toBe("Success");
+    if (result._tag === "Success") {
+      expect(result.success.ok).toBe(false);
+      expect(result.success.workflowPath).toBe("<inline>");
+      expect(result.success.errors[0]).toMatchObject({ phase: "meta" });
+    }
+  });
+
+  it("still fails clearly for 'path' when FileSystem/Path are unavailable", async () => {
+    const handlers = makeRecipeToolHandlers({
+      fileSystem: undefined,
+      path: undefined,
+      loadThreadProject: () =>
+        Effect.succeed({ project: { workspaceRoot: "/workspace/project-1" } }),
+    })(threadId);
+
+    const result = await Effect.runPromise(
+      handlers.validateRecipe({ path: "some.workflow.ts" }).pipe(Effect.result),
+    );
+
+    expect(result._tag).toBe("Failure");
+    if (result._tag === "Failure") {
+      expect(result.failure).toContain("not available");
+      expect(result.failure).toContain("in this runtime");
+    }
+  });
+
   it("wires listRecipes through a temp workspace on the happy path", async () => {
     await Effect.runPromise(
       Effect.scoped(

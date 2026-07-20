@@ -21,13 +21,13 @@ export const T3WORK_MCP_CANONICAL_TOOL_MAP = {
   t3work_workflow_run: "t3work.workflow.run",
   t3work_workflow_status: "t3work.workflow.status",
   t3work_show_widget: "t3work.widget.show",
+  t3work_recipe_list: "t3work.recipe.list",
+  t3work_recipe_validate: "t3work.recipe.validate",
 } as const;
 
 export const T3WORK_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = new Set([
   "t3work.backlog.set_assignee_filter",
   "t3work.view.read",
-  "t3work.recipe.list",
-  "t3work.recipe.validate",
   "t3work.work_item.refresh_context_bundle",
   "t3work.project.refresh_context_bundle",
 ]);
@@ -162,6 +162,35 @@ export const T3workHelpTool = Tool.make("t3work_help", {
   dependencies,
 });
 
+// Read-only listing of the project's saved recipe workflows. Routes to the
+// t3work.recipe.list broker tool.
+export const T3workRecipeListTool = Tool.make("t3work_recipe_list", {
+  description: "List the project's saved recipe workflows (id, title, paths). Read-only.",
+  parameters: Schema.Struct({}),
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
+// Static, read-only validation of a workflow before running it — either an
+// existing on-disk recipe (`path`) or inline source (`source`, the same body
+// passed to t3work_workflow_run). Routes to the t3work.recipe.validate broker
+// tool; never writes or executes anything.
+export const T3workRecipeValidateTool = Tool.make("t3work_recipe_validate", {
+  description:
+    "Statically validate a workflow before running it: pass `source` (inline workflow " +
+    "TypeScript — same body you would pass to t3work_workflow_run) or `path` (a .workflow.ts " +
+    "or recipe directory in the workspace). Returns {ok, meta?, shape?, errors[]}; fix errors " +
+    "and re-validate until ok before calling t3work_workflow_run. Nothing is executed or written.",
+  parameters: Schema.Struct({
+    path: Schema.optional(Schema.String),
+    source: Schema.optional(Schema.String),
+  }),
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
 export const T3workToolkit = Toolkit.make(
   T3workRenameThreadTool,
   T3workStartChildTool,
@@ -170,4 +199,6 @@ export const T3workToolkit = Toolkit.make(
   T3workWorkflowStatusTool,
   T3workShowWidgetTool,
   T3workHelpTool,
+  T3workRecipeListTool,
+  T3workRecipeValidateTool,
 );

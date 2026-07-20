@@ -40,7 +40,10 @@ export const ListRecipesToolResult = Schema.Struct({
 export type ListRecipesToolResult = typeof ListRecipesToolResult.Type;
 
 export const ValidateRecipeToolArgs = Schema.Struct({
-  path: Schema.String,
+  /** An existing `.workflow.ts` file or recipe directory in the project workspace. */
+  path: Schema.optional(Schema.String),
+  /** Inline workflow TypeScript to validate statically; nothing is written or executed. */
+  source: Schema.optional(Schema.String),
 });
 export type ValidateRecipeToolArgs = typeof ValidateRecipeToolArgs.Type;
 
@@ -99,14 +102,19 @@ export const validateRecipeTool = defineTool({
   args: ValidateRecipeToolArgs,
   result: ValidateRecipeToolResult,
   handler: async (args, ctx) => {
-    const path = args.path.trim();
-    if (path.length === 0) {
-      throw new Error("t3work.recipe.validate requires a non-empty 'path'.");
+    const path = args.path?.trim() ?? "";
+    const source = args.source?.trim() ?? "";
+    if ((path.length === 0) === (source.length === 0)) {
+      throw new Error(
+        "t3work.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+      );
     }
     if (!ctx.t3work?.validateRecipe) {
       throw new Error("t3work.recipe.validate requires a t3work recipe client in ToolHandlerCtx.");
     }
     // The host result is re-validated against ValidateRecipeToolResult by executeToolHandler.
-    return (await ctx.t3work.validateRecipe({ path })) as ValidateRecipeToolResult;
+    return (await ctx.t3work.validateRecipe(
+      path.length > 0 ? { path } : { source },
+    )) as ValidateRecipeToolResult;
   },
 });

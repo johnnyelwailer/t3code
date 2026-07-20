@@ -130,7 +130,8 @@ export function executeWorkflowSdkRecipeTool(input: {
   readonly toolArgs: unknown;
   readonly listRecipes: () => Effect.Effect<ListRecipesToolResult, WorkflowSdkBridgeError>;
   readonly validateRecipe: (args: {
-    readonly path: string;
+    readonly path?: string;
+    readonly source?: string;
   }) => Effect.Effect<ValidateRecipeToolResult, WorkflowSdkBridgeError>;
 }): Effect.Effect<WorkflowSdkRecipeToolResult, WorkflowSdkBridgeError> {
   return Effect.tryPromise({

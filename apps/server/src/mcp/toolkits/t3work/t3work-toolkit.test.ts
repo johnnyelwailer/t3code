@@ -101,3 +101,104 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
     Effect.provide(TestLayer),
   );
 });
+
+it.effect("routes t3work_recipe_list through the bound broker callTool dispatch", () => {
+  const calls: Array<{
+    readonly threadId: ThreadId;
+    readonly tool: string;
+    readonly args: unknown;
+  }> = [];
+  const binding: T3workToolBinding = {
+    threadId,
+    listServers: () => [],
+    readResource: ({ uri }) => Effect.succeed({ contents: [{ uri, text: "{}" }] }),
+    callTool: ({ tool, arguments: args }) => {
+      calls.push({ threadId, tool, args });
+      return Effect.succeed({
+        content: [{ type: "text" as const, text: "ok" }],
+        structuredContent: { ok: true, workspaceRoot: "/workspace", recipes: [], errors: [] },
+      });
+    },
+  };
+  const broker = T3workToolBroker.of({
+    sendMessage: () => Effect.succeed(undefined),
+    bindSession: ({ threadId: boundThreadId }) =>
+      Effect.succeed(boundThreadId === threadId ? binding : undefined),
+    bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+  });
+  const TestLayer = T3workToolkitRegistrationLive.pipe(
+    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(Layer.succeed(T3workToolBroker, broker)),
+  );
+
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const result = yield* server.callTool({
+      name: "t3work_recipe_list",
+      arguments: {},
+    });
+
+    expect(result.structuredContent).toEqual({
+      ok: true,
+      workspaceRoot: "/workspace",
+      recipes: [],
+      errors: [],
+    });
+    expect(calls).toEqual([{ threadId, tool: "t3work.recipe.list", args: {} }]);
+  }).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    Effect.provideService(McpSchema.McpServerClient, client),
+    Effect.provide(TestLayer),
+  );
+});
+
+it.effect("routes t3work_recipe_validate through the bound broker callTool dispatch", () => {
+  const calls: Array<{
+    readonly threadId: ThreadId;
+    readonly tool: string;
+    readonly args: unknown;
+  }> = [];
+  const binding: T3workToolBinding = {
+    threadId,
+    listServers: () => [],
+    readResource: ({ uri }) => Effect.succeed({ contents: [{ uri, text: "{}" }] }),
+    callTool: ({ tool, arguments: args }) => {
+      calls.push({ threadId, tool, args });
+      return Effect.succeed({
+        content: [{ type: "text" as const, text: "ok" }],
+        structuredContent: { ok: true, workflowPath: "<inline>", errors: [] },
+      });
+    },
+  };
+  const broker = T3workToolBroker.of({
+    sendMessage: () => Effect.succeed(undefined),
+    bindSession: ({ threadId: boundThreadId }) =>
+      Effect.succeed(boundThreadId === threadId ? binding : undefined),
+    bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+  });
+  const TestLayer = T3workToolkitRegistrationLive.pipe(
+    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(Layer.succeed(T3workToolBroker, broker)),
+  );
+
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const result = yield* server.callTool({
+      name: "t3work_recipe_validate",
+      arguments: { source: "export const meta = { name: 'x' };" },
+    });
+
+    expect(result.structuredContent).toEqual({ ok: true, workflowPath: "<inline>", errors: [] });
+    expect(calls).toEqual([
+      {
+        threadId,
+        tool: "t3work.recipe.validate",
+        args: { source: "export const meta = { name: 'x' };" },
+      },
+    ]);
+  }).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    Effect.provideService(McpSchema.McpServerClient, client),
+    Effect.provide(TestLayer),
+  );
+});
