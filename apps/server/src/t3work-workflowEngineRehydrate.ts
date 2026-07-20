@@ -35,6 +35,7 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
+import { deliverWorkflowFailure } from "./t3work-workflowCompletionMessage.ts";
 import { makeWorkflowRunLifecycle } from "./t3work-workflowEngineDurability.ts";
 import {
   createWorkflowRunController,
@@ -62,12 +63,26 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     const sleeping = yield* repo.listByStatus({ status: "sleeping" });
     const paused = yield* repo.listByStatus({ status: "paused" });
     const queued = yield* repo.listByStatus({ status: "queued" });
+    const dispatch = (command: Parameters<typeof orchestration.dispatch>[0]): Promise<void> =>
+      Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
+
     // A process died while executing a non-idempotent live step. Never blindly replay it at
-    // boot: surface Needs attention instead of leaving a forever-running orphan.
+    // boot: surface Needs attention instead of leaving a forever-running orphan — and TELL the
+    // launching conversation, or its agent keeps assuming the run is still going.
     const running = yield* repo.listByStatus({ status: "running" });
     for (const run of running) {
       yield* repo.setStatus({ runId: run.runId, status: "failed", updatedAt: nowIso() });
       yield* Effect.logWarning("marked interrupted running workflow failed", { runId: run.runId });
+      yield* Effect.promise(() =>
+        deliverWorkflowFailure({
+          launchThreadId: run.launchThreadId ?? undefined,
+          workflowRunId: run.runId,
+          errorText: "The server restarted while this run was executing; it was not resumed.",
+          dispatch,
+          newId: () => t3workRandomUUID(),
+          nowIso,
+        }),
+      );
     }
     if (
       suspended.length === 0 &&
@@ -80,8 +95,6 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     // The journal lives in the DB (store), so `runsRoot` only backs the workspace-root default
     // for tool scratch files; the server cwd matches the bootstrapped project's workspace.
     const runsRoot = `${serverConfig.cwd}/.t3work-runs`;
-    const dispatch = (command: Parameters<typeof orchestration.dispatch>[0]): Promise<void> =>
-      Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
 
     // Rebuild the resume closure (CODE from layers) over the persisted DATA. Shared by both wake
     // sources — the reactor (suspended) and the scheduler (sleeping) — so a restored run drives
@@ -95,6 +108,8 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         onSleep: () => {
           void scheduler.rearm();
         },
+        dispatch,
+        newId: () => t3workRandomUUID(),
       });
       createWorkflowRunController({
         runId: run.runId,
@@ -131,6 +146,8 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         onSleep: () => {
           void scheduler.rearm();
         },
+        dispatch,
+        newId: () => t3workRandomUUID(),
       });
       registry.registerOwnership(run.runId, run.launchThreadId ?? undefined);
       registry.registerMasterStop(run.runId, () =>

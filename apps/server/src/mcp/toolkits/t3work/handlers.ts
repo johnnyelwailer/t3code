@@ -59,6 +59,8 @@ export const T3workToolkitHandlersLive = T3workToolkit.toLayer({
   t3work_send_message: (input) => sendMessage(input),
   t3work_workflow_run: (input) =>
     callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_workflow_run, input),
+  t3work_workflow_status: (input) =>
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_workflow_status, input),
   t3work_show_widget: (input) =>
     callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_show_widget, input),
   t3work_help: (input) => Effect.succeed(t3workHelp(input.topic)),

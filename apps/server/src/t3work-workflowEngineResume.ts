@@ -15,6 +15,8 @@
 
 import { appendResolvedEntry, resumeWorkflow, type WorkflowRef } from "@t3work/sdk";
 
+import { settleWorkflowRunFailure } from "./t3work-workflowRunFailure.ts";
+
 import type {
   LaunchWorkflowRecipeInput,
   WorkflowRunController,
@@ -77,13 +79,26 @@ export function makeControllerResume(deps: {
         error,
       ).catch(() => false);
       if (repaired) return;
-      input.registry.deleteRun(input.runId);
-      await input.lifecycle?.recordFailed();
-      await stepActivities.emitRun(
-        "failed",
-        error instanceof Error ? error.message : String(error),
-      );
-      await input.onError?.(error);
+      // Mirror the launch path's post-repair cancellation guard: a user Stop
+      // during the (long) repair await must not overwrite the stopped state or
+      // post a spurious failure notice for a deliberately cancelled run.
+      if (deps.isCancelled?.() ?? false) return;
+      // The run may have completed DURING repair (settle deletes it from the
+      // registry and posts the completion) with only post-completion bookkeeping
+      // failing afterwards — never overwrite that completion with a failure.
+      if (input.registry.getRun(input.runId) === undefined) return;
+      await settleWorkflowRunFailure({
+        runId: input.runId,
+        launchThreadId: input.launchThreadId,
+        error,
+        registry: input.registry,
+        lifecycle: input.lifecycle,
+        stepActivities,
+        dispatch: input.dispatch,
+        newId: input.newId,
+        nowIso: input.nowIso,
+        onError: input.onError,
+      });
     } finally {
       resuming = false;
     }

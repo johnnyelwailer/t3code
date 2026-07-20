@@ -12,6 +12,7 @@ import {
   parseWorkflowRepairChildResult,
 } from "./t3work-workflowSelfHeal.ts";
 import { validateWorkflowRepairCandidate } from "./t3work-workflowRepairGuardrails.ts";
+import { buildWorkflowRepairPrompt } from "./t3work-workflowRepairPrompt.ts";
 import { workflowAdmissionQueue } from "./t3work-workflowAdmissionQueue.ts";
 
 /** Race one hidden repair reply against its remaining shared deadline. */
@@ -83,20 +84,14 @@ export async function tryWorkflowRepair(
       workspaceRoot: input.runsRoot,
       generateRepair: async ({ source, failure, intent, args, workspaceRoot }) => {
         if (stopped()) throw new Error("Workflow was stopped");
-        const prompt = [
-          "Repair this t3work workflow. Return exact JSON only.",
-          'Return exact JSON only: {"safeToResume":true,"correctedWorkflow":"...","summary":"..."} or {"safeToResume":false,"cancelReason":"..."}.',
-          `Intent goal: ${intent.goal}`,
-          `Expected outcome: ${intent.expectedOutcome}`,
-          `Guardrails (must not widen): ${intent.guardrails.join(" | ")}`,
-          `Failure: ${failure}`,
-          ...(priorReasons.length === 0
-            ? []
-            : [`Prior repair failures: ${priorReasons.join(" | ")}`]),
-          `Args: ${JSON.stringify(args)}`,
-          `Workspace root: ${workspaceRoot}`,
-          `Source:\n${source}`,
-        ].join("\n\n");
+        const prompt = buildWorkflowRepairPrompt({
+          intent,
+          failure,
+          priorReasons,
+          args,
+          workspaceRoot,
+          source,
+        });
         if (input.generateRepairStructured !== undefined) {
           try {
             const generated = await input.generateRepairStructured({

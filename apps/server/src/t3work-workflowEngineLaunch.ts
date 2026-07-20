@@ -26,6 +26,7 @@ import {
   type WorkflowStepActivityEmitter,
 } from "./t3work-workflowEngineStepActivities.ts";
 import { deliverWorkflowCompletion } from "./t3work-workflowCompletionMessage.ts";
+import { settleWorkflowRunFailure } from "./t3work-workflowRunFailure.ts";
 import type { WorkflowRepairIntent } from "./t3work-workflowSelfHeal.ts";
 import { tryWorkflowRepair } from "./t3work-workflowEngineRepair.ts";
 import { toWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
@@ -195,7 +196,13 @@ export function createWorkflowRunController(
       newId: input.newId,
       nowIso: input.nowIso,
     });
-    await input.onComplete?.(result.result);
+    // The run itself completed — a throwing output sink must not flip it to
+    // "failed" after the completion message already posted (double-notify).
+    try {
+      await input.onComplete?.(result.result);
+    } catch (sinkError) {
+      console.warn(`[t3work-workflow] onComplete sink failed for run ${input.runId}:`, sinkError);
+    }
     input.registry.deleteRun(input.runId);
     return "completed";
   };
@@ -242,13 +249,23 @@ export async function launchWorkflowRecipe(
     // Stop may arrive while the hidden repair child is active. Do not overwrite the durable
     // stopped state with a later failure or leave callers waiting for the repair deadline.
     if (controller.isCancelled()) return { runId: input.runId, status: "suspended" };
-    input.registry.deleteRun(input.runId);
-    await input.lifecycle?.recordFailed();
-    await controller.stepActivities.emitRun(
-      "failed",
-      error instanceof Error ? error.message : String(error),
-    );
-    await input.onError?.(error);
+    // The run may have completed DURING repair (settle deletes it from the registry and posts
+    // the completion) with only post-completion bookkeeping failing afterwards — a late error
+    // must not overwrite the genuine completion notice with a failure.
+    if (input.registry.getRun(input.runId) === undefined)
+      return { runId: input.runId, status: "completed" };
+    await settleWorkflowRunFailure({
+      runId: input.runId,
+      launchThreadId: input.launchThreadId,
+      error,
+      registry: input.registry,
+      lifecycle: input.lifecycle,
+      stepActivities: controller.stepActivities,
+      dispatch: input.dispatch,
+      newId: input.newId,
+      nowIso: input.nowIso,
+      onError: input.onError,
+    });
     return { runId: input.runId, status: "failed" };
   }
 }

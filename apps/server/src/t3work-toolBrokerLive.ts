@@ -28,7 +28,7 @@ import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts
 import { buildThreadWorkspaceView } from "./t3work-toolBrokerViewWorkspace.ts";
 import { setBacklogAssigneeFilterForContext } from "./t3work-toolBrokerBacklogFilter.ts";
 import { makeRecipeToolHandlers } from "./t3work-toolBrokerRecipeTools.ts";
-import { makeWorkflowRunToolsForThread } from "./t3work-toolBrokerWorkflowRunLive.ts";
+import { makeWorkflowToolsForThread } from "./t3work-toolBrokerWorkflowToolsWiring.ts";
 import { T3workContextRefreshService } from "./t3work-contextRefreshService.ts";
 import { makeT3workWidgetShowBinder } from "./t3work-toolBrokerWidgetShow.ts";
 
@@ -40,6 +40,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
     "t3work.thread.rename",
     "t3work.thread.start_child",
     "t3work.workflow.run",
+    "t3work.workflow.status",
     "t3work.widget.show",
   ] as const;
   const query = yield* ProjectionSnapshotQuery;
@@ -109,9 +110,8 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       title,
     });
   const recipeToolsForThread = makeRecipeToolHandlers({ fileSystem, path, loadThreadProject });
-  // `t3work.workflow.run` (ephemeral workflows): the same durable-engine seams the recipe
-  // launch route uses, bound to the calling thread (undefined when the engine isn't wired).
-  const workflowRunToolsForThread = yield* makeWorkflowRunToolsForThread({
+  // Ephemeral workflow tools (undefined per-tool when unwired) — see the wiring module.
+  const workflowTools = yield* makeWorkflowToolsForThread({
     fileSystem,
     path,
     loadThreadProject,
@@ -177,8 +177,11 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
           setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,
         recipeTools: recipeToolsForThread(threadId),
-        ...(workflowRunToolsForThread
-          ? { workflowRunTools: workflowRunToolsForThread(threadId) }
+        ...(workflowTools.workflowRunToolsForThread
+          ? { workflowRunTools: workflowTools.workflowRunToolsForThread(threadId) }
+          : {}),
+        ...(workflowTools.workflowStatusToolsForThread
+          ? { workflowStatusTools: workflowTools.workflowStatusToolsForThread(threadId) }
           : {}),
       });
     });

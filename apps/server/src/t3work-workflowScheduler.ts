@@ -38,8 +38,12 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
+import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { t3workRandomUUID } from "./t3work-random.ts";
+import { deliverWorkflowFailure } from "./t3work-workflowCompletionMessage.ts";
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 import { makeSchedulerResume, orphanSleepingRun } from "./t3work-workflowSchedulerResume.ts";
 
@@ -198,6 +202,11 @@ export const T3workWorkflowSchedulerLive = Layer.effect(
   Effect.gen(function* () {
     const repo = yield* WorkflowRunRepository;
     const registry = yield* T3workWorkflowEngineRegistry;
+    // Optional on purpose: harnesses without an orchestration engine still get a
+    // working scheduler — orphaned runs then only log instead of messaging.
+    const orchestration = Option.getOrUndefined(
+      yield* Effect.serviceOption(OrchestrationEngineService),
+    );
 
     const listSleeping = (): Promise<ReadonlyArray<SchedulerSleepingRun>> =>
       Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
@@ -208,7 +217,24 @@ export const T3workWorkflowSchedulerLive = Layer.effect(
 
     const resume = makeSchedulerResume({
       getRun: (runId) => registry.getRun(runId),
-      orphan: (runId, correlationId) => orphanSleepingRun(repo, runId, correlationId),
+      orphan: (runId, correlationId) =>
+        orphanSleepingRun(
+          repo,
+          runId,
+          correlationId,
+          orchestration === undefined
+            ? undefined
+            : (launchThreadId, errorText) =>
+                deliverWorkflowFailure({
+                  launchThreadId,
+                  workflowRunId: runId,
+                  errorText,
+                  dispatch: (command) =>
+                    Effect.runPromise(orchestration.dispatch(command)).then(() => undefined),
+                  newId: () => t3workRandomUUID(),
+                  nowIso: () => DateTime.formatIso(DateTime.nowUnsafe()),
+                }),
+        ),
     });
 
     const scheduler = makeWorkflowScheduler({

@@ -3,9 +3,13 @@
  * `.workflow.ts` is launched, the host derives its read-only shape (SDK `deriveWorkflowShape` —
  * a static AST scan, no body execution) and posts it to the launching thread as a system message
  * carrying the `t3work.workflow.shape` view, so the user sees the plan before/while it runs. This
- * mirrors the broker's decision-card emission ({@link ./t3work-workflowEngineBroker.ts}); it is
- * best-effort — the caller reads the source (returning early when it can't), and a derivation
- * failure or an empty shape returns null here, so neither ever blocks the launch.
+ * mirrors the broker's decision-card emission ({@link ./t3work-workflowEngineBroker.ts}).
+ *
+ * A run must NEVER be invisible: a derivation failure or an empty shape (no phases, no steps —
+ * e.g. an underivable/malformed source that slipped past the precheck) still builds the SAME
+ * command with a minimal fallback shape (name from the workflow path, no phases/steps), so a plan
+ * card always appears. The caller reads the source and returns early only when it can't (unreadable
+ * file / headless launch) — that is the one case this never blocks.
  */
 
 import { CommandId, MessageId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
@@ -23,23 +27,41 @@ export interface WorkflowShapePreviewInput {
   readonly nowIso: string;
 }
 
+/** Basename of `workflowPath` without its `.workflow.ts`/`.ts` extension, or "workflow". */
+function deriveFallbackWorkflowName(workflowPath: string): string {
+  const base = workflowPath.split(/[/\\]/).pop() ?? "";
+  const withoutExtension = base.replace(/\.workflow\.ts$/, "").replace(/\.ts$/, "");
+  return withoutExtension.length > 0 ? withoutExtension : "workflow";
+}
+
 /**
  * Derive the workflow's shape from its source and build the system-message command that carries
- * the `workflow.shape` view. Returns null when the shape can't be derived or there is nothing to
- * show (no phases and no steps).
+ * the `workflow.shape` view. When the shape can't be derived or there is nothing to show (no
+ * phases and no steps), builds the same command with a minimal fallback shape instead — a run
+ * must never be invisible.
  */
 export function buildWorkflowShapePreviewCommand(
   input: WorkflowShapePreviewInput,
-): OrchestrationCommand | null {
-  let shape: ReturnType<typeof deriveWorkflowShape>;
+): OrchestrationCommand {
+  let derived: ReturnType<typeof deriveWorkflowShape> | null;
   try {
-    shape = deriveWorkflowShape({ absolutePath: input.workflowPath, sourceText: input.sourceText });
+    derived = deriveWorkflowShape({
+      absolutePath: input.workflowPath,
+      sourceText: input.sourceText,
+    });
   } catch {
-    return null;
+    derived = null;
   }
-  if (shape.phases.length === 0 && shape.steps.length === 0) {
-    return null;
-  }
+
+  const shape =
+    derived === null || (derived.phases.length === 0 && derived.steps.length === 0)
+      ? {
+          name: deriveFallbackWorkflowName(input.workflowPath),
+          description: undefined,
+          phases: [],
+          steps: [],
+        }
+      : derived;
 
   return {
     type: "thread.message.upsert",

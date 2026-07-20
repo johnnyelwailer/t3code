@@ -15,6 +15,7 @@
 
 import {
   type ModelSelection,
+  type OrchestrationCommand,
   type ProjectId,
   type ProviderInteractionMode,
   type RuntimeMode,
@@ -29,6 +30,7 @@ import type {
   WorkflowRunRepositoryShape,
 } from "./persistence/Services/WorkflowRuns.ts";
 import type { WorkflowRunLifecycle } from "./t3work-workflowEngineLaunch.ts";
+import { deliverWorkflowFailure } from "./t3work-workflowCompletionMessage.ts";
 import { workflowAdmissionQueue } from "./t3work-workflowAdmissionQueue.ts";
 
 export interface BuildRunningRowInput {
@@ -81,6 +83,11 @@ export function makeWorkflowRunLifecycle(opts: {
   readonly row: WorkflowRun;
   readonly nowIso: () => string;
   readonly onSleep?: () => void;
+  /** Present when the caller can post to the launching thread: orphaned runs
+   * (crash-recovered clock parks) then notify the conversation instead of
+   * failing silently with only a server log line. */
+  readonly dispatch?: (command: OrchestrationCommand) => Promise<void>;
+  readonly newId?: () => string;
 }): WorkflowRunLifecycle {
   const { repo, row } = opts;
   const admissionManaged = row.origin === "ephemeral";
@@ -175,6 +182,19 @@ export function makeWorkflowRunLifecycle(opts: {
             "workflow scheduler orphaned a sleeping run whose wake reply was resolved before settle",
             { runId: row.runId, correlationId },
           );
+          if (opts.dispatch !== undefined && opts.newId !== undefined) {
+            yield* Effect.promise(() =>
+              deliverWorkflowFailure({
+                launchThreadId: row.launchThreadId ?? undefined,
+                workflowRunId: row.runId,
+                errorText:
+                  "A crash interrupted this run's scheduled wake-up; it could not be resumed.",
+                dispatch: opts.dispatch!,
+                newId: opts.newId!,
+                nowIso: opts.nowIso,
+              }),
+            );
+          }
         }),
       ),
   };

@@ -15,6 +15,7 @@ import { buildBindingState, permissionMessage } from "./t3work-toolBrokerBinding
 import { dispatchT3workToolCall } from "./t3work-toolBrokerBindingDispatch.ts";
 import type { T3workRecipeToolHandlers } from "./t3work-toolBrokerBindingRecipes.ts";
 import type { T3workWorkflowRunToolHandlers } from "./t3work-toolBrokerWorkflowRunTools.ts";
+import type { T3workWorkflowStatusToolHandlers } from "./t3work-toolBrokerWorkflowStatusTool.ts";
 import type { T3workContextRefreshServiceShape } from "./t3work-contextRefreshService.ts";
 
 type CreateBindingInput<
@@ -39,6 +40,7 @@ type CreateBindingInput<
   readonly refreshContextBundle?: T3workContextRefreshServiceShape;
   readonly recipeTools?: T3workRecipeToolHandlers;
   readonly workflowRunTools?: T3workWorkflowRunToolHandlers;
+  readonly workflowStatusTools?: T3workWorkflowStatusToolHandlers;
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3workToolCallResult>;
 };
 
@@ -85,6 +87,7 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
       ...(input.refreshContextBundle ? { refreshContextBundle: input.refreshContextBundle } : {}),
       ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
       ...(input.workflowRunTools ? { workflowRunTools: input.workflowRunTools } : {}),
+      ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
       ...(input.showWidget ? { showWidget: input.showWidget } : {}),
     });
 
