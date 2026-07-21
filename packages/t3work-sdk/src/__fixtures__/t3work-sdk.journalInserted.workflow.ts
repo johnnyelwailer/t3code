@@ -19,6 +19,7 @@ export const meta = {
   description: "Two-tools workflow with a lint call inserted at the front (drift fixture).",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["demo.read"], // tool-group gate: the demo tools' group (Epic 25 §Tools)
 } as const;
 
 const input = Schema.decodeSync(Inputs)(args);

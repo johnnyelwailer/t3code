@@ -16,6 +16,9 @@ export const meta = {
   description: "Runs the sub-child workflow inline and upper-cases its greeting.",
   inputs: Inputs,
   outputs: Outputs,
+  // The child declares ["script"]; a nested workflow may declare a subset of the parent's
+  // capabilities but never a superset, so the parent must hold "script" too.
+  capabilities: ["script"],
 } as const;
 
 const input = Schema.decodeSync(Inputs)(args);

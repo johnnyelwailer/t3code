@@ -12,6 +12,7 @@ export const meta = {
   description: "Calls a tool that returns a bigint — must raise JournalSerializeError.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["demo.read"], // tool-group gate: the demo tools' group (Epic 25 §Tools)
 } as const;
 
 await tools.demo.bigintResult({});

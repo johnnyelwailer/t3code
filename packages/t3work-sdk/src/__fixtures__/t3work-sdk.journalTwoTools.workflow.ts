@@ -19,6 +19,7 @@ export const meta = {
   inputs: Inputs,
   outputs: Outputs,
   phases: [{ title: "Approve" }, { title: "Merge" }],
+  capabilities: ["demo.read"], // tool-group gate: the demo tools' group (Epic 25 §Tools)
 } as const;
 
 const input = Schema.decodeSync(Inputs)(args);

@@ -24,6 +24,9 @@ import type * as UserAskDeniedWorkflow from "./__fixtures__/t3work-sdk.userAskDe
 import type * as ParallelWorkflow from "./__fixtures__/t3work-sdk.parallelPrimitive.workflow.ts";
 import type * as PipelineWorkflow from "./__fixtures__/t3work-sdk.pipelinePrimitive.workflow.ts";
 import type * as SubParentWorkflow from "./__fixtures__/t3work-sdk.subParent.workflow.ts";
+import type * as SubParentNoCapsWorkflow from "./__fixtures__/t3work-sdk.subParentNoCaps.workflow.ts";
+import type * as ToolGroupObjectCapWorkflow from "./__fixtures__/t3work-sdk.toolGroupObjectCap.workflow.ts";
+import type * as ToolNoCapabilityWorkflow from "./__fixtures__/t3work-sdk.toolNoCapability.workflow.ts";
 import type * as WaitWorkflow from "./__fixtures__/t3work-sdk.waitPrimitive.workflow.ts";
 import type * as InsertedWorkflow from "./__fixtures__/t3work-sdk.journalInserted.workflow.ts";
 import type * as BigintResultWorkflow from "./__fixtures__/t3work-sdk.bigintResult.workflow.ts";
@@ -229,6 +232,15 @@ export const pipelineWorkflow = defineWorkflow<typeof PipelineWorkflow>(
 );
 export const subParentWorkflow = defineWorkflow<typeof SubParentWorkflow>(
   "./__fixtures__/t3work-sdk.subParent.workflow.ts",
+);
+export const subParentNoCapsWorkflow = defineWorkflow<typeof SubParentNoCapsWorkflow>(
+  "./__fixtures__/t3work-sdk.subParentNoCaps.workflow.ts",
+);
+export const toolNoCapabilityWorkflow = defineWorkflow<typeof ToolNoCapabilityWorkflow>(
+  "./__fixtures__/t3work-sdk.toolNoCapability.workflow.ts",
+);
+export const toolGroupObjectCapWorkflow = defineWorkflow<typeof ToolGroupObjectCapWorkflow>(
+  "./__fixtures__/t3work-sdk.toolGroupObjectCap.workflow.ts",
 );
 export const waitWorkflow = defineWorkflow<typeof WaitWorkflow>(
   "./__fixtures__/t3work-sdk.waitPrimitive.workflow.ts",

@@ -14,6 +14,11 @@ import * as NodeModule from "node:module";
 import * as Schema from "effect/Schema";
 
 import type { MessageBroker } from "./t3work-sdk.broker.ts";
+import {
+  assertChildCapabilitiesSubset,
+  assertToolGroupDeclared,
+  normalizeCapabilities,
+} from "./t3work-sdk.capabilityGating.ts";
 import type { DurableWorkflowRuntime } from "./t3work-sdk.durableRuntime.ts";
 import { WorkflowError } from "./t3work-sdk.errors.ts";
 import type { HandleDispatch } from "./t3work-sdk.handles.ts";
@@ -43,20 +48,19 @@ const defaultBroker: MessageBroker = {
   },
 };
 
-/** Engine feature strings declared in `meta.capabilities` (the ToolGroupRefs are filtered out). */
-function engineCapabilities(meta: WorkflowMeta): ReadonlySet<string> {
-  return new Set((meta.capabilities ?? []).filter((cap): cap is string => typeof cap === "string"));
-}
-
 function buildToolTree(
   refs: ReadonlyArray<T.AnyToolRef>,
   runtime: T.WorkflowRuntime,
+  declaredCapabilities: ReadonlySet<string>,
 ): Record<string, unknown> {
   const root: Record<string, unknown> = {};
   for (const ref of refs) {
-    setNestedValue(root, ref.id, (args: unknown) =>
-      runtime.callTool(ref as T.ToolRef<unknown, unknown>, args),
-    );
+    // The spec's call-site gate (§Tools): the ref's group is checked against
+    // meta.capabilities when the body CALLS the tool, mirroring the "user"/"script" gates.
+    setNestedValue(root, ref.id, (args: unknown) => {
+      assertToolGroupDeclared(ref, declaredCapabilities);
+      return runtime.callTool(ref as T.ToolRef<unknown, unknown>, args);
+    });
   }
   return root;
 }
@@ -84,6 +88,12 @@ export async function runPreparedBody(opts: {
   readonly broker?: MessageBroker;
   readonly launchThreadId?: string;
   readonly defaultModel?: T.ModelSelection;
+  /** Present for a sub-workflow run: the parent's normalized capability set. The child's
+   * declaration must be a subset — never a superset (Epic 25 §Capability gating). */
+  readonly parentCapabilities?: ReadonlySet<string>;
+  /** Reports this body's normalized capability set once meta is extracted (used by the
+   * runner to gate `workflow()` children against THIS body's capabilities). */
+  readonly onCapabilities?: (capabilities: ReadonlySet<string>) => void;
 }): Promise<unknown> {
   const source: WorkflowSource = {
     absolutePath: opts.ref.absolutePath,
@@ -100,7 +110,15 @@ export async function runPreparedBody(opts: {
           `Invalid inputs for workflow '${meta.name}'`,
         );
   // Build the Thread-model globals; capability-gate askUser/notifyUser against meta.capabilities.
-  const capabilities = engineCapabilities(meta);
+  const capabilities = normalizeCapabilities(meta);
+  if (opts.parentCapabilities !== undefined) {
+    assertChildCapabilitiesSubset({
+      childName: meta.name,
+      childCapabilities: capabilities,
+      parentCapabilities: opts.parentCapabilities,
+    });
+  }
+  opts.onCapabilities?.(capabilities);
   const threads = createThreadPrimitives({
     dispatch: opts.handleDispatch,
     broker: opts.broker ?? defaultBroker,
@@ -116,7 +134,7 @@ export async function runPreparedBody(opts: {
   });
   const globals = buildWorkflowGlobals({
     args: decodedArgs,
-    tools: buildToolTree(opts.toolRefs, opts.runtime),
+    tools: buildToolTree(opts.toolRefs, opts.runtime, capabilities),
     // The `"script"` engine capability gates whether `scripts.*` is bound AT ALL; it does not
     // gate which scripts are callable — that is limited by recipe ownership (Epic 25 §Scripts).
     scripts: capabilities.has("script") ? buildScriptTree(opts.scripts, opts.runtime) : {},
@@ -139,14 +157,19 @@ export async function runPreparedBody(opts: {
 /**
  * Build the workflow-body primitive set for a run: agent/wait/budget/etc. wired to the
  * durable runtime, plus a `workflow()` that runs a sub-workflow against a *nested* set whose
- * own `workflow()` throws (one level of nesting only).
+ * own `workflow()` throws (one level of nesting only). `captureCapabilities` must be fed the
+ * top-level body's normalized capability set (runPreparedBody's `onCapabilities`) so a
+ * `workflow()` child is intersected against the PARENT's declaration at invocation.
  */
 export function buildWorkflowPrimitives(opts: {
   readonly runtime: DurableWorkflowRuntime;
   readonly options: T.WorkflowRunOptions;
   readonly toolRefs: ReadonlyArray<T.AnyToolRef>;
   readonly scripts: Readonly<Record<string, T.AnyScriptRef>>;
-}): WorkflowPrimitives {
+}): {
+  readonly primitives: WorkflowPrimitives;
+  readonly captureCapabilities: (capabilities: ReadonlySet<string>) => void;
+} {
   const { runtime, options } = opts;
   const broker = options.broker ?? defaultBroker;
   const shared = {
@@ -158,6 +181,8 @@ export function buildWorkflowPrimitives(opts: {
     onPhase: options.onPhase ?? (() => {}),
     onLog: options.onLog ?? (() => {}),
   };
+  // Filled by the top-level body's meta extraction, which always precedes any workflow() call.
+  let parentCapabilities: ReadonlySet<string> = new Set();
   const nested = createWorkflowPrimitives(shared);
   const runSubWorkflow = (ref: T.WorkflowRef, args: unknown): Promise<unknown> =>
     runPreparedBody({
@@ -169,8 +194,14 @@ export function buildWorkflowPrimitives(opts: {
       primitives: nested,
       handleDispatch: runtime.handles,
       broker,
+      parentCapabilities,
       ...(options.launchThreadId === undefined ? {} : { launchThreadId: options.launchThreadId }),
       ...(options.defaultModel === undefined ? {} : { defaultModel: options.defaultModel }),
     });
-  return createWorkflowPrimitives({ ...shared, runSubWorkflow });
+  return {
+    primitives: createWorkflowPrimitives({ ...shared, runSubWorkflow }),
+    captureCapabilities: (capabilities) => {
+      parentCapabilities = capabilities;
+    },
+  };
 }

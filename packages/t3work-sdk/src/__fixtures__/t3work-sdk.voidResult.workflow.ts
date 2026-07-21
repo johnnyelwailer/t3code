@@ -12,6 +12,7 @@ export const meta = {
   description: "Calls a tool that returns undefined; the void result must round-trip.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["demo.read"], // tool-group gate: the demo tools' group (Epic 25 §Tools)
 } as const;
 
 const input = Schema.decodeSync(Inputs)(args);

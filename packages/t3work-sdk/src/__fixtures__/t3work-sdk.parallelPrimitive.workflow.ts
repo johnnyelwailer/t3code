@@ -15,6 +15,7 @@ export const meta = {
   description: "Barrier fanout; a failing thunk resolves to null in its slot.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["demo.read"], // tool-group gate: the demo tools' group (Epic 25 §Tools)
 } as const;
 
 const results = await parallel([

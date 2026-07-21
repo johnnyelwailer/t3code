@@ -106,7 +106,7 @@ export async function executeRun<O>(opts: {
       : { afterPrimitive: opts.options.afterPrimitive }),
   });
   try {
-    const primitives = buildWorkflowPrimitives({
+    const { primitives, captureCapabilities } = buildWorkflowPrimitives({
       runtime,
       options: opts.options,
       toolRefs,
@@ -119,6 +119,8 @@ export async function executeRun<O>(opts: {
       toolRefs,
       scripts,
       primitives,
+      // Feed the body's capability set back so workflow() children intersect against it.
+      onCapabilities: captureCapabilities,
       handleDispatch: runtime.handles,
       ...(opts.options.broker === undefined ? {} : { broker: opts.options.broker }),
       ...(opts.options.launchThreadId === undefined

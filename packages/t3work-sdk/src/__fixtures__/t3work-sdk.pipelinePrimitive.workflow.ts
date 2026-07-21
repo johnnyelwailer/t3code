@@ -12,6 +12,7 @@ export const meta = {
   description: "Two-stage pipeline: a tool-backed echo then a pure suffix transform.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["demo.read"], // tool-group gate: the demo tools' group (Epic 25 §Tools)
 } as const;
 
 const input = Schema.decodeSync(Inputs)(args);
