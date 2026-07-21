@@ -11,11 +11,7 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-import {
-  T3workToolBroker,
-  type T3workToolBrokerShape,
-  type T3workTurnToolContext,
-} from "./t3work-toolBroker.ts";
+import { T3workToolBroker, type T3workToolBrokerShape } from "./t3work-toolBroker.ts";
 import {
   createT3workPrelaunchToolBinding,
   createT3workThreadToolBinding,
@@ -25,7 +21,8 @@ import { makeActorSendMessage } from "./t3work-actorSendMessage.ts";
 import { buildPrelaunchView } from "./t3work-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3work-toolBrokerStartChild.ts";
 import { T3workThreadToolContextStore } from "./t3work-threadToolContextStore.ts";
-import { buildThreadWorkspaceView } from "./t3work-toolBrokerViewWorkspace.ts";
+import { makeLoadThreadView } from "./t3work-toolBrokerViewWorkspace.ts";
+import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 import { setBacklogAssigneeFilterForContext } from "./t3work-toolBrokerBacklogFilter.ts";
 import { bindChildProviderCatalog } from "./t3work-childProviderCatalog.ts";
 import { makeRecipeToolHandlers } from "./t3work-toolBrokerRecipeTools.ts";
@@ -58,6 +55,9 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
     yield* Effect.serviceOption(ProjectSetupScriptRunner),
   );
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
+  const workflowRegistry = Option.getOrUndefined(
+    yield* Effect.serviceOption(T3workWorkflowEngineRegistry),
+  );
   bindChildProviderCatalog(providerRegistry);
   const bindShowWidget = yield* makeT3workWidgetShowBinder();
 
@@ -74,35 +74,8 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       return { project, thread };
     });
 
-  const loadThreadView = (threadId: ThreadIdType, toolContext: T3workTurnToolContext) =>
-    Effect.gen(function* () {
-      const resolved = yield* loadThreadProject(threadId).pipe(Effect.option);
-      const thread = Option.isSome(resolved) ? resolved.value.thread : undefined;
-      const project = Option.isSome(resolved) ? resolved.value.project : undefined;
-      return {
-        surface: toolContext.surface,
-        state: toolContext.state,
-        project: project
-          ? {
-              id: project.id,
-              title: project.title,
-              workspaceRoot: project.workspaceRoot,
-            }
-          : null,
-        thread: thread
-          ? {
-              id: thread.id,
-              projectId: thread.projectId,
-              title: thread.title,
-              runtimeMode: thread.runtimeMode,
-              interactionMode: thread.interactionMode,
-              messageCount: thread.messages.length,
-              latestTurnId: thread.latestTurn?.turnId ?? null,
-              ...buildThreadWorkspaceView({ thread, project }),
-            }
-          : null,
-      };
-    });
+  // Extracted to t3work-toolBrokerViewWorkspace.ts (additive LOC budget) — behavior unchanged.
+  const loadThreadView = makeLoadThreadView(loadThreadProject);
 
   const renameThread = (threadId: ThreadIdType, title: string) =>
     orchestration.dispatch({
@@ -130,6 +103,9 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
       ...(sourceControlProviders ? { sourceControlProviders } : {}),
       ...(projectSetupScriptRunner ? { projectSetupScriptRunner } : {}),
       ...(providerRegistry ? { listProviders: () => providerRegistry.getProviders } : {}),
+      ...(workflowRegistry
+        ? { workflowLaunchThreadForChild: workflowRegistry.launchThreadForChildThread }
+        : {}),
     },
   });
 

@@ -34,6 +34,9 @@ export type T3workStartChildServices = {
   readonly projectSetupScriptRunner: ProjectSetupScriptRunner["Service"];
   /** Live provider snapshots, used to resolve a cross-provider child model selection. */
   readonly listProviders: () => Effect.Effect<ReadonlyArray<ServerProvider>>;
+  /** Resolves the launching thread of the workflow run that spawned `threadId` (undefined
+   * when the caller is not a live run's child) — see the workflow-engine registry. */
+  readonly workflowLaunchThreadForChild: (threadId: string) => string | undefined;
 };
 
 export type T3workStartChildLinkedRepositoryServices = Pick<
@@ -154,6 +157,42 @@ export const resolveLinkedRepositoryWorktree = (input: {
       repoRef: baseRef,
       branch: worktree.worktree.refName,
       worktreePath: worktree.worktree.path,
+    };
+  });
+
+/** The child worktree's setup-script phase as one call: no worktree → not requested; no
+ * runner service → failed; otherwise run and map the runner's result. Extracted from
+ * `makeStartChildThread` (additive LOC budget) — behavior unchanged. */
+export const resolveStartChildSetupScript = (input: {
+  readonly services: Partial<T3workStartChildServices>;
+  readonly threadId: import("@t3tools/contracts").ThreadId;
+  readonly projectId: string;
+  readonly worktreePath: string | null;
+}): Effect.Effect<{
+  readonly setupScriptStatus: "not-requested" | "no-script" | "started" | "failed";
+  readonly setupScriptTerminalId: string | null;
+}> =>
+  Effect.gen(function* () {
+    if (!input.worktreePath) {
+      return { setupScriptStatus: "not-requested" as const, setupScriptTerminalId: null };
+    }
+    if (!hasProjectSetupScriptRunner(input.services)) {
+      return { setupScriptStatus: "failed" as const, setupScriptTerminalId: null };
+    }
+    const setupResult = yield* startProjectSetupScript({
+      services: input.services,
+      threadId: input.threadId,
+      projectId: input.projectId,
+      worktreePath: input.worktreePath,
+    });
+    return {
+      setupScriptStatus:
+        setupResult.status === "started"
+          ? ("started" as const)
+          : setupResult.status === "no-script"
+            ? ("no-script" as const)
+            : ("failed" as const),
+      setupScriptTerminalId: setupResult.status === "started" ? setupResult.terminalId : null,
     };
   });
 
