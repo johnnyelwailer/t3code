@@ -15,6 +15,7 @@ export const meta = {
   description: "greet (journaled) → farewell (journaled); freshTicket removed (drift fixture).",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["script"],
 } as const;
 
 const input = Schema.decodeSync(Inputs)(args);

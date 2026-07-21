@@ -13,6 +13,9 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
   readonly appliesTo?: T.RecipeApplicabilitySpec;
   readonly allowedToolGroups?: ReadonlyArray<string>;
   readonly slashAlias?: string;
+  /** Recipe-private scripts (Epic 25 §Scripts): `scripts: { fetchPr }` makes `scripts.fetchPr`
+   * available inside this recipe's workflows (bodies must declare the `"script"` capability). */
+  readonly scripts?: Readonly<Record<string, T.AnyScriptRef>>;
   readonly defaultAction: T.WorkflowRef<RInputs, ROutputs>;
   readonly defaults?: Partial<RInputs>;
 }): T.RecipeRef<RInputs, ROutputs> {
@@ -24,6 +27,16 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
   }
   if (opts.version.trim().length === 0) {
     throw new Error(`Recipe '${opts.id}' must include a non-empty version.`);
+  }
+  for (const [name, script] of Object.entries(opts.scripts ?? {})) {
+    if (name.trim().length === 0) {
+      throw new Error(`Recipe '${opts.id}': script names must be non-empty.`);
+    }
+    if (typeof script !== "function" || script.kind !== "script") {
+      throw new Error(
+        `Recipe '${opts.id}': scripts.${name} is not a defineScript(...) result. Each entry must be a ScriptRef (e.g. \`export default defineScript({...})\` in scripts/${name}.ts).`,
+      );
+    }
   }
 
   const ref = Object.freeze({
@@ -39,6 +52,7 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
     ...(opts.appliesTo === undefined ? {} : { appliesTo: opts.appliesTo }),
     ...(opts.allowedToolGroups === undefined ? {} : { allowedToolGroups: opts.allowedToolGroups }),
     ...(opts.slashAlias === undefined ? {} : { slashAlias: opts.slashAlias }),
+    ...(opts.scripts === undefined ? {} : { scripts: Object.freeze({ ...opts.scripts }) }),
     defaultAction: opts.defaultAction,
     ...(opts.defaults === undefined ? {} : { defaults: opts.defaults }),
   }) as T.RecipeRef<RInputs, ROutputs>;

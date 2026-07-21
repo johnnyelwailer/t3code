@@ -1,4 +1,4 @@
-import type { WorkflowRef } from "./t3work-sdk.types.ts";
+import type { AnyScriptRef, WorkflowRef } from "./t3work-sdk.types.ts";
 
 export type RecipeTechnicalDepth = "low" | "medium" | "high";
 export type RecipeBrevity = "short" | "balanced" | "detailed";
@@ -49,6 +49,9 @@ export interface RecipeRef<Inputs = unknown, Outputs = unknown> {
   readonly appliesTo?: RecipeApplicabilitySpec;
   readonly allowedToolGroups?: ReadonlyArray<string>;
   readonly slashAlias?: string;
+  /** Recipe-private scripts (Epic 25 §Scripts): the launching recipe's registration becomes
+   * the workflow body's `scripts.*` tree. No global identity — scoped to this recipe. */
+  readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
   readonly defaultAction: WorkflowRef<Inputs, Outputs>;
   readonly defaults?: Partial<Inputs>;
   readonly Inputs?: Inputs;

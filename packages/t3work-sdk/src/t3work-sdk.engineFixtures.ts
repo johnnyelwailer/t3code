@@ -33,6 +33,7 @@ import type * as NeverRemovedWorkflow from "./__fixtures__/t3work-sdk.neverMarke
 import type * as NowWorkflow from "./__fixtures__/t3work-sdk.journalNow.workflow.ts";
 import type * as RandomWorkflow from "./__fixtures__/t3work-sdk.journalRandom.workflow.ts";
 import type * as ScriptWorkflow from "./__fixtures__/t3work-sdk.journalScript.workflow.ts";
+import type * as ScriptNoCapabilityWorkflow from "./__fixtures__/t3work-sdk.scriptNoCapability.workflow.ts";
 import type * as TwoToolsWorkflow from "./__fixtures__/t3work-sdk.journalTwoTools.workflow.ts";
 import type * as UuidWorkflow from "./__fixtures__/t3work-sdk.journalUuid.workflow.ts";
 import type * as VoidResultWorkflow from "./__fixtures__/t3work-sdk.voidResult.workflow.ts";
@@ -186,6 +187,9 @@ export const insertedWorkflow = defineWorkflow<typeof InsertedWorkflow>(
 );
 export const scriptWorkflow = defineWorkflow<typeof ScriptWorkflow>(
   "./__fixtures__/t3work-sdk.journalScript.workflow.ts",
+);
+export const scriptNoCapabilityWorkflow = defineWorkflow<typeof ScriptNoCapabilityWorkflow>(
+  "./__fixtures__/t3work-sdk.scriptNoCapability.workflow.ts",
 );
 export const voidResultWorkflow = defineWorkflow<typeof VoidResultWorkflow>(
   "./__fixtures__/t3work-sdk.voidResult.workflow.ts",

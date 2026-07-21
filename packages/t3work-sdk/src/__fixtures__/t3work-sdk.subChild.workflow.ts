@@ -12,6 +12,7 @@ export const meta = {
   description: "Greets a name via a script call; run as a sub-workflow.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["script"],
 } as const;
 
 const input = Schema.decodeSync(Inputs)(args);

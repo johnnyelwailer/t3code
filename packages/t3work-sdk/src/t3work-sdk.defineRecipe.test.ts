@@ -1,7 +1,9 @@
+import { Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   defineRecipe,
+  defineScript,
   getRegisteredRecipe,
   listRegisteredRecipes,
   type WorkflowRef,
@@ -81,5 +83,55 @@ describe("defineRecipe", () => {
       // @ts-expect-error — only project scope is supported; this also asserts the runtime guard.
       defineRecipe({ ...base, id: "ok2", scope: "personal" }),
     ).toThrow(/project-scoped/);
+  });
+
+  it("carries a frozen scripts registration of ScriptRefs (Epic 25 §Scripts)", () => {
+    const fetchPr = defineScript({
+      inputs: Schema.Struct({ url: Schema.String }),
+      outputs: Schema.Struct({ title: Schema.String }),
+      handler: async (args) => ({ title: `pr for ${args.url}` }),
+    });
+
+    const recipe = defineRecipe({
+      id: "define-recipe-scripts",
+      version: "0.1.0",
+      title: "Scripts",
+      shortDescription: "d",
+      surfaces: ["thread.context"],
+      scripts: { fetchPr },
+      defaultAction: prReviewAction,
+    });
+
+    expect(recipe.scripts).toBeDefined();
+    expect(recipe.scripts!.fetchPr).toBe(fetchPr);
+    expect(recipe.scripts!.fetchPr!.kind).toBe("script");
+    expect(Object.isFrozen(recipe.scripts)).toBe(true);
+  });
+
+  it("rejects scripts entries that are not defineScript(...) results", () => {
+    const base = {
+      version: "0.1.0",
+      title: "T",
+      shortDescription: "d",
+      surfaces: ["thread.context"],
+      defaultAction: prReviewAction,
+    } as const;
+
+    expect(() =>
+      defineRecipe({
+        ...base,
+        id: "define-recipe-bad-script",
+        // @ts-expect-error — a plain function is not a ScriptRef; also asserts the runtime guard.
+        scripts: { broken: async () => ({}) },
+      }),
+    ).toThrow(/scripts\.broken is not a defineScript/);
+
+    expect(() =>
+      defineRecipe({
+        ...base,
+        id: "define-recipe-empty-script-name",
+        scripts: { " ": undefined as never },
+      }),
+    ).toThrow(/script names must be non-empty/);
   });
 });

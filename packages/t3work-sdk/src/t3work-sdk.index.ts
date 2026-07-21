@@ -106,6 +106,7 @@ export type {
 } from "./t3work-sdk.workflowShape.ts";
 export type {
   AnyRecipeRef,
+  AnyScriptRef,
   EngineCapability,
   FetchLike,
   IntegrationClient,

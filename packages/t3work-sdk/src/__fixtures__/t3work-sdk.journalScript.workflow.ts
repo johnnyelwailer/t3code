@@ -18,6 +18,7 @@ export const meta = {
   description: "Greet via a journaled script and mint a fresh (never-replayed) ticket.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["script"],
 } as const;
 
 const input = Schema.decodeSync(Inputs)(args);

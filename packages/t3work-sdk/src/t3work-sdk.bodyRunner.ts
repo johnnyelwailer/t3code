@@ -117,7 +117,9 @@ export async function runPreparedBody(opts: {
   const globals = buildWorkflowGlobals({
     args: decodedArgs,
     tools: buildToolTree(opts.toolRefs, opts.runtime),
-    scripts: buildScriptTree(opts.scripts, opts.runtime),
+    // The `"script"` engine capability gates whether `scripts.*` is bound AT ALL; it does not
+    // gate which scripts are callable — that is limited by recipe ownership (Epic 25 §Scripts).
+    scripts: capabilities.has("script") ? buildScriptTree(opts.scripts, opts.runtime) : {},
     runtime: opts.runtime,
     primitives: opts.primitives,
     threads,
