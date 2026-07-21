@@ -64,6 +64,9 @@ export const WorkflowRun = Schema.Struct({
   status: WorkflowRunStatus,
   /** Launch origin — `recipe` (discovered recipe) or `ephemeral` (agent-authored, tool-launched). */
   origin: WorkflowRunOrigin,
+  /** The launching recipe's directory — rehydration re-resolves the recipe's private scripts
+   * from it (`resolveRecipeWorkflowScripts`). NULL for ephemeral/scriptless (or pre-043) runs. */
+  recipePath: Schema.NullOr(Schema.String),
   /** The thread the current ask is parked on (a spawned thread for agent() sub-threads). */
   pendingThreadId: Schema.NullOr(Schema.String),
   /** The correlation the run is parked on — an ask reply for `suspended`, the `waitUntil` sent

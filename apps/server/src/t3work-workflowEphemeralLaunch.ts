@@ -76,6 +76,9 @@ export interface PreparedWorkflowLaunchInput {
   readonly args: unknown;
   /** The launching recipe's private scripts (recipe launches only; Epic 25 §Scripts). */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
+  /** The launching recipe's directory — persisted on the run row so boot rehydration can
+   * re-resolve `scripts` after a restart (see t3work-workflowRehydrateScripts.ts). */
+  readonly recipePath?: string | undefined;
   /** Agent-supplied contract; present for ephemeral workflow-tool launches. */
   readonly intent?: WorkflowRunIntent;
   /** Bounded host repair attempts; zero disables repair. */
@@ -119,6 +122,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
         origin: input.origin,
+        ...(input.recipePath === undefined ? {} : { recipePath: input.recipePath }),
         nowIso: nowIso(),
       }),
       ...(input.origin === "ephemeral" ? { status: "queued" as const } : {}),

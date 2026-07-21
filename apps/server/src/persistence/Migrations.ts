@@ -55,6 +55,7 @@ import Migration0039 from "./Migrations/t3work-039_WorkflowOrigin.ts";
 import Migration0040 from "./Migrations/t3work-040_ProjectionThreadMessageSequence.ts";
 import Migration0041 from "./Migrations/t3work-041_ProjectionThreadRetention.ts";
 import Migration0042 from "./Migrations/t3work-042_ProjectionThreadChildStatus.ts";
+import Migration0043 from "./Migrations/t3work-043_WorkflowRecipePath.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -109,6 +110,7 @@ export const migrationEntries = [
   [40, "ProjectionThreadMessageSequence", Migration0040],
   [41, "ProjectionThreadRetention", Migration0041],
   [42, "ProjectionThreadChildStatus", Migration0042],
+  [43, "WorkflowRecipePath", Migration0043],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

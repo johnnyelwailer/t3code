@@ -35,6 +35,7 @@ const baseRow = (overrides: Partial<WorkflowRun>): WorkflowRun => ({
   interactionMode: "default",
   status: "suspended",
   origin: "ephemeral",
+  recipePath: null,
   pendingThreadId: threadId,
   pendingCorrelationId: "run-1:1",
   pendingKind: "user.input",

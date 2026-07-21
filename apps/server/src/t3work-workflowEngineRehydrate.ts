@@ -43,6 +43,7 @@ import {
 } from "./t3work-workflowEngineLaunch.ts";
 import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
+import { resolveRehydratedWorkflowScripts } from "./t3work-workflowRehydrateScripts.ts";
 import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
 import { resolveWorkflowAgentModel } from "./t3work-workflowAgentModelPolicy.ts";
 
@@ -100,7 +101,10 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     // sources — the reactor (suspended) and the scheduler (sleeping) — so a restored run drives
     // forward identically. `onSleep` re-arms the scheduler whenever a rebuilt run parks on a new
     // `waitUntil` after resuming.
-    const rebuildController = (run: (typeof suspended)[number]): void => {
+    const rebuildController = (
+      run: (typeof suspended)[number],
+      scripts: Readonly<Record<string, import("@t3work/sdk").AnyScriptRef>>,
+    ): void => {
       const lifecycle = makeWorkflowRunLifecycle({
         repo,
         row: run,
@@ -115,6 +119,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         runId: run.runId,
         workflowPath: run.workflowPath,
         args: run.args,
+        ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
         runsRoot,
         launchThreadId: run.launchThreadId ?? undefined,
         projectId: run.projectId,
@@ -155,12 +160,14 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
           repo.clearPending({ runId: run.runId, status: "cancelled", updatedAt: nowIso() }),
         ),
       );
+      const scripts = yield* resolveRehydratedWorkflowScripts(run);
       yield* Effect.promise(async () => {
         if (!(await lifecycle.recordActive())) return;
         await launchWorkflowRecipe({
           runId: run.runId,
           workflowPath: run.workflowPath,
           args: run.args,
+          ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
           runsRoot,
           launchThreadId: run.launchThreadId ?? undefined,
           projectId: run.projectId,
@@ -192,7 +199,8 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         continue;
       }
       // Rebuild, then restore the pending ask so the reactor resolves it as if set this uptime.
-      rebuildController(run);
+      // Recipe-private scripts are re-resolved from the persisted recipe path (migration 043).
+      rebuildController(run, yield* resolveRehydratedWorkflowScripts(run));
       registry.setPending(run.pendingThreadId, {
         runId: run.runId,
         correlationId: run.pendingCorrelationId,
@@ -211,7 +219,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
       }
       // Rebuild the resume closure; the scheduler (re-armed below) wakes it at `wake_at`. No
       // reactor pending ask — the clock, not an event, resolves a sleeping run.
-      rebuildController(run);
+      rebuildController(run, yield* resolveRehydratedWorkflowScripts(run));
       armed += 1;
     }
 
@@ -224,7 +232,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         });
         continue;
       }
-      rebuildController(run);
+      rebuildController(run, yield* resolveRehydratedWorkflowScripts(run));
       restored += 1;
     }
 

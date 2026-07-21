@@ -44,6 +44,9 @@ export interface BuildRunningRowInput {
   readonly interactionMode: ProviderInteractionMode;
   /** Launch origin; defaults to `recipe` (the ephemeral tool path passes `ephemeral`). */
   readonly origin?: WorkflowRun["origin"];
+  /** The launching recipe's directory (recipe launches with scripts); rehydration re-resolves
+   * the recipe's private `scripts.*` tree from it. Absent → NULL. */
+  readonly recipePath?: string | undefined;
   readonly nowIso: string;
 }
 
@@ -61,6 +64,7 @@ export function buildRunningWorkflowRunRow(input: BuildRunningRowInput): Workflo
     interactionMode: input.interactionMode,
     status: "running",
     origin: input.origin ?? "recipe",
+    recipePath: input.recipePath ?? null,
     pendingThreadId: null,
     pendingCorrelationId: null,
     pendingKind: null,

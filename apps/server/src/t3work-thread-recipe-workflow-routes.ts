@@ -145,7 +145,11 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         runId,
         workflowPath,
         args,
-        ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
+        // Persist the recipe dir alongside the resolved scripts so a restart can re-resolve
+        // them during rehydration (a scriptless launch needs neither).
+        ...(Object.keys(scripts).length === 0
+          ? {}
+          : { scripts, recipePath: input.launch.recipePath }),
         workspaceRoot: project.workspaceRoot,
         launchThreadId: threadIdInput,
         projectId: thread.projectId,
