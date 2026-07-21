@@ -23,7 +23,6 @@ export interface WorkflowShapePreviewInput {
   /** The `.workflow.ts` source, read by the caller (the route, via Effect `FileSystem`). */
   readonly sourceText: string;
   readonly runId: string;
-  readonly newId: () => string;
   readonly nowIso: string;
 }
 
@@ -68,7 +67,9 @@ export function buildWorkflowShapePreviewCommand(
     commandId: CommandId.make(`t3work-wf:shape:${input.runId}`),
     threadId: ThreadId.make(input.threadId),
     message: {
-      messageId: MessageId.make(input.newId()),
+      // Run-stable id: any re-emission for the same run (repair relaunch, duplicate launch
+      // surface) UPSERTS the one plan card in place instead of appending another "Plan:" card.
+      messageId: MessageId.make(`t3work-wf-shape:${input.runId}`),
       role: "system",
       text: `Plan: ${shape.name}`,
       turnId: null,
