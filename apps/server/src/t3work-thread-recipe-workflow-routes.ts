@@ -24,6 +24,7 @@ import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStor
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { toT3workError } from "./t3work-project-repository-utils.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
+import { resolveRecipeWorkflowScripts } from "./t3work-recipeWorkflowScripts.ts";
 import { launchPreparedWorkflow } from "./t3work-workflowEphemeralLaunch.ts";
 import {
   isProviderInteractionMode,
@@ -119,6 +120,14 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       }),
     );
 
+    // The launching recipe's private scripts (Epic 25 §Scripts): a `recipe.ts` recipe module's
+    // `scripts` registration becomes the body's `scripts.*` tree. recipe.json recipes (no
+    // module) resolve to an empty record and the engine keeps its `scripts: {}` default.
+    const scripts = yield* resolveRecipeWorkflowScripts({
+      recipePath: input.launch.recipePath,
+      workflowPath,
+    });
+
     // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
     // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
     // `t3work.workflow.run` tool drives through.
@@ -136,6 +145,7 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         runId,
         workflowPath,
         args,
+        ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
         workspaceRoot: project.workspaceRoot,
         launchThreadId: threadIdInput,
         projectId: thread.projectId,

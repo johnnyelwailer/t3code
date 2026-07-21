@@ -10,6 +10,7 @@ import type {
 } from "@t3tools/contracts";
 
 import {
+  type AnyScriptRef,
   type JournalStore,
   startWorkflow,
   type SuspendedResult,
@@ -42,6 +43,8 @@ export interface LaunchWorkflowRecipeInput {
   /** Absolute path to the recipe's `.workflow.ts` (resolved by discovery). */
   readonly workflowPath: string;
   readonly args: unknown;
+  /** The launching recipe's private scripts; bodies see them as `scripts.*` (Epic 25 §Scripts). */
+  readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
   readonly runsRoot: string;
   /** The chat the user launched from; `undefined` for a headless run (`thread` is undefined). */
   readonly launchThreadId: string | undefined;
@@ -167,7 +170,7 @@ export function createWorkflowRunController(
     runsRoot: input.runsRoot,
     broker,
     tools: [],
-    scripts: {},
+    scripts: input.scripts ?? {},
     defaultModel: toWorkflowModelSelection(
       input.defaultAgentModelSelection ?? input.modelSelection,
     ),

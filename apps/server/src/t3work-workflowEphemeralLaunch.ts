@@ -18,7 +18,7 @@ import type {
   ProviderInteractionMode,
   RuntimeMode,
 } from "@t3tools/contracts";
-import type { JournalStore, WorkflowRunIntent } from "@t3work/sdk";
+import type { AnyScriptRef, JournalStore, WorkflowRunIntent } from "@t3work/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -74,6 +74,8 @@ export interface PreparedWorkflowLaunchInput {
   readonly runId: string;
   readonly workflowPath: string;
   readonly args: unknown;
+  /** The launching recipe's private scripts (recipe launches only; Epic 25 §Scripts). */
+  readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
   /** Agent-supplied contract; present for ephemeral workflow-tool launches. */
   readonly intent?: WorkflowRunIntent;
   /** Bounded host repair attempts; zero disables repair. */
@@ -182,6 +184,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       runId: input.runId,
       workflowPath: input.workflowPath,
       args: input.args,
+      ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
       runsRoot: `${input.workspaceRoot}/.t3work-runs`,
       launchThreadId: input.launchThreadId,
       projectId: input.projectId,

@@ -187,6 +187,10 @@ export type ProjectRecipeDiscovered = {
   readonly actionViewSource?: string;
   readonly workflowPath?: string;
   readonly allowedToolGroups: ReadonlyArray<string>;
+  /** Names of the recipe-private scripts a `recipe.ts` module registers (Epic 25 §Scripts).
+   * The live ScriptRefs are re-materialized server-side at launch by re-importing the module;
+   * this field only announces they exist. Absent for `recipe.json` recipes. */
+  readonly scriptNames?: ReadonlyArray<string>;
 };
 
 export type DiscoverProjectRecipesRequest = {

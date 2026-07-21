@@ -162,6 +162,7 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
       recipePath: input.recipePath,
       workflowPath,
       allowedToolGroups: ref.allowedToolGroups ?? [],
+      ...(ref.scripts === undefined ? {} : { scriptNames: Object.keys(ref.scripts) }),
     } satisfies ProjectRecipeDiscovered);
   },
 );
