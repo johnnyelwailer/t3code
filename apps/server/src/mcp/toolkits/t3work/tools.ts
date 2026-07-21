@@ -163,13 +163,16 @@ export const T3workHelpTool = Tool.make("t3work_help", {
 });
 
 // Read-only listing of the project's saved recipe workflows. Routes to the
-// t3work.recipe.list broker tool.
-export const T3workRecipeListTool = Tool.make("t3work_recipe_list", {
+// t3work.recipe.list broker tool. This tool takes no arguments; declared via
+// Tool.dynamic with an explicit `{type:"object"}` JSON schema because an effect
+// `Schema.Struct({})` renders as `{anyOf:[{object},{array}]}` (an empty TS object
+// type means "any non-null"), and MCP clients reject a non-object tool inputSchema
+// on tools/list — which would take the whole toolkit down for that client.
+export const T3workRecipeListTool = Tool.dynamic("t3work_recipe_list", {
   description: "List the project's saved recipe workflows (id, title, paths). Read-only.",
-  parameters: Schema.Struct({}),
+  parameters: { type: "object", properties: {}, additionalProperties: false },
   success: Schema.Unknown,
   failure: T3workMcpToolError,
-  dependencies,
 });
 
 // Static, read-only validation of a workflow before running it — either an
