@@ -20,6 +20,7 @@ export const T3WORK_MCP_CANONICAL_TOOL_MAP = {
   t3work_start_child: "t3work.thread.start_child",
   t3work_workflow_run: "t3work.workflow.run",
   t3work_workflow_status: "t3work.workflow.status",
+  t3work_workflow_resume: "t3work.workflow.resume",
   t3work_show_widget: "t3work.widget.show",
   t3work_recipe_list: "t3work.recipe.list",
   t3work_recipe_validate: "t3work.recipe.validate",
@@ -128,6 +129,26 @@ export const T3workWorkflowStatusTool = Tool.make("t3work_workflow_status", {
   dependencies,
 });
 
+// Resume a paused/failed workflow run from its durable journal (same-prefix replay:
+// journaled steps return their recorded results; execution continues live past the
+// recorded frontier). Routes to the t3work.workflow.resume broker tool. Prefer this over
+// re-running a failed workflow from scratch when the executed prefix should be kept.
+export const T3workWorkflowResumeTool = Tool.make("t3work_workflow_resume", {
+  description:
+    "Resume a paused or failed workflow run from its journal. Pass the `runId` from " +
+    "t3work_workflow_run/t3work_workflow_status; optionally pass corrected `source` for an " +
+    "ephemeral run (same-prefix replay — do not change already-executed steps). Returns " +
+    "{runId, status: accepted|suspended|sleeping, hint}; observe progress via " +
+    "t3work_workflow_status.",
+  parameters: Schema.Struct({
+    runId: Schema.String,
+    source: Schema.optional(Schema.String),
+  }),
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
 // Render an inline, sandboxed HTML/SVG widget in the calling thread. This is a
 // current-thread operation: the handler deliberately goes through the bound
 // broker surface, so normal thread resolution and tool-group policy still apply.
@@ -200,6 +221,7 @@ export const T3workToolkit = Toolkit.make(
   T3workSendMessageTool,
   T3workWorkflowRunTool,
   T3workWorkflowStatusTool,
+  T3workWorkflowResumeTool,
   T3workShowWidgetTool,
   T3workHelpTool,
   T3workRecipeListTool,

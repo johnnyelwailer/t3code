@@ -38,6 +38,11 @@ import {
   T3WORK_WORKFLOW_STATUS_TOOL_ID,
 } from "./t3work-toolBrokerBindingWorkflowStatus.ts";
 import type { T3workWorkflowStatusToolHandlers } from "./t3work-toolBrokerWorkflowStatusTool.ts";
+import {
+  callT3workWorkflowResumeTool,
+  T3WORK_WORKFLOW_RESUME_TOOL_ID,
+} from "./t3work-toolBrokerBindingWorkflowResume.ts";
+import type { T3workWorkflowResumeToolHandlers } from "./t3work-toolBrokerWorkflowResumeTool.ts";
 import type { T3workContextRefreshServiceShape } from "./t3work-contextRefreshService.ts";
 
 export function dispatchT3workToolCall(input: {
@@ -57,6 +62,7 @@ export function dispatchT3workToolCall(input: {
   recipeTools?: T3workRecipeToolHandlers;
   workflowRunTools?: T3workWorkflowRunToolHandlers;
   workflowStatusTools?: T3workWorkflowStatusToolHandlers;
+  workflowResumeTools?: T3workWorkflowResumeToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3workToolCallResult>;
 }): ReturnType<T3workToolBinding["callTool"]> {
   const { server, tool, toolArgs, state } = input;
@@ -98,6 +104,13 @@ export function dispatchT3workToolCall(input: {
       scopeLabel: input.scopeLabel,
       toolArgs,
       ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
+    });
+  }
+  if (tool === T3WORK_WORKFLOW_RESUME_TOOL_ID) {
+    return callT3workWorkflowResumeTool({
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
     });
   }
   if (tool === "t3work.thread.start_child") {

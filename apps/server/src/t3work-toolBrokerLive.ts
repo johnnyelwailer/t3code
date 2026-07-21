@@ -43,6 +43,7 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
     "t3work.thread.start_child",
     "t3work.workflow.run",
     "t3work.workflow.status",
+    "t3work.workflow.resume",
     "t3work.widget.show",
     "t3work.recipe.list",
     "t3work.recipe.validate",
@@ -187,6 +188,9 @@ const createT3workToolBroker = Effect.fn("createT3workToolBroker")(function* () 
           : {}),
         ...(workflowTools.workflowStatusToolsForThread
           ? { workflowStatusTools: workflowTools.workflowStatusToolsForThread(threadId) }
+          : {}),
+        ...(workflowTools.workflowResumeToolsForThread
+          ? { workflowResumeTools: workflowTools.workflowResumeToolsForThread(threadId) }
           : {}),
       });
     });
