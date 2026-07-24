@@ -32,6 +32,7 @@ export const ProjectionThread = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
+  retention: Schema.optional(Schema.Literals(["ephemeral", "retained"])),
   latestTurnId: Schema.NullOr(TurnId),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -41,6 +42,8 @@ export const ProjectionThread = Schema.Struct({
   pendingUserInputCount: NonNegativeInt,
   hasActionableProposedPlan: NonNegativeInt,
   deletedAt: Schema.NullOr(IsoDateTime),
+  childStatus: Schema.optional(Schema.NullOr(Schema.String)),
+  childStatusUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
 });
 export type ProjectionThread = typeof ProjectionThread.Type;
 
@@ -92,6 +95,12 @@ export interface ProjectionThreadRepositoryShape {
   readonly deleteById: (
     input: DeleteProjectionThreadInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Background-only child status write; does not create an orchestration event. */
+  readonly updateChildStatus: (input: {
+    readonly threadId: ThreadId;
+    readonly status: string;
+    readonly updatedAt: IsoDateTime;
+  }) => Effect.Effect<void, ProjectionRepositoryError>;
 }
 
 /**

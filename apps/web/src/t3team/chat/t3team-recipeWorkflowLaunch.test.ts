@@ -1,0 +1,133 @@
+import { describe, expect, it, vi } from "vite-plus/test";
+
+import { launchPendingRecipeWorkflowTurn } from "~/t3team/chat/t3team-recipeWorkflowLaunch";
+import type { BackendApi } from "~/t3team/backend/t3team-types";
+import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
+
+function createBackend(): Pick<BackendApi, "launchRecipeWorkflow"> {
+  return {
+    launchRecipeWorkflow: vi.fn(async () => ({ ok: true })),
+  };
+}
+
+const TEST_WORKFLOW: T3TeamKickoffWorkflow = {
+  kind: "recipe",
+  recipeId: "create-contextual-recipe",
+  recipeVersion: "0.1.0",
+  kickoff: {
+    version: 1,
+    steps: [
+      {
+        kind: "collect-input",
+        id: "collect-brief",
+        request: {
+          kind: "text",
+          when: "missing-prompt",
+          promptRequest: {
+            title: "Recipe authoring kickoff",
+          },
+        },
+      },
+      {
+        kind: "agent",
+        id: "author",
+      },
+    ],
+  },
+  title: "Create a recipe for this context",
+  description: "Design a contextual recipe for the current surface.",
+  source: "bundled",
+  surface: "project.dashboard.backlog",
+  recipePath: "/tmp/project-alpha/.t3team/recipes/create-contextual-recipe",
+  workflowPath: "/tmp/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+};
+
+describe("launchPendingRecipeWorkflowTurn", () => {
+  it("launches the recipe workflow when a pending kickoff receives its first manual prompt", async () => {
+    const backend = createBackend();
+
+    await expect(
+      launchPendingRecipeWorkflowTurn({
+        backend: backend as BackendApi,
+        threadId: "thread-1",
+        kickoffPending: false,
+        kickoffWorkflow: TEST_WORKFLOW,
+        hasServerLaunchActivity: false,
+        kickoffMessage: "Build me a recipe for backlog risk hotspots.",
+        titleSeed: "Create a recipe for this context",
+        createdAt: "2026-05-27T18:00:00.000Z",
+        modelSelection: { instanceId: "codex" as never, model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        hasAttachments: false,
+      }),
+    ).resolves.toBe(true);
+
+    expect(backend.launchRecipeWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-1",
+        kickoffMessage: "Build me a recipe for backlog risk hotspots.",
+        launch: expect.objectContaining({
+          recipeId: "create-contextual-recipe",
+          kickoff: TEST_WORKFLOW.kickoff,
+        }),
+      }),
+    );
+  });
+
+  it("falls back when attachments are present because the launch route is still text-only", async () => {
+    const backend = createBackend();
+
+    await expect(
+      launchPendingRecipeWorkflowTurn({
+        backend: backend as BackendApi,
+        threadId: "thread-1",
+        kickoffPending: false,
+        kickoffWorkflow: TEST_WORKFLOW,
+        hasServerLaunchActivity: false,
+        kickoffMessage: "Build me a recipe for backlog risk hotspots.",
+        titleSeed: "Create a recipe for this context",
+        createdAt: "2026-05-27T18:00:00.000Z",
+        modelSelection: { instanceId: "codex" as never, model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        hasAttachments: true,
+      }),
+    ).resolves.toBe(false);
+
+    expect(backend.launchRecipeWorkflow).not.toHaveBeenCalled();
+  });
+
+  it("falls back when recipe metadata has no workflow path", async () => {
+    const backend = createBackend();
+    const promptOnlyWorkflow: T3TeamKickoffWorkflow = {
+      kind: "recipe",
+      recipeId: TEST_WORKFLOW.recipeId,
+      ...(TEST_WORKFLOW.recipeVersion ? { recipeVersion: TEST_WORKFLOW.recipeVersion } : {}),
+      ...(TEST_WORKFLOW.kickoff ? { kickoff: TEST_WORKFLOW.kickoff } : {}),
+      title: TEST_WORKFLOW.title,
+      description: TEST_WORKFLOW.description,
+      source: TEST_WORKFLOW.source,
+      surface: TEST_WORKFLOW.surface,
+    };
+
+    await expect(
+      launchPendingRecipeWorkflowTurn({
+        backend: backend as BackendApi,
+        threadId: "thread-1",
+        kickoffPending: false,
+        kickoffWorkflow: promptOnlyWorkflow,
+        hasServerLaunchActivity: false,
+        kickoffMessage: "Build me a recipe for backlog risk hotspots.",
+        titleSeed: "Create a recipe for this context",
+        createdAt: "2026-05-27T18:00:00.000Z",
+        modelSelection: { instanceId: "codex" as never, model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        hasAttachments: false,
+      }),
+    ).resolves.toBe(false);
+
+    expect(backend.launchRecipeWorkflow).not.toHaveBeenCalled();
+  });
+});

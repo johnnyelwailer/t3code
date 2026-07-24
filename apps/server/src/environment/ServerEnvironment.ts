@@ -7,6 +7,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import { getPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
+import { getPackSetupProfileDescriptors } from "../t3team-pack-setupProfileOverlay.ts";
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";
@@ -124,6 +126,8 @@ export const make = Effect.gen(function* () {
   const environmentId = EnvironmentId.make(environmentIdRaw);
   const cwdBaseName = path.basename(serverConfig.cwd).trim();
   const label = yield* resolveServerEnvironmentLabel({ cwdBaseName });
+  const appearance = getPackAppearanceOverlay();
+  const setupProfiles = getPackSetupProfileDescriptors();
 
   const descriptor: ExecutionEnvironmentDescriptor = {
     environmentId,
@@ -135,7 +139,10 @@ export const make = Effect.gen(function* () {
     serverVersion: packageJson.version,
     capabilities: {
       repositoryIdentity: true,
+      connectionProbe: true,
     },
+    ...(appearance ? { appearance } : {}),
+    ...(setupProfiles ? { setupProfiles } : {}),
   };
 
   return ServerEnvironment.of({

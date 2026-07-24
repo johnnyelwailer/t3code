@@ -1,6 +1,6 @@
 {
   "name": "t3",
-  "version": "0.0.27",
+  "version": "0.0.28",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -9,7 +9,7 @@
   },
   "bin": {
     "t3": "./dist/bin.mjs",
-    "t3work": "./dist/t3work-bin.mjs"
+    "t3team": "./dist/t3team-bin.mjs"
   },
   "files": [
     "dist"
@@ -17,10 +17,10 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/bin.ts",
-    "dev:t3work": "node --watch src/t3work-bin.ts",
+    "dev:t3team": "node --watch src/t3team-bin.ts",
     "build:bundle": "vp pack",
     "start": "node dist/bin.mjs",
-    "start:t3work": "node dist/t3work-bin.mjs",
+    "start:t3team": "node dist/t3team-bin.mjs",
     "typecheck": "tsgo --noEmit",
     "test": "vp test run"
   },
@@ -37,8 +37,9 @@
     "@t3tools/integrations-core": "workspace:*",
     "@t3tools/project-context": "workspace:*",
     "@t3tools/project-recipes": "workspace:*",
-    "@t3tools/t3work-skill-packs": "workspace:*",
-    "@t3work/sdk": "workspace:*",
+    "@t3tools/t3team-skill-packs": "workspace:*",
+    "@t3team/packs": "workspace:*",
+    "@t3team/sdk": "workspace:*",
     "effect": "catalog:",
     "node-pty": "^1.1.0",
     "zod": "^4.3.6"

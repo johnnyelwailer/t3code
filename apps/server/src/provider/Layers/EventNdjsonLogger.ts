@@ -12,6 +12,7 @@ import * as NodePath from "node:path";
 import type { ThreadId } from "@t3tools/contracts";
 import { RotatingFileSink } from "@t3tools/shared/logging";
 import { errorTag } from "@t3tools/shared/observability";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Logger from "effect/Logger";
@@ -24,6 +25,12 @@ import { toSafeThreadAttachmentSegment } from "../../attachmentStore.ts";
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MAX_FILES = 10;
 const DEFAULT_BATCH_WINDOW_MS = 200;
+/**
+ * Writers idle longer than this are closed and dropped so a long-lived server
+ * doesn't hold one open file handle (plus batching state) per thread ever
+ * logged. A later write for the same thread transparently re-opens the sink.
+ */
+const IDLE_WRITER_TTL_MS = 10 * 60 * 1000;
 const GLOBAL_THREAD_SEGMENT = "_global";
 const LOG_SCOPE = "provider-observability";
 const encodeUnknownJsonString = Schema.encodeUnknownEffect(Schema.UnknownFromJsonString);
@@ -48,8 +55,13 @@ interface ThreadWriter {
   close: () => Effect.Effect<void>;
 }
 
+interface ThreadWriterEntry {
+  readonly writer: ThreadWriter;
+  readonly lastUsedMs: number;
+}
+
 interface LoggerState {
-  readonly threadWriters: Map<string, ThreadWriter>;
+  readonly threadWriters: Map<string, ThreadWriterEntry>;
   readonly failedSegments: Set<string>;
 }
 
@@ -201,48 +213,53 @@ export const makeEventNdjsonLogger = Effect.fn("makeEventNdjsonLogger")(function
   const resolveThreadWriter = Effect.fn("resolveThreadWriter")(function* (
     threadSegment: string,
   ): Effect.fn.Return<ThreadWriter | undefined> {
-    return yield* SynchronizedRef.modifyEffect(stateRef, (state) => {
-      if (state.failedSegments.has(threadSegment)) {
-        return Effect.succeed([undefined, state] as const);
-      }
+    return yield* SynchronizedRef.modifyEffect(stateRef, (state) =>
+      Effect.gen(function* () {
+        const nowMs = yield* Clock.currentTimeMillis;
 
-      const existing = state.threadWriters.get(threadSegment);
-      if (existing) {
-        return Effect.succeed([existing, state] as const);
-      }
+        const nextThreadWriters = new Map(state.threadWriters);
+        for (const [segment, entry] of state.threadWriters) {
+          if (segment === threadSegment) continue;
+          if (nowMs - entry.lastUsedMs <= IDLE_WRITER_TTL_MS) continue;
+          yield* entry.writer.close();
+          nextThreadWriters.delete(segment);
+        }
 
-      return makeThreadWriter({
-        filePath: NodePath.join(NodePath.dirname(filePath), `${threadSegment}.log`),
-        maxBytes,
-        maxFiles,
-        batchWindowMs,
-        streamLabel,
-      }).pipe(
-        Effect.map((writer) => {
-          if (!writer) {
-            const nextFailedSegments = new Set(state.failedSegments);
-            nextFailedSegments.add(threadSegment);
-            return [
-              undefined,
-              {
-                ...state,
-                failedSegments: nextFailedSegments,
-              },
-            ] as const;
-          }
+        if (state.failedSegments.has(threadSegment)) {
+          return [undefined, { ...state, threadWriters: nextThreadWriters }] as const;
+        }
 
-          const nextThreadWriters = new Map(state.threadWriters);
-          nextThreadWriters.set(threadSegment, writer);
+        const existing = nextThreadWriters.get(threadSegment);
+        if (existing) {
+          nextThreadWriters.set(threadSegment, { writer: existing.writer, lastUsedMs: nowMs });
+          return [existing.writer, { ...state, threadWriters: nextThreadWriters }] as const;
+        }
+
+        const writer = yield* makeThreadWriter({
+          filePath: NodePath.join(NodePath.dirname(filePath), `${threadSegment}.log`),
+          maxBytes,
+          maxFiles,
+          batchWindowMs,
+          streamLabel,
+        });
+
+        if (!writer) {
+          const nextFailedSegments = new Set(state.failedSegments);
+          nextFailedSegments.add(threadSegment);
           return [
-            writer,
+            undefined,
             {
               ...state,
               threadWriters: nextThreadWriters,
+              failedSegments: nextFailedSegments,
             },
           ] as const;
-        }),
-      );
-    });
+        }
+
+        nextThreadWriters.set(threadSegment, { writer, lastUsedMs: nowMs });
+        return [writer, { ...state, threadWriters: nextThreadWriters }] as const;
+      }),
+    );
   });
 
   const write = Effect.fn("write")(function* (event: unknown, threadId: ThreadId | null) {
@@ -263,14 +280,14 @@ export const makeEventNdjsonLogger = Effect.fn("makeEventNdjsonLogger")(function
   const close = Effect.fn("close")(function* () {
     yield* SynchronizedRef.modifyEffect(stateRef, (state) =>
       Effect.gen(function* () {
-        for (const writer of state.threadWriters.values()) {
-          yield* writer.close();
+        for (const entry of state.threadWriters.values()) {
+          yield* entry.writer.close();
         }
 
         return [
           undefined,
           {
-            threadWriters: new Map<string, ThreadWriter>(),
+            threadWriters: new Map<string, ThreadWriterEntry>(),
             failedSegments: new Set<string>(),
           },
         ] as const;

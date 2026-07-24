@@ -282,6 +282,7 @@ export function projectEvent(
             interactionMode: payload.interactionMode,
             branch: payload.branch,
             worktreePath: payload.worktreePath,
+            retention: payload.retention ?? "retained",
             latestTurn: null,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
@@ -348,6 +349,12 @@ export function projectEvent(
               : {}),
             ...(payload.branch !== undefined ? { branch: payload.branch } : {}),
             ...(payload.worktreePath !== undefined ? { worktreePath: payload.worktreePath } : {}),
+            ...(payload.childStatus !== undefined
+              ? {
+                  childStatus: payload.childStatus,
+                  childStatusUpdatedAt: payload.childStatusUpdatedAt ?? payload.updatedAt,
+                }
+              : {}),
             updatedAt: payload.updatedAt,
           }),
         })),
@@ -400,7 +407,7 @@ export function projectEvent(
             role: payload.role,
             text: payload.text,
             ...(payload.attachments !== undefined ? { attachments: payload.attachments } : {}),
-            ...(payload.t3workExt !== undefined ? { t3workExt: payload.t3workExt } : {}),
+            ...(payload.t3teamExt !== undefined ? { t3teamExt: payload.t3teamExt } : {}),
             turnId: payload.turnId,
             streaming: payload.streaming,
             createdAt: payload.createdAt,
@@ -427,7 +434,7 @@ export function projectEvent(
                     ...(message.attachments !== undefined
                       ? { attachments: message.attachments }
                       : {}),
-                    ...(message.t3workExt !== undefined ? { t3workExt: message.t3workExt } : {}),
+                    ...(message.t3teamExt !== undefined ? { t3teamExt: message.t3teamExt } : {}),
                   }
                 : entry,
             )
@@ -441,6 +448,15 @@ export function projectEvent(
             updatedAt: event.occurredAt,
           }),
         };
+      });
+
+    case "thread.turn-start-requested":
+      return Effect.succeed({
+        ...nextBase,
+        threads: updateThread(nextBase.threads, event.payload.threadId, {
+          turnStartPending: true,
+          updatedAt: event.occurredAt,
+        }),
       });
 
     case "thread.session-set":
@@ -470,6 +486,7 @@ export function projectEvent(
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, {
             session,
+            turnStartPending: false,
             latestTurn:
               session.status === "running" && session.activeTurnId !== null
                 ? {

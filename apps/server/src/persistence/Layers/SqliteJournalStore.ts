@@ -25,7 +25,7 @@ import {
   type RunMeta,
   toResolvedWire,
   toWire,
-} from "@t3work/sdk";
+} from "@t3team/sdk";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";

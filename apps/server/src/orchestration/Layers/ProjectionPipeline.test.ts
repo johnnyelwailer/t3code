@@ -175,6 +175,64 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
   );
 });
 
+it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-message-ordering-")))(
+  "OrchestrationProjectionPipeline message ordering",
+  (it) => {
+    it.effect("orders two projected turns by event insertion sequence", () =>
+      Effect.gen(function* () {
+        const projectionPipeline = yield* OrchestrationProjectionPipeline;
+        const eventStore = yield* OrchestrationEventStore;
+        const sql = yield* SqlClient.SqlClient;
+        const threadId = ThreadId.make("thread-message-ordering");
+        const messages = [
+          ["user-1", "user", "2026-01-01T00:00:02.000Z"],
+          ["assistant-1", "assistant", "2026-01-01T00:00:01.000Z"],
+          ["user-2", "user", "2026-01-01T00:00:04.000Z"],
+          ["assistant-2", "assistant", "2026-01-01T00:00:03.000Z"],
+        ] as const;
+
+        for (const [index, [id, role, createdAt]] of messages.entries()) {
+          const eventNumber = index + 1;
+          yield* eventStore.append({
+            type: "thread.message-sent",
+            eventId: EventId.make(`evt-order-${eventNumber}`),
+            aggregateKind: "thread",
+            aggregateId: threadId,
+            occurredAt: `2026-01-01T00:00:0${eventNumber}.500Z`,
+            commandId: CommandId.make(`cmd-order-${eventNumber}`),
+            causationEventId: null,
+            correlationId: CorrelationId.make(`cmd-order-${eventNumber}`),
+            metadata: {},
+            payload: {
+              threadId,
+              messageId: MessageId.make(id),
+              role,
+              text: id,
+              turnId: TurnId.make(index < 2 ? "turn-1" : "turn-2"),
+              streaming: false,
+              createdAt,
+              updatedAt: createdAt,
+            },
+          });
+        }
+
+        yield* projectionPipeline.bootstrap;
+
+        const rows = yield* sql<{ readonly messageId: string }>`
+          SELECT message_id AS "messageId"
+          FROM projection_thread_messages
+          WHERE thread_id = ${threadId}
+          ORDER BY sequence ASC
+        `;
+        assert.deepEqual(
+          rows.map((row) => row.messageId),
+          ["user-1", "assistant-1", "user-2", "assistant-2"],
+        );
+      }),
+    );
+  },
+);
+
 it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-base-")))(
   "OrchestrationProjectionPipeline",
   (it) => {

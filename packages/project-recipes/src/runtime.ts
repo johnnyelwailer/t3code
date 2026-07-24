@@ -13,11 +13,11 @@ import { RecipeSurface } from "./surface.ts";
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
 
-export const PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH = "t3work.recipe.launch";
-export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP = "t3work.recipe.workflow.step";
-export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD = "t3work.recipe.workflow.card";
+export const PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH = "t3team.recipe.launch";
+export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP = "t3team.recipe.workflow.step";
+export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD = "t3team.recipe.workflow.card";
 export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD_ACTION =
-  "t3work.recipe.workflow.card-action";
+  "t3team.recipe.workflow.card-action";
 
 export const ProjectRecipeWorkflowAgentStep = Schema.Struct({
   kind: Schema.Literal("agent"),
@@ -134,7 +134,9 @@ export const ProjectRecipeWorkflowStepPhase = Schema.Literals([
   "started",
   "completed",
   "waiting",
+  "paused",
   "failed",
+  "cancelled",
 ]);
 export type ProjectRecipeWorkflowStepPhase = typeof ProjectRecipeWorkflowStepPhase.Type;
 
@@ -145,6 +147,8 @@ export const ProjectRecipeWorkflowStepActivityPayload = Schema.Struct({
   phase: ProjectRecipeWorkflowStepPhase,
   detail: Schema.optional(Schema.String),
   error: Schema.optional(Schema.String),
+  projectId: Schema.optional(Schema.String),
+  threadId: Schema.optional(Schema.String),
 });
 export type ProjectRecipeWorkflowStepActivityPayload =
   typeof ProjectRecipeWorkflowStepActivityPayload.Type;
@@ -246,6 +250,19 @@ export const LaunchProjectRecipeWorkflowResponse = Schema.Struct({
   completionActivity: Schema.optional(ProjectRecipeDeterministicCompletionActivity),
 });
 export type LaunchProjectRecipeWorkflowResponse = typeof LaunchProjectRecipeWorkflowResponse.Type;
+
+export const ControlProjectRecipeWorkflowRequest = Schema.Struct({
+  threadId: Schema.String,
+  workflowRunId: Schema.String,
+  action: Schema.Literals(["pause", "resume", "stop"]),
+});
+export type ControlProjectRecipeWorkflowRequest = typeof ControlProjectRecipeWorkflowRequest.Type;
+
+export const ControlProjectRecipeWorkflowResponse = Schema.Struct({
+  ok: Schema.Boolean,
+  status: Schema.Literals(["suspended", "sleeping", "paused", "cancelled"]),
+});
+export type ControlProjectRecipeWorkflowResponse = typeof ControlProjectRecipeWorkflowResponse.Type;
 
 export const SubmitProjectRecipeCardActionResponse = Schema.Struct({
   ok: Schema.Boolean,

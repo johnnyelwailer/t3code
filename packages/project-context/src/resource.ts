@@ -19,6 +19,7 @@ export const ExternalResourceRef = Schema.Struct({
   priority: Schema.optional(Schema.String),
   assignee: Schema.optional(Schema.String),
   updatedAt: Schema.optional(Schema.String),
+  labels: Schema.optional(Schema.Array(Schema.String)),
 });
 export type ExternalResourceRef = typeof ExternalResourceRef.Type;
 

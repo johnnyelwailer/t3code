@@ -5,7 +5,9 @@ import {
   UPSTREAM_REPO_SLUG,
   expectedUpstreamRemoteHint,
   isExpectedUpstreamRemoteUrl,
-} from "./t3work-upstream-source-of-truth.mjs";
+} from "./t3team-upstream-source-of-truth.mjs";
+
+const upstreamUrl = `https://github.com/${UPSTREAM_REPO_SLUG}.git`;
 
 function runGit(args, options = {}) {
   const { allowFail = false, stdio = "pipe" } = options;
@@ -31,18 +33,25 @@ function hasRemote(name) {
   return Boolean(runGit(["remote", "get-url", name], { allowFail: true }));
 }
 
-function assertCanonicalUpstreamRemote() {
+function ensureCanonicalUpstreamRemote() {
   const remoteUrl = runGit(["remote", "get-url", UPSTREAM_REMOTE_NAME], { allowFail: true });
   if (!remoteUrl) {
-    throw new Error(
-      `Remote '${UPSTREAM_REMOTE_NAME}' is missing. Add it with: ${expectedUpstreamRemoteHint()}`,
-    );
+    runGit(["remote", "add", UPSTREAM_REMOTE_NAME, upstreamUrl], { stdio: "inherit" });
+    console.log(`added ${UPSTREAM_REMOTE_NAME}: ${upstreamUrl}`);
+    return;
   }
   if (!isExpectedUpstreamRemoteUrl(remoteUrl)) {
     throw new Error(
       `Remote '${UPSTREAM_REMOTE_NAME}' must point to ${UPSTREAM_REPO_SLUG} (found: ${remoteUrl}).`,
     );
   }
+}
+
+export function runSetupUpstreamCommand() {
+  ensureGitRepo();
+  ensureCanonicalUpstreamRemote();
+  runGit(["fetch", "--prune", UPSTREAM_REMOTE_NAME], { stdio: "inherit" });
+  console.log("upstream remote ready");
 }
 
 function getUpstreamRef() {
@@ -164,7 +173,7 @@ function rebaseCurrent(upstreamRef) {
 
 export function runSyncUpstreamCommand(argv) {
   ensureGitRepo();
-  assertCanonicalUpstreamRemote();
+  ensureCanonicalUpstreamRemote();
   if (!hasRemote(UPSTREAM_REMOTE_NAME)) {
     throw new Error(
       `Remote '${UPSTREAM_REMOTE_NAME}' is missing. Add it with: ${expectedUpstreamRemoteHint()}`,
@@ -200,7 +209,7 @@ export function runSyncUpstreamCommand(argv) {
     return;
   }
 
-  console.log("Usage: node scripts/t3work-sync-upstream-fork.mjs <command> [flags]");
+  console.log("Usage: node scripts/t3team-sync-upstream-fork.mjs <command> [flags]");
   console.log("");
   console.log("Commands:");
   console.log("  status            Fetch and print ahead/behind against upstream");

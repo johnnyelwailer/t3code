@@ -39,6 +39,37 @@ describe("JiraApiClient", () => {
     );
   });
 
+  it("lists a board's quick filters", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        values: [
+          { id: 1, name: "My Open Issues", jql: "assignee = currentUser()" },
+          { id: 2, name: "Recently Updated", jql: "updated >= -1d" },
+        ],
+        isLast: true,
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    const result = await client.listBoardQuickFilters("42");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://test.atlassian.net/rest/agile/1.0/board/42/quickfilter?maxResults=100",
+      expect.any(Object),
+    );
+    expect(result.values).toEqual([
+      { id: 1, name: "My Open Issues", jql: "assignee = currentUser()" },
+      { id: 2, name: "Recently Updated", jql: "updated >= -1d" },
+    ]);
+  });
+
   it("aborts Jira requests that exceed the HTTP timeout", async () => {
     const timeoutController = new AbortController();
     const timeoutSignalSpy = vi

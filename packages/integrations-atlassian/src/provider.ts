@@ -16,6 +16,7 @@ import type { ExternalProject } from "@t3tools/integrations-core";
 import {
   AtlassianApiError,
   AtlassianAuthError,
+  AtlassianMirrorSourceUnavailableError,
   AtlassianNetworkError,
   type JiraIssue,
 } from "./client.ts";
@@ -78,10 +79,17 @@ export type AtlassianBacklogSavedFilter = {
   readonly favourite?: boolean;
 };
 
+export type AtlassianBacklogQuickFilter = {
+  readonly id: string;
+  readonly name: string;
+  readonly jql: string;
+};
+
 export type AtlassianBacklogSelection = {
   readonly boards: ReadonlyArray<AtlassianBacklogBoard>;
   readonly sprints: ReadonlyArray<AtlassianBacklogSprint>;
   readonly savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
+  readonly quickFilters: ReadonlyArray<AtlassianBacklogQuickFilter>;
   readonly selectedBoardId?: string;
   readonly selectedBoardColumns?: ReadonlyArray<AtlassianBacklogBoardColumn>;
   readonly selectedSprintId?: string;
@@ -264,6 +272,24 @@ function toBacklogSavedFilter(filter: {
     jql,
     ...(filter.owner?.displayName ? { ownerDisplayName: filter.owner.displayName } : {}),
     ...(filter.favourite !== undefined ? { favourite: filter.favourite } : {}),
+  };
+}
+
+function toBacklogQuickFilter(filter: {
+  id: string | number;
+  name: string;
+  jql?: string;
+}): AtlassianBacklogQuickFilter | undefined {
+  const id = normalizeOptionalId(filter.id);
+  const jql = typeof filter.jql === "string" ? filter.jql.trim() : "";
+  if (!id || filter.name.trim().length === 0 || jql.length === 0) {
+    return undefined;
+  }
+
+  return {
+    id,
+    name: filter.name,
+    jql,
   };
 }
 
@@ -605,6 +631,13 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
   id = "atlassian";
   kind = "atlassian";
   private clients: Map<string, { client: JiraApiClient; siteUrl: string }> = new Map();
+  // Instance-lifetime quick-filter catalog cache. The backlog sync walk calls
+  // listBacklogResources once per cursor page; without this, each page would
+  // re-fetch the board's quick filters (REST + possible GraphQL fallback).
+  private quickFilterCache: Map<
+    string,
+    { promise: Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> }
+  > = new Map();
 
   constructor(auth: JiraApiAuth | AtlassianIntegrationProviderConfig) {
     if ("kind" in auth) {
@@ -631,6 +664,9 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     provider.id = "atlassian";
     provider.kind = "atlassian";
     provider.clients = new Map();
+    // Object.create skips field initializers; every instance field must be
+    // assigned here or methods that touch it crash on this construction path.
+    provider.quickFilterCache = new Map();
     for (const auth of auths) {
       const key = auth.kind === "oauth" ? auth.cloudId : normalizeSiteUrl(auth.siteUrl);
       const clientAuth: JiraApiAuth =
@@ -702,11 +738,22 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
 
     const projectKey = project.key.replace(/"/g, '\\"');
     const assignedJql = `project = "${projectKey}" AND assignee = currentUser() ORDER BY updated DESC`;
-    const assignedResponse = await entry.client.searchIssues(assignedJql, input.limit ?? 50);
-    const assignedItems = normalizeIssueSearch(assignedResponse, entry.siteUrl);
+    // My Work must surface EVERY issue assigned to the user. The previous fixed
+    // page limit (50) silently dropped assigned issues — and therefore their
+    // children — beyond the most-recently-updated window, so a user with >50
+    // assignments never saw the rest. Paginate to completion (no caller limit ⇒
+    // walk all pages). Epic 33 replaces this live path with a server-side
+    // project mirror, which removes the per-poll pagination cost entirely.
+    const assignedSearch = await this.searchIssuesWithPagination(
+      entry.client,
+      assignedJql,
+      [],
+      input.limit,
+    );
+    const assignedItems = normalizeIssueSearch({ issues: assignedSearch.issues }, entry.siteUrl);
 
     const parentKeys = new Set<string>();
-    for (const issue of assignedResponse.issues) {
+    for (const issue of assignedSearch.issues) {
       if (!issue || typeof issue !== "object") continue;
       const fields = (issue as { fields?: unknown }).fields;
       if (!fields || typeof fields !== "object") continue;
@@ -749,6 +796,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       boardId?: string;
       sprintId?: string;
       filterJql?: string;
+      quickFilterIds?: ReadonlyArray<string>;
       cursor?: string;
     },
   ): Promise<ResourcePage> {
@@ -769,6 +817,19 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     const requestedSprintId = input.sprintId?.trim();
     if (requestedSprintId) {
       backlogJqlParts.push(buildSprintJqlClause(requestedSprintId));
+    }
+    const requestedQuickFilterIds = (input.quickFilterIds ?? [])
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    if (requestedQuickFilterIds.length > 0 && input.boardId?.trim()) {
+      const boardQuickFilters = await this.listBacklogQuickFilters(entry, input.boardId.trim());
+      for (const quickFilterId of requestedQuickFilterIds) {
+        const quickFilter = boardQuickFilters.find((filter) => filter.id === quickFilterId);
+        const quickFilterJql = stripJqlOrderBy(quickFilter?.jql);
+        if (quickFilterJql) {
+          backlogJqlParts.push(`(${quickFilterJql})`);
+        }
+      }
     }
     const backlogJql = `${backlogJqlParts.join(" AND ")} ORDER BY updated DESC`;
     const [estimateField, sprintField] = await Promise.all([
@@ -993,12 +1054,12 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
   }): Promise<AtlassianBacklogSelection> {
     const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
     if (!entry) {
-      return { boards: [], sprints: [], savedFilters: [] };
+      return { boards: [], sprints: [], savedFilters: [], quickFilters: [] };
     }
 
     const project = await this.findProjectById(input.externalProjectId, entry.client);
     if (!project) {
-      return { boards: [], sprints: [], savedFilters: [] };
+      return { boards: [], sprints: [], savedFilters: [], quickFilters: [] };
     }
 
     const [savedFilters, projectBoards] = await Promise.all([
@@ -1042,11 +1103,30 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         boards,
         sprints: fallbackCatalog.sprints,
         savedFilters,
+        quickFilters: [],
         ...(selectedSprint ? { selectedSprintId: selectedSprint.id } : {}),
         ...(selectedFilter ? { selectedFilterId: selectedFilter.id } : {}),
         ...(selectedFilter ? { selectedFilterJql: selectedFilter.jql } : {}),
       };
     }
+
+    // Catalog listing degrades gracefully: a failed fetch here should not
+    // take down the whole selection payload. (The resource path in
+    // listBacklogResources deliberately does NOT degrade — dropping quick
+    // filter clauses there would silently return unfiltered data.)
+    const quickFilters = await this.listBacklogQuickFilters(entry, selectedBoard.id).catch(
+      (error: unknown) => {
+        // A silent [] is indistinguishable from a board that simply has no
+        // filters, so leave a trace. This package is Promise-based (no
+        // Effect logger in scope), so console is the trace.
+        // @effect-diagnostics-next-line globalConsole:off
+        console.warn(
+          `[t3team-atlassian] quick filter fetch failed for board ${selectedBoard.id}:`,
+          error instanceof Error ? error.message : error,
+        );
+        return [] as ReadonlyArray<AtlassianBacklogQuickFilter>;
+      },
+    );
 
     const boardSprints = (
       await entry.client.listBoardSprints(selectedBoard.id).catch(() => ({ values: [] }))
@@ -1073,6 +1153,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       boards,
       sprints,
       savedFilters,
+      quickFilters,
       selectedBoardId: selectedBoard.id,
       ...(selectedBoardColumns && selectedBoardColumns.length > 0 ? { selectedBoardColumns } : {}),
       ...(selectedSprint ? { selectedSprintId: selectedSprint.id } : {}),
@@ -1103,6 +1184,109 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       ...(estimateField ? { estimateFieldLabel: estimateField.label } : {}),
       canCreateSubtasks: subtaskIssueType !== null,
     };
+  }
+
+  /**
+   * Fetches one page of ALL issues in a project across ALL status categories
+   * (including Done), ordered by updated ASC. Used exclusively by the
+   * whole-project mirror sync (Epic 33 Wave 2).
+   *
+   * @param updatedWithinMinutes - When set, restricts to issues updated in the
+   *   last N minutes via a RELATIVE JQL bound (`updated >= -Nm`). Relative is
+   *   deliberate: Jira evaluates it server-side in its own clock, so we avoid
+   *   JQL's absolute-datetime format constraints (it rejects ISO-8601 with
+   *   T/Z/millis) and any server/Jira timezone or clock skew. Omit for a full
+   *   backfill / reconcile walk over the entire project.
+   * @param cursor - Opaque page token from a previous call's `nextCursor`.
+   * @param limit - Page size; defaults to jiraIssueSearchPageSize.
+   * @throws AtlassianMirrorSourceUnavailableError when no client is registered
+   *   for the account or the project lookup does not find the project. An
+   *   empty page ({ items: [] }) therefore always means "the project genuinely
+   *   has no (matching) issues", so the reconcile prune can trust it.
+   */
+  async listProjectMirrorPage(input: {
+    account: IntegrationAccountRef;
+    externalProjectId: string;
+    updatedWithinMinutes?: number;
+    cursor?: string;
+    limit?: number;
+  }): Promise<{
+    items: ReadonlyArray<ReturnType<typeof normalizeIssueSearch>[number]>;
+    nextCursor: string | undefined;
+  }> {
+    const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
+    if (!entry) {
+      throw new AtlassianMirrorSourceUnavailableError({
+        reason: "client-unavailable",
+        externalProjectId: input.externalProjectId,
+        message: `No Atlassian client available for account "${input.account.id}".`,
+      });
+    }
+
+    const project = await this.findProjectById(input.externalProjectId, entry.client);
+    if (!project) {
+      throw new AtlassianMirrorSourceUnavailableError({
+        reason: "project-not-found",
+        externalProjectId: input.externalProjectId,
+        message: `Atlassian project "${input.externalProjectId}" was not found on ${entry.siteUrl}.`,
+      });
+    }
+
+    const [estimateField, sprintField] = await Promise.all([
+      this.resolveEstimateField(entry.client),
+      this.resolveSprintField(entry.client),
+    ]);
+
+    const projectKey = project.key.replace(/"/g, '\\"');
+    const jqlParts = [`project = "${projectKey}"`];
+    if (input.updatedWithinMinutes && input.updatedWithinMinutes > 0) {
+      jqlParts.push(`updated >= -${Math.floor(input.updatedWithinMinutes)}m`);
+    }
+    const jql = `${jqlParts.join(" AND ")} ORDER BY updated ASC`;
+
+    const extraFields: string[] = [
+      ...(estimateField ? [estimateField.id] : []),
+      ...(sprintField ? [sprintField.id] : []),
+      "timeoriginalestimate",
+      "timeestimate",
+      "aggregatetimeoriginalestimate",
+      "aggregatetimeestimate",
+    ];
+
+    const response = await entry.client.searchIssues(
+      jql,
+      input.limit ?? jiraIssueSearchPageSize,
+      extraFields,
+      input.cursor,
+    );
+
+    const items = response.issues.map((issue) =>
+      this.toBacklogItem(issue as JiraIssue, entry.siteUrl, estimateField, sprintField),
+    );
+
+    return {
+      items,
+      nextCursor:
+        response.nextPageToken && response.isLast !== true ? response.nextPageToken : undefined,
+    };
+  }
+
+  /**
+   * Resolve the Jira accountId of the viewer authenticated by `account`.
+   *
+   * `account.id` is the Jira site/cloud id used to select the client — it is
+   * NOT the user's `atlassianAccountId`. My Work needs the latter to filter
+   * the mirror by `assignee_account_id`, so this calls `/rest/api/3/myself`.
+   * Callers should cache the result per `account.id` (stable for the life of
+   * the OAuth connection) rather than calling this on every request.
+   */
+  async resolveViewerAccountId(input: {
+    account: IntegrationAccountRef;
+  }): Promise<string | undefined> {
+    const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
+    if (!entry) return undefined;
+    const myself = await entry.client.getMyself();
+    return myself.accountId;
   }
 
   async searchAssignableUsers(
@@ -1464,6 +1648,102 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     } catch {
       return [];
     }
+  }
+
+  private listBacklogQuickFilters(
+    entry: { client: JiraApiClient; siteUrl: string },
+    boardId: string,
+  ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
+    const cacheKey = `${entry.siteUrl}:${boardId}`;
+    const cached = this.quickFilterCache.get(cacheKey);
+    if (cached) {
+      return cached.promise;
+    }
+    // Successful catalogs are cached for the life of this provider instance
+    // (the server constructs a fresh provider per request/sync walk, so this
+    // is bounded). Never expiring mid-instance keeps the composed JQL stable
+    // across a paginated walk — Jira's nextPageToken is bound to the exact
+    // JQL that produced it, so the catalog must not change between pages.
+    // Failed fetches are NOT cached (and reject): callers that filter by
+    // quick filters must fail loudly rather than silently drop the clauses,
+    // and the next call retries instead of reading a false-empty catalog.
+    const promise = this.fetchBacklogQuickFilters(entry.client, boardId);
+    promise.catch(() => {
+      this.quickFilterCache.delete(cacheKey);
+    });
+    this.quickFilterCache.set(cacheKey, { promise });
+    return promise;
+  }
+
+  private async fetchBacklogQuickFilters(
+    client: JiraApiClient,
+    boardId: string,
+  ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
+    const response = await client.listBoardQuickFilters(boardId);
+    const quickFilters = (response.values ?? [])
+      .map((filter) => toBacklogQuickFilter(filter))
+      .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
+
+    if (quickFilters.length > 0) {
+      return quickFilters;
+    }
+
+    // Boards on Jira's "new board experience" store custom filters that the
+    // REST quickfilter endpoint never returns (200 + empty values). Jira's
+    // own UI reads them via an internal GraphQL field, so fall back to that
+    // only when the REST call succeeded but came back empty.
+    return await this.listBacklogCustomFiltersViaGraphql(client, boardId);
+  }
+
+  private async listBacklogCustomFiltersViaGraphql(
+    client: JiraApiClient,
+    boardId: string,
+  ): Promise<ReadonlyArray<AtlassianBacklogQuickFilter>> {
+    // OAuth clients cannot reach the GraphQL gateway at all — a permanent
+    // condition, not a failure. Those accounts can never have custom filters
+    // in their catalog (and so none selected), so an empty catalog is the
+    // truthful answer, not a degraded one.
+    if (!client.supportsGraphql) {
+      return [];
+    }
+    const cloudId = await client.getCloudId();
+    const boardAri = `ari:cloud:jira-software:${cloudId}:board/${boardId}`;
+    const response = await client.postGraphql<{
+      data?: {
+        boardScope?: {
+          customFiltersConfig?: {
+            customFilters?: ReadonlyArray<{
+              id: string;
+              name: string;
+              jql?: string;
+              description?: string;
+            }>;
+          };
+        };
+      };
+      errors?: ReadonlyArray<{ message: string }>;
+    }>({
+      query: `query BoardCustomFilters($id: ID!) { boardScope(boardId: $id) { customFiltersConfig { customFilters { id name jql description } } } }`,
+      variables: { id: boardAri },
+    });
+
+    // A well-formed GraphQL error means the internal customFilters field is
+    // not available for this tenant/board — a stable condition, so an empty
+    // catalog is correct. Transport-level failures (network, 429, 5xx) throw
+    // past this method instead: they are transient, and swallowing them here
+    // would let the quick-filter cache pin a false-empty catalog.
+    if (response.errors && response.errors.length > 0) {
+      // @effect-diagnostics-next-line globalConsole:off
+      console.warn(
+        `[t3team-atlassian] custom filter GraphQL fallback returned errors for board ${boardId}: ${response.errors[0]?.message}`,
+      );
+      return [];
+    }
+
+    const customFilters = response.data?.boardScope?.customFiltersConfig?.customFilters ?? [];
+    return customFilters
+      .map((filter) => toBacklogQuickFilter(filter))
+      .filter((filter): filter is AtlassianBacklogQuickFilter => filter !== undefined);
   }
 
   private async listProjectBoards(
