@@ -12,13 +12,33 @@
  * recipes." Here the drop also produces a diagnostic naming the pack.
  */
 
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import type { ProjectRecipeDiscovered, ProjectRecipeRenderContext } from "@t3tools/project-recipes";
 
 import { getPackRecipeSources, type PackRecipeSource } from "./t3work-packRecipeSources.ts";
 import { discoverProjectRecipeAtPath } from "./t3work-projectRecipeDiscoveryRecipe.ts";
+
+/**
+ * One-line rendering of a load failure. Walks to the INNERMOST `cause` first: `Effect.tryPromise`
+ * wraps the real error in a generic wrapper, and the wrapper's message ("An error occurred in
+ * Effect.tryPromise") is exactly the uninformative text that made this failure mode invisible.
+ */
+function describeLoadFailure(cause: Cause.Cause<unknown>): string {
+  let error: unknown = Cause.squash(cause);
+  const seen = new Set<unknown>();
+  while (error && typeof error === "object" && !seen.has(error)) {
+    seen.add(error);
+    const nested = (error as { readonly cause?: unknown }).cause;
+    if (nested === undefined || nested === null) break;
+    error = nested;
+  }
+  const message = (error as { readonly message?: unknown })?.message ?? error;
+  return String(message).split("\n")[0] || "unknown error";
+}
 
 const discoverOne = Effect.fn("discoverPackRecipeAtSource")(function* (input: {
   readonly source: PackRecipeSource;
@@ -49,12 +69,25 @@ const discoverOne = Effect.fn("discoverPackRecipeAtSource")(function* (input: {
       packId: source.packId,
       packScope: source.packScope,
     },
-  }).pipe(Effect.catch(() => Effect.succeed(Option.none<ProjectRecipeDiscovered>())));
+  }).pipe(Effect.exit);
 
-  if (!Option.isSome(discovered)) {
+  // A recipe whose module fails to load stays isolated — it never breaks the page or the other
+  // recipes — but the failure MUST be reported. Swallowing it makes a total library outage (e.g. the
+  // pack's bare imports not resolving at all) indistinguishable from an ordinary empty recipe list.
+  // Interruption is not a recipe defect, so it still propagates instead of becoming a diagnostic.
+  if (Exit.isFailure(discovered)) {
+    if (Cause.hasInterruptsOnly(discovered.cause)) {
+      return yield* Effect.failCause(discovered.cause);
+    }
+    return {
+      recipe: Option.none<ProjectRecipeDiscovered>(),
+      diagnostic: `Pack ${source.packId} recipe ${source.declaredId} at ${source.recipeRoot} failed to load: ${describeLoadFailure(discovered.cause)}`,
+    };
+  }
+  if (!Option.isSome(discovered.value)) {
     return { recipe: Option.none<ProjectRecipeDiscovered>() };
   }
-  const recipe: ProjectRecipeDiscovered = discovered.value;
+  const recipe: ProjectRecipeDiscovered = discovered.value.value;
   if (recipe.id !== source.declaredId) {
     return {
       recipe: Option.none<ProjectRecipeDiscovered>(),
