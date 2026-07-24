@@ -1120,6 +1120,8 @@ function ChatViewContent(props: ChatViewProps) {
   const onOpenThread = routeKind === "server" ? props.onOpenThread : undefined;
   const onBack = routeKind === "server" ? props.onBack : undefined;
   const headerAccessory = routeKind === "server" ? props.headerAccessory : undefined;
+  const titleBarControlsAccessory =
+    routeKind === "server" ? props.titleBarControlsAccessory : undefined;
   const hideHeader = routeKind === "server" ? props.hideHeader : false;
   const hideBranchToolbar = routeKind === "server" ? props.hideBranchToolbar : false;
   const minimalComposer = routeKind === "server" ? props.minimalComposer : false;
@@ -5238,6 +5240,7 @@ function ChatViewContent(props: ChatViewProps) {
           onToggle={toggleRightPanelMaximized}
         />
       ) : null}
+      {titleBarControlsAccessory}
       {panelToggleControls}
     </div>
   );

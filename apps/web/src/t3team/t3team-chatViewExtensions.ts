@@ -10,6 +10,7 @@ export type ChatViewT3TeamExtensionProps = {
   readonly syntheticMessages?: ReadonlyArray<ChatMessage>;
   readonly onBack?: () => void;
   readonly headerAccessory?: ReactNode;
+  readonly titleBarControlsAccessory?: ReactNode;
   readonly hideHeader?: boolean;
   readonly hideBranchToolbar?: boolean;
   readonly minimalComposer?: boolean;

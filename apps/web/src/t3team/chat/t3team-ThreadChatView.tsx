@@ -18,7 +18,7 @@ export interface ThreadChatViewProps {
   projectWorkspaceRoot?: string;
   title: string;
   onBack?: () => void;
-  headerAccessory?: React.ReactNode;
+  titleBarControlsAccessory?: React.ReactNode;
   hideHeader?: boolean;
   embeddedMode?: boolean;
   kickoffMessage?: string;
@@ -41,7 +41,7 @@ export function ThreadChatView({
   projectWorkspaceRoot,
   title,
   onBack,
-  headerAccessory,
+  titleBarControlsAccessory,
   hideHeader = false,
   embeddedMode = false,
   kickoffMessage,
@@ -173,7 +173,7 @@ export function ThreadChatView({
             routeKind="server"
             {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
             {...(onBack ? { onBack } : {})}
-            {...(headerAccessory ? { headerAccessory } : {})}
+            {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
             hideHeader={hideHeader || embeddedMode}
             hideBranchToolbar={embeddedMode}
             minimalComposer={embeddedMode}

@@ -93,7 +93,7 @@ export function AppThreadPane({
         : {})}
       {...(resolvedThread && canOpenEmbedded
         ? {
-            headerAccessory: (
+            titleBarControlsAccessory: (
               <Button
                 size="icon-xs"
                 variant="ghost"
