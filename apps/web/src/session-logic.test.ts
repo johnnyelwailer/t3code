@@ -22,6 +22,7 @@ import {
   workEntryIndicatesToolNeutralStatus,
   workEntryIndicatesToolSuccess,
 } from "./session-logic";
+import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
 
 let nextActivityId = 0;
 
@@ -691,6 +692,25 @@ describe("workEntryIndicatesToolFailure", () => {
 });
 
 describe("deriveWorkLogEntries", () => {
+  it("keeps workflow-owned step activities out of the generic work log", () => {
+    const entries = deriveWorkLogEntries([
+      makeActivity({
+        id: "workflow-repair",
+        kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
+        summary: "Workflow step started: Analysing failure",
+        tone: "info",
+      }),
+      makeActivity({
+        id: "unrelated-task",
+        kind: "task.progress",
+        summary: "Refreshing project context",
+        tone: "info",
+      }),
+    ]);
+
+    expect(entries.map((entry) => entry.id)).toEqual(["unrelated-task"]);
+  });
+
   it("omits tool started entries and keeps completed entries", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

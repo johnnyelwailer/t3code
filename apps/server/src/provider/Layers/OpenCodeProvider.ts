@@ -414,6 +414,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
         const server = yield* openCodeRuntime.connectToOpenCodeServer({
           binaryPath: openCodeSettings.binaryPath,
           serverUrl: openCodeSettings.serverUrl,
+          configContent: openCodeSettings.configContent,
           environment: resolvedEnvironment,
         });
         return yield* openCodeRuntime.loadOpenCodeInventory(

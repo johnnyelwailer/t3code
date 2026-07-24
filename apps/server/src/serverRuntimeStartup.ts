@@ -4,7 +4,6 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   type ModelSelection,
   ProjectId,
-  ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Console from "effect/Console";
@@ -34,6 +33,8 @@ import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
+import { T3TeamThreadToolContextEvictionReactor } from "./t3team-threadToolContextEvictionReactor.ts";
+import { getConfiguredDefaultModelSelection } from "./configuredDefaultModelSelection.ts";
 import {
   formatHeadlessServeOutput,
   formatHostForUrl,
@@ -161,10 +162,12 @@ export const launchStartupHeartbeat = recordStartupHeartbeat.pipe(
   Effect.asVoid,
 );
 
-export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
-  instanceId: ProviderInstanceId.make("codex"),
-  model: DEFAULT_MODEL,
-});
+// The default model a freshly auto-bootstrapped project (and therefore a new
+// thread's composer) selects. Upstream default stays Codex; a distribution can
+// override it without hardcoding a provider in core by setting the env seam
+// below (e.g. the Nexplore pack points it at its own instance + model).
+export const getAutoBootstrapDefaultModelSelection = (): ModelSelection =>
+  getConfiguredDefaultModelSelection(DEFAULT_MODEL);
 
 export const resolveWelcomeBase = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig.ServerConfig;
@@ -293,6 +296,7 @@ export const make = Effect.gen(function* () {
   const keybindings = yield* Keybindings.Keybindings;
   const orchestrationReactor = yield* OrchestrationReactor.OrchestrationReactor;
   const providerSessionReaper = yield* ProviderSessionReaper.ProviderSessionReaper;
+  const threadToolContextEvictionReactor = yield* T3TeamThreadToolContextEvictionReactor;
   const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
@@ -343,6 +347,7 @@ export const make = Effect.gen(function* () {
       Effect.gen(function* () {
         yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
         yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
+        yield* threadToolContextEvictionReactor.start().pipe(Scope.provide(reactorScope));
       }),
     );
 

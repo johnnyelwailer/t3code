@@ -16,6 +16,21 @@ export class AtlassianAuthError extends Data.TaggedError("AtlassianAuthError")<{
   readonly path: string;
 }> {}
 
+/**
+ * The mirror source could not be read at all: no client is registered for the
+ * account, or the project lookup did not return the project. Distinct from a
+ * successful page with zero items — callers that prune based on a full walk
+ * (the mirror reconcile) must treat this as "provider unavailable", never as
+ * "project is empty".
+ */
+export class AtlassianMirrorSourceUnavailableError extends Data.TaggedError(
+  "AtlassianMirrorSourceUnavailableError",
+)<{
+  readonly reason: "client-unavailable" | "project-not-found";
+  readonly externalProjectId: string;
+  readonly message: string;
+}> {}
+
 export type AtlassianCredentialSet = {
   readonly siteUrl: string;
   readonly email: string;
@@ -116,6 +131,20 @@ export type JiraSprint = {
 
 export type JiraSprintSearchResponse = {
   readonly values: ReadonlyArray<JiraSprint>;
+  readonly total?: number;
+  readonly startAt?: number;
+  readonly maxResults?: number;
+  readonly isLast?: boolean;
+};
+
+export type JiraQuickFilter = {
+  readonly id: string | number;
+  readonly name: string;
+  readonly jql?: string;
+};
+
+export type JiraQuickFilterSearchResponse = {
+  readonly values: ReadonlyArray<JiraQuickFilter>;
   readonly total?: number;
   readonly startAt?: number;
   readonly maxResults?: number;

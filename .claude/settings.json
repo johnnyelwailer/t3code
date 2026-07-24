@@ -7,8 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/t3work-additive-fast-hook.mjs",
-            "statusMessage": "t3work additive guard (LOC check)",
+            "command": "node scripts/t3team-additive-fast-hook.mjs",
+            "statusMessage": "t3team additive guard (LOC check)",
             "timeout": 30
           }
         ]

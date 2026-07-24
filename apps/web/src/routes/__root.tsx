@@ -14,6 +14,8 @@ import { APP_BASE_NAME, APP_DISPLAY_NAME, APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppDisplayName } from "../branding.logic";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
+import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
+import { OpenAddProjectCommandPaletteProvider } from "../commandPaletteContext";
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
@@ -37,8 +39,9 @@ import { syncBrowserChromeTheme } from "../hooks/useTheme";
 import { configureClientTracing } from "../observability/clientTracing";
 import { resolveInitialServerAuthGateState } from "../environments/primary";
 import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
-import { isAtlassianOAuthCallbackPath } from "../t3work/hooks/t3work-atlassianOAuthRedirect";
-import { useT3workWorkMode } from "../t3work/t3work-workMode";
+import { isAtlassianOAuthCallbackPath } from "../t3team/hooks/t3team-atlassianOAuthRedirect";
+import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
+import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 import { shellEnvironment } from "../state/shell";
 import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -53,6 +56,9 @@ import {
   createKeybindingsUpdateToastController,
   type KeybindingsUpdateToastController,
 } from "../components/KeybindingsUpdateToast.logic";
+
+// Pre-auth surfaces render outside CommandPalette; add-project is a no-op until authenticated.
+const noopOpenAddProject = () => undefined;
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -98,28 +104,20 @@ function RootRouteView() {
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
 
-  const workMode = useT3workWorkMode();
+  // T3 Team is the product shell (no toggleable work mode): keep non-shell routes
+  // redirected to the team surface.
+  const isT3TeamRoute = pathname === "/t3team" || pathname.startsWith("/t3team/");
 
-  // Check actual route path to determine layout (t3work routes don't need sidebar)
-  const isT3workRoute = pathname === "/t3work" || pathname.startsWith("/t3work/");
-
-  // Redirect based on work mode
   useEffect(() => {
-    // If user has "For Teams" mode but is on a chat route, redirect to t3work
     if (
-      workMode === "t3work" &&
-      !isT3workRoute &&
+      !isT3TeamRoute &&
       !pathname.startsWith("/settings") &&
       !pathname.startsWith("/pair") &&
       !isAtlassianOAuthCallbackPath(pathname)
     ) {
-      void navigate({ to: "/t3work" });
+      void navigate({ to: "/t3team" });
     }
-    // If user has "For Code" mode but is on t3work route, redirect to chat
-    else if (workMode === "classic" && isT3workRoute) {
-      void navigate({ to: "/" });
-    }
-  }, [workMode, pathname, isT3workRoute, navigate]);
+  }, [pathname, isT3TeamRoute, navigate]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -130,7 +128,12 @@ function RootRouteView() {
     };
   }, [pathname]);
 
-  if (pathname === "/pair" || isAtlassianOAuthCallbackPath(pathname)) {
+  if (
+    pathname === "/pair" ||
+    pathname === "/connect" ||
+    pathname.startsWith("/connect/") ||
+    isAtlassianOAuthCallbackPath(pathname)
+  ) {
     return (
       <>
         <DocumentTitleSync />
@@ -143,14 +146,16 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
-        <Outlet />
+        <OpenAddProjectCommandPaletteProvider openAddProject={noopOpenAddProject}>
+          <Outlet />
+        </OpenAddProjectCommandPaletteProvider>
       </>
     );
   }
 
   const appShell = (
     <CommandPalette>
-      {isT3workRoute ? (
+      {isT3TeamRoute ? (
         <Outlet />
       ) : (
         <AppSidebarLayout>
@@ -164,8 +169,10 @@ function RootRouteView() {
     <ToastProvider>
       <AnchoredToastProvider>
         <DocumentTitleSync />
+        <T3TeamPackAppearanceSync />
         {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
         <RelayClientInstallDialog />
+        <ConnectOnboardingDialog />
         <SshPasswordPromptDialog />
         <SlowRpcRequestToastCoordinator />
         <HostedStaticEnvironmentBootstrap />
@@ -180,9 +187,10 @@ function RootRouteView() {
 function DocumentTitleSync() {
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
+  const packAppName = useT3TeamPackAppearance()?.labels?.appName;
   const title = resolveServerBackedAppDisplayName({
-    baseName: APP_BASE_NAME,
-    fallbackDisplayName: APP_DISPLAY_NAME,
+    baseName: packAppName ?? APP_BASE_NAME,
+    fallbackDisplayName: packAppName ?? APP_DISPLAY_NAME,
     fallbackStageLabel: APP_STAGE_LABEL,
     primaryServerVersion,
   });

@@ -24,7 +24,7 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "cd /Users/pj/Dev/github/t3code/apps/web && export PATH=\"$HOME/.bun/bin:$PWD/../../node_modules/.bin:$PATH\" && exec node scripts/t3work-storybook.mjs dev --no-open"
+        "cd /Users/pj/Dev/github/t3code/apps/web && export PATH=\"$HOME/.bun/bin:$PWD/../../node_modules/.bin:$PATH\" && exec node scripts/t3team-storybook.mjs dev --no-open"
       ],
       "port": 6006
     }

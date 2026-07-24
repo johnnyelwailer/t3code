@@ -603,6 +603,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             interactionMode: event.payload.interactionMode,
             branch: event.payload.branch,
             worktreePath: event.payload.worktreePath,
+            retention: event.payload.retention ?? "retained",
             latestTurnId: null,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
@@ -612,6 +613,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             pendingUserInputCount: 0,
             hasActionableProposedPlan: 0,
             deletedAt: null,
+            childStatus: null,
+            childStatusUpdatedAt: null,
           });
           return;
 
@@ -661,6 +664,13 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...(event.payload.branch !== undefined ? { branch: event.payload.branch } : {}),
             ...(event.payload.worktreePath !== undefined
               ? { worktreePath: event.payload.worktreePath }
+              : {}),
+            ...(event.payload.childStatus !== undefined
+              ? {
+                  childStatus: event.payload.childStatus,
+                  childStatusUpdatedAt:
+                    event.payload.childStatusUpdatedAt ?? event.payload.updatedAt,
+                }
               : {}),
             updatedAt: event.payload.updatedAt,
           });
@@ -834,10 +844,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
                   attachments: event.payload.attachments,
                 })
               : previousMessage?.attachments;
-          const nextT3workExt =
-            event.payload.t3workExt !== undefined
-              ? event.payload.t3workExt
-              : previousMessage?.t3workExt;
+          const nextT3TeamExt =
+            event.payload.t3teamExt !== undefined
+              ? event.payload.t3teamExt
+              : previousMessage?.t3teamExt;
           yield* projectionThreadMessageRepository.upsert({
             messageId: event.payload.messageId,
             threadId: event.payload.threadId,
@@ -845,7 +855,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             role: event.payload.role,
             text: nextText,
             ...(nextAttachments !== undefined ? { attachments: [...nextAttachments] } : {}),
-            ...(nextT3workExt !== undefined ? { t3workExt: nextT3workExt } : {}),
+            ...(nextT3TeamExt !== undefined ? { t3teamExt: nextT3TeamExt } : {}),
             isStreaming: event.payload.streaming,
             createdAt: previousMessage?.createdAt ?? event.payload.createdAt,
             updatedAt: event.payload.updatedAt,

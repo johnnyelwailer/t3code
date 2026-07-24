@@ -49,10 +49,21 @@ import { type DeepPartial, deepMerge } from "@t3tools/shared/Struct";
 import { fromJsonStringPretty, fromLenientJson } from "@t3tools/shared/schemaJson";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import {
+  getConfiguredDefaultModelSelection,
+  getConfiguredTextGenerationModelSelection,
+} from "./configuredDefaultModelSelection.ts";
 
 const encodeServerSettings = Schema.encodeEffect(ServerSettings);
 const encodeServerSettingsJson = Schema.encodeUnknownEffect(fromJsonStringPretty(ServerSettings));
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
+const decodeRawServerSettings = Schema.decodeUnknownOption(
+  fromLenientJson(
+    Schema.Struct({
+      textGenerationModelSelection: Schema.optional(Schema.Unknown),
+    }),
+  ),
+);
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -180,7 +191,15 @@ const getLegacyProviderSettings = (
  * persisted preference is preserved for when a provider is re-enabled.
  */
 function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings {
+  const policySelection = getConfiguredTextGenerationModelSelection();
+  if (policySelection !== undefined) {
+    return { ...settings, textGenerationModelSelection: policySelection };
+  }
   const selection = settings.textGenerationModelSelection;
+  const configuredSelection = getConfiguredDefaultModelSelection(DEFAULT_GIT_TEXT_GENERATION_MODEL);
+  if (selection.instanceId === configuredSelection.instanceId) {
+    return settings;
+  }
   const instanceConfig = settings.providerInstances[selection.instanceId];
   if (instanceConfig !== undefined) {
     return (instanceConfig.enabled ?? true) ? settings : fallbackTextGenerationProvider(settings);
@@ -266,6 +285,12 @@ const make = Effect.gen(function* () {
   const startedRef = yield* Ref.make(false);
   const startedDeferred = yield* Deferred.make<void, ServerSettingsError>();
   const watcherScope = yield* Scope.make("sequential");
+  const configuredDefaultServerSettings: ServerSettings = {
+    ...DEFAULT_SERVER_SETTINGS,
+    textGenerationModelSelection: getConfiguredDefaultModelSelection(
+      DEFAULT_GIT_TEXT_GENERATION_MODEL,
+    ),
+  };
   yield* Effect.addFinalizer(() => Scope.close(watcherScope, Exit.void));
 
   const emitChange = (settings: ServerSettings) =>
@@ -295,7 +320,7 @@ const make = Effect.gen(function* () {
 
   const loadSettingsFromDisk = Effect.gen(function* () {
     if (!(yield* readConfigExists)) {
-      return DEFAULT_SERVER_SETTINGS;
+      return configuredDefaultServerSettings;
     }
 
     const raw = yield* readRawConfig;
@@ -306,9 +331,19 @@ const make = Effect.gen(function* () {
         issues: Cause.pretty(decoded.cause),
         cause: decoded.cause,
       });
-      return DEFAULT_SERVER_SETTINGS;
+      return configuredDefaultServerSettings;
     }
-    return decoded.value;
+    const rawSettings = decodeRawServerSettings(raw);
+    const hasPersistedTextGenerationSelection = Option.exists(rawSettings, (settings) =>
+      Object.hasOwn(settings, "textGenerationModelSelection"),
+    );
+    return hasPersistedTextGenerationSelection
+      ? decoded.value
+      : {
+          ...decoded.value,
+          textGenerationModelSelection:
+            configuredDefaultServerSettings.textGenerationModelSelection,
+        };
   });
 
   const settingsCache = yield* Cache.make<typeof cacheKey, ServerSettings, ServerSettingsError>({
@@ -467,7 +502,7 @@ const make = Effect.gen(function* () {
   const writeSettingsAtomically = Effect.fnUntraced(
     function* (settings: ServerSettings) {
       const sparseSettingsJson = yield* encodeServerSettingsJson(
-        stripDefaultServerSettings(settings, DEFAULT_SERVER_SETTINGS) ?? {},
+        stripDefaultServerSettings(settings, configuredDefaultServerSettings) ?? {},
       );
 
       return yield* writeFileStringAtomically({

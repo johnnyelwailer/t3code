@@ -12,6 +12,7 @@ import type * as PlatformError from "effect/PlatformError";
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import {
   listThreadsByProjectId,
+  requireActiveProjectWorkspaceRootAbsent,
   requireProject,
   requireProjectAbsent,
   requireThread,
@@ -111,6 +112,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         projectId: command.projectId,
       });
+      yield* requireActiveProjectWorkspaceRootAbsent({
+        readModel,
+        command,
+        workspaceRoot: command.workspaceRoot,
+        exceptProjectId: command.projectId,
+      });
 
       return {
         ...(yield* withEventBase({
@@ -138,6 +145,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         projectId: command.projectId,
       });
+      if (command.workspaceRoot !== undefined) {
+        yield* requireActiveProjectWorkspaceRootAbsent({
+          readModel,
+          command,
+          workspaceRoot: command.workspaceRoot,
+          exceptProjectId: command.projectId,
+        });
+      }
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -239,6 +254,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           interactionMode: command.interactionMode,
           branch: command.branch,
           worktreePath: command.worktreePath,
+          retention: command.retention ?? "retained",
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
@@ -313,11 +329,17 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.meta.update": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+      const branch =
+        command.branch !== undefined &&
+        command.expectedBranch !== undefined &&
+        thread.branch !== command.expectedBranch
+          ? thread.branch
+          : command.branch;
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -333,8 +355,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.modelSelection !== undefined
             ? { modelSelection: command.modelSelection }
             : {}),
-          ...(command.branch !== undefined ? { branch: command.branch } : {}),
+          ...(branch !== undefined ? { branch } : {}),
           ...(command.worktreePath !== undefined ? { worktreePath: command.worktreePath } : {}),
+          ...(command.childStatus !== undefined
+            ? { childStatus: command.childStatus, childStatusUpdatedAt: occurredAt }
+            : {}),
           updatedAt: occurredAt,
         },
       };
@@ -392,6 +417,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const sessionStatus = targetThread.session?.status;
+      const turnIsBusy =
+        targetThread.turnStartPending === true ||
+        sessionStatus === "starting" ||
+        sessionStatus === "running" ||
+        targetThread.latestTurn?.state === "running";
+      if (turnIsBusy) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' already has a turn in progress.`,
+        });
+      }
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({
@@ -430,6 +467,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "user",
           text: command.message.text,
           attachments: command.message.attachments,
+          ...(command.message.t3teamExt !== undefined
+            ? { t3teamExt: command.message.t3teamExt }
+            : {}),
           turnId: null,
           streaming: false,
           createdAt: command.createdAt,
@@ -622,8 +662,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.message.attachments !== undefined
             ? { attachments: command.message.attachments }
             : {}),
-          ...(command.message.t3workExt !== undefined
-            ? { t3workExt: command.message.t3workExt }
+          ...(command.message.t3teamExt !== undefined
+            ? { t3teamExt: command.message.t3teamExt }
             : {}),
           turnId: command.message.turnId,
           streaming: command.message.streaming,
@@ -631,6 +671,78 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: command.createdAt,
         },
       };
+    }
+
+    case "thread.actor.message": {
+      yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Record the inter-agent message as a first-class `actor`-role message,
+      // attributed to the sending thread, and raise a delivery intent that the
+      // actor-message reactor turns into a reaction turn (see
+      // t3team-actorMessageReactor.ts). Mirrors how `thread.turn.start` emits a
+      // `message-sent` alongside a follow-on intent event.
+      const messageSentEvent: Omit<OrchestrationEvent, "sequence"> = {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-sent",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          role: "actor",
+          text: command.text,
+          t3teamExt: {
+            author: {
+              kind: "actor",
+              threadId: command.fromThreadId,
+              projectId: command.fromProjectId,
+              title: command.fromTitle,
+            },
+            displayText: command.text,
+            visibleToUser: true,
+            visibleToAgent: true,
+            actor: {
+              senderThreadId: command.fromThreadId,
+              urgency: command.urgency,
+              hopCount: command.hopCount,
+              rootThreadId: command.rootThreadId,
+            },
+          },
+          turnId: null,
+          streaming: false,
+          createdAt: command.createdAt,
+          updatedAt: command.createdAt,
+        },
+      };
+      const deliveredEvent: Omit<OrchestrationEvent, "sequence"> = {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        causationEventId: messageSentEvent.eventId,
+        type: "thread.actor-message-delivered",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          fromThreadId: command.fromThreadId,
+          fromTitle: command.fromTitle,
+          fromProjectId: command.fromProjectId,
+          text: command.text,
+          urgency: command.urgency,
+          hopCount: command.hopCount,
+          rootThreadId: command.rootThreadId,
+          createdAt: command.createdAt,
+        },
+      };
+      return [messageSentEvent, deliveredEvent];
     }
 
     case "thread.message.assistant.delta": {

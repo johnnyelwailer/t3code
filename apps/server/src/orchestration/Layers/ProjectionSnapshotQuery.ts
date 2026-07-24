@@ -9,6 +9,7 @@ import {
   OrchestrationReadModel,
   OrchestrationShellSnapshot,
   OrchestrationThread,
+  OrchestrationThreadDetailSnapshot,
   ProjectScript,
   TurnId,
   type OrchestrationCheckpointSummary,
@@ -22,7 +23,7 @@ import {
   type OrchestrationThreadShell,
   ModelSelection,
   ProjectId,
-  T3workMessageExt,
+  T3TeamMessageExt,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
@@ -72,7 +73,7 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   Struct.assign({
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
-    t3workExt: Schema.NullOr(Schema.fromJsonString(T3workMessageExt)),
+    t3teamExt: Schema.NullOr(Schema.fromJsonString(T3TeamMessageExt)),
   }),
 );
 const ProjectionThreadProposedPlanDbRowSchema = ProjectionThreadProposedPlan;
@@ -149,6 +150,39 @@ const SleepingWakeAtRowSchema = Schema.Struct({
 });
 const SleepingWakeAtByThreadRowSchema = Schema.Struct({
   wakeAt: IsoDateTime,
+});
+// Latest durable workflow state per launch thread. This wins over provider-session state: a
+// suspended workflow may be waiting on a child agent while the launch thread itself is idle.
+const WorkflowRunStatusRowSchema = Schema.Struct({
+  threadId: ThreadId,
+  runId: Schema.String,
+  status: Schema.Literals([
+    "running",
+    "suspended",
+    "sleeping",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
+  ]),
+  pendingKind: Schema.NullOr(Schema.Literals(["thread.turn", "user.input"])),
+  wakeAt: Schema.NullOr(IsoDateTime),
+  updatedAt: IsoDateTime,
+});
+const WorkflowRunStatusByThreadRowSchema = Schema.Struct({
+  runId: Schema.String,
+  status: Schema.Literals([
+    "running",
+    "suspended",
+    "sleeping",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
+  ]),
+  pendingKind: Schema.NullOr(Schema.Literals(["thread.turn", "user.input"])),
+  wakeAt: Schema.NullOr(IsoDateTime),
+  updatedAt: IsoDateTime,
 });
 
 const REQUIRED_SNAPSHOT_PROJECTORS = [
@@ -341,6 +375,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           branch,
           worktree_path AS "worktreePath",
+          retention,
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -369,6 +404,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           branch,
           worktree_path AS "worktreePath",
+          retention,
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -381,6 +417,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         FROM projection_threads
         WHERE deleted_at IS NULL
           AND archived_at IS NULL
+          AND retention = 'retained'
         ORDER BY project_id ASC, created_at ASC, thread_id ASC
       `,
   });
@@ -399,6 +436,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           branch,
           worktree_path AS "worktreePath",
+          retention,
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -427,12 +465,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
-          t3work_ext_json AS "t3workExt",
+          t3team_ext_json AS "t3teamExt",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM projection_thread_messages
-        ORDER BY thread_id ASC, created_at ASC, message_id ASC
+        ORDER BY thread_id ASC, sequence ASC, rowid ASC
       `,
   });
 
@@ -762,6 +800,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           branch,
           worktree_path AS "worktreePath",
+          retention,
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -791,13 +830,13 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
-          t3work_ext_json AS "t3workExt",
+          t3team_ext_json AS "t3teamExt",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM projection_thread_messages
         WHERE thread_id = ${threadId}
-        ORDER BY created_at ASC, message_id ASC
+        ORDER BY sequence ASC, rowid ASC
       `,
   });
 
@@ -980,6 +1019,33 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  const listWorkflowRunStatusRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: WorkflowRunStatusRowSchema,
+    execute: () => sql`
+      SELECT runs.launch_thread_id AS "threadId", runs.run_id AS "runId", runs.status, runs.pending_kind AS "pendingKind",
+        runs.wake_at AS "wakeAt", runs.updated_at AS "updatedAt"
+      FROM workflow_runs runs
+      WHERE runs.launch_thread_id IS NOT NULL
+        AND runs.run_id = (
+          SELECT candidate.run_id
+          FROM workflow_runs candidate
+          WHERE candidate.launch_thread_id = runs.launch_thread_id
+          ORDER BY candidate.updated_at DESC, candidate.run_id DESC
+          LIMIT 1
+        )
+    `,
+  });
+  const getWorkflowRunStatusByThread = SqlSchema.findOneOption({
+    Request: ThreadIdLookupInput,
+    Result: WorkflowRunStatusByThreadRowSchema,
+    execute: ({ threadId }) => sql`
+      SELECT run_id AS "runId", status, pending_kind AS "pendingKind", wake_at AS "wakeAt", updated_at AS "updatedAt"
+      FROM workflow_runs WHERE launch_thread_id = ${threadId}
+      ORDER BY updated_at DESC, run_id DESC LIMIT 1
+    `,
+  });
+
   const getSnapshot: ProjectionSnapshotQueryShape["getSnapshot"] = () =>
     sql
       .withTransaction(
@@ -1099,7 +1165,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   role: row.role,
                   text: row.text,
                   ...(row.attachments !== null ? { attachments: row.attachments } : {}),
-                  ...(row.t3workExt !== null ? { t3workExt: row.t3workExt } : {}),
+                  ...(row.t3teamExt !== null ? { t3teamExt: row.t3teamExt } : {}),
                   turnId: row.turnId,
                   streaming: row.isStreaming === 1,
                   createdAt: row.createdAt,
@@ -1232,6 +1298,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 interactionMode: row.interactionMode,
                 branch: row.branch,
                 worktreePath: row.worktreePath,
+                retention: row.retention,
                 latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
@@ -1511,6 +1578,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               ),
             ),
           ),
+          listWorkflowRunStatusRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getShellSnapshot:listWorkflowRunStatus:query",
+                "ProjectionSnapshotQuery.getShellSnapshot:listWorkflowRunStatus:decodeRows",
+              ),
+            ),
+          ),
         ]),
       )
       .pipe(
@@ -1523,6 +1598,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               latestTurnRows,
               stateRows,
               sleepingWakeAtRows,
+              workflowRunStatusRows,
             ] = rows;
             let updatedAt: string | null = null;
             for (const row of projectRows) {
@@ -1557,6 +1633,21 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             const sleepingUntilByThread = new Map(
               sleepingWakeAtRows.map((row) => [row.threadId, row.wakeAt] as const),
             );
+            const workflowRunStatusByThread = new Map(
+              workflowRunStatusRows.map(
+                (row) =>
+                  [
+                    row.threadId,
+                    {
+                      runId: row.runId,
+                      status: row.status,
+                      pendingKind: row.pendingKind,
+                      wakeAt: row.wakeAt,
+                      updatedAt: row.updatedAt,
+                    },
+                  ] as const,
+              ),
+            );
 
             const snapshot = {
               snapshotSequence: computeSnapshotSequence(stateRows),
@@ -1590,7 +1681,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   hasPendingApprovals: row.pendingApprovalCount > 0,
                   hasPendingUserInput: row.pendingUserInputCount > 0,
                   hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
+                  ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
+                  ...(row.childStatusUpdatedAt != null
+                    ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
+                    : {}),
                   ...(sleepingUntil !== undefined ? { sleepingUntil } : {}),
+                  ...(workflowRunStatusByThread.has(row.threadId)
+                    ? { workflowRunStatus: workflowRunStatusByThread.get(row.threadId)! }
+                    : {}),
                 } satisfies OrchestrationThreadShell);
               }),
               updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
@@ -1724,6 +1822,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   hasPendingApprovals: row.pendingApprovalCount > 0,
                   hasPendingUserInput: row.pendingUserInputCount > 0,
                   hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
+                  ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
+                  ...(row.childStatusUpdatedAt != null
+                    ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
+                    : {}),
                 }),
               ),
               updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
@@ -1972,6 +2074,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         hasPendingApprovals: threadRow.value.pendingApprovalCount > 0,
         hasPendingUserInput: threadRow.value.pendingUserInputCount > 0,
         hasActionableProposedPlan: threadRow.value.hasActionableProposedPlan > 0,
+        ...(threadRow.value.childStatus != null
+          ? { childStatus: threadRow.value.childStatus }
+          : {}),
+        ...(threadRow.value.childStatusUpdatedAt != null
+          ? { childStatusUpdatedAt: threadRow.value.childStatusUpdatedAt }
+          : {}),
         ...(Option.isSome(sleepingRow) ? { sleepingUntil: sleepingRow.value.wakeAt } : {}),
       } satisfies OrchestrationThreadShell);
     });
@@ -2067,6 +2175,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         interactionMode: threadRow.value.interactionMode,
         branch: threadRow.value.branch,
         worktreePath: threadRow.value.worktreePath,
+        retention: threadRow.value.retention,
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,
@@ -2081,7 +2190,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             streaming: row.isStreaming === 1,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
-            ...(row.t3workExt !== null ? { t3workExt: row.t3workExt } : {}),
+            ...(row.t3teamExt !== null ? { t3teamExt: row.t3teamExt } : {}),
           };
           if (row.attachments !== null) {
             return Object.assign(message, { attachments: row.attachments });
@@ -2126,6 +2235,35 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       );
     });
 
+  const getThreadDetailSnapshot: ProjectionSnapshotQueryShape["getThreadDetailSnapshot"] = (
+    threadId,
+  ) =>
+    // Read the thread detail and the snapshot sequence within a single
+    // transaction so the sequence is consistent with the returned state; a
+    // projector update landing between two separate reads could otherwise return
+    // a sequence ahead of the thread detail, causing the client to resume from
+    // too far and drop events.
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const thread = yield* getThreadDetailById(threadId);
+          if (Option.isNone(thread)) {
+            return Option.none<OrchestrationThreadDetailSnapshot>();
+          }
+          const { snapshotSequence } = yield* getSnapshotSequence();
+          return Option.some({ snapshotSequence, thread: thread.value });
+        }),
+      )
+      .pipe(
+        Effect.mapError((error) =>
+          isPersistenceError(error)
+            ? error
+            : toPersistenceSqlError("ProjectionSnapshotQuery.getThreadDetailSnapshot:transaction")(
+                error,
+              ),
+        ),
+      );
+
   return {
     getCommandReadModel,
     getSnapshot,
@@ -2140,6 +2278,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getFullThreadDiffContext,
     getThreadShellById,
     getThreadDetailById,
+    getThreadDetailSnapshot,
   } satisfies ProjectionSnapshotQueryShape;
 });
 

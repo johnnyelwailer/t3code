@@ -1,0 +1,48 @@
+{
+  "name": "@t3team/sdk",
+  "version": "0.0.27",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/t3team-sdk.index.ts",
+      "import": "./src/t3team-sdk.index.ts"
+    },
+    "./groups": {
+      "types": "./src/t3team-sdk.groups.ts",
+      "import": "./src/t3team-sdk.groups.ts"
+    },
+    "./models": {
+      "types": "./src/t3team-sdk.models.ts",
+      "import": "./src/t3team-sdk.models.ts"
+    },
+    "./tools/t3team": {
+      "types": "./src/tools/t3team-sdk.t3team.ts",
+      "import": "./src/tools/t3team-sdk.t3team.ts"
+    },
+    "./tools/t3teamRecipes": {
+      "types": "./src/tools/t3team-sdk.t3teamRecipes.ts",
+      "import": "./src/tools/t3team-sdk.t3teamRecipes.ts"
+    },
+    "./tools/t3teamWorkflow": {
+      "types": "./src/tools/t3team-sdk.workflow.ts",
+      "import": "./src/tools/t3team-sdk.workflow.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "effect": "catalog:",
+    "typescript": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

@@ -434,6 +434,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         binaryPath: "/opt/homebrew/bin/opencode",
         serverUrl: "http://127.0.0.1:4096",
         serverPassword: "secret-password",
+        configContent: "",
         customModels: [],
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),

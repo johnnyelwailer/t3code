@@ -1,6 +1,43 @@
 # T3 Code
 
-T3 Code is a minimal web GUI for coding agents (currently Codex, Claude, Cursor, and OpenCode, more coming soon).
+This is our fork of T3 Code. Upstream T3 Code is a minimal web/desktop GUI for coding
+agents; this fork adds **t3team** on top.
+
+**t3team** is a team-based, project-aware agentic shell. The premise: teams do not need
+another loose AI chat — they need one managed workbench where engineers, PMs, designers,
+QA, support, and managers work from the same project context, use role-aware profiles and
+team-approved recipes instead of writing perfect prompts, and review external writes
+before they happen.
+
+The core stays small and boring: agent runtime, providers, tool/permission broker,
+persistence and sync, workflow engine, safe UI blocks, pack loading. Product opinion comes
+from **packs** — versioned bundles of connectors, views, recipes, profiles, themes,
+policies, provider integrations, and project sync:
+
+- a GitHub pack makes it a PR/repo workbench
+- an Atlassian pack makes it a Jira/Confluence project workbench
+- an enterprise pack makes it your internal branded work app — custom systems, approved
+  providers, role-based workflows, locked policy
+
+Security model in one sentence: one managed platform with connector-based access and
+reviewable actions, instead of many unmanaged MCP/token connections per user.
+
+Current state:
+
+- local-first web/desktop shell
+- provider support for Codex, Claude, Cursor, and OpenCode
+- project and session UI for working with coding agents
+- early `t3team` experiments for team/project-oriented work surfaces
+
+This repository is still very early. Expect rough edges.
+
+> [!WARNING]
+> The T3 Team rename is an intentional pre-release clean cut. It changes product-prefixed
+> SQL identifiers without compatibility migrations or legacy fallback logic. Existing
+> disposable local state from an earlier pre-rename build may need to be reset before using
+> a renamed build; this is not a data-preserving upgrade path.
+
+Detailed working spec and pack model: [`docs/t3team-mvp`](./docs/t3team-mvp).
 
 ## Installation
 
