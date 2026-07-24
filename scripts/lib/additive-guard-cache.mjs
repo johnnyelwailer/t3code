@@ -3,7 +3,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-const CACHE_FILE_NAME = "t3work-additive-guard-cache.json";
+const CACHE_FILE_NAME = "t3team-additive-guard-cache.json";
 
 function resolveAdditiveGuardCachePath(cwd) {
   const result = NodeChildProcess.spawnSync(

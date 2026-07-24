@@ -19,10 +19,10 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "paths": {
-      "@t3work/sdk": ["./packages/t3work-sdk/src/t3work-sdk.index.ts"],
-      "@t3work/sdk/groups": ["./packages/t3work-sdk/src/t3work-sdk.groups.ts"],
-      "@t3work/sdk/models": ["./packages/t3work-sdk/src/t3work-sdk.models.ts"],
-      "@t3work/sdk/tools/t3work": ["./packages/t3work-sdk/src/tools/t3work-sdk.t3work.ts"]
+      "@t3team/sdk": ["./packages/t3team-sdk/src/t3team-sdk.index.ts"],
+      "@t3team/sdk/groups": ["./packages/t3team-sdk/src/t3team-sdk.groups.ts"],
+      "@t3team/sdk/models": ["./packages/t3team-sdk/src/t3team-sdk.models.ts"],
+      "@t3team/sdk/tools/t3team": ["./packages/t3team-sdk/src/tools/t3team-sdk.t3team.ts"]
     },
     "plugins": [
       {

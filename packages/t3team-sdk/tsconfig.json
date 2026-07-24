@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  // Workflow fixtures rely on the ambient engine globals (thread/agent/args) injected at
+  // load time, and the engine tests (plus their shared fixture module, which type-imports
+  // the workflow fixtures) still type against the pre-callPrimitive runtime shape; both run
+  // under vitest, only the library surface is typechecked here.
+  "include": ["src"],
+  "exclude": ["src/__fixtures__/**/*", "src/**/*.test.ts", "src/t3team-sdk.engineFixtures.ts"]
+}

@@ -34,17 +34,17 @@ const configuredRelayTracingToken = repoEnv.VITE_RELAY_OTLP_TRACES_TOKEN?.trim()
 const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
 const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
 const configuredAtlassianClientId =
-  process.env.T3WORK_ATLASSIAN_CLIENT_ID?.trim() ||
+  process.env.T3TEAM_ATLASSIAN_CLIENT_ID?.trim() ||
   process.env.VITE_ATLASSIAN_CLIENT_ID?.trim() ||
   process.env.ATLASSIAN_CLIENT_ID?.trim() ||
   "";
 const configuredAtlassianSiteUrl =
-  process.env.T3WORK_ATLASSIAN_SITE_URL?.trim() ||
-  process.env.VITE_T3WORK_ATLASSIAN_SITE_URL?.trim() ||
+  process.env.T3TEAM_ATLASSIAN_SITE_URL?.trim() ||
+  process.env.VITE_T3TEAM_ATLASSIAN_SITE_URL?.trim() ||
   "";
 const configuredAtlassianOAuthRedirectUri =
   process.env.VITE_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
-  process.env.T3WORK_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
+  process.env.T3TEAM_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
   "";
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();

@@ -42,7 +42,7 @@ describe("defineSidecarSection", () => {
         label: `Pin ${(item as { id: string }).id}`,
         run: {
           kind: "tool" as const,
-          toolName: "t3work.backlog.set_assignee_filter",
+          toolName: "t3team.backlog.set_assignee_filter",
           input: { mode: "current-user" },
         },
       },
@@ -83,7 +83,7 @@ describe("defineSidecarSection", () => {
         label: "Pin recipe-1",
         run: {
           kind: "tool",
-          toolName: "t3work.backlog.set_assignee_filter",
+          toolName: "t3team.backlog.set_assignee_filter",
           input: { mode: "current-user" },
         },
       },

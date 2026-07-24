@@ -99,7 +99,7 @@ import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
-import { workflowCompletionDisplayText } from "../../t3work/chat/t3work-workflowCompletionDisplayText";
+import { workflowCompletionDisplayText } from "../../t3team/chat/t3team-workflowCompletionDisplayText";
 
 import {
   buildInlineTerminalContextText,
@@ -114,20 +114,20 @@ import {
   parseReviewCommentMessageSegments,
   type ReviewCommentContext,
 } from "../../reviewCommentContext";
-import type { ChatViewT3workExtensionProps } from "~/t3work/t3work-chatViewExtensions";
+import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
 import {
   findActiveWorkflowInputMessageId,
-  T3workSystemTimelineRow,
-} from "~/t3work/chat/t3work-SystemTimelineRow";
-import { T3workActorTimelineRow } from "~/t3work/chat/t3work-ActorTimelineRow";
+  T3TeamSystemTimelineRow,
+} from "~/t3team/chat/t3team-SystemTimelineRow";
+import { T3TeamActorTimelineRow } from "~/t3team/chat/t3team-ActorTimelineRow";
 import {
-  getT3workRenderableAttachments,
-  T3workMessageAttachmentList,
-} from "~/t3work/chat/t3work-messageExtViews";
+  getT3TeamRenderableAttachments,
+  T3TeamMessageAttachmentList,
+} from "~/t3team/chat/t3team-messageExtViews";
 import {
-  deriveT3workWorkflowStepRuns,
-  type T3workWorkflowRunProgress,
-} from "~/t3work/chat/t3work-threadWorkflowStepProgress";
+  deriveT3TeamWorkflowStepRuns,
+  type T3TeamWorkflowRunProgress,
+} from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -150,12 +150,12 @@ interface TimelineRowSharedState {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   activeWorkflowInputMessageId: string | null;
-  workflowStepRuns: ReadonlyMap<string, T3workWorkflowRunProgress>;
+  workflowStepRuns: ReadonlyMap<string, T3TeamWorkflowRunProgress>;
   workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
-  onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
-  dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
-  onControlWorkflow?: ChatViewT3workExtensionProps["onControlWorkflow"];
-  onOpenThread?: ChatViewT3workExtensionProps["onOpenThread"];
+  onSubmitRecipeCardAction?: ChatViewT3TeamExtensionProps["onSubmitRecipeCardAction"];
+  dispatchWorkflowDecision?: ChatViewT3TeamExtensionProps["dispatchWorkflowDecision"];
+  onControlWorkflow?: ChatViewT3TeamExtensionProps["onControlWorkflow"];
+  onOpenThread?: ChatViewT3TeamExtensionProps["onOpenThread"];
   onToggleWorkGroup: (groupId: string, anchorElement?: HTMLElement) => void;
 }
 
@@ -204,10 +204,10 @@ interface MessagesTimelineProps {
   /** Thread activities feeding the live workflow-step overlay on plan (shape) cards. */
   threadActivities?: ReadonlyArray<OrchestrationThreadActivity>;
   workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
-  onSubmitRecipeCardAction?: ChatViewT3workExtensionProps["onSubmitRecipeCardAction"];
-  dispatchWorkflowDecision?: ChatViewT3workExtensionProps["dispatchWorkflowDecision"];
-  onControlWorkflow?: ChatViewT3workExtensionProps["onControlWorkflow"];
-  onOpenThread?: ChatViewT3workExtensionProps["onOpenThread"];
+  onSubmitRecipeCardAction?: ChatViewT3TeamExtensionProps["onSubmitRecipeCardAction"];
+  dispatchWorkflowDecision?: ChatViewT3TeamExtensionProps["dispatchWorkflowDecision"];
+  onControlWorkflow?: ChatViewT3TeamExtensionProps["onControlWorkflow"];
+  onOpenThread?: ChatViewT3TeamExtensionProps["onOpenThread"];
   onManualNavigation: () => void;
   workflowCardNavigationRequest?: {
     readonly messageId: MessageId;
@@ -336,7 +336,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   const rawRows = useMemo(
     () =>
-      // Suppress messages flagged `t3workExt.visibleToUser === false` — e.g. the
+      // Suppress messages flagged `t3teamExt.visibleToUser === false` — e.g. the
       // framed sender-attribution input the actor-message reactor stores as a
       // hidden `role:"user"` turn prompt. Filtering here (before the minimap and
       // list derivation) keeps the raw framing out of both the timeline and the
@@ -352,7 +352,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
       }).filter(
-        (row) => !(row.kind === "message" && row.message.t3workExt?.visibleToUser === false),
+        (row) => !(row.kind === "message" && row.message.t3teamExt?.visibleToUser === false),
       ),
     [
       timelineEntries,
@@ -476,7 +476,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   );
 
   const workflowStepRuns = useMemo(
-    () => deriveT3workWorkflowStepRuns(threadActivities ?? []),
+    () => deriveT3TeamWorkflowStepRuns(threadActivities ?? []),
     [threadActivities],
   );
 
@@ -889,7 +889,7 @@ function ActorTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message"
   const ctx = use(TimelineRowCtx);
 
   return (
-    <T3workActorTimelineRow
+    <T3TeamActorTimelineRow
       message={row.message}
       {...(ctx.markdownCwd ? { markdownCwd: ctx.markdownCwd } : {})}
       {...(ctx.threadRef ? { threadRef: ctx.threadRef } : {})}
@@ -908,7 +908,7 @@ function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message
   const ctx = use(TimelineRowCtx);
 
   return (
-    <T3workSystemTimelineRow
+    <T3TeamSystemTimelineRow
       message={row.message}
       threadRef={ctx.threadRef}
       activeWorkflowInputMessageId={ctx.activeWorkflowInputMessageId}
@@ -967,7 +967,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const ctx = use(TimelineRowCtx);
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(
-    row.message.t3workExt?.displayText ?? row.message.text,
+    row.message.t3teamExt?.displayText ?? row.message.text,
   );
   const terminalContexts = displayedUserMessage.contexts;
   const previewAnnotations: ParsedPreviewAnnotation[] = [];
@@ -986,7 +986,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const previewImages = userImages.filter((image) => image.name.startsWith("preview-annotation-"));
   const regularImages = userImages.filter((image) => !image.name.startsWith("preview-annotation-"));
   const canRevertAgentWork = typeof row.revertTurnCount === "number";
-  const t3workAttachments = getT3workRenderableAttachments(row.message);
+  const t3teamAttachments = getT3TeamRenderableAttachments(row.message);
 
   return (
     <div className="group flex flex-col items-end gap-1">
@@ -1041,9 +1041,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             ))}
           </div>
         ) : null}
-        {t3workAttachments.length > 0 ? (
+        {t3teamAttachments.length > 0 ? (
           <div className="mb-2">
-            <T3workMessageAttachmentList attachments={t3workAttachments} />
+            <T3TeamMessageAttachmentList attachments={t3teamAttachments} />
           </div>
         ) : null}
         <CollapsibleUserMessageBody

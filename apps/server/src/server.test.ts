@@ -117,15 +117,15 @@ import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts"
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
-import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
-import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
-import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
-import { NoopT3workToolBroker, T3workToolBroker } from "./t3work-toolBroker.ts";
-import { T3workWidgetRegistryLive } from "./t3work-widgetRegistry.ts";
+import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
+import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
+import { NoopT3TeamToolBroker, T3TeamToolBroker } from "./t3team-toolBroker.ts";
+import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
 import {
-  NoopT3workContextRefreshService,
-  T3workContextRefreshService,
-} from "./t3work-contextRefreshService.ts";
+  NoopT3TeamContextRefreshService,
+  T3TeamContextRefreshService,
+} from "./t3team-contextRefreshService.ts";
 
 const defaultProjectId = ProjectId.make("project-default");
 const defaultThreadId = ThreadId.make("thread-default");
@@ -397,13 +397,13 @@ const buildAppUnderTest = (options?: {
       ...options?.config,
     };
     const layerConfig = ServerConfig.layer(config);
-    const t3workRouterSupportLayer = Layer.mergeAll(
+    const t3teamRouterSupportLayer = Layer.mergeAll(
       SqlitePersistenceMemory,
-      T3workWorkflowEngineRegistryLive,
-      T3workThreadToolContextStoreLive,
-      T3workWidgetRegistryLive,
-      Layer.succeed(T3workToolBroker, NoopT3workToolBroker),
-      Layer.succeed(T3workContextRefreshService, NoopT3workContextRefreshService),
+      T3TeamWorkflowEngineRegistryLive,
+      T3TeamThreadToolContextStoreLive,
+      T3TeamWidgetRegistryLive,
+      Layer.succeed(T3TeamToolBroker, NoopT3TeamToolBroker),
+      Layer.succeed(T3TeamContextRefreshService, NoopT3TeamContextRefreshService),
       WorkflowRunRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory)),
       WorkflowJournalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
       Layer.mock(VcsProcess.VcsProcess)({
@@ -416,7 +416,7 @@ const buildAppUnderTest = (options?: {
             stderrTruncated: false,
           }),
       }),
-      Layer.mock(T3workWorkflowScheduler)({
+      Layer.mock(T3TeamWorkflowScheduler)({
         rearm: () => Promise.resolve(),
         stop: () => {},
       }),
@@ -840,7 +840,7 @@ const buildAppUnderTest = (options?: {
       Layer.provideMerge(makeAuthTestLayer()),
       Layer.provideMerge(ServerSecretStore.layer),
       Layer.provide(workspaceAndProjectServicesLayer),
-      Layer.provideMerge(t3workRouterSupportLayer),
+      Layer.provideMerge(t3teamRouterSupportLayer),
       Layer.provideMerge(FetchHttpClient.layer),
       Layer.provide(layerConfig),
     );

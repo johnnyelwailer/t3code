@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
 
-export const PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_CARD = "t3work.recipe.workflow-card";
+export const PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_CARD = "t3team.recipe.workflow-card";
 
 export const ProjectRecipeConversationCardKind = Schema.Literals([
   "checklist",

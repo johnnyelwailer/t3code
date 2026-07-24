@@ -539,7 +539,7 @@ describe("ProviderCommandReactor", () => {
           messageId: asMessageId("user-message-display-title"),
           role: "user",
           text: "### Added Context: workspace synced\n\nReply only with OK.",
-          t3workExt: { displayText: "Reply only with OK." },
+          t3teamExt: { displayText: "Reply only with OK." },
           attachments: [],
         },
         titleSeed: seededTitle,

@@ -204,9 +204,9 @@ import {
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
-import type { ChatViewT3workExtensionProps } from "~/t3work/t3work-chatViewExtensions";
-import { appendContextAttachmentsToPrompt } from "~/t3work/chat/t3work-prepareThreadContextAttachments";
-import { buildContextAttachmentMessageExt } from "~/t3work/t3work-messageContextAttachments";
+import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
+import { appendContextAttachmentsToPrompt } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
+import { buildContextAttachmentMessageExt } from "~/t3team/t3team-messageContextAttachments";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
@@ -265,11 +265,11 @@ import {
 } from "../versionSkew";
 import { useAssetUrls } from "../assets/assetUrls";
 import {
-  deriveT3workActiveWorkflowDockItems,
-  T3workActiveWorkflowDock,
-  type T3workActiveWorkflowDockItem,
-} from "~/t3work/chat/t3work-activeWorkflowDock";
-import { deriveT3workWorkflowStepRuns } from "~/t3work/chat/t3work-threadWorkflowStepProgress";
+  deriveT3TeamActiveWorkflowDockItems,
+  T3TeamActiveWorkflowDock,
+  type T3TeamActiveWorkflowDockItem,
+} from "~/t3team/chat/t3team-activeWorkflowDock";
+import { deriveT3TeamWorkflowStepRuns } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
@@ -435,7 +435,7 @@ type ChatViewProps =
       forceExpandedMobileComposer?: boolean;
       routeKind: "server";
       draftId?: never;
-    } & ChatViewT3workExtensionProps)
+    } & ChatViewT3TeamExtensionProps)
   | {
       environmentId: EnvironmentId;
       threadId: ThreadId;
@@ -2251,9 +2251,9 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const activeWorkflowDockItems = useMemo(
     () =>
-      deriveT3workActiveWorkflowDockItems(
+      deriveT3TeamActiveWorkflowDockItems(
         timelineEntries,
-        deriveT3workWorkflowStepRuns(threadActivities),
+        deriveT3TeamWorkflowStepRuns(threadActivities),
         activeThread?.workflowRunStatus,
       ),
     [activeThread?.workflowRunStatus, threadActivities, timelineEntries],
@@ -2262,7 +2262,7 @@ function ChatViewContent(props: ChatViewProps) {
     messageId: MessageId;
     requestId: number;
   } | null>(null);
-  const openWorkflowCard = useCallback((item: T3workActiveWorkflowDockItem) => {
+  const openWorkflowCard = useCallback((item: T3TeamActiveWorkflowDockItem) => {
     setWorkflowCardNavigationRequest((current) => ({
       messageId: item.messageId,
       requestId: (current?.requestId ?? 0) + 1,
@@ -4261,10 +4261,10 @@ function ChatViewContent(props: ChatViewProps) {
       }
       return;
     }
-    const t3workMessageExt = buildContextAttachmentMessageExt(contextAttachmentsResult.value, {
+    const t3teamMessageExt = buildContextAttachmentMessageExt(contextAttachmentsResult.value, {
       displayText: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
     });
-    const messageTextWithT3workContext = appendContextAttachmentsToPrompt(
+    const messageTextWithT3TeamContext = appendContextAttachmentsToPrompt(
       messageTextForSend,
       contextAttachmentsResult.value,
     );
@@ -4275,7 +4275,7 @@ function ChatViewContent(props: ChatViewProps) {
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: messageTextWithT3workContext || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+      text: messageTextWithT3TeamContext || IMAGE_ONLY_BOOTSTRAP_PROMPT,
     });
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
@@ -4315,7 +4315,7 @@ function ChatViewContent(props: ChatViewProps) {
         role: "user",
         text: outgoingMessageText,
         ...(optimisticAttachments.length > 0 ? { attachments: optimisticAttachments } : {}),
-        ...(t3workMessageExt ? { t3workExt: t3workMessageExt } : {}),
+        ...(t3teamMessageExt ? { t3teamExt: t3teamMessageExt } : {}),
         turnId: null,
         createdAt: messageCreatedAt,
         updatedAt: messageCreatedAt,
@@ -4467,7 +4467,7 @@ function ChatViewContent(props: ChatViewProps) {
             role: "user",
             text: outgoingMessageText,
             attachments: turnAttachmentsResult.value,
-            ...(t3workMessageExt ? { t3workExt: t3workMessageExt } : {}),
+            ...(t3teamMessageExt ? { t3teamExt: t3teamMessageExt } : {}),
           },
           modelSelection: ctxSelectedModelSelection,
           titleSeed: title,
@@ -5512,7 +5512,7 @@ function ChatViewContent(props: ChatViewProps) {
                     </div>
                   ) : (
                     <>
-                      <T3workActiveWorkflowDock
+                      <T3TeamActiveWorkflowDock
                         items={activeWorkflowDockItems}
                         className="mx-auto max-w-3xl rounded-t-xl"
                         onOpen={openWorkflowCard}

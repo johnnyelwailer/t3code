@@ -467,8 +467,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "user",
           text: command.message.text,
           attachments: command.message.attachments,
-          ...(command.message.t3workExt !== undefined
-            ? { t3workExt: command.message.t3workExt }
+          ...(command.message.t3teamExt !== undefined
+            ? { t3teamExt: command.message.t3teamExt }
             : {}),
           turnId: null,
           streaming: false,
@@ -662,8 +662,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.message.attachments !== undefined
             ? { attachments: command.message.attachments }
             : {}),
-          ...(command.message.t3workExt !== undefined
-            ? { t3workExt: command.message.t3workExt }
+          ...(command.message.t3teamExt !== undefined
+            ? { t3teamExt: command.message.t3teamExt }
             : {}),
           turnId: command.message.turnId,
           streaming: command.message.streaming,
@@ -682,7 +682,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // Record the inter-agent message as a first-class `actor`-role message,
       // attributed to the sending thread, and raise a delivery intent that the
       // actor-message reactor turns into a reaction turn (see
-      // t3work-actorMessageReactor.ts). Mirrors how `thread.turn.start` emits a
+      // t3team-actorMessageReactor.ts). Mirrors how `thread.turn.start` emits a
       // `message-sent` alongside a follow-on intent event.
       const messageSentEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({
@@ -697,7 +697,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           messageId: command.messageId,
           role: "actor",
           text: command.text,
-          t3workExt: {
+          t3teamExt: {
             author: {
               kind: "actor",
               threadId: command.fromThreadId,

@@ -1121,7 +1121,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         // Effect logger in scope), so console is the trace.
         // @effect-diagnostics-next-line globalConsole:off
         console.warn(
-          `[t3work-atlassian] quick filter fetch failed for board ${selectedBoard.id}:`,
+          `[t3team-atlassian] quick filter fetch failed for board ${selectedBoard.id}:`,
           error instanceof Error ? error.message : error,
         );
         return [] as ReadonlyArray<AtlassianBacklogQuickFilter>;
@@ -1735,7 +1735,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     if (response.errors && response.errors.length > 0) {
       // @effect-diagnostics-next-line globalConsole:off
       console.warn(
-        `[t3work-atlassian] custom filter GraphQL fallback returned errors for board ${boardId}: ${response.errors[0]?.message}`,
+        `[t3team-atlassian] custom filter GraphQL fallback returned errors for board ${boardId}: ${response.errors[0]?.message}`,
       );
       return [];
     }
