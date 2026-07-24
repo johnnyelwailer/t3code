@@ -21,7 +21,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
-import { T3workActorMessageUrgency, T3workMessageExt } from "./t3work-message-ext.ts";
+import { T3TeamActorMessageUrgency, T3TeamMessageExt } from "./t3team-message-ext.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -262,7 +262,7 @@ export const OrchestrationMessage = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
-  t3workExt: Schema.optional(T3workMessageExt),
+  t3teamExt: Schema.optional(T3TeamMessageExt),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -681,7 +681,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     role: Schema.Literal("user"),
     text: Schema.String,
     attachments: Schema.Array(ChatAttachment),
-    t3workExt: Schema.optional(T3workMessageExt),
+    t3teamExt: Schema.optional(T3TeamMessageExt),
   }),
   modelSelection: Schema.optional(ModelSelection),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
@@ -703,7 +703,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
     role: Schema.Literal("user"),
     text: Schema.String,
     attachments: Schema.Array(UploadChatAttachment),
-    t3workExt: Schema.optional(T3workMessageExt),
+    t3teamExt: Schema.optional(T3TeamMessageExt),
   }),
   modelSelection: Schema.optional(ModelSelection),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
@@ -813,7 +813,7 @@ const ThreadMessageUpsertCommand = Schema.Struct({
     role: OrchestrationMessageRole,
     text: Schema.String,
     attachments: Schema.optional(Schema.Array(ChatAttachment)),
-    t3workExt: Schema.optional(T3workMessageExt),
+    t3teamExt: Schema.optional(T3TeamMessageExt),
     turnId: Schema.NullOr(TurnId),
     streaming: Schema.Boolean,
   }),
@@ -838,7 +838,7 @@ const ThreadActorMessageCommand = Schema.Struct({
   fromTitle: TrimmedNonEmptyString,
   fromProjectId: ProjectId,
   text: Schema.String,
-  urgency: T3workActorMessageUrgency,
+  urgency: T3TeamActorMessageUrgency,
   hopCount: NonNegativeInt,
   rootThreadId: ThreadId,
   createdAt: IsoDateTime,
@@ -1040,7 +1040,7 @@ export const ThreadMessageSentPayload = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
-  t3workExt: Schema.optional(T3workMessageExt),
+  t3teamExt: Schema.optional(T3TeamMessageExt),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -1054,7 +1054,7 @@ export const ThreadActorMessageDeliveredPayload = Schema.Struct({
   fromTitle: TrimmedNonEmptyString,
   fromProjectId: ProjectId,
   text: Schema.String,
-  urgency: T3workActorMessageUrgency,
+  urgency: T3TeamActorMessageUrgency,
   hopCount: NonNegativeInt,
   rootThreadId: ThreadId,
   createdAt: IsoDateTime,

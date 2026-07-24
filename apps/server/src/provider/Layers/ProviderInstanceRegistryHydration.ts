@@ -55,7 +55,7 @@ import { ServerSettingsService } from "../../serverSettings.ts";
 import {
   getPackProviderDrivers,
   getPackProviderOverlay,
-} from "../../t3work-pack-providerOverlay.ts";
+} from "../../t3team-pack-providerOverlay.ts";
 import { BUILT_IN_DRIVERS, type BuiltInDriversEnv } from "../builtInDrivers.ts";
 import { ProviderInstanceRegistry } from "../Services/ProviderInstanceRegistry.ts";
 import { ProviderInstanceRegistryMutator } from "../Services/ProviderInstanceRegistryMutator.ts";

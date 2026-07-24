@@ -22,8 +22,8 @@ import {
   PreviewSnapshotToolkit,
   PreviewStandardToolkit,
 } from "./toolkits/preview/tools.ts";
-import { T3workToolkitHandlersLive } from "./toolkits/t3work/handlers.ts";
-import { T3workToolkit } from "./toolkits/t3work/tools.ts";
+import { T3TeamToolkitHandlersLive } from "./toolkits/t3team/handlers.ts";
+import { T3TeamToolkit } from "./toolkits/t3team/tools.ts";
 
 const unauthorized = HttpServerResponse.jsonUnsafe(
   {
@@ -210,8 +210,8 @@ export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewSnapshotRegistrationLive,
 );
 
-export const T3workToolkitRegistrationLive = McpServer.toolkit(T3workToolkit).pipe(
-  Layer.provide(T3workToolkitHandlersLive),
+export const T3TeamToolkitRegistrationLive = McpServer.toolkit(T3TeamToolkit).pipe(
+  Layer.provide(T3TeamToolkitHandlersLive),
 );
 
 const McpTransportLive = McpServer.layerHttp({
@@ -222,5 +222,5 @@ const McpTransportLive = McpServer.layerHttp({
 
 export const layer = Layer.mergeAll(
   PreviewToolkitRegistrationLive,
-  T3workToolkitRegistrationLive,
+  T3TeamToolkitRegistrationLive,
 ).pipe(Layer.provideMerge(McpTransportLive));

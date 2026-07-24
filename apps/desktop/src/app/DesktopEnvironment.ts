@@ -187,7 +187,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     rootDir,
     appRoot,
     // Dev-only escape hatch so a distribution can boot an alternate server
-    // variant (e.g. the t3work entry) as the local backend; mirrors the
+    // variant (e.g. the t3team entry) as the local backend; mirrors the
     // devRemoteT3ServerEntryPath override and is ignored in packaged builds.
     backendEntryPath:
       isDevelopment && !input.isPackaged && Option.isSome(config.devBackendEntryPath)

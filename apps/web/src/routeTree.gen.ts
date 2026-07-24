@@ -9,13 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as T3workRouteImport } from './routes/t3work'
+import { Route as T3teamRouteImport } from './routes/t3team'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PairRouteImport } from './routes/pair'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
-import { Route as T3workNewRouteImport } from './routes/t3work.new'
+import { Route as T3teamNewRouteImport } from './routes/t3team.new'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
 import { Route as SettingsProvidersRouteImport } from './routes/settings.providers'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
@@ -25,15 +25,15 @@ import { Route as SettingsConnectionsRouteImport } from './routes/settings.conne
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as ConnectCallbackRouteImport } from './routes/connect_.callback'
-import { Route as T3workProjectsProjectIdRouteImport } from './routes/t3work.projects.$projectId'
+import { Route as T3teamProjectsProjectIdRouteImport } from './routes/t3team.projects.$projectId'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
-import { Route as T3workProjectsProjectIdTicketsTicketIdRouteImport } from './routes/t3work.projects.$projectId.tickets.$ticketId'
-import { Route as T3workProjectsProjectIdThreadsThreadIdRouteImport } from './routes/t3work.projects.$projectId.threads.$threadId'
+import { Route as T3teamProjectsProjectIdTicketsTicketIdRouteImport } from './routes/t3team.projects.$projectId.tickets.$ticketId'
+import { Route as T3teamProjectsProjectIdThreadsThreadIdRouteImport } from './routes/t3team.projects.$projectId.threads.$threadId'
 
-const T3workRoute = T3workRouteImport.update({
-  id: '/t3work',
-  path: '/t3work',
+const T3teamRoute = T3teamRouteImport.update({
+  id: '/t3team',
+  path: '/t3team',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -60,10 +60,10 @@ const ChatIndexRoute = ChatIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ChatRoute,
 } as any)
-const T3workNewRoute = T3workNewRouteImport.update({
+const T3teamNewRoute = T3teamNewRouteImport.update({
   id: '/new',
   path: '/new',
-  getParentRoute: () => T3workRoute,
+  getParentRoute: () => T3teamRoute,
 } as any)
 const SettingsSourceControlRoute = SettingsSourceControlRouteImport.update({
   id: '/source-control',
@@ -110,10 +110,10 @@ const ConnectCallbackRoute = ConnectCallbackRouteImport.update({
   path: '/connect/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const T3workProjectsProjectIdRoute = T3workProjectsProjectIdRouteImport.update({
+const T3teamProjectsProjectIdRoute = T3teamProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
-  getParentRoute: () => T3workRoute,
+  getParentRoute: () => T3teamRoute,
 } as any)
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   id: '/draft/$draftId',
@@ -126,17 +126,17 @@ const ChatEnvironmentIdThreadIdRoute =
     path: '/$environmentId/$threadId',
     getParentRoute: () => ChatRoute,
   } as any)
-const T3workProjectsProjectIdTicketsTicketIdRoute =
-  T3workProjectsProjectIdTicketsTicketIdRouteImport.update({
+const T3teamProjectsProjectIdTicketsTicketIdRoute =
+  T3teamProjectsProjectIdTicketsTicketIdRouteImport.update({
     id: '/tickets/$ticketId',
     path: '/tickets/$ticketId',
-    getParentRoute: () => T3workProjectsProjectIdRoute,
+    getParentRoute: () => T3teamProjectsProjectIdRoute,
   } as any)
-const T3workProjectsProjectIdThreadsThreadIdRoute =
-  T3workProjectsProjectIdThreadsThreadIdRouteImport.update({
+const T3teamProjectsProjectIdThreadsThreadIdRoute =
+  T3teamProjectsProjectIdThreadsThreadIdRouteImport.update({
     id: '/threads/$threadId',
     path: '/threads/$threadId',
-    getParentRoute: () => T3workProjectsProjectIdRoute,
+    getParentRoute: () => T3teamProjectsProjectIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -144,7 +144,7 @@ export interface FileRoutesByFullPath {
   '/connect': typeof ConnectRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
-  '/t3work': typeof T3workRouteWithChildren
+  '/t3team': typeof T3teamRouteWithChildren
   '/connect/callback': typeof ConnectCallbackRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
@@ -154,18 +154,18 @@ export interface FileRoutesByFullPath {
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
-  '/t3work/new': typeof T3workNewRoute
+  '/t3team/new': typeof T3teamNewRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
-  '/t3work/projects/$projectId': typeof T3workProjectsProjectIdRouteWithChildren
-  '/t3work/projects/$projectId/threads/$threadId': typeof T3workProjectsProjectIdThreadsThreadIdRoute
-  '/t3work/projects/$projectId/tickets/$ticketId': typeof T3workProjectsProjectIdTicketsTicketIdRoute
+  '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
+  '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
+  '/t3team/projects/$projectId/tickets/$ticketId': typeof T3teamProjectsProjectIdTicketsTicketIdRoute
 }
 export interface FileRoutesByTo {
   '/connect': typeof ConnectRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
-  '/t3work': typeof T3workRouteWithChildren
+  '/t3team': typeof T3teamRouteWithChildren
   '/connect/callback': typeof ConnectCallbackRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
@@ -175,13 +175,13 @@ export interface FileRoutesByTo {
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
-  '/t3work/new': typeof T3workNewRoute
+  '/t3team/new': typeof T3teamNewRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
-  '/t3work/projects/$projectId': typeof T3workProjectsProjectIdRouteWithChildren
-  '/t3work/projects/$projectId/threads/$threadId': typeof T3workProjectsProjectIdThreadsThreadIdRoute
-  '/t3work/projects/$projectId/tickets/$ticketId': typeof T3workProjectsProjectIdTicketsTicketIdRoute
+  '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
+  '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
+  '/t3team/projects/$projectId/tickets/$ticketId': typeof T3teamProjectsProjectIdTicketsTicketIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -189,7 +189,7 @@ export interface FileRoutesById {
   '/connect': typeof ConnectRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
-  '/t3work': typeof T3workRouteWithChildren
+  '/t3team': typeof T3teamRouteWithChildren
   '/connect_/callback': typeof ConnectCallbackRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
@@ -199,13 +199,13 @@ export interface FileRoutesById {
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
-  '/t3work/new': typeof T3workNewRoute
+  '/t3team/new': typeof T3teamNewRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
-  '/t3work/projects/$projectId': typeof T3workProjectsProjectIdRouteWithChildren
-  '/t3work/projects/$projectId/threads/$threadId': typeof T3workProjectsProjectIdThreadsThreadIdRoute
-  '/t3work/projects/$projectId/tickets/$ticketId': typeof T3workProjectsProjectIdTicketsTicketIdRoute
+  '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
+  '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
+  '/t3team/projects/$projectId/tickets/$ticketId': typeof T3teamProjectsProjectIdTicketsTicketIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -214,7 +214,7 @@ export interface FileRouteTypes {
     | '/connect'
     | '/pair'
     | '/settings'
-    | '/t3work'
+    | '/t3team'
     | '/connect/callback'
     | '/oauth/callback'
     | '/settings/archived'
@@ -224,18 +224,18 @@ export interface FileRouteTypes {
     | '/settings/keybindings'
     | '/settings/providers'
     | '/settings/source-control'
-    | '/t3work/new'
+    | '/t3team/new'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
-    | '/t3work/projects/$projectId'
-    | '/t3work/projects/$projectId/threads/$threadId'
-    | '/t3work/projects/$projectId/tickets/$ticketId'
+    | '/t3team/projects/$projectId'
+    | '/t3team/projects/$projectId/threads/$threadId'
+    | '/t3team/projects/$projectId/tickets/$ticketId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connect'
     | '/pair'
     | '/settings'
-    | '/t3work'
+    | '/t3team'
     | '/connect/callback'
     | '/oauth/callback'
     | '/settings/archived'
@@ -245,20 +245,20 @@ export interface FileRouteTypes {
     | '/settings/keybindings'
     | '/settings/providers'
     | '/settings/source-control'
-    | '/t3work/new'
+    | '/t3team/new'
     | '/'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
-    | '/t3work/projects/$projectId'
-    | '/t3work/projects/$projectId/threads/$threadId'
-    | '/t3work/projects/$projectId/tickets/$ticketId'
+    | '/t3team/projects/$projectId'
+    | '/t3team/projects/$projectId/threads/$threadId'
+    | '/t3team/projects/$projectId/tickets/$ticketId'
   id:
     | '__root__'
     | '/_chat'
     | '/connect'
     | '/pair'
     | '/settings'
-    | '/t3work'
+    | '/t3team'
     | '/connect_/callback'
     | '/oauth/callback'
     | '/settings/archived'
@@ -268,13 +268,13 @@ export interface FileRouteTypes {
     | '/settings/keybindings'
     | '/settings/providers'
     | '/settings/source-control'
-    | '/t3work/new'
+    | '/t3team/new'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/draft/$draftId'
-    | '/t3work/projects/$projectId'
-    | '/t3work/projects/$projectId/threads/$threadId'
-    | '/t3work/projects/$projectId/tickets/$ticketId'
+    | '/t3team/projects/$projectId'
+    | '/t3team/projects/$projectId/threads/$threadId'
+    | '/t3team/projects/$projectId/tickets/$ticketId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -282,18 +282,18 @@ export interface RootRouteChildren {
   ConnectRoute: typeof ConnectRoute
   PairRoute: typeof PairRoute
   SettingsRoute: typeof SettingsRouteWithChildren
-  T3workRoute: typeof T3workRouteWithChildren
+  T3teamRoute: typeof T3teamRouteWithChildren
   ConnectCallbackRoute: typeof ConnectCallbackRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/t3work': {
-      id: '/t3work'
-      path: '/t3work'
-      fullPath: '/t3work'
-      preLoaderRoute: typeof T3workRouteImport
+    '/t3team': {
+      id: '/t3team'
+      path: '/t3team'
+      fullPath: '/t3team'
+      preLoaderRoute: typeof T3teamRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -331,12 +331,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatIndexRouteImport
       parentRoute: typeof ChatRoute
     }
-    '/t3work/new': {
-      id: '/t3work/new'
+    '/t3team/new': {
+      id: '/t3team/new'
       path: '/new'
-      fullPath: '/t3work/new'
-      preLoaderRoute: typeof T3workNewRouteImport
-      parentRoute: typeof T3workRoute
+      fullPath: '/t3team/new'
+      preLoaderRoute: typeof T3teamNewRouteImport
+      parentRoute: typeof T3teamRoute
     }
     '/settings/source-control': {
       id: '/settings/source-control'
@@ -401,12 +401,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConnectCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/t3work/projects/$projectId': {
-      id: '/t3work/projects/$projectId'
+    '/t3team/projects/$projectId': {
+      id: '/t3team/projects/$projectId'
       path: '/projects/$projectId'
-      fullPath: '/t3work/projects/$projectId'
-      preLoaderRoute: typeof T3workProjectsProjectIdRouteImport
-      parentRoute: typeof T3workRoute
+      fullPath: '/t3team/projects/$projectId'
+      preLoaderRoute: typeof T3teamProjectsProjectIdRouteImport
+      parentRoute: typeof T3teamRoute
     }
     '/_chat/draft/$draftId': {
       id: '/_chat/draft/$draftId'
@@ -422,19 +422,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatEnvironmentIdThreadIdRouteImport
       parentRoute: typeof ChatRoute
     }
-    '/t3work/projects/$projectId/tickets/$ticketId': {
-      id: '/t3work/projects/$projectId/tickets/$ticketId'
+    '/t3team/projects/$projectId/tickets/$ticketId': {
+      id: '/t3team/projects/$projectId/tickets/$ticketId'
       path: '/tickets/$ticketId'
-      fullPath: '/t3work/projects/$projectId/tickets/$ticketId'
-      preLoaderRoute: typeof T3workProjectsProjectIdTicketsTicketIdRouteImport
-      parentRoute: typeof T3workProjectsProjectIdRoute
+      fullPath: '/t3team/projects/$projectId/tickets/$ticketId'
+      preLoaderRoute: typeof T3teamProjectsProjectIdTicketsTicketIdRouteImport
+      parentRoute: typeof T3teamProjectsProjectIdRoute
     }
-    '/t3work/projects/$projectId/threads/$threadId': {
-      id: '/t3work/projects/$projectId/threads/$threadId'
+    '/t3team/projects/$projectId/threads/$threadId': {
+      id: '/t3team/projects/$projectId/threads/$threadId'
       path: '/threads/$threadId'
-      fullPath: '/t3work/projects/$projectId/threads/$threadId'
-      preLoaderRoute: typeof T3workProjectsProjectIdThreadsThreadIdRouteImport
-      parentRoute: typeof T3workProjectsProjectIdRoute
+      fullPath: '/t3team/projects/$projectId/threads/$threadId'
+      preLoaderRoute: typeof T3teamProjectsProjectIdThreadsThreadIdRouteImport
+      parentRoute: typeof T3teamProjectsProjectIdRoute
     }
   }
 }
@@ -477,43 +477,43 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
   SettingsRouteChildren,
 )
 
-interface T3workProjectsProjectIdRouteChildren {
-  T3workProjectsProjectIdThreadsThreadIdRoute: typeof T3workProjectsProjectIdThreadsThreadIdRoute
-  T3workProjectsProjectIdTicketsTicketIdRoute: typeof T3workProjectsProjectIdTicketsTicketIdRoute
+interface T3teamProjectsProjectIdRouteChildren {
+  T3teamProjectsProjectIdThreadsThreadIdRoute: typeof T3teamProjectsProjectIdThreadsThreadIdRoute
+  T3teamProjectsProjectIdTicketsTicketIdRoute: typeof T3teamProjectsProjectIdTicketsTicketIdRoute
 }
 
-const T3workProjectsProjectIdRouteChildren: T3workProjectsProjectIdRouteChildren =
+const T3teamProjectsProjectIdRouteChildren: T3teamProjectsProjectIdRouteChildren =
   {
-    T3workProjectsProjectIdThreadsThreadIdRoute:
-      T3workProjectsProjectIdThreadsThreadIdRoute,
-    T3workProjectsProjectIdTicketsTicketIdRoute:
-      T3workProjectsProjectIdTicketsTicketIdRoute,
+    T3teamProjectsProjectIdThreadsThreadIdRoute:
+      T3teamProjectsProjectIdThreadsThreadIdRoute,
+    T3teamProjectsProjectIdTicketsTicketIdRoute:
+      T3teamProjectsProjectIdTicketsTicketIdRoute,
   }
 
-const T3workProjectsProjectIdRouteWithChildren =
-  T3workProjectsProjectIdRoute._addFileChildren(
-    T3workProjectsProjectIdRouteChildren,
+const T3teamProjectsProjectIdRouteWithChildren =
+  T3teamProjectsProjectIdRoute._addFileChildren(
+    T3teamProjectsProjectIdRouteChildren,
   )
 
-interface T3workRouteChildren {
-  T3workNewRoute: typeof T3workNewRoute
-  T3workProjectsProjectIdRoute: typeof T3workProjectsProjectIdRouteWithChildren
+interface T3teamRouteChildren {
+  T3teamNewRoute: typeof T3teamNewRoute
+  T3teamProjectsProjectIdRoute: typeof T3teamProjectsProjectIdRouteWithChildren
 }
 
-const T3workRouteChildren: T3workRouteChildren = {
-  T3workNewRoute: T3workNewRoute,
-  T3workProjectsProjectIdRoute: T3workProjectsProjectIdRouteWithChildren,
+const T3teamRouteChildren: T3teamRouteChildren = {
+  T3teamNewRoute: T3teamNewRoute,
+  T3teamProjectsProjectIdRoute: T3teamProjectsProjectIdRouteWithChildren,
 }
 
-const T3workRouteWithChildren =
-  T3workRoute._addFileChildren(T3workRouteChildren)
+const T3teamRouteWithChildren =
+  T3teamRoute._addFileChildren(T3teamRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   ConnectRoute: ConnectRoute,
   PairRoute: PairRoute,
   SettingsRoute: SettingsRouteWithChildren,
-  T3workRoute: T3workRouteWithChildren,
+  T3teamRoute: T3teamRouteWithChildren,
   ConnectCallbackRoute: ConnectCallbackRoute,
   OauthCallbackRoute: OauthCallbackRoute,
 }

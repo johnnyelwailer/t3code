@@ -36,7 +36,7 @@
     "@t3tools/project-context": "workspace:*",
     "@t3tools/project-recipes": "workspace:*",
     "@t3tools/shared": "workspace:*",
-    "@t3tools/t3work-skill-packs": "workspace:*",
+    "@t3tools/t3team-skill-packs": "workspace:*",
     "@tanstack/react-pacer": "^0.19.4",
     "@tanstack/react-router": "^1.160.2",
     "@tanstack/react-virtual": "^3.13.12",
