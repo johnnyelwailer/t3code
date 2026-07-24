@@ -1,191 +1,130 @@
-# Epic 40: Code And Team Modes
+# Epic 40: Code and Work Sidebar Surfaces in T3 Team
 
 ## Decision
 
-T3 Team supports two user-facing modes over one shared thread, project, workflow, and
-runtime model:
+T3 Team is the permanent product shell. It is not a mode that users can turn off.
 
-- **Code mode** is the focused coding surface: projects, threads, files, worktrees, Git,
-  terminals, diffs, and pull requests.
-- **Team mode** is the coordination surface: projects, work items, parent and child
-  threads, workflows, packs, change sets, and review.
+Upstream's Code/Work toggle is integrated inside that shell and changes the sidebar
+presentation only:
 
-The mode is a presentation and navigation context. It is not a second provider runtime,
-thread database, persistence model, or authentication boundary. A thread created in one
-mode remains the same thread when opened in the other mode.
+- **Code** keeps the upstream-style classic sidebar.
+- **Work** uses the upstream-style Inbox sidebar.
 
-Use **Team** as the visible T3 Team label. Do not expose the conflicting product name
-"T3 Work". If an upstream contract eventually calls the second surface `work`, adapt it
-at the mode registry boundary rather than leaking that identifier through T3 Team UI.
+The toggle does not create a second product, thread, provider runtime, persistence model,
+authentication boundary, or work/code capability set. The selected project, environment,
+thread, draft, and detail-sidecar preference survive the switch. There are no
+"Open in Code" or "Open in Team" actions: the user changes the sidebar lens while
+remaining in T3 Team.
 
-## Why two modes
+## Product graph
 
-Upstream T3 Code is evolving a native coding surface around Sidebar V2 and thread
-lifecycle states. Relevant upstream work includes:
-
-- [Agents and workflow observability](https://github.com/pingdotgg/t3code/pull/4220)
-- [Waiting status for background tasks](https://github.com/pingdotgg/t3code/pull/4415)
-- [Review unsettled threads](https://github.com/pingdotgg/t3code/pull/4417)
-- [Server-driven PR monitoring](https://github.com/pingdotgg/t3code/pull/4428)
-- [Folders, worktree labels, and Git sync](https://github.com/pingdotgg/t3code/pull/4207)
-- [Thread forking](https://github.com/pingdotgg/t3code/pull/4390)
-- [Thread references](https://github.com/pingdotgg/t3code/pull/4010)
-
-These primitives are valuable in both surfaces, but upstream's flat coding-thread inbox
-does not replace T3 Team's project-to-work-item hierarchy. We adopt the lifecycle and
-observability primitives, while keeping the Team information architecture.
-
-The latest inspected upstream main was
-[`202e5609`](https://github.com/pingdotgg/t3code/commit/202e5609ffb294bc0aa86c08ce1d3751de567226).
-The latest inspected nightly was
-[`v0.0.29-nightly.20260724.890`](https://github.com/pingdotgg/t3code/releases/tag/v0.0.29-nightly.20260724.890).
-Maria's visible [snooze UI PR #4418](https://github.com/pingdotgg/t3code/pull/4418)
-improves parked-thread shelves and the composer wake banner. The exact upstream
-Code/Work toggle discussed during planning was not publicly verifiable in the inspected
-PR set; treat its final contract as incoming evidence, not as an assumption here.
-
-## Shared product graph
+The shared product graph remains:
 
 ```text
 Company / project
-  ├─ work item
-  │   ├─ parent thread
-  │   │   ├─ child research thread
-  │   │   └─ child implementation thread
-  │   └─ change set / review
-  └─ project-level thread
+  ├─ work item (label/context, not a hierarchy node)
+  │   └─ parent and child threads
+  ├─ workflow runs / packs
+  └─ change sets / reviews
 ```
 
-The same graph is presented differently by each mode:
+Work items provide context and attribution. Only parent/child threads create sidebar
+hierarchy. A work item is not a container row above its threads by default.
 
-| Shared entity | Code mode | Team mode |
-|---|---|---|
-| Project | Project/thread inbox | Project dashboard and work areas |
-| Work item | Optional context attachment | First-class backlog/My Work entity |
-| Thread | Chat, files, terminal, Git, PR | Parent/child coordination and handoff |
-| Workflow run | Execution details and logs | Pack/recipe outcome attached to work |
-| Change set | Diff and source-control review | Work-item approval and delivery state |
-| Agent child | Activity or agent panel | Nested child thread under the parent/work item |
+## Code / classic sidebar
 
-## Global shell and mode switch
+Code follows upstream's classic behavior and remains deliberately lean:
 
-The global shell owns the mode switch, project/environment selection, command palette,
-notifications, and active-thread identity. The switch should be compact and persistent:
+- preserve upstream thread lifecycle, selection, waiting, approval, snooze, settled,
+  PR-indicator, and wake behavior;
+- retain parent/child thread hierarchy;
+- show T3 Team project/work-item attribution only where it is not already obvious from
+  the hierarchy;
+- do not duplicate work-item metadata as additional rows merely to advertise Team;
+- keep work-item, workflow, and pack details in the selected thread or sidecar unless an
+  upstream surface already exposes them.
 
-```text
-[ T3 Team ]    [ Code ] [ Team ]
-```
+The Code sidebar is still inside the T3 Team shell. It is not a separate product view.
 
-Rules:
+## Work / Inbox sidebar
 
-1. Persist the preferred mode per workspace or project, not globally for every project.
-2. Include the mode in deep links when a destination is mode-specific.
-3. Preserve project, work-item, thread, and environment context across a switch.
-4. Never create or duplicate a thread merely because the user changed modes.
-5. Provide explicit actions: **Open in Code**, **Open in Team**, and **Attach to work item**.
-6. On mobile, keep the same mode model but use a top-level segmented control or a
-   navigation-sheet entry; do not create a third mobile-only information architecture.
+Work integrates T3 Team context into upstream Inbox behavior rather than replacing it
+with a project-management tree.
 
-Suggested surface type:
+### Thread rows
 
-```ts
-type ProductSurface = "code" | "team";
-```
+- Ordinary threads without a T3 Team work item remain ordinary upstream Inbox threads.
+- Threads with a work item always show compact work-item attribution in Inbox.
+- Child threads remain the only hierarchy. Inbox may show a child as a standalone active
+  row even when its parent is settled.
+- The current selected thread remains selected when switching between Code and Work.
+- Clicking a thread opens that thread and respects its saved detail-sidecar view setting.
 
-The value belongs in route/UI state. Provider selection, runtime mode, permissions, and
-thread identity remain shared.
+### Work-item rows
 
-## Code mode
+Work-item rows are optional Inbox entries, not hierarchy parents. They appear when the
+work item is directly assigned to the user or explicitly pinned. They should reuse the
+existing T3 Team navbar-item visual language while remaining visually distinct from
+thread rows and fitting the upstream Inbox look.
 
-Code mode should feel native to upstream T3 Code:
+- Clicking a work-item row opens work-item details.
+- Work-item rows participate in the same merged stream as thread activity.
+- Position should be based on the latest relevant activity, including descendant thread
+  activity, subject to the upstream Inbox ordering rules.
+- If a work item and related thread are both visible, experiment with visual grouping and
+  adjacency without turning the work item into a hierarchy node.
 
-- project and thread sidebar
-- active, waiting, settled, snoozed, and needs-attention states
-- working duration and in-flight indicators
-- files, terminal, worktree, branch, diff, and pull-request panels
-- thread fork and thread-reference actions
-- environment-aware new-thread creation
+### PR indicators
 
-Code mode is where an individual implementation thread gets executed. It should not
-attempt to render the full backlog, work-item hierarchy, or pack authoring surface.
+PRs are not first-class Inbox rows yet. Native PR detail is deferred to a dedicated
+GitHub integration stream with full GitHub feature parity as its target.
 
-## Team mode
+For now:
 
-Team mode keeps the existing T3 Team hierarchy:
+- reuse upstream's thread-to-PR association and external-click behavior;
+- show a small official GitHub-style PR state icon on a thread when it has an associated
+  PR;
+- when descendant threads have PRs, a work-item row may show an aggregate count across
+  all descendants;
+- do not invent a native PR detail view in this sidebar work.
 
-```text
-Project
-  ├─ Overview / Backlog / My Work
-  ├─ Work item
-  │   ├─ context-bound parent thread
-  │   ├─ child agent threads
-  │   └─ change set / review
-  └─ project-level planning threads
-```
+### Scheduled work
 
-Team mode is where a lead or individual contributor answers: What matters, who is doing
-it, what is blocked, what changed, and what should happen next?
+Autonomous workflow waits use a separate **Scheduled** section. This is not upstream's
+user-controlled Snoozed behavior.
 
-Its sidebar remains hierarchical. Upstream's flat Sidebar V2 can inspire a filter lens,
-but should not replace the Team tree.
+- Scheduled is visible in both Code and Work.
+- It is lower priority than active/actionable work but remains glanceable.
+- Rows use compact relative time where possible, such as `in 3h`.
+- If the workflow supplies a useful reason, show it, such as `Waiting for deploy window ·
+  in 3h`; otherwise do not invent a reason.
+- Earliest wake time is the provisional ordering.
+- Wake, promotion, unread, and lifecycle transitions follow upstream behavior rather than
+  introducing a competing Team-specific lifecycle model.
+- Shelf expansion and fallback wording remain visual implementation details to evaluate
+  with a concrete prototype.
 
-## Core user flows
+Approval-required and user-input states remain upstream states and should not be
+reimplemented as generic workflow badges. Abstract workflow existence has no Inbox value
+by itself; expose only a concrete user-relevant consequence such as a wake time, approval,
+input request, failure, or change-set state.
 
-### Start work
+## Cross-surface invariants
 
-1. User opens a project or work item in Team mode.
-2. User chooses an action such as Investigate, Plan, Implement, or Review.
-3. T3 Team creates one context-bound thread with the work-item context.
-4. The thread appears under the work item and can be opened in Code mode.
+1. One thread remains one thread across Code and Work.
+2. Mode switching never duplicates, relocates, or forks a thread.
+3. Project, environment, work-item context, selection, draft, and sidecar preference
+   survive switching.
+4. Team remains the shell and owns work-item, workflow, pack, review, and change-set
+   semantics.
+5. Code and Work are presentation lenses, not authorization or execution modes.
+6. Workflow sleeping is distinct from user snooze; settled is distinct from deleted.
+7. Upstream lifecycle and attention behavior remains authoritative unless T3 Team adds a
+   concrete, documented presentation rule.
 
-### Delegate nested work
+## Implementation seams
 
-1. Parent thread starts a child through the T3 Team child-thread tool.
-2. Child appears beneath the parent and remains linked to the work item.
-3. Child reports progress, result, or a request for input.
-4. Parent shows a durable summary card; Team mode rolls the state up to the work item.
-5. Code mode may show the same child in its agent/activity panel without flattening the
-   Team hierarchy.
-
-### Wait for background work
-
-Use one honest vocabulary:
-
-- **Working**: the current turn is active.
-- **Waiting for agent**: a child or delegated task is still active.
-- **Waiting for CI**: a monitor is active.
-- **Waiting for you**: approval or input is required.
-- **Sleeping**: a workflow is clock-parked.
-- **Snoozed**: the user hid a thread until a time.
-- **Settled**: the user considers the thread parked/done for now.
-
-Waiting must remain visible in both modes. A thread with a live monitor or child must not
-briefly look Done.
-
-### Review and delivery
-
-1. Code mode shows the files, diff, branch, checks, and PR monitor.
-2. Team mode shows the change set attached to the work item.
-3. User approves, edits, rejects, or delegates the change set.
-4. The parent thread receives the result and the work item records the decision.
-
-## State axes
-
-Keep these axes independent:
-
-1. **Placement**: project, work item, parent thread, child thread.
-2. **Conversation**: working, complete, failed, awaiting input.
-3. **Execution**: queued, running, sleeping, paused, cancelled.
-4. **Attention**: unread, approval required, snoozed, settled, woke.
-5. **Delivery**: files changed, PR checks, review state, change-set state.
-
-In particular, workflow sleeping must not be represented as user snoozing, and settled
-must not mean deleted. Settled and snoozed threads remain deep-linkable in both modes.
-
-## Architecture seams
-
-The implementation should extend these existing T3 Team seams rather than create a
-parallel product shell:
+Adapt the existing T3 Team seams instead of creating a parallel product shell:
 
 - `apps/web/src/t3team/components/t3team-ProjectSidebar.tsx`
 - `apps/web/src/t3team/components/t3team-projectSidebarThreadTree.ts`
@@ -193,87 +132,73 @@ parallel product shell:
 - `apps/web/src/t3team/t3team-mergedThreads.ts`
 - `apps/server/src/t3team-thread-placement-routes.ts`
 - `packages/contracts/src/orchestration.ts`
-- T3 Team workflow, pack, sidecar, and change-set surfaces under `apps/web/src/t3team/`
+- workflow, pack, sidecar, and change-set surfaces under `apps/web/src/t3team/`
 
-The mode adapter should sit above these surfaces:
+Keep the adapter above shared thread/runtime state:
 
 ```text
-Shared shell
-  ├─ ProductSurfaceContext
-  ├─ shared thread/runtime state
-  ├─ shared command palette and notifications
-  ├─ CodeSurface
-  └─ TeamSurface
+T3 Team shell
+  ├─ Code / classic sidebar adapter
+  ├─ Work / Inbox sidebar adapter
+  └─ shared thread, project, work-item, workflow, and source-control state
 ```
 
-Do not import the entire upstream `SidebarV2` into Team mode. Reuse its pure lifecycle,
-sorting, waiting, and observability concepts through small namespaced adapters.
+Reuse upstream pure lifecycle, sorting, waiting, selection, and PR-state concepts through
+small adapters. Do not blindly import upstream Sidebar V2 as the Team information
+architecture.
 
 ## Delivery plan
 
-### Phase 0: shared mode contract
+### Phase 0: establish the shared sidebar contract
 
-- Add the mode registry and route/UI state.
-- Define cross-mode navigation payloads.
-- Acceptance: switching modes preserves project, environment, thread, and draft context.
+- Map upstream Code/Work state into T3 Team's permanent shell.
+- Preserve selection, drafts, deep links, and sidecar preference.
+- Add contract tests for cross-surface identity and route state.
 
-### Phase 1: native Code mode
+### Phase 1: integrate Work / Inbox context
 
-- Integrate the upstream coding sidebar and source-control surfaces.
-- Keep Team mode behind its own surface boundary.
-- Acceptance: Code mode can create, open, fork, monitor, and review a thread without
-  mutating Team placement.
+- Add compact work-item attribution to Inbox thread rows.
+- Add assigned/pinned work-item rows with distinct-but-native rendering.
+- Preserve upstream ordering and lifecycle behavior before experimenting with grouping.
 
-### Phase 2: Team mode continuity
+### Phase 2: add Team-specific observability
 
-- Add Open in Code, Open in Team, and Attach to work item.
-- Show Team parent/work-item context in Code mode.
-- Show Code branch/diff/PR state in Team mode.
-- Acceptance: one thread remains addressable and correctly placed from both modes.
+- Adapt child-thread and workflow-run state to the Inbox without replacing its flat
+  activity model.
+- Add Scheduled rows for concrete autonomous wake times.
+- Keep approval and user-input states on upstream status paths.
 
-### Phase 3: nested observability
+### Phase 3: source-control indicators
 
-- Adapt upstream Agents panel data to parent/child T3 Team threads and workflow runs.
-- Add waiting and wake summaries to parent threads and work items.
-- Acceptance: background work, child completion, failure, and input requests are visible
-  without opening every child.
-
-### Phase 4: review and triage
-
-- Attach PR monitors and change sets to work items.
-- Add a project triage lens: Needs attention, Active, Waiting, Snoozed, Settled.
-- Acceptance: the Team tree remains the default; the lens is shareable and agrees with
-  the sidebar status resolver.
+- Reuse upstream PR association and external links.
+- Add GitHub-state icons and descendant PR counts on work items.
+- Keep full PR detail and review parity in a separate GitHub integration stream.
 
 ## Verification requirements
 
-- Route tests for mode persistence, deep links, and cross-mode navigation.
-- Mapper tests proving thread identity and Team placement survive a mode switch.
-- State tests proving workflow sleeping, user snooze, settled, and waiting are distinct.
-- Parent/child tests for roll-up, wake-up, failure, and requested input.
-- Browser checks for Code → Team and Team → Code flows.
-- Mobile checks for the mode switch and nested-thread navigation.
-- Focused upstream-merge tests for orchestration contracts, provider runtime ingestion,
-  persistence, and PR monitoring.
+- Route tests prove Code ↔ Work preserves thread identity, selection, draft, environment,
+  work-item context, and sidecar preference.
+- Sidebar tests prove classic hierarchy, Inbox attribution, child-thread standalone
+  visibility, assigned/pinned work-item rows, and PR count propagation.
+- State tests distinguish approval, user input, workflow sleeping, Scheduled, Snoozed,
+  settled, and wake transitions.
+- Browser checks cover switching surfaces, clicking work items, clicking threads, and
+  preserving the selected thread.
+- Focused upstream merge tests cover lifecycle, selection, PR indicators, and source
+  control.
+- Scheduled visual tests cover compact relative time, optional reason text, and wake
+  promotion.
 
-## Rejected alternatives
+## Explicitly deferred
 
-1. **Use Sidebar V2 as the Team sidebar.** This loses the project/work-item/thread
-   hierarchy and creates a second product IA.
-2. **Maintain separate Code and Team thread records.** This duplicates history and makes
-   handoff, notifications, and review unreliable.
-3. **Treat Team as a provider or runtime mode.** Product surface and execution policy are
-   different concerns.
-4. **Conflate workflow sleeping with user snooze.** One is execution state; the other is
-   attention/visibility state.
-5. **Make the flat triage lens the default.** Team users need hierarchy first; flat views
-   are valuable for focused review and morning triage.
+- Native PR detail and full GitHub review parity.
+- A separate project-management tree inside Work/Inbox.
+- Generic workflow badges without a user-relevant consequence.
+- Final visual treatment of work-item/thread grouping and Scheduled shelf expansion.
 
-## Open decisions
+## Product decisions still open only for implementation exploration
 
-- Whether Team-mode settled/snoozed state is shared across teammates or user-local.
-- Whether the final upstream label is `Work`, `Team`, or another name; T3 Team should
-  avoid exposing the conflicting “T3 Work” brand.
-- Whether mode preference belongs to a project, workspace, or environment.
-- Which Code-mode panels are available on mobile and which remain deep links.
-
+- Exact merged-stream grouping and adjacency treatment when a work item and its thread are
+  both present.
+- Scheduled fallback wording and collapsed/expanded shelf presentation.
+- Whether an aggregate PR count is displayed as an icon, count badge, or both.

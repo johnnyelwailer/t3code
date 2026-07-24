@@ -31,6 +31,12 @@ Current state:
 
 This repository is still very early. Expect rough edges.
 
+> [!WARNING]
+> The T3 Team rename is an intentional pre-release clean cut. It changes product-prefixed
+> SQL identifiers without compatibility migrations or legacy fallback logic. Existing
+> disposable local state from an earlier pre-rename build may need to be reset before using
+> a renamed build; this is not a data-preserving upgrade path.
+
 Detailed working spec and pack model: [`docs/t3team-mvp`](./docs/t3team-mvp).
 
 ## Installation
