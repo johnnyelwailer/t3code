@@ -160,6 +160,7 @@ export function ProjectDashboardKickoffAside({
         onClearSelectedRecipe={clearSelectedRecipe}
         providers={providers}
         isConnected={isConnected}
+        {...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {})}
         injectedContextAttachments={injectedContextAttachments}
         onRemoveContextAttachment={removeContextAttachment}
         onSubmit={(text, selection, runtimeMode, interactionMode, selectedToolIds) => {

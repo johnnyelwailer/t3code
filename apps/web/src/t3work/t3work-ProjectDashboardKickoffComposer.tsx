@@ -21,6 +21,7 @@ type ProjectDashboardKickoffComposerProps = {
   onClearSelectedRecipe?: () => void;
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
+  workspaceRoot?: string;
   injectedContextAttachments: ReadonlyArray<T3WorkContextAttachment>;
   onRemoveContextAttachment: (id: string) => void;
   onSubmit: (
@@ -58,6 +59,7 @@ export const ProjectDashboardKickoffComposer = forwardRef<
           : {})}
         providers={input.providers}
         isConnected={input.isConnected}
+        {...(input.workspaceRoot ? { workspaceRoot: input.workspaceRoot } : {})}
         onSubmit={input.onSubmit}
       />
     </div>
