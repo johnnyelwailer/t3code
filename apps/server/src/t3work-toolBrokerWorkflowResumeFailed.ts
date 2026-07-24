@@ -1,5 +1,5 @@
 /**
- * The failed-run branch of `t3work.workflow.resume`, split from
+ * The failed-run branch of `t3work.orchestration.resume`, split from
  * {@link ./t3work-toolBrokerWorkflowResumeActions.ts} for the additive size budget:
  * re-resolve recipe scripts exactly as boot rehydration does, rebuild the durable lifecycle
  * over the persisted row, and re-drive {@link resumeWorkflowRunFromJournal} detached.
@@ -28,7 +28,7 @@ export const makeResumeFailedRun =
     Effect.gen(function* () {
       if (!deps.path) {
         return yield* Effect.fail(
-          "Filesystem services are not available for t3work.workflow.resume in this runtime.",
+          "Filesystem services are not available for t3work.orchestration.resume in this runtime.",
         );
       }
       const workspaceRoot = yield* workspaceRootFor(deps, threadId);
@@ -76,6 +76,6 @@ export const makeResumeFailedRun =
         ok: true as const,
         runId: run.runId,
         status: "accepted" as const,
-        hint: "Resuming from the journal (same-prefix replay); observe progress via t3work.workflow.status.",
+        hint: "Resuming from the journal (same-prefix replay); observe progress via t3work.orchestration.status.",
       };
     });

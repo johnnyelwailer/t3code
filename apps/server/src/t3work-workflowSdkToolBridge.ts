@@ -15,7 +15,7 @@ import type {
   ValidateRecipeToolResult,
 } from "@t3work/sdk/tools/t3workRecipes";
 import type { RunWorkflowToolResult, WorkflowRunIntent } from "@t3work/sdk/tools/t3workWorkflow";
-// Importing the tool modules registers `t3work.recipe.*` / `t3work.workflow.run` in the SDK
+// Importing the tool modules registers `t3work.recipe.*` / `t3work.orchestration.run` in the SDK
 // tool registry.
 import "@t3work/sdk/tools/t3workRecipes";
 import "@t3work/sdk/tools/t3workWorkflow";
@@ -98,7 +98,7 @@ export function executeWorkflowSdkThreadRename(input: {
   });
 }
 
-/** Execute `t3work.workflow.run` through the SDK tool registry (arg decode + result check). */
+/** Execute `t3work.orchestration.run` through the SDK tool registry (arg decode + result check). */
 export function executeWorkflowSdkWorkflowRunTool(input: {
   readonly toolArgs: unknown;
   readonly runWorkflow: (args: {
@@ -111,7 +111,7 @@ export function executeWorkflowSdkWorkflowRunTool(input: {
   return Effect.tryPromise({
     try: () =>
       executeRegisteredTool(
-        "t3work.workflow.run",
+        "t3work.orchestration.run",
         input.toolArgs,
         baseToolHandlerCtx({
           renameThread: unsupportedRenameThread,

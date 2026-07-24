@@ -124,8 +124,8 @@ describe("createT3workTurnToolContext", () => {
           capabilities: ["read"],
         },
         {
-          id: "t3work.workflow.run",
-          label: "Run ephemeral workflow",
+          id: "t3work.orchestration.run",
+          label: "Run ephemeral orchestration",
           capabilities: ["write"],
         },
         {

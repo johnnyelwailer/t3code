@@ -1,5 +1,5 @@
 /**
- * Live wiring for the agent-facing `t3work.workflow.run` tool (ephemeral workflows, slice 1):
+ * Live wiring for the agent-facing `t3work.orchestration.run` tool (ephemeral workflows, slice 1):
  * resolves the calling thread's project, enforces the ephemeral concurrency cap, persists an
  * inline `source` under `.t3work-runs/<runId>/workflow.ts` (the engine re-reads it on every
  * resume/rehydrate, so the file must outlive the call) or containment-checks `workflowPath`,
@@ -68,7 +68,7 @@ export function makeWorkflowRunToolHandlers<E>(deps: {
     runWorkflow: (args) => {
       if (!fileSystem || !path) {
         return Effect.fail(
-          "Filesystem services are not available for t3work.workflow.run in this runtime.",
+          "Filesystem services are not available for t3work.orchestration.run in this runtime.",
         );
       }
       return Effect.gen(function* () {

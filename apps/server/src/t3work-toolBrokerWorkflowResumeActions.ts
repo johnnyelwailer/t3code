@@ -1,5 +1,5 @@
 /**
- * The `t3work.workflow.resume` action implementations, split from
+ * The `t3work.orchestration.resume` action implementations, split from
  * {@link ./t3work-toolBrokerWorkflowResumeTool.ts} for the additive size budget:
  * optional corrected-source replacement (ephemeral runs only), the paused-run continuation
  * restore (mirrors the HTTP control route). The failed-run journal re-drive lives in
@@ -33,7 +33,9 @@ export interface WorkflowResumeToolDeps<E = string> {
   readonly journalStore: JournalStore;
   readonly rearmScheduler: () => Promise<void>;
   readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
-  readonly loadThreadProject: (threadId: ThreadId) => Effect.Effect<
+  readonly loadThreadProject: (
+    threadId: ThreadId,
+  ) => Effect.Effect<
     { readonly project: { readonly workspaceRoot: string | null | undefined } },
     E
   >;
@@ -64,7 +66,7 @@ export const replaceRunSourceIfRequested = <E>(
     if (trimmed.length === 0) return;
     if (!deps.fileSystem || !deps.path) {
       return yield* Effect.fail(
-        "Filesystem services are not available for t3work.workflow.resume in this runtime.",
+        "Filesystem services are not available for t3work.orchestration.resume in this runtime.",
       );
     }
     const precheckError = precheckWorkflowSource(trimmed);

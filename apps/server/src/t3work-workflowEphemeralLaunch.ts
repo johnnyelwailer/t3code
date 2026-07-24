@@ -5,7 +5,7 @@
  * launch drive through identical durability wiring:
  *   • the HTTP recipe-launch route (`t3work-thread-recipe-workflow-routes.ts`), which stamps the
  *     recipe-launch activity BEFORE calling in (composer-override disarm — recipe-only concern);
- *   • the `t3work.workflow.run` tool handler (`t3work-toolBrokerWorkflowRunTools.ts`), which
+ *   • the `t3work.orchestration.run` tool handler (`t3work-toolBrokerWorkflowRunTools.ts`), which
  *     skips the stamp (no composer override to disarm) and passes origin `ephemeral`.
  * It builds the SQLite-backed lifecycle row (with `origin`), emits the best-effort play-as-shape
  * preview into the launch thread (observability — an unreadable source skips it), then launches

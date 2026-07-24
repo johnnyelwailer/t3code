@@ -1,5 +1,5 @@
 /**
- * Agent-facing ephemeral workflow launch (`t3work.workflow.run`). The SDK layer owns the id,
+ * Agent-facing ephemeral orchestration launch (`t3work.orchestration.run`). The SDK layer owns the id,
  * argument/result schemas, and group classification; the server broker supplies the engine-backed
  * implementation via `ctx.t3work.runWorkflow`. No approval gate — observability (live step
  * timeline, durable run row) is the compensating control.
@@ -45,7 +45,7 @@ export const RunWorkflowToolResult = Schema.Struct({
 export type RunWorkflowToolResult = typeof RunWorkflowToolResult.Type;
 
 export const runWorkflowTool = defineTool({
-  id: "t3work.workflow.run",
+  id: "t3work.orchestration.run",
   group: t3workThreadWrite,
   args: RunWorkflowToolArgs,
   result: RunWorkflowToolResult,
@@ -54,7 +54,7 @@ export const runWorkflowTool = defineTool({
     const workflowPath = args.workflowPath?.trim() ?? "";
     if ((source.length === 0) === (workflowPath.length === 0)) {
       throw new Error(
-        "t3work.workflow.run requires exactly one of 'source' (inline workflow TypeScript) or 'workflowPath' (existing .workflow.ts in the workspace).",
+        "t3work.orchestration.run requires exactly one of 'source' (inline workflow TypeScript) or 'workflowPath' (existing .workflow.ts in the workspace).",
       );
     }
     const intent = {
@@ -64,7 +64,7 @@ export const runWorkflowTool = defineTool({
     };
     if (intent.goal.length === 0 || intent.expectedOutcome.length === 0) {
       throw new Error(
-        "t3work.workflow.run requires nonblank intent.goal and intent.expectedOutcome.",
+        "t3work.orchestration.run requires nonblank intent.goal and intent.expectedOutcome.",
       );
     }
     if (
@@ -72,11 +72,13 @@ export const runWorkflowTool = defineTool({
       intent.guardrails.some((guardrail) => guardrail.length === 0)
     ) {
       throw new Error(
-        "t3work.workflow.run requires intent.guardrails with at least one nonblank guardrail.",
+        "t3work.orchestration.run requires intent.guardrails with at least one nonblank guardrail.",
       );
     }
     if (!ctx.t3work?.runWorkflow) {
-      throw new Error("t3work.workflow.run requires a t3work workflow client in ToolHandlerCtx.");
+      throw new Error(
+        "t3work.orchestration.run requires a t3work workflow client in ToolHandlerCtx.",
+      );
     }
     // The host result is re-validated against RunWorkflowToolResult by executeToolHandler.
     return (await ctx.t3work.runWorkflow({

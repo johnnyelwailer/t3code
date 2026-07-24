@@ -1,7 +1,7 @@
 /* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test writes an ephemeral workflow source + temp dir.
 /**
- * `t3work.workflow.resume` — the broker tool surfacing the engine's journal resume:
+ * `t3work.orchestration.resume` — the broker tool surfacing the engine's journal resume:
  *
  *   • Validation: missing/unknown runId, another thread's run (identical not-found answer,
  *     so run ids can't be probed across threads), a non-resumable status, and corrected
@@ -49,7 +49,10 @@ import {
   T3workWorkflowEngineRegistry,
   T3workWorkflowEngineRegistryLive,
 } from "./t3work-workflowEngineRegistry.ts";
-import { T3workWorkflowScheduler, T3workWorkflowSchedulerLive } from "./t3work-workflowScheduler.ts";
+import {
+  T3workWorkflowScheduler,
+  T3workWorkflowSchedulerLive,
+} from "./t3work-workflowScheduler.ts";
 
 const cwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-resume-tool-"));
 afterAll(() => NodeFS.rmSync(cwd, { recursive: true, force: true }));
@@ -99,7 +102,10 @@ const makeHandlers = Effect.gen(function* () {
   return makeWorkflowResumeToolHandlers(deps)(threadId);
 });
 
-const baseRow = (runId: string, overrides: Partial<Parameters<typeof buildRunningWorkflowRunRow>[0]> = {}) =>
+const baseRow = (
+  runId: string,
+  overrides: Partial<Parameters<typeof buildRunningWorkflowRunRow>[0]> = {},
+) =>
   buildRunningWorkflowRunRow({
     runId,
     workflowPath: NodePath.join(cwd, ".t3work-runs", runId, "workflow.ts"),
@@ -123,7 +129,7 @@ it.effect("rejects a missing runId, an unknown runId, and another thread's run i
     assert.match(missing, /requires a runId/);
 
     const unknown = yield* handlers.resumeWorkflowRun({ runId: "nope" }).pipe(Effect.flip);
-    assert.match(unknown, /No workflow run found/);
+    assert.match(unknown, /No orchestration run found/);
 
     yield* repo.upsert({
       ...baseRow("other-thread-run"),
@@ -133,7 +139,7 @@ it.effect("rejects a missing runId, an unknown runId, and another thread's run i
     const foreign = yield* handlers
       .resumeWorkflowRun({ runId: "other-thread-run" })
       .pipe(Effect.flip);
-    assert.match(foreign, /No workflow run found/);
+    assert.match(foreign, /No orchestration run found/);
   }).pipe(Effect.provide(TestLayer)),
 );
 
@@ -251,10 +257,7 @@ it.live(
         }),
       );
       assert.strictEqual(launched.status, "failed");
-      assert.strictEqual(
-        Option.getOrThrow(yield* repo.getById({ runId })).status,
-        "failed",
-      );
+      assert.strictEqual(Option.getOrThrow(yield* repo.getById({ runId })).status, "failed");
 
       const value = yield* handlers.resumeWorkflowRun({ runId, source: correctedSource });
       assert.strictEqual(value.status, "accepted");

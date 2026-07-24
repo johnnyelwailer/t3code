@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - test asserts persisted run files on local disk.
 /**
- * `t3work.workflow.run` (ephemeral workflows, slice 1) — handler-level acceptance against the
+ * `t3work.orchestration.run` (ephemeral workflows, slice 1) — handler-level acceptance against the
  * REAL durable engine seams: an in-memory SQLite run repo + journal store (post-039 schema with
  * `origin`), the real launch funnel, and a captured orchestration dispatch standing in for the
  * live engine. Covers: argument validation (exactly one of source/workflowPath), pure-compute
@@ -141,7 +141,7 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
   return { handlers, dispatched, workspaceRoot, repo, registry };
 });
 
-testLayer("t3work.workflow.run — ephemeral workflow tool", (it) => {
+testLayer("t3work.orchestration.run — ephemeral workflow tool", (it) => {
   it.effect("returns an explicit workflow-UI handoff through the broker result", () =>
     Effect.gen(function* () {
       const result = yield* callT3workWorkflowRunTool({

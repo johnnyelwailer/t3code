@@ -1,5 +1,5 @@
 /**
- * Combines the `t3work.workflow.run`, `t3work.workflow.status`, and `t3work.workflow.resume`
+ * Combines the `t3work.orchestration.run`, `t3work.orchestration.status`, and `t3work.orchestration.resume`
  * per-thread wiring into one call. All are small `*Live.ts` builders that already resolve their
  * own optional durable-engine deps and return `undefined` when unwired; this just gives
  * `t3work-toolBrokerLive.ts` (already near the additive size budget) a single call site for the

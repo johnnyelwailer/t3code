@@ -35,6 +35,6 @@ Declare capabilities honestly: \`user\` for askUser/notifyUser, \`schedule\` for
 
 ## Scale and scope
 
-Match the workflow to what was asked: a one-off task gets a small linear body; "audit thoroughly" justifies fan-out plus a verification phase. A workflow doesn't need to be a saved recipe -- for a one-off multi-step task, write a temp workflow and run it directly with \`t3work.workflow.run\` (or whatever the run tool is named), no permission-seeking. Save it as a recipe in the background, and only once it's proven reusable.
+Match the orchestration to what was asked: a one-off task gets a small linear body; "audit thoroughly" justifies fan-out plus a verification phase. An orchestration doesn't need to be a saved recipe -- for a one-off multi-step task, write a temp orchestration and run it directly with \`t3work.orchestration.run\` (or whatever the run tool is named), no permission-seeking. Save it as a recipe in the background, and only once it's proven reusable.
 `;
 }

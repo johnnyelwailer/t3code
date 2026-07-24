@@ -1,5 +1,5 @@
 /**
- * Broker-side wiring for `t3work.workflow.resume`: resolves the durable-engine singletons
+ * Broker-side wiring for `t3work.orchestration.resume`: resolves the durable-engine singletons
  * OPTIONALLY from the broker's environment and builds the per-thread handler factory.
  * Optional so broker test layers that never wire the engine still build — without the
  * services the tool simply reports "not enabled". Mirrors
@@ -21,7 +21,7 @@ import {
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
 import { T3workWorkflowScheduler } from "./t3work-workflowScheduler.ts";
 
-/** Build the per-thread `t3work.workflow.resume` handler factory, or `undefined` when the
+/** Build the per-thread `t3work.orchestration.resume` handler factory, or `undefined` when the
  * durable-engine services are absent from the broker's environment. */
 export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToolsForThread")(
   function* (deps: {

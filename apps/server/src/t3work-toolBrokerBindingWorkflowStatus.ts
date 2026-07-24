@@ -1,5 +1,5 @@
 /**
- * Binding glue for `t3work.workflow.status`: routes the broker's tool call through to the host
+ * Binding glue for `t3work.orchestration.status`: routes the broker's tool call through to the host
  * handler bound to the calling thread. Simpler than {@link ./t3work-toolBrokerBindingWorkflowRun.ts} —
  * a direct read, no SDK bridge — but mirrors its shape so the dispatch module stays small.
  */
@@ -9,7 +9,7 @@ import type { T3workToolCallResult } from "./t3work-toolBroker.ts";
 import { errorResult, foldResult, okResult } from "./t3work-toolBrokerHelpers.ts";
 import type { T3workWorkflowStatusToolHandlers } from "./t3work-toolBrokerWorkflowStatusTool.ts";
 
-export const T3WORK_WORKFLOW_STATUS_TOOL_ID = "t3work.workflow.status";
+export const T3WORK_WORKFLOW_STATUS_TOOL_ID = "t3work.orchestration.status";
 
 const readRunId = (value: unknown): string | undefined => {
   if (!value || typeof value !== "object" || globalThis.Array.isArray(value)) {

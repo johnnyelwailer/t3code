@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Action recipes are project-scoped, context-aware workflow launchers. They turn a blank
+Action recipes are project-scoped, context-aware orchestration launchers. They turn a blank
 chat into a concrete, repeatable action that is visible in the UI before the user opens a
 conversation.
 
@@ -19,16 +19,16 @@ in code, and reused everywhere. Avoid inventing recipe-specific parallels to any
 
 | Primitive    | What it is                                                                                                                                                                                                                                                                                                                           | Owns                       |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
-| **Context**  | A read-only snapshot of the world the agent and workflows read. Two depths: a light _render context_ used before launch, and a rich _full context_ available after launch.                                                                                                                                                           | `packages/project-context` |
-| **Tools**    | The single capability surface — the verbs that read or mutate `t3work` and external state. The _same_ surface is consumed by agent turns, workflow steps, and views, scoped by `allowedToolGroups`. See [Epic 21](./21-context-tool-catalog.md).                                                                                     | `T3workToolBroker`         |
-| **Workflow** | The core engine: a TS-native, replay-based durable-execution engine (Epic 25) where workflows are plain async TypeScript `.workflow.ts` bodies and primitive calls are journaled. The earlier step-union runtime is no longer a live execution path; only compat naming remnants remain (see below).                                 | `packages/project-recipes` |
+| **Context**  | A read-only snapshot of the world the agent and orchestrations read. Two depths: a light _render context_ used before launch, and a rich _full context_ available after launch.                                                                                                                                                           | `packages/project-context` |
+| **Tools**    | The single capability surface — the verbs that read or mutate `t3work` and external state. The _same_ surface is consumed by agent turns, orchestration steps, and views, scoped by `allowedToolGroups`. See [Epic 21](./21-context-tool-catalog.md).                                                                                     | `T3workToolBroker`         |
+| **Orchestration** | The core engine: a TS-native, replay-based durable-execution engine (Epic 25) where orchestrations are plain async TypeScript `.workflow.ts` bodies and primitive calls are journaled. The earlier step-union runtime is no longer a live execution path; only compat naming remnants remain (see below).                                 | `packages/project-recipes` |
 | **View**     | A code-based, interactive UI unit that mounts on any surface — the action list, a conversation message, a project nav page, a dashboard slot, a side panel. Action launchers, custom project views, and conversation cards are all Views. See [Epic 19](./19-workspace-miniapps.md) and [Epic 31](./31-composable-project-views.md). | `@t3work/sdk`              |
 
 How they interact, in one line:
 
 > A **surface** discovers **recipes** using a render **context** → the user launches one →
 > the host builds the full **context**, materializes a **run**, and executes the recipe's
-> **workflow** → workflow steps drive the agent, call **tools**, run scripts, and present
+> **orchestration** → orchestration steps drive the agent, call **tools**, run scripts, and present
 > **views**.
 
 "Template" is not a fifth primitive. It is a lifecycle stage: a recipe as _authored_
@@ -147,12 +147,12 @@ is needed repeatedly, expose it as a **Tool** rather than a library import.
 ## Context: Reactive Queryable Surface
 
 Context is the read substrate that every consumer of the recipe system reads — recipe
-discovery (`visible(ctx)`, `displayName(ctx)`, `rank(ctx)`), Views, and workflow steps
+discovery (`visible(ctx)`, `displayName(ctx)`, `rank(ctx)`), Views, and orchestration steps
 (`script`, `agent`, `tool`) all bind the same model. It is not a recipe-specific concept.
 
 This section defines the contract. Surfaces (next section) declare which context shapes
 they expose; Discovery uses the contract to evaluate recipes; Views consume the same
-queryables as component props; workflow steps consume a snapshot of the same contract at
+queryables as component props; orchestration steps consume a snapshot of the same contract at
 step start.
 
 ### Surface-typed contexts
@@ -330,12 +330,12 @@ The Context contract is consumed identically by all three places that need data:
 | --------------------------------------------------- | -------------------------------------------------- | ---------------------------------- |
 | Recipe discovery (`visible`, `displayName`, `rank`) | UI side, live context                              | Yes — Proxy-traced                 |
 | Views (in conversation, dashboards, side panels)    | UI side, live context as props                     | Yes — field access is subscription |
-| Workflow steps (`script`, `agent`, `tool`)          | Server side, **snapshot** of context at step start | No — one-shot per step             |
+| Orchestration steps (`script`, `agent`, `tool`)          | Server side, **snapshot** of context at step start | No — one-shot per step             |
 
 The query API and lazy-resource semantics are identical; recipe and View authors learn
-one model. The only difference is that server-side workflow steps read against a snapshot
+one model. The only difference is that server-side orchestration steps read against a snapshot
 fixed for the step's lifetime — they don't re-run when data changes mid-step. For
-long-running workflows that need to react to data changes mid-run, the runtime exposes
+long-running orchestrations that need to react to data changes mid-run, the runtime exposes
 typed events (e.g. `collect-input` can resume on a tool-emitted event), not implicit
 re-execution.
 
@@ -457,7 +457,7 @@ remote-managed packs → explicit locks
 ```
 
 A higher-precedence recipe whose id matches a lower-precedence recipe may override fields
-such as visibility, rank, slash alias, default inputs, or workflow entrypoint. Locks may
+such as visibility, rank, slash alias, default inputs, or orchestration entrypoint. Locks may
 prevent override. The long-term goal is a single discovery path over a single recipe type,
 regardless of source.
 
@@ -501,8 +501,8 @@ mechanism by which a pack ships recipes.
 ## Conversation Participants
 
 A conversation has **three message authors**: `user`, `agent`, and `system`. The third
-author is what lets a workflow speak in the conversation as itself rather than ventriloquise
-through `user` or `agent` messages — which is the bug that today's "workflow-injected
+author is what lets an orchestration speak in the conversation as itself rather than ventriloquise
+through `user` or `agent` messages — which is the bug that today's "orchestration-injected
 prompt rendered as a user message" pattern creates. System messages are first-class in the
 conversation history; they are not a separate activity timeline.
 
@@ -532,10 +532,10 @@ The flags give you three useful cases:
 | `visibleToUser` | `visibleToAgent` | Use                                                                     |
 | --------------- | ---------------- | ----------------------------------------------------------------------- |
 | ✓               | ✓                | shared turn (e.g. "Here's the test plan I prepared")                    |
-| ✓               | ✗                | UX-only (e.g. "Workflow paused, awaiting your input")                   |
-| ✗               | ✓                | hidden agent context (workflow-injected instructions, structured input) |
+| ✓               | ✗                | UX-only (e.g. "Orchestration paused, awaiting your input")                   |
+| ✗               | ✓                | hidden agent context (orchestration-injected instructions, structured input) |
 
-System messages are **mutable**. A workflow may update body/attachments/status until the
+System messages are **mutable**. An orchestration may update body/attachments/status until the
 message reaches its terminal `completed` state. While it is still in progress, `status`
 captures whether the message is actively progressing or paused on user input. This
 subsumes the former `activity.phase: presented → updated → completed` pattern; the upsert
@@ -569,7 +569,7 @@ Each attachment kind has a host-registered renderer:
   Renders via the artifact's registered kind renderer.
 - **`view`** — an interactive miniapp ([Epic 19](./19-workspace-miniapps.md)) attached to
   the message. Multiple `view` attachments may coexist with the message's primary body;
-  actions on each round-trip through the workflow runtime as typed events. This is the
+  actions on each round-trip through the orchestration runtime as typed events. This is the
   path for "custom views inside a message" — for example, a checklist View next to a
   diff-preview View on the same system message.
 
@@ -583,7 +583,7 @@ its attachments (resource snapshots, artifact summaries, file/image refs); the a
 A message's "primary View" is just the first `view` attachment (or, equivalently, an
 attachment whose role the renderer treats as the message's main card). The launch card
 described in [Conversation-Native Launch UX](#conversation-native-launch-ux) is one such
-view attachment on the workflow run's first system message.
+view attachment on the orchestration run's first system message.
 
 **LLM-context mapping** is an adapter concern, not part of the conversation model. When the
 t3 adapter builds an agent turn, it filters by `visibleToAgent` and projects each message
@@ -618,14 +618,14 @@ All rendering, persistence, and LLM-mapping logic lives in `t3work-`-prefixed fi
 upstream `Message` type gains one optional field. See [Epic 02 — Additive Extension
 Pattern](./02-additive-architecture.md#additive-extension-pattern).
 
-## Workflows
+## Orchestrations
 
-The workflow is the heart of the system. It is a **TS-native, replay-based durable-execution
-engine** — a workflow is a plain async TypeScript `.workflow.ts` body whose primitive calls are
+The orchestration is the heart of the system. It is a **TS-native, replay-based durable-execution
+engine** — an orchestration is a plain async TypeScript `.workflow.ts` body whose primitive calls are
 journaled and replayable. The full engine specification (the file shape, the globals, the
 determinism contract, the Thread model, capability gating) is authoritative in
-[Epic 25: Workflow Engine](./25-workflow-engine.md). This section retains only the recipe-facing
-parts: how recipes reference workflows and how the launcher behaves by workflow shape.
+[Epic 25: Agent Orchestration Engine](./25-workflow-engine.md). This section retains only the recipe-facing
+parts: how recipes reference orchestrations and how the launcher behaves by orchestration shape.
 
 > **The legacy step-union JSON model is no longer a live runtime.** Earlier revisions of this
 > doc documented a `RecipeWorkflow = { steps: RecipeWorkflowStep[] }` union (`agent` / `script` /
@@ -640,12 +640,12 @@ parts: how recipes reference workflows and how the launcher behaves by workflow 
 > `apps/server/src/t3work-workflowEngineLaunch.ts`, and
 > `packages/project-recipes/src/kickoff.ts` + `runtime.ts`.
 
-The former `run-interactive-agent` step is just an `agent` call. There is one workflow body,
-not a separate kickoff union and workflow union.
+The former `run-interactive-agent` step is just an `agent` call. There is one orchestration body,
+not a separate kickoff union and orchestration union.
 
-### Deterministic workflows (no chat)
+### Deterministic orchestrations (no chat)
 
-Not every recipe culminates in a conversation. A workflow that contains **no `agent` step**
+Not every recipe culminates in a conversation. An orchestration that contains **no `agent` step**
 is **deterministic**: it executes its `tool` / `script` / `present-message` /
 `collect-input` steps without involving the LLM, and the launch path skips
 thread/launch-card creation. The user sees the side effect (a filter applied, an artifact
@@ -653,13 +653,13 @@ written, a draft mutation queued), not a chat.
 
 The canonical use case is an **inline filter** — a backlog View that renders chips like
 "Show only unassigned", "Show all assigned to me", "Hide closed". Each chip is a recipe
-whose workflow is a single `tool` step calling a view-state tool
+whose orchestration is a single `tool` step calling a view-state tool
 (`t3work.backlog.set_assignee_filter`, etc.) with the chip's parameters. Clicking the chip
-runs the workflow; the backlog re-filters; no conversation is created.
+runs the orchestration; the backlog re-filters; no conversation is created.
 
 Authoring rule:
 
-- A workflow whose body never touches the launching `thread` (no `thread.askAgent` / `askUser`
+- An orchestration whose body never touches the launching `thread` (no `thread.askAgent` / `askUser`
   / `notify*`) — it only runs `tools.*` / `scripts.*` and maybe a one-shot `agent(…)` for
   compute — is **headless**: it runs with `thread` bound to `undefined` and reports completion
   via a transient affordance (toast, focus change, the visible state change itself).
@@ -671,14 +671,14 @@ A recipe whose body drives the launching `thread` stays on the conversational pa
 does not split into two recipe types. It's the same `.workflow.ts` shape, with the launch
 behaviour selected by whether the body uses the `thread` global.
 
-### Launcher UX by workflow shape
+### Launcher UX by orchestration shape
 
 The shell does not own a single launcher UX. Recipes surface through **sidecar sections**
 ([Epic 19 — Sidecar Sections](./19-workspace-miniapps.md#sidecar-sections)) — most
 commonly a pack-provided "Quick Starts" section — and that section's View decides per-item
-click behaviour based on the workflow's content:
+click behaviour based on the orchestration's content:
 
-| Workflow shape                                         | Click behaviour         | Result surface                                                                        |
+| Orchestration shape                                         | Click behaviour         | Result surface                                                                        |
 | ------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------- |
 | Headless (never touches `thread`)                      | Execute immediately     | Visible state change + transient toast                                                |
 | Drives `thread.askAgent` / `askUser`                   | Launch chat directly    | Chat thread opens; the body drives turns + user escalations                           |
@@ -689,7 +689,7 @@ authoring shape (`recipe.ts`) covers all three; nothing on the recipe declares w
 wants.
 
 In the legacy runtime, the launcher inspects the recipe's step list. In the Epic 25
-engine, the same shape detection is performed by static analysis of the workflow body —
+engine, the same shape detection is performed by static analysis of the orchestration body —
 the loader checks whether the body contains any `agent()` calls (conversational), any
 `agent.task()` calls (background), and whether the first primitive is a user-facing
 prompt (`ui.show` / `user.ask`). The conceptual mapping (deterministic ↔ conversational ↔
@@ -700,7 +700,7 @@ filter chip) use the deterministic row only — they cannot live on the chat pat
 
 The same deterministic launcher path also backs sidecar context-menu actions declared by
 `defineSidecarSection.itemActions` / `sectionActions`. A section action is just a small
-single-step workflow launched through the existing `launchRecipeWorkflow` runtime; there
+single-step orchestration launched through the existing `launchRecipeWorkflow` runtime; there
 is no parallel sidecar-action executor.
 
 These UX rules belong to the Quick Starts section (and any future recipe-launcher
@@ -712,7 +712,7 @@ have entirely different click behaviours owned by their own View.
 A recipe can also be selected from the composer by typing `/<slashAlias>`. The slash
 typeahead is the keyboard-driven equivalent of clicking a Quick Starts card: the recipe
 becomes the composer's pre-submit selection chip, the user keeps typing free-form
-kickoff text, and submission funnels through the normal [Launcher UX by workflow shape](#launcher-ux-by-workflow-shape)
+kickoff text, and submission funnels through the normal [Launcher UX by orchestration shape](#launcher-ux-by-orchestration-shape)
 table — there is no second launch path.
 
 #### Composer typeahead is a host primitive, not a recipe concern
@@ -812,14 +812,14 @@ click):
 3. The composer renders `TicketKickoffComposerSelectedRecipe` (or its in-thread
    equivalent) above the editor with the recipe's icon, title, and remove (`×`) affordance.
 4. The user continues typing free-form text. On submit, the normal kickoff path runs:
-   `text` becomes [`RecipeKickoffSubmission.text`](#kickoff-submission), the workflow
-   launches per the shape table in [Launcher UX by workflow shape](#launcher-ux-by-workflow-shape).
+   `text` becomes [`RecipeKickoffSubmission.text`](#kickoff-submission), the orchestration
+   launches per the shape table in [Launcher UX by orchestration shape](#launcher-ux-by-orchestration-shape).
 
 This deliberately rebinds to the **existing pre-submit chip mechanism** rather than
 introducing a new "launch-on-accept" branch. Consequences:
 
 - One launch path. Click vs. slash both flow through `setSelectedRecipe → submit`. The
-  workflow runtime does not need to know which entry point fired.
+  orchestration runtime does not need to know which entry point fired.
 - Deterministic recipes still execute on submit (consistent with the shape table). A
   deterministic recipe selected via slash + an empty body simply submits to the synchronous
   execute path; no chat surface, same as clicking.
@@ -871,7 +871,7 @@ recipe slash now.
 ### Background agent tasks
 
 The interactive `agent` step opens or uses a conversation thread — the LLM's reply is a
-visible message the user sees and (usually) the workflow continues on. Some workflows need
+visible message the user sees and (usually) the orchestration continues on. Some orchestrations need
 the opposite: an LLM invocation for **a specific, defined task** whose result feeds the next
 step but never reaches a chat surface. Examples:
 
@@ -881,7 +881,7 @@ step but never reaches a chat surface. Examples:
 - extract a structured field set from a freeform description
 
 In the engine (Epic 25) these are just `agent(prompt, { schema })` — a one-shot in a fresh
-isolated thread whose typed result lives as a normal variable in the workflow body:
+isolated thread whose typed result lives as a normal variable in the orchestration body:
 
 ```ts
 const summary = await agent(`Summarize this diff:\n\n${pr.diff}`, {
@@ -894,7 +894,7 @@ const summary = await agent(`Summarize this diff:\n\n${pr.diff}`, {
 Contract:
 
 - **No launching-thread involvement.** The one-shot runs in its own isolated thread; it never
-  touches the launching `thread`, so using it does not turn a headless workflow into a
+  touches the launching `thread`, so using it does not turn a headless orchestration into a
   conversational one.
 - **Structured result.** The model is instructed to emit JSON conforming to `schema`;
   the engine parses + validates with Effect's decoder and returns the typed value.
@@ -902,7 +902,7 @@ Contract:
   before failing as `SchemaExhaustedError`.
 - **No step-result binding model needed.** In the replay-based engine, results are just
   variables in scope — no `resultBinding` / `$ref` indirection.
-- **Cost discipline.** The optional per-call `model` override lets workflows route
+- **Cost discipline.** The optional per-call `model` override lets orchestrations route
   routine tasks to cheaper models without changing the user's default selection.
 - **Failure handling.** Timeouts, provider errors, and schema-exhaustion surface as
   typed `WorkflowError` subclasses that `try`/`catch` can branch on.
@@ -912,11 +912,11 @@ in an isolated thread (there is no separate `agent.task`).
 
 ### Execution model
 
-Workflows are plain async TS `.workflow.ts` bodies; every primitive call is journaled with a
+Orchestrations are plain async TS `.workflow.ts` bodies; every primitive call is journaled with a
 content hash of its arguments. Resume replays the body from the top, returning recorded results
 until reaching the next un-journaled call. This unlocks `try`/`catch`, branching, structured
 request/response across threads (the `Thread` verbs), multi-hour suspension on user escalation,
-and typed composition of workflows by typed reference. The full contract — the determinism
+and typed composition of orchestrations by typed reference. The full contract — the determinism
 rules authors must follow and replay-drift error semantics — lives in
 [Epic 25 §The determinism contract](./25-workflow-engine.md#the-determinism-contract--replay-safety).
 The earlier stateless step-union runtime (a forward-only cursor over a persisted step list) is no
@@ -933,7 +933,7 @@ agent-scoped tools (`T3workToolBroker` binds a per-thread set of `callTool`/`rea
 capabilities for an agent turn). The same surface is consumed by:
 
 - agent turns (today),
-- workflow bodies — `script` / `tool` steps in the legacy runtime; in the Epic 25 engine,
+- orchestration bodies — `script` / `tool` steps in the legacy runtime; in the Epic 25 engine,
   via the typed `tools.<group>.<name>(args)` ambient tree (see
   [Epic 25 §Tools](./25-workflow-engine.md#tools) for `defineTool` / `defineToolGroup`
   and how the typed-ref tree is constructed),
@@ -974,7 +974,7 @@ Binding modes:
   binding (read tools and `readResource` only). This is why `visible` must stay
   side-effect-free.
 
-> **Implementation status.** The broker now backs workflow `script` and `tool` steps and
+> **Implementation status.** The broker now backs orchestration `script` and `tool` steps and
 > pre-launch `visible.ts` evaluation. Thread-bound recipe execution is filtered by
 > `allowedToolGroups`; pre-launch bindings are further intersected with the read-only
 > default (`integration.read`, `ui.render`). Project-local recipes with no declared
@@ -999,7 +999,7 @@ provides conversation cards during a run. Relevant placements:
 
 In-conversation Views are not a separate "card protocol": they are carried by the `view`
 field of a system message (see [Conversation Participants](#conversation-participants)).
-A workflow emits the system message — via a `present-message` step in the legacy runtime,
+An orchestration emits the system message — via a `present-message` step in the legacy runtime,
 or via the `ui.show(view)` primitive in the Epic 25 engine — and the host renders the
 referenced View at the message's placement.
 
@@ -1008,7 +1008,7 @@ Project nav views additionally use the block/capability model from
 [Epic 31](./31-composable-project-views.md): agents compose `@t3work/blocks` such as
 tables, boards, filters, and recipe sections rather than calling raw provider APIs.
 Views never start a chat by themselves; the shell owns click and launch behavior. A View
-action (button, form submit, approval) round-trips through the workflow runtime as a typed
+action (button, form submit, approval) round-trips through the orchestration runtime as a typed
 event — it does not mutate React state directly and, under [stage 2](#security-two-stages),
 does not call tools directly from the renderer.
 
@@ -1018,7 +1018,7 @@ metadata.
 > **Implementation status.** Launcher Views render today via the MDX runtime
 > (`t3work-recipeActionView.tsx`, client-side `@mdx-js/mdx` evaluate). Host-rendered
 > conversation cards (`checklist | form | approval | artifact-preview | status`) render
-> today from workflow `card` steps. Converging both onto the single miniapp View model and
+> today from orchestration `card` steps. Converging both onto the single miniapp View model and
 > the typed-event action path is Phase 5.
 >
 > Concretely, native `.tsx` Views (`action.view.tsx`, `views/PrItem.tsx` in
@@ -1044,7 +1044,7 @@ metadata.
 
 When a recipe is launched the host materializes a **run** — a working directory on disk.
 The "recipe instance" is not a separate concept: it _is_ the run's on-disk directory plus
-its persisted workflow state. There is no `ActionRecipeInstance` type distinct from the
+its persisted orchestration state. There is no `ActionRecipeInstance` type distinct from the
 run.
 
 ```text
@@ -1061,7 +1061,7 @@ runs/
                          # (per phase 25.2 — see Epic 25 §Open question 2)
 ```
 
-The run directory is the **workflow engine's** persistent record of a launch — a durable
+The run directory is the **orchestration engine's** persistent record of a launch — a durable
 working directory the engine uses for audit, replay, and to give `script` / `tool` calls a
 place to write outputs. **It is not an API surface the agent navigates.** `recipe.ts` and
 `*.workflow.ts` are engine-internal artifacts; the agent never sees them and is never told to
@@ -1074,12 +1074,12 @@ Launch sequence (thread-first, so the user sees state immediately):
 3. Build the full context for the project and optional work item.
 4. Render templated metadata and files; materialize the run directory; write `context.json`,
    `context.schema.json`, and `context-map.md`.
-5. Begin executing the workflow. Show progress on the launch card.
-6. Only send the first agent turn when the workflow reaches an `agent` step.
+5. Begin executing the orchestration. Show progress on the launch card.
+6. Only send the first agent turn when the orchestration reaches an `agent` step.
 
 ### What the agent actually sees
 
-When the workflow reaches an `agent` step, the workflow runtime constructs the agent's
+When the orchestration reaches an `agent` step, the orchestration runtime constructs the agent's
 turn material — it does **not** send a "read this directory" instruction. The agent's
 view is built from three sources:
 
@@ -1099,12 +1099,12 @@ view is built from three sources:
 
 The user never sees the bootstrap material in the conversation timeline — it lives on
 a system message with `visibleToUser: false`. The first user-visible message in the
-conversation is either the launch card (host-owned) or whatever the workflow's first
+conversation is either the launch card (host-owned) or whatever the orchestration's first
 `present-message` emits.
 
 **Anti-pattern:** do NOT emit a user-role message containing
 "Follow the instantiated action recipe at &lt;path&gt;. Read recipe.ts first, then
-prompt.md…". That string leaks workflow-runtime internals into the conversation,
+prompt.md…". That string leaks orchestration-runtime internals into the conversation,
 ventriloquises through the user role, and exposes file paths the agent has no general
 business reading. The runtime owns `recipe.ts` / `workflow.ts`; the agent owns the
 task.
@@ -1143,13 +1143,13 @@ it cannot drift from the type.
 
 ## Conversation-Native Launch UX
 
-This section applies only to recipes whose workflow contains at least one interactive
+This section applies only to recipes whose orchestration contains at least one interactive
 `agent` step. Deterministic recipes and background-task-only recipes follow the no-chat
-paths described in [Deterministic workflows](#deterministic-workflows-no-chat) and
+paths described in [Deterministic orchestrations](#deterministic-orchestrations-no-chat) and
 [Background agent tasks](#background-agent-tasks); they do not create a thread or insert
 a launch card.
 
-A recipe click is a first-class workflow launch, not "fill the composer for me." Launch
+A recipe click is a first-class orchestration launch, not "fill the composer for me." Launch
 switches the kickoff surface into normal conversation mode immediately.
 
 The host-owned **launch card** is conversation-native state, distinct from author-defined
@@ -1166,12 +1166,12 @@ thread bootstrap or first context build is still pending. It shows at least:
 - optional reason/rank metadata when discovery provided it
 
 The launch card updates in place (`status: active` → `waiting-for-input` → `completed`) as
-the workflow advances. Subsequent workflow turns appear as additional system messages.
+the orchestration advances. Subsequent orchestration turns appear as additional system messages.
 
-Launch is dynamic, decided by the workflow, not by a web-only special case: some recipes
+Launch is dynamic, decided by the orchestration, not by a web-only special case: some recipes
 auto-run the first agent turn immediately; others present a `collect-input` step and wait.
-If the workflow pauses for input, the first user reply resumes the workflow path — the
-reply is a normal `user` message in the conversation history, but workflow launch
+If the orchestration pauses for input, the first user reply resumes the orchestration path — the
+reply is a normal `user` message in the conversation history, but orchestration launch
 semantics own the transition (it is not a plain `thread.turn.start`).
 
 ### Kickoff submission
@@ -1186,9 +1186,9 @@ type RecipeKickoffSubmission = {
 };
 ```
 
-A workflow paused on `collect-input` resumes through the recipe runtime with this
-submission as workflow input. Any provider-specific translation from attachments to prompt
-material happens after the workflow resumes, keeping kickoff and workflow one continuous
+An orchestration paused on `collect-input` resumes through the recipe runtime with this
+submission as orchestration input. Any provider-specific translation from attachments to prompt
+material happens after the orchestration resumes, keeping kickoff and orchestration one continuous
 host-owned system.
 
 > **Implementation status.** The launch card, string/text kickoff, and `collect-input`
@@ -1217,7 +1217,7 @@ hatches" and not a rewrite:
 
 - Route every capability through the injected `api.*` surface even though raw access still
   works. Do not let new recipes reach for `node:fs`/`fetch` when a tool exists.
-- Make View actions emit typed events the workflow runtime handles, rather than calling
+- Make View actions emit typed events the orchestration runtime handles, rather than calling
   tools from the renderer.
 - Keep `allowedToolGroups` as the single enforcement point; it is inert in stage 1 but is
   exactly what stage 2 enforces.
@@ -1227,8 +1227,8 @@ project-hosted code.
 
 ## Agent-Created Recipes
 
-Agents may offer to create a new project recipe after a workflow succeeds, or on direct
-user request ("save this as a recipe"). Recipe authoring is itself a workflow — the
+Agents may offer to create a new project recipe after an orchestration succeeds, or on direct
+user request ("save this as a recipe"). Recipe authoring is itself an orchestration — the
 **`create-recipe` recipe** — built on the same primitives the agent is being asked to
 extend. It is the canonical end-to-end example of the architecture working.
 
@@ -1254,9 +1254,9 @@ The same generated pipeline covers **Tools** (`@t3work/sdk` exports a typed
 registry, autocomplete shows what's available) and **Views** (typed miniapp registry — a
 recipe's `view:` reference is type-checked against the surface's context).
 
-### The `create-recipe` workflow
+### The `create-recipe` orchestration
 
-A small, declarative workflow built from the unified step union — and itself a useful
+A small, declarative orchestration built from the unified step union — and itself a useful
 proof that the architecture composes end-to-end:
 
 ```ts
@@ -1318,7 +1318,7 @@ export default defineRecipe({
 });
 ```
 
-If this workflow runs end-to-end, the architecture has paid for itself: it exercises the
+If this orchestration runs end-to-end, the architecture has paid for itself: it exercises the
 unified step union, system messages with embedded Views, the shared tool surface, the
 materialized run directory, and the additive-guard discipline — all on the same primitives
 described in this epic.
@@ -1347,15 +1347,15 @@ referenced files (`./prompts/edit-recipe.md`, `./prompts/edit-section.md`, etc.)
 right move once per-kind guidance grows beyond what fits cleanly in one prompt — same
 recipe, multiple prompt references picked by the script step.
 
-The same workflow also backs the **"Customize…"** context-menu action used for
+The same orchestration also backs the **"Customize…"** context-menu action used for
 _structured / destructive_ operations (reset to source defaults, reset overrides, change tool
 grants, etc.). There are intentionally no ad-hoc confirmation dialogs in the UI — every
-destructive pack or project-local edit routes through this guided workflow's preview +
+destructive pack or project-local edit routes through this guided orchestration's preview +
 approval steps.
 
 ### Default behavior
 
-- **Offer first**, never silently create. The agent triggers the `create-recipe` workflow
+- **Offer first**, never silently create. The agent triggers the `create-recipe` orchestration
   with an explicit user confirmation; it does not write recipe files in the background.
 - Save under the current project `recipes/` directory as a `recipe.ts` plugin module.
 - Include a redacted fixture from the successful context for tests and future authoring.
@@ -1402,12 +1402,12 @@ the editable source of truth for the early MVP.
 | Pack-provided recipe discovery (`contents.recipes`, `source: "pack"`, precedence merge)                                                                                                                                                | Built (local packs; `recipe:v1` capability gate — signing/policy locks for remote-managed packs still pending)                                          |
 | Visibility (predicate + script, timeout, isolation)                                                                                                                                                                                    | Built (via `recipe.json` + expression engine)                                                                                                         |
 | TS-module authoring (`recipe.ts`), retire expression engine                                                                                                                                                                            | Partial (engine deleted; the discovery-layer `{{ }}` template renderer is kept and its removal deferred)                                              |
-| Unified workflow step union; kickoff absorbed                                                                                                                                                                                          | Retired as a live runtime; replaced by the Epic 25 engine (legacy naming remnants persist as compat naming, see Implementation Notes)                 |
-| Workflow runtime: bootstrap agent, card, await-card-action, script                                                                                                                                                                     | Retired as a live runtime; replaced by the Epic 25 engine                                                                                             |
-| Workflow runtime: mid-flow agent, tool, present-message, collect-input                                                                                                                                                                 | Deleted (replaced by Epic 25 primitives + the Thread model)                                                                                           |
+| Unified orchestration step union; kickoff absorbed                                                                                                                                                                                          | Retired as a live runtime; replaced by the Epic 25 engine (legacy naming remnants persist as compat naming, see Implementation Notes)                 |
+| Orchestration runtime: bootstrap agent, card, await-card-action, script                                                                                                                                                                     | Retired as a live runtime; replaced by the Epic 25 engine                                                                                             |
+| Orchestration runtime: mid-flow agent, tool, present-message, collect-input                                                                                                                                                                 | Deleted (replaced by Epic 25 primitives + the Thread model)                                                                                           |
 | Three-author conversation model + `t3workExt` seam (system messages, view-in-message)                                                                                                                                                  | Built                                                                                                                                                 |
 | Shared tool surface for scripts/steps via broker; enforce `allowedToolGroups`                                                                                                                                                          | Built                                                                                                                                                 |
-| Deterministic workflows (no-agent workflows skip thread/launch-card) + `action.inline` placement                                                                                                                                       | Built (tool-step no-chat path; backlog inline chip wired)                                                                                             |
+| Deterministic orchestrations (no-agent orchestrations skip thread/launch-card) + `action.inline` placement                                                                                                                                       | Built (tool-step no-chat path; backlog inline chip wired)                                                                                             |
 | `agent.task` step (background non-interactive LLM call) + step-result binding model                                                                                                                                                    | Subsumed by `agent(…, { schema })` (no separate `agent.task`); step-result binding obsoleted by the replay-based engine (results are scope variables) |
 | Sidecar sections + `defineSidecarSection` SDK + composition model + remove hardcoded kickoff aside                                                                                                                                     | Built (sections + composition + shell menus + declared deterministic actions)                                                                         |
 | Composer slash-command launchers for recipes (`slashAlias` + `recipe-slash-command` item kind)                                                                                                                                         | Planned (precondition: extract shared composer-menu hook so kickoff wires `/`, `@`, `$` at all)                                                       |
@@ -1418,7 +1418,7 @@ the editable source of truth for the early MVP.
 | `Queryable<T>` contract (Array-backed at MVP)                                                                                                                                                                                          | Planned (Phase 2 — needed by unified steps)                                                                                                           |
 | `Queryable<T>` runtime: SQL-backed + signals (Signia / equivalent); projection-driven invalidation                                                                                                                                     | Planned (Phase 6 — scale tier)                                                                                                                        |
 | Agent-discovery types pipeline: generated `.d.ts` + `context.schema.json` + `context-map.md`                                                                                                                                           | Built                                                                                                                                                 |
-| `create-recipe` recipe (canonical end-to-end workflow proof)                                                                                                                                                                           | Built                                                                                                                                                 |
+| `create-recipe` recipe (canonical end-to-end orchestration proof)                                                                                                                                                                           | Built                                                                                                                                                 |
 | `edit-plugin-module` recipe (single canonical AI-edit entry point; backs "Edit this…" now and remains the base for "Customize…")                                                                                                       | Implemented for "Edit this…" (Phase 5c); structured customize flows remain deferred                                                                   |
 | Stage-2 sandboxing                                                                                                                                                                                                                     | Planned, parallel track                                                                                                                               |
 | **Epic 25 — `.workflow.ts` loader + `meta` static extractor + `defineWorkflow` / `defineTool` / `defineToolGroup` / `defineScript` SDK + ambient `tools.*` / `scripts.*` trees**                                                       | Implemented (25.1)                                                                                                                                    |
@@ -1430,13 +1430,13 @@ the editable source of truth for the early MVP.
 
 ## Implementation Notes
 
-- `packages/project-recipes` owns recipe definitions, the workflow engine, discovery, and
+- `packages/project-recipes` owns recipe definitions, the orchestration engine, discovery, and
   visibility evaluation.
 - `packages/project-context` owns context schemas, the `Queryable<T>` contract, and the
   generated agent-discovery artifacts (`.d.ts` per surface, `context.schema.json`,
   `context-map.md`). All three are generated from the canonical TS types — never
   hand-maintained.
-- `@t3work/sdk` is the workflow/tool authoring SDK (Epic 25: `defineWorkflow`, `defineTool`,
+- `@t3work/sdk` is the orchestration/tool authoring SDK (Epic 25: `defineWorkflow`, `defineTool`,
   `defineToolGroup`, `defineModel`, `defineScript`) and the public import path for the
   recipe/plugin-module and View `define*` helpers. Some helpers (e.g. `defineSidecarSection`)
   currently live in `packages/project-recipes` and are surfaced through `@t3work/sdk`.
@@ -1457,7 +1457,7 @@ the editable source of truth for the early MVP.
 - `apps/web/src/t3work` renders recipe actions and launch cards; it must not evaluate
   provider-specific context directly.
 - Thread bootstrap and the special recipe launch message live in the t3 adapter / server
-  workflow engine, split across
+  orchestration engine, split across
   [t3work-workflowEngineBroker.ts](apps/server/src/t3work-workflowEngineBroker.ts),
   [t3work-workflowEngineLaunch.ts](apps/server/src/t3work-workflowEngineLaunch.ts),
   [t3work-workflowEngineReactor.ts](apps/server/src/t3work-workflowEngineReactor.ts),

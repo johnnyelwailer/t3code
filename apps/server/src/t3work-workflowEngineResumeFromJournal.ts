@@ -1,6 +1,6 @@
 /**
  * Re-drive a parked (paused/failed) durable run from its journal — the machinery behind the
- * `t3work.workflow.resume` broker tool. This is surfacing, not rebuilding: it reuses the same
+ * `t3work.orchestration.resume` broker tool. This is surfacing, not rebuilding: it reuses the same
  * per-run controller the live launch and boot rehydration share
  * ({@link createWorkflowRunController}) and the SDK's `resumeWorkflow` same-prefix replay —
  * journaled entries return their recorded results verbatim; execution goes live past the

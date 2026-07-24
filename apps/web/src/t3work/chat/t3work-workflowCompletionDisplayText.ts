@@ -23,7 +23,7 @@ export function workflowCompletionDisplayText(messageId: string, text: string): 
         const title = label.charAt(0).toUpperCase() + label.slice(1);
         return `**${title}:** ${Array.isArray(value) ? value.join(", ") : String(value)}`;
       });
-    return readable.length > 0 ? readable.join("\n") : "Workflow completed.";
+    return readable.length > 0 ? readable.join("\n") : "Orchestration completed.";
   } catch {
     return text;
   }

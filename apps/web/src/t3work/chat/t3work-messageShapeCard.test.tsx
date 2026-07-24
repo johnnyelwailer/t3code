@@ -142,7 +142,7 @@ describe("workflow shape card in the timeline", () => {
     // the card owns the header — the message text echo must not double up above it
     expect(markup).not.toContain("Plan: shape.pr-review");
     // visually quiet default: no capability disclosure row for a capability-less run
-    expect(markup).not.toContain("This workflow declared these capabilities");
+    expect(markup).not.toContain("This orchestration declared these capabilities");
   }, 30000);
 
   it("discloses declared capabilities as plain-language chips before execution", async () => {
@@ -168,7 +168,7 @@ describe("workflow shape card in the timeline", () => {
     expect(markup).toContain("Modify GitHub");
     expect(markup).toContain("Merge pull requests, push branches, edit issues.");
     // the disclosure row is present and sits above the step list
-    expect(markup).toContain("This workflow declared these capabilities");
+    expect(markup).toContain("This orchestration declared these capabilities");
     expect(markup.indexOf("Modify GitHub")).toBeLessThan(markup.indexOf("github.pullRequest.get"));
   }, 30000);
 });

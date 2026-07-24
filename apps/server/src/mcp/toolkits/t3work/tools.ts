@@ -18,12 +18,22 @@ const dependencies = [McpInvocationContext.McpInvocationContext, T3workToolBroke
 export const T3WORK_MCP_CANONICAL_TOOL_MAP = {
   t3work_rename_thread: "t3work.thread.rename",
   t3work_start_child: "t3work.thread.start_child",
-  t3work_workflow_run: "t3work.workflow.run",
-  t3work_workflow_status: "t3work.workflow.status",
-  t3work_workflow_resume: "t3work.workflow.resume",
+  t3work_orchestration_run: "t3work.orchestration.run",
+  t3work_orchestration_status: "t3work.orchestration.status",
+  t3work_orchestration_resume: "t3work.orchestration.resume",
   t3work_show_widget: "t3work.widget.show",
   t3work_recipe_list: "t3work.recipe.list",
   t3work_recipe_validate: "t3work.recipe.validate",
+} as const;
+
+/** Deprecated MCP tool name → its replacement. The old agent-orchestration names
+ * (`t3work_workflow_*`) stay callable so pack configs, agent prompts, and live
+ * transcripts that reference them keep working; both names dispatch to the same
+ * canonical broker tool. */
+export const T3WORK_MCP_DEPRECATED_TOOL_ALIASES = {
+  t3work_workflow_run: "t3work_orchestration_run",
+  t3work_workflow_status: "t3work_orchestration_status",
+  t3work_workflow_resume: "t3work_orchestration_resume",
 } as const;
 
 export const T3WORK_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = new Set([
@@ -88,62 +98,104 @@ export const T3workSendMessageTool = Tool.make("t3work_send_message", {
   dependencies,
 });
 
-// Ephemeral "runbook": run a short multi-step workflow immediately in this
-// conversation, defined inline via `source` (persisted per-run, no approval
-// gate). Routes to the existing t3work.workflow.run broker tool. Prefer this
-// over walking multi-step tasks by hand; on a `failed` status, fix the source
-// and run again.
+// Ephemeral agent orchestration: run a short multi-step structure immediately in
+// this conversation, defined inline via `source` (persisted per-run, no approval
+// gate). Routes to the t3work.orchestration.run broker tool. Prefer this over
+// walking multi-step tasks by hand; on a `failed` status, fix the source and run
+// again.
+const orchestrationRunParameters = Schema.Struct({
+  source: Schema.optional(Schema.String),
+  workflowPath: Schema.optional(Schema.String),
+  args: Schema.optional(Schema.Unknown),
+  intent: Schema.Struct({
+    goal: Schema.String,
+    expectedOutcome: Schema.String,
+    guardrails: Schema.Array(Schema.String),
+  }),
+});
+
+const orchestrationRunDescription =
+  `${T3WORK_WORKFLOW_TAGLINE} Pass \`source\` (the orchestration body — MUST be orchestration ` +
+  "TypeScript starting with `export const meta = {...}`, NEVER YAML or JSON) or `workflowPath` " +
+  "(an existing `.workflow.ts`), required `intent` ({goal, expectedOutcome, guardrails}), and " +
+  "optional `args`. Returns {runId, status: accepted|completed|suspended|failed, " +
+  "handoff: 'workflow-ui', output?, error?}. After a successful handoff, end the current turn " +
+  "with no assistant prose; the orchestration card owns progress and user decisions.";
+
+export const T3workOrchestrationRunTool = Tool.make("t3work_orchestration_run", {
+  description: orchestrationRunDescription,
+  parameters: orchestrationRunParameters,
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
+// Read-only observability for a run launched via t3work_orchestration_run: what
+// it's doing now and what (if anything) to do next. Routes to the
+// t3work.orchestration.status broker tool. Prefer this over guessing from silence
+// after a handoff.
+const orchestrationStatusDescription =
+  "Observe an agent-orchestration run: status, what it's waiting on, and next-step hint. Omit " +
+  "runId to list recent runs.";
+const orchestrationStatusParameters = Schema.Struct({ runId: Schema.optional(Schema.String) });
+
+export const T3workOrchestrationStatusTool = Tool.make("t3work_orchestration_status", {
+  description: orchestrationStatusDescription,
+  parameters: orchestrationStatusParameters,
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
+// Resume a paused/failed orchestration run from its durable journal (same-prefix
+// replay: journaled steps return their recorded results; execution continues live
+// past the recorded frontier). Routes to the t3work.orchestration.resume broker
+// tool. Prefer this over re-running from scratch when the executed prefix should
+// be kept.
+const orchestrationResumeDescription =
+  "Resume a paused or failed agent-orchestration run from its journal. Pass the `runId` from " +
+  "t3work_orchestration_run/t3work_orchestration_status; optionally pass corrected `source` for " +
+  "an ephemeral run (same-prefix replay — do not change already-executed steps). Returns " +
+  "{runId, status: accepted|suspended|sleeping, hint}; observe progress via " +
+  "t3work_orchestration_status.";
+const orchestrationResumeParameters = Schema.Struct({
+  runId: Schema.String,
+  source: Schema.optional(Schema.String),
+});
+
+export const T3workOrchestrationResumeTool = Tool.make("t3work_orchestration_resume", {
+  description: orchestrationResumeDescription,
+  parameters: orchestrationResumeParameters,
+  success: Schema.Unknown,
+  failure: T3workMcpToolError,
+  dependencies,
+});
+
+// Deprecated aliases (see T3WORK_MCP_DEPRECATED_TOOL_ALIASES): identical schemas,
+// same canonical broker target. Kept so existing pack configs and agent prompts
+// that name `t3work_workflow_*` do not silently lose the capability.
+const deprecated = (replacement: string) =>
+  `DEPRECATED alias for ${replacement} — use that name instead. `;
+
 export const T3workWorkflowRunTool = Tool.make("t3work_workflow_run", {
-  description:
-    `${T3WORK_WORKFLOW_TAGLINE} Pass \`source\` (the orchestration body — MUST be workflow ` +
-    "TypeScript starting with `export const meta = {...}`, NEVER YAML or JSON) or `workflowPath`, " +
-    "required `intent` ({goal, expectedOutcome, guardrails}), and optional `args`. Returns " +
-    "{runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. " +
-    "After a successful workflow-ui handoff, end the current turn with no assistant prose; " +
-    "the workflow card owns progress and user decisions.",
-  parameters: Schema.Struct({
-    source: Schema.optional(Schema.String),
-    workflowPath: Schema.optional(Schema.String),
-    args: Schema.optional(Schema.Unknown),
-    intent: Schema.Struct({
-      goal: Schema.String,
-      expectedOutcome: Schema.String,
-      guardrails: Schema.Array(Schema.String),
-    }),
-  }),
+  description: deprecated("t3work_orchestration_run") + orchestrationRunDescription,
+  parameters: orchestrationRunParameters,
   success: Schema.Unknown,
   failure: T3workMcpToolError,
   dependencies,
 });
 
-// Read-only observability for a run launched via t3work_workflow_run: what it's
-// doing now and what (if anything) to do next. Routes to the t3work.workflow.status
-// broker tool. Prefer this over guessing from silence after a workflow-ui handoff.
 export const T3workWorkflowStatusTool = Tool.make("t3work_workflow_status", {
-  description:
-    "Observe a workflow run: status, what it's waiting on, and next-step hint. Omit runId to " +
-    "list recent runs.",
-  parameters: Schema.Struct({ runId: Schema.optional(Schema.String) }),
+  description: deprecated("t3work_orchestration_status") + orchestrationStatusDescription,
+  parameters: orchestrationStatusParameters,
   success: Schema.Unknown,
   failure: T3workMcpToolError,
   dependencies,
 });
 
-// Resume a paused/failed workflow run from its durable journal (same-prefix replay:
-// journaled steps return their recorded results; execution continues live past the
-// recorded frontier). Routes to the t3work.workflow.resume broker tool. Prefer this over
-// re-running a failed workflow from scratch when the executed prefix should be kept.
 export const T3workWorkflowResumeTool = Tool.make("t3work_workflow_resume", {
-  description:
-    "Resume a paused or failed workflow run from its journal. Pass the `runId` from " +
-    "t3work_workflow_run/t3work_workflow_status; optionally pass corrected `source` for an " +
-    "ephemeral run (same-prefix replay — do not change already-executed steps). Returns " +
-    "{runId, status: accepted|suspended|sleeping, hint}; observe progress via " +
-    "t3work_workflow_status.",
-  parameters: Schema.Struct({
-    runId: Schema.String,
-    source: Schema.optional(Schema.String),
-  }),
+  description: deprecated("t3work_orchestration_resume") + orchestrationResumeDescription,
+  parameters: orchestrationResumeParameters,
   success: Schema.Unknown,
   failure: T3workMcpToolError,
   dependencies,
@@ -176,7 +228,7 @@ export const T3workShowWidgetTool = Tool.make("t3work_show_widget", {
 export const T3workHelpTool = Tool.make("t3work_help", {
   description:
     'Get t3work reference docs on demand. Pass a topic slug (e.g. "agent-orchestration" for ' +
-    "how to author a t3work_workflow_run body); omit `topic` to list available topics.",
+    "how to author a t3work_orchestration_run body); omit `topic` to list available topics.",
   parameters: Schema.Struct({ topic: Schema.optional(Schema.String) }),
   success: Schema.String,
   failure: T3workMcpToolError,
@@ -190,22 +242,23 @@ export const T3workHelpTool = Tool.make("t3work_help", {
 // type means "any non-null"), and MCP clients reject a non-object tool inputSchema
 // on tools/list — which would take the whole toolkit down for that client.
 export const T3workRecipeListTool = Tool.dynamic("t3work_recipe_list", {
-  description: "List the project's saved recipe workflows (id, title, paths). Read-only.",
+  description: "List the project's saved recipe orchestrations (id, title, paths). Read-only.",
   parameters: { type: "object", properties: {}, additionalProperties: false },
   success: Schema.Unknown,
   failure: T3workMcpToolError,
 });
 
-// Static, read-only validation of a workflow before running it — either an
+// Static, read-only validation of an orchestration before running it — either an
 // existing on-disk recipe (`path`) or inline source (`source`, the same body
-// passed to t3work_workflow_run). Routes to the t3work.recipe.validate broker
-// tool; never writes or executes anything.
+// passed to t3work_orchestration_run). Routes to the t3work.recipe.validate
+// broker tool; never writes or executes anything.
 export const T3workRecipeValidateTool = Tool.make("t3work_recipe_validate", {
   description:
-    "Statically validate a workflow before running it: pass `source` (inline workflow " +
-    "TypeScript — same body you would pass to t3work_workflow_run) or `path` (a .workflow.ts " +
-    "or recipe directory in the workspace). Returns {ok, meta?, shape?, errors[]}; fix errors " +
-    "and re-validate until ok before calling t3work_workflow_run. Nothing is executed or written.",
+    "Statically validate an agent orchestration before running it: pass `source` (inline " +
+    "orchestration TypeScript — same body you would pass to t3work_orchestration_run) or `path` " +
+    "(a .workflow.ts or recipe directory in the workspace). Returns {ok, meta?, shape?, " +
+    "errors[]}; fix errors and re-validate until ok before calling t3work_orchestration_run. " +
+    "Nothing is executed or written.",
   parameters: Schema.Struct({
     path: Schema.optional(Schema.String),
     source: Schema.optional(Schema.String),
@@ -219,6 +272,9 @@ export const T3workToolkit = Toolkit.make(
   T3workRenameThreadTool,
   T3workStartChildTool,
   T3workSendMessageTool,
+  T3workOrchestrationRunTool,
+  T3workOrchestrationStatusTool,
+  T3workOrchestrationResumeTool,
   T3workWorkflowRunTool,
   T3workWorkflowStatusTool,
   T3workWorkflowResumeTool,

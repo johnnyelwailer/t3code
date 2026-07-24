@@ -1,5 +1,5 @@
 /**
- * `t3work.workflow.status` — handler-level tests against a stubbed WorkflowRunRepository (no
+ * `t3work.orchestration.status` — handler-level tests against a stubbed WorkflowRunRepository (no
  * real DB): known runId returns status + hint, unknown runId fails with a helpful string, and
  * list mode (no runId) returns recent runs. Mirrors the stub-dependency style of sibling broker
  * tool tests rather than the real-DB harness in t3work-toolBrokerWorkflowRunTools.test.ts.
@@ -46,7 +46,7 @@ const baseRow = (overrides: Partial<WorkflowRun>): WorkflowRun => ({
 });
 
 /** A stubbed WorkflowRunRepositoryShape: only `getById` and `listRecent` are exercised by
- * `t3work.workflow.status`, so every other method dies loudly if the tool ever reaches for it. */
+ * `t3work.orchestration.status`, so every other method dies loudly if the tool ever reaches for it. */
 function makeStubRepository(rows: ReadonlyArray<WorkflowRun>): WorkflowRunRepositoryShape {
   return {
     upsert: notImplemented("upsert"),
@@ -68,7 +68,7 @@ function makeStubRepository(rows: ReadonlyArray<WorkflowRun>): WorkflowRunReposi
   };
 }
 
-describe("t3work.workflow.status", () => {
+describe("t3work.orchestration.status", () => {
   it.effect("returns status + hint for a known runId", () =>
     Effect.gen(function* () {
       const row = baseRow({ runId: "run-known", status: "suspended", pendingKind: "user.input" });
@@ -153,7 +153,7 @@ describe("t3work.workflow.status", () => {
 
       // By id: answers exactly like an unknown runId, so ids can't be probed.
       const denied = yield* Effect.flip(handlers.getStatus({ runId: "run-foreign" }));
-      assert.match(String(denied), /No workflow run found/);
+      assert.match(String(denied), /No orchestration run found/);
 
       // List mode: the foreign run simply isn't there.
       const listed = yield* handlers.getStatus({});

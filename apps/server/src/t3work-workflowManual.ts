@@ -1,14 +1,19 @@
 /**
- * Single source of truth for the agent-facing "how to write a runbook" manual.
+ * Single source of truth for the agent-facing "how to write an agent
+ * orchestration" manual.
  *
  * Used in two places so an agent can both DISCOVER the format (the
- * `t3work.workflow.run` tool description) and RECOVER from a bad one (the manual
- * is appended to a `failed`/load-error result). Generic — every provider that
- * reaches the tool, over `/mcp` or the native catalog, gets the same guidance.
+ * `t3work.orchestration.run` tool description) and RECOVER from a bad one (the
+ * manual is appended to a `failed`/load-error result). Generic — every provider
+ * that reaches the tool, over `/mcp` or the native catalog, gets the same guidance.
  *
- * The #1 misuse to prevent: agents treating a runbook as a place to dump a
- * generic Node script (`import fs`, file writing). A runbook is for AGENT
+ * The #1 misuse to prevent: agents treating an orchestration as a place to dump a
+ * generic Node script (`import fs`, file writing). An orchestration is for AGENT
  * ORCHESTRATION — fanning work out to multiple agents and composing the results.
+ *
+ * The concept is "agent orchestration"; the FILE FORMAT it is authored in is
+ * still `.workflow.ts` (see docs/t3work-mvp/25-workflow-engine.md § Naming), so
+ * this module's own name and exported symbols keep the legacy spelling.
  *
  * @module t3work-workflowManual
  */
@@ -25,12 +30,12 @@ export const T3WORK_WORKFLOW_TAGLINE =
   "for a simple single-agent task, just do it directly — do not write one of these. For the " +
   'authoring syntax, call t3work_help("agent-orchestration") first.';
 
-export const T3WORK_TIMERS_MANUAL = `DURABLE TIMERS — t3work workflow scheduling.
+export const T3WORK_TIMERS_MANUAL = `DURABLE TIMERS — t3work agent-orchestration scheduling.
 
 Use the injected waitUntil(epochMs) and now() globals. Add the schedule capability.
 Do not import timer libraries, poll, use setTimeout, run a shell sleep, or rely on external cron.
 
-One-shot wait (short waits of seconds show "Scheduled" / a due time in the workflow UI):
+One-shot wait (short waits of seconds show "Scheduled" / a due time in the orchestration UI):
 
   export const meta = {
     name: 'short-reminder',
@@ -41,7 +46,7 @@ One-shot wait (short waits of seconds show "Scheduled" / a due time in the workf
   await thread.notifyUser('Thirty seconds passed.')
   return { reminded: true }
 
-Recurring pattern (the workflow loop is the schedule):
+Recurring pattern (the orchestration loop is the schedule):
 
   export const meta = {
     name: 'daily-review',
@@ -62,9 +67,9 @@ that is display rounding, not polling or a lost timer.`;
 
 /**
  * The full manual. Kept compact but complete enough that a small model can
- * author a valid runbook from it alone, and fix one from the error path.
+ * author a valid orchestration from it alone, and fix one from the error path.
  */
-export const T3WORK_WORKFLOW_MANUAL = `AGENT-ORCHESTRATION MANUAL — what 't3work.workflow.run' runs.
+export const T3WORK_WORKFLOW_MANUAL = `AGENT-ORCHESTRATION MANUAL — what 't3work.orchestration.run' runs.
 
 REQUIRED INTENT (pass this beside source/workflowPath)
 Every run must declare its contract:
@@ -90,7 +95,8 @@ findings", "for each of these N modules spawn an agent to analyze it, then rank 
 results", "research X across several sub-questions, dedupe, verify".
 
 FORMAT (the 'source' you pass)
-It is a workflow BODY in TypeScript. The engine injects the orchestration globals.
+It is an orchestration BODY in TypeScript (file format: .workflow.ts). The engine injects
+the orchestration globals.
 Import only { Schema } from "effect" when you need typed agent results or a structured
 user decision. Do not import Node APIs. The meta export must precede executable code;
 after that, the body runs top-to-bottom.
@@ -127,7 +133,8 @@ INJECTED GLOBALS (no imports; call them directly)
                               retention: 'retained' only when it must remain sidebar-visible.
                               Then t.askAgent(prompt,opts?), t.notifyAgent(msg),
                               t.askUser(question,opts?), t.notifyUser(msg).
-- thread                      the chat this runbook was launched from (undefined if headless).
+- thread                      the chat this orchestration was launched from (undefined if
+                              headless).
 - thread.showWidget({ title, widgetCode, format? }) renders sandboxed inline HTML/SVG through
                               the typed widget attachment pipeline. Requires 'user'. Use this
                               for interactive/rich UI. Trusted notifyUser HTML is automatically
@@ -142,7 +149,8 @@ INJECTED GLOBALS (no imports; call them directly)
                               The run is persisted as sleeping with a wake time, survives
                               server restarts, and catches up immediately when an overdue
                               deadline is found after restart.
-- args                        the workflow input (validated against meta.inputs if declared).
+- args                        the orchestration input (validated against meta.inputs if
+                              declared).
 
 DURABLE TIMERS AND ROUTINES
 For the focused timer reference and copyable examples, call t3work_help("timers").
@@ -194,7 +202,7 @@ RULES
   are available. Otherwise call thread.notifyUser(...) with a concise evidence summary, then
   call askUser. Never make the user reconstruct context from earlier agent or tool results.
 - Prefer thread.showWidget({ title, widgetCode, format: 'html' }) for HTML/SVG. Legacy trusted
-  workflow HTML passed to notifyUser or askUser is auto-promoted to a sandboxed typed widget;
+  orchestration HTML passed to notifyUser or askUser is auto-promoted to a sandboxed typed widget;
   it is never rendered as raw system text.
 - Structured choice example:
     import { Schema } from "effect"
@@ -208,5 +216,5 @@ RESULT
 Returns { runId, status: 'accepted'|'completed'|'suspended'|'failed', handoff: 'workflow-ui', output?, error? }.
 accepted means the durable host owns the run. A successful workflow-ui handoff means end the
 current host turn immediately with no follow-up assistant prose. Do not launch it again or poll
-it; sleeping, user decisions, and other progress arrive through the existing workflow UI.
+it; sleeping, user decisions, and other progress arrive through the existing orchestration UI.
 On 'failed', read 'error', fix the source per this manual, and run it again.`;

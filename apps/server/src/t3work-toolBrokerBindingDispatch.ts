@@ -44,6 +44,7 @@ import {
 } from "./t3work-toolBrokerBindingWorkflowResume.ts";
 import type { T3workWorkflowResumeToolHandlers } from "./t3work-toolBrokerWorkflowResumeTool.ts";
 import type { T3workContextRefreshServiceShape } from "./t3work-contextRefreshService.ts";
+import { resolveT3workCanonicalToolId } from "./t3work-toolBrokerLegacyToolIds.ts";
 
 export function dispatchT3workToolCall(input: {
   state: BindingState;
@@ -65,7 +66,10 @@ export function dispatchT3workToolCall(input: {
   workflowResumeTools?: T3workWorkflowResumeToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3workToolCallResult>;
 }): ReturnType<T3workToolBinding["callTool"]> {
-  const { server, tool, toolArgs, state } = input;
+  const { server, toolArgs, state } = input;
+  // Deprecated `t3work.workflow.*` ids resolve to the current
+  // `t3work.orchestration.*` ones before the availability/permission gate.
+  const tool = resolveT3workCanonicalToolId(input.tool);
   if (server !== T3WORK_MCP_SERVER_NAME) {
     return Effect.succeed(errorResult(`Unknown MCP server '${server}'.`));
   }

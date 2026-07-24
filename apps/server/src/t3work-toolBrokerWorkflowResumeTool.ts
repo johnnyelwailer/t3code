@@ -1,14 +1,14 @@
 /**
- * `t3work.workflow.resume` — broker tool resuming a paused/failed workflow run from its
+ * `t3work.orchestration.resume` — broker tool resuming a paused/failed workflow run from its
  * journal (Epic 25 resume/replay semantics), optionally with corrected source for an
  * ephemeral run. Scoped to the CALLING thread via the run row's `launchThreadId`, like
- * `t3work.workflow.status` — an unknown id and another thread's run answer identically.
+ * `t3work.orchestration.status` — an unknown id and another thread's run answer identically.
  *
  *   • `paused` — restores the parked continuation (pending ask back into the registry, or the
  *     scheduler re-armed for a timer park), mirroring the HTTP control route's resume action.
  *   • `failed` — re-drives {@link resumeWorkflowRunFromJournal}: same-prefix replay returns
  *     journaled results verbatim and executes live past the recorded frontier. Runs detached
- *     (a resume can suspend again for hours); observe it via `t3work.workflow.status`.
+ *     (a resume can suspend again for hours); observe it via `t3work.orchestration.status`.
  */
 import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -44,10 +44,10 @@ export type T3workWorkflowResumeToolHandlers = {
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 const notFoundHint = (runId: string) =>
-  `No workflow run found for runId '${runId}'. Use t3work.workflow.status to list your ` +
+  `No orchestration run found for runId '${runId}'. Use t3work.orchestration.status to list your ` +
   "recent runs.";
 
-/** Build the per-thread `t3work.workflow.resume` handler factory. */
+/** Build the per-thread `t3work.orchestration.resume` handler factory. */
 export function makeWorkflowResumeToolHandlers<E>(
   deps: WorkflowResumeToolDeps<E>,
 ): (threadId: ThreadId) => T3workWorkflowResumeToolHandlers {
@@ -56,7 +56,7 @@ export function makeWorkflowResumeToolHandlers<E>(
       Effect.gen(function* () {
         const runId = args.runId?.trim() ?? "";
         if (runId.length === 0) {
-          return yield* Effect.fail("t3work.workflow.resume requires a runId.");
+          return yield* Effect.fail("t3work.orchestration.resume requires a runId.");
         }
         const found = yield* deps.runRepository
           .getById({ runId })

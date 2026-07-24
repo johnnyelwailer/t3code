@@ -130,7 +130,7 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
 
     // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
     // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
-    // `t3work.workflow.run` tool drives through.
+    // `t3work.orchestration.run` tool drives through.
     const fileSystem = yield* FileSystem.FileSystem;
     const result = yield* launchPreparedWorkflow(
       {

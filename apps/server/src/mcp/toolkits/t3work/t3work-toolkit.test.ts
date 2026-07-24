@@ -10,6 +10,7 @@ import { T3workToolkitRegistrationLive } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import {
   T3WORK_MCP_CANONICAL_TOOL_MAP,
+  T3WORK_MCP_DEPRECATED_TOOL_ALIASES,
   T3WORK_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS,
 } from "./tools.ts";
 
@@ -101,6 +102,74 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
     Effect.provide(TestLayer),
   );
 });
+
+// The agent-orchestration rename kept the old MCP names as deprecated aliases:
+// pack configs, agent prompts, and live transcripts still say t3work_workflow_*,
+// and a hard break would silently strip the capability from running agents.
+const orchestrationAliasCases = [
+  {
+    deprecated: "t3work_workflow_run",
+    current: "t3work_orchestration_run",
+    args: {
+      source: "export const meta = { name: 'x' };",
+      intent: { goal: "g", expectedOutcome: "o", guardrails: ["none"] },
+    },
+  },
+  { deprecated: "t3work_workflow_status", current: "t3work_orchestration_status", args: {} },
+  {
+    deprecated: "t3work_workflow_resume",
+    current: "t3work_orchestration_resume",
+    args: { runId: "run-1" },
+  },
+] as const;
+
+it("declares every deprecated orchestration alias with a mapped replacement", () => {
+  expect(orchestrationAliasCases.map(({ deprecated, current }) => [deprecated, current])).toEqual(
+    Object.entries(T3WORK_MCP_DEPRECATED_TOOL_ALIASES),
+  );
+});
+
+for (const { deprecated, current, args } of orchestrationAliasCases) {
+  it.effect(`dispatches ${deprecated} and ${current} to the same broker tool`, () => {
+    const calls: Array<string> = [];
+    const binding: T3workToolBinding = {
+      threadId,
+      listServers: () => [],
+      readResource: ({ uri }) => Effect.succeed({ contents: [{ uri, text: "{}" }] }),
+      callTool: ({ tool }) => {
+        calls.push(tool);
+        return Effect.succeed({
+          content: [{ type: "text" as const, text: "ok" }],
+          structuredContent: { ok: true },
+        });
+      },
+    };
+    const broker = T3workToolBroker.of({
+      sendMessage: () => Effect.succeed(undefined),
+      bindSession: ({ threadId: boundThreadId }) =>
+        Effect.succeed(boundThreadId === threadId ? binding : undefined),
+      bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+    });
+    const TestLayer = T3workToolkitRegistrationLive.pipe(
+      Layer.provideMerge(McpServer.McpServer.layer),
+      Layer.provideMerge(Layer.succeed(T3workToolBroker, broker)),
+    );
+
+    return Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      yield* server.callTool({ name: current, arguments: args });
+      yield* server.callTool({ name: deprecated, arguments: args });
+
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toBe(T3WORK_MCP_CANONICAL_TOOL_MAP[current]);
+      expect(calls[1]).toBe(calls[0]);
+    }).pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+      Effect.provideService(McpSchema.McpServerClient, client),
+      Effect.provide(TestLayer),
+    );
+  });
+}
 
 it.effect("routes t3work_recipe_list through the bound broker callTool dispatch", () => {
   const calls: Array<{

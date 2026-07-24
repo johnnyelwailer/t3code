@@ -2,7 +2,7 @@
  * Workflow run origin (ephemeral workflows, slice 1).
  *
  * Adds `origin` to `workflow_runs` so agent-authored ephemeral runs (launched by the
- * `t3work.workflow.run` tool, no recipe on disk) are distinguishable from recipe-launched runs.
+ * `t3work.orchestration.run` tool, no recipe on disk) are distinguishable from recipe-launched runs.
  * Existing rows and every recipe launch default to 'recipe'; the ephemeral tool path writes
  * 'ephemeral'. Boot rehydration is origin-agnostic — it restores both kinds unchanged.
  */

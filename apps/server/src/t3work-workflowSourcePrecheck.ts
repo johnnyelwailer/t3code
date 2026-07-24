@@ -1,5 +1,5 @@
 /**
- * Synchronous format precheck for an inline `t3work.workflow.run` `source` submission. Live
+ * Synchronous format precheck for an inline `t3work.orchestration.run` `source` submission. Live
  * incident: an agent submitted YAML instead of workflow TypeScript. The run was accepted, then
  * failed asynchronously — the agent never saw actionable feedback in the tool result, and no plan
  * card ever appeared (see {@link ./t3work-workflowShapePreview.ts}) because the shape could not be

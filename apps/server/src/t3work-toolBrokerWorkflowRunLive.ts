@@ -1,5 +1,5 @@
 /**
- * Broker-side wiring for `t3work.workflow.run` (ephemeral workflows, slice 1): resolves the
+ * Broker-side wiring for `t3work.orchestration.run` (ephemeral workflows, slice 1): resolves the
  * durable-engine singletons OPTIONALLY from the broker's environment and builds the per-thread
  * handler factory. Optional so broker test layers that never wire the engine still build —
  * without the services the tool simply reports "not enabled". Kept out of
@@ -37,7 +37,7 @@ type LoadThreadProjectLike = Parameters<typeof makeWorkflowRunToolHandlers>[0] e
   ? L
   : never;
 
-/** Build the per-thread `t3work.workflow.run` handler factory, or `undefined` when the
+/** Build the per-thread `t3work.orchestration.run` handler factory, or `undefined` when the
  * durable-engine services are absent from the broker's environment. */
 export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForThread")(
   function* (deps: {

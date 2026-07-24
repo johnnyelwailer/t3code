@@ -188,12 +188,12 @@ export const IMPLEMENTED_T3WORK_TOOL_CATALOG = {
       required: ["path"],
     },
   },
-  "t3work.workflow.run": {
-    id: "t3work.workflow.run",
-    label: "Run ephemeral workflow",
-    title: "Run a temporary t3work workflow in this conversation",
+  "t3work.orchestration.run": {
+    id: "t3work.orchestration.run",
+    label: "Run ephemeral orchestration",
+    title: "Run a temporary agent orchestration in this conversation",
     description:
-      "Run a temporary t3work workflow immediately in this conversation — a durable, journaled t3work engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline workflow TypeScript, persisted under .t3work-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: .t3work/recipes/AUTHORING.md; validate with t3work.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the workflow card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the workflow on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.",
+      "Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3work engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3work-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: .t3work/recipes/AUTHORING.md; validate with t3work.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -206,7 +206,7 @@ export const IMPLEMENTED_T3WORK_TOOL_CATALOG = {
         source: {
           type: "string",
           description:
-            "Inline workflow TypeScript (meta + top-level body). Exactly one of source/workflowPath.",
+            "Inline orchestration TypeScript (meta + top-level body). Exactly one of source/workflowPath.",
           minLength: 1,
         },
         workflowPath: {
@@ -216,7 +216,7 @@ export const IMPLEMENTED_T3WORK_TOOL_CATALOG = {
           minLength: 1,
         },
         args: {
-          description: "Launch arguments decoded by the workflow's meta.inputs schema.",
+          description: "Launch arguments decoded by the orchestration's meta.inputs schema.",
         },
       },
     },

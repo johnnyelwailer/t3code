@@ -1,14 +1,14 @@
-# Epic 27: Scheduled Workflows (Routines)
+# Epic 27: Scheduled Orchestrations (Routines)
 
 ## Purpose
 
-A workflow today runs when a user launches it, and it can suspend awaiting a reply (Epic
-25 §The Handle pattern). This epic adds the other wake trigger: **the clock.** A workflow
+An orchestration today runs when a user launches it, and it can suspend awaiting a reply (Epic
+25 §The Handle pattern). This epic adds the other wake trigger: **the clock.** An orchestration
 can sleep until a specific date/time, which makes two things possible — a one-off timer
 ("open this back up Monday morning") and a **routine** (a loop that does work, waits,
 does it again).
 
-A routine is just a workflow that loops on a timer. The thread it runs in _is_ its
+A routine is just an orchestration that loops on a timer. The thread it runs in _is_ its
 visualization — it mostly sleeps, wakes on its timer, posts what it did, sleeps again.
 There is no "automations panel": a routine is a thread that lives in the sidebar, dormant
 until its next wake.
@@ -33,7 +33,7 @@ a **scheduler** — is the missing piece, and it's what turns a parked run into 
 ## The model: a loop with `waitUntil`
 
 The engine is replay-based durable execution. In that world, recurrence is not a
-host-managed schedule — it's a loop in the workflow body, the same way it would be in
+host-managed schedule — it's a loop in the orchestration body, the same way it would be in
 Temporal/Restate. There is no separate "schedule" concept to learn.
 
 A complete routine is an ordinary `.workflow.ts` (Epic 25 file shape) whose body loops:
@@ -147,7 +147,7 @@ opts)` / `askUser(question, opts)` take `{ schema?, model?, attachments? }` —
 
 Three properties fall out, and all three are the author's choice, not the engine's:
 
-- **Unbounded is allowed.** A loop that never returns is a valid workflow. The thread
+- **Unbounded is allowed.** A loop that never returns is a valid orchestration. The thread
   accumulates its history.
 - **State across fires is free.** A `let count = 0` in the loop survives every wake (it's
   in the journal, replayed on resume). No external store needed.
@@ -215,12 +215,12 @@ runs on domain events, the scheduler wakes them on the wall clock.
    (re-arming as runs park/wake). At fire time, for the due run: `appendResolvedEntry` for
    the wait's correlation id, then `resumeWorkflow` — the exact path the event reactor
    uses, just clock-triggered instead of event-triggered.
-3. **Re-arm on boot.** In `serverRuntimeStartup`, alongside Epic 25's workflow-run
+3. **Re-arm on boot.** In `serverRuntimeStartup`, alongside Epic 25's orchestration-run
    rehydration, the scheduler queries all runs with a future (or past-due) `wake_at` and
    re-arms them. This is the durability guarantee: a timer set before a restart still
    fires after it. A deadline that _passed_ during downtime fires immediately on boot.
 
-The scheduler is the only clock authority. Workflow bodies never read the wall clock to
+The scheduler is the only clock authority. Orchestration bodies never read the wall clock to
 decide timing (they read the journaled `now()`); the scheduler reads the real clock and
 pokes the engine. That keeps replay deterministic while still being time-driven.
 
@@ -265,13 +265,13 @@ next-wake time, distinct from active and input-waiting threads.
   not woken); resume re-arms it for its `wake_at` (or the next computed one).
 - **Edit cadence** — via composer, _if_ the routine reads its schedule from mutable config
   (see above). A routine that hardcodes its cadence isn't editable without changing the
-  workflow.
+  orchestration.
 - **Delete** — follows the thread-deletion cascade: deleting the thread deletes the run +
   its journal.
 
 ## Capability and limits
 
-- **`"schedule"` capability** — a workflow that calls `waitUntil` must declare the
+- **`"schedule"` capability** — an orchestration that calls `waitUntil` must declare the
   `"schedule"` capability (Epic 25 §Capability gating). It surfaces in the pre-execution
   permission view ("this can run on a timer, even when you're away") — running unattended
   is a power the user should authorize knowingly.
@@ -327,7 +327,7 @@ clock, the one-off timer and the routine loop are both just `waitUntil`.
 
 ## References
 
-- [Epic 25: Workflow Engine](./25-workflow-engine.md) — durable suspension, `wait`, the
+- [Epic 25: Agent Orchestration Engine](./25-workflow-engine.md) — durable suspension, `wait`, the
   determinism contract, and the DB-backed run/journal tables this builds on.
 - The event reactor (`apps/server/src/t3work-workflowEngineReactor.ts`) — the existing
   event-based wake path the scheduler is a clock-based peer to.

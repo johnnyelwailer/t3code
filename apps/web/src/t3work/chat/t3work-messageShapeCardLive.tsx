@@ -106,11 +106,11 @@ function fallbackRuntimeLabel(step: T3workWorkflowStepEntry): string {
       return step.phase === "failed"
         ? "Repair attempt failed"
         : step.phase === "completed"
-          ? "Workflow recovered"
+          ? "Orchestration recovered"
           : step.detail === "Repairing workflow"
-            ? "Repairing workflow"
+            ? "Repairing orchestration"
             : step.detail === "Resuming workflow"
-              ? "Resuming workflow"
+              ? "Resuming orchestration"
               : "Analysing failure";
     case "thread.turn":
       // Dynamic agent branches may not have a dedicated authored plan row. The emitted prompt
@@ -125,7 +125,7 @@ function fallbackRuntimeLabel(step: T3workWorkflowStepEntry): string {
     case "wait.until":
       return "Scheduled work";
     default:
-      return "Additional workflow work";
+      return "Additional orchestration work";
   }
 }
 
@@ -332,11 +332,11 @@ function repairStatus(steps: ReadonlyArray<T3workWorkflowStepEntry>): {
     .reverse()
     .find((step) => step.stepKind === "workflow.self-heal" && step.error)?.error;
   if (latest.phase === "failed") return { label: "Needs attention", step: latest };
-  if (latest.phase === "completed") return { label: "Workflow ready", step: latest };
+  if (latest.phase === "completed") return { label: "Orchestration ready", step: latest };
   if (latest.detail === "Resuming workflow")
-    return { label: "Starting workflow", ...(reason ? { reason } : {}), step: latest };
+    return { label: "Starting orchestration", ...(reason ? { reason } : {}), step: latest };
   // Self-heal/repair internals stay out of normal UI.
-  return { label: "Getting workflow ready", ...(reason ? { reason } : {}), step: latest };
+  return { label: "Getting orchestration ready", ...(reason ? { reason } : {}), step: latest };
 }
 
 function RepairStatusStrip({
@@ -348,8 +348,8 @@ function RepairStatusStrip({
 }) {
   const { label: status, reason, step } = repair;
   const needsAttention = status === "Needs attention";
-  const ready = status === "Workflow ready";
-  const activelyPreparing = status === "Getting workflow ready";
+  const ready = status === "Orchestration ready";
+  const activelyPreparing = status === "Getting orchestration ready";
   const canOpenThread = Boolean(step.projectId && step.threadId && onOpenThread);
   const className = cn(
     "mt-3 flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs font-medium",
@@ -383,7 +383,7 @@ function RepairStatusStrip({
       data-workflow-repair-status={status}
       className={className}
       disabled={!canOpenThread}
-      aria-label={canOpenThread ? "Open workflow repair thread" : undefined}
+      aria-label={canOpenThread ? "Open orchestration repair thread" : undefined}
       onClick={() => onOpenThread?.({ projectId: step.projectId!, threadId: step.threadId! })}
     >
       {content}
@@ -394,9 +394,9 @@ function RepairStatusStrip({
 export function workflowControlErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/\b404\b|not found/i.test(message)) {
-    return "Server restart required to use workflow controls in this development session.";
+    return "Server restart required to use orchestration controls in this development session.";
   }
-  return message.trim() || "Workflow control failed. Please try again.";
+  return message.trim() || "Orchestration control failed. Please try again.";
 }
 
 export function T3workWorkflowShapeLiveCard({
@@ -456,7 +456,7 @@ export function T3workWorkflowShapeLiveCard({
       ? serverStatus
       : (localStatus ?? serverStatus ?? inferredRunStatus(progress));
   // Repair entries are historical workflow activity. Once a run is terminal, they must not
-  // keep a stale spinner/"Getting workflow ready" strip visible after Stop succeeds.
+  // keep a stale spinner/"Getting orchestration ready" strip visible after Stop succeeds.
   const repair = ["completed", "failed", "cancelled"].includes(status)
     ? null
     : repairStatus(progress.steps);
@@ -538,7 +538,7 @@ export function T3workWorkflowShapeLiveCard({
                 type="button"
                 disabled={controlPending !== null}
                 title="Pause at this safe waiting point"
-                aria-label="Pause workflow"
+                aria-label="Pause orchestration"
                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                 onClick={() => void control("pause")}
               >
@@ -549,8 +549,8 @@ export function T3workWorkflowShapeLiveCard({
               <button
                 type="button"
                 disabled={controlPending !== null}
-                title="Resume workflow"
-                aria-label="Resume workflow"
+                title="Resume orchestration"
+                aria-label="Resume orchestration"
                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                 onClick={() => void control("resume")}
               >
@@ -560,7 +560,7 @@ export function T3workWorkflowShapeLiveCard({
             {canStop ? (
               <Menu>
                 <MenuTrigger
-                  aria-label="More workflow actions"
+                  aria-label="More orchestration actions"
                   disabled={controlPending !== null}
                   className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                 >

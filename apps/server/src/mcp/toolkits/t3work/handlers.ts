@@ -57,12 +57,20 @@ export const T3workToolkitHandlersLive = T3workToolkit.toLayer({
   t3work_start_child: (input) =>
     callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_start_child, input),
   t3work_send_message: (input) => sendMessage(input),
+  t3work_orchestration_run: (input) =>
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_orchestration_run, input),
+  t3work_orchestration_status: (input) =>
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_orchestration_status, input),
+  t3work_orchestration_resume: (input) =>
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_orchestration_resume, input),
+  // Deprecated aliases — same canonical broker target as the t3work_orchestration_*
+  // handlers above, so old ids keep working for already-running agents.
   t3work_workflow_run: (input) =>
-    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_workflow_run, input),
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_orchestration_run, input),
   t3work_workflow_status: (input) =>
-    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_workflow_status, input),
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_orchestration_status, input),
   t3work_workflow_resume: (input) =>
-    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_workflow_resume, input),
+    callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_orchestration_resume, input),
   t3work_show_widget: (input) =>
     callBroker(T3WORK_MCP_CANONICAL_TOOL_MAP.t3work_show_widget, input),
   t3work_help: (input) => Effect.succeed(t3workHelp(input.topic)),

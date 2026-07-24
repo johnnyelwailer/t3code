@@ -1,12 +1,12 @@
 /**
  * Capability disclosure for the play-as-shape "plan" card — the pre-execution permission
- * surface (Epic 25 §Capability gating): before a workflow with elevated capabilities runs,
+ * surface (Epic 25 §Capability gating): before an orchestration with elevated capabilities runs,
  * the user sees WHAT IT MAY DO as a compact chip row on the launch card. Engine feature
  * strings render via the engine's own label table below; tool-group refs render their
  * author-declared `label` (with `description` as the hover title). Disclosure-only — the
  * spec defines no confirmation gate for this surface, so none is invented here.
  *
- * Visually quiet by design: a workflow that declares no capabilities renders nothing.
+ * Visually quiet by design: an orchestration that declares no capabilities renders nothing.
  */
 import { ShieldIcon } from "lucide-react";
 import type { ProjectRecipeWorkflowCapability } from "@t3tools/project-recipes";
@@ -38,8 +38,8 @@ const ENGINE_CAPABILITY_LABELS: Record<string, { label: string; description: str
     description: "Display interactive views inside this thread.",
   },
   workflow: {
-    label: "Run sub-workflows",
-    description: "Invoke other workflows as part of this run.",
+    label: "Run sub-orchestrations",
+    description: "Invoke other orchestrations as part of this run.",
   },
   schedule: {
     label: "Run on a timer",
@@ -78,7 +78,7 @@ export function T3workShapeCapabilityChips({
     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
       <span
         className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65"
-        title="This workflow declared these capabilities; they are granted for this run."
+        title="This orchestration declared these capabilities; they are granted for this run."
       >
         <ShieldIcon className="size-3" />
         May

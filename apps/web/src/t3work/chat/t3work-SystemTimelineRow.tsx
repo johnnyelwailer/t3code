@@ -48,8 +48,8 @@ function workflowDecisionUnavailableMessage(
     return undefined;
   }
   return terminalStatus === "cancelled"
-    ? "This question is no longer available because the workflow was stopped."
-    : "This question is no longer available because the workflow has ended.";
+    ? "This question is no longer available because the orchestration was stopped."
+    : "This question is no longer available because the orchestration has ended.";
 }
 
 export function T3workSystemTimelineRow(props: {

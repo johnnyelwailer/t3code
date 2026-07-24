@@ -1,6 +1,6 @@
 /**
- * `t3work.workflow.status` — read-only broker tool letting an agent observe a workflow run it
- * (or another thread) launched via `t3work.workflow.run`. With `runId`, returns that run's
+ * `t3work.orchestration.status` — read-only broker tool letting an agent observe a workflow run it
+ * (or another thread) launched via `t3work.orchestration.run`. With `runId`, returns that run's
  * observable state plus a one-sentence next-step hint. Without one, lists the most recent runs
  * (project-wide — the run row does not model a per-thread index, so this does not scope to the
  * calling thread; see WorkflowRunRepository.listRecent).
@@ -86,13 +86,13 @@ const toStatusResult = (row: WorkflowRun): WorkflowStatusToolResult => ({
 });
 
 const notFoundHint = (runId: string) =>
-  `No workflow run found for runId '${runId}'. Omit runId to list the most recent runs, or ` +
-  "double-check the runId returned by t3work.workflow.run.";
+  `No orchestration run found for runId '${runId}'. Omit runId to list the most recent runs, or ` +
+  "double-check the runId returned by t3work.orchestration.run.";
 
 /** Over-fetch factor for list mode: rows are filtered to the calling thread after the query. */
 const RECENT_RUNS_SCAN_LIMIT = 50;
 
-/** Build the per-thread `t3work.workflow.status` handler factory. Both modes are scoped to the
+/** Build the per-thread `t3work.orchestration.status` handler factory. Both modes are scoped to the
  * CALLING thread via the run row's `launchThreadId` — a thread can observe only the runs it
  * launched, never other threads'/projects' run metadata. */
 export function makeWorkflowStatusToolHandlers(deps: {

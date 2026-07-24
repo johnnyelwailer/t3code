@@ -1,31 +1,50 @@
-# Epic 25: Workflow Engine
+# Epic 25: Agent Orchestration Engine
+
+## Naming
+
+The concept is **agent orchestration**. "Workflow" and "runbook" were earlier names for the
+same thing; prose, headings, tool descriptions, and UI copy say *orchestration*.
+
+Three things deliberately keep the legacy spelling, and renaming them would be a breaking
+change, not a cleanup:
+
+- **The file format is still `.workflow.ts`**, authored with `export const meta = {...}` and
+  referenced via `defineWorkflow` / `WorkflowRef` / `workflowPath`. Every existing recipe and
+  the SDK's public authoring API depend on it.
+- **Engine internals** — module filenames (`t3work-workflow*.ts`), exported symbols, DB tables
+  and columns, journal `refId` / `PrimitiveKind` strings (replay-stable: renaming them breaks
+  resume of in-flight runs), and the `handoff: 'workflow-ui'` wire literal.
+- **The old tool ids remain as deprecated aliases.** `t3work_workflow_run` / `_status` /
+  `_resume` (MCP) and `t3work.workflow.run` / `.status` / `.resume` (canonical broker) resolve
+  to the `t3work_orchestration_*` / `t3work.orchestration.*` names and dispatch to the same
+  handlers, so pack configs and already-running agents keep working. Prefer the new names.
 
 ## Purpose
 
-This epic defines the **TS-native, replay-based durable-execution workflow engine** that
+This epic defines the **TS-native, replay-based durable-execution orchestration engine** that
 backs every action recipes can launch, every cross-thread interaction, and every script
 that t3work runs on a user's behalf.
 
 It supersedes the step-union JSON model and the forward-only execution loop described in
-[Epic 16 — Workflows](./16-action-recipes.md#workflows). Recipes, surfaces, applicability,
+[Epic 16 — Orchestrations](./16-action-recipes.md#orchestrations). Recipes, surfaces, applicability,
 and discovery are still owned by Epic 16; this epic owns the **engine** and the **author
 surface**.
 
 Treat this doc as authoritative for:
 
-- workflow file shape (`.workflow.ts`),
+- orchestration file shape (`.workflow.ts`),
 - the `meta` block contract,
-- the globals injected into the workflow body,
+- the globals injected into the orchestration body,
 - the durable-execution / replay model,
 - the determinism contract authors must follow (and how the engine enforces it),
 - the `Handle<R>` pattern for primitives that fire something into the system,
-- error classes and the workflow-catchable taxonomy,
+- error classes and the orchestration-catchable taxonomy,
 - capability gating via `meta.capabilities`,
-- how recipes thread typed workflow references into views.
+- how recipes thread typed orchestration references into views.
 
 ## Why now
 
-The current workflow runtime is a forward-only cursor over a persisted step list (see
+The current orchestration runtime is a forward-only cursor over a persisted step list (see
 [Epic 16 — Stateless, forward-only execution](./16-action-recipes.md)). It enables resume
 across a single `collect-input` checkpoint and isolates per-step failures, but it cannot
 express the things authors actually want:
@@ -35,20 +54,20 @@ express the things authors actually want:
 - structured request/response across threads or child sessions,
 - escalation to the user mid-run with a typed reply,
 - waiting on multi-hour or multi-day external events,
-- safely calling another workflow as a sub-routine.
+- safely calling another orchestration as a sub-routine.
 
 Today's authoring path is also a step-array of `{kind, …}` JSON objects with embedded
 expression strings — exactly the heavy-JSON-config pattern that
 [the project's authoring philosophy](./16-action-recipes.md#plugin-modules) rejects.
 
-The new engine is **a real TypeScript workflow body** that runs under replay-based
+The new engine is **a real TypeScript orchestration body** that runs under replay-based
 durable execution (Temporal / Restate / DBOS / Inngest idiom). Authors write idiomatic
 async TS with `try`/`catch`/`if`/`for` and call typed primitives. The engine journals
 every primitive call and replays the body on resume to reach the next live call.
 
-## Workflow file shape
+## Orchestration file shape (`.workflow.ts`)
 
-A workflow lives in its own `.workflow.ts` file. There is no `defineWorkflow(async (ctx) => …)`
+An orchestration lives in its own `.workflow.ts` file. There is no `defineWorkflow(async (ctx) => …)`
 wrapper inside the file — the body **is** the function:
 
 ```ts
@@ -116,7 +135,7 @@ Three things make this file shape work under replay:
    `Schema.decodeSync(Inputs)(args)` line gives the body a typed handle without a build
    step.
 
-Files conventionally live alongside the recipe that owns them, but workflows can also
+Files conventionally live alongside the recipe that owns them, but orchestrations can also
 live at the project root for shared use:
 
 ```text
@@ -139,7 +158,7 @@ Discovery is by filesystem scan for `*.workflow.ts`. Ownership comes from where
 
 The `.t3work` paths in this epic are the current project-local authoring convention. Under
 Epic 36, generated/synced state should move to host app-data, and repo files should remain
-only for explicitly project-owned workflow source.
+only for explicitly project-owned orchestration source.
 
 ## The `meta` block
 
@@ -157,7 +176,7 @@ export const meta = {
 
 ### Static-extraction rules
 
-`meta` is read at workflow-load time **before** the body runs. The loader evaluates only
+`meta` is read at orchestration-load time **before** the body runs. The loader evaluates only
 the top-level `const` declarations referenced by `meta` (e.g. `Inputs`, `Outputs`) in a
 context that exposes no engine primitives. This is what makes capability gating and
 permission UI safe to display before the user authorizes execution.
@@ -213,13 +232,13 @@ about (`models.anthropic.claudeOpus47`, `models.openai.gpt5_4`, etc.). Each leaf
 `ModelRef` whose `id` is the canonical provider-scoped slug. The engine still passes the
 string slug to the provider adapter; the type is what authors interact with.
 
-`meta.model` is the workflow-wide default. Individual `agent(prompt, { model })` /
+`meta.model` is the orchestration-wide default. Individual `agent(prompt, { model })` /
 `askAgent(prompt, { model })` calls can override per-call (same `{ provider, model: ModelRef }`
 shape).
 
 #### Model cascade — `models: [...]`
 
-A single `model` pins a provider that may not be configured on the machine the workflow runs on.
+A single `model` pins a provider that may not be configured on the machine the orchestration runs on.
 `models` is the fallback ladder for that: an ordered list of candidate rungs, walked HOST-side
 against the live provider registry, first available one wins.
 
@@ -260,7 +279,7 @@ Rules:
 
 ## Globals — the surface
 
-The engine injects globals into the workflow body. There are no `import` statements for
+The engine injects globals into the orchestration body. There are no `import` statements for
 engine APIs. Authors get full IntelliSense via a `.workflow.ts`-specific ambient `.d.ts`
 that ships with `@t3work/workflow-sdk`.
 
@@ -278,19 +297,19 @@ there is **no** separate `agent.task` (deleted — "structured compute, no chat"
 | `agent(prompt, opts?)`   | `Promise<string \| T>`        | One-shot shortcut for `spawnThread(opts).askAgent(prompt, opts)`. With `schema: Schema<T>`, returns a validated `T`; the thread is not retained.                                                                  |
 | `parallel(thunks)`       | `Promise<R[]>`                | Concurrent fanout with a barrier. Failing thunks resolve to `null`.                                                                                                                                               |
 | `pipeline(items, …stgs)` | `Promise<R[]>`                | Per-item pipelined fanout — no barrier between stages.                                                                                                                                                            |
-| `workflow(ref, args?)`   | `Promise<O>`                  | Run another workflow inline as a sub-step. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). One level of nesting; cycles refused.                                        |
+| `workflow(ref, args?)`   | `Promise<O>`                  | Run another orchestration inline as a sub-step. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). One level of nesting; cycles refused.                                        |
 | `phase(title)`           | `void`                        | Start a progress group. `title` is typed as the union of `meta.phases[].title` literals when `meta.phases` is declared `as const` (recommended). Calling with a title outside that union is a compile-time error. |
 | `log(message)`           | `void`                        | Emit a narrator line above the progress tree.                                                                                                                                                                     |
-| `args`                   | `unknown`                     | The workflow's input; validated against `meta.inputs` before the body runs.                                                                                                                                       |
+| `args`                   | `unknown`                     | The orchestration's input; validated against `meta.inputs` before the body runs.                                                                                                                                       |
 | `budget`                 | `{ total, spent, remaining }` | Token accumulator. Thread-turn token rollup is deferred (§Out of scope), so `spent()` currently reads 0.                                                                                                          |
 
 > **Black-box journaling boundary (Stage-1).** `parallel`, `pipeline`, and `workflow`
 > are each journaled as **one** entry; primitive calls made inside their thunks/stages/
-> sub-workflow body are **not** individually journaled — the composition primitive itself
+> sub-orchestration body are **not** individually journaled — the composition primitive itself
 > is the journal boundary. On replay the recorded result is returned verbatim and the
-> thunks (and any LLM/tool/sub-workflow calls inside them) do **not** re-execute. Two
+> thunks (and any LLM/tool/sub-orchestration calls inside them) do **not** re-execute. Two
 > consequences: (1) an author who needs fine-grained replay across N branches must refactor
-> those branches into sequential sub-workflows; (2) token accounting is the top-level journaled
+> those branches into sequential sub-orchestrations; (2) token accounting is the top-level journaled
 > calls only — work inside a `parallel`/`pipeline`/`workflow` thunk is invisible to the parent
 > budget. Per-thunk journaling would
 > require a deterministic event loop (the path Temporal takes) and is deferred past Stage-1.
@@ -318,7 +337,7 @@ The globals bound into the body:
 
 | Global               | Returns               | Purpose                                                                                                |
 | -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
-| `thread`             | `Thread \| undefined` | The thread the workflow runs in (the launching chat); `undefined` if headless.                         |
+| `thread`             | `Thread \| undefined` | The thread the orchestration runs in (the launching chat); `undefined` if headless.                         |
 | `spawnThread(opts?)` | `Thread`              | A new isolated thread (`{ name?, model? }`).                                                           |
 | `agent(prompt, o?)`  | `Promise<R>`          | Shortcut for `spawnThread(o).askAgent(prompt, o)` — returns the result for one-shots; thread not kept. |
 
@@ -344,7 +363,7 @@ const ok = await thread.askUser("approve?", { schema: Approve }); // typed user 
 Each verb maps onto orchestration via the host broker: `spawnThread` → `thread.create`,
 `askAgent`/`agent` → `thread.turn.start` (resolved on turn-done), `notifyAgent`/`notifyUser`
 → `thread.message.upsert` (one-way), `askUser` → a system message requesting input (resolved
-on the user's reply). See [§Agents vs. workflows](#agents-vs-workflows).
+on the user's reply). See [§Agents vs. orchestrations](#agents-vs-orchestrations).
 
 ### Other primitives — durable timers and journaled side effects
 
@@ -352,14 +371,14 @@ on the user's reply). See [§Agents vs. workflows](#agents-vs-workflows).
 | ---------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `scripts.<name>(args)`       | `Promise<T>`    | Call a recipe-registered script (typed). Result is journaled. See [§Scripts](#scripts). Gated by the `"script"` engine capability.     |
 | `tools.<group>.<name>(args)` | `Promise<T>`    | Call a broker tool. ToolRefs are typed; the ref's group is checked against `meta.capabilities` at the call site. See [§Tools](#tools). |
-| `wait(durationMs)`           | `Promise<void>` | Durable timer — suspends the workflow if the deadline hasn't passed. Survives server restart.                                          |
+| `wait(durationMs)`           | `Promise<void>` | Durable timer — suspends the orchestration if the deadline hasn't passed. Survives server restart.                                          |
 | `Math.random()`              | `number`        | Deterministic `[0, 1)` — journaled. Call it as in any JS; a resume replays the recorded draw.                                          |
 | `Date.now()`, `new Date()`   | `number`/`Date` | Deterministic wall-clock — journaled. A resume replays the recorded epoch millis.                                                      |
 | `crypto.randomUUID()`        | `string`        | Deterministic UUIDv4 — journaled. A resume replays the recorded id.                                                                    |
 
 `script` and `tool` may take arbitrary wall-clock time but don't durably suspend — they
 block on a Promise that the engine awaits and journals when it resolves. `wait` is the
-only non-Handle primitive that can suspend the workflow durably across a server restart.
+only non-Handle primitive that can suspend the orchestration durably across a server restart.
 
 ### Read-only ambient
 
@@ -416,7 +435,7 @@ reply; real turn execution and view rendering (Epic 19) live in the host, not th
 
 ## The determinism contract — replay safety
 
-> **This is the most important section of this doc.** The engine replays the workflow
+> **This is the most important section of this doc.** The engine replays the orchestration
 > body from the top on every resume. Authors who break determinism break replay; the
 > engine catches what it can but cannot catch everything.
 
@@ -429,7 +448,7 @@ Every journaled primitive call writes one line to an append-only
 journaled), `result` is a value/void envelope that is absent for `script-never` markers
 (see below). On resume:
 
-1. The engine re-runs the workflow body from the top.
+1. The engine re-runs the orchestration body from the top.
 2. A per-run **sequence counter** increments on every primitive call; the call at counter
    value `seq` is matched against the journal entry recorded at that same `seq`.
 3. **Matched** (same `kind`, `refId`, and `argsHash`): return the recorded `result`
@@ -443,7 +462,7 @@ journaled), `result` is a value/void envelope that is absent for `script-never` 
 A `replay: "never"` script always re-executes, but it still writes a typed
 `script-never` **marker** (no `result`) so it occupies its `seq`. Removing or reordering a
 never-script therefore surfaces as `ReplayDriftError` at the next call, rather than
-silently re-executing a neighbouring journaled primitive. The workflow inputs are hashed
+silently re-executing a neighbouring journaled primitive. The orchestration inputs are hashed
 into a sibling `runMeta.json` at start; resuming with different args is caught at that
 input boundary (drift at `seq 0`) before the body re-runs.
 
@@ -451,7 +470,7 @@ input boundary (drift at `seq 0`) before the body re-runs.
 type tag**, not from lexical position. (Lexical position via stack-trace parsing is too
 fragile under transpilation, bundling, and minification to be the durable key; the
 sequence-counter idiom is what Temporal/Restate use.) The type tag is the drift guard:
-**adding, removing, or reordering primitive calls is a workflow-version-incompatible
+**adding, removing, or reordering primitive calls is an orchestration-version-incompatible
 change**, because every call after the edit shifts to a `seq` whose recorded `(kind, refId)`
 no longer matches — surfacing as a loud `ReplayDriftError` rather than a silent wrong
 replay. The one residual blind spot is reordering two calls that share the _same_
@@ -460,13 +479,13 @@ catch it. Authors get correctness by keeping the call sequence stable across ver
 
 ### Rules authors must follow
 
-**1. Ambient nondeterminism is journaled, not banned.** Workflow bodies see deterministic
+**1. Ambient nondeterminism is journaled, not banned.** Orchestration bodies see deterministic
 `Date` (`Date.now()` / `new Date()`), `Math.random`, and `crypto.randomUUID` — call them
 exactly as you would in any JS code. The engine journals each call, so on replay they
 return the recorded value instead of re-reading the clock or drawing fresh entropy. For a
 durable timer use `wait(ms)` (it suspends across a server restart, which a raw `setTimeout`
 cannot); for network or filesystem I/O, call it from inside a `script` module rather than
-inline, so the result is journaled. Stage-1 does **not** refuse a workflow for reading
+inline, so the result is journaled. Stage-1 does **not** refuse an orchestration for reading
 ambient state — it trusts project code (see [§Sandboxing](#sandboxing)).
 
 **2. Imports are types-only.** Runtime imports change the module graph on replay — if a
@@ -504,7 +523,7 @@ determinism for everything downstream of it.
 | ------------------------------------------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------ |
 | Non-type runtime imports                                                                         | Lint                      | Flagged; the loader blanks the import (value is `undefined` in the body) |
 | Module-level mutable state                                                                       | Lint                      | Flagged by the linter                                                    |
-| `meta` referencing non-extractable values                                                        | Workflow load time        | Workflow refuses to load                                                 |
+| `meta` referencing non-extractable values                                                        | Orchestration load time        | Orchestration refuses to load                                                 |
 | Mismatched `argsHash` on replay (including a journaled `Date`/`Math.random`/`uuid` call)         | Replay execution          | `ReplayDriftError` at the diverging site                                 |
 | Primitive call after `cancellation` aborted                                                      | Runtime                   | `CancelledError`                                                         |
 | Capability mismatch (call site references a tool whose `group` ref isn't in `meta.capabilities`) | Runtime, at the call site | `PermissionDeniedError` thrown and journaled                             |
@@ -524,29 +543,29 @@ and a side-by-side hash of expected vs. observed args).
 
 ### Sandboxing
 
-Stage-1 has **no sandbox**. Workflow bodies run in a `vm.Script` context with deterministic
+Stage-1 has **no sandbox**. Orchestration bodies run in a `vm.Script` context with deterministic
 `Date`/`Math.random`/`crypto.randomUUID` bound (each call journaled, so replays return the
 recorded value), but the host realm is reachable via prototype chains. The trust model is
 **"trusted project code"** — the same status as project recipes and scripts (see [Epic 16
 §Security: Two Stages](./16-action-recipes.md#security-two-stages)). There is no banned-globals
 scan and no AST refusal; the loader only blanks imports and lifts `meta`. Stage-2 (planned:
-SES or `isolated-vm`) is the real sandbox if and when untrusted workflows come into scope —
+SES or `isolated-vm`) is the real sandbox if and when untrusted orchestrations come into scope —
 until then the engine relies on the determinism contract above, not on isolation, for replay
 safety.
 
 ## Capability gating
 
 > **Status: partially implemented.** The user-escalation verbs are capability-gated: a
-> workflow whose `meta.capabilities` omits `"user"` gets `thread.askUser` / `thread.notifyUser`
+> orchestration whose `meta.capabilities` omits `"user"` gets `thread.askUser` / `thread.notifyUser`
 > bound to throwers that raise `PermissionDeniedError` at the call site. `agent` / `spawnThread`
 > / `askAgent` / `notifyAgent` are unconditionally bound (spawning isolated compute is core, as
 > `agent` always was). The remaining gates (`scripts.*` ← `"script"`, tool-group refs for
-> `tools.*`, the load-time/pre-execution permission UI, and nested-workflow capability
+> `tools.*`, the load-time/pre-execution permission UI, and nested-orchestration capability
 > intersection) are deferred (static capability lint is out of scope this phase — the runtime
 > gate is the backstop).
 
 `meta.capabilities` is a declarative allowlist that gates which globals are bound at
-workflow-body-load time. A workflow that doesn't declare `"script"` has `script` as
+orchestration-body-load time. An orchestration that doesn't declare `"script"` has `script` as
 `undefined` — calling it is an immediate `PermissionDeniedError` at the call site.
 
 ```ts
@@ -578,7 +597,7 @@ The capability list is a mixed array of two kinds of entries:
 | `"user"`     | `user.ask`, `user.notify`                     |
 | `"script"`   | `scripts.*` — the recipe's registered scripts |
 | `"ui"`       | `ui.show` (auto-granted if recipe has views)  |
-| `"workflow"` | `workflow()` (sub-workflow invocation)        |
+| `"workflow"` | `workflow()` (sub-orchestration invocation)        |
 
 **`ToolGroupRef`s** — typed references to tool groups declared via `defineToolGroup` (see
 [§Tools](#tools)). Each ref unlocks every tool registered under that group. Built-in
@@ -593,26 +612,26 @@ Globals not listed in either category — `agent`, `spawnThread`, `thread` (and 
 verbs), `parallel`, `pipeline`, `phase`, `log`, `args`, `budget`, `wait`, `random`, `now`,
 `uuid`, `context`, `views`, `cancellation`, and the error classes — are **unconditionally
 bound**. They have no capability gate because their effects are either contained to the
-workflow run (timers, journaled values), spawn isolated compute (`agent` / `spawnThread` /
+orchestration run (timers, journaled values), spawn isolated compute (`agent` / `spawnThread` /
 `askAgent`), or are read-only. Only the user-escalation verbs (`askUser` / `notifyUser`) are
 gated, by `"user"`.
 
 Capabilities surface in the **pre-execution permission UI** the user sees before any
-workflow with elevated capabilities runs. The UI reads each group ref's `label` and
+orchestration with elevated capabilities runs. The UI reads each group ref's `label` and
 `description` for human-friendly text; engine feature strings render via the engine's
 own label table. This is the one place declarative JSON beats TS-as-config — the user
 needs to see the request _before_ executing the code that would ask for it.
 
-Nested workflows can declare a subset of the parent's capabilities but never a superset.
+Nested orchestrations can declare a subset of the parent's capabilities but never a superset.
 The engine intersects at invocation.
 
 ## Tools
 
 Tools are the t3work capability surface — the verbs that read or mutate external state
-(GitHub, Jira, the filesystem, the workspace). Workflows call them; views call them
-indirectly through workflows. They are owned and dispatched by `T3workToolBroker` (see
+(GitHub, Jira, the filesystem, the workspace). Orchestrations call them; views call them
+indirectly through orchestrations. They are owned and dispatched by `T3workToolBroker` (see
 [Epic 16 §Tools](./16-action-recipes.md#tools)) but in the Epic 25 engine they appear in
-workflow bodies as **typed, namespaced callables** — never as strings.
+orchestration bodies as **typed, namespaced callables** — never as strings.
 
 ### `defineTool` — declaration + implementation in one place
 
@@ -645,7 +664,7 @@ Project-local tools are authored the same way under `.t3work/recipes/<id>/tools/
 ### Tool groups — `defineToolGroup`
 
 Groups classify tools for the user-facing permission UI. They are typed refs (not
-strings) for consistency, just like tools and workflows:
+strings) for consistency, just like tools and orchestrations:
 
 ```ts
 // @t3work/sdk/groups.ts — built-in groups
@@ -681,7 +700,7 @@ Groups live in pack-aware tiers, by ownership:
 
 ### The `tools.*` global tree
 
-Workflow bodies call tools through a namespaced global — no imports needed for tools made
+Orchestration bodies call tools through a namespaced global — no imports needed for tools made
 available by the resolved pack/project environment. The mapping from tool `id` to the
 namespace path is mechanical:
 `github.pull_request.merge` → `tools.github.pullRequest.merge` (dot segments become
@@ -705,7 +724,7 @@ full IntelliSense without a project build step.
 ### Project-local tools via recipe registration
 
 Project-local tools register on the recipe (or the project root) and appear in the
-workflow under a recipe- or project-scoped namespace:
+orchestration under a recipe- or project-scoped namespace:
 
 ```ts
 // .t3work/recipes/pr-review/tools/customAnalyze.ts
@@ -772,17 +791,17 @@ though the broker itself is an `Effect.Service` under the hood. Integration-spec
 clients are injected based on the tool's `group` so the handler doesn't have to thread
 credentials manually.
 
-### Sandboxing — symmetric with workflow bodies
+### Sandboxing — symmetric with orchestration bodies
 
 - **Built-in tool handlers** (in `@t3work/sdk/tools/*.ts`) are host-trusted code, no
   sandbox.
 - **Project-local tool handlers** are stage-1 trusted today (same status as project
   recipes and scripts — see [Epic 16 §Security: Two Stages](./16-action-recipes.md#security-two-stages)).
-  Stage-1 has no sandbox for them, as for workflow bodies (see [§Sandboxing](#sandboxing)). The
+  Stage-1 has no sandbox for them, as for orchestration bodies (see [§Sandboxing](#sandboxing)). The
   planned Stage-2 VM-isolation work makes the handler's `ToolHandlerCtx` the only API surface,
   with ambient `fetch`/`fs`/`process` stripped from `globalThis`.
 
-The handler ↔ workflow-body sandboxing is deliberately symmetric: same stage-1 vs.
+The handler ↔ orchestration-body sandboxing is deliberately symmetric: same stage-1 vs.
 stage-2 plan, same injected-`ctx`-becomes-the-only-surface pattern. No new security
 model needed for tools.
 
@@ -822,7 +841,7 @@ export default defineScript({
 
 No `id`, no `group` — scripts are scoped to the recipe that registers them; they have
 no global identity. The `"script"` engine capability gates whether `scripts.*` is bound
-at all, but it doesn't gate which scripts the workflow can call (that's already limited
+at all, but it doesn't gate which scripts the orchestration can call (that's already limited
 by recipe ownership).
 
 ### Recipe registration and the `scripts.*` global
@@ -846,14 +865,14 @@ const parsed = await scripts.parsePrTitle({ title: pr.title });
 //             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ fully typed
 ```
 
-The `scripts.*` global tree is built per-workflow at load time from the launching
+The `scripts.*` global tree is built per-orchestration at load time from the launching
 recipe's `scripts` registration. There is no project-level or global script tree — if
 you need cross-recipe reuse, promote the script to a tool with a group.
 
 ### `ScriptHandlerCtx`
 
 Strictly smaller than `ToolHandlerCtx` — no integration clients, no per-call `threadId`
-beyond what the workflow's run provides:
+beyond what the orchestration's run provides:
 
 ```ts
 type ScriptHandlerCtx = {
@@ -880,9 +899,9 @@ not the capability.
 Same stage-1 / stage-2 plan as tool handlers. The `ScriptHandlerCtx` becomes the only
 API surface at stage 2.
 
-## Recipes and workflow references
+## Recipes and orchestration references
 
-A recipe imports workflow types via type-only imports and registers them as typed refs:
+A recipe imports orchestration types via type-only imports and registers them as typed refs:
 
 ```ts
 // .t3work/recipes/pr-review/recipe.ts
@@ -916,11 +935,11 @@ export default defineRecipe({
 
 `defineWorkflow<typeof Module>("./path")` returns a `WorkflowRef<Inputs, Outputs>` whose
 types are inferred from the file's exported `Inputs`/`Outputs` schemas via the type-only
-import. The type-only import doesn't pull the workflow body into the host module graph at
+import. The type-only import doesn't pull the orchestration body into the host module graph at
 runtime — TypeScript strips it — so the body is loaded and run only in the engine's
 `vm.Script` context at invocation time.
 
-View code consumes workflow refs by typed variable, with `host` injected as a prop:
+View code consumes orchestration refs by typed variable, with `host` injected as a prop:
 
 ```tsx
 // .t3work/recipes/pr-review/views/PrItem.tsx
@@ -938,15 +957,15 @@ export const PrItem = ({ pr, host }: PrItemProps) => (
 
 `host.run<I, O>(ref: WorkflowRef<I, O>, args: I): Promise<O>` is typed end-to-end. Wrong
 args is a compile error. Missing fields is a compile error. The return type is the
-workflow's declared `Outputs`. For long-running workflows where the view needs a handle
+orchestration's declared `Outputs`. For long-running orchestrations where the view needs a handle
 (progress, cancellation), use `host.start(ref, args): RunHandle<O>` — same args, returns
 a richer handle with `status$`, `cancel()`, and `.result: Promise<O>`.
 
-There is no string-keyed action registry on the recipe; views fire workflows directly via
+There is no string-keyed action registry on the recipe; views fire orchestrations directly via
 the imported ref. The recipe's `defaultAction` is the only binding the launcher needs
 statically — it's what the Quick Starts card / `/<slashAlias>` selection runs.
 
-Sub-workflow invocation from inside another workflow body uses the `workflow()` global
+Sub-orchestration invocation from inside another orchestration body uses the `workflow()` global
 with a typed `WorkflowRef`:
 
 ```ts
@@ -961,17 +980,17 @@ const result = await workflow(degraded, args); // typed
 `workflow()` does not accept a string form. For dynamic dispatch, branch on the ref:
 `const ref = condition ? workflowA : workflowB; await workflow(ref, args);`.
 
-## Agents vs. workflows — the asymmetry
+## Agents vs. orchestrations — the asymmetry
 
-Agents and workflows live in different runtime worlds, deliberately. Agents are
+Agents and orchestrations live in different runtime worlds, deliberately. Agents are
 **in-flight** — the LLM streams tokens to its provider in a single open connection;
-suspending an agent mid-turn means killing and re-establishing that connection. Workflows
-are **durable** — every primitive call is a journaled checkpoint; suspending a workflow
+suspending an agent mid-turn means killing and re-establishing that connection. Orchestrations
+are **durable** — every primitive call is a journaled checkpoint; suspending an orchestration
 parks it cheaply and resumes it on the next external event.
 
 This asymmetry shapes the surface each side gets:
 
-| Capability                                              | Agent                     | Workflow                   |
+| Capability                                              | Agent                     | Orchestration                   |
 | ------------------------------------------------------- | ------------------------- | -------------------------- |
 | Spawn a child thread                                    | ✅                        | ✅                         |
 | Fire-and-forget message to another thread               | ✅                        | ✅                         |
@@ -983,16 +1002,16 @@ This asymmetry shapes the surface each side gets:
 
 Agents get the simplified, fire-and-forget surface (spawn a child thread, post a one-way
 message). Anything more — a blocking request/response, suspend-and-resume, user escalation —
-belongs in a workflow, where the `Thread` verbs (`askAgent` / `askUser`) do the suspension via
+belongs in an orchestration, where the `Thread` verbs (`askAgent` / `askUser`) do the suspension via
 the Handle pattern.
 
-When an agent needs schema-typed output, it launches a workflow that does the work and posts
+When an agent needs schema-typed output, it launches an orchestration that does the work and posts
 the typed result back to the agent's thread on the next turn. The agent reads it as a normal
-inbound message; the workflow does the suspension.
+inbound message; the orchestration does the suspension.
 
 ## Implementation phasing
 
-The step-union runtime has been **deleted** — the durable engine is the only workflow runtime.
+The step-union runtime has been **deleted** — the durable engine is the only orchestration runtime.
 
 | Phase | Scope                                                                                                                                                                                                                                                                                                                                                    | Status      |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
@@ -1028,7 +1047,7 @@ longer a `recipe.json` / step-union path.
    pending ask). Both share **one** durability guarantee — the journal and the run record commit
    to the same DB, so there is no split-brain where the DB says "resume" but the journal is gone.
    On boot, `rehydrateSuspendedWorkflowRuns` reads `workflow_runs WHERE status='suspended'` and
-   rebuilds each run's resume closure: DATA (workflow path, args, project/model/mode, pending
+   rebuilds each run's resume closure: DATA (orchestration path, args, project/model/mode, pending
    ask) from the row, CODE (broker, dispatch, store, registry, lifecycle) reconstructed from host
    layers, then `registry.registerRun` + restore the pending ask. The reactor then resolves it
    identically whether the ask was set this uptime or a prior one. Journal compaction/retention
@@ -1040,9 +1059,9 @@ longer a `recipe.json` / step-union path.
 
 3. **Per-call model selection for cost discipline.** When `meta.model` declares a default and
    a single `agent` / `askAgent` call wants a cheaper model, the per-call `model:` override
-   should be a strict subset of the workflow's declared capability for that provider. Surface
+   should be a strict subset of the orchestration's declared capability for that provider. Surface
    the rule in the lint.
-4. **Cancellation semantics for spawned-thread orphans.** When a parent workflow throws without
+4. **Cancellation semantics for spawned-thread orphans.** When a parent orchestration throws without
    resolving a spawned thread's pending turn, does the engine cascade-cancel the child? Default
    proposal: yes, on parent failure or cancellation, propagate `CancelledError` to all open
    pending asks via `thread.cancelled` system messages.
@@ -1059,7 +1078,7 @@ longer a `recipe.json` / step-union path.
 - [Epic 21: Context & Tool Catalog](./21-context-tool-catalog.md) — tool groups for
   capability gating via `ToolGroupRef`s in `meta.capabilities`.
 - [Epic 24: Tiered Message Composition](./24-tiered-message-composition.md) — system
-  message envelope and the three-author conversation model that workflow messages slot
+  message envelope and the three-author conversation model that orchestration messages slot
   into.
 - The Claude Code `Workflow` tool — the inspiration; this engine extends it with
   arbitrary script execution, child sessions, cross-thread messaging, user escalation,

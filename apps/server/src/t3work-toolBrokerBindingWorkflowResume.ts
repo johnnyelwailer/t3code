@@ -1,5 +1,5 @@
 /**
- * Binding glue for `t3work.workflow.resume`: routes the broker's tool call through to the host
+ * Binding glue for `t3work.orchestration.resume`: routes the broker's tool call through to the host
  * handler bound to the calling thread. Mirrors {@link ./t3work-toolBrokerBindingWorkflowStatus.ts}
  * so the dispatch module stays small.
  */
@@ -12,7 +12,7 @@ import type {
   T3workWorkflowResumeToolHandlers,
 } from "./t3work-toolBrokerWorkflowResumeTool.ts";
 
-export const T3WORK_WORKFLOW_RESUME_TOOL_ID = "t3work.workflow.resume";
+export const T3WORK_WORKFLOW_RESUME_TOOL_ID = "t3work.orchestration.resume";
 
 const readArgs = (value: unknown): ResumeWorkflowHandlerArgs => {
   if (!value || typeof value !== "object" || globalThis.Array.isArray(value)) {

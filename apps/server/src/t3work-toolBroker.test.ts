@@ -181,7 +181,7 @@ describe("T3workToolBrokerLive", () => {
       "t3work.thread.start_child": expect.objectContaining({
         name: "t3work.thread.start_child",
       }),
-      "t3work.workflow.run": expect.objectContaining({ name: "t3work.workflow.run" }),
+      "t3work.orchestration.run": expect.objectContaining({ name: "t3work.orchestration.run" }),
       "t3work.widget.show": expect.objectContaining({ name: "t3work.widget.show" }),
       "t3work.recipe.list": expect.objectContaining({ name: "t3work.recipe.list" }),
       "t3work.recipe.validate": expect.objectContaining({ name: "t3work.recipe.validate" }),

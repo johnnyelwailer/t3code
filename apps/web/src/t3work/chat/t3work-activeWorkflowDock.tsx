@@ -81,7 +81,7 @@ export function deriveT3workActiveWorkflowDockItems(
     byRunId.set(runId, {
       runId,
       messageId: message.id,
-      name: shape.name || "Workflow",
+      name: shape.name || "Orchestration",
       summaries,
     });
   }
@@ -142,11 +142,11 @@ export function T3workActiveWorkflowDock({
         <LocateFixedIcon className="size-3 shrink-0 text-muted-foreground" />
       </button>
       {items.length > 1 ? (
-        <div className="flex shrink-0 items-center gap-0.5" aria-label="Switch active workflow">
+        <div className="flex shrink-0 items-center gap-0.5" aria-label="Switch orchestration">
           <button
             type="button"
             className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Previous active workflow"
+            aria-label="Previous active orchestration"
             onClick={() => selectOffset(-1)}
           >
             <ChevronLeftIcon className="size-3.5" />
@@ -157,7 +157,7 @@ export function T3workActiveWorkflowDock({
           <button
             type="button"
             className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Next active workflow"
+            aria-label="Next active orchestration"
             onClick={() => selectOffset(1)}
           >
             <ChevronRightIcon className="size-3.5" />

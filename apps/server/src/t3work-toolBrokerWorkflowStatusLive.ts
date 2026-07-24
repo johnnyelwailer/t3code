@@ -1,5 +1,5 @@
 /**
- * Broker-side wiring for `t3work.workflow.status`: resolves the run repository OPTIONALLY from
+ * Broker-side wiring for `t3work.orchestration.status`: resolves the run repository OPTIONALLY from
  * the broker's environment and builds the per-thread handler factory. Optional so broker test
  * layers that never wire the run repository still build — without it the tool simply reports
  * "not enabled". Mirrors ./t3work-toolBrokerWorkflowRunLive.ts, kept separate so that file (and
@@ -15,7 +15,7 @@ import {
   type T3workWorkflowStatusToolHandlers,
 } from "./t3work-toolBrokerWorkflowStatusTool.ts";
 
-/** Build the per-thread `t3work.workflow.status` handler factory, or `undefined` when the run
+/** Build the per-thread `t3work.orchestration.status` handler factory, or `undefined` when the run
  * repository is absent from the broker's environment. */
 export const makeWorkflowStatusToolsForThread = Effect.fn("makeWorkflowStatusToolsForThread")(
   function* () {
