@@ -11,7 +11,8 @@ import { defineTool } from "../t3work-sdk.ts";
 /** One structured, agent-actionable problem found while discovering/loading/validating. */
 export const RecipeToolIssue = Schema.Struct({
   path: Schema.String,
-  phase: Schema.Literals(["discover", "load", "meta", "shape"]),
+  /** `determinism` / `capability` are the phase-25.5 load-time static audits. */
+  phase: Schema.Literals(["discover", "load", "meta", "shape", "determinism", "capability"]),
   message: Schema.String,
 });
 export type RecipeToolIssue = typeof RecipeToolIssue.Type;

@@ -56,17 +56,13 @@ export {
   listRegisteredTools,
   withWorkflowRuntime,
 } from "./t3work-sdk.ts";
-// Placement `define*` helpers — one per contribution kind, shipped alongside the placements
-// they cover (Epic 19 §Plugin SDK Surface). See ./t3work-sdk.placements.ts for what is
-// deliberately NOT here.
+// Placement `define*` helpers (Epic 19 §Plugin SDK Surface); see ./t3work-sdk.placements.ts.
+// The per-section action/defaults schemas stay on the `@t3work/sdk/placements` subpath.
 export {
   ActionDefinition,
   defineAction,
   defineSidecarSection,
   RecipeSurface,
-  SidecarSectionAction,
-  SidecarSectionActionRun,
-  SidecarSectionDefaults,
   SidecarSectionDefinition,
 } from "./t3work-sdk.placements.ts";
 export { renameThreadTool } from "./tools/t3work-sdk.t3work.ts";
@@ -79,6 +75,12 @@ export type {
 export { runWorkflowTool } from "./tools/t3work-sdk.workflow.ts";
 export { deriveWorkflowShape } from "./t3work-sdk.workflowShape.ts";
 export { extractMeta, prepareWorkflow } from "./t3work-sdk.loader.ts";
+// Load-time static audits (Epic 25 phase 25.5): determinism + capability, before any run.
+export { auditWorkflowSourceStatic, registryToolGroupResolver } from "./t3work-sdk.staticAudit.ts";
+export { scanCapabilities } from "./t3work-sdk.capabilityScan.ts";
+export { scanDeterminism } from "./t3work-sdk.determinismScan.ts";
+export { formatFinding } from "./t3work-sdk.staticAuditTypes.ts";
+export { normalizeCapabilities } from "./t3work-sdk.capabilityGating.ts";
 
 export type {
   HandleKind,
@@ -112,6 +114,9 @@ export type { JournalEntry, JournalMaps, ResolvedEntry } from "./t3work-sdk.jour
 export type { JournalSink, JournalStore } from "./t3work-sdk.journalStore.ts";
 export type { ResolvedWireInput } from "./t3work-sdk.journalWriter.ts";
 export type { WorkflowMeta } from "./t3work-sdk.loader.ts";
+export type { CapabilityScanOptions } from "./t3work-sdk.capabilityScan.ts";
+export type { WorkflowStaticAuditOptions } from "./t3work-sdk.staticAudit.ts";
+export type { WorkflowAuditFacet, WorkflowAuditFinding } from "./t3work-sdk.staticAuditTypes.ts";
 export type {
   WorkflowShape,
   WorkflowShapeStep,
