@@ -13,6 +13,7 @@
 import type * as Schema from "effect/Schema";
 
 import { type AskAffordance, schemaToAffordance } from "./t3work-sdk.affordance.ts";
+import { normalizeAgentAttachments } from "./t3work-sdk.askAttachments.ts";
 import { SCHEMA_INSTRUCTION, describeSchemaForPrompt } from "./t3work-sdk.schemaDescribe.ts";
 
 /** Coerce a raw reply into a value a schema can decode: parse a JSON string (tolerating a
@@ -62,7 +63,11 @@ export function planAskRender(input: {
       : undefined;
   const choice = affordance?.kind === "choice" ? affordance : undefined;
   const rendered = affordance !== undefined && affordance.kind !== "text";
-  const refs = kind === "user.input" ? input.attachments : undefined;
+  // `user.input` attachments are external-resource refs the host renders as cards — passed
+  // through verbatim so decision-card payloads stay byte-identical. A `thread.turn`'s are the
+  // author's structured data: named here, serialized once by the host at dispatch.
+  const refs =
+    kind === "user.input" ? input.attachments : normalizeAgentAttachments(input.attachments);
   // The implicit schema description is for AGENTS only: a `user.input` is read by a human, whose
   // affordance (buttons/inputs, or the freeform reply box) is the instruction. Deriving it here
   // and nowhere else keeps rendered decision cards byte-identical to pre-card journals.

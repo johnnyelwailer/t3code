@@ -7,6 +7,7 @@
 
 import type * as Schema from "effect/Schema";
 
+import type { AgentAttachment } from "./t3work-sdk.askAttachments.ts";
 import type { ModelSelection } from "./t3work-sdk.types.ts";
 
 /** A reference to a thread the workflow can drive. `id` is the thread's stable id. */
@@ -21,6 +22,13 @@ export interface AskOpts<R = string> {
   readonly label?: string;
   readonly schema?: Schema.Schema<R>;
   readonly model?: ModelSelection;
+  /**
+   * Structured data the agent should work on — passed as OBJECTS, never stringified by the
+   * author: `agent("Judge these gates", { attachments: [gates] })`. The runtime names them,
+   * journals them as structure, and serializes them once when it composes the provider-facing
+   * turn. Wrap a value as `{ name, value }` to control the name the agent sees.
+   */
+  readonly attachments?: ReadonlyArray<AgentAttachment>;
 }
 
 /**
@@ -49,6 +57,11 @@ export interface AskUserOpts<R = string> extends AskOpts<R> {
    * affordance). Absent → the card defaults to "Yes"/"No". Ignored for non-boolean schemas. */
   readonly labels?: { readonly true: string; readonly false: string };
 }
+
+/** The widest ask-opts shape the internal dispatch loop accepts: agent opts (whose `attachments`
+ * are arbitrary author data) plus the `askUser`-only extras. Every public opts type is assignable
+ * to it, which `AskUserOpts` — narrowing `attachments` to resource refs — is not. */
+export type AnyAskOpts<R = string> = AskOpts<R> & Pick<AskUserOpts<R>, "labels">;
 
 /** Options for `spawnThread`. */
 export interface SpawnThreadOpts {

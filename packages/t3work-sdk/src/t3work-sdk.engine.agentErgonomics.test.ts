@@ -6,6 +6,8 @@
  *      without re-firing the broker (identical payload → identical `argsHash`).
  *   2. replay stability — re-deriving the payload of an identical ask produces the identical
  *      `argsHash`, which is what makes (1) safe to put in the prompt at all.
+ *   3. first-class attachments — author objects ride in the payload as STRUCTURE (never inlined
+ *      into the prompt), survive the journal round-trip, and replay to the same `argsHash`.
  */
 
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -16,10 +18,13 @@ import {
   resetCounters,
   runsRoot,
 } from "./t3work-sdk.engineFixtures.ts";
+import type * as AttachmentAgentWorkflow from "./__fixtures__/t3work-sdk.attachmentAgent.workflow.ts";
 import type * as SchemaPromptWorkflow from "./__fixtures__/t3work-sdk.schemaPrompt.workflow.ts";
 import {
+  asNamedAttachments,
   createMockBroker,
   defineWorkflow,
+  renderAgentAttachments,
   type MessageEnvelope,
   type MockBrokerOutcome,
   resumeWorkflow,
@@ -35,6 +40,9 @@ afterAll(cleanupRunsRoot);
 
 const schemaPromptWorkflow = defineWorkflow<typeof SchemaPromptWorkflow>(
   "./__fixtures__/t3work-sdk.schemaPrompt.workflow.ts",
+);
+const attachmentAgentWorkflow = defineWorkflow<typeof AttachmentAgentWorkflow>(
+  "./__fixtures__/t3work-sdk.attachmentAgent.workflow.ts",
 );
 
 type AnyResult<O> = WorkflowRunResult<O> | SuspendedResult;
@@ -84,6 +92,46 @@ describe("agent ergonomics — implicit schema description", () => {
     expect(completed(resumed)).toEqual({ verdict: "pass", score: 0 });
     // Replay re-derives the same description → same payload → same argsHash, no re-fire.
     expect(broker.sent).toHaveLength(2);
+    const replayHash = [
+      ...readJournalEntries(journalFilePath(runsRoot, run.runId)).bySeq.values(),
+    ].map((entry) => entry.argsHash);
+    expect(replayHash).toEqual(firstHash);
+  });
+});
+
+describe("agent ergonomics — first-class attachments", () => {
+  const gates = [
+    { id: "g1", ok: true },
+    { id: "g2", ok: false },
+  ];
+
+  it("carries author objects through the payload and journal, never inlined in the prompt", async () => {
+    const broker = createMockBroker((envelope) =>
+      envelope.kind === "thread.turn" ? { kind: "resolve", reply: "judged" } : { kind: "defer" },
+    );
+    const base = { runsRoot, tools: [], broker } as const;
+    const run = await startWorkflow(attachmentAgentWorkflow, { gates }, base);
+    expect(completed(run)).toEqual({ reply: "judged" });
+
+    const turn = broker.sent.find((envelope) => envelope.kind === "thread.turn");
+    const payload = turn?.payload as { prompt: string; attachments?: unknown };
+    // Structure in the payload — one explicitly named, one named positionally…
+    expect(payload.attachments).toEqual([
+      { name: "gates", value: gates },
+      { name: "data-2", value: { policy: "strict" } },
+    ]);
+    // …and NOT a single byte of it stringified into the prompt.
+    expect(payload.prompt).toBe("Judge these gates");
+
+    // The host composes the provider-facing text from the same structure, once.
+    expect(renderAgentAttachments(asNamedAttachments(payload.attachments))).toContain('"id": "g1"');
+
+    const firstHash = [
+      ...readJournalEntries(journalFilePath(runsRoot, run.runId)).bySeq.values(),
+    ].map((entry) => entry.argsHash);
+    const resumed = await resumeWorkflow(run.runId, attachmentAgentWorkflow, { gates }, base);
+    expect(completed(resumed)).toEqual({ reply: "judged" });
+    expect(broker.sent).toHaveLength(2); // replayed, not re-fired
     const replayHash = [
       ...readJournalEntries(journalFilePath(runsRoot, run.runId)).bySeq.values(),
     ].map((entry) => entry.argsHash);

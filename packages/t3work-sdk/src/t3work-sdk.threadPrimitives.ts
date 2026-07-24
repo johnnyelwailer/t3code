@@ -21,6 +21,7 @@ import { PermissionDeniedError, SchemaExhaustedError } from "./t3work-sdk.errors
 import type { HandleDispatch, ReplyResolver } from "./t3work-sdk.handles.ts";
 import { decodeWithSchema } from "./t3work-sdk.internal.ts";
 import type {
+  AnyAskOpts,
   AskOpts,
   AskUserOpts,
   ShowWidgetInput,
@@ -73,7 +74,7 @@ export function createThreadPrimitives(deps: {
     kind: "thread.turn" | "user.input",
     threadId: string,
     basePrompt: string,
-    opts: AskUserOpts<R> | undefined,
+    opts: AnyAskOpts<R> | undefined,
   ): Promise<R> => {
     const schema = opts?.schema;
     const model = opts?.model ?? deps.defaultModel;
@@ -86,7 +87,7 @@ export function createThreadPrimitives(deps: {
     const plan = planAskRender({
       kind,
       schema,
-      attachments: kind === "user.input" ? opts?.attachments : undefined,
+      attachments: opts?.attachments,
       labels: opts?.labels,
     });
     let prompt = `${basePrompt}${plan.promptSuffix}`;

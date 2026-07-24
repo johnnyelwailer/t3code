@@ -40,6 +40,7 @@ import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities
 import { dispatchWorkflowChild } from "./t3work-workflowChildPlacement.ts";
 import { resolveWorkflowChildModel } from "./t3work-workflowChildModel.ts";
 import { createWorkflowLiveSettlement } from "./t3work-workflowLiveSettlement.ts";
+import { workflowTurnText } from "./t3work-workflowTurnText.ts";
 import {
   buildT3workWidgetAttachment,
   parseT3workWidgetShowInput,
@@ -167,7 +168,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
               message: {
                 messageId: MessageId.make(deps.newId()),
                 role: "user",
-                text: p.prompt,
+                text: workflowTurnText(p),
                 attachments: [],
               },
               modelSelection,

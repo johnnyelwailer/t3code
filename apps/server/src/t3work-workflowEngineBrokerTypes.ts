@@ -111,6 +111,9 @@ export interface ThreadTurnPayload {
   readonly model?: WorkflowModelSelection;
   /** Short human-facing status label, separate from the provider prompt. */
   readonly label?: string;
+  /** The author's structured data, named by the SDK and journaled as structure; the host
+   * serializes it into the turn text (`workflowTurnText`). Absent on older journals. */
+  readonly attachments?: ReadonlyArray<import("@t3work/sdk").NamedAttachment>;
 }
 export interface ThreadMessagePayload {
   readonly threadId: string;
