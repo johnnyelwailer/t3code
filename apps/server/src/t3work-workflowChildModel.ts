@@ -1,9 +1,17 @@
 import type { ModelSelection } from "@t3tools/contracts";
-import type { AgentEffort, ModelSelection as WorkflowModelSelection } from "@t3work/sdk";
+import type {
+  AgentEffort,
+  ModelCascadeWireEntry,
+  ModelSelection as WorkflowModelSelection,
+} from "@t3work/sdk";
 
 import { getChildProviderCatalog } from "./t3work-childProviderCatalog.ts";
 import { applyWorkflowEffort } from "./t3work-workflowEffortOptions.ts";
 import { resolveStartChildModelSelection } from "./t3work-toolBrokerStartChildProvider.ts";
+import {
+  resolveModelCascade,
+  type WorkflowModelCascadeChoice,
+} from "./t3work-workflowModelCascade.ts";
 import { fromWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
 
 /**
@@ -48,4 +56,26 @@ export async function resolveWorkflowChildModel(
 
   if (!result.ok) throw new Error(result.message);
   return applyWorkflowEffort(result.value, effort, providers);
+}
+
+/**
+ * Resolve a `model.resolve` primitive's provider ladder against the live snapshots. The winning
+ * selection is the primitive's journaled reply, so a replay reuses it instead of re-probing.
+ *
+ * No catalog wired (SDK fs path / minimal tests) → no choice, and the ask keeps the run's default
+ * selection: availability is only knowable from a live snapshot, and guessing a provider is worse
+ * than staying on the model the run was launched with.
+ */
+export async function resolveWorkflowModelCascade(
+  base: ModelSelection,
+  entries: ReadonlyArray<ModelCascadeWireEntry>,
+): Promise<WorkflowModelCascadeChoice> {
+  const catalog = getChildProviderCatalog();
+  if (catalog === undefined) {
+    return {
+      selection: undefined,
+      reason: `no provider registry wired; keeping the run's default ${base.instanceId}/${base.model}`,
+    };
+  }
+  return resolveModelCascade({ base, entries, providers: await catalog() });
 }

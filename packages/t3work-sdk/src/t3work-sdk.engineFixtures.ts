@@ -20,6 +20,9 @@ import type * as BudgetWorkflow from "./__fixtures__/t3work-sdk.budgetPrimitive.
 import type * as ChildSpawnWorkflow from "./__fixtures__/t3work-sdk.childSpawn.workflow.ts";
 import type * as E2eReviewWorkflow from "./__fixtures__/t3work-sdk.e2eReview.workflow.ts";
 import type * as FireForgetWorkflow from "./__fixtures__/t3work-sdk.handleFireForget.workflow.ts";
+import type * as ModelCascadeWorkflow from "./__fixtures__/t3work-sdk.modelCascade.workflow.ts";
+import type * as ModelCascadeAbsentWorkflow from "./__fixtures__/t3work-sdk.modelCascadeAbsent.workflow.ts";
+import type * as ModelCascadePrecedenceWorkflow from "./__fixtures__/t3work-sdk.modelCascadePrecedence.workflow.ts";
 import type * as UserAskDeniedWorkflow from "./__fixtures__/t3work-sdk.userAskDenied.workflow.ts";
 import type * as ParallelWorkflow from "./__fixtures__/t3work-sdk.parallelPrimitive.workflow.ts";
 import type * as PipelineWorkflow from "./__fixtures__/t3work-sdk.pipelinePrimitive.workflow.ts";
@@ -265,6 +268,15 @@ export const childSpawnWorkflow = defineWorkflow<typeof ChildSpawnWorkflow>(
 );
 export const e2eReviewWorkflow = defineWorkflow<typeof E2eReviewWorkflow>(
   "./__fixtures__/t3work-sdk.e2eReview.workflow.ts",
+);
+export const modelCascadeWorkflow = defineWorkflow<typeof ModelCascadeWorkflow>(
+  "./__fixtures__/t3work-sdk.modelCascade.workflow.ts",
+);
+export const modelCascadeAbsentWorkflow = defineWorkflow<typeof ModelCascadeAbsentWorkflow>(
+  "./__fixtures__/t3work-sdk.modelCascadeAbsent.workflow.ts",
+);
+export const modelCascadePrecedenceWorkflow = defineWorkflow<typeof ModelCascadePrecedenceWorkflow>(
+  "./__fixtures__/t3work-sdk.modelCascadePrecedence.workflow.ts",
 );
 
 export const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-engine-"));

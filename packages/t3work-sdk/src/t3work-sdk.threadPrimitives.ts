@@ -18,9 +18,11 @@ import { createAskVerb, createFireEnvelope } from "./t3work-sdk.askVerb.ts";
 import type { MessageBroker } from "./t3work-sdk.broker.ts";
 import { PermissionDeniedError } from "./t3work-sdk.errors.ts";
 import type { HandleDispatch } from "./t3work-sdk.handles.ts";
+import { createModelCascadeResolver, createThreadCascadeAsk } from "./t3work-sdk.modelCascade.ts";
 import type {
   AgentEffort,
   AskOpts,
+  ModelCascade,
   AskUserOpts,
   ShowWidgetInput,
   SpawnThreadOpts,
@@ -34,6 +36,8 @@ export type {
   AskOpts,
   AskUserAttachment,
   AskUserOpts,
+  ModelCascade,
+  ModelCascadeEntry,
   ShowWidgetInput,
   SpawnThreadOpts,
   Thread,
@@ -54,6 +58,7 @@ export const workflowChildTitleFromPrompt = (prompt: string): string => {
 /** A thread's per-call defaults, applied to every ask that omits them. */
 interface ThreadDefaults {
   readonly model: ModelSelection | undefined;
+  readonly models: ModelCascade | undefined;
   readonly effort: AgentEffort | undefined;
 }
 
@@ -63,11 +68,18 @@ export function createThreadPrimitives(deps: {
   readonly capabilities: ReadonlySet<string>;
   readonly launchThreadId: string | undefined;
   readonly defaultModel: ModelSelection | undefined;
+  /** The body's `log` narrator, so a cascade can report which provider it landed on. */
+  readonly log?: (message: string) => void;
 }): WorkflowThreadPrimitives {
   const { dispatch, broker } = deps;
   const has = (cap: string): boolean => deps.capabilities.has(cap);
   const fireEnvelope = createFireEnvelope(broker);
   const askVerb = createAskVerb({ dispatch, broker, defaultModel: deps.defaultModel });
+  const resolveCascade = createModelCascadeResolver({
+    dispatch,
+    broker,
+    log: deps.log ?? (() => {}),
+  });
 
   const notify = (threadId: string, recipient: "agent" | "user", text: string): void => {
     const payload = { threadId, recipient, text };
@@ -102,30 +114,41 @@ export function createThreadPrimitives(deps: {
     defaults: ThreadDefaults,
   ): AskOpts<R> => {
     const model = o?.model ?? defaults.model;
+    const models = o?.models ?? defaults.models;
     const effort = o?.effort ?? defaults.effort;
     return {
       ...o,
       ...(model === undefined ? {} : { model }),
+      ...(models === undefined ? {} : { models }),
       ...(effort === undefined ? {} : { effort }),
     };
   };
 
-  const makeThread = (threadId: string, defaults: ThreadDefaults): Thread => ({
-    id: { kind: "thread-ref", id: threadId },
-    askAgent: <R>(p: string, o?: AskOpts<R>) =>
-      askVerb<R>("thread.turn", threadId, p, withThreadDefaults(o, defaults)),
-    notifyAgent: (msg: string) => notify(threadId, "agent", msg),
-    askUser: has("user")
-      ? <R>(q: string, o?: AskUserOpts<R>) =>
-          askVerb<R>("user.input", deps.launchThreadId ?? threadId, q, o)
-      : (denied("user", "askUser") as Thread["askUser"]),
-    notifyUser: has("user")
-      ? (msg: string) => notify(threadId, "user", msg)
-      : (denied("user", "notifyUser") as Thread["notifyUser"]),
-    showWidget: has("user")
-      ? (input: ShowWidgetInput) => showWidget(threadId, input)
-      : (denied("user", "showWidget") as Thread["showWidget"]),
-  });
+  const makeThread = (threadId: string, defaults: ThreadDefaults): Thread => {
+    // Cascade resolution + its per-thread memo live in t3work-sdk.modelCascade.ts; here we only
+    // merge the thread's defaults in and hand the ask over.
+    const cascadeAsk = createThreadCascadeAsk({
+      askVerb,
+      resolve: resolveCascade,
+      threadId,
+      threadLadder: defaults.models,
+    });
+    return {
+      id: { kind: "thread-ref", id: threadId },
+      askAgent: <R>(p: string, o?: AskOpts<R>) => cascadeAsk<R>(p, withThreadDefaults(o, defaults)),
+      notifyAgent: (msg: string) => notify(threadId, "agent", msg),
+      askUser: has("user")
+        ? <R>(q: string, o?: AskUserOpts<R>) =>
+            askVerb<R>("user.input", deps.launchThreadId ?? threadId, q, o)
+        : (denied("user", "askUser") as Thread["askUser"]),
+      notifyUser: has("user")
+        ? (msg: string) => notify(threadId, "user", msg)
+        : (denied("user", "notifyUser") as Thread["notifyUser"]),
+      showWidget: has("user")
+        ? (input: ShowWidgetInput) => showWidget(threadId, input)
+        : (denied("user", "showWidget") as Thread["showWidget"]),
+    };
+  };
 
   const spawnThread = (opts?: SpawnThreadOpts): Thread => {
     const model = opts?.model ?? deps.defaultModel;
@@ -155,13 +178,16 @@ export function createThreadPrimitives(deps: {
           resolver,
         ),
     });
-    return makeThread(threadId, { model, effort: opts?.effort });
+    return makeThread(threadId, { model, models: opts?.models, effort: opts?.effort });
   };
 
+  // `models` rides through to the spawned thread so `agent()`'s create + turn share ONE
+  // journaled cascade resolution (the ladder array identity is the same object).
   const agent = <R = string>(prompt: string, opts?: AskOpts<R>): Promise<R> =>
     spawnThread({
       name: opts?.label?.trim() || workflowChildTitleFromPrompt(prompt),
       ...(opts?.model === undefined ? {} : { model: opts.model }),
+      ...(opts?.models === undefined ? {} : { models: opts.models }),
       ...(opts?.effort === undefined ? {} : { effort: opts.effort }),
     }).askAgent(prompt, opts);
 
@@ -169,7 +195,11 @@ export function createThreadPrimitives(deps: {
     thread:
       deps.launchThreadId === undefined
         ? undefined
-        : makeThread(deps.launchThreadId, { model: deps.defaultModel, effort: undefined }),
+        : makeThread(deps.launchThreadId, {
+            model: deps.defaultModel,
+            models: undefined,
+            effort: undefined,
+          }),
     spawnThread,
     agent,
   };

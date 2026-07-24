@@ -8,7 +8,33 @@
 import type * as Schema from "effect/Schema";
 
 import type { AgentAttachment } from "./t3work-sdk.askAttachments.ts";
-import type { ModelSelection } from "./t3work-sdk.types.ts";
+import type { ModelRef, ModelSelection } from "./t3work-sdk.types.ts";
+
+/**
+ * One rung of a {@link ModelCascade}. All three shapes are legal:
+ *   • `{ instanceId, model }` — a specific model on a specific provider instance;
+ *   • `{ instanceId }`        — that instance, on the run's model if it has it else its first;
+ *   • `{ model }`             — that model on the run's CURRENT provider instance.
+ * `model` may be a typed `ModelRef` from `@t3work/sdk/models` or a raw provider slug (custom
+ * local models are not in the SDK's build-time tree).
+ */
+export interface ModelCascadeEntry {
+  readonly instanceId?: string;
+  readonly model?: ModelRef | string;
+}
+
+/**
+ * A provider ladder, tried in order. The HOST walks it against its live provider registry and
+ * picks the FIRST rung whose instance is configured, installed, enabled, and owns the model —
+ * the same availability check `t3work.thread.start_child` uses for cross-provider spawning. When
+ * no rung is available the run's current/default selection is kept (the ask never fails on
+ * availability alone). The winning rung is journaled, so a replay reuses the recorded choice
+ * instead of re-probing a registry whose availability may have changed since.
+ *
+ * An explicit single `model` WINS over a cascade: `models` is the fallback ladder, not an
+ * override. Effort composes — {@link AgentEffort} is mapped onto the CHOSEN provider's controls.
+ */
+export type ModelCascade = ReadonlyArray<ModelCascadeEntry>;
 
 /**
  * How hard the agent should think, WITHOUT naming a provider or a model (PR review: "a generic
@@ -31,6 +57,8 @@ export interface AskOpts<R = string> {
   readonly label?: string;
   readonly schema?: Schema.Schema<R>;
   readonly model?: ModelSelection;
+  /** Provider fallback ladder; ignored when `model` is given. See {@link ModelCascade}. */
+  readonly models?: ModelCascade;
   /** Thinking level for this ask, provider-agnostic. See {@link AgentEffort}. */
   readonly effort?: AgentEffort;
   /**
@@ -78,6 +106,9 @@ export type AnyAskOpts<R = string> = AskOpts<R> & Pick<AskUserOpts<R>, "labels">
 export interface SpawnThreadOpts {
   readonly name?: string;
   readonly model?: ModelSelection;
+  /** Provider fallback ladder for the thread's asks; ignored when `model` is given. Resolved ONCE
+   * per thread (on its first ask) and reused by every later ask on it. See {@link ModelCascade}. */
+  readonly models?: ModelCascade;
   /** Default thinking level for the thread's turns, provider-agnostic. See {@link AgentEffort}. */
   readonly effort?: AgentEffort;
   /** Ephemeral children stay out of the sidebar; retained children are durable and visible. */

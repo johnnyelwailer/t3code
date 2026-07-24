@@ -141,6 +141,14 @@ export interface UserInputPayload {
   /** External-resource refs to render as cards on the decision message. */
   readonly attachments?: ReadonlyArray<unknown>;
 }
+/**
+ * The `model.resolve` envelope payload: the author's provider ladder (`{ models: [...] }`), in
+ * wire form. Resolved host-side against the live registry; the chosen selection is the
+ * primitive's journaled reply, so replays reuse it instead of re-probing.
+ */
+export interface ModelResolvePayload {
+  readonly entries: ReadonlyArray<import("@t3work/sdk").ModelCascadeWireEntry>;
+}
 /** The `wait.until` envelope payload: the wall-clock deadline (epoch millis) the run sleeps to. */
 export interface WaitUntilPayload {
   readonly deadline: number;

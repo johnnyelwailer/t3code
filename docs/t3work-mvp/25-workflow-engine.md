@@ -217,6 +217,47 @@ string slug to the provider adapter; the type is what authors interact with.
 `askAgent(prompt, { model })` calls can override per-call (same `{ provider, model: ModelRef }`
 shape).
 
+#### Model cascade — `models: [...]`
+
+A single `model` pins a provider that may not be configured on the machine the workflow runs on.
+`models` is the fallback ladder for that: an ordered list of candidate rungs, walked HOST-side
+against the live provider registry, first available one wins.
+
+```ts
+await agent("Judge this gate", {
+  label: "Judge gate",
+  models: [
+    { instanceId: "nexplore", model: "minimax-m2.7-reap-139b-q4-160k" }, // instance + model
+    { instanceId: "nexplore", model: "qwen3.6-35b-a3b-q6-192k:nothink" },
+    { instanceId: "claudeAgent" }, // instance only — its default/matching model
+    { model: models.anthropic.claudeOpus48 }, // model only — the run's CURRENT instance
+  ],
+  effort: "high",
+});
+```
+
+Rules:
+
+- **Availability** is exactly `t3work.thread.start_child`'s definition (same resolver,
+  `resolveStartChildModelSelection`): the instance exists, its driver is available, it is
+  installed and enabled, and it owns the requested model. A rung that fails any of these falls
+  through — it is a skip, not an error.
+- **Nothing available** → the run's current/default selection is kept. A cascade is a preference
+  ladder, never a precondition, so it cannot fail a step on availability alone.
+- **Precedence**: an explicit single `model` **wins**; `models` is only consulted when no single
+  model was named (per-call `model` also beats a thread-level `models` from `spawnThread`).
+- **`effort` composes**: the tier is mapped onto the CHOSEN rung's own reasoning control.
+- **Diagnostics**: the winning rung and every skipped rung (with the reason) are narrated through
+  `log()` and emitted as the step's activity detail — a silent switch of brain is undebuggable.
+- **Replay determinism**: the ladder is resolved through ONE journaled `model.resolve` primitive
+  whose reply is the chosen `ModelSelection`. A resume replays that recorded reply instead of
+  re-probing a registry whose availability may have changed, so the following `thread.turn`
+  re-derives the same payload and the same `argsHash`. A body that passes no `models` fires no
+  `model.resolve` at all — its journal is byte-identical to one written before the option existed.
+- `spawnThread({ models })` resolves the ladder **once**, on the thread's first ask, and reuses
+  that choice for every later ask on the thread. The `thread.create` itself carries no resolved
+  model (it is fired one-way, before any await); the turn's selection is what runs.
+
 ## Globals — the surface
 
 The engine injects globals into the workflow body. There are no `import` statements for

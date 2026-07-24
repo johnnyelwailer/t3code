@@ -125,6 +125,7 @@ export async function runPreparedBody(opts: {
     capabilities,
     launchThreadId: opts.launchThreadId,
     defaultModel: opts.defaultModel,
+    log: opts.primitives.log,
   });
   // `waitUntil` (Epic 27) — capability-gated against the same meta.capabilities (`"schedule"`).
   const schedule = createSchedulePrimitives({

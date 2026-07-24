@@ -1,21 +1,30 @@
 import type { ScriptRef, ToolRef } from "./t3work-sdk.types.ts";
 
-export type PrimitiveKind =
-  | "tool"
-  | "script"
-  | "script-never"
-  | "now"
-  | "random"
-  | "uuid"
-  | "wait"
-  | "parallel"
-  | "pipeline"
-  | "workflow"
-  | "thread.create"
-  | "thread.turn"
-  | "thread.message"
-  | "user.input"
-  | "wait.until";
+/**
+ * Every kind a journal line can carry, in ONE place: the {@link PrimitiveKind} union and the
+ * read-side `Schema.Literals` validator in `t3work-sdk.journalReader.ts` are both derived from
+ * this list, so a new primitive cannot be writable-but-unreadable.
+ */
+export const PRIMITIVE_KINDS = [
+  "tool",
+  "script",
+  "script-never",
+  "now",
+  "random",
+  "uuid",
+  "wait",
+  "parallel",
+  "pipeline",
+  "workflow",
+  "thread.create",
+  "thread.turn",
+  "thread.message",
+  "user.input",
+  "wait.until",
+  "model.resolve",
+] as const;
+
+export type PrimitiveKind = (typeof PRIMITIVE_KINDS)[number];
 
 export interface PrimitiveCall<R> {
   readonly kind: PrimitiveKind;

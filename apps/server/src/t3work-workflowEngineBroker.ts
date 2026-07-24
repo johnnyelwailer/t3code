@@ -29,6 +29,7 @@ import type { MessageBroker, MessageEnvelope } from "@t3work/sdk";
 
 import {
   messageUpsert,
+  type ModelResolvePayload,
   type ThreadCreatePayload,
   type ThreadMessagePayload,
   type ThreadTurnPayload,
@@ -38,7 +39,11 @@ import {
 } from "./t3work-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities.ts";
 import { dispatchWorkflowChild } from "./t3work-workflowChildPlacement.ts";
-import { resolveWorkflowChildModel } from "./t3work-workflowChildModel.ts";
+import {
+  resolveWorkflowChildModel,
+  resolveWorkflowModelCascade,
+} from "./t3work-workflowChildModel.ts";
+import { toWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3work-workflowLiveSettlement.ts";
 import { workflowTurnText } from "./t3work-workflowTurnText.ts";
 import {
@@ -130,6 +135,20 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
           deps.stepActivities?.emitResolved(correlationId, "completed") ?? Promise.resolve(),
         resolve: resolver.resolve,
       });
+    if (kind === "model.resolve") {
+      // Walk the author's provider ladder against the LIVE registry and settle SYNCHRONOUSLY: the
+      // chosen selection becomes this primitive's `resolved` journal line, so a replay reuses the
+      // recorded choice instead of re-probing a registry whose availability may have changed.
+      const p = payload as ModelResolvePayload;
+      const choice = await resolveWorkflowModelCascade(deps.modelSelection, p.entries);
+      step(correlationId, kind, "completed", `Model cascade — ${choice.reason}`);
+      resolver.resolve({
+        selection:
+          choice.selection === undefined ? null : toWorkflowModelSelection(choice.selection),
+        reason: choice.reason,
+      });
+      return;
+    }
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
       // Resolve BEFORE registering/dispatching: enqueueOneWay swallows dispatch errors, so an

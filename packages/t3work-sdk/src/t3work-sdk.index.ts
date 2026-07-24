@@ -106,11 +106,14 @@ export type {
   AskOpts,
   AskUserAttachment,
   AskUserOpts,
+  ModelCascade,
+  ModelCascadeEntry,
   SpawnThreadOpts,
   Thread,
   ThreadRef,
   WorkflowThreadPrimitives,
 } from "./t3work-sdk.threadPrimitives.ts";
+export type { ModelCascadeWireEntry } from "./t3work-sdk.modelCascade.ts";
 export type { ReplayDriftFacet, ReplayDriftReason } from "./t3work-sdk.errors.ts";
 export type { RunMeta } from "./t3work-sdk.journal.ts";
 export type { JournalEntry, JournalMaps, ResolvedEntry } from "./t3work-sdk.journalReader.ts";
