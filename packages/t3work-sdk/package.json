@@ -11,6 +11,10 @@
       "types": "./src/t3work-sdk.index.ts",
       "import": "./src/t3work-sdk.index.ts"
     },
+    "./placements": {
+      "types": "./src/t3work-sdk.placements.ts",
+      "import": "./src/t3work-sdk.placements.ts"
+    },
     "./groups": {
       "types": "./src/t3work-sdk.groups.ts",
       "import": "./src/t3work-sdk.groups.ts"
@@ -37,6 +41,7 @@
     "test": "vp test run"
   },
   "dependencies": {
+    "@t3tools/project-recipes": "workspace:*",
     "effect": "catalog:",
     "typescript": "catalog:"
   },

@@ -56,6 +56,19 @@ export {
   listRegisteredTools,
   withWorkflowRuntime,
 } from "./t3work-sdk.ts";
+// Placement `define*` helpers — one per contribution kind, shipped alongside the placements
+// they cover (Epic 19 §Plugin SDK Surface). See ./t3work-sdk.placements.ts for what is
+// deliberately NOT here.
+export {
+  ActionDefinition,
+  defineAction,
+  defineSidecarSection,
+  RecipeSurface,
+  SidecarSectionAction,
+  SidecarSectionActionRun,
+  SidecarSectionDefaults,
+  SidecarSectionDefinition,
+} from "./t3work-sdk.placements.ts";
 export { renameThreadTool } from "./tools/t3work-sdk.t3work.ts";
 export { listRecipesTool, validateRecipeTool } from "./tools/t3work-sdk.t3workRecipes.ts";
 export type {
