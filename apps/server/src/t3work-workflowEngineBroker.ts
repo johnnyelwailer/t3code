@@ -40,6 +40,7 @@ import { workflowStepDetailSnippet } from "./t3work-workflowEngineStepActivities
 import { dispatchWorkflowChild } from "./t3work-workflowChildPlacement.ts";
 import { resolveWorkflowChildModel } from "./t3work-workflowChildModel.ts";
 import { createWorkflowLiveSettlement } from "./t3work-workflowLiveSettlement.ts";
+import { workflowTurnText } from "./t3work-workflowTurnText.ts";
 import {
   buildT3workWidgetAttachment,
   parseT3workWidgetShowInput,
@@ -133,10 +134,12 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       const p = payload as ThreadCreatePayload;
       // Resolve BEFORE registering/dispatching: enqueueOneWay swallows dispatch errors, so an
       // invalid provider/model must reject this send() while the SDK still observes it.
+      // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
+      // microtask before `setPending`, and callers observe the pending entry right after `send`.
       const modelSelection =
-        p.model === undefined
+        p.model === undefined && p.effort === undefined
           ? deps.modelSelection
-          : await resolveWorkflowChildModel(deps.modelSelection, p.model);
+          : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
       step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
       await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p, modelSelection)));
       return;
@@ -145,10 +148,12 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       const p = payload as ThreadTurnPayload;
       // Resolve BEFORE recording pending state (registry + durable recordPending): an invalid
       // provider/model must reject this ask cleanly, not park the run on an undispatched turn.
+      // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
+      // microtask before `setPending`, and callers observe the pending entry right after `send`.
       const modelSelection =
-        p.model === undefined
+        p.model === undefined && p.effort === undefined
           ? deps.modelSelection
-          : await resolveWorkflowChildModel(deps.modelSelection, p.model);
+          : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
       step(correlationId, kind, "started", p.label ?? p.prompt, p.threadId);
       const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
       deps.registry.setPending(p.threadId, {
@@ -167,7 +172,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
               message: {
                 messageId: MessageId.make(deps.newId()),
                 role: "user",
-                text: p.prompt,
+                text: workflowTurnText(p),
                 attachments: [],
               },
               modelSelection,

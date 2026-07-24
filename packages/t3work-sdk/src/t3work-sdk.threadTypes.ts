@@ -7,7 +7,17 @@
 
 import type * as Schema from "effect/Schema";
 
+import type { AgentAttachment } from "./t3work-sdk.askAttachments.ts";
 import type { ModelSelection } from "./t3work-sdk.types.ts";
+
+/**
+ * How hard the agent should think, WITHOUT naming a provider or a model (PR review: "a generic
+ * way to define agent effort without having to specify exact provider/model … which could either
+ * delegate to different models altogether or just different thinking levels"). The run's current
+ * provider is kept; the host maps the tier onto whatever reasoning/thinking control that provider
+ * exposes, and degrades to a no-op when it exposes none — an effort request never fails a call.
+ */
+export type AgentEffort = "light" | "standard" | "high";
 
 /** A reference to a thread the workflow can drive. `id` is the thread's stable id. */
 export interface ThreadRef {
@@ -21,6 +31,15 @@ export interface AskOpts<R = string> {
   readonly label?: string;
   readonly schema?: Schema.Schema<R>;
   readonly model?: ModelSelection;
+  /** Thinking level for this ask, provider-agnostic. See {@link AgentEffort}. */
+  readonly effort?: AgentEffort;
+  /**
+   * Structured data the agent should work on — passed as OBJECTS, never stringified by the
+   * author: `agent("Judge these gates", { attachments: [gates] })`. The runtime names them,
+   * journals them as structure, and serializes them once when it composes the provider-facing
+   * turn. Wrap a value as `{ name, value }` to control the name the agent sees.
+   */
+  readonly attachments?: ReadonlyArray<AgentAttachment>;
 }
 
 /**
@@ -50,10 +69,17 @@ export interface AskUserOpts<R = string> extends AskOpts<R> {
   readonly labels?: { readonly true: string; readonly false: string };
 }
 
+/** The widest ask-opts shape the internal dispatch loop accepts: agent opts (whose `attachments`
+ * are arbitrary author data) plus the `askUser`-only extras. Every public opts type is assignable
+ * to it, which `AskUserOpts` — narrowing `attachments` to resource refs — is not. */
+export type AnyAskOpts<R = string> = AskOpts<R> & Pick<AskUserOpts<R>, "labels">;
+
 /** Options for `spawnThread`. */
 export interface SpawnThreadOpts {
   readonly name?: string;
   readonly model?: ModelSelection;
+  /** Default thinking level for the thread's turns, provider-agnostic. See {@link AgentEffort}. */
+  readonly effort?: AgentEffort;
   /** Ephemeral children stay out of the sidebar; retained children are durable and visible. */
   readonly retention?: "ephemeral" | "retained";
 }

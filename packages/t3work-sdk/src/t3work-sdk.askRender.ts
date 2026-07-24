@@ -4,14 +4,17 @@
  * prompt instructions, and the reply coercion — so `askVerb` stays a thin dispatch loop and every
  * card-renderable affordance (choice / boolean / form) suppresses the JSON-reply instruction the
  * same way (its buttons/inputs are the instruction; the bare question shows).
+ *
+ * For an AGENT turn the schema instruction is not generic: `describeSchemaForPrompt` derives the
+ * schema's actual shape + an example reply, so a workflow author never restates it in the prompt.
+ * A `user.input` keeps the generic line — its reader is a human with an affordance.
  */
 
 import type * as Schema from "effect/Schema";
 
 import { type AskAffordance, schemaToAffordance } from "./t3work-sdk.affordance.ts";
-
-const SCHEMA_INSTRUCTION =
-  "Respond with ONLY a single JSON value matching the required schema — no prose, no code fence.";
+import { normalizeAgentAttachments } from "./t3work-sdk.askAttachments.ts";
+import { SCHEMA_INSTRUCTION, describeSchemaForPrompt } from "./t3work-sdk.schemaDescribe.ts";
 
 /** Coerce a raw reply into a value a schema can decode: parse a JSON string (tolerating a
  * ```json fence); pass non-strings through; leave an unparseable string as-is so the decode fails
@@ -60,13 +63,22 @@ export function planAskRender(input: {
       : undefined;
   const choice = affordance?.kind === "choice" ? affordance : undefined;
   const rendered = affordance !== undefined && affordance.kind !== "text";
-  const refs = kind === "user.input" ? input.attachments : undefined;
+  // `user.input` attachments are external-resource refs the host renders as cards — passed
+  // through verbatim so decision-card payloads stay byte-identical. A `thread.turn`'s are the
+  // author's structured data: named here, serialized once by the host at dispatch.
+  const refs =
+    kind === "user.input" ? input.attachments : normalizeAgentAttachments(input.attachments);
+  // The implicit schema description is for AGENTS only: a `user.input` is read by a human, whose
+  // affordance (buttons/inputs, or the freeform reply box) is the instruction. Deriving it here
+  // and nowhere else keeps rendered decision cards byte-identical to pre-card journals.
+  const described =
+    kind === "thread.turn" && schema !== undefined ? describeSchemaForPrompt(schema) : undefined;
   const correctiveInstruction =
     choice !== undefined
       ? `Reply with exactly one of: ${choice.options.join(", ")}.`
       : affordance?.kind === "boolean"
         ? "Reply with true or false."
-        : SCHEMA_INSTRUCTION;
+        : (described ?? SCHEMA_INSTRUCTION);
   // A reply that IS one of a choice's offered options is the literal value (field-wrapped for a
   // fielded choice); JSON-coercing it would corrupt parseable options ("true"→bool, "42"→num).
   const coerceReply = (value: unknown): unknown => {
@@ -81,7 +93,7 @@ export function planAskRender(input: {
       ...(rendered ? { affordance } : {}),
       ...(refs === undefined || refs.length === 0 ? {} : { attachments: refs }),
     },
-    promptSuffix: schema === undefined || rendered ? "" : `\n\n${SCHEMA_INSTRUCTION}`,
+    promptSuffix: schema === undefined || rendered ? "" : `\n\n${described ?? SCHEMA_INSTRUCTION}`,
     correctiveInstruction,
     coerceReply,
   };

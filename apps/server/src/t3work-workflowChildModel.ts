@@ -1,7 +1,8 @@
 import type { ModelSelection } from "@t3tools/contracts";
-import type { ModelSelection as WorkflowModelSelection } from "@t3work/sdk";
+import type { AgentEffort, ModelSelection as WorkflowModelSelection } from "@t3work/sdk";
 
 import { getChildProviderCatalog } from "./t3work-childProviderCatalog.ts";
+import { applyWorkflowEffort } from "./t3work-workflowEffortOptions.ts";
 import { resolveStartChildModelSelection } from "./t3work-toolBrokerStartChildProvider.ts";
 import { fromWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
 
@@ -12,7 +13,10 @@ import { fromWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
  * `provider`/`model` string with no check that the instance was configured or the model
  * existed on it).
  *
- * - No `requested` selection → inherit the run's base model unchanged.
+ * `effort` rides along: a provider-agnostic thinking level applied to whichever selection wins,
+ * via {@link applyWorkflowEffort} (a no-op when the provider exposes no reasoning control).
+ *
+ * - Neither a `requested` selection nor an `effort` → inherit the run's base model unchanged.
  * - No catalog wired (some test/SDK harnesses don't set one) → fall back to the legacy blind
  *   `fromWorkflowModelSelection` mapping so existing SDK/test behavior is preserved.
  * - Catalog wired → fetch the live provider snapshots and defer to the same pure resolver
@@ -21,13 +25,20 @@ import { fromWorkflowModelSelection } from "./t3work-workflowModelSelection.ts";
 export async function resolveWorkflowChildModel(
   base: ModelSelection,
   requested: WorkflowModelSelection | undefined,
+  effort?: AgentEffort,
 ): Promise<ModelSelection> {
-  if (requested === undefined) return base;
+  if (requested === undefined && effort === undefined) return base;
 
   const catalog = getChildProviderCatalog();
-  if (catalog === undefined) return fromWorkflowModelSelection(requested);
+  // No catalog (some test/SDK harnesses): legacy blind mapping, and `effort` degrades to a no-op
+  // because the provider's option descriptors are only knowable from a live snapshot.
+  if (catalog === undefined) {
+    return requested === undefined ? base : fromWorkflowModelSelection(requested);
+  }
 
   const providers = await catalog();
+  if (requested === undefined) return applyWorkflowEffort(base, effort, providers);
+
   const result = resolveStartChildModelSelection({
     parentModelSelection: base,
     requestedProvider: requested.provider,
@@ -36,5 +47,5 @@ export async function resolveWorkflowChildModel(
   });
 
   if (!result.ok) throw new Error(result.message);
-  return result.value;
+  return applyWorkflowEffort(result.value, effort, providers);
 }
