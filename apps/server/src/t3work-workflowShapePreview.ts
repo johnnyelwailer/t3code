@@ -52,6 +52,10 @@ export function buildWorkflowShapePreviewCommand(
     derived = null;
   }
 
+  // Capabilities are kept even when the shape falls back to the minimal card: an
+  // empty-bodied workflow that declares elevated capabilities must still disclose them
+  // before execution (spec 25 §Capability gating — the pre-execution permission surface).
+  const capabilities = derived?.capabilities ?? [];
   const shape =
     derived === null || (derived.phases.length === 0 && derived.steps.length === 0)
       ? {
@@ -86,6 +90,7 @@ export function buildWorkflowShapePreviewCommand(
               ...(shape.description === undefined ? {} : { description: shape.description }),
               phases: shape.phases,
               steps: shape.steps,
+              ...(capabilities.length === 0 ? {} : { capabilities }),
               workflowRunId: input.runId,
             },
           },

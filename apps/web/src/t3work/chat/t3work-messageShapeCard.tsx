@@ -29,6 +29,7 @@ import {
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import { T3workShapeCapabilityChips } from "~/t3work/chat/t3work-messageShapeCardCapabilities";
 import type { ChatMessage } from "~/types";
 
 export function getT3workWorkflowShapeAttachment(
@@ -143,6 +144,7 @@ export function T3workWorkflowShapeCard({ shape }: { shape: ProjectRecipeWorkflo
       {shape.description ? (
         <p className="text-sm leading-6 text-muted-foreground">{shape.description}</p>
       ) : null}
+      <T3workShapeCapabilityChips capabilities={shape.capabilities} />
 
       {shape.steps.length > 0 ? (
         <div className="mt-3 space-y-3">
