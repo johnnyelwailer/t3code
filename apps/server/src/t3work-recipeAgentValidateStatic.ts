@@ -9,8 +9,11 @@
 import * as Schema from "effect/Schema";
 
 import {
+  auditWorkflowSourceStatic,
   deriveWorkflowShape,
   extractMeta,
+  formatFinding,
+  normalizeCapabilities,
   prepareWorkflow,
   type RecipeToolIssue,
   type RecipeWorkflowMetaSummary,
@@ -70,6 +73,7 @@ export function validateWorkflowSourceStatic(input: {
   const source = { absolutePath: workflowPath, sourceText };
   const errors: RecipeToolIssue[] = [];
   let meta: RecipeWorkflowMetaSummary | undefined;
+  let declared: ReadonlySet<string> | undefined;
   let prepared: ReturnType<typeof prepareWorkflow> | undefined;
   try {
     prepared = prepareWorkflow(source);
@@ -78,10 +82,27 @@ export function validateWorkflowSourceStatic(input: {
   }
   if (prepared !== undefined) {
     try {
-      meta = summarizeMeta(extractMeta(prepared, source, Schema));
+      const extracted = extractMeta(prepared, source, Schema);
+      meta = summarizeMeta(extracted);
+      declared = normalizeCapabilities(extracted);
     } catch (error) {
       errors.push(issue(workflowPath, "meta", errorMessage(error)));
     }
+  }
+
+  // Phase-25.5 load-time audits: determinism + static capability gating. Reported as validation
+  // errors so an authoring agent sees them BEFORE a run instead of as a mid-flight
+  // PermissionDeniedError. Capability rules are skipped when `meta` did not extract (the meta
+  // error above is the real finding — a guessed empty capability set would bury it).
+  try {
+    for (const item of auditWorkflowSourceStatic(
+      source,
+      declared === undefined ? {} : { declared },
+    )) {
+      errors.push(issue(workflowPath, item.facet, formatFinding(item)));
+    }
+  } catch (error) {
+    errors.push(issue(workflowPath, "load", `Static audit failed: ${errorMessage(error)}`));
   }
 
   let shape: ValidateRecipeToolResult["shape"];

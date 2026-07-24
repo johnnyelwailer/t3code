@@ -1,3 +1,4 @@
+export * from "./actionPlacement.ts";
 export * from "./recipe.ts";
 export * from "./recipePredicates.ts";
 export * from "./recipeSignals.ts";
