@@ -9,6 +9,7 @@ import packageJson from "../package.json" with { type: "json" };
 import { authCommand } from "./cli/auth.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
 import { projectCommand } from "./cli/project.ts";
+import { fixtureCommand } from "./cli/t3work-fixture.ts";
 import {
   runT3workServerCommand,
   t3workServeCommand,
@@ -20,7 +21,13 @@ const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 export const cli = Command.make("t3work", { ...sharedServerCommandFlags }).pipe(
   Command.withDescription("Run the T3work server."),
   Command.withHandler((flags) => runT3workServerCommand(flags)),
-  Command.withSubcommands([t3workStartCommand, t3workServeCommand, authCommand, projectCommand]),
+  Command.withSubcommands([
+    t3workStartCommand,
+    t3workServeCommand,
+    authCommand,
+    projectCommand,
+    fixtureCommand,
+  ]),
 );
 
 if (import.meta.main) {
