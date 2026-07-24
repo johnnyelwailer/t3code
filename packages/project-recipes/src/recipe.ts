@@ -58,10 +58,23 @@ export const RecipeFollowup = Schema.Struct({
 });
 export type RecipeFollowup = typeof RecipeFollowup.Type;
 
+export const RecipeTopic = Schema.Literals([
+  "filters",
+  "quick-actions",
+  "qa",
+  "refinement",
+  "planning",
+  "engineering",
+  "delivery",
+  "customize",
+]);
+export type RecipeTopic = typeof RecipeTopic.Type;
+
 export const Recipe = Schema.Struct({
   id: Schema.String,
   title: Schema.String,
   shortDescription: Schema.String,
+  topic: Schema.optional(RecipeTopic),
   surfaces: Schema.Array(RecipeSurface),
   promptTemplate: Schema.optional(Schema.String),
   kickoff: Schema.optional(ProjectRecipeKickoffProgram),

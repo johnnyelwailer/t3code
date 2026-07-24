@@ -18,9 +18,6 @@ are the four shared primitives all `t3team` automation is built on; this epic ow
 ## Product Model
 
 Miniapps should let users and agents extend the shell without changing core app code.
-Under the pack-driven model, miniapps are also the UI module format for packs
-([Epic 36](./36-workspace-packs-and-distributions.md)). A miniapp can be project-local,
-user-local, distribution-bundled, or remote-managed.
 
 Examples:
 
@@ -38,7 +35,7 @@ result as inspectable source.
 
 ## Workspace Ownership
 
-Miniapps live in the workspace or pack scope that owns them.
+Miniapps live in the workspace that owns them.
 
 Project-scoped miniapps:
 
@@ -70,14 +67,6 @@ present so miniapp changes have normal source history.
 
 Sharing can be added by promoting a project miniapp into the home workspace, or by
 including/referencing a miniapp from another trusted workspace.
-
-Remote-managed and globally installed pack miniapps should live in the host pack install
-location, not be copied into every project workspace. The project workspace may hold only
-project-local miniapps and references to enabled packs.
-
-The `.t3team` paths above are transitional storage spelling. Under Epic 36, generated or
-synced miniapp state should move to host app-data, and repo files should exist only when
-the project explicitly owns the miniapp source.
 
 ## Manifest
 
@@ -121,10 +110,10 @@ Known placements:
 - `global.navView`: full user/global view reachable from global navigation.
 - `sidecar.section`: a labeled, composable group rendered inside the right-side
   **sidecar** (the contextual panel — distinct from the left navigation sidebar).
-  The canonical place for sidecar content — recipe launchers ("Quick Starts"),
-  open-items lists, recent threads, filter palettes, status widgets, and anything else
-  the user discovers from the sidecar are all sections at this placement. See
-  [Sidecar Sections](#sidecar-sections) below.
+  The canonical place for sidecar content — topic-grouped recipe sections (Filters,
+  Quick actions, QA, Refinement, …), open-items lists, recent threads, status widgets,
+  and anything else the user discovers from the sidecar are all sections at this placement.
+  See [Sidecar Sections](#sidecar-sections).
 - `action`: recipe launcher in a dedicated action list. Typically
   rendered inside a `sidecar.section` miniapp that aggregates recipe launchers.
 - `action.inline`: inline action chip embedded within an existing page's control chrome
@@ -176,18 +165,147 @@ type MiniappHostContext = {
 ## Sidecar Sections
 
 The right-side contextual panel (the **sidecar** — distinct from the left navigation
-"sidebar" in t3team's vocabulary) is a **composition of sections**, not a single fixed
-list. Each section is a miniapp at the `sidecar.section` placement; the shell composes
-them in an order that the user (and profile defaults) can configure. There is no
-shell-special-cased content in the sidecar — Quick Starts, Recent Threads, Open Pull
-Requests, Inline Filters, Status Widgets, and any future category are all sections
-built on the same primitive.
+"sidebar" in t3team's vocabulary) is a **composition of topic-grouped sections**, not a
+single monolithic recipe list. Each section is a miniapp at the `sidecar.section`
+placement; the shell composes them in an order that profile and project defaults (and
+user overrides) configure. There is no shell-special-cased content in the sidecar —
+Filters, Quick actions, QA, Refinement, Planning, Engineering, Delivery, Customize,
+Recent, and any future category are all sections built on the same primitive.
+
+Two orthogonal axes drive what appears:
+
+1. **Interaction type** — view action vs chat starter vs hybrid. Drives click behavior
+   (derived from recipe workflow shape and section `component`, not from topic).
+2. **Topic** — **required** on every bundled and project-local recipe. One topic per
+   recipe; determines which section group it appears under. Topics are flat peers — no
+   topic is architecturally special or a catch-all fallback.
+
+**Section visibility:** a topic section renders **only when it has at least one matched,
+visible action**. After recipe discovery and matching, items are bucketed by
+`recipe.topic`; empty buckets are skipped (auto-hide). The `recent` section follows the
+same rule — hide when there are no recent threads.
 
 This removes earlier hardcoded headers from the side panel (e.g. the
 `ProjectDashboardKickoffAside.tsx` "Kick off a project thread / Start a focused
 conversation for &lt;project&gt; and continue it in full thread view" block). That
-intent is now expressed by whichever section the active profile composes — the shell
+intent is now expressed by whichever sections the active profile composes — the shell
 chrome carries no recipe-specific copy.
+
+### Topic catalog
+
+Every recipe **must** declare `topic`. Section id typically matches topic id (1:1).
+
+| Topic id        | Section title | What belongs here                       | Examples                                       |
+| --------------- | ------------- | --------------------------------------- | ---------------------------------------------- |
+| `filters`       | Filters       | Narrowing what you see on the board     | Assigned to me, needs my action, clear filters |
+| `quick-actions` | Quick actions | Simple, everyday conversation starters  | Explain simply                                 |
+| `qa`            | QA            | Verification and acceptance             | Review AC, QA test plan                        |
+| `refinement`    | Refinement    | Early shaping — stories, epics, sizing  | T-shirt-size epic, shape backlog slice         |
+| `planning`      | Planning      | Sprint/commitment — capacity, tasks, assignments, scope | Estimate/split/assign, unassigned, overbooked, sprint fit |
+| `engineering`   | Engineering   | Implementation work                     | Technical plan, PR feedback                    |
+| `delivery`      | Delivery      | Unblock, handoff, coordination          | Unblock blocked ticket                         |
+| `customize`     | Customize     | Personalize workspace / extensions      | Create contextual recipe, edit-plugin-module   |
+| —               | Recent        | *(not a recipe topic — thread utility)* | —                                              |
+
+**Refinement vs Planning** are different stages, not interchangeable:
+
+| Topic        | When                                              | Examples                                              |
+| ------------ | ------------------------------------------------- | ----------------------------------------------------- |
+| Refinement   | Early — shaping work before commitment            | T-shirt-size epic, shape backlog slice, story writing |
+| Planning     | Later — planning day, sprint fit, who does what   | Estimate/split/assign, unassigned, overbooked, sprint scope moves |
+
+T-shirt-size and epic shaping stay **refinement**. Estimate-a-story + split-into-tasks +
+assign is **planning**.
+
+**Honest scope:** engineering and refinement examples are the most validated in the
+bundled catalog. QA, planning, delivery, and customize topics use the same mechanical
+model but need recipes and copy reviewed by people in those roles — do not treat the
+bundled catalog as complete for non-engineering roles until reviewed.
+
+### Section catalog
+
+| Section id      | Title         | Component              | Matches `topic` |
+| --------------- | ------------- | ---------------------- | --------------- |
+| `filters`       | Filters       | `inline-filters`       | `filters`       |
+| `quick-actions` | Quick actions | `recipe-list`          | `quick-actions` |
+| `qa`            | QA            | `recipe-list`          | `qa`            |
+| `refinement`    | Refinement    | `recipe-list`          | `refinement`    |
+| `planning`      | Planning      | `recipe-list`          | `planning`      |
+| `engineering`   | Engineering   | `recipe-list`          | `engineering`   |
+| `delivery`      | Delivery      | `recipe-list`          | `delivery`      |
+| `customize`     | Customize     | `recipe-list`          | `customize`     |
+| `recent`        | Recent        | `recent-conversations` | —               |
+
+Only mechanical difference: the `filters` topic uses the `inline-filters` component
+(view actions with Apply / optional Rank next); all other recipe topics use `recipe-list`
+(chat starters that stage a kickoff chip). **Same grouping rules for every topic.**
+
+**Profile and project composition** affects **order and collapse only** — not which
+section ids exist and not role gates. All bundled profiles share the same section id
+catalog; an empty section slot never renders regardless of composition order.
+
+```ts
+sidecarSections: {
+  sections: [
+    { sectionId: "filters" },
+    { sectionId: "quick-actions" },
+    { sectionId: "qa" },
+    { sectionId: "refinement" },
+    { sectionId: "planning" },
+    { sectionId: "engineering" },
+    { sectionId: "delivery" },
+    { sectionId: "customize" },
+    { sectionId: "recent", collapsed: true },
+  ],
+}
+```
+
+Profiles may reorder (e.g. put `planning` before `refinement`) or collapse `filters`.
+`customize` is usually last or collapsed until needed.
+
+**Project manifest wiring:** project setup persists `sidecarSections` into
+`.t3team/setup/profile.json`. `T3workSidecarComposition` merges
+`bundled → profile → project → user` via `projectDefault?: SidecarComposition`.
+Kickoff panels read synced `agentSetup.sidecarSections` with
+`readProjectSidecarCompositionFromProject` (`t3team-createProjectBootstrap.ts`) and pass
+the result as `projectDefault` from `ProjectDashboardKickoffAside` and
+`TicketKickoffPanel` (covered by `t3team-createProjectBootstrap.test.ts`).
+
+### Launcher rules (section component drives clicks)
+
+Section `component` drives per-item click behavior; section `id` / title is topical
+presentation only:
+
+```text
+onSectionItemClick(sectionDefinition, item, action):
+  if sectionDefinition.component === "inline-filters":
+    if action === "rank-next": stageKickoff(rankNextRecipeFor(item))
+    else: executeDeterministic(item)
+  elif sectionDefinition.component === "recipe-list":
+    stageKickoff(item)
+```
+
+`recipe-list` sections (QA, Quick actions, Refinement, Planning, etc.) share identical
+card → `stageKickoff` behavior. The `recent` section navigates to threads on click.
+
+### Storybook-first UI iteration
+
+Storybook is set up for `t3team` sidecar and recipe presentation. Build and review section
+chrome in isolation before full dashboard wiring.
+
+- Config: `apps/web/src/t3team/storybook/t3team-storybook-main.ts`
+- Dev: `pnpm storybook` from repo root
+- Static build: `pnpm storybook:build`
+- Stories colocated: `apps/web/src/t3team/**/*.stories.tsx`
+- Sidecar fixtures: `apps/web/src/t3team/t3team-sidecarStoryFixtures.ts`
+
+Existing sidecar stories: `RecipeListCard`, `FilterActionCard`, `TopicSection`,
+`SidecarComposition` (engineering + QA fixture variants).
+
+Workflow per feature: add/update story states (default, empty, populated) → implement
+component → wire into `T3workSidecarComposition` → unit test click paths. Recipe
+**logic** (matching, topics) stays in tests; recipe **presentation** (cards, sections,
+spacing) lives in Storybook for fast iteration.
 
 ### `defineSidecarSection` SDK primitive
 
@@ -204,32 +322,35 @@ module paths are deferred to the miniapp runtime phase.
 // @t3team/sdk
 import { defineSidecarSection } from "@t3team/sdk";
 
+// Example: a recipe-list section (most topics)
 export default defineSidecarSection({
-  id: "quick-starts",
+  id: "quick-actions",
   version: "1.0.0",
-  title: "Quick Starts",
-  shortDescription: "Recipes matched to the current view",
-  // Surface filter — only mount this section on these surfaces.
+  title: "Quick actions",
+  shortDescription: "Everyday conversation starters for the current view",
   surfaces: ["project.dashboard.backlog", "project.dashboard.myWork", "workitem.detail.sidepanel"],
-  // The stage-1 trusted component rendered inside the shell-provided section chrome.
-  component: "quick-starts",
-  // Data the View consumes — typed Queryables from the render context.
-  // (No section-specific data layer; uses the same Context primitive.)
-  // Tool groups this section's items may invoke.
+  component: "recipe-list",
+  topicFilter: ["quick-actions"],
   allowedToolGroups: ["view.state", "thread.handoff"],
-  // Default collapse / visibility (user can override per profile).
-  defaults: {
-    collapsed: false,
-    visible: true,
-  },
+  defaults: { collapsed: false, visible: true },
+});
+
+// Example: filters section (view actions)
+export default defineSidecarSection({
+  id: "filters",
+  version: "1.0.0",
+  title: "Filters",
+  component: "inline-filters",
+  topicFilter: ["filters"],
+  allowedToolGroups: ["view.state"],
+  defaults: { collapsed: false, visible: true },
 });
 ```
 
 A section's View receives the render context (per [Epic 16 — Context](./16-action-recipes.md#context-reactive-queryable-surface))
-and renders whatever it wants inside the shell-provided chrome. Click behaviors per
-item are owned entirely by the section's View — a Quick Starts section applies the
-launch-UX-by-workflow-shape rules from doc 16 to its items; a Recent Threads section
-navigates on click; a Filters section runs deterministic workflows on chip click.
+and renders matched recipes for its `topicFilter`. Click behaviors follow the
+[launcher rules](#launcher-rules-section-component-drives-clicks) above — section
+`component` is authoritative, not per-recipe hacks in the shell.
 
 ### Shell vs section ownership
 
@@ -266,41 +387,50 @@ type SidecarPersonalization = {
 ```
 
 Defaults come from the active profile ([Epic 12](./12-profiles-and-skill-packs.md)) —
-a QA profile composes a different section list than an engineering profile. Per-user
-overrides (reorder, collapse, hide) persist via a sibling client-settings key
+all profiles share the same section id catalog; profile `sidecarSections` sets **order
+and collapse** only. Per-user overrides (reorder, collapse, hide) persist via a sibling
+client-settings key
 (`t3teamStoredSidecarCompositionJson`; `packages/contracts/src/settings.ts` is already
 on the additive guard allowlist). The same payload now carries per-section hidden item
 ids, pinned item ids, and explicit item-order overrides.
 
-### Quick Starts is not special
+### Topic sections are peers, not a monolith
 
-The Quick Starts list is just one section implemented via `defineSidecarSection`. It can
-come from a distribution pack, user pack, project pack, or remote-managed pack. It is
-removable when policy allows it and replaceable when a higher-precedence pack or project
-module overrides it. The launch-UX-by-workflow-shape rules from
-[Epic 16 — Launcher UX by workflow shape](./16-action-recipes.md#deterministic-workflows-no-chat)
-are rules of _that_ section, not of the side panel.
+The legacy **Quick Starts** bundled section (all recipes in one list) is being replaced
+by topic-grouped sections. Each topic is a `defineSidecarSection` with `recipe-list` or
+`inline-filters` component. Sections are removable (user/profile can hide a slot) and
+replaceable (a project can ship its own section with the same id to override). The
+[launcher rules](#launcher-rules-section-component-drives-clicks) and
+[Epic 16 — Launcher UX by workflow shape](./16-action-recipes.md#launcher-ux-by-workflow-shape)
+apply per section component, not to the side panel as a whole.
+
+**Sidebar shape is emergent:** e.g. ticket + QA profile → Filters + QA + Quick actions;
+epic + engineer → Filters + Refinement + Quick actions.
 
 ### Example sections
 
-Each of these is a miniapp at `sidecar.section` — distribution-bundled, pack-provided,
-user-local, or project-local:
+Each of these is a miniapp at `sidecar.section` — built-in, bundled, or project-local:
 
-- **Quick Starts** — recipes matched to the current surface
+**Topic-grouped recipe sections (bundled default catalog):**
+
+- **Filters** — `inline-filters`; view actions (assignee narrowing, needs-my-action, clear)
+- **Quick actions** — everyday chat starters
+- **QA**, **Refinement**, **Planning**, **Engineering**, **Delivery**, **Customize** —
+  `recipe-list` sections bucketed by `recipe.topic`
+- **Recent** — `recent-conversations`; recently active threads
+
+**Future / skill-pack sections (same primitive, different data sources):**
 - **Open Pull Requests** — assigned / review-requested PRs, click navigates to PR workspace
 - **My Open Tickets** — Jira issues assigned to the user
-- **Recent Threads** — recently active conversation threads
-- **Inline Filters** — filter chips (backlog assignee, status category, etc.) as a section
 - **Saved Filters** — the Jira-side saved-filter library
 - **Pinned Workflows** — user favorites across recipes
 - **Drafts** — pending mutation drafts awaiting commit
 - **Status Widgets** — health / build / sync indicators
 
-Workspace packs and project workspaces contribute sections the same way they contribute
-recipes — a `defineSidecarSection` plugin module discovered from active pack manifests or
-project-local source (see [Epic 16 — Plugin Modules](./16-action-recipes.md#plugin-modules)
-for the module pattern; project-local sections may live under
-`<workspace>/.t3team/sections/<id>/section.ts`).
+Skill packs and project workspaces contribute sections the same way they contribute
+recipes — a `defineSidecarSection` plugin module discovered alongside `recipes/` (see
+[Epic 16 — Plugin Modules](./16-action-recipes.md#plugin-modules) for the discovery
+pattern; sections live under `<workspace>/.t3team/sections/<id>/section.ts`).
 
 ### Context menus
 
@@ -316,7 +446,7 @@ section-declared actions into one menu.
 
 #### Item-level actions
 
-Right-click / kebab on an individual item (Quick Start card, inline chip, PR row, etc.):
+Right-click / kebab on an individual item (recipe card, filter row, inline chip, PR row, etc.):
 
 | Action                 | Source    | Scope    | Notes                                                                                                                                                   |
 | ---------------------- | --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -324,7 +454,7 @@ Right-click / kebab on an individual item (Quick Start card, inline chip, PR row
 | **Customize…**         | Universal | per-user | Only shown when the item has user-specific hide/pin/order overrides. MVP routes this through a guided reset workflow rather than a broader settings UI. |
 | **Hide item**          | Universal | per-user | Item never shows for this user. Persisted in `t3teamStoredSidecarCompositionJson` under `itemHides`. Per-project hide remains **deferred**.             |
 | **Pin to top / Unpin** | Universal | per-user | Boosts the item above its natural rank within its section. Persisted in the same settings payload under `itemPins` / `itemOrderOverrides`.              |
-| _section-specific_     | Section   | varies   | E.g., "Apply filter now" on a backlog Quick Start item. Declared via `defineSidecarSection.itemActions` and launched through the no-chat workflow path. |
+| _section-specific_     | Section   | varies   | E.g., "Apply filter now" on a filter item. Declared via `defineSidecarSection.itemActions` and launched through the no-chat workflow path. |
 
 #### Section-level actions
 
@@ -397,11 +527,9 @@ type SidecarPersonalization = {
 };
 ```
 
-Layering follows the pack merge model:
-`core defaults → distribution packs → global packs → user packs → project packs →
-remote-managed packs → explicit locks`, then per-user runtime personalization where policy
-allows it. Hidden items don't render; pinned items render first; the section's natural
-order fills the rest.
+Layering: `bundled defaults → profile defaults → project config → user overrides`.
+Higher layers override lower. Hidden items don't render; pinned items render first; the
+section's natural order fills the rest.
 
 #### What's not in MVP
 
@@ -468,9 +596,8 @@ exist to prevent.
 
 | Helper                            | Placement                                                                                                           | Typical use                                                                                                                                                                                                                                                                            | Status              |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| `defineSidecarSection`            | `sidecar.section`                                                                                                   | Labeled group in the right contextual sidecar (Quick Starts, Recent Threads, Inline Filters, Status Widgets)                                                                                                                                                                           | Built (Phase 5a)    |
+| `defineSidecarSection`            | `sidecar.section`                                                                                                   | Labeled group in the right contextual sidecar (Filters, topic-grouped recipe lists, Recent, PR lists, Status Widgets)                                                                                                                                                                    | Built (Phase 5a)    |
 | `defineWorkItemSection`           | `workitem.detail.section`                                                                                           | Section inside a work-item detail page (e.g., "Risk Assessment" between Description and Comments)                                                                                                                                                                                      | Planned (Phase 5+)  |
-| `defineProjectView`               | `project.navView`                                                                                                   | Full project page assembled from safe project blocks (Backlog, My Work, triage dashboards, release readiness). See [Epic 31](./31-composable-project-views.md).                                                                                                                        | Planned (Epic 31)   |
 | `defineDashboardWidget`           | `dashboard.widget`                                                                                                  | Widget tile inside a project dashboard (backlog overview, my-work overview)                                                                                                                                                                                                            | Planned (Phase 5+)  |
 | `defineNavSection`                | `nav.section`                                                                                                       | Section inside the left navigation tree (e.g., a "Saved Filters" subtree)                                                                                                                                                                                                              | Planned (Phase 5+)  |
 | `defineHomeBlock`                 | `home.block`                                                                                                        | Block on the home workspace                                                                                                                                                                                                                                                            | Planned (Phase 5+)  |
@@ -478,7 +605,7 @@ exist to prevent.
 | `defineArtifactRenderer`          | `artifact.detail`                                                                                                   | Custom viewer for a specific `artifact.kind`                                                                                                                                                                                                                                           | Planned             |
 | `defineConversationCard`          | (embedded as view attachment on a system message — see [Epic 16 — Attachments](./16-action-recipes.md#attachments)) | Declarative card spec (checklist / form / approval / etc.); replaces inline card literals                                                                                                                                                                                              | Planned (Phase 5)   |
 | `defineConversationSidecar`       | `conversation.sidecar`                                                                                              | Interactive side panel beside a conversation                                                                                                                                                                                                                                           | Planned (Phase 5+)  |
-| `defineAction`                    | `action`                                                                                                            | Recipe launcher in a dedicated action list (usually wrapped by a Quick Starts `defineSidecarSection`)                                                                                                                                                                                  | Planned (Phase 5)   |
+| `defineAction`                    | `action`                                                                                                            | Recipe launcher in a dedicated action list (usually rendered inside a `recipe-list` sidecar section)                                                                                                                                                                                   | Planned (Phase 5)   |
 | `defineInlineAction`              | `action.inline`                                                                                                     | Inline action chip in a host page's control chrome (deterministic workflows — see [Epic 16](./16-action-recipes.md#deterministic-workflows-no-chat))                                                                                                                                   | Planned (Phase 3-5) |
 | `defineContextAction`             | (universal context menu — see [Context menus](#context-menus))                                                      | A cross-cutting action that targets items matching a predicate across any section — for cross-section verbs that shouldn't have to be re-declared per section                                                                                                                          | Planned (Phase 5+)  |
 
@@ -486,9 +613,9 @@ exist to prevent.
 
 | Helper               | What it contributes                                                                                                       | Status  |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `defineTool`         | Custom tool registered with `T3TeamToolBroker` (project-local or pack-bundled). Today tools are only built-in.            | Planned |
+| `defineTool`         | Custom tool registered with `T3workToolBroker` (project-local or pack-bundled). Today tools are only built-in.            | Planned |
 | `defineSkillPack`    | Bundle of recipes + sections + profile defaults + tool grants under one id ([Epic 12](./12-profiles-and-skill-packs.md)). | Planned |
-| `defineProfile`      | A configuration-defined starter profile with preference fields; starter profiles are seed config, not behavior enums.     | Planned |
+| `defineProfile`      | A starter profile with preference fields. Today profiles are hardcoded; this makes them authorable.                       | Planned |
 | `defineResourceType` | Typed resource shape + renderer (for new integration providers).                                                          | Planned |
 
 ### No generic primitive
@@ -533,11 +660,6 @@ Current first-party surfaces such as Backlog and My Work are effectively hardcod
 project dashboards. They prove the interaction model, but they should not remain the
 only way to add dense project views.
 
-[Epic 31: Composable Project Views](./31-composable-project-views.md) narrows this into
-the concrete product path: project nav views are composed from safe blocks and
-high-level capabilities, not raw Jira/Tempo/GitHub APIs. Backlog and My Work are the
-dogfood targets for that block library.
-
 The miniapp model should allow custom views to register into navigation:
 
 - project nav: views scoped to one project workspace.
@@ -560,8 +682,8 @@ Example:
       "order": 40
     }
   ],
-  "capabilities": ["workItems.read", "recipes.read", "recipes.run", "threads.read"],
-  "blocks": ["ProjectView", "WorkItemTable", "WorkItemBoard", "RecipeSection"]
+  "tools": ["artifact.list", "integration.search", "recipe.run"],
+  "components": ["Button", "Table", "KanbanBoard", "Timeline"]
 }
 ```
 
@@ -588,26 +710,6 @@ export default function App({ host }: { host: MiniappHostContext }) {
 ## Runtime Contract
 
 Miniapps are full React code, but they should import through a narrow SDK.
-
-For full project nav views, the preferred import surface is the block library from
-[Epic 31](./31-composable-project-views.md):
-
-```tsx
-import { ProjectView, RecipeSection, WorkItemFilters, WorkItemTable } from "@t3team/blocks";
-
-export default function App() {
-  return (
-    <ProjectView title="Planning">
-      <WorkItemFilters presets={["assigned-to-me", "blocked"]} />
-      <WorkItemTable query="workItems.myWork" columns={["key", "title", "status", "assignee"]} />
-      <RecipeSection topic="planning" />
-    </ProjectView>
-  );
-}
-```
-
-Lower-level miniapps still use `@t3team/sdk` for host context, tool bridge, shell controls,
-and non-project-view placements.
 
 ```tsx
 import { Badge, Button, Chart, Table, useMiniappTools } from "@t3team/sdk";
@@ -647,12 +749,11 @@ Useful component families to whitelist over time:
 - motion: constrained animation primitives that respect shell accessibility settings
 
 Direct access to arbitrary internal app modules should stay blocked. Public miniapp
-components should be intentionally exported and versioned through `@t3team/sdk` or
-`@t3team/blocks`.
+components should be intentionally exported and versioned through the SDK.
 
 ## Tool Access
 
-Miniapps use the **single shared tool surface** — the same `T3TeamToolBroker` capability
+Miniapps use the **single shared tool surface** — the same `T3workToolBroker` capability
 surface consumed by agent turns and workflow steps, scoped by the declared tool groups.
 There is no miniapp-specific tool API. The catalog, tool classes, and safety matrix are in
 [Epic 21](./21-context-tool-catalog.md); the recipe/workflow side is in
@@ -670,8 +771,6 @@ await tools.integration.prepareMutation({ ref, action: "comment" });
 Rules:
 
 - tool calls must be declared in `miniapp.json`
-- project nav views should prefer high-level capabilities and `@t3team/blocks`; raw
-  provider-shaped tools stay out of the default view authoring surface
 - shell resolves tools from the active workspace and user permissions
 - mutation-capable tools keep the same review and approval gates as agent actions
 - tool calls should be logged into run or artifact history when they affect workflow state
@@ -727,29 +826,18 @@ Start with:
 
 - project workspace miniapps only
 - home workspace concept stubbed but not required
-- `project.navView`, `dashboard`, `conversation.inlineCard`, and `conversation.sidecar`
-  placements
+- `dashboard`, `conversation.inlineCard`, and `conversation.sidecar` placements
 - manifest schema and discovery under `.t3team/miniapps`
-- SDK/block exports for core shell components, work-item tables/boards/filters, simple
-  charts, artifact links, and tool bridge
+- SDK exports for core shell components, tables, simple charts, artifact links, and tool bridge
 - no arbitrary npm dependencies
 - declared tools only
 - explicit enablement UI
 - agent recipe for creating a miniapp from a short interview
 
-## Working Decisions
+## Open Questions
 
-- Pack-installed miniapps do not copy into project workspaces. Project-local miniapps are
-  explicit project-authored code.
-- v1 miniapps are trusted code. The smallest safe runtime question moves to the later
-  untrusted marketplace/sandbox track.
-- Generated miniapp source is never auto-committed. The workflow writes a draft or
-  unstaged files, shows the diff, and lets the user decide whether to commit.
-- `miniapp.json` declares SDK compatibility as a semver range, for example
-  `sdk: { "@t3team/sdk": "^1.0.0" }`, plus optional host capability strings.
-- First chart/graph exports should use shell-owned SVG/HTML primitives. Do not add a chart
-  library dependency for v1 unless a specific block needs it.
-- Home-scope miniapps are not globally enabled by default. They are enabled by user choice,
-  active profile, or pack policy, then filtered by project policy.
-- Explicitly project-owned miniapp source follows the project-local storage decision in
-  Epic 36; pack-installed miniapps stay in host app-data.
+- Should miniapp files be committed automatically after creation, or only staged for user review?
+- How should SDK version compatibility be represented in `miniapp.json`?
+- Which visualization library should back the first chart/graph exports?
+- Should home workspace miniapps be globally enabled by default, or opt-in per project?
+- What is the smallest safe runtime that still supports real React authoring?

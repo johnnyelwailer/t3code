@@ -187,6 +187,18 @@ export default function Action() {
 }
 `;
 
+export const CLEAR_FILTERS_ACTION_VIEW = `
+export default function Action() {
+  return (
+    <RecipeAction
+      title="Clear filters"
+      icon="list-filter"
+      description="Reset active view filters to the default slice."
+    />
+  );
+}
+`;
+
 export const SHAPE_NEXT_BACKLOG_SLICE_ACTION_VIEW = `
 export default function Action({ ctx }) {
   const itemCount = ctx.surfaceState?.currentView?.itemCount ?? 0;

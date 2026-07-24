@@ -2,13 +2,15 @@ import { useMemo } from "react";
 import { useBackend } from "~/t3team/backend/t3team-index";
 
 import {
+  buildBacklogAssignedToMeOutcome,
   buildBacklogNeedsMyActionOutcome,
-  useRegisterT3TeamDashboardRecipeActionHandler,
+  useRegisterT3workDashboardRecipeActionHandler,
 } from "~/t3team/t3team-dashboardRecipeActions";
+import { buildBacklogClearFiltersOutcome } from "~/t3team/t3team-dashboardRecipeFilterOutcomes";
 import {
-  type T3TeamDeterministicWorkflowLaunch,
+  type T3workDeterministicWorkflowLaunch,
   launchProjectDashboardBacklogInlineRecipe,
-  useRegisterT3TeamInlineRecipeLaunchHandler,
+  useRegisterT3workInlineRecipeLaunchHandler,
 } from "~/t3team/t3team-inlineRecipeLaunch";
 import { launchProjectDashboardBacklogDeterministicWorkflow } from "~/t3team/t3team-deterministicWorkflowLaunch";
 import type { ProjectDashboardBacklogState } from "~/t3team/t3team-projectDashboardBacklogState";
@@ -30,9 +32,28 @@ export function useProjectDashboardBacklogRecipeSupport(input: {
 }) {
   const backend = useBackend();
 
-  useRegisterT3TeamDashboardRecipeActionHandler(
+  useRegisterT3workDashboardRecipeActionHandler(
     useMemo(
       () => (action) => {
+        if (action.kind === "show-only-assigned-to-me") {
+          const outcome = buildBacklogAssignedToMeOutcome(
+            input.state,
+            input.currentUserDisplayName,
+          );
+          if (!outcome) {
+            return { applied: false };
+          }
+
+          input.setState(outcome.nextState);
+          return { applied: true, promptText: outcome.promptText };
+        }
+
+        if (action.kind === "clear-filters") {
+          const outcome = buildBacklogClearFiltersOutcome(input.state);
+          input.setState(outcome.nextState);
+          return { applied: true, promptText: outcome.promptText };
+        }
+
         if (action.kind !== "focus-needs-my-action") {
           return null;
         }
@@ -49,7 +70,7 @@ export function useProjectDashboardBacklogRecipeSupport(input: {
     ),
   );
 
-  useRegisterT3TeamInlineRecipeLaunchHandler(
+  useRegisterT3workInlineRecipeLaunchHandler(
     useMemo(
       () =>
         backend
@@ -69,7 +90,7 @@ export function useProjectDashboardBacklogRecipeSupport(input: {
                 });
               }
 
-              const workflowLaunch = launch as T3TeamDeterministicWorkflowLaunch;
+              const workflowLaunch = launch as T3workDeterministicWorkflowLaunch;
               if (workflowLaunch.surface !== "project.dashboard.backlog") {
                 return null;
               }

@@ -162,6 +162,16 @@ Do not write brittle tests that only assert implementation details.
 
 ## Storybook And Screenshots
 
+Storybook is set up for `t3team` UI. Run from repo root:
+
+- Dev: `pnpm storybook`
+- Static build: `pnpm storybook:build`
+
+Config: `apps/web/src/t3team/storybook/t3team-storybook-main.ts`. Stories live at
+`apps/web/src/t3team/**/*.stories.tsx`. Prefer Storybook-first iteration for sidecar
+section chrome and recipe cards before wiring full dashboard integration (see
+[Epic 19 — Storybook-first UI iteration](./19-workspace-miniapps.md#storybook-first-ui-iteration)).
+
 Every reusable `t3team` component should have Storybook coverage before it is
 considered stable.
 

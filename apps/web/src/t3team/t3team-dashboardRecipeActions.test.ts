@@ -4,8 +4,12 @@ import {
   buildBacklogAssignedToMeOutcome,
   buildBacklogNeedsMyActionOutcome,
   buildMyWorkNeedsMyActionOutcome,
-  resolveT3TeamDashboardRecipeAction,
+  resolveT3workDashboardRecipeAction,
 } from "~/t3team/t3team-dashboardRecipeActions";
+import {
+  buildBacklogClearFiltersOutcome,
+  buildMyWorkClearFiltersOutcome,
+} from "~/t3team/t3team-dashboardRecipeFilterOutcomes";
 import {
   createDefaultProjectDashboardBacklogState,
   type ProjectDashboardBacklogState,
@@ -42,12 +46,17 @@ function createTicket(overrides: Partial<ProjectTicket> = {}): ProjectTicket {
 }
 
 describe("t3team-dashboardRecipeActions", () => {
-  it("maps the needs-my-action recipe id to a dashboard action", () => {
-    expect(resolveT3TeamDashboardRecipeAction("focus-needs-my-action")).toEqual({
+  it("maps dashboard inline-action recipe ids to dashboard actions", () => {
+    expect(resolveT3workDashboardRecipeAction("focus-needs-my-action")).toEqual({
       kind: "focus-needs-my-action",
     });
-    expect(resolveT3TeamDashboardRecipeAction("show-only-assigned-to-me")).toBeUndefined();
-    expect(resolveT3TeamDashboardRecipeAction("prioritize-pending-work")).toBeUndefined();
+    expect(resolveT3workDashboardRecipeAction("show-only-assigned-to-me")).toEqual({
+      kind: "show-only-assigned-to-me",
+    });
+    expect(resolveT3workDashboardRecipeAction("clear-filters")).toEqual({
+      kind: "clear-filters",
+    });
+    expect(resolveT3workDashboardRecipeAction("prioritize-pending-work")).toBeUndefined();
   });
 
   it("updates the backlog assignee filter to the current user", () => {
@@ -143,5 +152,37 @@ describe("t3team-dashboardRecipeActions", () => {
 
     expect(outcome?.nextState.statusCategory).toBe("active");
     expect(outcome?.promptText).toContain("active work");
+  });
+
+  it("clears backlog view filters back to defaults", () => {
+    const outcome = buildBacklogClearFiltersOutcome({
+      ...createDefaultProjectDashboardBacklogState(),
+      focusFilter: "needs-plan",
+      assigneeFilter: "Pat Jones",
+      query: "blocked",
+    });
+
+    expect(outcome.nextState).toMatchObject({
+      focusFilter: "all",
+      assigneeFilter: "__all__",
+      query: "",
+    });
+    expect(outcome.promptText).toContain("Cleared");
+  });
+
+  it("clears my-work view filters back to defaults", () => {
+    const outcome = buildMyWorkClearFiltersOutcome({
+      ...createDefaultProjectDashboardMyWorkState(),
+      query: "review",
+      statusCategory: "review",
+      selectedPriority: "High",
+    });
+
+    expect(outcome.nextState).toMatchObject({
+      query: "",
+      statusCategory: "all",
+      selectedPriority: "all",
+    });
+    expect(outcome.promptText).toContain("Cleared");
   });
 });

@@ -35,7 +35,8 @@ export function areT3TeamDashboardRecipeViewSummariesEqual(
     left.primaryItemLabel === right.primaryItemLabel &&
     left.primaryBugLabel === right.primaryBugLabel &&
     left.needsMyActionPreset === right.needsMyActionPreset &&
-    left.needsMyActionCount === right.needsMyActionCount
+    left.needsMyActionCount === right.needsMyActionCount &&
+    left.viewFiltersActive === right.viewFiltersActive
   );
 }
 

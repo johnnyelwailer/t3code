@@ -5,14 +5,17 @@ import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import { useProjectDashboardInjectedContextAttachments } from "~/t3team/hooks/t3team-useProjectDashboardInjectedContextAttachments";
 import type { ProjectDashboardKickoffAsideProps } from "~/t3team/t3team-ProjectDashboardKickoffAsideTypes";
 import { EmbeddedThreadAside } from "~/t3team/t3team-EmbeddedThreadAside";
-import { readProjectSetupProfileIdFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
+import {
+  readProjectSetupProfileIdFromProject,
+  readProjectSidecarCompositionFromProject,
+} from "~/t3team/hooks/t3team-createProjectBootstrap";
+import { resolveT3workKickoffSectionProps } from "~/t3team/t3team-sidecarKickoffSectionProps";
 import { ProjectDashboardKickoffComposer } from "~/t3team/t3team-ProjectDashboardKickoffComposer";
-import { T3TeamSidecarComposition } from "~/t3team/t3team-SidecarComposition";
-import { useRunT3TeamDashboardRecipeAction } from "~/t3team/t3team-dashboardRecipeActions";
+import { T3workSidecarComposition } from "~/t3team/t3team-SidecarComposition";
 import { buildProjectDashboardSelectedRecipe } from "~/t3team/t3team-dashboardRecipeSelection";
-import { buildT3TeamSelectedRecipeKickoffLaunch } from "~/t3team/t3team-recipeQuickStartLaunch";
-import { useT3TeamDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
-import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
+import { buildT3workSelectedRecipeKickoffLaunch } from "~/t3team/t3team-recipeQuickStartLaunch";
+import { useT3workDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
+import { runT3workViewTransition } from "~/t3team/t3team-runViewTransition";
 import { useBundledSidecarRecipeLaunch } from "~/t3team/t3team-useBundledSidecarRecipeLaunch";
 
 export function ProjectDashboardKickoffAside({
@@ -29,11 +32,11 @@ export function ProjectDashboardKickoffAside({
 }: ProjectDashboardKickoffAsideProps) {
   const backend = useBackend();
   const environmentId = usePrimaryEnvironmentId();
-  const runDashboardRecipeAction = useRunT3TeamDashboardRecipeAction();
   const profileId = readProjectSetupProfileIdFromProject(project);
+  const projectDefault = readProjectSidecarCompositionFromProject(project);
   const { clearInjectedContextAttachments, injectedContextAttachments, removeContextAttachment } =
     useProjectDashboardInjectedContextAttachments(project.id);
-  const currentViewSummary = useT3TeamDashboardRecipeViewSummary();
+  const currentViewSummary = useT3workDashboardRecipeViewSummary();
   const sidecarSurface =
     dashboardMode === "my-work" ? "project.dashboard.myWork" : "project.dashboard.backlog";
 
@@ -92,7 +95,6 @@ export function ProjectDashboardKickoffAside({
         buildProjectDashboardSelectedRecipe({
           recipe,
           ...(customization ? { customization } : {}),
-          runDashboardRecipeAction,
         }),
       createThread: ({ kickoffMessage, kickoffWorkflow, launchConfig }) =>
         onKickoffThread(
@@ -131,26 +133,19 @@ export function ProjectDashboardKickoffAside({
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden border-l border-border/70 bg-background [view-transition-name:t3team-right-sidebar-panel]">
       <ScrollArea className="min-h-0 flex-1">
-        <T3TeamSidecarComposition
+        <T3workSidecarComposition
           surface={sidecarSurface}
           profileId={profileId}
+          projectDefault={projectDefault}
           host={sidecarHost}
-          resolveSectionProps={(sectionId) => {
-            if (sectionId === "quick-starts") {
-              return {
-                recipeInput: quickStartRecipeInput,
-                ...(selectedRecipe?.recipe.id
-                  ? { selectedRecipeId: selectedRecipe.recipe.id }
-                  : {}),
-              };
-            }
-
-            if (sectionId === "recent-conversations") {
-              return { threads: projectThreads };
-            }
-
-            return undefined;
-          }}
+          resolveSectionProps={(sectionId) =>
+            resolveT3workKickoffSectionProps({
+              sectionId,
+              recipeInput: quickStartRecipeInput,
+              ...(selectedRecipe?.recipe.id ? { selectedRecipeId: selectedRecipe.recipe.id } : {}),
+              recentThreads: projectThreads,
+            })
+          }
         />
       </ScrollArea>
 
@@ -163,9 +158,9 @@ export function ProjectDashboardKickoffAside({
         injectedContextAttachments={injectedContextAttachments}
         onRemoveContextAttachment={removeContextAttachment}
         onSubmit={(text, selection, runtimeMode, interactionMode, selectedToolIds) => {
-          runT3TeamViewTransition(() => {
+          runT3workViewTransition(() => {
             const kickoff = selectedRecipe
-              ? buildT3TeamSelectedRecipeKickoffLaunch({
+              ? buildT3workSelectedRecipeKickoffLaunch({
                   selectedRecipe,
                   customMessage: text,
                 })

@@ -1,10 +1,14 @@
 import { useMemo } from "react";
 
-import { usePublishT3TeamDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
+import { usePublishT3workDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
 import {
   buildMyWorkNeedsMyActionOutcome,
-  useRegisterT3TeamDashboardRecipeActionHandler,
+  useRegisterT3workDashboardRecipeActionHandler,
 } from "~/t3team/t3team-dashboardRecipeActions";
+import {
+  buildMyWorkClearFiltersOutcome,
+  hasMyWorkViewFiltersActive,
+} from "~/t3team/t3team-dashboardRecipeFilterOutcomes";
 import { buildMyWorkRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeSummary";
 import type { ProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -19,14 +23,27 @@ export function useProjectDashboardMyWorkRecipeSupport(input: {
   readonly setSelectedStatus: (value: string) => void;
 }) {
   const recipeViewSummary = useMemo(
-    () => buildMyWorkRecipeViewSummary(input.filteredWorkItems),
-    [input.filteredWorkItems],
+    () => ({
+      ...buildMyWorkRecipeViewSummary(input.filteredWorkItems),
+      viewFiltersActive: hasMyWorkViewFiltersActive(input.state),
+    }),
+    [input.filteredWorkItems, input.state],
   );
 
-  usePublishT3TeamDashboardRecipeViewSummary(recipeViewSummary);
-  useRegisterT3TeamDashboardRecipeActionHandler(
+  usePublishT3workDashboardRecipeViewSummary(recipeViewSummary);
+  useRegisterT3workDashboardRecipeActionHandler(
     useMemo(
       () => (action) => {
+        if (action.kind === "clear-filters") {
+          const outcome = buildMyWorkClearFiltersOutcome(input.state);
+          input.setQuery(outcome.nextState.query);
+          input.setStatusCategory(outcome.nextState.statusCategory);
+          input.setShowGitHubActivity(outcome.nextState.showGitHubActivity);
+          input.setSelectedPriority(outcome.nextState.selectedPriority);
+          input.setSelectedStatus(outcome.nextState.selectedStatus);
+          return { applied: true, promptText: outcome.promptText };
+        }
+
         if (action.kind !== "focus-needs-my-action") {
           return null;
         }

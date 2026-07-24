@@ -17,12 +17,12 @@ different angles.
 Everything in this epic is expressed in terms of four primitives. They are defined once,
 in code, and reused everywhere. Avoid inventing recipe-specific parallels to any of them.
 
-| Primitive    | What it is                                                                                                                                                                                                                                                                                                                           | Owns                       |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
-| **Context**  | A read-only snapshot of the world the agent and workflows read. Two depths: a light _render context_ used before launch, and a rich _full context_ available after launch.                                                                                                                                                           | `packages/project-context` |
-| **Tools**    | The single capability surface — the verbs that read or mutate `t3team` and external state. The _same_ surface is consumed by agent turns, workflow steps, and views, scoped by `allowedToolGroups`. See [Epic 21](./21-context-tool-catalog.md).                                                                                     | `T3TeamToolBroker`         |
-| **Workflow** | The core engine: a TS-native, replay-based durable-execution engine (Epic 25) where workflows are plain async TypeScript `.workflow.ts` bodies and primitive calls are journaled. The earlier step-union runtime is no longer a live execution path; only compat naming remnants remain (see below).                                 | `packages/project-recipes` |
-| **View**     | A code-based, interactive UI unit that mounts on any surface — the action list, a conversation message, a project nav page, a dashboard slot, a side panel. Action launchers, custom project views, and conversation cards are all Views. See [Epic 19](./19-workspace-miniapps.md) and [Epic 31](./31-composable-project-views.md). | `@t3team/sdk`              |
+| Primitive    | What it is                                                                                                                                                                                                                                       | Owns                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
+| **Context**  | A read-only snapshot of the world the agent and workflows read. Two depths: a light _render context_ used before launch, and a rich _full context_ available after launch.                                                                       | `packages/project-context` |
+| **Tools**    | The single capability surface — the verbs that read or mutate `t3team` and external state. The _same_ surface is consumed by agent turns, workflow steps, and views, scoped by `allowedToolGroups`. See [Epic 21](./21-context-tool-catalog.md). | `T3workToolBroker`         |
+| **Workflow** | The core engine: a TS-native, replay-based durable-execution engine (Epic 25) where workflows are plain async TypeScript `.workflow.ts` bodies and primitive calls are journaled. The earlier step-union runtime has been deleted.               | `packages/project-recipes` |
+| **View**     | A code-based, interactive UI unit that mounts on any surface — the action list, a conversation message, a dashboard slot, a side panel. Action launchers and conversation cards are both Views. See [Epic 19](./19-workspace-miniapps.md).       | `@t3team/sdk`              |
 
 How they interact, in one line:
 
@@ -37,15 +37,13 @@ launch). When this document says a recipe is a template, it means the authored f
 
 ## Scope
 
-The first implementation may support project-scoped recipes only, but the product model is
-broader. Recipes can be supplied by project packs, user packs, distribution packs, or
-remote-managed workspace packs (see
-[Epic 36](./36-workspace-packs-and-distributions.md)). Scope is determined by where the
-pack/module is installed and which policy layer enables it.
+The first implementation supports project-scoped recipes only. Personal recipes and
+company-owned collections are later extensions of the same model, distinguished only by
+where the plugin module lives (project workspace vs. home workspace vs. bundled app).
 
 The MVP does not optimize for public-marketplace security. Project recipes are trusted
-local code in the first stage; remote-managed pack recipes add signing, capability
-manifests, policy locks, and rollback before activation.
+local code in the first stage; see [Security: Two Stages](#security-two-stages) for how
+that evolves.
 
 ## Plugin Modules
 
@@ -79,6 +77,8 @@ export default defineRecipe({
   version: "0.1.0",
   scope: "project",
   surfaces: ["workitem.detail.sidepanel"],
+  // Required: which sidecar topic section groups this recipe (see Epic 19).
+  topic: "qa",
 
   // Metadata is derived from context in code, not via {{ }} expressions.
   displayName: (ctx) => `Create QA plan for ${ctx.workitem?.displayId ?? "selected work"}`,
@@ -360,11 +360,6 @@ and the React layer renders `ProjectDashboardBacklogView` and `ProjectDashboardM
 as distinct pages. Each gets its own typed context; recipes that legitimately span both
 declare both surfaces and narrow with `ctx.surface ===`.
 
-[Epic 31](./31-composable-project-views.md) keeps these surfaces as recipe/context
-identifiers while moving the page implementation toward composable project views. In that
-model, Backlog and My Work become registered views assembled from safe blocks, but recipe
-matching still uses the exact surface strings above.
-
 Dot-namespacing is hierarchical for ranking and UI grouping purposes only; surface
 matching is exact-string. There is no abstract `project.dashboard` parent.
 
@@ -432,9 +427,8 @@ type RenderContextCommon = {
 };
 ```
 
-Discovery walks all active recipe sources (distribution/user/project/remote-managed packs
-plus project-local `recipes/`), loads each plugin module, filters by surface, evaluates
-`visible`, and renders metadata. Failures are isolated:
+Discovery walks the project `recipes/` directory, loads each plugin module, filters by
+surface, evaluates `visible`, and renders metadata. Failures are isolated:
 
 - A recipe whose module fails to load or whose `visible`/metadata throws is dropped from
   the list — it never breaks the page or the other recipes.
@@ -445,21 +439,59 @@ plus project-local `recipes/`), loads each plugin module, filters by surface, ev
 read-only tools, but it must not perform writes or long IO. (See the binding note under
 [Tools](#tools) for how pre-launch code gets a no-thread, read-only tool surface.)
 
-### Recipe Sources And Precedence
+### Bundled vs. project-local recipes
 
-Pack-provided recipes and project-local recipes are the **same concept with different
-sources**. The host discovers recipes from active packs and local workspace folders, then
-merges them through the same pack precedence model as other contributions:
+Bundled recipes (shipped with the app, enabled by skill packs) and project-local recipes
+are the **same concept with different sources**. Bundled recipes are matched against the
+render context by the recipe matcher; project-local recipes are discovered from the
+workspace directory. A project-local recipe whose id matches a bundled one inherits the
+bundled visibility/rank unless it declares its own. The long-term goal is a single
+discovery path over a single recipe type, regardless of source.
 
-```text
-core defaults → distribution packs → global packs → user packs → project packs →
-remote-managed packs → explicit locks
-```
+Every recipe — bundled or project-local — **must** declare `topic` so sidecar composition
+can bucket matched actions into the correct section
+([Epic 19 — Topic catalog](./19-workspace-miniapps.md#topic-catalog)). Profile
+`sidecarSections` controls section **order and collapse only**; it does not gate which
+topics exist.
 
-A higher-precedence recipe whose id matches a lower-precedence recipe may override fields
-such as visibility, rank, slash alias, default inputs, or workflow entrypoint. Locks may
-prevent override. The long-term goal is a single discovery path over a single recipe type,
-regardless of source.
+#### Bundled catalog disposition
+
+Main-branch bundled recipes are being reorganized from a single Quick Starts monolith into
+topic-grouped sections. Disposition key:
+
+- **KEEP** — ship in default catalog and surfaces
+- **PACK** — bundled but skill-pack / profile gated
+- **META** — authoring tools (`create-recipe`, `edit-plugin-module`), not end-user defaults
+- **DEFER** — remove from default surfaces; reintroduce via project-local or when signals proven
+
+| Recipe                          | Class       | Topic         | Surfaces           | Disposition        |
+| ------------------------------- | ----------- | ------------- | ------------------ | ------------------ |
+| `show-only-assigned-to-me`      | View action | `filters`     | backlog            | **KEEP**           |
+| `clear-filters`                 | View action | `filters`     | dashboard          | **KEEP**           |
+| `focus-needs-my-action`         | Hybrid      | `filters`     | dashboard          | **KEEP**           |
+| `explain-selected-work`         | Chat        | `quick-actions` | dashboard + ticket | **KEEP**           |
+| `review-acceptance-criteria`    | Chat        | `qa`          | ticket             | **KEEP**           |
+| `tshirt-size-epic`              | Chat        | `refinement`  | ticket + backlog   | **KEEP**           |
+| `shape-next-backlog-slice`      | Chat        | `refinement`  | backlog            | **KEEP**           |
+| `create-qa-test-plan`           | Chat        | `qa`          | ticket             | **PACK**           |
+| `technical-implementation-plan` | Chat        | `engineering` | ticket             | **PACK**           |
+| `unblock-blocked-ticket`        | Chat        | `delivery`    | ticket             | **PACK**           |
+| `prioritize-pending-work`       | Chat        | `planning`    | dashboard          | **DEFER→planning** |
+| `create-contextual-recipe`      | Meta        | `customize`   | dashboard + ticket | **META**           |
+| `create-recipe`                 | Meta        | `customize`   | dashboard + ticket | **META**           |
+| `edit-plugin-module`            | Meta        | `customize`   | dashboard + ticket | **META**           |
+
+**Filters note:** `show-only-assigned-to-me` duplicates backlog filter-bar assignee
+narrowing. Keep it in the sidecar for now; long-term it may move to filter chips once chip
+UX is validated. Do not remove without updating click-path tests.
+
+**Refinement vs Planning:** refinement covers early shaping (t-shirt-size epic, backlog
+slice); planning covers sprint/commitment work (estimate/split/assign, capacity, scope
+moves). Do not conflate the two topics when authoring or reviewing recipes.
+
+**Role coverage:** engineering and refinement examples are the most validated. QA,
+planning, delivery, and customize recipes use the same model but need copy and
+applicability reviewed by role owners before treating the catalog as complete.
 
 ## Conversation Participants
 
@@ -563,11 +595,11 @@ single optional field on `Message`:
 // packages/contracts/src/model.ts  (already allowlisted)
 export type Message = {
   // ...existing upstream fields
-  t3teamExt?: T3TeamMessageExt;
+  t3teamExt?: T3workMessageExt;
 };
 
 // packages/contracts/src/t3team-message-ext.ts  (new, prefix-compliant)
-export type T3TeamMessageExt = {
+export type T3workMessageExt = {
   author?: { kind: "system"; source?: { workflowRunId: string; stepId?: string } };
   visibleToUser?: boolean;
   visibleToAgent?: boolean;
@@ -590,18 +622,13 @@ determinism contract, the Thread model, capability gating) is authoritative in
 [Epic 25: Workflow Engine](./25-workflow-engine.md). This section retains only the recipe-facing
 parts: how recipes reference workflows and how the launcher behaves by workflow shape.
 
-> **The legacy step-union JSON model is no longer a live runtime.** Earlier revisions of this
-> doc documented a `RecipeWorkflow = { steps: RecipeWorkflowStep[] }` union (`agent` / `script` /
+> **The legacy step-union JSON model has been deleted.** Earlier revisions of this doc
+> documented a `RecipeWorkflow = { steps: RecipeWorkflowStep[] }` union (`agent` / `script` /
 > `tool` / `present-message` / `collect-input` steps) interpreted by a forward-only step-list
-> runtime. That runtime was split apart and replaced by the Epic 25 engine
-> (`apps/server/src/t3team-workflowEngine*.ts` — Broker/Launch/Reactor/Registry/Rehydrate/Resume/
-> Durability — plus `packages/project-recipes/src/runtime.ts`). Recipes now reference a
-> `.workflow.ts` body (Epic 25); interactive request/response is expressed with the `Thread`
-> verbs (`askAgent` / `askUser` / `notify*`), not `present-message` + `collect-input`. Legacy
-> step-union naming remnants remain as compat naming (not a live second runtime) in
-> `apps/server/src/t3team-thread-recipe-workflow-routes.ts`,
-> `apps/server/src/t3team-workflowEngineLaunch.ts`, and
-> `packages/project-recipes/src/kickoff.ts` + `runtime.ts`.
+> runtime in `apps/server/src/t3team-recipeWorkflowRuntime*.ts`. That runtime, its routes, and
+> its tests are gone. Recipes now reference a `.workflow.ts` body (Epic 25); interactive
+> request/response is expressed with the `Thread` verbs (`askAgent` / `askUser` / `notify*`),
+> not `present-message` + `collect-input`.
 
 The former `run-interactive-agent` step is just an `agent` call. There is one workflow body,
 not a separate kickoff union and workflow union.
@@ -636,10 +663,22 @@ behaviour selected by whether the body uses the `thread` global.
 
 ### Launcher UX by workflow shape
 
-The shell does not own a single launcher UX. Recipes surface through **sidecar sections**
-([Epic 19 — Sidecar Sections](./19-workspace-miniapps.md#sidecar-sections)) — most
-commonly a pack-provided "Quick Starts" section — and that section's View decides per-item
-click behaviour based on the workflow's content:
+Recipes surface through **topic-grouped sidecar sections**
+([Epic 19 — Sidecar Sections](./19-workspace-miniapps.md#sidecar-sections)). Every
+recipe declares a required `topic`; matched recipes bucket into the section whose
+`topicFilter` includes that topic. **A section renders only when it has ≥1 visible
+matched action** — empty topic buckets auto-hide.
+
+Section `component` drives click behavior (not per-recipe shell hacks):
+
+| Section `component`   | Typical `topic`(s)              | Click behaviour                                                                 |
+| --------------------- | ------------------------------- | ------------------------------------------------------------------------------- |
+| `inline-filters`      | `filters`                       | **Apply** → execute deterministic workflow (view narrows, no chat). Optional **Rank next** → `stageKickoff` for hybrid ranking flows. |
+| `recipe-list`         | `quick-actions`, `qa`, `refinement`, `planning`, `engineering`, `delivery`, `customize` | Card → `stageKickoff` (composer chip, then submit per shape below)              |
+| `recent-conversations`| — (not a recipe topic)          | Navigate to thread                                                              |
+
+Within `recipe-list` and `inline-filters`, workflow shape still selects the post-click
+path:
 
 | Workflow shape                                         | Click behaviour         | Result surface                                                                        |
 | ------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------- |
@@ -647,9 +686,9 @@ click behaviour based on the workflow's content:
 | Drives `thread.askAgent` / `askUser`                   | Launch chat directly    | Chat thread opens; the body drives turns + user escalations                           |
 | One-shot compute (`agent(…, { schema })`, no `thread`) | Execute, capture result | Artifact ([Epic 08](./08-rich-artifacts.md)) or inline toast with the result; no chat |
 
-The launcher detects the shape at click time and selects the row above. The same recipe
-authoring shape (`recipe.ts`) covers all three; nothing on the recipe declares which UX it
-wants.
+The launcher detects workflow shape at click time. The same recipe authoring shape
+(`recipe.ts`) covers all three; nothing on the recipe declares which UX it wants beyond
+`topic` (section placement) and workflow body (interaction path).
 
 In the legacy runtime, the launcher inspects the recipe's step list. In the Epic 25
 engine, the same shape detection is performed by static analysis of the workflow body —
@@ -666,15 +705,16 @@ The same deterministic launcher path also backs sidecar context-menu actions dec
 single-step workflow launched through the existing `launchRecipeWorkflow` runtime; there
 is no parallel sidecar-action executor.
 
-These UX rules belong to the Quick Starts section (and any future recipe-launcher
-section). Other sidecar sections — Recent Threads, Open Pull Requests, Status Widgets —
-have entirely different click behaviours owned by their own View.
+Composer slash commands ([below](#composer-slash-command-launchers)) apply to
+`recipe-list` sections only (Phase C). Other sidecar sections — Recent, Open Pull
+Requests, Status Widgets — have entirely different click behaviours owned by their
+section `component`.
 
 ### Composer slash-command launchers
 
 A recipe can also be selected from the composer by typing `/<slashAlias>`. The slash
-typeahead is the keyboard-driven equivalent of clicking a Quick Starts card: the recipe
-becomes the composer's pre-submit selection chip, the user keeps typing free-form
+typeahead is the keyboard-driven equivalent of clicking a `recipe-list` section card: the
+recipe becomes the composer's pre-submit selection chip, the user keeps typing free-form
 kickoff text, and submission funnels through the normal [Launcher UX by workflow shape](#launcher-ux-by-workflow-shape)
 table — there is no second launch path.
 
@@ -704,7 +744,7 @@ The composer hands the recipe catalog plus the current surface context (kickoff 
 `project.dashboard.backlog` or `project.dashboard.myWork` depending on the dashboard tab;
 in-thread = `thread.context`) and gets back the surface-applicable recipes in rank order.
 Recipes whose `visible(ctx)` returns false are filtered out. This means the slash menu
-shows exactly the same recipes the user would see as Quick Starts cards — no parallel
+shows the same recipes the user would see in `recipe-list` sidecar sections — no parallel
 catalog, no separate visibility predicate.
 
 The empty-query view (cursor immediately after `/`) shows all applicable recipes; typed
@@ -740,10 +780,10 @@ defineRecipe({
   stored without it.
 - Default: when omitted, the recipe is reachable as `/<id>`. Recipes whose `id` is not a
   valid alias (uppercase, dots, etc.) get no implicit alias — they remain reachable only
-  through the Quick Starts card.
+  through the sidecar card.
 - Per-surface scope: the alias is global within a project. Two recipes may share an alias
   only if their `surfaces` are disjoint; otherwise the merge step rejects the later one
-  (see [Recipe Sources And Precedence](#recipe-sources-and-precedence) for the
+  (see [Bundled vs. project-local recipes](#bundled-vs-project-local-recipes) for the
   precedence rule that decides which wins).
 
 #### Namespace and collision rules
@@ -755,12 +795,13 @@ order, refusing to register any later contributor that collides:
    override.
 2. **Provider slash commands** (`ServerProvider.slashCommands`). Reserved per-provider;
    recipes cannot override on a surface where that provider is currently selected.
-3. **Pack and project recipes** in resolved precedence order
-   ([Recipe Sources And Precedence](#recipe-sources-and-precedence)). A higher-precedence
-   recipe may override a lower-precedence `slashAlias` unless a policy lock prevents it.
+3. **Bundled recipes** ([Bundled vs. project-local](#bundled-vs-project-local-recipes)).
+4. **Project-local recipes**. A project recipe whose `id` matches a bundled recipe inherits
+   the bundled `slashAlias` unless it declares its own (consistent with the existing
+   visibility/rank inheritance rule).
 
 Collisions surface in the same diagnostic channel as other recipe-load failures — the
-recipe loads but its slash alias is suppressed; the Quick Starts card remains available.
+recipe loads but its slash alias is suppressed; the sidecar card remains available.
 
 #### Selection semantics — "select" not "launch on accept"
 
@@ -770,7 +811,7 @@ click):
 1. The host calls `applyPromptReplacement(rangeStart, rangeEnd, "")` to remove the typed
    `/<alias>` prefix from the editor — same pattern as the existing `/model` selection.
 2. The host calls `setSelectedRecipe(recipe)` on the surrounding composer (the kickoff
-   composer already owns this state for Quick Starts; the in-thread composer uses the
+   composer already owns this state for sidecar selections; the in-thread composer uses the
    equivalent seam).
 3. The composer renders `TicketKickoffComposerSelectedRecipe` (or its in-thread
    equivalent) above the editor with the recipe's icon, title, and remove (`×`) affordance.
@@ -882,9 +923,8 @@ request/response across threads (the `Thread` verbs), multi-hour suspension on u
 and typed composition of workflows by typed reference. The full contract — the determinism
 rules authors must follow and replay-drift error semantics — lives in
 [Epic 25 §The determinism contract](./25-workflow-engine.md#the-determinism-contract--replay-safety).
-The earlier stateless step-union runtime (a forward-only cursor over a persisted step list) is no
-longer a live execution path — it was split into the Epic 25 engine modules (see Implementation
-Notes below); a few legacy naming remnants persist as compat naming only.
+The earlier stateless step-union runtime (a forward-only cursor over a persisted step list) has
+been deleted.
 
 Per-step / per-call failures are isolated and recorded as activity in the run's timeline;
 they do not crash the run or the page.
@@ -892,7 +932,7 @@ they do not crash the run or the page.
 ## Tools
 
 Tools are one shared capability surface, not a recipe-specific API. They began as
-agent-scoped tools (`T3TeamToolBroker` binds a per-thread set of `callTool`/`readResource`
+agent-scoped tools (`T3workToolBroker` binds a per-thread set of `callTool`/`readResource`
 capabilities for an agent turn). The same surface is consumed by:
 
 - agent turns (today),
@@ -941,9 +981,8 @@ Binding modes:
 > pre-launch `visible.ts` evaluation. Thread-bound recipe execution is filtered by
 > `allowedToolGroups`; pre-launch bindings are further intersected with the read-only
 > default (`integration.read`, `ui.render`). Project-local recipes with no declared
-> `allowedToolGroups` get no tools. Temporary distribution/core registry recipes keep their
-> explicit default grants for MVP compatibility until they move behind the pack manifest
-> model.
+> `allowedToolGroups` get no tools. Bundled core recipes keep their explicit default grants
+> from the bundled recipe registry for MVP compatibility.
 
 ## Views
 
@@ -966,14 +1005,11 @@ A workflow emits the system message — via a `present-message` step in the lega
 or via the `ui.show(view)` primitive in the Epic 25 engine — and the host renders the
 referenced View at the message's placement.
 
-Views receive context as props and use shell-provided components and the tool bridge.
-Project nav views additionally use the block/capability model from
-[Epic 31](./31-composable-project-views.md): agents compose `@t3team/blocks` such as
-tables, boards, filters, and recipe sections rather than calling raw provider APIs.
-Views never start a chat by themselves; the shell owns click and launch behavior. A View
-action (button, form submit, approval) round-trips through the workflow runtime as a typed
-event — it does not mutate React state directly and, under [stage 2](#security-two-stages),
-does not call tools directly from the renderer.
+Views receive context as props and use shell-provided components and the tool bridge. They
+never start a chat by themselves; the shell owns click and launch behavior. A View action
+(button, form submit, approval) round-trips through the workflow runtime as a typed event
+— it does not mutate React state directly and, under [stage 2](#security-two-stages), does
+not call tools directly from the renderer.
 
 If a recipe declares no View, the host renders a default launcher/card from the recipe
 metadata.
@@ -1066,14 +1102,14 @@ and agents to read.
 
 ```ts
 type ActionRecipeContext = {
-  project: T3TeamProjectSnapshot;
+  project: T3WorkProjectSnapshot;
   workitem?: ResourceSnapshot;
   selectedResource?: ResourceSnapshot;
   linkedResources: ResourceSnapshot[];
   sourceProject?: ExternalProjectSnapshot;
   artifacts: RichArtifactSummary[];
   recentRuns: RecipeRunSummary[];
-  profile: T3TeamProfile;
+  profile: T3WorkProfile;
   enabledSkillPacks: string[];
   memory: ProjectMemorySnapshot;
   capabilities: RecipeCapabilitySummary;
@@ -1103,7 +1139,7 @@ thread bootstrap or first context build is still pending. It shows at least:
 
 - recipe id and version
 - rendered title and short description
-- source (pack id/version or project-local path)
+- source (`project-local` or bundled)
 - selected surface and relevant work-item context
 - current phase: `queued`, `creating-thread`, `bootstrapping-agent`, `running`,
   `waiting-for-input`, `completed`, `failed`
@@ -1152,7 +1188,7 @@ or reviewed by the project owner on their own machine.
 
 **Stage 2 — Sandboxed (planned).** Project-hosted code runs with **no ambient
 capabilities** — no direct filesystem, network, process, or React/DOM access. Everything
-goes through host-injected APIs: the `T3TeamToolBroker` for tools, structured props for
+goes through host-injected APIs: the `T3workToolBroker` for tools, structured props for
 data, and the typed-event path for View actions. Isolation is enforced by a worker/isolate
 boundary (scripts) and a sandboxed iframe-equivalent (Views).
 
@@ -1204,7 +1240,7 @@ A small, declarative workflow built from the unified step union — and itself a
 proof that the architecture composes end-to-end:
 
 ```ts
-// recipes/create-recipe/recipe.ts (distribution pack or project-local source)
+// recipes/create-recipe/recipe.ts (bundled)
 export default defineRecipe({
   id: "create-recipe",
   surfaces: ["thread.context"],
@@ -1276,7 +1312,8 @@ future Edit-this surface ([Epic 19 — Context menus](./19-workspace-miniapps.md
 
 Shape:
 
-1. **Input**: a target source path plus the requested edit (what change the user wants).
+1. **Input**: a target source path plus the kickoff customization (what change the
+   user wants).
 2. **Script step**: reads the target file, inspects which `define*` helper it exports,
    and selects the appropriate authoring guidance to inject into the agent's prompt
    (falling back to manifest guidance for legacy project-local `recipe.json` items).
@@ -1292,10 +1329,9 @@ right move once per-kind guidance grows beyond what fits cleanly in one prompt �
 recipe, multiple prompt references picked by the script step.
 
 The same workflow also backs the **"Customize…"** context-menu action used for
-_structured / destructive_ operations (reset to source defaults, reset overrides, change tool
+_structured / destructive_ operations (revert-to-bundled, reset overrides, change tool
 grants, etc.). There are intentionally no ad-hoc confirmation dialogs in the UI — every
-destructive pack or project-local edit routes through this guided workflow's preview +
-approval steps.
+destructive customization routes through this guided workflow's preview + approval steps.
 
 ### Default behavior
 
@@ -1334,42 +1370,43 @@ Project recipes live next to project data:
   memory/
 ```
 
-Pack-provided recipes from skill packs may be referenced from project scope, or copied into
-project scope when the user explicitly wants an editable fork. Project-local recipes are
-the editable source of truth for the early MVP.
+Bundled recipes from skill packs may be referenced or copied into project scope when a
+project is created. Project-local recipes are the editable source of truth for the MVP.
 
 ## Implementation Status Summary
 
-| Area                                                                                                                                                                                                                                   | Status                                                                                                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Project-local discovery + temporary distribution/core matching                                                                                                                                                                         | Built                                                                                                                                                 |
-| Visibility (predicate + script, timeout, isolation)                                                                                                                                                                                    | Built (via `recipe.json` + expression engine)                                                                                                         |
-| TS-module authoring (`recipe.ts`), retire expression engine                                                                                                                                                                            | Partial (engine deleted; the discovery-layer `{{ }}` template renderer is kept and its removal deferred)                                              |
-| Unified workflow step union; kickoff absorbed                                                                                                                                                                                          | Retired as a live runtime; replaced by the Epic 25 engine (legacy naming remnants persist as compat naming, see Implementation Notes)                 |
-| Workflow runtime: bootstrap agent, card, await-card-action, script                                                                                                                                                                     | Retired as a live runtime; replaced by the Epic 25 engine                                                                                             |
-| Workflow runtime: mid-flow agent, tool, present-message, collect-input                                                                                                                                                                 | Deleted (replaced by Epic 25 primitives + the Thread model)                                                                                           |
-| Three-author conversation model + `t3teamExt` seam (system messages, view-in-message)                                                                                                                                                  | Built                                                                                                                                                 |
-| Shared tool surface for scripts/steps via broker; enforce `allowedToolGroups`                                                                                                                                                          | Built                                                                                                                                                 |
-| Deterministic workflows (no-agent workflows skip thread/launch-card) + `action.inline` placement                                                                                                                                       | Built (tool-step no-chat path; backlog inline chip wired)                                                                                             |
-| `agent.task` step (background non-interactive LLM call) + step-result binding model                                                                                                                                                    | Subsumed by `agent(…, { schema })` (no separate `agent.task`); step-result binding obsoleted by the replay-based engine (results are scope variables) |
-| Sidecar sections + `defineSidecarSection` SDK + composition model + remove hardcoded kickoff aside                                                                                                                                     | Built (sections + composition + shell menus + declared deterministic actions)                                                                         |
-| Composer slash-command launchers for recipes (`slashAlias` + `recipe-slash-command` item kind)                                                                                                                                         | Planned (precondition: extract shared composer-menu hook so kickoff wires `/`, `@`, `$` at all)                                                       |
-| `define*` SDK surface (per-placement helpers, no generic primitive, multi-placement via exports)                                                                                                                                       | Planned (Phase 5 — ships alongside the placements it covers)                                                                                          |
-| Run-directory materialization, `context.json`/schema/map                                                                                                                                                                               | Built                                                                                                                                                 |
-| Setup script (formerly `init.ts`)                                                                                                                                                                                                      | Deferred until stage-2 sandbox                                                                                                                        |
-| Views unified on miniapp model; typed-event action path                                                                                                                                                                                | Planned (Phase 5)                                                                                                                                     |
-| `Queryable<T>` contract (Array-backed at MVP)                                                                                                                                                                                          | Planned (Phase 2 — needed by unified steps)                                                                                                           |
-| `Queryable<T>` runtime: SQL-backed + signals (Signia / equivalent); projection-driven invalidation                                                                                                                                     | Planned (Phase 6 — scale tier)                                                                                                                        |
-| Agent-discovery types pipeline: generated `.d.ts` + `context.schema.json` + `context-map.md`                                                                                                                                           | Built                                                                                                                                                 |
-| `create-recipe` recipe (canonical end-to-end workflow proof)                                                                                                                                                                           | Built                                                                                                                                                 |
-| `edit-plugin-module` recipe (single canonical AI-edit entry point; backs "Edit this…" now and remains the base for "Customize…")                                                                                                       | Implemented for "Edit this…" (Phase 5c); structured customize flows remain deferred                                                                   |
-| Stage-2 sandboxing                                                                                                                                                                                                                     | Planned, parallel track                                                                                                                               |
-| **Epic 25 — `.workflow.ts` loader + `meta` static extractor + `defineWorkflow` / `defineTool` / `defineToolGroup` / `defineScript` SDK + ambient `tools.*` / `scripts.*` trees**                                                       | Implemented (25.1)                                                                                                                                    |
-| **Epic 25 — Durable-execution engine: journal, replay, argsHash, `ReplayDriftError`**                                                                                                                                                  | Implemented (25.2)                                                                                                                                    |
-| **Epic 25 — Composition primitives: `parallel`, `pipeline`, `phase`, `log`, `args`, `budget`, `workflow`, `random`, `now`, `uuid`, `wait`, `scripts.*`, `tools.*`**                                                                    | Implemented (25.3)                                                                                                                                    |
-| **Epic 25 — Handle pattern: `sent`/`resolved` split, `correlationId`, durable suspension, `MessageBroker` seam**                                                                                                                       | Implemented (25.4)                                                                                                                                    |
-| **Epic 25 — Thread model + host wiring + legacy retirement: `thread`/`spawnThread`/`agent` + `Thread` verbs; orchestration broker + launch path + resume reactor; step-union runtime retired as a live path (naming remnants remain)** | Implemented                                                                                                                                           |
-| **Epic 25 — Determinism enforcement: lint rules, banned-global throws, capability gating at load time**                                                                                                                                | Planned (25.5)                                                                                                                                        |
+| Area                                                                                                                                                                                         | Status                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project-local discovery + bundled matching                                                                                                                                                   | Built                                                                                                                                                 |
+| Visibility (predicate + script, timeout, isolation)                                                                                                                                          | Built (via `recipe.json` + expression engine)                                                                                                         |
+| TS-module authoring (`recipe.ts`), retire expression engine                                                                                                                                  | Partial (engine deleted; the discovery-layer `{{ }}` template renderer is kept and its removal deferred)                                              |
+| Unified workflow step union; kickoff absorbed                                                                                                                                                | Deleted (step-union runtime removed; replaced by the Epic 25 engine)                                                                                  |
+| Workflow runtime: bootstrap agent, card, await-card-action, script                                                                                                                           | Deleted (step-union runtime removed)                                                                                                                  |
+| Workflow runtime: mid-flow agent, tool, present-message, collect-input                                                                                                                       | Deleted (replaced by Epic 25 primitives + the Thread model)                                                                                           |
+| Three-author conversation model + `t3teamExt` seam (system messages, view-in-message)                                                                                                        | Built                                                                                                                                                 |
+| Shared tool surface for scripts/steps via broker; enforce `allowedToolGroups`                                                                                                                | Built                                                                                                                                                 |
+| Deterministic workflows (no-agent workflows skip thread/launch-card) + `action.inline` placement                                                                                             | Built (tool-step no-chat path; backlog inline chip wired)                                                                                             |
+| `agent.task` step (background non-interactive LLM call) + step-result binding model                                                                                                          | Subsumed by `agent(…, { schema })` (no separate `agent.task`); step-result binding obsoleted by the replay-based engine (results are scope variables) |
+| Sidecar sections + `defineSidecarSection` SDK + composition model + remove hardcoded kickoff aside                                                                                           | Built (topic-grouped sections, required `recipe.topic`, auto-hide empty sections, `FilterActionCard` Apply/Rank-next in `inline-filters`)             |
+| Wire `projectDefault` from project `profile.json` `sidecarSections` into kickoff panels                                                                                                      | Built (`readProjectSidecarCompositionFromProject`; passed from dashboard + ticket kickoff asides)                                                    |
+| Storybook sidecar/recipe presentation (`RecipeListCard`, `FilterActionCard`, `TopicSection`, `SidecarComposition`)                                                                           | Built (`pnpm storybook` from repo root; stories under `apps/web/src/t3team/**/*.stories.tsx`)                                                         |
+| Composer slash-command launchers for recipes (`slashAlias` + `recipe-slash-command` item kind)                                                                                               | Planned (precondition: extract shared composer-menu hook so kickoff wires `/`, `@`, `$` at all)                                                       |
+| `define*` SDK surface (per-placement helpers, no generic primitive, multi-placement via exports)                                                                                             | Planned (Phase 5 — ships alongside the placements it covers)                                                                                          |
+| Run-directory materialization, `context.json`/schema/map                                                                                                                                     | Built                                                                                                                                                 |
+| Setup script (formerly `init.ts`)                                                                                                                                                            | Deferred until stage-2 sandbox                                                                                                                        |
+| Views unified on miniapp model; typed-event action path                                                                                                                                      | Planned (Phase 5)                                                                                                                                     |
+| `Queryable<T>` contract (Array-backed at MVP)                                                                                                                                                | Planned (Phase 2 — needed by unified steps)                                                                                                           |
+| `Queryable<T>` runtime: SQL-backed + signals (Signia / equivalent); projection-driven invalidation                                                                                           | Planned (Phase 6 — scale tier)                                                                                                                        |
+| Agent-discovery types pipeline: generated `.d.ts` + `context.schema.json` + `context-map.md`                                                                                                 | Built                                                                                                                                                 |
+| `create-recipe` recipe (canonical end-to-end workflow proof)                                                                                                                                 | Built                                                                                                                                                 |
+| `edit-plugin-module` recipe (single canonical AI-edit entry point; backs "Edit this…" now and remains the base for "Customize…")                                                             | Implemented for "Edit this…" (Phase 5c); structured customize flows remain deferred                                                                   |
+| Stage-2 sandboxing                                                                                                                                                                           | Planned, parallel track                                                                                                                               |
+| **Epic 25 — `.workflow.ts` loader + `meta` static extractor + `defineWorkflow` / `defineTool` / `defineToolGroup` / `defineScript` SDK + ambient `tools.*` / `scripts.*` trees**             | Implemented (25.1)                                                                                                                                    |
+| **Epic 25 — Durable-execution engine: journal, replay, argsHash, `ReplayDriftError`**                                                                                                        | Implemented (25.2)                                                                                                                                    |
+| **Epic 25 — Composition primitives: `parallel`, `pipeline`, `phase`, `log`, `args`, `budget`, `workflow`, `random`, `now`, `uuid`, `wait`, `scripts.*`, `tools.*`**                          | Implemented (25.3)                                                                                                                                    |
+| **Epic 25 — Handle pattern: `sent`/`resolved` split, `correlationId`, durable suspension, `MessageBroker` seam**                                                                             | Implemented (25.4)                                                                                                                                    |
+| **Epic 25 — Thread model + host wiring + legacy deletion: `thread`/`spawnThread`/`agent` + `Thread` verbs; orchestration broker + launch path + resume reactor; step-union runtime removed** | Implemented                                                                                                                                           |
+| **Epic 25 — Determinism enforcement: lint rules, banned-global throws, capability gating at load time**                                                                                      | Planned (25.5)                                                                                                                                        |
 
 ## Implementation Notes
 
@@ -1383,7 +1420,7 @@ the editable source of truth for the early MVP.
   `defineToolGroup`, `defineModel`, `defineScript`) and the public import path for the
   recipe/plugin-module and View `define*` helpers. Some helpers (e.g. `defineSidecarSection`)
   currently live in `packages/project-recipes` and are surfaced through `@t3team/sdk`.
-- `T3TeamToolBroker` (`apps/server`) is the single tool surface for agents, scripts, and
+- `T3workToolBroker` (`apps/server`) is the single tool surface for agents, scripts, and
   Views. Mutations through it emit events on the existing orchestration bus.
 - **The Queryable runtime is backed by the existing local SQLite persistence layer**
   ([apps/server/src/persistence/Layers/Sqlite.ts](apps/server/src/persistence/Layers/Sqlite.ts)
@@ -1400,13 +1437,4 @@ the editable source of truth for the early MVP.
 - `apps/web/src/t3team` renders recipe actions and launch cards; it must not evaluate
   provider-specific context directly.
 - Thread bootstrap and the special recipe launch message live in the t3 adapter / server
-  workflow engine, split across
-  [t3team-workflowEngineBroker.ts](apps/server/src/t3team-workflowEngineBroker.ts),
-  [t3team-workflowEngineLaunch.ts](apps/server/src/t3team-workflowEngineLaunch.ts),
-  [t3team-workflowEngineReactor.ts](apps/server/src/t3team-workflowEngineReactor.ts),
-  [t3team-workflowEngineRegistry.ts](apps/server/src/t3team-workflowEngineRegistry.ts),
-  [t3team-workflowEngineRehydrate.ts](apps/server/src/t3team-workflowEngineRehydrate.ts),
-  [t3team-workflowEngineResume.ts](apps/server/src/t3team-workflowEngineResume.ts), and
-  [t3team-workflowEngineDurability.ts](apps/server/src/t3team-workflowEngineDurability.ts) —
-  plus [packages/project-recipes/src/runtime.ts](packages/project-recipes/src/runtime.ts). The
-  earlier single-file `t3team-recipeWorkflowRuntime.ts` no longer exists.
+  workflow runtime ([t3team-recipeWorkflowRuntime.ts](apps/server/src/t3team-recipeWorkflowRuntime.ts)).

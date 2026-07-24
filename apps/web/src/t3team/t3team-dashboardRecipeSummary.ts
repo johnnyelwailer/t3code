@@ -19,6 +19,7 @@ export type T3TeamDashboardRecipeCurrentViewSummary = {
   readonly primaryBugLabel?: string;
   readonly needsMyActionPreset?: T3TeamDashboardNeedsMyActionPreset;
   readonly needsMyActionCount?: number;
+  readonly viewFiltersActive?: boolean;
 };
 
 function buildBaseRecipeViewSummary(

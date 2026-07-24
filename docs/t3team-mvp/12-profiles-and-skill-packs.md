@@ -2,23 +2,21 @@
 
 ## Purpose
 
-`t3team` should not be positioned as a QA-only product. QA is the first useful proof pack,
-but the product is a pack-driven agent workspace for many kinds of work.
+`t3team` should not be positioned as a QA-only product. QA is the first useful proof
+pack, but the product is a pack-driven agent workspace for many kinds of work.
 
 Profiles and skill packs make that explicit. Under the pack-driven vision in
-[Epic 36](./36-workspace-packs-and-distributions.md), profiles and skill packs are content
-types inside broader packs. A pack may ship profiles, skill packs, recipes, views, themes,
-localization, connectors, providers, and policy together.
+[Epic 36](./36-workspace-packs-and-distributions.md), profiles and skill packs are
+content types inside broader packs. A pack may ship profiles, skill packs, recipes,
+views, themes, localization, connectors, providers, and policy together.
 
-Profiles are configuration, not a hardcoded product enum.
-
-`t3team` may ship starter profiles through a distribution pack as seed configuration, but
-profiles themselves are fully configuration-based. Users, projects, and managed packs
-should be able to add, clone, edit, replace, or force profiles according to policy.
-Runtime behavior must never depend on checks like
-`profile.id === "engineering-copilot"` or `profile.title === "QA Assistant"`. All ranking,
-visibility, and presentation logic should derive from the profile's lower-level
-preference fields.
+Profiles are configuration, not a hardcoded product enum. `t3team` may ship starter
+profiles through a distribution pack as seed configuration, but profiles themselves are
+fully configuration-based. Users, projects, and managed packs should be able to add,
+clone, edit, replace, or force profiles according to policy. Runtime behavior must never
+depend on checks like `profile.id === "engineering-copilot"` or
+`profile.title === "QA Assistant"`. All ranking, visibility, and presentation logic
+should derive from the profile's lower-level preference fields.
 
 ## Concepts
 
@@ -45,22 +43,20 @@ Profiles affect:
 - mutation safety posture
 - follow-up suggestions
 - surface defaults such as summary-first vs diff-first emphasis
-- **sidecar section composition** — which
-  [sidecar sections](./19-workspace-miniapps.md#sidecar-sections) are visible by default,
-  in what order, and which are collapsed; the profile sets the starting point (e.g., a
-  QA profile leads with Open Bugs + QA Quick Starts; an engineering profile leads with
-  Open Pull Requests). Profile defaults are one input to the pack merge model; the user can
-  override per workspace via the context-menu hide / pin / reorder actions when policy
-  allows it
-  ([Epic 19 — Context menus](./19-workspace-miniapps.md#context-menus))
+- **sidecar section composition** — section **order and collapse** in the
+  [sidecar](./19-workspace-miniapps.md#sidecar-sections); all profiles share the same
+  section id catalog (Filters, Quick actions, QA, Refinement, Planning, Engineering,
+  Delivery, Customize, Recent). A QA profile may reorder to surface QA earlier; an
+  engineering profile may collapse Customize. Profile defaults are one input to the pack
+  merge model; the user can override per workspace via the context-menu hide / pin /
+  reorder actions ([Epic 19 — Context menus](./19-workspace-miniapps.md#context-menus))
 
 ### Skill Pack
 
 A skill pack is a bundle of recipes (authored as `recipe.ts` plugin modules), prompt
 blocks, artifact templates, and tool-group permissions for a type of work. A skill pack's
-recipes use the same recipe model as project-local recipes. Skill packs may be shipped by
-a distribution pack, remote-managed pack, user pack, project pack, or temporary in-repo
-starter package (see [Epic 16](./16-action-recipes.md)).
+recipes are bundled-source recipes — the same recipe model as project-local recipes, just
+shipped with the app (see [Epic 16](./16-action-recipes.md)).
 
 Examples:
 
@@ -73,9 +69,10 @@ Examples:
 
 A project can enable multiple skill packs. A project can also select multiple profiles
 when a user plays more than one role in that project. One selected profile is always the
-primary profile; it controls communication style and priority defaults. Additional
-selected profiles contribute role coverage, recipe affinity, skill-pack suggestions,
-artifact preferences, and surface composition.
+primary profile; it controls communication style and priority defaults.
+
+Additional selected profiles contribute role coverage, recipe affinity, skill-pack
+suggestions, artifact preferences, and surface composition.
 
 Example:
 
@@ -93,14 +90,14 @@ surfacing engineering recipes, artifacts, and project views.
 
 The runtime should resolve a selected profile set into one effective profile at the
 configuration boundary, so downstream recipe ranking and surface code can continue to
-consume a single `T3TeamProfile`-shaped object.
+consume a single `T3WorkProfile`-shaped object.
 
 Profile-set rules:
 
 - `primaryProfileId` must be one of `profileIds`.
 - If only one profile is selected, that profile is both selected and primary.
-- If legacy config only has `profileId`, treat it as `{ primaryProfileId: profileId,
-profileIds: [profileId] }`.
+- If legacy config only has `profileId`, treat it as
+  `{ primaryProfileId: profileId, profileIds: [profileId] }`.
 - Communication style comes from the primary profile unless a later explicit user setting
   overrides it.
 - Scalar priority fields that affect wording or density come from the primary profile.
@@ -108,10 +105,11 @@ profileIds: [profileId] }`.
   `recommendedSkillPackIds` are merged by stable union, preserving selected-profile order
   and de-duplicating entries.
 - `defaultRecipeWeights` are merged with primary profile weights taking precedence on
-  conflicts. Secondary profile weights may still introduce recipes absent from the
-  primary profile.
+  conflicts. Secondary profile weights may still introduce recipes absent from the primary
+  profile.
 - `sidecarSections` start from the primary profile's order and append missing sections
-  from secondary profiles.
+  from secondary profiles; all profiles still share the same topic-section catalog, so
+  profile sets never create profile-name-specific recipe behavior.
 - `hideImplementationComplexity` should follow the primary profile for communication, but
   capability and recipe visibility should not be hidden solely because the primary profile
   is non-technical.
@@ -133,11 +131,10 @@ During early implementation, bundled starter skill packs may live in:
 packages/t3team-skill-packs
 ```
 
-This package owns bundled definitions, not runtime execution. Long term, this package is a
-starter distribution-pack source, not the only place skill packs can live.
-
-It should contain starter presets and starter skill packs, not the only legal profile
-definitions in the system.
+This package owns bundled definitions, not runtime execution. Long term, this package is
+a starter distribution-pack source, not the only place skill packs can live. It should
+contain starter presets and starter skill packs, not the only legal profile definitions
+in the system.
 
 Suggested layout:
 
@@ -164,7 +161,7 @@ packages/t3team-skill-packs/src/
 ## Profile Model
 
 ```ts
-type T3TeamProfile = {
+type T3WorkProfile = {
   id: string;
   title: string;
   description: string;
@@ -189,7 +186,7 @@ type T3TeamProfile = {
 Project setup stores profile selection separately from profile definitions:
 
 ```ts
-type T3TeamProjectProfileSelection = {
+type T3WorkProjectProfileSelection = {
   primaryProfileId: string;
   profileIds: string[];
 };
@@ -208,7 +205,7 @@ Interpretation rules:
 ## Skill Pack Model
 
 ```ts
-type T3TeamSkillPack = {
+type T3WorkSkillPack = {
   id: string;
   title: string;
   description: string;
@@ -357,13 +354,13 @@ Recipes:
 
 ## Project Creation Defaults
 
-When creating from a pack-provided source:
+When creating from Jira:
 
 - show recommended skill packs based on project type and issue data
 - default packs based on project signals plus profile preference fields, not on profile id
   or title
 - allow Product, Support, Delivery, Engineering, and Release packs to be enabled too
-- never imply one source, for example Jira, is only for QA work
+- never imply Jira projects are only for QA work
 
 Example recommendation inputs:
 
@@ -371,12 +368,11 @@ Example recommendation inputs:
 - `communicationStyle.technicalDepth`
 - `preferredArtifactKinds`
 - `defaultActionFamilies`
-- connector/project metadata such as Jira project type and issue patterns
+- provider/project metadata such as Jira project type and issue patterns
 
 Confirm screen should show:
 
-- selected profiles
-- primary profile
+- selected profile
 - enabled skill packs
 - top recipes that will appear first
 - mutation safety policy
@@ -387,22 +383,10 @@ Profile selection should be a normal setup step, not hidden in settings.
 
 Use existing T3 primitives:
 
-- multi-select cards for profile choices
+- cards for profile choices
 - badges for skill pack categories
 - select/menu for compact profile switching
 - settings rows for later edits
-
-Project setup should keep the flow simple:
-
-1. Let the user select one or more profiles from the normal profile card grid.
-2. If exactly one profile is selected, continue with that profile as primary.
-3. If multiple profiles are selected, show a short review step listing the selected
-   profiles, with remove controls and a primary-profile choice.
-4. The primary choice should be explicit but lightweight, for example radio buttons inside
-   the selected-profile review list.
-
-The second step exists only for multi-select. Do not force all users through a heavier
-profile composition screen.
 
 Users should also be able to clone a starter profile into a custom profile and edit its
 preferences without leaving the normal setup/settings flow.
@@ -410,11 +394,9 @@ preferences without leaving the normal setup/settings flow.
 Project overview should show enabled skill packs as quiet badges near the project source
 badges.
 
-GitHub PR and review surfaces should also expose the active primary profile as a
-lightweight mode switch. Switching the primary profile should immediately rerank actions,
-adjust explanation density, and change guided-vs-expert defaults without forcing the user
-to reopen chat. Secondary selected profiles should remain available as project role
-coverage unless the user removes them from project settings.
+GitHub PR and review surfaces should also expose the active profile as a lightweight mode
+switch. Switching profiles should immediately rerank actions, adjust explanation density,
+and change guided-vs-expert defaults without forcing the user to reopen chat.
 
 That mode switch should operate on the selected profile configuration's preferences. It
 must not special-case named starter profiles.

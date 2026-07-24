@@ -1,9 +1,10 @@
-import { resolveT3TeamProjectSetupProfileId } from "~/t3team/t3team-projectSetup";
+import { resolveT3WorkProjectSetupProfileId } from "~/t3team/t3team-projectSetup";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type {
   LinkedRepositorySyncResult,
   ProjectWorkspaceBootstrapResult,
 } from "~/t3team/backend/t3team-types";
+import type { SidecarComposition } from "@t3tools/project-recipes";
 
 export type LinkedRepositoryReference = {
   readonly url: string;
@@ -20,6 +21,7 @@ export type ProjectAgentReferences = {
 
 export type ProjectAgentSetup = {
   readonly profileId?: string;
+  readonly sidecarSections?: SidecarComposition;
 };
 
 export function normalizeRepositoryUrls(
@@ -49,7 +51,7 @@ export function buildInitialRaw(
     linkedRepositories: linkedRepositoryUrls.map((url) => ({ url })),
   };
   const agentSetup: ProjectAgentSetup = {
-    profileId: resolveT3TeamProjectSetupProfileId(setupProfileId),
+    profileId: resolveT3WorkProjectSetupProfileId(setupProfileId),
   };
   return { ...base, agentReferences: references, agentSetup };
 }
@@ -112,9 +114,36 @@ export function readLinkedRepositoryUrlsFromProject(
 export function readProjectSetupProfileIdFromProject(project: ProjectShellProject): string {
   const currentRaw = readObjectRecord(project.source.raw);
   const currentSetup = readObjectRecord(currentRaw.agentSetup);
-  return resolveT3TeamProjectSetupProfileId(
+  return resolveT3WorkProjectSetupProfileId(
     typeof currentSetup.profileId === "string" ? currentSetup.profileId : undefined,
   );
+}
+
+function isSidecarComposition(value: unknown): value is SidecarComposition {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const sections = (value as SidecarComposition).sections;
+  return (
+    Array.isArray(sections) &&
+    sections.every(
+      (section) =>
+        typeof section === "object" &&
+        section !== null &&
+        typeof section.sectionId === "string" &&
+        section.sectionId.trim().length > 0,
+    )
+  );
+}
+
+export function readProjectSidecarCompositionFromProject(
+  project: ProjectShellProject,
+): SidecarComposition | undefined {
+  const currentRaw = readObjectRecord(project.source.raw);
+  const currentSetup = readObjectRecord(currentRaw.agentSetup);
+  const sidecarSections = currentSetup.sidecarSections;
+  return isSidecarComposition(sidecarSections) ? sidecarSections : undefined;
 }
 
 export function replaceLinkedRepositoryUrlsInProject(

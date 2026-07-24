@@ -1,6 +1,8 @@
 import type { RecipeProfileContext, SidecarComposition } from "@t3tools/project-recipes";
 
-export type BundledT3TeamProfileId =
+import { DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION } from "./sidecarSections.ts";
+
+export type BundledT3WorkProfileId =
   | "qa-assistant"
   | "product-partner"
   | "support-triage"
@@ -8,9 +10,9 @@ export type BundledT3TeamProfileId =
   | "verification-guide"
   | "engineering-copilot";
 
-export type T3TeamProfileId = string;
+export type T3WorkProfileId = string;
 
-export type T3TeamProfileAudience =
+export type T3WorkProfileAudience =
   | "mixed"
   | "qa"
   | "product"
@@ -18,11 +20,11 @@ export type T3TeamProfileAudience =
   | "delivery"
   | "engineering";
 
-export type T3TeamProfile = {
-  readonly id: T3TeamProfileId;
+export type T3WorkProfile = {
+  readonly id: T3WorkProfileId;
   readonly title: string;
   readonly description: string;
-  readonly audience: T3TeamProfileAudience;
+  readonly audience: T3WorkProfileAudience;
   readonly tags?: ReadonlyArray<string>;
   readonly communicationStyle: {
     readonly technicalDepth: "low" | "medium" | "high";
@@ -43,30 +45,29 @@ export type T3TeamProfile = {
   readonly hideImplementationComplexity: boolean;
 };
 
-export type T3TeamProfileResolutionSource =
+export type T3WorkProfileResolutionSource =
   | "bundled"
   | "project-local"
-  | "pack"
   | "manifest-inline"
   | "fallback";
 
-export type T3TeamProfileResolution = {
-  readonly profile: T3TeamProfile;
-  readonly source: T3TeamProfileResolutionSource;
+export type T3WorkProfileResolution = {
+  readonly profile: T3WorkProfile;
+  readonly source: T3WorkProfileResolutionSource;
   readonly requestedProfileId?: string;
   readonly warning?: string;
 };
 
-export type T3TeamProjectProfileManifest = {
+export type T3WorkProjectProfileManifest = {
   readonly version: number;
-  readonly profileId: T3TeamProfileId;
+  readonly profileId: T3WorkProfileId;
   readonly enabledSkillPackIds?: ReadonlyArray<string>;
   readonly title?: string;
   readonly description?: string;
-  readonly audience?: T3TeamProfileAudience;
+  readonly audience?: T3WorkProfileAudience;
   readonly tags?: ReadonlyArray<string>;
-  readonly communicationStyle?: T3TeamProfile["communicationStyle"];
-  readonly surfaceDefaults?: T3TeamProfile["surfaceDefaults"];
+  readonly communicationStyle?: T3WorkProfile["communicationStyle"];
+  readonly surfaceDefaults?: T3WorkProfile["surfaceDefaults"];
   readonly preferredArtifactKinds?: ReadonlyArray<string>;
   readonly defaultActionFamilies?: ReadonlyArray<string>;
   readonly defaultRecipeWeights?: Readonly<Record<string, number>>;
@@ -76,21 +77,19 @@ export type T3TeamProjectProfileManifest = {
   readonly managedFileHashes?: Readonly<Record<string, string>>;
 };
 
-export type ResolveT3TeamProfileInput = {
+export type ResolveT3WorkProfileInput = {
   readonly profileId?: string;
-  readonly projectLocalProfiles?: Readonly<Record<string, T3TeamProfile>>;
-  /** Profiles contributed by an active workspace pack, keyed by id. */
-  readonly packProfiles?: Readonly<Record<string, T3TeamProfile>>;
-  readonly manifest?: T3TeamProjectProfileManifest;
+  readonly projectLocalProfiles?: Readonly<Record<string, T3WorkProfile>>;
+  readonly manifest?: T3WorkProjectProfileManifest;
   readonly allowFallback?: boolean;
 };
 
 export const T3TEAM_PROJECT_PROFILES_DIR = ".t3team/setup/profiles";
 export const T3TEAM_PROJECT_PROFILE_MANIFEST_PATH = ".t3team/setup/profile.json";
 
-export const DEFAULT_T3TEAM_PROFILE_ID: BundledT3TeamProfileId = "product-partner";
+export const DEFAULT_T3TEAM_PROFILE_ID: BundledT3WorkProfileId = "product-partner";
 
-export const T3TEAM_PROFILES: Record<BundledT3TeamProfileId, T3TeamProfile> = {
+export const T3TEAM_PROFILES: Record<BundledT3WorkProfileId, T3WorkProfile> = {
   "qa-assistant": {
     id: "qa-assistant",
     title: "QA Assistant",
@@ -117,6 +116,7 @@ export const T3TEAM_PROFILES: Record<BundledT3TeamProfileId, T3TeamProfile> = {
       "draft-jira-comment": 10,
       "release-handoff-checklist": 10,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["qa", "delivery"],
     hideImplementationComplexity: true,
   },
@@ -140,6 +140,7 @@ export const T3TEAM_PROFILES: Record<BundledT3TeamProfileId, T3TeamProfile> = {
       "stakeholder-update": 30,
       "summarize-project-risk": 10,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["product", "delivery"],
     hideImplementationComplexity: true,
   },
@@ -167,6 +168,7 @@ export const T3TEAM_PROFILES: Record<BundledT3TeamProfileId, T3TeamProfile> = {
       "draft-jira-comment": 15,
       "explain-selected-work": 10,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["support", "qa"],
     hideImplementationComplexity: true,
   },
@@ -189,6 +191,7 @@ export const T3TEAM_PROFILES: Record<BundledT3TeamProfileId, T3TeamProfile> = {
       "release-handoff-checklist": 25,
       "summarize-project-risk": 20,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["delivery", "release"],
     hideImplementationComplexity: true,
   },
@@ -216,6 +219,7 @@ export const T3TEAM_PROFILES: Record<BundledT3TeamProfileId, T3TeamProfile> = {
       "release-handoff-checklist": 20,
       "summarize-project-risk": 15,
     },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["qa", "release"],
     hideImplementationComplexity: false,
   },
@@ -248,24 +252,22 @@ export const T3TEAM_PROFILES: Record<BundledT3TeamProfileId, T3TeamProfile> = {
       "release-handoff-checklist": 10,
       "next-best-task": 10,
     },
-    sidecarSections: {
-      sections: [{ sectionId: "recent-conversations" }, { sectionId: "quick-starts" }],
-    },
+    sidecarSections: DEFAULT_BUNDLED_PROFILE_SIDECAR_COMPOSITION,
     recommendedSkillPackIds: ["engineering", "release"],
     hideImplementationComplexity: false,
   },
 };
 
-export function isBundledT3TeamProfileId(profileId: string): profileId is BundledT3TeamProfileId {
+export function isBundledT3WorkProfileId(profileId: string): profileId is BundledT3WorkProfileId {
   return profileId in T3TEAM_PROFILES;
 }
 
 function buildResolution(
-  profile: T3TeamProfile,
-  source: T3TeamProfileResolutionSource,
+  profile: T3WorkProfile,
+  source: T3WorkProfileResolutionSource,
   requestedProfileId?: string,
   warning?: string,
-): T3TeamProfileResolution {
+): T3WorkProfileResolution {
   return {
     profile,
     source,
@@ -274,30 +276,26 @@ function buildResolution(
   };
 }
 
-export function resolveT3TeamProfile(
-  input: ResolveT3TeamProfileInput = {},
-): T3TeamProfileResolution {
+export function resolveT3WorkProfile(
+  input: ResolveT3WorkProfileInput = {},
+): T3WorkProfileResolution {
   const requestedProfileId = input.profileId?.trim();
   if (!requestedProfileId) {
     return buildResolution(T3TEAM_PROFILES[DEFAULT_T3TEAM_PROFILE_ID], "fallback");
   }
-  if (isBundledT3TeamProfileId(requestedProfileId)) {
+  if (isBundledT3WorkProfileId(requestedProfileId)) {
     return buildResolution(T3TEAM_PROFILES[requestedProfileId], "bundled", requestedProfileId);
   }
   const projectLocalProfile = input.projectLocalProfiles?.[requestedProfileId];
   if (projectLocalProfile) {
     return buildResolution(projectLocalProfile, "project-local", requestedProfileId);
   }
-  const packProfile = input.packProfiles?.[requestedProfileId];
-  if (packProfile) {
-    return buildResolution(packProfile, "pack", requestedProfileId);
-  }
   if (
     input.manifest?.profileId === requestedProfileId &&
     input.manifest.title &&
     input.manifest.description
   ) {
-    const manifestProfile = parseT3TeamProfileDefinition(input.manifest, requestedProfileId);
+    const manifestProfile = parseT3WorkProfileDefinition(input.manifest, requestedProfileId);
     if (manifestProfile) {
       return buildResolution(manifestProfile, "manifest-inline", requestedProfileId);
     }
@@ -314,23 +312,23 @@ export function resolveT3TeamProfile(
   );
 }
 
-export function resolveT3TeamProfileId(profileId: string | undefined): T3TeamProfileId {
-  return resolveT3TeamProfile(profileId ? { profileId } : {}).profile.id;
+export function resolveT3WorkProfileId(profileId: string | undefined): T3WorkProfileId {
+  return resolveT3WorkProfile(profileId ? { profileId } : {}).profile.id;
 }
 
-export function getT3TeamProfile(
+export function getT3WorkProfile(
   profileId?: string,
-  input?: Omit<ResolveT3TeamProfileInput, "profileId">,
-): T3TeamProfile {
-  return resolveT3TeamProfile({ ...input, ...(profileId ? { profileId } : {}) }).profile;
+  input?: Omit<ResolveT3WorkProfileInput, "profileId">,
+): T3WorkProfile {
+  return resolveT3WorkProfile({ ...input, ...(profileId ? { profileId } : {}) }).profile;
 }
 
-export function listT3TeamProfiles(): ReadonlyArray<T3TeamProfile> {
+export function listT3WorkProfiles(): ReadonlyArray<T3WorkProfile> {
   return Object.values(T3TEAM_PROFILES);
 }
 
 export function resolveEnabledSkillPackIds(input: {
-  readonly profile: T3TeamProfile;
+  readonly profile: T3WorkProfile;
   readonly enabledSkillPackIds?: ReadonlyArray<string>;
 }): ReadonlyArray<string> {
   const explicit = (input.enabledSkillPackIds ?? []).filter(
@@ -340,12 +338,12 @@ export function resolveEnabledSkillPackIds(input: {
   return [...input.profile.recommendedSkillPackIds];
 }
 
-export function cloneBundledT3TeamProfile(
+export function cloneBundledT3WorkProfile(
   sourceProfileId: string,
   customProfileId: string,
   overrides: Partial<
     Pick<
-      T3TeamProfile,
+      T3WorkProfile,
       | "title"
       | "description"
       | "communicationStyle"
@@ -356,8 +354,8 @@ export function cloneBundledT3TeamProfile(
       | "sidecarSections"
     >
   > = {},
-): T3TeamProfile {
-  const source = getT3TeamProfile(sourceProfileId);
+): T3WorkProfile {
+  const source = getT3WorkProfile(sourceProfileId);
   return {
     ...source,
     ...overrides,
@@ -370,10 +368,10 @@ export function buildProjectLocalProfilePath(profileId: string): string {
   return `${T3TEAM_PROJECT_PROFILES_DIR}/${profileId}.json`;
 }
 
-export function parseT3TeamProfileDefinition(
+export function parseT3WorkProfileDefinition(
   value: unknown,
   fallbackId?: string,
-): T3TeamProfile | undefined {
+): T3WorkProfile | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
   const id = typeof record.id === "string" ? record.id.trim() : fallbackId?.trim();
@@ -390,7 +388,7 @@ export function parseT3TeamProfileDefinition(
   ) {
     return undefined;
   }
-  const communicationStyle = style as T3TeamProfile["communicationStyle"];
+  const communicationStyle = style as T3WorkProfile["communicationStyle"];
   const preferredArtifactKinds = Array.isArray(record.preferredArtifactKinds)
     ? record.preferredArtifactKinds.filter((entry): entry is string => typeof entry === "string")
     : [];
@@ -400,7 +398,7 @@ export function parseT3TeamProfileDefinition(
     title,
     description,
     audience:
-      typeof record.audience === "string" ? (record.audience as T3TeamProfileAudience) : "mixed",
+      typeof record.audience === "string" ? (record.audience as T3WorkProfileAudience) : "mixed",
     communicationStyle,
     preferredArtifactKinds,
     defaultRecipeWeights:
@@ -420,12 +418,12 @@ export function parseT3TeamProfileDefinition(
   };
 }
 
-export function buildT3TeamProjectProfileManifest(input: {
-  readonly profile: T3TeamProfile;
+export function buildT3WorkProjectProfileManifest(input: {
+  readonly profile: T3WorkProfile;
   readonly enabledSkillPackIds: ReadonlyArray<string>;
   readonly version?: number;
   readonly managedFileHashes?: Readonly<Record<string, string>>;
-}): T3TeamProjectProfileManifest {
+}): T3WorkProjectProfileManifest {
   const { id, sidecarSections, ...profileFields } = input.profile;
   return {
     version: input.version ?? 1,
@@ -440,10 +438,10 @@ export function buildT3TeamProjectProfileManifest(input: {
 }
 
 export function toRecipeProfileContext(
-  profile: T3TeamProfile | string | undefined,
+  profile: T3WorkProfile | string | undefined,
 ): RecipeProfileContext {
   const resolvedProfile =
-    typeof profile === "string" || profile === undefined ? getT3TeamProfile(profile) : profile;
+    typeof profile === "string" || profile === undefined ? getT3WorkProfile(profile) : profile;
   return {
     technicalDepth: resolvedProfile.communicationStyle.technicalDepth,
     brevity: resolvedProfile.communicationStyle.brevity,

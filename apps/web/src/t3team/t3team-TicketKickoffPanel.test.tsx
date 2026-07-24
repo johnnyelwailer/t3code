@@ -37,23 +37,27 @@ vi.mock("~/t3team/components/t3team-ContextAttachmentChip", () => ({
 }));
 
 vi.mock("~/t3team/t3team-KickoffRecipeList", () => ({
-  T3TeamKickoffRecipeList: () => <div>quick-starts</div>,
+  T3workKickoffRecipeList: () => <div>quick-starts</div>,
 }));
 
 vi.mock("~/t3team/t3team-runViewTransition", () => ({
-  runT3TeamViewTransition: (callback: () => void) => callback(),
+  runT3workViewTransition: (callback: () => void) => callback(),
 }));
 
 vi.mock("~/t3team/hooks/t3team-useSidecarComposition", () => ({
-  useT3TeamSidecarComposition: (input: unknown) => mockUseSidecarComposition(input),
+  useT3workSidecarComposition: (input: unknown) => mockUseSidecarComposition(input),
 }));
 
-vi.mock("~/t3team/t3team-sidecarRecipes", () => ({
-  useT3TeamSidecarRecipeQuickStarts: () => [],
-}));
+vi.mock("~/t3team/t3team-sidecarRecipes", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/t3team/t3team-sidecarRecipes")>();
+  return {
+    ...actual,
+    useT3workSidecarRecipeQuickStarts: () => [],
+  };
+});
 
 vi.mock("~/t3team/t3team-TicketKickoffComposer", () => ({
-  createDefaultT3TeamKickoffLaunchConfig: () => ({
+  createDefaultT3workKickoffLaunchConfig: () => ({
     selection: { model: "gpt-5.4", instanceId: "provider" },
     runtimeMode: "full-access",
     interactionMode: "default",
@@ -81,10 +85,7 @@ describe("TicketKickoffPanel", () => {
   beforeEach(() => {
     mockUseSidecarComposition.mockReturnValue({
       composition: {
-        sections: [
-          { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
-        ],
+        sections: [{ sectionId: "recent", visible: true, collapsed: false }],
       },
       setCollapsed: () => undefined,
       userOverrides: { sections: [] },
@@ -137,8 +138,7 @@ describe("TicketKickoffPanel", () => {
     );
 
     expect(markup).toContain("<ul");
-    expect(markup).toContain("Quick starts");
-    expect(markup).toContain("Recent conversations");
+    expect(markup).toContain("Recent");
     expect(markup).toContain("IES-17877 thread 2");
     expect(markup).toContain("relative:2026-05-27T10:00:00.000Z");
     expect(markup).not.toContain("Get Help With IES-17877");
