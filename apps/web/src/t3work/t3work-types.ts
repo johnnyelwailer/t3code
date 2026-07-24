@@ -1,6 +1,10 @@
 import type { T3workActionRecipeContext } from "@t3tools/project-context";
 import type { T3workToolId } from "@t3tools/project-context/t3workToolCatalog";
-import type { ProjectRecipeKickoffProgram, RecipeSurface } from "@t3tools/project-recipes";
+import type {
+  ProjectRecipeKickoffProgram,
+  ProjectRecipeLaunchSource,
+  RecipeSurface,
+} from "@t3tools/project-recipes";
 import type { ProjectDashboardMode } from "~/t3work/t3work-projectDashboardModeState";
 
 export type T3workThreadToolId = T3workToolId;
@@ -15,7 +19,7 @@ export type T3workKickoffWorkflow = {
   readonly kickoff?: ProjectRecipeKickoffProgram;
   readonly title: string;
   readonly description: string;
-  readonly source: "bundled" | "project-local";
+  readonly source: ProjectRecipeLaunchSource;
   readonly surface: RecipeSurface;
   readonly reason?: string;
   readonly recipePath?: string;

@@ -59,6 +59,7 @@ export {
   loadWorkspacePackDirectory,
 } from "./t3work-packs.localLoader.ts";
 export { packScopeOrder, resolveWorkspacePacks } from "./t3work-packs.resolve.ts";
+export { resolvePackAssetPath } from "./t3work-packs.assetPath.ts";
 export type { PackDiscoveryIssue, PackDiscoveryResult } from "./t3work-packs.localLoader.ts";
 export type {
   LoadedWorkspacePack,

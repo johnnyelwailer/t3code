@@ -168,10 +168,27 @@ export type ProjectRecipeManifest = {
   readonly allowedToolGroups?: ReadonlyArray<string>;
 };
 
+/**
+ * Where a discovered recipe came from (Epic 16 §Recipe Sources And Precedence): pack-provided
+ * and project-local recipes are the same concept with different sources, merged through the
+ * pack precedence model. `pack` covers every pack scope; `packId`/`packScope` name the origin.
+ */
+export type ProjectRecipeSource = "project-local" | "pack";
+
+/**
+ * Source label carried by a launch/kickoff descriptor. Adds `bundled` — the host's own built-in
+ * quick starts, which are not discovered from a recipe source at all.
+ */
+export type ProjectRecipeLaunchSource = "bundled" | ProjectRecipeSource;
+
 export type ProjectRecipeDiscovered = {
   readonly id: string;
   readonly version: string;
-  readonly source: "project-local";
+  readonly source: ProjectRecipeSource;
+  /** Pack that contributed this recipe. Present only when `source === "pack"`. */
+  readonly packId?: string;
+  /** Pack scope the recipe inherits its precedence from. Present only when `source === "pack"`. */
+  readonly packScope?: string;
   readonly displayName: string;
   readonly shortDescription: string;
   readonly icon?: string;
@@ -202,6 +219,9 @@ export type DiscoverProjectRecipesResponse = {
   readonly workspaceRoot: string;
   readonly hasProjectLocalRecipes: boolean;
   readonly recipes: ReadonlyArray<ProjectRecipeDiscovered>;
+  /** Non-fatal per-source notes (a pack recipe that failed to load, an id shadowed by a
+   * higher-precedence source). Surfaced in the advanced/debug surface, never inline. */
+  readonly diagnostics?: ReadonlyArray<string>;
 };
 
 export type ManagedProjectRecipeSourceKind = "recipe-json" | "recipe-module";

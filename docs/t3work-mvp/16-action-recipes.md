@@ -461,6 +461,43 @@ such as visibility, rank, slash alias, default inputs, or workflow entrypoint. L
 prevent override. The long-term goal is a single discovery path over a single recipe type,
 regardless of source.
 
+#### Authoring a pack recipe
+
+A pack declares recipe directories in its manifest and takes the `recipe:v1` capability
+(peer to `theme:v1` / `setup-profile:v1`). Each `path` is a pack-relative directory holding
+exactly the same layout as a project-local recipe — `recipe.ts` (preferred) or
+`recipe.json` + `prompt.md`:
+
+```jsonc
+// pack.json
+{
+  "capabilities": ["recipe:v1"],
+  "contents": {
+    "recipes": [
+      { "id": "story-readiness", "path": "recipes/story-readiness" },
+      { "id": "estimation-check", "path": "recipes/estimation-check" },
+    ],
+  },
+}
+```
+
+Discovery then treats those directories as additional recipe roots:
+
+- results carry `source: "pack"` plus `packId` / `packScope`, so the UI can label them
+  ("Pack recipe") and `Edit this…` can stay project-local-only;
+- the manifest `id` must match the authored recipe's own `id`, otherwise the recipe is
+  dropped with a diagnostic (a pack cannot silently shadow another id);
+- paths are resolved inside the pack directory only — an absolute path or a `..` escape is
+  refused, the same guard project-local discovery applies with `resolveWithinRoot`;
+- a pack recipe resolves its own relative `prompt` / `workflow` / `actionView` paths against
+  its pack directory, not the user's workspace;
+- a project-local recipe of the same id wins (project layer beats any pack scope), and the
+  shadowing is reported in the response's `diagnostics`, never inline.
+
+Seeding a pack's recipes into `<workspaceRoot>/.t3work/recipes/` with a copy script remains
+valid, but it is now only for the "user explicitly wants an editable fork" case — not the
+mechanism by which a pack ships recipes.
+
 ## Conversation Participants
 
 A conversation has **three message authors**: `user`, `agent`, and `system`. The third
@@ -983,6 +1020,25 @@ metadata.
 > conversation cards (`checklist | form | approval | artifact-preview | status`) render
 > today from workflow `card` steps. Converging both onto the single miniapp View model and
 > the typed-event action path is Phase 5.
+>
+> Concretely, native `.tsx` Views (`action.view.tsx`, `views/PrItem.tsx` in
+> [Epic 25](./25-workflow-engine.md)) are still the gap. What is missing is exactly:
+>
+> 1. **a TS/JSX transform** in the View runtime — `@mdx-js/mdx evaluate` handles MDX with
+>    embedded JSX, but not type annotations or `import` statements, so a `.tsx` file cannot
+>    be fed to it as-is;
+> 2. **an import resolver** limited to `@t3work/sdk` and approved shims, which
+>    [Epic 19 §Security And Isolation](./19-workspace-miniapps.md#security-and-isolation)
+>    already specifies ("load imports only from `@t3work/sdk` and approved runtime shims");
+> 3. **typed `host.run(ref, args)` wiring** so a View fires a `WorkflowRef` directly instead
+>    of going through a launch descriptor.
+>
+> Stage-2 sandboxing is explicitly *not* a prerequisite — Views are trusted workspace code
+> under Stage 1. Until (1)–(3) land, the ad-hoc widget tier
+> ([Epic 24](./24-tiered-message-composition.md)) is the supported way to get rich output
+> into a thread, and `format: "tsx"` there stays a reserved seam. That tier's theme-token
+> and icon contracts (Epic 24 §Widget theme-token and icon contract) exist so widget authors
+> are not forced into hard-coded palettes or emoji glyphs while native Views are pending.
 
 ## The Run
 
@@ -1343,6 +1399,7 @@ the editable source of truth for the early MVP.
 | Area                                                                                                                                                                                                                                   | Status                                                                                                                                                |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Project-local discovery + temporary distribution/core matching                                                                                                                                                                         | Built                                                                                                                                                 |
+| Pack-provided recipe discovery (`contents.recipes`, `source: "pack"`, precedence merge)                                                                                                                                                | Built (local packs; `recipe:v1` capability gate — signing/policy locks for remote-managed packs still pending)                                          |
 | Visibility (predicate + script, timeout, isolation)                                                                                                                                                                                    | Built (via `recipe.json` + expression engine)                                                                                                         |
 | TS-module authoring (`recipe.ts`), retire expression engine                                                                                                                                                                            | Partial (engine deleted; the discovery-layer `{{ }}` template renderer is kept and its removal deferred)                                              |
 | Unified workflow step union; kickoff absorbed                                                                                                                                                                                          | Retired as a live runtime; replaced by the Epic 25 engine (legacy naming remnants persist as compat naming, see Implementation Notes)                 |

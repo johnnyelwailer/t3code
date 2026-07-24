@@ -7,6 +7,13 @@
  * window, and never evaluates strings received from the iframe.
  */
 
+import { buildT3workWidgetIconSprite, T3WORK_WIDGET_ICON_CSS } from "./t3work-widgetIconSprite.ts";
+
+/**
+ * Theme tokens a widget may rely on. Every one is also snapshotted from the live document, so the
+ * list is the *documented contract* (what authoring guidance promises), not the only thing copied:
+ * a theme pack adding tokens (Epic 37) still reaches widgets automatically.
+ */
 const FALLBACK_THEME_VARIABLES = [
   "--background",
   "--foreground",
@@ -20,12 +27,28 @@ const FALLBACK_THEME_VARIABLES = [
   "--accent",
   "--accent-foreground",
   "--destructive",
+  "--destructive-foreground",
   "--card",
   "--card-foreground",
+  "--popover",
+  "--popover-foreground",
+  "--input",
   "--ring",
+  // Status tokens from the Epic 37 semantic vocabulary. These are what replaces a ✅/⚠️/⛔ glyph:
+  // a real icon in `var(--success)` / `var(--warning)` / `var(--destructive)`.
+  "--info",
+  "--info-foreground",
+  "--success",
+  "--success-foreground",
+  "--warning",
+  "--warning-foreground",
+  "--radius",
   "--font-sans",
   "--font-mono",
 ] as const;
+
+/** The documented widget theme-token contract, in the order authoring guidance lists it. */
+export const T3WORK_WIDGET_THEME_TOKENS: ReadonlyArray<string> = FALLBACK_THEME_VARIABLES;
 
 /** Snapshot the app's custom properties so widgets can use `var(--...)`. */
 export function collectT3workWidgetThemeCss(root?: HTMLElement): string {
@@ -108,6 +131,7 @@ export function buildT3workWidgetSrcdoc(input: {
     "html, body { margin: 0; padding: 0; background: transparent; }",
     "body { color: var(--foreground, inherit); font-family: var(--font-sans, system-ui, sans-serif); }",
     "img, svg, video, canvas { max-width: 100%; height: auto; }",
+    T3WORK_WIDGET_ICON_CSS,
   ].join(" ");
   // CSP first: no external network at all (postMessage is unaffected by connect-src);
   // scripts/styles are inline by construction, assets must be data: URIs.
@@ -118,6 +142,8 @@ export function buildT3workWidgetSrcdoc(input: {
     `<meta http-equiv="Content-Security-Policy" content="${csp}">`,
     `<style>${input.themeCss} ${reset}</style>`,
     `<script data-nonce="${input.nonce}">${BRIDGE_SCRIPT}</script>`,
+    // Host-injected so referencing an icon costs the author nothing against the widget_code cap.
+    buildT3workWidgetIconSprite(),
     input.html,
   ].join("\n");
 }
