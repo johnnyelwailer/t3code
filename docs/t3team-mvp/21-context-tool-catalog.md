@@ -581,6 +581,7 @@ t3team.view.read
 t3team.recipe.list
 t3team.recipe.validate
 t3team.workflow.run
+t3team.widget.show
 t3team.thread.rename
 t3team.thread.read_current
 t3team.thread.rename.draft_update
