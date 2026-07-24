@@ -53,7 +53,7 @@ export const discoverProjectRecipes = Effect.fn("discoverProjectRecipes")(functi
   const context = normalizeRenderContext(input.context);
   // Pack-provided recipes are the same concept with a different source (Epic 16 §Recipe Sources
   // And Precedence), so they are discovered even when the workspace has no `.t3work/recipes/`.
-  const packDiscovery = yield* discoverPackRecipes({ context });
+  const packDiscovery = yield* discoverPackRecipes({ workspaceRoot, context });
 
   const recipesRoot = pathService.join(workspaceRoot, T3WORK_PROJECT_RECIPES_ROOT);
   if (!(yield* fileSystem.exists(recipesRoot).pipe(Effect.orElseSucceed(() => false)))) {

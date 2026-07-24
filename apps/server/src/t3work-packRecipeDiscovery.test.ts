@@ -248,6 +248,66 @@ describe("pack-provided recipe discovery", () => {
     expect(load.diagnostics[1]).toContain("must be relative");
   });
 
+  it("evaluates a pack recipe's visible.ts against the USER's workspace, not the pack", async () => {
+    await run(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const packDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-pack-" });
+        const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-ws-" });
+        const recipeRoot = path.join(packDir, "recipes/triage");
+        yield* writeRecipeDir({ root: recipeRoot, id: "triage", displayName: "Pack triage" });
+        // `visible` is authored inside the pack, but probes the user's project.
+        yield* fileSystem.writeFileString(
+          path.join(recipeRoot, "recipe.json"),
+          JSON.stringify({
+            id: "triage",
+            version: "0.1.0",
+            scope: "project",
+            displayName: "Pack triage",
+            shortDescription: "A recipe.",
+            surfaces: ["project.dashboard.backlog"],
+            prompt: "./prompt.md",
+            visibleWhen: "./visible.ts",
+          }),
+        );
+        yield* fileSystem.writeFileString(
+          path.join(recipeRoot, "visible.ts"),
+          [
+            "export async function visible(_ctx, api) {",
+            "  const marker = await api.workspace.exists('WORKSPACE_MARKER');",
+            "  return { visible: marker, rank: 42, reason: api.workspace.rootPath };",
+            "}",
+          ].join("\n"),
+        );
+
+        setPackRecipeSources(
+          loadPackRecipeSources(
+            makePackDiagnostic({
+              directory: packDir,
+              recipes: [{ id: "triage", path: "recipes/triage" }],
+            }),
+          ),
+        );
+
+        // Decoy: a marker inside the pack recipe dir. If discovery wrongly used the pack as
+        // `workspaceRoot`, this alone would make the recipe visible.
+        yield* fileSystem.writeFileString(path.join(recipeRoot, "WORKSPACE_MARKER"), "decoy");
+        const hidden = yield* discoverProjectRecipes({ workspaceRoot, context });
+        expect(hidden.recipes).toHaveLength(0);
+
+        yield* fileSystem.writeFileString(path.join(workspaceRoot, "WORKSPACE_MARKER"), "x");
+        const shown = yield* discoverProjectRecipes({ workspaceRoot, context });
+        expect(shown.recipes).toHaveLength(1);
+        expect(shown.recipes[0]?.rank).toBe(42);
+        // `workspace.rootPath` is the user's workspace, never the pack directory.
+        expect(shown.recipes[0]?.reason).toBe(workspaceRoot);
+        // While the recipe's own files still resolve inside the pack.
+        expect(shown.recipes[0]?.recipePath).toBe(recipeRoot);
+      }),
+    );
+  });
+
   it("drops a pack recipe whose authored id disagrees with the manifest", async () => {
     await run(
       Effect.gen(function* () {

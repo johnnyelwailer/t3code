@@ -22,6 +22,7 @@ import { discoverProjectRecipeAtPath } from "./t3work-projectRecipeDiscoveryReci
 
 const discoverOne = Effect.fn("discoverPackRecipeAtSource")(function* (input: {
   readonly source: PackRecipeSource;
+  readonly workspaceRoot: string;
   readonly context: ProjectRecipeRenderContext;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -34,8 +35,13 @@ const discoverOne = Effect.fn("discoverPackRecipeAtSource")(function* (input: {
   }
 
   const discovered = yield* discoverProjectRecipeAtPath({
-    // A pack recipe resolves paths against its own pack directory, not the user's workspace.
-    workspaceRoot: source.recipeRoot,
+    // Two different roots, deliberately:
+    //  - `recipePath` is the pack's recipe directory, so the recipe's own relative `prompt` /
+    //    `workflow` / `actionView` / `visible` files resolve inside the pack;
+    //  - `workspaceRoot` stays the USER's workspace, because that is what a `visible.ts` gets as
+    //    `workspace.rootPath` / `readText` / `exists` and what the read-only tool broker binds to.
+    //    A pack recipe still decides its visibility from the user's project, not from the pack.
+    workspaceRoot: input.workspaceRoot,
     recipePath: source.recipeRoot,
     context: input.context,
     origin: {
@@ -60,6 +66,7 @@ const discoverOne = Effect.fn("discoverPackRecipeAtSource")(function* (input: {
 
 /** Discover every recipe contributed by an active pack, filtered by the same render context. */
 export const discoverPackRecipes = Effect.fn("discoverPackRecipes")(function* (input: {
+  readonly workspaceRoot: string;
   readonly context: ProjectRecipeRenderContext;
 }) {
   const registered = getPackRecipeSources();
@@ -67,7 +74,11 @@ export const discoverPackRecipes = Effect.fn("discoverPackRecipes")(function* (i
   const diagnostics: string[] = [...registered.diagnostics];
 
   for (const source of registered.sources) {
-    const result = yield* discoverOne({ source, context: input.context });
+    const result = yield* discoverOne({
+      source,
+      workspaceRoot: input.workspaceRoot,
+      context: input.context,
+    });
     if (result.diagnostic) diagnostics.push(result.diagnostic);
     if (Option.isSome(result.recipe)) recipes.push(result.recipe.value);
   }
