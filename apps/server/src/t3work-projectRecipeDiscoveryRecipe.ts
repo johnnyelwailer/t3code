@@ -20,6 +20,11 @@ import {
   renderMaybeExpression,
   renderTemplateString,
 } from "./t3work-projectRecipeDiscoveryTemplate.ts";
+import {
+  originFields,
+  PROJECT_LOCAL_ORIGIN,
+  type ProjectRecipeOrigin,
+} from "./t3work-projectRecipeOrigin.ts";
 
 export function sortRecipes(left: ProjectRecipeDiscovered, right: ProjectRecipeDiscovered): number {
   if (left.rank !== right.rank) {
@@ -33,9 +38,12 @@ export const discoverProjectRecipeAtPath = Effect.fn("discoverProjectRecipeAtPat
     readonly workspaceRoot: string;
     readonly recipePath: string;
     readonly context: ProjectRecipeRenderContext;
+    /** Defaults to project-local; pack discovery passes its own pack-scoped origin. */
+    readonly origin?: ProjectRecipeOrigin;
   }) {
     const fileSystem = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;
+    const origin = input.origin ?? PROJECT_LOCAL_ORIGIN;
 
     // Prefer a typed `recipe.ts` module when present (Epic 16); the legacy `recipe.json` +
     // `{{ }}`-expression path below remains for recipes that ship it. The two coexist additively
@@ -47,6 +55,7 @@ export const discoverProjectRecipeAtPath = Effect.fn("discoverProjectRecipeAtPat
         recipePath: input.recipePath,
         modulePath,
         context: input.context,
+        origin,
       });
     }
 
@@ -102,7 +111,7 @@ export const discoverProjectRecipeAtPath = Effect.fn("discoverProjectRecipeAtPat
     return Option.some({
       id: manifest.id,
       version: manifest.version,
-      source: "project-local",
+      ...originFields(origin),
       displayName: renderedDisplayName,
       shortDescription: renderedShortDescription,
       ...(typeof renderedIcon === "string" && renderedIcon.length > 0

@@ -35,6 +35,11 @@ import {
 import type { AnyRecipeRef } from "@t3work/sdk";
 
 import { isRelativePath, resolveWithinRoot } from "./t3work-projectRecipeDiscoveryShared.ts";
+import {
+  originFields,
+  PROJECT_LOCAL_ORIGIN,
+  type ProjectRecipeOrigin,
+} from "./t3work-projectRecipeOrigin.ts";
 
 /** A `recipe.ts` module loaded fine but did not default-export a `defineRecipe(...)` result. */
 export class T3workRecipeModuleShapeError extends Data.TaggedError("T3workRecipeModuleShapeError")<{
@@ -129,6 +134,8 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
     /** Absolute path to the recipe's `recipe.ts`. */
     readonly modulePath: string;
     readonly context: ProjectRecipeRenderContext;
+    /** Defaults to project-local; pack discovery passes its own pack-scoped origin. */
+    readonly origin?: ProjectRecipeOrigin;
   }) {
     const pathService = yield* Path.Path;
 
@@ -147,7 +154,7 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
     return Option.some({
       id: ref.id,
       version: ref.version,
-      source: "project-local",
+      ...originFields(input.origin ?? PROJECT_LOCAL_ORIGIN),
       displayName: ref.title,
       shortDescription: ref.shortDescription,
       ...(ref.icon ? { icon: ref.icon } : {}),

@@ -1,0 +1,279 @@
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Matches the sibling recipe-discovery tests. */
+/**
+ * Pack-provided recipes (Epic 16 §Scope + §Recipe Sources And Precedence): a pack that declares
+ * `contents.recipes` gets those recipes discovered by the SAME pipeline as project-local ones,
+ * labelled `source: "pack"`, with project-local winning an id collision.
+ */
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
+import { afterEach, describe, expect, it } from "vite-plus/test";
+import { createQueryable } from "@t3tools/project-context";
+import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
+
+import {
+  loadPackRecipeSources,
+  PACK_RECIPE_CAPABILITY,
+  setPackRecipeSources,
+} from "./t3work-packRecipeSources.ts";
+import { discoverProjectRecipes } from "./t3work-projectRecipeDiscovery.ts";
+import { makeBrokerLayer } from "./t3work-toolBrokerTestUtils.ts";
+
+const orchestrationMock = {} as never;
+
+const context: ProjectRecipeRenderContext = {
+  surface: "project.dashboard.backlog",
+  project: { title: "Project Alpha", provider: "atlassian" },
+  linkedResources: createQueryable([]),
+  artifacts: createQueryable([]),
+  availableContextKeys: createQueryable([]),
+  profile: {
+    technicalDepth: "medium",
+    brevity: "balanced",
+    guidanceStyle: "guided",
+  },
+  enabledSkillPacks: [],
+} as unknown as ProjectRecipeRenderContext;
+
+const recipeJson = (id: string, displayName: string) =>
+  JSON.stringify({
+    id,
+    version: "0.1.0",
+    scope: "project",
+    displayName,
+    shortDescription: "A recipe.",
+    surfaces: ["project.dashboard.backlog"],
+    prompt: "./prompt.md",
+  });
+
+const writeRecipeDir = Effect.fn("writeRecipeDir")(function* (input: {
+  readonly root: string;
+  readonly id: string;
+  readonly displayName: string;
+}) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  yield* fileSystem.makeDirectory(input.root, { recursive: true });
+  yield* fileSystem.writeFileString(
+    path.join(input.root, "recipe.json"),
+    recipeJson(input.id, input.displayName),
+  );
+  yield* fileSystem.writeFileString(path.join(input.root, "prompt.md"), "Do the thing.");
+});
+
+const makePackDiagnostic = (input: {
+  readonly directory: string;
+  readonly recipes: ReadonlyArray<{ readonly id: string; readonly path: string }>;
+  readonly capabilities?: ReadonlyArray<string>;
+  readonly scope?: string;
+}) =>
+  ({
+    enabled: true,
+    root: "/packs",
+    issues: [],
+    resolution: {
+      packs: [
+        {
+          directory: input.directory,
+          manifest: {
+            id: "nexplore-global",
+            version: "0.1.0",
+            packApiVersion: 1,
+            name: "Nexplore Global",
+            scope: input.scope ?? "distribution",
+            compatibility: { t3workCore: "*" },
+            contents: { recipes: input.recipes },
+            capabilities: input.capabilities ?? [PACK_RECIPE_CAPABILITY],
+            hashes: {},
+          },
+        },
+      ],
+      locks: {},
+      diagnostics: [],
+    },
+  }) as never;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test harness: services come from the merged layer below.
+const run = <A>(effect: Effect.Effect<A, any, any>) =>
+  Effect.runPromise(
+    Effect.scoped(
+      effect.pipe(
+        Effect.provide(Layer.mergeAll(makeBrokerLayer(orchestrationMock), NodeServices.layer)),
+      ),
+    ) as Effect.Effect<A, unknown, never>,
+  );
+
+afterEach(() => {
+  setPackRecipeSources({ sources: [], diagnostics: [] });
+});
+
+describe("pack-provided recipe discovery", () => {
+  it('discovers a pack recipe with source "pack" even without a .t3work/recipes folder', async () => {
+    await run(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const packDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-pack-" });
+        const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-ws-" });
+        yield* writeRecipeDir({
+          root: path.join(packDir, "recipes/triage"),
+          id: "triage",
+          displayName: "Triage the backlog",
+        });
+
+        setPackRecipeSources(
+          loadPackRecipeSources(
+            makePackDiagnostic({
+              directory: packDir,
+              recipes: [{ id: "triage", path: "recipes/triage" }],
+            }),
+          ),
+        );
+
+        const result = yield* discoverProjectRecipes({ workspaceRoot, context });
+        expect(result.hasProjectLocalRecipes).toBe(false);
+        expect(result.recipes).toHaveLength(1);
+        expect(result.recipes[0]).toMatchObject({
+          id: "triage",
+          source: "pack",
+          packId: "nexplore-global",
+          packScope: "distribution",
+          displayName: "Triage the backlog",
+        });
+      }),
+    );
+  });
+
+  it("lets a project-local recipe override a pack recipe of the same id", async () => {
+    await run(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const packDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-pack-" });
+        const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-ws-" });
+        yield* writeRecipeDir({
+          root: path.join(packDir, "recipes/triage"),
+          id: "triage",
+          displayName: "Pack triage",
+        });
+        yield* writeRecipeDir({
+          root: path.join(workspaceRoot, ".t3work/recipes/triage"),
+          id: "triage",
+          displayName: "Project triage",
+        });
+
+        setPackRecipeSources(
+          loadPackRecipeSources(
+            makePackDiagnostic({
+              directory: packDir,
+              recipes: [{ id: "triage", path: "recipes/triage" }],
+            }),
+          ),
+        );
+
+        const result = yield* discoverProjectRecipes({ workspaceRoot, context });
+        expect(result.recipes).toHaveLength(1);
+        expect(result.recipes[0]).toMatchObject({
+          source: "project-local",
+          displayName: "Project triage",
+        });
+        expect(result.diagnostics?.join(" ")).toContain("shadowed by project-local");
+      }),
+    );
+  });
+
+  it("keeps pack and project recipes with distinct ids side by side", async () => {
+    await run(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const packDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-pack-" });
+        const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-ws-" });
+        yield* writeRecipeDir({
+          root: path.join(packDir, "recipes/triage"),
+          id: "triage",
+          displayName: "Pack triage",
+        });
+        yield* writeRecipeDir({
+          root: path.join(workspaceRoot, ".t3work/recipes/risk"),
+          id: "risk",
+          displayName: "Project risk",
+        });
+
+        setPackRecipeSources(
+          loadPackRecipeSources(
+            makePackDiagnostic({
+              directory: packDir,
+              recipes: [{ id: "triage", path: "recipes/triage" }],
+            }),
+          ),
+        );
+
+        const result = yield* discoverProjectRecipes({ workspaceRoot, context });
+        expect(result.hasProjectLocalRecipes).toBe(true);
+        expect(
+          [...result.recipes].map((recipe) => `${recipe.id}:${recipe.source}`).toSorted(),
+        ).toEqual(["risk:project-local", "triage:pack"]);
+      }),
+    );
+  });
+
+  it("ignores pack recipes when the pack lacks the recipe:v1 capability", () => {
+    const load = loadPackRecipeSources(
+      makePackDiagnostic({
+        directory: "/packs/nexplore-global",
+        recipes: [{ id: "triage", path: "recipes/triage" }],
+        capabilities: ["theme:v1"],
+      }),
+    );
+    expect(load.sources).toHaveLength(0);
+    expect(load.diagnostics[0]).toContain(`without the ${PACK_RECIPE_CAPABILITY} capability`);
+  });
+
+  it("refuses a recipe path that escapes the pack directory", () => {
+    const load = loadPackRecipeSources(
+      makePackDiagnostic({
+        directory: "/packs/nexplore-global",
+        recipes: [
+          { id: "escape", path: "../other-pack/recipes/x" },
+          { id: "absolute", path: "/etc/recipes/x" },
+        ],
+      }),
+    );
+    expect(load.sources).toHaveLength(0);
+    expect(load.diagnostics).toHaveLength(2);
+    expect(load.diagnostics[0]).toContain("escapes its pack directory");
+    expect(load.diagnostics[1]).toContain("must be relative");
+  });
+
+  it("drops a pack recipe whose authored id disagrees with the manifest", async () => {
+    await run(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const packDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-pack-" });
+        const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-ws-" });
+        yield* writeRecipeDir({
+          root: path.join(packDir, "recipes/triage"),
+          id: "actually-something-else",
+          displayName: "Pack triage",
+        });
+
+        setPackRecipeSources(
+          loadPackRecipeSources(
+            makePackDiagnostic({
+              directory: packDir,
+              recipes: [{ id: "triage", path: "recipes/triage" }],
+            }),
+          ),
+        );
+
+        const result = yield* discoverProjectRecipes({ workspaceRoot, context });
+        expect(result.recipes).toHaveLength(0);
+        expect(result.diagnostics?.join(" ")).toContain("declares recipe id triage");
+      }),
+    );
+  });
+});
