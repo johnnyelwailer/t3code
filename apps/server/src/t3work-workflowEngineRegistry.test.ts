@@ -48,4 +48,20 @@ describe("workflow engine registry controls", () => {
     expect(registry.runsOwnedByThread("master-thread")).toEqual(["run-1"]);
     expect(registry.childThreadsForRun("run-1")).toEqual(["child-a", "child-b"]);
   });
+
+  it("resolves a child thread back to its run's launching thread (start_child re-parenting)", () => {
+    const registry = makeWorkflowEngineRegistry();
+    registry.registerRun("run-1", { resume: async () => {}, cancel: () => {} });
+    registry.registerOwnership("run-1", "master-thread");
+    registry.registerChildThread("run-1", "child-a");
+
+    expect(registry.launchThreadForChildThread("child-a")).toBe("master-thread");
+    // Not a workflow child / unknown thread → no re-parenting.
+    expect(registry.launchThreadForChildThread("master-thread")).toBeUndefined();
+    expect(registry.launchThreadForChildThread("unrelated")).toBeUndefined();
+
+    // A completed (deleted) run stops re-parenting: its children are no longer live.
+    registry.deleteRun("run-1");
+    expect(registry.launchThreadForChildThread("child-a")).toBeUndefined();
+  });
 });

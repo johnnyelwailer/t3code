@@ -61,6 +61,10 @@ export interface T3workWorkflowEngineRegistryShape {
   readonly runsOwnedByThread: (threadId: string) => ReadonlyArray<string>;
   readonly registerChildThread: (runId: string, threadId: string) => void;
   readonly childThreadsForRun: (runId: string) => ReadonlyArray<string>;
+  /** The launching thread of the run that spawned `threadId`, when it is a live run's child.
+   * Lets `start_child` parent a session spawned from inside a workflow child thread under the
+   * (visible) launching thread instead of a hidden ephemeral workflow thread. */
+  readonly launchThreadForChildThread: (threadId: string) => string | undefined;
   readonly setPending: (threadId: string, pending: WorkflowPendingAsk) => void;
   /** Read and remove the pending ask for a thread (first matching reply wins). */
   readonly takePending: (threadId: string) => WorkflowPendingAsk | undefined;
@@ -128,6 +132,12 @@ export function makeWorkflowEngineRegistry(): T3workWorkflowEngineRegistryShape 
       childThreadsByRun.set(runId, children);
     },
     childThreadsForRun: (runId) => [...(childThreadsByRun.get(runId) ?? [])],
+    launchThreadForChildThread: (threadId) => {
+      for (const [runId, children] of childThreadsByRun) {
+        if (children.has(threadId)) return launchThreadByRun.get(runId);
+      }
+      return undefined;
+    },
     setPending: (threadId, pending) => {
       pendingByThread.set(threadId, pending);
     },

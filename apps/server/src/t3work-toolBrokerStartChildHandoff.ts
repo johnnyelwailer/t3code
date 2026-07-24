@@ -1,4 +1,4 @@
-import { type ThreadId } from "@t3tools/contracts";
+import { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
@@ -27,10 +27,16 @@ export function resolveStartChildHandoffPlacement(input: {
   readonly currentTicketId: string | undefined;
   readonly requestedTicketId: string | undefined;
   readonly threadId: ThreadId;
+  /** When the calling thread is itself a workflow-spawned (hidden, ephemeral) child, the
+   * owning run's launching thread. Sessions started from inside a workflow must nest under
+   * that visible thread — parenting to the hidden workflow child renders them flat. */
+  readonly workflowLaunchThreadId?: string | undefined;
 }): { readonly parentThreadId?: ThreadId; readonly ticketId?: string } {
   const ticketId = input.requestedTicketId ?? input.currentTicketId;
   return {
-    parentThreadId: input.threadId,
+    parentThreadId: input.workflowLaunchThreadId
+      ? ThreadId.make(input.workflowLaunchThreadId)
+      : input.threadId,
     ...(ticketId ? { ticketId } : {}),
   };
 }

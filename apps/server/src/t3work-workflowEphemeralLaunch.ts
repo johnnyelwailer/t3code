@@ -164,7 +164,6 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
             workflowPath: input.workflowPath,
             sourceText: shapeSource,
             runId: input.runId,
-            newId: () => t3workRandomUUID(),
             nowIso: nowIso(),
           });
     if (shapeCommand) {

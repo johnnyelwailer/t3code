@@ -13,9 +13,8 @@ import {
 import { resolveChildModel } from "./t3work-toolBrokerStartChildProvider.ts";
 import {
   hasLinkedRepositoryStartChildServices,
-  hasProjectSetupScriptRunner,
   resolveLinkedRepositoryWorktree,
-  startProjectSetupScript,
+  resolveStartChildSetupScript,
   type T3workStartChildServices,
 } from "./t3work-toolBrokerStartChildContext.ts";
 import {
@@ -59,6 +58,7 @@ export function makeStartChildThread(input: {
         currentTicketId,
         requestedTicketId: args.ticketId,
         threadId: thread.id,
+        workflowLaunchThreadId: input.services.workflowLaunchThreadForChild?.(thread.id),
       });
       const { listProviders } = input.services;
       const modelSelection = yield* resolveChildModel(baseModelSelection, args, listProviders);
@@ -70,8 +70,6 @@ export function makeStartChildThread(input: {
         repoRef: string | null = null,
         branch: string | null = null,
         worktreePath: string | null = null;
-      let setupScriptStatus: "not-requested" | "no-script" | "started" | "failed" = "not-requested",
-        setupScriptTerminalId: string | null = null;
 
       if (args.repoFullName) {
         if (!hasLinkedRepositoryStartChildServices(input.services)) {
@@ -119,26 +117,12 @@ export function makeStartChildThread(input: {
         yield* input.contextStore.put({ threadId: childThreadId, toolContext: childToolContext });
       }
 
-      if (worktreePath) {
-        if (hasProjectSetupScriptRunner(input.services)) {
-          const setupResult = yield* startProjectSetupScript({
-            services: input.services,
-            threadId: childThreadId,
-            projectId: thread.projectId,
-            worktreePath,
-          });
-          if (setupResult.status === "started") {
-            setupScriptStatus = "started";
-            setupScriptTerminalId = setupResult.terminalId;
-          } else if (setupResult.status === "no-script") {
-            setupScriptStatus = "no-script";
-          } else {
-            setupScriptStatus = "failed";
-          }
-        } else {
-          setupScriptStatus = "failed";
-        }
-      }
+      const { setupScriptStatus, setupScriptTerminalId } = yield* resolveStartChildSetupScript({
+        services: input.services,
+        threadId: childThreadId,
+        projectId: thread.projectId,
+        worktreePath,
+      });
 
       yield* appendStartChildHandoffActivities({
         orchestration: input.orchestration,
