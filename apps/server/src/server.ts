@@ -52,6 +52,7 @@ import { ProviderRuntimeIngestionLive } from "./orchestration/Layers/ProviderRun
 import { ProviderCommandReactorLive } from "./orchestration/Layers/ProviderCommandReactor.ts";
 import { CheckpointReactorLive } from "./orchestration/Layers/CheckpointReactor.ts";
 import { ThreadDeletionReactorLive } from "./orchestration/Layers/ThreadDeletionReactor.ts";
+import { T3TeamThreadToolContextEvictionReactorLive } from "./t3team-threadToolContextEvictionReactor.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry.ts";
@@ -92,43 +93,50 @@ import {
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import {
-  t3workAtlassianAccountsRouteLayer,
-  t3workAtlassianAssetRouteLayer,
-  t3workAtlassianAssetContentRouteLayer,
-  t3workAtlassianBacklogRouteLayer,
-  t3workAtlassianConnectBasicRouteLayer,
-  t3workAtlassianConnectOAuthRouteLayer,
-  t3workAtlassianProjectsRouteLayer,
-  t3workAtlassianResourceRouteLayer,
-  t3workAtlassianResourcesRouteLayer,
-} from "./t3work-atlassian-routes.ts";
-import { t3workAtlassianOAuthExchangeRouteLayer } from "./t3work-atlassian-oauth-routes.ts";
-import { t3workTempoRouteLayer } from "./t3work-tempo-routes.ts";
-import { t3workProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3work-project-workspace-recipe-routes.ts";
-import { t3workProjectWorkspaceWriteContextFilesRouteLayer } from "./t3work-project-workspace-write-routes.ts";
+  t3teamAtlassianAccountsRouteLayer,
+  t3teamAtlassianAssetRouteLayer,
+  t3teamAtlassianAssetContentRouteLayer,
+  t3teamAtlassianBacklogRouteLayer,
+  t3teamAtlassianConnectBasicRouteLayer,
+  t3teamAtlassianConnectOAuthRouteLayer,
+  t3teamAtlassianMyWorkRouteLayer,
+  t3teamAtlassianProjectsRouteLayer,
+  t3teamAtlassianResourceRouteLayer,
+  t3teamAtlassianResourcesRouteLayer,
+} from "./t3team-atlassian-routes.ts";
+import { t3teamAtlassianOAuthExchangeRouteLayer } from "./t3team-atlassian-oauth-routes.ts";
+import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
+import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
+import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
 import {
-  t3workProjectWorkspaceRefreshProjectContextRouteLayer,
-  t3workProjectWorkspaceRefreshWorkItemContextRouteLayer,
-  t3workProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
-} from "./t3work-context-refresh-routes.ts";
+  t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
+  t3teamProjectWorkspaceRefreshWorkItemContextRouteLayer,
+  t3teamProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
+} from "./t3team-context-refresh-routes.ts";
 import {
-  t3workThreadRecipeWorkflowLaunchRouteLayer,
-  t3workThreadWorkflowResolveInputRouteLayer,
-} from "./t3work-thread-recipe-workflow-routes.ts";
+  t3teamThreadRecipeWorkflowLaunchRouteLayer,
+  t3teamThreadWorkflowResolveInputRouteLayer,
+} from "./t3team-thread-recipe-workflow-routes.ts";
+import { t3teamThreadWorkflowControlRouteLayer } from "./t3team-thread-workflow-control-route.ts";
 import {
-  t3workGitHubAssetRouteLayer,
-  t3workGitHubInboxRouteLayer,
-  t3workGitHubPullRequestContextRouteLayer,
-} from "./t3work-github-routes.ts";
-import { t3workProjectWorkspaceBootstrapRouteLayer } from "./t3work-project-repository-routes.ts";
-import { t3workThreadPlacementRouteLayer } from "./t3work-thread-placement-routes.ts";
-import { t3workThreadToolContextRouteLayer } from "./t3work-thread-tool-context-routes.ts";
-import { T3workThreadToolContextStoreLive } from "./t3work-threadToolContextStore.ts";
-import { T3workContextRefreshServiceLive } from "./t3work-contextRefreshService.ts";
-import { T3workWorkflowEngineReactorLive } from "./t3work-workflowEngineReactor.ts";
-import { T3workWorkflowEngineRegistryLive } from "./t3work-workflowEngineRegistry.ts";
-import { T3workWorkflowSchedulerLive } from "./t3work-workflowScheduler.ts";
-import { T3workToolBrokerLive } from "./t3work-toolBrokerLive.ts";
+  t3teamGitHubAssetRouteLayer,
+  t3teamGitHubInboxRouteLayer,
+  t3teamGitHubPullRequestContextRouteLayer,
+} from "./t3team-github-routes.ts";
+import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
+import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
+import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
+import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
+import { t3teamWidgetToolCallRouteLayer } from "./t3team-widget-tool-call-route.ts";
+import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
+import { T3TeamContextRefreshServiceLive } from "./t3team-contextRefreshService.ts";
+import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
+import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
+import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
+import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
+import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
+import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -194,6 +202,7 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ProviderCommandReactorLive),
   Layer.provideMerge(CheckpointReactorLive),
   Layer.provideMerge(ThreadDeletionReactorLive),
+  Layer.provideMerge(T3TeamThreadToolContextEvictionReactorLive),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),
 );
@@ -321,10 +330,10 @@ const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
 // §Open question 2); the registry needs nothing. The scheduler (Epic 27) is layered ON TOP via
 // `provideMerge` so it shares that same registry + repo (its arm/fire path resolves runs from
 // the one registry and reads the sleeping set from the one repo).
-const WorkflowEngineDurabilityLive = T3workWorkflowSchedulerLive.pipe(
+const WorkflowEngineDurabilityLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
-      T3workWorkflowEngineRegistryLive,
+      T3TeamWorkflowEngineRegistryLive,
       WorkflowRunRepositoryLive,
       WorkflowJournalStoreLive,
     ),
@@ -344,10 +353,25 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(Keybindings.layer),
   Layer.provideMerge(ProviderRegistryLive),
   Layer.provideMerge(
-    T3workToolBrokerLive.pipe(
-      Layer.provideMerge(T3workThreadToolContextStoreLive),
-      Layer.provideMerge(T3workContextRefreshServiceLive),
+    T3TeamToolBrokerLive.pipe(
+      Layer.provideMerge(T3TeamThreadToolContextStoreLive),
+      Layer.provideMerge(T3TeamWidgetRegistryLive),
+      Layer.provideMerge(T3TeamContextRefreshServiceLive),
       Layer.provide(OrchestrationLayerLive),
+      // t3team.workflow.run (ephemeral workflows) drives the same durable-engine singletons;
+      // memoized by reference, so this shares the registry/repo/store/scheduler instances.
+      Layer.provide(WorkflowEngineDurabilityLive),
+      // ProviderRegistryLive appears EARLIER in the outer pipe below, but `provideMerge`
+      // only feeds a layer's output into layers accumulated BEFORE it in the chain — the
+      // broker (which resolves ProviderRegistry via `Effect.serviceOption`) never saw it, so
+      // `t3team.thread.start_child` with an explicit provider always failed with "Unknown
+      // provider instance … Available: none". Providing it directly here shares the outer
+      // instance via layer memoization; its own requirements (config, instance registry,
+      // platform) are satisfied by the later outer provideMerges. NOTE: GitWorkflowService/
+      // SourceControlProviderRegistry/ProjectSetupScriptRunner have the same visibility gap,
+      // but providing VcsLayerLive here would leak its ProjectionSnapshotQuery/
+      // TerminalManager requirements out of this composed layer — fix separately.
+      Layer.provide(ProviderRegistryLive),
     ),
   ),
   // Shared singletons: the launch route registers parked runs in the registry and writes the
@@ -386,7 +410,11 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
       ServerSecretStore.layer,
-      CloudCliTokenManager.layer.pipe(Layer.provide(ServerSecretStore.layer)),
+      // Upstream: the CLI token manager now also drives the external launcher.
+      CloudCliTokenManager.layer.pipe(
+        Layer.provide(ServerSecretStore.layer),
+        Layer.provide(ExternalLauncher.layer),
+      ),
       CloudManagedEndpointRuntimeLive,
     ),
   ),
@@ -416,30 +444,33 @@ export const makeRoutesLayer = Layer.mergeAll(
     Layer.provide(environmentAuthenticatedAuthLayer),
   ),
   assetRouteLayer,
-  t3workAtlassianAccountsRouteLayer,
-  t3workAtlassianAssetRouteLayer,
-  t3workAtlassianAssetContentRouteLayer,
-  t3workAtlassianBacklogRouteLayer,
-  t3workAtlassianConnectBasicRouteLayer,
-  t3workAtlassianConnectOAuthRouteLayer,
-  t3workAtlassianOAuthExchangeRouteLayer,
-  t3workAtlassianProjectsRouteLayer,
-  t3workAtlassianResourceRouteLayer,
-  t3workAtlassianResourcesRouteLayer,
-  t3workGitHubAssetRouteLayer,
-  t3workGitHubInboxRouteLayer,
-  t3workGitHubPullRequestContextRouteLayer,
-  t3workTempoRouteLayer,
-  t3workProjectWorkspaceBootstrapRouteLayer,
-  t3workProjectWorkspaceDiscoverRecipesRouteLayer,
-  t3workThreadPlacementRouteLayer,
-  t3workThreadRecipeWorkflowLaunchRouteLayer,
-  t3workThreadWorkflowResolveInputRouteLayer,
-  t3workThreadToolContextRouteLayer,
-  t3workProjectWorkspaceWriteContextFilesRouteLayer,
-  t3workProjectWorkspaceRefreshProjectContextRouteLayer,
-  t3workProjectWorkspaceRefreshWorkItemContextRouteLayer,
-  t3workProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
+  t3teamAtlassianAccountsRouteLayer,
+  t3teamAtlassianAssetRouteLayer,
+  t3teamAtlassianAssetContentRouteLayer,
+  t3teamAtlassianBacklogRouteLayer,
+  t3teamAtlassianConnectBasicRouteLayer,
+  t3teamAtlassianConnectOAuthRouteLayer,
+  t3teamAtlassianMyWorkRouteLayer,
+  t3teamAtlassianOAuthExchangeRouteLayer,
+  t3teamAtlassianProjectsRouteLayer,
+  t3teamAtlassianResourceRouteLayer,
+  t3teamAtlassianResourcesRouteLayer,
+  t3teamGitHubAssetRouteLayer,
+  t3teamGitHubInboxRouteLayer,
+  t3teamGitHubPullRequestContextRouteLayer,
+  t3teamTempoRouteLayer,
+  t3teamProjectWorkspaceBootstrapRouteLayer,
+  t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
+  t3teamThreadPlacementRouteLayer,
+  t3teamThreadRecipeWorkflowLaunchRouteLayer,
+  t3teamThreadWorkflowControlRouteLayer,
+  t3teamThreadWorkflowResolveInputRouteLayer,
+  t3teamThreadToolContextRouteLayer,
+  t3teamWidgetToolCallRouteLayer,
+  t3teamProjectWorkspaceWriteContextFilesRouteLayer,
+  t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
+  t3teamProjectWorkspaceRefreshWorkItemContextRouteLayer,
+  t3teamProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
   otlpTracesProxyRouteLayer,
   staticAndDevRouteLayer,
   websocketRpcRouteLayer,
@@ -560,7 +591,10 @@ export const makeServerLayer = Layer.unwrap(
       httpListeningLayer,
       runtimeStateLayer,
       tailscaleServeLayer,
-      T3workWorkflowEngineReactorLive,
+      T3TeamWorkflowEngineReactorLive,
+      T3TeamActorMessageReactorLive,
+      T3TeamChildStatusReactorLive,
+      T3TeamWorkflowEngineRehydrateLive,
       cloudDesiredLinkReconcileLayer,
     );
 

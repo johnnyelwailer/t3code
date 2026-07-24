@@ -33,8 +33,8 @@ describe("ClientSettings word wrap", () => {
 
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("defaults sidebar pin persistence to undefined so server config stays sparse", () => {
-    expect(DEFAULT_SERVER_SETTINGS.t3workStoredSidebarPinsJson).toBeUndefined();
-    expect(DEFAULT_SERVER_SETTINGS.t3workStoredSidecarCompositionJson).toBeUndefined();
+    expect(DEFAULT_SERVER_SETTINGS.t3teamStoredSidebarPinsJson).toBeUndefined();
+    expect(DEFAULT_SERVER_SETTINGS.t3teamStoredSidecarCompositionJson).toBeUndefined();
   });
 
   it("defaults to an empty record so legacy configs without the key still decode", () => {
@@ -108,7 +108,7 @@ describe("ServerSettingsPatch.providerInstances", () => {
   it("treats providerInstances as an optional whole-map replacement", () => {
     const patch = decodeServerSettingsPatch({});
     expect(patch.providerInstances).toBeUndefined();
-    expect(patch.t3workStoredSidebarPinsJson).toBeUndefined();
+    expect(patch.t3teamStoredSidebarPinsJson).toBeUndefined();
 
     const replacement = decodeServerSettingsPatch({
       providerInstances: {
@@ -121,12 +121,12 @@ describe("ServerSettingsPatch.providerInstances", () => {
     );
 
     const pinPatch = decodeServerSettingsPatch({
-      t3workStoredSidebarPinsJson: '  [{"id":"pin-1"}]  ',
-      t3workStoredSidecarCompositionJson:
+      t3teamStoredSidebarPinsJson: '  [{"id":"pin-1"}]  ',
+      t3teamStoredSidecarCompositionJson:
         '  {"sections":[{"sectionId":"quick-starts","collapsed":true}]}  ',
     });
-    expect(pinPatch.t3workStoredSidebarPinsJson).toBe('[{"id":"pin-1"}]');
-    expect(pinPatch.t3workStoredSidecarCompositionJson).toBe(
+    expect(pinPatch.t3teamStoredSidebarPinsJson).toBe('[{"id":"pin-1"}]');
+    expect(pinPatch.t3teamStoredSidecarCompositionJson).toBe(
       '{"sections":[{"sectionId":"quick-starts","collapsed":true}]}',
     );
   });

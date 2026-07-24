@@ -1,0 +1,199 @@
+import { useCallback, useMemo } from "react";
+import type { ProjectShellProject } from "@t3tools/project-context";
+
+import { useProjects } from "~/state/entities";
+import { useBackend } from "~/t3team/backend/t3team-index";
+import { useAgentContext } from "~/t3team/hooks/t3team-useAgentContext";
+import { useT3TeamPinnedSidebarStore } from "~/t3team/t3team-pinnedSidebarStore";
+import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
+import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
+import {
+  buildGitHubActivitySidebarPinnedItem,
+  buildTicketSidebarPinnedItem,
+} from "~/t3team/t3team-sidebarPinningTypes";
+import {
+  buildGitHubActivityAgentContextCapabilities,
+  buildTicketAgentContextCapabilities,
+} from "~/t3team/t3team-ticketAgentContext";
+import type { ProjectTicket } from "~/t3team/t3team-types";
+import { useTicketAgentContextMenus } from "~/t3team/hooks/t3team-useTicketAgentContextMenus";
+import {
+  buildTicketPathPinnedSidebarItemIds,
+  buildTicketSubtreePinnedSidebarItemIds,
+  findPinnedGitHubActivitySidebarItem,
+  findPinnedTicketSidebarItem,
+  findPinnedTicketSubtreeItemIds,
+  resolveTicketAgentContextPinnedProjectState,
+} from "./t3team-ticketSidebarPinState";
+
+const emptyGitHubActivityByWorkItem = new Map<string, readonly GitHubWorkActivityItem[]>();
+
+export function useTicketAgentContext(input: {
+  project: ProjectShellProject;
+  projectTickets: ReadonlyArray<ProjectTicket>;
+  githubActivityByWorkItem?: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
+}) {
+  const {
+    project,
+    projectTickets,
+    githubActivityByWorkItem = emptyGitHubActivityByWorkItem,
+  } = input;
+  const backend = useBackend();
+  const { showAgentContextMenu, showAgentContextMenuAt } = useAgentContext();
+  const pinnedSidebarItems = useT3TeamPinnedSidebarStore((state) => state.items);
+  const liveProjects = useProjects();
+  const { resolvedProjectId, pinnedProjectIds } = useMemo(
+    () => resolveTicketAgentContextPinnedProjectState({ project, liveProjects }),
+    [liveProjects, project],
+  );
+  const ticketHierarchy = useMemo(
+    () => buildProjectTicketHierarchy(projectTickets),
+    [projectTickets],
+  );
+
+  const getTicketAgentContext = useCallback(
+    (ticket: ProjectTicket, options?: { visibleInSidebar?: boolean }) => {
+      if (!backend) {
+        return null;
+      }
+
+      const existingPinnedItem = findPinnedTicketSidebarItem(
+        pinnedSidebarItems,
+        pinnedProjectIds,
+        ticket.id,
+      );
+      const sidebarPinItem =
+        existingPinnedItem ??
+        buildTicketSidebarPinnedItem({
+          projectId: resolvedProjectId,
+          ticketId: ticket.id,
+        });
+      const prioritizeItemIds = buildTicketPathPinnedSidebarItemIds({
+        projectId: resolvedProjectId,
+        ticketId: ticket.id,
+        parentByChildId: ticketHierarchy.parentByChildId,
+      });
+      const cascadeItemIds = existingPinnedItem
+        ? findPinnedTicketSubtreeItemIds({
+            rootTicketId: ticket.id,
+            projectIds: pinnedProjectIds,
+            pinnedSidebarItems,
+            childrenByParentId: ticketHierarchy.childrenByParentId,
+          })
+        : buildTicketSubtreePinnedSidebarItemIds({
+            projectId: resolvedProjectId,
+            rootTicketId: ticket.id,
+            childrenByParentId: ticketHierarchy.childrenByParentId,
+          });
+
+      return buildTicketAgentContextCapabilities(
+        {
+          backend,
+          project,
+          ticket,
+          projectTickets,
+          githubActivityItems: githubActivityByWorkItem.get(ticket.ref.displayId) ?? [],
+        },
+        {
+          sidebarPin: {
+            item: sidebarPinItem,
+            pinned: existingPinnedItem !== null,
+            prioritizeItemIds,
+            cascadeItemIds,
+            ...(options?.visibleInSidebar ? { visibleInSidebar: true } : {}),
+          },
+        },
+      );
+    },
+    [
+      backend,
+      githubActivityByWorkItem,
+      pinnedProjectIds,
+      pinnedSidebarItems,
+      project,
+      projectTickets,
+      resolvedProjectId,
+      ticketHierarchy.childrenByParentId,
+    ],
+  );
+
+  const getGitHubActivityAgentContext = useCallback(
+    (
+      ticket: ProjectTicket | null,
+      item: GitHubWorkActivityItem,
+      options?: { fallbackHost?: string; visibleInSidebar?: boolean },
+    ) => {
+      const existingPinnedItem = findPinnedGitHubActivitySidebarItem(
+        pinnedSidebarItems,
+        pinnedProjectIds,
+        item.id,
+      );
+      const sidebarPinItem =
+        existingPinnedItem ??
+        buildGitHubActivitySidebarPinnedItem({
+          projectId: resolvedProjectId,
+          activityId: item.id,
+        });
+      const prioritizeItemIds = ticket
+        ? buildTicketPathPinnedSidebarItemIds({
+            projectId: resolvedProjectId,
+            ticketId: ticket.id,
+            parentByChildId: ticketHierarchy.parentByChildId,
+          })
+        : undefined;
+
+      return buildGitHubActivityAgentContextCapabilities(
+        {
+          backend,
+          project,
+          item,
+          linkedWorkItem: ticket,
+          ...(ticket
+            ? {
+                projectTickets,
+                githubActivityItems: githubActivityByWorkItem.get(ticket.ref.displayId) ?? [],
+              }
+            : {}),
+          ...(options?.fallbackHost ? { fallbackHost: options.fallbackHost } : {}),
+        },
+        {
+          sidebarPin: {
+            item: sidebarPinItem,
+            pinned: existingPinnedItem !== null,
+            ...(prioritizeItemIds ? { prioritizeItemIds } : {}),
+            ...(options?.visibleInSidebar ? { visibleInSidebar: true } : {}),
+          },
+        },
+      );
+    },
+    [
+      backend,
+      githubActivityByWorkItem,
+      pinnedProjectIds,
+      pinnedSidebarItems,
+      project,
+      projectTickets,
+      resolvedProjectId,
+      ticketHierarchy.parentByChildId,
+    ],
+  );
+
+  const {
+    openTicketAgentContextMenu,
+    openTicketAgentContextMenuAt,
+    openGitHubActivityAgentContextMenu,
+  } = useTicketAgentContextMenus({
+    getTicketAgentContext,
+    getGitHubActivityAgentContext,
+    showAgentContextMenu,
+    showAgentContextMenuAt,
+  });
+
+  return {
+    getTicketAgentContext,
+    getGitHubActivityAgentContext,
+    openTicketAgentContextMenu,
+    openTicketAgentContextMenuAt,
+    openGitHubActivityAgentContextMenu,
+  };
+}

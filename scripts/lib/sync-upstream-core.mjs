@@ -5,7 +5,7 @@ import {
   UPSTREAM_REPO_SLUG,
   expectedUpstreamRemoteHint,
   isExpectedUpstreamRemoteUrl,
-} from "./t3work-upstream-source-of-truth.mjs";
+} from "./t3team-upstream-source-of-truth.mjs";
 
 const upstreamUrl = `https://github.com/${UPSTREAM_REPO_SLUG}.git`;
 
@@ -209,7 +209,7 @@ export function runSyncUpstreamCommand(argv) {
     return;
   }
 
-  console.log("Usage: node scripts/t3work-sync-upstream-fork.mjs <command> [flags]");
+  console.log("Usage: node scripts/t3team-sync-upstream-fork.mjs <command> [flags]");
   console.log("");
   console.log("Commands:");
   console.log("  status            Fetch and print ahead/behind against upstream");

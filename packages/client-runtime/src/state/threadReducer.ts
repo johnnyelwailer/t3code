@@ -185,6 +185,7 @@ export function applyThreadDetailEvent(
         ...(event.payload.attachments !== undefined
           ? { attachments: event.payload.attachments }
           : {}),
+        ...(event.payload.t3teamExt !== undefined ? { t3teamExt: event.payload.t3teamExt } : {}),
         turnId: event.payload.turnId,
         streaming: event.payload.streaming,
         createdAt: event.payload.createdAt,
@@ -209,6 +210,7 @@ export function applyThreadDetailEvent(
                   ...(message.attachments !== undefined
                     ? { attachments: message.attachments }
                     : {}),
+                  ...(message.t3teamExt !== undefined ? { t3teamExt: message.t3teamExt } : {}),
                 },
           )
         : Arr.append(thread.messages, message);

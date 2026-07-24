@@ -38,6 +38,7 @@ type ModelPickerItem = {
   driverKind: ProviderDriverKind;
   instanceDisplayName: string;
   instanceAccentColor?: string | undefined;
+  instanceIconDataUrl?: string | undefined;
   continuationGroupKey?: string | undefined;
 };
 
@@ -211,6 +212,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           driverKind: entry.driverKind,
           instanceDisplayName: entry.displayName,
           ...(entry.accentColor ? { instanceAccentColor: entry.accentColor } : {}),
+          ...(entry.iconDataUrl ? { instanceIconDataUrl: entry.iconDataUrl } : {}),
           ...(entry.continuationGroupKey
             ? { continuationGroupKey: entry.continuationGroupKey }
             : {}),
@@ -641,6 +643,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                         driverKind={model.driverKind}
                         providerDisplayName={model.instanceDisplayName}
                         providerAccentColor={model.instanceAccentColor}
+                        providerIconDataUrl={model.instanceIconDataUrl}
                         isFavorite={favoritesSet.has(modelKey)}
                         isSelected={modelKey === `${props.activeInstanceId}:${props.model}`}
                         showProvider

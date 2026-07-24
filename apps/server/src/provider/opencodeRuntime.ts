@@ -36,8 +36,12 @@ import { resolveSpawnCommand } from "@t3tools/shared/shell";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 const OPENCODE_EMPTY_CONFIG_CONTENT = "{}";
 
+export function resolveOpenCodeConfigContent(configContent: string | undefined): string {
+  return configContent?.trim() ? configContent : OPENCODE_EMPTY_CONFIG_CONTENT;
+}
+
 const OPENCODE_SERVER_READY_PREFIX = "opencode server listening";
-const DEFAULT_OPENCODE_SERVER_TIMEOUT_MS = 5_000;
+const DEFAULT_OPENCODE_SERVER_TIMEOUT_MS = 30_000;
 const DEFAULT_HOSTNAME = "127.0.0.1";
 export interface OpenCodeServerProcess {
   readonly url: string;
@@ -116,6 +120,7 @@ export interface OpenCodeRuntimeShape {
    */
   readonly startOpenCodeServerProcess: (input: {
     readonly binaryPath: string;
+    readonly configContent?: string;
     readonly environment?: NodeJS.ProcessEnv;
     readonly port?: number;
     readonly hostname?: string;
@@ -128,6 +133,7 @@ export interface OpenCodeRuntimeShape {
    */
   readonly connectToOpenCodeServer: (input: {
     readonly binaryPath: string;
+    readonly configContent?: string;
     readonly serverUrl?: string | null;
     readonly environment?: NodeJS.ProcessEnv;
     readonly port?: number;
@@ -349,7 +355,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
             shell: spawnCommand.shell,
             env: {
               ...input.environment,
-              OPENCODE_CONFIG_CONTENT: OPENCODE_EMPTY_CONFIG_CONTENT,
+              OPENCODE_CONFIG_CONTENT: resolveOpenCodeConfigContent(input.configContent),
             },
             extendEnv: input.environment === undefined,
           }),
@@ -489,6 +495,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 
     return startOpenCodeServerProcess({
       binaryPath: input.binaryPath,
+      ...(input.configContent !== undefined ? { configContent: input.configContent } : {}),
       ...(input.environment !== undefined ? { environment: input.environment } : {}),
       ...(input.port !== undefined ? { port: input.port } : {}),
       ...(input.hostname !== undefined ? { hostname: input.hostname } : {}),

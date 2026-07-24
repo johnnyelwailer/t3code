@@ -13,7 +13,7 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
 import type { EnvironmentThread, EnvironmentThreadShell } from "./models.ts";
 import { scopeThread } from "./models.ts";
-import { EMPTY_ENVIRONMENT_THREAD_STATE, type EnvironmentThreadState } from "./threads.ts";
+import { EMPTY_ENVIRONMENT_THREAD_STATE, type EnvironmentThreadState } from "./threadState.ts";
 import { parseThreadKey, threadKey } from "./entities.ts";
 import { THREAD_STATE_IDLE_TTL_MS } from "./threadRetention.ts";
 
@@ -35,8 +35,18 @@ export function mergeEnvironmentThread(
   detail: EnvironmentThread | null,
   shell: EnvironmentThreadShell | null,
 ): EnvironmentThread | null {
-  if (detail === null || shell === null) {
+  if (shell === null) {
     return detail;
+  }
+  if (detail === null) {
+    return {
+      ...shell,
+      deletedAt: null,
+      messages: EMPTY_MESSAGES,
+      proposedPlans: EMPTY_PROPOSED_PLANS,
+      activities: EMPTY_ACTIVITIES,
+      checkpoints: EMPTY_CHECKPOINTS,
+    };
   }
   if (detail.environmentId !== shell.environmentId || detail.id !== shell.id) {
     return detail;

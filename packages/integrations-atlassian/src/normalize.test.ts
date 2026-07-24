@@ -112,6 +112,7 @@ describe("normalizeIssue", () => {
     expect(result.fields.reporter).toBe("Bob");
     expect(result.fields.type).toBe("Bug");
     expect(result.fields.labels).toEqual(["backend", "urgent"]);
+    expect(result.ref.labels).toEqual(["backend", "urgent"]);
     expect(result.fields.description).toBe("It is broken.");
     expect(result.fields.comments).toContain("Charlie");
     expect(result.fields.comments).toContain("Looking into it.");
@@ -135,6 +136,7 @@ describe("normalizeIssue", () => {
     expect(result.fields.status).toBeUndefined();
     expect(result.fields.assignee).toBeUndefined();
     expect(result.fields.comments).toBe("");
+    expect(result.ref.labels).toBeUndefined();
   });
 });
 
@@ -154,6 +156,7 @@ describe("normalizeIssueSearch", () => {
             },
             issuetype: { name: "Bug" },
             project: { id: "10001" },
+            labels: ["backend", "urgent"],
           },
         },
         {
@@ -178,10 +181,12 @@ describe("normalizeIssueSearch", () => {
     expect(result[0]?.title).toBe("Fix the bug");
     expect(result[0]?.description).toBe("Search text.");
     expect(result[0]?.type).toBe("Bug");
+    expect(result[0]?.labels).toEqual(["backend", "urgent"]);
     expect(result[1]?.id).toBe("TEST-2");
     expect(result[1]?.title).toBe("Add feature");
     expect(result[1]?.type).toBe("Story");
     expect(result[1]?.parentId).toBe("TEST-1");
+    expect(result[1]?.labels).toBeUndefined();
   });
 });
 

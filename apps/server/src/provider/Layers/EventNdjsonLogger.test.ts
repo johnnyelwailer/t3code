@@ -8,6 +8,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
@@ -235,6 +236,41 @@ describe("EventNdjsonLogger", () => {
           matchingFiles.some((entry) => entry === `${fileStem}.3`),
           false,
         );
+      } finally {
+        NodeFS.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("closes and evicts thread writers idle past the TTL", () =>
+    Effect.gen(function* () {
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const basePath = NodePath.join(tempDir, "provider-native.ndjson");
+
+      try {
+        const logger = yield* makeEventNdjsonLogger(basePath, {
+          stream: "native",
+          batchWindowMs: 1,
+        });
+        assert.exists(logger);
+        if (!logger) return;
+
+        yield* logger.write({ id: "evt-idle" }, ThreadId.make("thread-idle"));
+        yield* TestClock.adjust("11 minutes");
+        // Any later write sweeps writers idle past the 10 min TTL. The idle
+        // writer's scope close flushes its batch, so the file still exists
+        // with its content — the leak being fixed is the retained open
+        // sink/batching state, observable as the flushed file content.
+        yield* logger.write({ id: "evt-fresh" }, ThreadId.make("thread-fresh"));
+
+        const idleContent = NodeFS.readFileSync(NodePath.join(tempDir, "thread-idle.log"), "utf8");
+        assert.include(idleContent, "evt-idle");
+
+        // A write for the evicted thread transparently re-creates its writer.
+        yield* logger.write({ id: "evt-idle-again" }, ThreadId.make("thread-idle"));
+        yield* logger.close();
+        const reopened = NodeFS.readFileSync(NodePath.join(tempDir, "thread-idle.log"), "utf8");
+        assert.include(reopened, "evt-idle-again");
       } finally {
         NodeFS.rmSync(tempDir, { recursive: true, force: true });
       }

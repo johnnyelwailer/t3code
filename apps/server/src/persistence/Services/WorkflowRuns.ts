@@ -27,17 +27,25 @@ import type { ProjectionRepositoryError } from "../Errors.ts";
  * clock-parked sibling of `suspended` (Epic 27): a run parked on `waitUntil`, woken by the
  * scheduler at its `wake_at` rather than by an event. */
 export const WorkflowRunStatus = Schema.Literals([
+  "queued",
   "running",
   "suspended",
   "sleeping",
+  "paused",
   "completed",
   "failed",
+  "cancelled",
 ]);
 export type WorkflowRunStatus = typeof WorkflowRunStatus.Type;
 
 /** Which ask kind a suspended run is parked on (matches the engine registry's pending kind). */
 export const WorkflowRunPendingKind = Schema.Literals(["thread.turn", "user.input"]);
 export type WorkflowRunPendingKind = typeof WorkflowRunPendingKind.Type;
+
+/** How the run was launched: from a discovered recipe, or agent-authored via
+ * `t3team.workflow.run` (ephemeral — no recipe on disk, source under `.t3team-runs/`). */
+export const WorkflowRunOrigin = Schema.Literals(["recipe", "ephemeral"]);
+export type WorkflowRunOrigin = typeof WorkflowRunOrigin.Type;
 
 export const WorkflowRun = Schema.Struct({
   runId: Schema.String,
@@ -54,6 +62,8 @@ export const WorkflowRun = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   status: WorkflowRunStatus,
+  /** Launch origin — `recipe` (discovered recipe) or `ephemeral` (agent-authored, tool-launched). */
+  origin: WorkflowRunOrigin,
   /** The thread the current ask is parked on (a spawned thread for agent() sub-threads). */
   pendingThreadId: Schema.NullOr(Schema.String),
   /** The correlation the run is parked on — an ask reply for `suspended`, the `waitUntil` sent
@@ -74,12 +84,23 @@ export type GetWorkflowRunInput = typeof GetWorkflowRunInput.Type;
 export const ListWorkflowRunsByStatusInput = Schema.Struct({ status: WorkflowRunStatus });
 export type ListWorkflowRunsByStatusInput = typeof ListWorkflowRunsByStatusInput.Type;
 
+/** The N most recently updated runs, any status — backs `t3team.workflow.status`'s list mode. */
+export const ListRecentWorkflowRunsInput = Schema.Struct({ limit: Schema.Number });
+export type ListRecentWorkflowRunsInput = typeof ListRecentWorkflowRunsInput.Type;
+
 export const SetWorkflowRunStatusInput = Schema.Struct({
   runId: Schema.String,
   status: WorkflowRunStatus,
   updatedAt: IsoDateTime,
 });
 export type SetWorkflowRunStatusInput = typeof SetWorkflowRunStatusInput.Type;
+
+/** Resume a paused run to the parked state encoded by its retained pending columns. */
+export const ResumePausedWorkflowRunInput = Schema.Struct({
+  runId: Schema.String,
+  updatedAt: IsoDateTime,
+});
+export type ResumePausedWorkflowRunInput = typeof ResumePausedWorkflowRunInput.Type;
 
 /** Flip a run to `suspended` and record the ask it is parked on, in one update. */
 export const SetWorkflowRunPendingInput = Schema.Struct({
@@ -110,6 +131,10 @@ export const SetWorkflowRunSleepingInput = Schema.Struct({
 });
 export type SetWorkflowRunSleepingInput = typeof SetWorkflowRunSleepingInput.Type;
 
+/** Count runs of one origin still holding engine resources (running/suspended/sleeping). */
+export const CountLiveWorkflowRunsByOriginInput = Schema.Struct({ origin: WorkflowRunOrigin });
+export type CountLiveWorkflowRunsByOriginInput = typeof CountLiveWorkflowRunsByOriginInput.Type;
+
 /** WorkflowRunRepositoryShape - service API for durable run records. */
 export interface WorkflowRunRepositoryShape {
   /** Insert or replace a run row (keyed by `runId`). */
@@ -122,9 +147,17 @@ export interface WorkflowRunRepositoryShape {
   readonly listByStatus: (
     input: ListWorkflowRunsByStatusInput,
   ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
+  /** The N most recently updated runs, any status (observability listing, not boot rehydration). */
+  readonly listRecent: (
+    input: ListRecentWorkflowRunsInput,
+  ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
   /** Set a run's status (without touching the pending ask). */
   readonly setStatus: (
     input: SetWorkflowRunStatusInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Restore `paused` to `suspended` or `sleeping` without losing its parked continuation. */
+  readonly resumePaused: (
+    input: ResumePausedWorkflowRunInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
   /** Flip to `suspended` and record the pending ask (fired when an ask verb suspends). */
   readonly setPending: (
@@ -134,6 +167,10 @@ export interface WorkflowRunRepositoryShape {
   readonly clearPending: (
     input: ClearWorkflowRunPendingInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Count live (running/suspended/sleeping) runs of one origin — the ephemeral concurrency cap. */
+  readonly countLiveByOrigin: (
+    input: CountLiveWorkflowRunsByOriginInput,
+  ) => Effect.Effect<number, ProjectionRepositoryError>;
   /** Flip to `sleeping` and record the wake deadline + `waitUntil` correlation (Epic 27). */
   readonly setSleeping: (
     input: SetWorkflowRunSleepingInput,

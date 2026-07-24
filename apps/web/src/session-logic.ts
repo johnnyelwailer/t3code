@@ -1,5 +1,6 @@
 import * as Option from "effect/Option";
 import * as Arr from "effect/Array";
+import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
 import {
   ApprovalRequestId,
   isToolLifecycleItemType,
@@ -630,6 +631,9 @@ export function deriveWorkLogEntries(
   const ordered = [...activities].toSorted(compareActivitiesByOrder);
   const entries: DerivedWorkLogEntry[] = [];
   for (const activity of ordered) {
+    // Workflow step activities belong to the workflow card, which already renders their live
+    // state. Keeping them in the generic log duplicates repair/progress copy below the card.
+    if (activity.kind === PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP) continue;
     if (activity.kind === "tool.started") continue;
     if (activity.kind === "task.started") continue;
     if (activity.kind === "context-window.updated") continue;
