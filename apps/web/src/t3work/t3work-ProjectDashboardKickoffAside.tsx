@@ -13,6 +13,7 @@ import { buildProjectDashboardSelectedRecipe } from "~/t3work/t3work-dashboardRe
 import { buildT3workSelectedRecipeKickoffLaunch } from "~/t3work/t3work-recipeQuickStartLaunch";
 import { useT3workDashboardRecipeViewSummary } from "~/t3work/t3work-dashboardRecipeViewContext";
 import { runT3workViewTransition } from "~/t3work/t3work-runViewTransition";
+import { useT3workSidecarRecipeQuickStarts } from "~/t3work/t3work-sidecarRecipes";
 import { useBundledSidecarRecipeLaunch } from "~/t3work/t3work-useBundledSidecarRecipeLaunch";
 
 export function ProjectDashboardKickoffAside({
@@ -80,7 +81,8 @@ export function ProjectDashboardKickoffAside({
       quickStartContextKeys,
     ],
   );
-  const { clearSelectedRecipe, composerRef, selectedRecipe, sidecarHost } =
+  const slashRecipes = useT3workSidecarRecipeQuickStarts(quickStartRecipeInput);
+  const { clearSelectedRecipe, composerRef, selectedRecipe, sidecarHost, stageRecipeKickoff } =
     useBundledSidecarRecipeLaunch({
       backend,
       environmentId,
@@ -160,6 +162,9 @@ export function ProjectDashboardKickoffAside({
         onClearSelectedRecipe={clearSelectedRecipe}
         providers={providers}
         isConnected={isConnected}
+        {...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {})}
+        slashRecipes={slashRecipes}
+        onSelectSlashRecipe={stageRecipeKickoff}
         injectedContextAttachments={injectedContextAttachments}
         onRemoveContextAttachment={removeContextAttachment}
         onSubmit={(text, selection, runtimeMode, interactionMode, selectedToolIds) => {

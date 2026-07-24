@@ -156,6 +156,8 @@ export type ProjectRecipeManifest = {
   readonly displayName: string;
   readonly shortDescription: string;
   readonly icon?: string;
+  /** Composer `/` alias, stored without the leading slash. */
+  readonly slashAlias?: string;
   readonly surfaces: ReadonlyArray<RecipeSurface>;
   readonly rank?: number | string;
   readonly visibleWhen?: string;
@@ -192,6 +194,8 @@ export type ProjectRecipeDiscovered = {
   readonly displayName: string;
   readonly shortDescription: string;
   readonly icon?: string;
+  /** Composer `/` alias, stored without the leading slash. */
+  readonly slashAlias?: string;
   readonly surfaces: ReadonlyArray<RecipeSurface>;
   readonly rank: number;
   readonly reason?: string;

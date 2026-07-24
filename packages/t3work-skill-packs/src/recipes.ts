@@ -251,6 +251,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "explain-selected-work",
     title: "Explain this simply",
+    slashAlias: "explain",
     manifestDisplayName: "Explain this simply",
     shortDescription: "Summarize the selected work with user impact, checks, and open questions.",
     actionViewTemplate: EXPLAIN_SELECTED_WORK_ACTION_VIEW,
@@ -296,6 +297,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   createBundledRecipe({
     id: "create-qa-test-plan",
     title: "Create QA test plan",
+    slashAlias: "qa-plan",
     manifestDisplayName: "Create QA test plan",
     shortDescription: "Build a test matrix with regression, smoke, and edge-case coverage.",
     surfaces: ["workitem.detail.sidepanel"],

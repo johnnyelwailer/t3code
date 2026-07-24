@@ -113,6 +113,7 @@ export function buildT3workSidecarRecipeQuickStarts(
       title: renderedTitle,
       description: renderedDescription,
       prompt: renderedPrompt,
+      ...(result.recipe.slashAlias ? { slashAlias: result.recipe.slashAlias } : {}),
       ...(workflow ? { workflow } : {}),
     };
 

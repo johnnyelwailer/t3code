@@ -100,3 +100,20 @@ describe("tshirt-size-epic bundled recipe", () => {
     );
   });
 });
+
+describe("bundled recipe slash aliases", () => {
+  it("exposes the documented aliases for the demonstrable recipes", () => {
+    expect(getBundledT3WorkRecipe("create-qa-test-plan")?.slashAlias).toBe("qa-plan");
+    expect(getBundledT3WorkRecipe("explain-selected-work")?.slashAlias).toBe("explain");
+  });
+
+  it("keeps every declared alias in the documented `[a-z0-9][a-z0-9-]*` format and unique", () => {
+    const aliases = listBundledT3WorkRecipes()
+      .map((recipe) => recipe.slashAlias)
+      .filter((alias): alias is string => typeof alias === "string");
+    for (const alias of aliases) {
+      expect(alias).toMatch(/^[a-z0-9][a-z0-9-]*$/);
+    }
+    expect(new Set(aliases).size).toBe(aliases.length);
+  });
+});

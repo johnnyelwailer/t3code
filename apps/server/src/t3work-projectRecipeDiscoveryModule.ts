@@ -61,6 +61,7 @@ function toRecipe(ref: AnyRecipeRef): Recipe {
     requiredContext: [],
     outputPreference: "markdown",
     ...(ref.icon !== undefined ? { icon: ref.icon } : {}),
+    ...(ref.slashAlias !== undefined ? { slashAlias: ref.slashAlias } : {}),
     ...(ref.rank !== undefined ? { rankHint: ref.rank } : {}),
   };
 }
@@ -158,6 +159,7 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
       displayName: ref.title,
       shortDescription: ref.shortDescription,
       ...(ref.icon ? { icon: ref.icon } : {}),
+      ...(ref.slashAlias ? { slashAlias: ref.slashAlias } : {}),
       surfaces: ref.surfaces as ReadonlyArray<RecipeSurface>,
       rank: match.score,
       ...(match.reason ? { reason: match.reason } : {}),
