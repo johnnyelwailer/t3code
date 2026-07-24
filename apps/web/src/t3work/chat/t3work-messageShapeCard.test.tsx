@@ -50,7 +50,7 @@ window.matchMedia ??= ((query: string) => ({
   dispatchEvent: () => false,
 })) as unknown as typeof window.matchMedia;
 
-function shapeMessage(id: string): ChatMessage {
+function shapeMessage(id: string, capabilities?: ReadonlyArray<unknown>): ChatMessage {
   return {
     id: MessageId.make(id),
     role: "system",
@@ -75,6 +75,7 @@ function shapeMessage(id: string): ChatMessage {
               { phase: "Decide", kind: "ask", label: "Merge it?" },
               { phase: "Decide", kind: "act", label: "github.pullRequest.merge" },
             ],
+            ...(capabilities === undefined ? {} : { capabilities }),
             workflowRunId: "run-1",
           },
         },
@@ -140,5 +141,34 @@ describe("workflow shape card in the timeline", () => {
     expect(markup).toContain("Act");
     // the card owns the header — the message text echo must not double up above it
     expect(markup).not.toContain("Plan: shape.pr-review");
+    // visually quiet default: no capability disclosure row for a capability-less run
+    expect(markup).not.toContain("This workflow declared these capabilities");
+  }, 30000);
+
+  it("discloses declared capabilities as plain-language chips before execution", async () => {
+    const message = shapeMessage("message-shape-caps", [
+      { kind: "feature", id: "user" },
+      { kind: "feature", id: "schedule" },
+      { kind: "feature", id: "future-unknown" },
+      {
+        kind: "tool-group",
+        id: "github.write",
+        label: "Modify GitHub",
+        description: "Merge pull requests, push branches, edit issues.",
+      },
+    ]);
+    const markup = await renderTimeline([message]);
+
+    // engine feature strings render via the engine's own label table (spec 25 §Capability gating)
+    expect(markup).toContain("Ask &amp; notify you");
+    expect(markup).toContain("Run on a timer");
+    // an unknown feature id still shows honestly, by its raw id
+    expect(markup).toContain("future-unknown");
+    // tool-group refs carry their own author-declared label + description
+    expect(markup).toContain("Modify GitHub");
+    expect(markup).toContain("Merge pull requests, push branches, edit issues.");
+    // the disclosure row is present and sits above the step list
+    expect(markup).toContain("This workflow declared these capabilities");
+    expect(markup.indexOf("Modify GitHub")).toBeLessThan(markup.indexOf("github.pullRequest.get"));
   }, 30000);
 });

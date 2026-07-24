@@ -38,6 +38,7 @@ import type {
 import { cn } from "~/lib/utils";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/t3work/components/ui/t3work-menu";
 import { T3workShapeStepRow } from "~/t3work/chat/t3work-messageShapeCard";
+import { T3workShapeCapabilityChips } from "~/t3work/chat/t3work-messageShapeCardCapabilities";
 import type {
   T3workWorkflowRunProgress,
   T3workWorkflowStepEntry,
@@ -579,6 +580,7 @@ export function T3workWorkflowShapeLiveCard({
       {shape.description ? (
         <p className="text-sm leading-6 text-muted-foreground">{shape.description}</p>
       ) : null}
+      <T3workShapeCapabilityChips capabilities={shape.capabilities} />
       {repair ? (
         <RepairStatusStrip repair={repair} {...(onOpenThread ? { onOpenThread } : {})} />
       ) : null}

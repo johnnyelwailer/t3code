@@ -101,6 +101,7 @@ export type { ResolvedWireInput } from "./t3work-sdk.journalWriter.ts";
 export type { WorkflowMeta } from "./t3work-sdk.loader.ts";
 export type {
   WorkflowShape,
+  WorkflowShapeCapability,
   WorkflowShapeStep,
   WorkflowStepKind,
 } from "./t3work-sdk.workflowShape.ts";

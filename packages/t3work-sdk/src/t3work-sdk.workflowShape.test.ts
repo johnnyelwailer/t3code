@@ -103,4 +103,47 @@ describe("deriveWorkflowShape", () => {
       { phase: null, kind: "ask", label: "Ask the user" },
     ]);
   });
+
+  it("normalizes meta.capabilities for the pre-execution permission surface", () => {
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/capabilities.workflow.ts",
+      sourceText: [
+        `const releaseWrite = {`,
+        `  kind: "tool-group",`,
+        `  id: "release-notes.write",`,
+        `  label: "Write release notes artifacts",`,
+        `  description: "Create or update release notes content.",`,
+        `} as const;`,
+        `export const meta = {`,
+        `  name: "x.capabilities",`,
+        `  capabilities: ["user", "schedule", releaseWrite, 42, null],`,
+        `} as const;`,
+        `await thread.askUser("Proceed?");`,
+      ].join("\n"),
+    });
+
+    // Strings → feature entries; tool-group refs carry their own label/description;
+    // unrecognized entries are dropped — the preview never invents a permission.
+    expect(shape.capabilities).toEqual([
+      { kind: "feature", id: "user" },
+      { kind: "feature", id: "schedule" },
+      {
+        kind: "tool-group",
+        id: "release-notes.write",
+        label: "Write release notes artifacts",
+        description: "Create or update release notes content.",
+      },
+    ]);
+  });
+
+  it("yields an empty capability list for a workflow that declares none", () => {
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/no-capabilities.workflow.ts",
+      sourceText: [`export const meta = { name: "x.none" } as const;`, `await agent("go");`].join(
+        "\n",
+      ),
+    });
+
+    expect(shape.capabilities).toEqual([]);
+  });
 });
