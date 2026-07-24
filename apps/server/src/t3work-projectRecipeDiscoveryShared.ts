@@ -21,6 +21,7 @@ const RawProjectRecipeManifestSchema = Schema.Struct({
   displayName: Schema.String,
   shortDescription: Schema.String,
   icon: Schema.optional(Schema.String),
+  slashAlias: Schema.optional(Schema.String),
   surfaces: Schema.Array(RecipeSurface),
   rank: Schema.optional(Schema.Union([Schema.Number, Schema.String])),
   visibleWhen: Schema.optional(Schema.String),

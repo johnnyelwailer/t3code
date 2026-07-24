@@ -4,8 +4,10 @@ import {
   ComposerPromptEditor,
   type ComposerPromptEditorHandle,
 } from "~/components/ComposerPromptEditor";
+import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu";
 import { ComposerCommandMenu } from "~/components/chat/ComposerCommandMenu";
 import { useTheme } from "~/hooks/useTheme";
+import { T3workComposerSlashMenu } from "~/t3work/composer/t3work-ComposerSlashMenuGroups";
 import type { useT3workKickoffComposerMenu } from "~/t3work/composer/t3work-useKickoffComposerMenu";
 
 type KickoffComposerCommandMenu = ReturnType<typeof useT3workKickoffComposerMenu>;
@@ -34,19 +36,26 @@ export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
     <div className="relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4">
       {commandMenu.menuOpen ? (
         <div className="absolute inset-x-0 bottom-full z-20 mb-2">
-          <ComposerCommandMenu
-            items={commandMenu.menuItems}
-            resolvedTheme={resolvedTheme}
-            isLoading={commandMenu.isPathSearchPending}
-            triggerKind={commandMenu.trigger?.kind ?? null}
-            groupSlashCommandSections={
-              commandMenu.trigger?.kind === "slash-command" &&
-              commandMenu.trigger.query.trim().length === 0
-            }
-            activeItemId={commandMenu.activeItemId}
-            onHighlightedItemChange={commandMenu.onHighlightedItemChange}
-            onSelect={commandMenu.selectItem}
-          />
+          {commandMenu.trigger?.kind === "slash-command" ? (
+            <T3workComposerSlashMenu
+              items={commandMenu.menuItems}
+              activeItemId={commandMenu.activeItemId}
+              onHighlightedItemChange={commandMenu.onHighlightedItemChange}
+              onSelect={commandMenu.selectItem}
+            />
+          ) : (
+            <ComposerCommandMenu
+              items={commandMenu.menuItems.filter(
+                (item): item is ComposerCommandItem => item.type !== "recipe-slash-command",
+              )}
+              resolvedTheme={resolvedTheme}
+              isLoading={commandMenu.isPathSearchPending}
+              triggerKind={commandMenu.trigger?.kind ?? null}
+              activeItemId={commandMenu.activeItemId}
+              onHighlightedItemChange={commandMenu.onHighlightedItemChange}
+              onSelect={commandMenu.selectItem}
+            />
+          )}
         </div>
       ) : null}
       <ComposerPromptEditor

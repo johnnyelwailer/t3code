@@ -1,11 +1,13 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import type { ProviderInteractionMode, ServerProvider } from "@t3tools/contracts";
 
+import type { ComposerTrigger } from "~/composer-logic";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
-import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu";
 import { T3WORK_COMPOSER_BUILT_IN_SLASH_COMMANDS } from "~/t3work/composer/t3work-composerMenuItems";
+import { buildT3workRecipeSlashItems } from "~/t3work/composer/t3work-composerRecipeSlashItems";
 import { useT3workComposerCommandMenu } from "~/t3work/composer/t3work-useComposerCommandMenu";
+import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipeTypes";
 
 /**
  * The kickoff composer has no thread-scoped model picker, so `/model` is not
@@ -24,7 +26,9 @@ export type T3workKickoffComposerMenuInput = {
   readonly setText: (next: string) => void;
   readonly setCursor: (next: number) => void;
   readonly setInteractionMode: (mode: ProviderInteractionMode) => void;
-  readonly extraItems?: ReadonlyArray<ComposerCommandItem>;
+  /** Surface-applicable recipe catalog offered as `/`-menu launchers. */
+  readonly slashRecipes?: ReadonlyArray<T3workSidecarRecipeQuickStart>;
+  readonly onSelectRecipe?: (recipe: T3workSidecarRecipeQuickStart) => void;
 };
 
 export function useT3workKickoffComposerMenu(input: T3workKickoffComposerMenuInput) {
@@ -40,10 +44,28 @@ export function useT3workKickoffComposerMenu(input: T3workKickoffComposerMenuInp
     [provider],
   );
 
+  const slashRecipes = input.slashRecipes;
+  const buildExtraItems = useCallback(
+    (trigger: ComposerTrigger) => {
+      if (trigger.kind !== "slash-command" || !slashRecipes || slashRecipes.length === 0) {
+        return [];
+      }
+      return buildT3workRecipeSlashItems({
+        recipes: slashRecipes,
+        reservedAliases: [
+          ...sources.builtInSlashCommands.map((builtIn) => builtIn.command),
+          ...sources.providerSlashCommands.map((command) => command.name),
+        ],
+        query: trigger.query,
+      });
+    },
+    [slashRecipes, sources],
+  );
+
   return useT3workComposerCommandMenu({
     sources,
     pathSearch: { environmentId: environmentId ?? null, cwd: input.workspaceRoot },
-    ...(input.extraItems ? { extraItems: input.extraItems } : {}),
+    buildExtraItems,
     readSnapshot: () => {
       const snapshot = input.editorRef.current?.readSnapshot();
       return snapshot ?? { value: input.text, expandedCursor: input.cursor };
@@ -60,6 +82,10 @@ export function useT3workKickoffComposerMenu(input: T3workKickoffComposerMenuInp
     onSelectionEffect: (effect) => {
       if (effect.type === "built-in-slash-command") {
         input.setInteractionMode(effect.command === "plan" ? "plan" : "default");
+        return;
+      }
+      if (effect.type === "select-recipe") {
+        input.onSelectRecipe?.(effect.recipe);
       }
     },
   });

@@ -1,13 +1,10 @@
 import { forwardRef, useCallback, useImperativeHandle } from "react";
-import type {
-  ModelSelection,
-  ProviderInteractionMode,
-  RuntimeMode,
-  ServerProvider,
-} from "@t3tools/contracts";
-
 import { cn } from "~/lib/utils";
 import { KickoffComposerEditor } from "~/t3work/composer/t3work-KickoffComposerEditor";
+import type {
+  T3workKickoffComposerHandle,
+  T3workKickoffComposerProps,
+} from "~/t3work/composer/t3work-kickoffComposerProps";
 import { useT3workKickoffComposerMenu } from "~/t3work/composer/t3work-useKickoffComposerMenu";
 import { useT3workKickoffComposerText } from "~/t3work/composer/t3work-useKickoffComposerText";
 import { useAddToChatComposerDropTarget } from "~/t3work/hooks/t3work-useAddToChatComposerDropTarget";
@@ -19,40 +16,16 @@ import {
 } from "~/t3work/t3work-kickoffLaunchConfig";
 import { TicketKickoffComposerControls } from "~/t3work/t3work-TicketKickoffComposerControls";
 import { TicketKickoffComposerSelectedRecipe } from "~/t3work/t3work-TicketKickoffComposerSelectedRecipe";
-import {
-  getT3workSelectedRecipeComposerPlaceholder,
-  type T3workSelectedRecipeQuickStart,
-} from "~/t3work/t3work-recipeQuickStartLaunch";
+import { getT3workSelectedRecipeComposerPlaceholder } from "~/t3work/t3work-recipeQuickStartLaunch";
 import { runtimeModeConfig, runtimeModeOptions } from "~/t3work/t3work-ticketKickoffRuntimeConfig";
-import type { T3workThreadToolId } from "~/t3work/t3work-types";
-
-type TicketKickoffComposerProps = {
-  prefillText?: string;
-  selectedRecipe?: T3workSelectedRecipeQuickStart;
-  onClearSelectedRecipe?: () => void;
-  providers: ReadonlyArray<ServerProvider>;
-  isConnected: boolean;
-  /** Workspace root used as the `@` path-search cwd. */
-  workspaceRoot?: string;
-  onSubmit: (
-    text: string,
-    selection: ModelSelection,
-    runtimeMode: RuntimeMode,
-    interactionMode: ProviderInteractionMode,
-    selectedToolIds: ReadonlyArray<T3workThreadToolId>,
-  ) => void;
-};
-
-export type T3workKickoffComposerHandle = {
-  getLaunchConfig: () => T3workKickoffLaunchConfig;
-};
 
 export { createDefaultT3workKickoffLaunchConfig };
 export type { T3workKickoffLaunchConfig };
+export type { T3workKickoffComposerHandle };
 
 export const TicketKickoffComposer = forwardRef<
   T3workKickoffComposerHandle,
-  TicketKickoffComposerProps
+  T3workKickoffComposerProps
 >(
   (
     {
@@ -62,6 +35,8 @@ export const TicketKickoffComposer = forwardRef<
       providers,
       isConnected,
       workspaceRoot,
+      slashRecipes,
+      onSelectSlashRecipe,
       onSubmit,
     },
     ref,
@@ -98,6 +73,8 @@ export const TicketKickoffComposer = forwardRef<
       setText,
       setCursor,
       setInteractionMode,
+      ...(slashRecipes ? { slashRecipes } : {}),
+      ...(onSelectSlashRecipe ? { onSelectRecipe: onSelectSlashRecipe } : {}),
     });
 
     const composerDropTarget = useAddToChatComposerDropTarget();

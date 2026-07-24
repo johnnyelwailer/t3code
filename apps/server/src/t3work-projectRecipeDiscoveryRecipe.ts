@@ -108,6 +108,7 @@ export const discoverProjectRecipeAtPath = Effect.fn("discoverProjectRecipeAtPat
       ...(typeof renderedIcon === "string" && renderedIcon.length > 0
         ? { icon: renderedIcon }
         : {}),
+      ...(manifest.slashAlias ? { slashAlias: manifest.slashAlias } : {}),
       surfaces: manifest.surfaces,
       rank:
         visibility.rank ??

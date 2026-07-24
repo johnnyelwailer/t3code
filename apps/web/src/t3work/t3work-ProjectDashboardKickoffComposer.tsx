@@ -13,6 +13,7 @@ import {
 } from "~/t3work/t3work-TicketKickoffComposer";
 import type { T3WorkContextAttachment } from "~/t3work/t3work-contextAttachment";
 import type { T3workSelectedRecipeQuickStart } from "~/t3work/t3work-recipeQuickStartLaunch";
+import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipeTypes";
 import type { T3workThreadToolId } from "~/t3work/t3work-types";
 
 type ProjectDashboardKickoffComposerProps = {
@@ -22,6 +23,8 @@ type ProjectDashboardKickoffComposerProps = {
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
   workspaceRoot?: string;
+  slashRecipes?: ReadonlyArray<T3workSidecarRecipeQuickStart>;
+  onSelectSlashRecipe?: (recipe: T3workSidecarRecipeQuickStart) => void;
   injectedContextAttachments: ReadonlyArray<T3WorkContextAttachment>;
   onRemoveContextAttachment: (id: string) => void;
   onSubmit: (
@@ -60,6 +63,8 @@ export const ProjectDashboardKickoffComposer = forwardRef<
         providers={input.providers}
         isConnected={input.isConnected}
         {...(input.workspaceRoot ? { workspaceRoot: input.workspaceRoot } : {})}
+        {...(input.slashRecipes ? { slashRecipes: input.slashRecipes } : {})}
+        {...(input.onSelectSlashRecipe ? { onSelectSlashRecipe: input.onSelectSlashRecipe } : {})}
         onSubmit={input.onSubmit}
       />
     </div>

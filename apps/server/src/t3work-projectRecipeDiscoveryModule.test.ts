@@ -165,6 +165,8 @@ describe("recipe.ts discovery + engine launch", () => {
       displayName: "Review a pull request",
       shortDescription: "Summarize a PR, then ask whether to merge.",
       icon: "git-pull-request",
+      // Epic 16: the recipe's composer `/` alias reaches the client verbatim.
+      slashAlias: "pr-review",
       allowedToolGroups: ["integration.read"],
     });
     expect(recipe!.rank).toBeGreaterThan(0);

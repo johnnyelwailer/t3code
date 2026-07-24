@@ -1,7 +1,10 @@
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 
 import type { ComposerSlashCommand, ComposerTrigger } from "~/composer-logic";
-import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu";
+import type {
+  T3workComposerMenuItem,
+  T3workRecipeSlashCommandItem,
+} from "~/t3work/composer/t3work-composerRecipeSlashItems";
 
 /** Text replacement to apply to the editor for a selected menu item. */
 export type T3workComposerMenuReplacement = {
@@ -20,7 +23,11 @@ export type T3workComposerMenuReplacement = {
 /** Host-state side effect a selection triggers in addition to the replacement. */
 export type T3workComposerMenuSelectionEffect =
   | { readonly type: "open-model-picker" }
-  | { readonly type: "built-in-slash-command"; readonly command: ComposerSlashCommand };
+  | { readonly type: "built-in-slash-command"; readonly command: ComposerSlashCommand }
+  | {
+      readonly type: "select-recipe";
+      readonly recipe: T3workRecipeSlashCommandItem["recipe"];
+    };
 
 export type T3workComposerMenuSelectionPlan = {
   readonly replacement: T3workComposerMenuReplacement;
@@ -93,7 +100,7 @@ function clearRangePlan(
  * insert a `$skill` chip.
  */
 export function resolveT3workComposerMenuSelection(
-  item: ComposerCommandItem,
+  item: T3workComposerMenuItem,
   trigger: ComposerTrigger,
   text: string,
 ): T3workComposerMenuSelectionPlan | null {
@@ -116,6 +123,11 @@ export function resolveT3workComposerMenuSelection(
   }
   if (item.type === "skill") {
     return insertionPlan(text, trigger, `$${item.skill.name} `);
+  }
+  if (item.type === "recipe-slash-command") {
+    // Selector, not launcher: clear the typed `/<alias>` and stage the recipe
+    // as the composer's pre-submit chip, exactly like clicking its card.
+    return clearRangePlan(text, trigger, { type: "select-recipe", recipe: item.recipe }, true);
   }
   return null;
 }

@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 
 import { type ComposerTrigger, detectComposerTrigger } from "~/composer-logic";
-import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu";
 import { useComposerPathSearch } from "~/lib/composerPathSearchState";
 import { useT3workComposerMenuHighlight } from "~/t3work/composer/t3work-composerMenuHighlightState";
 import {
@@ -17,6 +16,7 @@ import {
   resolveT3workComposerMenuSelection,
   type T3workComposerMenuSelectionEffect,
 } from "~/t3work/composer/t3work-composerMenuSelection";
+import type { T3workComposerMenuItem } from "~/t3work/composer/t3work-composerRecipeSlashItems";
 
 export type T3workComposerPathSearchScope = {
   readonly environmentId: EnvironmentId | null;
@@ -31,8 +31,11 @@ export type T3workComposerCommandMenuInput = {
   /** Writes the post-replacement editor text plus its collapsed cursor. */
   readonly applyText: (next: T3workComposerMenuAppliedText) => void;
   readonly onSelectionEffect: (effect: T3workComposerMenuSelectionEffect) => void;
-  /** Extra t3work-owned items appended after the shared ones. */
-  readonly extraItems?: ReadonlyArray<ComposerCommandItem>;
+  /**
+   * Builds t3work-owned items appended after the shared ones (the recipes
+   * group). Called with the live trigger so the query can rank them.
+   */
+  readonly buildExtraItems?: (trigger: ComposerTrigger) => ReadonlyArray<T3workComposerMenuItem>;
 };
 
 /**
@@ -61,11 +64,11 @@ export function useT3workComposerCommandMenu(input: T3workComposerCommandMenuInp
       }),
     [input.sources, pathEntries.entries, trigger],
   );
-  const extraItems = input.extraItems ?? [];
-  const menuItems = useMemo(
-    () => (extraItems.length > 0 ? [...sharedItems, ...extraItems] : sharedItems),
-    [extraItems, sharedItems],
-  );
+  const buildExtraItems = input.buildExtraItems;
+  const menuItems = useMemo<ReadonlyArray<T3workComposerMenuItem>>(() => {
+    const extraItems = trigger && buildExtraItems ? buildExtraItems(trigger) : [];
+    return extraItems.length > 0 ? [...sharedItems, ...extraItems] : sharedItems;
+  }, [buildExtraItems, sharedItems, trigger]);
   const searchKey = trigger ? `${trigger.kind}:${trigger.query.trim().toLowerCase()}` : null;
   const highlight = useT3workComposerMenuHighlight(menuItems, searchKey);
   const activeItem = menuItems.find((item) => item.id === highlight.activeItemId) ?? null;
@@ -80,7 +83,7 @@ export function useT3workComposerCommandMenu(input: T3workComposerCommandMenuInp
   );
 
   const selectItem = useCallback(
-    (item: ComposerCommandItem) => {
+    (item: T3workComposerMenuItem) => {
       if (selectLockRef.current) return;
       selectLockRef.current = true;
       window.requestAnimationFrame(() => {
