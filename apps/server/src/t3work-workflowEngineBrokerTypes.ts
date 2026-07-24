@@ -102,6 +102,8 @@ export interface ThreadCreatePayload {
   readonly threadId: string;
   readonly name?: string;
   readonly model?: WorkflowModelSelection;
+  /** Provider-agnostic thinking level; see `resolveWorkflowChildModel`. */
+  readonly effort?: import("@t3work/sdk").AgentEffort;
   /** Omitted is ephemeral, preserving one-shot agent() as a hidden child. */
   readonly retention?: "ephemeral" | "retained";
 }
@@ -111,6 +113,8 @@ export interface ThreadTurnPayload {
   readonly model?: WorkflowModelSelection;
   /** Short human-facing status label, separate from the provider prompt. */
   readonly label?: string;
+  /** Provider-agnostic thinking level; see `resolveWorkflowChildModel`. */
+  readonly effort?: import("@t3work/sdk").AgentEffort;
   /** The author's structured data, named by the SDK and journaled as structure; the host
    * serializes it into the turn text (`workflowTurnText`). Absent on older journals. */
   readonly attachments?: ReadonlyArray<import("@t3work/sdk").NamedAttachment>;

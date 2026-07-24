@@ -87,6 +87,7 @@ export type {
 export type { AskAffordance, AskFormField } from "./t3work-sdk.affordance.ts";
 export type { AgentAttachment, NamedAttachment } from "./t3work-sdk.askAttachments.ts";
 export type {
+  AgentEffort,
   AskOpts,
   AskUserAttachment,
   AskUserOpts,

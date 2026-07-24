@@ -114,7 +114,12 @@ describe("agent ergonomics — first-class attachments", () => {
     expect(completed(run)).toEqual({ reply: "judged" });
 
     const turn = broker.sent.find((envelope) => envelope.kind === "thread.turn");
-    const payload = turn?.payload as { prompt: string; attachments?: unknown };
+    const payload = turn?.payload as {
+      prompt: string;
+      attachments?: unknown;
+      effort?: string;
+      model?: unknown;
+    };
     // Structure in the payload — one explicitly named, one named positionally…
     expect(payload.attachments).toEqual([
       { name: "gates", value: gates },
@@ -122,6 +127,11 @@ describe("agent ergonomics — first-class attachments", () => {
     ]);
     // …and NOT a single byte of it stringified into the prompt.
     expect(payload.prompt).toBe("Judge these gates");
+    // The provider-agnostic effort tier rides on both the create and the turn — no provider or
+    // model named anywhere in the workflow.
+    expect(payload.effort).toBe("high");
+    expect(broker.sent[0]?.payload).toMatchObject({ effort: "high" });
+    expect(payload.model).toBeUndefined();
 
     // The host composes the provider-facing text from the same structure, once.
     expect(renderAgentAttachments(asNamedAttachments(payload.attachments))).toContain('"id": "g1"');
