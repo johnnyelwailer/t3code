@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { Sidebar, SidebarProvider, SidebarRail } from "~/t3team/components/ui/t3team-sidebar";
 import { AppContentPane } from "~/t3team/t3team-AppContentPane";
@@ -7,10 +7,14 @@ import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarS
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ViewState } from "~/t3team/t3team-types";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
-import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
+import { T3workLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
-import { useResolvedViewSync } from "~/t3team/t3team-useResolvedViewSync";
+import {
+  useMergedRouteAndStoreView,
+  useResolvedProjectView,
+  useResolvedViewSync,
+} from "~/t3team/t3team-useResolvedViewSync";
 import { useHydratePinnedSidebarItems } from "~/t3team/hooks/t3team-useHydratePinnedSidebarItems";
 
 type AppProps = {
@@ -28,7 +32,6 @@ type AppProps = {
   ) => void;
   onOpenTicket?: (projectId: string, ticketId: string, embeddedThreadId?: string | null) => void;
   onOpenThread?: (projectId: string, threadId: string) => void;
-  onCloseEmbeddedThread?: () => void;
   onProjectCreated?: (project: ProjectShellProject) => void;
 };
 
@@ -47,7 +50,6 @@ export function App({
   onOpenDashboard,
   onOpenTicket,
   onOpenThread,
-  onCloseEmbeddedThread,
   onProjectCreated,
 }: AppProps = {}) {
   const store = useProjectStore();
@@ -61,17 +63,8 @@ export function App({
 
   const showCreate = showCreateProp ?? showCreateInternal;
   const setShowCreate = onCreateOpenChange ?? setShowCreateInternal;
-  const activeView = view ?? store.view;
-  const resolvedView = useMemo(() => {
-    if (!activeView) {
-      return activeView;
-    }
-
-    const resolvedProjectId = store.resolveProjectId(activeView.projectId);
-    return resolvedProjectId === activeView.projectId
-      ? activeView
-      : { ...activeView, projectId: resolvedProjectId };
-  }, [activeView, store]);
+  const activeView = useMergedRouteAndStoreView(view, store.view);
+  const resolvedView = useResolvedProjectView(store, activeView);
   const activeDashboardMode = dashboardMode ?? "my-work";
   const selectedProjectId = resolvedView?.projectId ?? store.selectedProjectId;
   const manageRepositoriesProject = manageRepositoriesProjectId
@@ -166,7 +159,7 @@ export function App({
         </div>
         <SidebarRail />
       </Sidebar>
-      <T3TeamLeftSidebarDesktopToggle />
+      <T3workLeftSidebarDesktopToggle />
 
       <AppContentPane
         activeDashboardMode={activeDashboardMode}
@@ -178,7 +171,6 @@ export function App({
         onOpenThread={handleSelectThread}
         onOpenFullThread={handleOpenFullThread}
         onOpenEmbeddedThread={handleOpenEmbeddedThread}
-        {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
         onKickoffProjectThread={handleCreateProjectKickoffThread}
         onKickoffTicketThread={handleCreateTicketKickoffThread}
         onThreadKickoffConsumed={handleThreadKickoffConsumed}

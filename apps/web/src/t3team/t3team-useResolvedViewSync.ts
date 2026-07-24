@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { mergeRouteAndStoreView } from "~/t3team/t3team-projectThreadViewState";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import type { ViewState } from "~/t3team/t3team-types";
@@ -58,4 +59,27 @@ export function useResolvedViewSync({
 
     store.setView(resolvedView);
   }, [activeDashboardMode, onOpenDashboard, onOpenThread, onOpenTicket, resolvedView, store, view]);
+}
+
+export function useMergedRouteAndStoreView(
+  routeView: ViewState | null | undefined,
+  storeView: ViewState | null,
+) {
+  return useMemo(() => mergeRouteAndStoreView(routeView, storeView), [routeView, storeView]);
+}
+
+export function useResolvedProjectView(
+  store: ReturnType<typeof useProjectStore>,
+  activeView: ViewState | null,
+) {
+  return useMemo(() => {
+    if (!activeView) {
+      return activeView;
+    }
+
+    const resolvedProjectId = store.resolveProjectId(activeView.projectId);
+    return resolvedProjectId === activeView.projectId
+      ? activeView
+      : { ...activeView, projectId: resolvedProjectId };
+  }, [activeView, store]);
 }

@@ -11,15 +11,33 @@ import type {
   TicketKickoffThreadInput,
 } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
+import type { ViewState } from "~/t3team/t3team-types";
 import { enqueueThreadKickoffAttachments } from "~/t3team/t3team-enqueueThreadKickoffAttachments";
 import { useLocalWorkspaceCommands } from "~/t3team/hooks/t3team-useLocalWorkspaceCommands";
+import { selectProjectDashboardMode } from "~/t3team/t3team-projectThreadViewState";
 import {
   createTicketKickoffThread,
   deleteAppThread,
   openEmbeddedProjectThread,
   selectProjectThread,
 } from "~/t3team/t3team-appThreadMutations";
-import type { AppHandlersInput } from "~/t3team/t3team-appHandlersTypes";
+
+type AppHandlersInput = {
+  store: ReturnType<typeof useProjectStore>;
+  activeView: ViewState | null;
+  onOpenHome: (() => void) | undefined;
+  onOpenDashboard:
+    | ((
+        projectId: string,
+        dashboardMode?: ProjectDashboardMode,
+        embeddedThreadId?: string | null,
+      ) => void)
+    | undefined;
+  onOpenTicket:
+    | ((projectId: string, ticketId: string, embeddedThreadId?: string | null) => void)
+    | undefined;
+  onOpenThread: ((projectId: string, threadId: string) => void) | undefined;
+};
 
 export function useAppHandlers({
   store,
@@ -43,23 +61,15 @@ export function useAppHandlers({
     (projectId: string) => {
       const resolvedProjectId = store.resolveProjectId(projectId);
       store.selectProject(resolvedProjectId);
-      if (store.looseWorkspaceProjects.some((project) => project.id === resolvedProjectId)) {
-        store.setView(null);
-        onOpenHome?.();
-        return;
-      }
       onOpenDashboard?.(resolvedProjectId);
     },
-    [onOpenDashboard, onOpenHome, store],
+    [onOpenDashboard, store],
   );
 
   const handleSelectProjectDashboardMode = useCallback(
-    (projectId: string, dashboardMode: ProjectDashboardMode) => {
-      const resolvedProjectId = store.resolveProjectId(projectId);
-      store.selectProject(resolvedProjectId);
-      onOpenDashboard?.(resolvedProjectId, dashboardMode);
-    },
-    [onOpenDashboard, store],
+    (projectId: string, dashboardMode: ProjectDashboardMode) =>
+      selectProjectDashboardMode({ activeView, dashboardMode, onOpenDashboard, projectId, store }),
+    [activeView, onOpenDashboard, store],
   );
 
   const handleSelectTicket = useCallback(
