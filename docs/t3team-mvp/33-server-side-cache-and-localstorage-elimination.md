@@ -6,7 +6,7 @@
 ## 1. Problem
 
 The web app caches **real domain data in the browser's `localStorage`** via a generic
-`t3work-integrationCache` (localStorage + in-memory mirror). This violates the rule:
+`t3team-integrationCache` (localStorage + in-memory mirror). This violates the rule:
 
 > **`localStorage` is only for settings / UI-view-state. It must never hold real data.**
 
@@ -29,7 +29,7 @@ linking works); it is a capped, un-paginated live query. A paginated whole-proje
 
 Two structural problems:
 1. **Two parallel Atlassian fetch paths.** The backlog has a proper SQLite cache
-   (`t3work_atlassian_backlog_issues` + `t3work_atlassian_backlog_views`); My Work,
+   (`t3team_atlassian_backlog_issues` + `t3team_atlassian_backlog_views`); My Work,
    board columns, accounts, projects, current-user, resource snapshots do **not** — they
    are live calls mirrored into `localStorage`.
 2. **GitHub is entirely live + in-memory.** `gh api` calls behind short-TTL in-process
@@ -40,8 +40,8 @@ Two structural problems:
 One **broad raw sync** per integration into SQLite, and each view is a **thin SQL
 projection** over that raw data — exactly the pattern the backlog already implements:
 
-- **Raw table** `t3work_atlassian_backlog_issues`: PK `(provider, account_id, external_project_id, issue_id)`, stores `resource_json`, indexed by `issue_key`. → the raw store.
-- **View table** `t3work_atlassian_backlog_views`: per selection, an ordered `issue_ids_json` referencing the raw store + metadata + page cursor. → the optimized projection.
+- **Raw table** `t3team_atlassian_backlog_issues`: PK `(provider, account_id, external_project_id, issue_id)`, stores `resource_json`, indexed by `issue_key`. → the raw store.
+- **View table** `t3team_atlassian_backlog_views`: per selection, an ordered `issue_ids_json` referencing the raw store + metadata + page cursor. → the optimized projection.
 - **Sync walk** (`kickT3workAtlassianBacklogBackgroundSync`): paginates the provider in bounded bursts, upserts raw rows, and on completion **replaces** the view's id-list (prunes stale).
 - **Cached response** (`readCachedT3workAtlassianBacklogResponse`): joins view + raw, returns payload with a `fingerprint` and a `source` of `live | persisted | stale-fallback`.
 
@@ -165,12 +165,12 @@ establishes the reusable pattern; later phases reuse it.
   mirror, with fingerprint + `source` — no per-view Jira call.
 - Build the **hierarchy server-side** over the raw store (resolve `parent.key`), so the
   client receives an already-linked tree — retires the client-side `ticketIdByParentRef`
-  workaround in `t3work-ticketHierarchy.ts`.
+  workaround in `t3team-ticketHierarchy.ts`.
 - `useProjectResources`: read the projection from the server; **delete the `localStorage`
   cache** and the `v3` cache-key machinery.
 - **Acceptance:** IES-21014 / IES-21015 nest under IES-20032 in My Work; no
-  `t3work.integration-cache...listResources` key written; reload/multi-tab consistent;
-  existing `t3work-projectMyWork.test.ts` cases still green (now exercising server output
+  `t3team.integration-cache...listResources` key written; reload/multi-tab consistent;
+  existing `t3team-projectMyWork.test.ts` cases still green (now exercising server output
   shape).
 
 ### Phase 2 — Backlog client mirror removal
@@ -179,8 +179,8 @@ establishes the reusable pattern; later phases reuse it.
 - **Acceptance:** no backlog data in `localStorage`; backlog view unchanged for the user.
 
 ### Phase 3 — Reference caches (accounts, projects, board columns, current user)
-- Small TTL-projection tables: `t3work_atlassian_accounts` (global/user),
-  `t3work_atlassian_projects` (per account), `t3work_atlassian_board_columns` (per project),
+- Small TTL-projection tables: `t3team_atlassian_accounts` (global/user),
+  `t3team_atlassian_projects` (per account), `t3team_atlassian_board_columns` (per project),
   current-user folded into accounts.
 - Endpoints refresh-on-stale, return stale meanwhile.
 - Clients (`useCreateProject*`, `useProjectKanbanBoardColumns`,
@@ -194,7 +194,7 @@ establishes the reusable pattern; later phases reuse it.
 - Apply the same incremental-freshness idea where GitHub allows it (notifications carry
   `last_read_at` / `updated_at`; `gh api` conditional requests via ETag) instead of full
   re-hydration; full reconcile on a slower cadence.
-- Replace the 4 in-memory Maps in `t3work-github-inbox-loader.ts` with SQLite reads/writes.
+- Replace the 4 in-memory Maps in `t3team-github-inbox-loader.ts` with SQLite reads/writes.
 - `useProjectGitHubActivity` / `useGitHubRepositoryDiscovery` read server; drop `localStorage`.
 - **Acceptance:** GitHub inbox/activity survives server restart; no GitHub data in
   `localStorage`; TTL behavior preserved.
@@ -205,12 +205,12 @@ establishes the reusable pattern; later phases reuse it.
 - **Acceptance:** palette populated without reading `localStorage` data caches.
 
 ### Phase 6 — Resource snapshot cache (`getResource`)
-- Fold single-resource snapshots into the raw issues store (or a `t3work_atlassian_resource_snapshots`
+- Fold single-resource snapshots into the raw issues store (or a `t3team_atlassian_resource_snapshots`
   table) keyed per resource; drop `atlassianResourceSnapshotCache` `localStorage`.
 - **Acceptance:** detail views read server snapshots; no snapshot data in `localStorage`.
 
 ### Phase 7 — Decommission & enforce
-- Delete the data path of `t3work-integrationCache.ts` (keep only any settings use, if any —
+- Delete the data path of `t3team-integrationCache.ts` (keep only any settings use, if any —
   likely none → delete file).
 - Tighten the Phase 0 guardrail to **hard-fail** any domain `localStorage` use.
 - Sweep for orphaned cache keys / dead code; document the final contract in [04](04-integration-platform.md).
