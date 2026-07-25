@@ -118,10 +118,25 @@ export default defineRecipe({
 > reached from `t3team-projectRecipeDiscoveryRecipe.ts`, `t3team-recipeAgentValidate.ts` and
 > `t3team-recipeAgentListEntry.ts`.
 >
-> Phase 1 is not complete until that path is removed. No recipe in this repo or in the
-> Nexplore distribution ships a `recipe.json`, so it has no remaining consumers — but
-> removing it drops a documented authoring format, which is a product decision rather than a
-> cleanup, so it is called out here instead of being done silently.
+> Phase 1 is not complete until that path is removed. Two things block it, in order:
+>
+> 1. **The scaffolder is a live producer.** `renderBundledRecipeSetupFiles`
+>    (`t3team-projectSetupRecipes.ts`, reached from `t3team-projectSetup.ts`) writes 23 bundled
+>    starter recipes as `recipe.json` + `prompt.md` into every newly set-up project. Most are
+>    prompt-only, which is why [An action is a workflow or a prompt](#an-action-is-a-workflow-or-a-prompt)
+>    exists — `definePrompt` is what lets them become typed modules at all.
+> 2. **Project-local modules cannot resolve `@t3team/sdk`.** A `recipe.ts` in a real workspace
+>    fails at import with `ERR_MODULE_NOT_FOUND`: there is no resolver hook, no `NODE_PATH`, and
+>    setup writes no `package.json`. The distribution solves this for its own pack directory only
+>    (`scripts/link-vendor-sdk.mjs`). Converting the starters before this seam exists would ship
+>    recipes that cannot load.
+>
+>    Note for anyone verifying this: server test fixtures live under `apps/server/__fixtures__`,
+>    INSIDE this repo, so Node walks up and finds `@t3team/sdk`. Such a test proves module loading,
+>    not real-world resolution.
+>
+> This also makes `renderTypedRecipeModuleStarter` misleading today: it tells users to author
+> `import { defineRecipe } from "@t3team/sdk"`, which would not load in their project.
 
 ### One recipe, several actions
 
