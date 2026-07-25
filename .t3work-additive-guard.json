@@ -36,6 +36,8 @@
     "apps/web/src/components/chat/MessagesTimeline.tsx",
     "apps/web/src/components/chat/MessagesTimeline.logic.ts",
     "apps/web/src/components/chat/MessagesTimeline.test.tsx",
+    "apps/web/src/components/chat/ChatComposer.tsx",
+    "apps/web/src/components/chat/ComposerCommandMenu.tsx",
     "apps/web/src/composerDraftStore.ts",
     "apps/server/src/provider/Layers/EventNdjsonLogger.ts",
     "apps/server/src/provider/Layers/EventNdjsonLogger.test.ts",

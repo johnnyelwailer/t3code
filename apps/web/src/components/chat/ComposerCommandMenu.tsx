@@ -4,12 +4,14 @@ import {
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
-import { BotIcon } from "lucide-react";
+import { BotIcon, SparklesIcon } from "lucide-react";
 import { memo, useLayoutEffect, useMemo, useRef } from "react";
 
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
 import { formatProviderSkillInstallSource } from "~/providerSkillPresentation";
 import { cn } from "~/lib/utils";
+import { t3workComposerMenuOptionDomId } from "~/t3work/composer/t3work-composerMenuKeyboard";
+import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipeTypes";
 import {
   Command,
   CommandGroup,
@@ -51,12 +53,27 @@ export type ComposerCommandItem =
       skill: ServerProviderSkill;
       label: string;
       description: string;
+    }
+  /**
+   * t3work-owned kind. Unlike the kinds above it selects host state (stages the
+   * recipe as the composer's pre-submit chip) instead of mutating editor text —
+   * see docs/t3work-mvp/16-action-recipes.md#composer-slash-command-launchers.
+   * It lives in this union so every `/` menu renders through one component
+   * instead of a parallel panel duplicating the row chrome.
+   */
+  | {
+      id: string;
+      type: "recipe-slash-command";
+      alias: string;
+      recipe: T3workSidecarRecipeQuickStart;
+      label: string;
+      description: string;
     };
 
 type ComposerCommandGroup = {
   id: string;
   label: string | null;
-  items: ComposerCommandItem[];
+  items: ReadonlyArray<ComposerCommandItem>;
 };
 
 function SkillGlyph(props: { className?: string }) {
@@ -79,7 +96,7 @@ function SkillGlyph(props: { className?: string }) {
 }
 
 function groupCommandItems(
-  items: ComposerCommandItem[],
+  items: ReadonlyArray<ComposerCommandItem>,
   triggerKind: ComposerTriggerKind | null,
   groupSlashCommandSections: boolean,
 ): ComposerCommandGroup[] {
@@ -92,6 +109,7 @@ function groupCommandItems(
 
   const builtInItems = items.filter((item) => item.type === "slash-command");
   const providerItems = items.filter((item) => item.type === "provider-slash-command");
+  const recipeItems = items.filter((item) => item.type === "recipe-slash-command");
 
   const groups: ComposerCommandGroup[] = [];
   if (builtInItems.length > 0) {
@@ -100,16 +118,27 @@ function groupCommandItems(
   if (providerItems.length > 0) {
     groups.push({ id: "provider", label: "Provider", items: providerItems });
   }
+  // Recipes come last so a project recipe can never appear to shadow a host
+  // command (docs/t3work-mvp/16-action-recipes.md#menu-grouping).
+  if (recipeItems.length > 0) {
+    groups.push({ id: "recipes", label: "Recipes", items: recipeItems });
+  }
   return groups;
 }
 
 export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
-  items: ComposerCommandItem[];
+  items: ReadonlyArray<ComposerCommandItem>;
   resolvedTheme: "light" | "dark";
   isLoading: boolean;
   triggerKind: ComposerTriggerKind | null;
   groupSlashCommandSections?: boolean;
   emptyStateText?: string;
+  /**
+   * Enables the listbox/option ARIA wiring. The caller owns the id because it
+   * also has to publish it (plus the active option id) on the prompt editor's
+   * editable element as `aria-controls` / `aria-activedescendant`.
+   */
+  listboxId?: string;
   activeItemId: string | null;
   onHighlightedItemChange: (itemId: string | null) => void;
   onSelect: (item: ComposerCommandItem) => void;
@@ -121,13 +150,20 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
     [props.groupSlashCommandSections, props.items, props.triggerKind],
   );
 
+  const listboxId = props.listboxId;
   useLayoutEffect(() => {
     if (!props.activeItemId || !listRef.current) return;
-    const el = listRef.current.querySelector<HTMLElement>(
-      `[data-composer-item-id="${CSS.escape(props.activeItemId)}"]`,
-    );
-    el?.scrollIntoView({ block: "nearest" });
-  }, [props.activeItemId]);
+    // With a listbox id the option ids are stable (t3workComposerMenuOptionDomId),
+    // so the active row is found by id and no selector escaping is needed.
+    const el = listboxId
+      ? listRef.current.ownerDocument.getElementById(
+          t3workComposerMenuOptionDomId(listboxId, props.activeItemId),
+        )
+      : listRef.current.querySelector<HTMLElement>(
+          `[data-composer-item-id="${CSS.escape(props.activeItemId)}"]`,
+        );
+    el?.scrollIntoView?.({ block: "nearest" });
+  }, [listboxId, props.activeItemId]);
 
   return (
     <Command
@@ -144,7 +180,10 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
         className="relative w-full overflow-hidden rounded-[20px] border border-border/80 bg-popover/96 shadow-lg/8 backdrop-blur-xs"
       >
         {props.items.length > 0 ? (
-          <CommandList className="max-h-72">
+          <CommandList
+            {...(props.listboxId ? { id: props.listboxId, role: "listbox" as const } : {})}
+            className="max-h-72"
+          >
             {groups.map((group, groupIndex) => (
               <div key={group.id}>
                 {groupIndex > 0 ? <CommandSeparator className="my-0.5" /> : null}
@@ -160,6 +199,9 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                       item={item}
                       resolvedTheme={props.resolvedTheme}
                       isActive={props.activeItemId === item.id}
+                      {...(props.listboxId
+                        ? { optionDomId: t3workComposerMenuOptionDomId(props.listboxId, item.id) }
+                        : {})}
                       onHighlight={props.onHighlightedItemChange}
                       onSelect={props.onSelect}
                     />
@@ -203,6 +245,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
   item: ComposerCommandItem;
   resolvedTheme: "light" | "dark";
   isActive: boolean;
+  optionDomId?: string;
   onHighlight: (itemId: string | null) => void;
   onSelect: (item: ComposerCommandItem) => void;
 }) {
@@ -212,6 +255,16 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
   return (
     <CommandItem
       value={props.item.id}
+      {...(props.optionDomId
+        ? {
+            // Base UI owns `id` on its item props, so the stable
+            // aria-activedescendant target is supplied through the rendered
+            // element instead.
+            render: <div id={props.optionDomId} />,
+            role: "option" as const,
+            "aria-selected": props.isActive,
+          }
+        : {})}
       data-composer-item-id={props.item.id}
       className={cn(
         "cursor-pointer select-none gap-2 hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit",
@@ -246,6 +299,9 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
         <span className="inline-flex size-4 shrink-0 items-center justify-center text-muted-foreground/80">
           <SkillGlyph className="size-3.5" />
         </span>
+      ) : null}
+      {props.item.type === "recipe-slash-command" ? (
+        <SparklesIcon className="size-4 shrink-0 text-muted-foreground/80" />
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="shrink-0">{props.item.label}</span>
