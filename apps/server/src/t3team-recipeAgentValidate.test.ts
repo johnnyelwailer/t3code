@@ -314,8 +314,10 @@ describe("validateInlineWorkflowSourceForAgent", () => {
   it("bounds hostile meta-head execution instead of hanging (vm timeout)", () => {
     const source = ["while (true) {}", 'export const meta = { name: "hostile" };'].join("\n");
 
+    // @effect-diagnostics-next-line globalDate:off - measuring real wall-clock is the point: the vm timeout must bound a hostile infinite loop.
     const start = Date.now();
     const result = validateInlineWorkflowSourceForAgent(source);
+    // @effect-diagnostics-next-line globalDate:off - see above.
     const elapsed = Date.now() - start;
 
     expect(result.ok).toBe(false);

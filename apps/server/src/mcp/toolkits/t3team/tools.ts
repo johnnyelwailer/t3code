@@ -173,6 +173,7 @@ export const T3TeamRecipeListTool = Tool.dynamic("t3team_recipe_list", {
   parameters: { type: "object", properties: {}, additionalProperties: false },
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
+  dependencies,
 });
 
 // Static, read-only validation of a workflow before running it — either an
