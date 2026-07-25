@@ -30,6 +30,7 @@ import {
   SettingsIcon,
   SquarePenIcon,
 } from "lucide-react";
+import { buildT3TeamAddProjectJiraSource } from "~/t3team/t3team-addProjectJiraSource";
 import {
   useCallback,
   useDeferredValue,
@@ -940,6 +941,12 @@ function OpenCommandPaletteDialog(props: {
       readinessBySource: AddProjectRemoteSourceReadiness,
     ): CommandPaletteView["groups"] => {
       const sourceItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [
+        // Jira first: this distribution's projects ARE Jira work (see t3team-addProjectJiraSource).
+        buildT3TeamAddProjectJiraSource({
+          environmentId,
+          iconClassName: ITEM_ICON_CLASS,
+          closePalette: () => setOpen(false),
+        }),
         {
           kind: "action",
           value: `action:add-project:${environmentId}:local`,
