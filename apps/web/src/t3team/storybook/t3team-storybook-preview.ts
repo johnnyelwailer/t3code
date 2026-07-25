@@ -1,6 +1,8 @@
 import type { Preview } from "@storybook/react";
 
 import "~/t3team/t3team-index.css";
+// Must come after the app stylesheet so it wins on the canvas-scrolling rules.
+import "~/t3team/storybook/t3team-storybook-canvas.css";
 
 const preview: Preview = {
   parameters: {

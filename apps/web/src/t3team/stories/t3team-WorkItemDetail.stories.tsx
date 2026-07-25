@@ -246,17 +246,21 @@ function Frame({
   width,
   label,
   loading = false,
+  height,
 }: {
   readonly width: string;
   readonly label: string;
   readonly loading?: boolean;
+  /** Shorter frames for the ladder, where three stack in one view. */
+  readonly height?: string;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs text-muted-foreground">{label}</p>
       <div
-        style={{ width }}
-        className="h-[46rem] overflow-hidden rounded-xl border border-border bg-background"
+        style={{ width, ...(height ? { height } : {}) }}
+        /* Viewport-relative so a single story always fits the window without the canvas clipping. */
+        className="h-[min(44rem,80vh)] overflow-hidden rounded-xl border border-border bg-background"
       >
         <WorkItemDetailPreview loading={loading} />
       </div>
@@ -304,9 +308,9 @@ export const FirstLoad: Story = {
 export const ResponsiveLadder: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
-      <Frame width="360px" label="360px — small phone" />
-      <Frame width="520px" label="520px — detail pane with the agent panel open" />
-      <Frame width="900px" label="900px — rail appears" />
+      <Frame width="360px" label="360px — small phone" height="30rem" />
+      <Frame width="520px" label="520px — detail pane with the agent panel open" height="30rem" />
+      <Frame width="900px" label="900px — rail appears" height="30rem" />
     </div>
   ),
 };

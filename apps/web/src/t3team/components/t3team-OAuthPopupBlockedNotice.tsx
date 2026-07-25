@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
+import { CopyLinkButton } from "~/t3team/components/t3team-CopyLinkButton";
 import { T3SurfaceCard, T3SurfaceCardContent } from "~/t3team/components/ui/t3team-surface";
 
 /**
@@ -32,7 +33,7 @@ export function OAuthPopupBlockedNotice({
             Your browser blocked the sign-in window
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Open it yourself and we&apos;ll pick up where you left off.
+            Open it here, or copy the link into the browser you&apos;re signed in to.
           </p>
         </div>
 
@@ -45,12 +46,15 @@ export function OAuthPopupBlockedNotice({
             Sign in to Atlassian
           </Button>
 
+          <CopyLinkButton value={authorizeUrl} label="Copy sign-in link" />
+
           {onCancel ? (
             <Button size="xs" variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
           ) : null}
         </div>
+
       </T3SurfaceCardContent>
     </T3SurfaceCard>
   );
