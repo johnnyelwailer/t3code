@@ -1,6 +1,12 @@
-import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
-
 import type { AnyScriptRef, WorkflowRef } from "./t3team-sdk.types.ts";
+
+/**
+ * The render context a recipe's ctx-derived metadata receives. Kept STRUCTURAL here on
+ * purpose: `@t3tools/project-recipes` owns the real discriminated union, and the SDK must
+ * not depend on it — the SDK is the public authoring surface everything else points at.
+ * Consumers bind the concrete `ProjectRecipeRenderContext` where they evaluate these.
+ */
+export type RecipeRenderContextLike = Readonly<Record<string, unknown>>;
 
 /** Any action's workflow, regardless of its own `Inputs`/`Outputs`. */
 export type AnyWorkflowRef = WorkflowRef<unknown, unknown>;
@@ -14,14 +20,14 @@ export type AnyWorkflowRef = WorkflowRef<unknown, unknown>;
  * side-effect-free (Epic 16 §Pure functions, Proxy-traced reactivity). A deriver that throws
  * degrades that ONE recipe to "not visible"; it never breaks the catalog.
  */
-export type RecipeDerived<T> = T | ((ctx: ProjectRecipeRenderContext) => T);
+export type RecipeDerived<T, Ctx = RecipeRenderContextLike> = T | ((ctx: Ctx) => T);
 
 /**
  * Epic 16 §Pure functions: `visible: (ctx) => boolean`. Evaluated ALONGSIDE the declarative
  * `appliesTo`/`visiblePredicates` gates — a recipe must satisfy both, so `visible` can only
  * narrow what `appliesTo` already allows, never widen it.
  */
-export type RecipeVisiblePredicate = (ctx: ProjectRecipeRenderContext) => boolean;
+export type RecipeVisiblePredicate<Ctx = RecipeRenderContextLike> = (ctx: Ctx) => boolean;
 
 export type RecipeTechnicalDepth = "low" | "medium" | "high";
 export type RecipeBrevity = "short" | "balanced" | "detailed";
