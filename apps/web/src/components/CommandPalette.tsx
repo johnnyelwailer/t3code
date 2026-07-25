@@ -1067,7 +1067,15 @@ function OpenCommandPaletteDialog(props: {
               .map((workspace) => ({
                 kind: "action" as const,
                 value: `action:add-project:${environmentId}:provider-workspace:${workspace.cwd}`,
-                searchTerms: ["workspace", "local", "codex", "claude", workspace.cwd],
+                // Keep matching by workspace name. Including cwd makes a search
+                // for a parent directory return every nested worktree.
+                searchTerms: [
+                  inferProjectTitleFromPath(workspace.cwd),
+                  "workspace",
+                  "local",
+                  "codex",
+                  "claude",
+                ],
                 title: inferProjectTitleFromPath(workspace.cwd),
                 description: `External workspace · ${workspace.cwd}`,
                 icon: <FolderIcon className={ITEM_ICON_CLASS} />,
@@ -1440,6 +1448,11 @@ function OpenCommandPaletteDialog(props: {
         }
         return;
       }
+
+      // The watcher covers later profile changes. A newly added workspace must
+      // also import matching native sessions immediately.
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      await fetch("/api/local-provider-sessions/sync", { method: "POST" }).catch(() => undefined);
 
       const navigationResult = await settlePromise(() =>
         handleNewThread(scopeProjectRef(input.environmentId, projectId)),

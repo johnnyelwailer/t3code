@@ -22,21 +22,26 @@ export interface LocalProviderSession {
 }
 
 const MAX_FILES = 500;
-const MAX_SESSIONS = 100;
+// Keep each provider independently bounded. A global newest-only cap hides
+// one provider when its matching session is older than another provider's.
+const MAX_SESSIONS_PER_PROVIDER = 100;
 const MAX_MESSAGES = 100;
+
+export const normalizeWorkspacePath = (
+  value: string,
+  hostPlatform: string = platform(),
+): string => {
+  const normalized = value.trim().replace(/[\\/]+$/u, "");
+  return hostPlatform === "win32"
+    ? normalized.replaceAll("/", "\\").toLocaleLowerCase()
+    : normalized;
+};
 
 export const workspacePathsMatch = (
   left: string,
   right: string,
   hostPlatform: string = platform(),
-): boolean => {
-  const normalize = (value: string) => value.trim().replace(/[\\/]+$/u, "");
-  if (hostPlatform !== "win32") return normalize(left) === normalize(right);
-  return (
-    normalize(left).replaceAll("/", "\\").toLocaleLowerCase() ===
-    normalize(right).replaceAll("/", "\\").toLocaleLowerCase()
-  );
-};
+): boolean => normalizeWorkspacePath(left, hostPlatform) === normalizeWorkspacePath(right, hostPlatform);
 
 const textFromContent = (content: unknown): string => {
   if (typeof content === "string") return content.trim();
@@ -189,11 +194,16 @@ export const listLocalProviderSessions = Effect.fn("listLocalProviderSessions")(
         : null;
     }),
   );
-  const sessions = yield* Effect.forEach(
+  const recentSessions = (["codex", "claudeAgent"] as const).flatMap((provider) =>
     recentPaths
-      .filter((value): value is NonNullable<typeof value> => value !== null)
+      .filter(
+        (value): value is NonNullable<typeof value> => value !== null && value.provider === provider,
+      )
       .sort((left, right) => right.modifiedAt - left.modifiedAt)
-      .slice(0, MAX_SESSIONS),
+      .slice(0, MAX_SESSIONS_PER_PROVIDER),
+  );
+  const sessions = yield* Effect.forEach(
+    recentSessions,
     ({ provider, filePath }) =>
       Effect.gen(function* () {
         const raw = yield* fileSystem.readFileString(filePath).pipe(Effect.orElseSucceed(() => ""));

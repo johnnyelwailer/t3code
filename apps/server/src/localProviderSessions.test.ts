@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   parseClaudeLocalSession,
   parseCodexLocalSession,
+  normalizeWorkspacePath,
   workspacePathsMatch,
 } from "./localProviderSessions.ts";
 
@@ -38,6 +39,7 @@ describe("local provider session parsing", () => {
 
   it("matches Windows workspace paths without case or slash sensitivity", () => {
     expect(workspacePathsMatch("C:\\Dev\\App\\", "c:/dev/app", "win32")).toBe(true);
+    expect(normalizeWorkspacePath("C:\\Dev\\App\\", "win32")).toBe("c:\\dev\\app");
     expect(workspacePathsMatch("/Users/pj/app", "/users/pj/app", "darwin")).toBe(false);
   });
 });

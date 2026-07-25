@@ -1,5 +1,7 @@
 import { memo, useCallback, useRef, useState } from "react";
 import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
+import { ProviderDriverKind } from "@t3tools/contracts";
+import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { SidebarMenuSubButton, SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
 import { readLocalApi } from "~/localApi";
@@ -119,6 +121,16 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
       onClick={onSelect}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+        {thread.providerKind ? (
+          <span title={`External ${thread.providerKind === "codex" ? "Codex" : "Claude"} session`}>
+            <ProviderInstanceIcon
+              driverKind={ProviderDriverKind.make(thread.providerKind)}
+              displayName={thread.providerKind === "codex" ? "Codex" : "Claude"}
+              className="size-3.5"
+              iconClassName="size-3.5"
+            />
+          </span>
+        ) : null}
         {variant === "issue" ? (
           <MessageSquareIcon className="size-3 shrink-0 text-muted-foreground/70" />
         ) : null}

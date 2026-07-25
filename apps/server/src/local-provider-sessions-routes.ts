@@ -14,6 +14,7 @@ import { HttpRouter } from "effect/unstable/http";
 import {
   listLocalProviderSessions,
   type LocalProviderSession,
+  normalizeWorkspacePath,
   workspacePathsMatch,
 } from "./localProviderSessions.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
@@ -145,7 +146,25 @@ export const syncLocalProviderSessions = Effect.fn("syncLocalProviderSessions")(
   );
 });
 
-export const localProviderSessionsRouteLayer = HttpRouter.add(
+const localProviderSessionsSyncRoute = HttpRouter.route(
+  "POST",
+  "/api/local-provider-sessions/sync",
+  Effect.gen(function* () {
+    const settings = yield* ServerSettingsService;
+    if (!(yield* settings.getSettings).showLocalProviderSessions) {
+      return okJson({ results: [] });
+    }
+    const results = yield* syncLocalProviderSessions().pipe(
+      Effect.mapError(
+        (cause) =>
+          new T3TeamAtlassianError({ message: "Could not sync local provider sessions.", cause }),
+      ),
+    );
+    return okJson({ results });
+  }).pipe(Effect.catch(errorResponse)),
+);
+
+const localProviderSessionsWorkspaceRoute = HttpRouter.route(
   "GET",
   "/api/local-provider-sessions/workspaces",
   Effect.gen(function* () {
@@ -159,17 +178,23 @@ export const localProviderSessionsRouteLayer = HttpRouter.add(
           new T3TeamAtlassianError({ message: "Could not discover local workspaces.", cause }),
       ),
     );
-    const workspaces = new Map<string, Set<string>>();
+    const workspaces = new Map<string, { cwd: string; providers: Set<string> }>();
     for (const session of sessions) {
-      const providers = workspaces.get(session.cwd) ?? new Set<string>();
-      providers.add(session.provider === "codex" ? "Codex" : "Claude");
-      workspaces.set(session.cwd, providers);
+      const key = normalizeWorkspacePath(session.cwd);
+      const workspace = workspaces.get(key) ?? { cwd: session.cwd, providers: new Set<string>() };
+      workspace.providers.add(session.provider === "codex" ? "Codex" : "Claude");
+      workspaces.set(key, workspace);
     }
     return okJson({
-      workspaces: [...workspaces].map(([cwd, providers]) => ({
-        cwd,
-        providers: [...providers].sort(),
+      workspaces: [...workspaces.values()].map((workspace) => ({
+        cwd: workspace.cwd,
+        providers: [...workspace.providers].sort(),
       })),
     });
   }).pipe(Effect.catch(errorResponse)),
 );
+
+export const localProviderSessionsRouteLayer = HttpRouter.addAll([
+  localProviderSessionsSyncRoute,
+  localProviderSessionsWorkspaceRoute,
+]);
