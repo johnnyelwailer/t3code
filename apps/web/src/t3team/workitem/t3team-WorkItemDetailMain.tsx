@@ -135,7 +135,13 @@ export function WorkItemDetailMain({
 
   return (
     <WorkItemDetailLayout
-      titleBand={<WorkItemTitleBand model={model} nowMs={nowMs} />}
+      titleBand={
+        <WorkItemTitleBand
+          model={model}
+          nowMs={nowMs}
+          {...(currentUserName ? { currentUserName } : {})}
+        />
+      }
       sectionNav={<WorkItemSectionNav entries={navEntries} />}
       properties={<WorkItemProperties model={model} nowMs={nowMs} />}
       primary={

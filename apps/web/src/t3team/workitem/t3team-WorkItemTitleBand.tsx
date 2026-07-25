@@ -22,18 +22,25 @@ import { WorkItemStatusBadge } from "~/t3team/workitem/t3team-WorkItemStatusBadg
 export function WorkItemTitleBand({
   model,
   nowMs,
+  currentUserName,
   statusControl,
   titleControl,
   className,
 }: {
   readonly model: WorkItemFieldModel;
   readonly nowMs: number;
+  readonly currentUserName?: string | undefined;
   /** Slice B replaces the static badge with a transition picker. */
   readonly statusControl?: ReactNode;
   /** Slice B replaces the static heading with an inline editor. */
   readonly titleControl?: ReactNode;
   readonly className?: string;
 }) {
+  const isAssignedToCurrentUser =
+    currentUserName !== undefined &&
+    model.assignee !== undefined &&
+    model.assignee.displayName.trim().toLowerCase() === currentUserName.trim().toLowerCase();
+
   return (
     /*
       One row from `@md` up, two rows below it — driven by flex-basis rather than by rendering the
@@ -65,7 +72,14 @@ export function WorkItemTitleBand({
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 @md/workitem:mt-0.5">
         {statusControl ?? <WorkItemStatusBadge status={model.status} />}
 
-        {model.assignee ? <WorkItemPersonChip person={model.assignee} /> : null}
+        {/*
+          Always rendered, unassigned included. Who owns an item is a primary question, and an empty
+          space is not an answer — "nobody" is, and it is the one that prompts someone to pick it up.
+        */}
+        <WorkItemPersonChip
+          person={model.assignee}
+          isCurrentUser={isAssignedToCurrentUser}
+        />
         <WorkItemPriorityChip priority={model.priority} />
 
         {model.storyPoints !== undefined ? (
