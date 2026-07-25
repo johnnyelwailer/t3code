@@ -15,6 +15,8 @@ import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
 import { decideOrchestrationCommand } from "./orchestration/decider.ts";
+import type { T3TeamMessageExt } from "@t3tools/contracts";
+import { isAutomatedTurnStart } from "./t3team-deciderTurnAdmission.ts";
 import { projectEvent } from "./orchestration/projector.ts";
 
 const now = "2026-07-19T08:00:00.000Z";
@@ -196,6 +198,42 @@ it.layer(NodeServices.layer)("thread turn admission", (it) => {
       const decided = yield* decideOrchestrationCommand({ command: automatedCommand, readModel });
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events.map((event) => event.type)).toContain("thread.turn-start-requested");
+    }),
+  );
+
+  // Pins the message shape of every real automated dispatcher. If one stops
+  // marking itself, `isAutomatedTurnStart` returns false and it would silently
+  // bypass the guard, so assert the classifier here rather than trusting greps.
+  const dispatcherShapes: ReadonlyArray<readonly [string, T3TeamMessageExt]> = [
+    ["workflow step (t3team-workflowEngineBroker)", { author: { kind: "system", workflowRunId: "run-1" } }],
+    ["workflow repair (t3team-workflowEngineRepair)", { author: { kind: "system" } }],
+    ["child kickoff (t3team-toolBrokerStartChild)", { author: { kind: "system" } }],
+    [
+      "actor delivery (t3team-actorMessageReactor)",
+      {
+        visibleToUser: false,
+        actor: { senderThreadId: "sender", urgency: "normal", hopCount: 1, rootThreadId: "root" },
+      },
+    ],
+  ];
+
+  it.effect.each(dispatcherShapes)("classifies %s as automated and rejects it while busy", ([, ext]) =>
+    Effect.gen(function* () {
+      const automated = {
+        ...automatedCommand,
+        commandId: CommandId.make("dispatcher-shape-command"),
+        message: { ...automatedCommand.message, t3teamExt: ext },
+      };
+
+      expect(isAutomatedTurnStart(automated)).toBe(true);
+
+      const error = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: automated,
+          readModel: withThread({ session: startingSession }),
+        }),
+      );
+      expect(error.message).toContain("already has a turn in progress");
     }),
   );
 

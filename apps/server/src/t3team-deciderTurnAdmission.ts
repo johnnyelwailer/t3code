@@ -27,9 +27,19 @@ import type { OrchestrationCommand, OrchestrationThread } from "@t3tools/contrac
 
 type TurnStartCommand = Extract<OrchestrationCommand, { type: "thread.turn.start" }>;
 
-/** A turn a fork subsystem started on the user's behalf, rather than a typed message. */
+/**
+ * A turn a fork subsystem started on the user's behalf, rather than a typed
+ * message. Every automated dispatcher must mark itself here — see the callers
+ * enumerated in `t3team-deciderTurnAdmission.test.ts`, which pins the exact
+ * message shapes they send so a sender that stops marking itself fails loudly
+ * instead of silently bypassing the guard.
+ *
+ * `actor` covers inter-agent delivery, which carries its routing metadata
+ * rather than an author.
+ */
 export function isAutomatedTurnStart(command: TurnStartCommand): boolean {
-  return command.message.t3teamExt?.author !== undefined;
+  const ext = command.message.t3teamExt;
+  return ext?.author !== undefined || ext?.actor !== undefined;
 }
 
 export function isThreadTurnBusy(

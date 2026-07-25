@@ -171,6 +171,8 @@ export function makeStartChildThread(input: {
               role: "user",
               text: buildChildKickoffText(thread, args.kickoffPrompt),
               attachments: [],
+              // Marks this as an automated start for decider turn admission.
+              t3teamExt: { author: { kind: "system" } },
             },
             modelSelection,
             titleSeed: args.name,
