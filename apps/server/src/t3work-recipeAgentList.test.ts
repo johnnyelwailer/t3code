@@ -112,6 +112,7 @@ describe("listProjectRecipesForAgent", () => {
             shortDescription: "A typed recipe used for agent-list testing.",
             surfaces: ["project.dashboard.backlog"],
             authoring: "recipe-ts",
+            source: "project-local",
             recipePath: expect.stringContaining("/typed-recipe"),
             workflowPath: expect.stringContaining("/typed-recipe/typed-recipe.workflow.ts"),
           });
@@ -123,6 +124,7 @@ describe("listProjectRecipesForAgent", () => {
             shortDescription: "A legacy recipe.json recipe used for agent-list testing.",
             surfaces: ["project.dashboard.backlog"],
             authoring: "recipe-json",
+            source: "project-local",
             recipePath: expect.stringContaining("/legacy-recipe"),
           });
           // Legacy manifest declares no `workflow` field, so no workflowPath is resolved.

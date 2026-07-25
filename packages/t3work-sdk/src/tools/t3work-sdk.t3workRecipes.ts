@@ -29,6 +29,16 @@ export const RecipeListEntry = Schema.Struct({
   authoring: Schema.Literals(["recipe-ts", "recipe-json"]),
   recipePath: Schema.String,
   workflowPath: Schema.optional(Schema.String),
+  /**
+   * Where the recipe came from (Epic 16 §Recipe Sources And Precedence). `pack` recipes are the
+   * shipped library — runnable by `recipePath` exactly like a project-local one; the label only
+   * tells the agent whether editing it would mean editing the project or a distribution.
+   */
+  source: Schema.Literals(["project-local", "pack"]),
+  /** Pack that contributed the recipe. Present only when `source === "pack"`. */
+  packId: Schema.optional(Schema.String),
+  /** Pack scope the recipe inherits its precedence from. Present only when `source === "pack"`. */
+  packScope: Schema.optional(Schema.String),
 });
 export type RecipeListEntry = typeof RecipeListEntry.Type;
 
@@ -37,6 +47,12 @@ export const ListRecipesToolResult = Schema.Struct({
   workspaceRoot: Schema.String,
   recipes: Schema.Array(RecipeListEntry),
   errors: Schema.Array(RecipeToolIssue),
+  /**
+   * Non-fatal source-level notes: a pack that declared recipes it cannot deliver, a recipe id
+   * shadowed by a higher-precedence source. Populated by discovery and worth telling the agent —
+   * a recipe that silently failed to load looks identical to a recipe that never existed.
+   */
+  diagnostics: Schema.optional(Schema.Array(Schema.String)),
 });
 export type ListRecipesToolResult = typeof ListRecipesToolResult.Type;
 

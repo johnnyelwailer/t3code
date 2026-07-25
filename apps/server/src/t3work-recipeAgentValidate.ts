@@ -5,7 +5,9 @@
  * literal, and `deriveWorkflowShape` is the same static AST scan the UI's play-as-shape preview
  * uses ({@link ./t3work-workflowShapePreview.ts}). The one dynamic import is a recipe DIRECTORY's
  * `recipe.ts` (to resolve its `defaultAction` workflow) — the same trusted-project-code path UI
- * discovery already takes. Paths are constrained to the project workspace root.
+ * discovery already takes. Paths are constrained to the project workspace root or an active pack's
+ * recipe directory ({@link ./t3work-recipeAgentPaths.ts}) — a pack recipe's `recipePath` is what
+ * `t3work.recipe.list` hands the agent, so validate has to accept it.
  */
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -23,6 +25,7 @@ import {
   resolveWithinRoot,
   type RawProjectRecipeManifest,
 } from "./t3work-projectRecipeDiscoveryShared.ts";
+import { resolveAgentRecipePath } from "./t3work-recipeAgentPaths.ts";
 import { validateWorkflowSourceStatic } from "./t3work-recipeAgentValidateStatic.ts";
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -96,13 +99,13 @@ export const validateProjectRecipeWorkflowForAgent = Effect.fn(
 
   let requestedPath: string;
   try {
-    requestedPath = resolveWithinRoot(pathService, workspaceRoot, input.path);
+    requestedPath = resolveAgentRecipePath(pathService, workspaceRoot, input.path);
   } catch (error) {
     return failedResult([
       issue(
         input.path,
         "discover",
-        `${errorMessage(error)} Paths must stay inside the project workspace root.`,
+        `${errorMessage(error)} Paths must stay inside the project workspace root or an active pack's recipe directory.`,
       ),
     ]);
   }

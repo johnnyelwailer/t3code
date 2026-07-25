@@ -242,7 +242,11 @@ export const T3workHelpTool = Tool.make("t3work_help", {
 // type means "any non-null"), and MCP clients reject a non-object tool inputSchema
 // on tools/list — which would take the whole toolkit down for that client.
 export const T3workRecipeListTool = Tool.dynamic("t3work_recipe_list", {
-  description: "List the project's saved recipe orchestrations (id, title, paths). Read-only.",
+  description:
+    "List every saved recipe orchestration you can run — both the project's own and the ones " +
+    "shipped by installed packs. Each entry carries {id, title, recipePath, workflowPath?, " +
+    "source} where source is \"project-local\" or \"pack\"; pass recipePath to run or validate " +
+    "it. Prefer an existing recipe over re-authoring one. Read-only.",
   parameters: { type: "object", properties: {}, additionalProperties: false },
   success: Schema.Unknown,
   failure: T3workMcpToolError,

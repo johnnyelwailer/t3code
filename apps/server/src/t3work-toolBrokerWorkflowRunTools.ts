@@ -2,9 +2,10 @@
  * Live wiring for the agent-facing `t3work.orchestration.run` tool (ephemeral workflows, slice 1):
  * resolves the calling thread's project, enforces the ephemeral concurrency cap, persists an
  * inline `source` under `.t3work-runs/<runId>/workflow.ts` (the engine re-reads it on every
- * resume/rehydrate, so the file must outlive the call) or containment-checks `workflowPath`,
- * then launches through the shared {@link launchPreparedWorkflow} funnel with origin
- * `ephemeral` — bound to the calling thread, NO approval gate.
+ * resume/rehydrate, so the file must outlive the call) or authorizes an existing `workflowPath`
+ * ({@link ./t3work-workflowRunPathAuthorize.ts} — workspace containment, or a discovered pack
+ * recipe's DECLARED workflow), then launches through the shared {@link launchPreparedWorkflow}
+ * funnel with origin `ephemeral` — bound to the calling thread, NO approval gate.
  */
 import type { ModelSelection, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
@@ -13,14 +14,13 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 
-import { resolveWithinRoot } from "./t3work-projectRecipeDiscoveryShared.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
 import {
   launchPreparedWorkflow,
   type PreparedWorkflowLaunchDeps,
 } from "./t3work-workflowEphemeralLaunch.ts";
 import { DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS } from "./t3work-workflowEphemeralConcurrencyPolicy.ts";
-import { precheckWorkflowSource } from "./t3work-workflowSourcePrecheck.ts";
+import { resolveRunWorkflowPath } from "./t3work-workflowRunPathAuthorize.ts";
 
 /** Max ephemeral runs holding engine resources (running/suspended/sleeping) at once (spec D8). */
 export const T3WORK_EPHEMERAL_RUN_CAP = DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS;
@@ -131,48 +131,4 @@ export function makeWorkflowRunToolHandlers<E>(deps: {
       });
     },
   });
-}
-
-/** Persist inline `source` under `.t3work-runs/<runId>/workflow.ts`, or containment-check an
- * existing `workflowPath` against the workspace root (same rule as `t3work.recipe.validate`). */
-function resolveRunWorkflowPath(input: {
-  readonly fileSystem: FileSystem.FileSystem;
-  readonly path: Path.Path;
-  readonly workspaceRoot: string;
-  readonly runId: string;
-  readonly args: RunWorkflowHandlerArgs;
-}): Effect.Effect<string, string> {
-  const { fileSystem, path, workspaceRoot, runId, args } = input;
-  const source = args.source?.trim() ?? "";
-  if (source.length > 0) {
-    const precheckError = precheckWorkflowSource(source);
-    if (precheckError !== null) {
-      return Effect.fail(precheckError);
-    }
-    const runDirectory = path.join(workspaceRoot, ".t3work-runs", runId);
-    const workflowPath = path.join(runDirectory, "workflow.ts");
-    return fileSystem
-      .makeDirectory(runDirectory, { recursive: true })
-      .pipe(
-        Effect.andThen(fileSystem.writeFileString(workflowPath, args.source ?? "")),
-        Effect.mapError(errorMessage),
-        Effect.as(workflowPath),
-      );
-  }
-  const requestedPath = args.workflowPath?.trim() ?? "";
-  return Effect.try({
-    try: () => resolveWithinRoot(path, workspaceRoot, requestedPath),
-    catch: (error) => `${errorMessage(error)} Paths must stay inside the project workspace root.`,
-  }).pipe(
-    Effect.flatMap((resolved) =>
-      fileSystem.exists(resolved).pipe(
-        Effect.mapError(errorMessage),
-        Effect.flatMap((exists) =>
-          exists
-            ? Effect.succeed(resolved)
-            : Effect.fail(`Workflow path does not exist: ${resolved}`),
-        ),
-      ),
-    ),
-  );
 }
