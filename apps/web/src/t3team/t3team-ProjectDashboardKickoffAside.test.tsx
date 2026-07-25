@@ -54,6 +54,7 @@ vi.mock("~/t3team/t3team-EmbeddedThreadAside", () => ({
 
 vi.mock("~/t3team/hooks/t3team-createProjectBootstrap", () => ({
   readProjectSetupProfileIdFromProject: () => undefined,
+  readProjectSidecarCompositionFromProject: () => undefined,
 }));
 
 vi.mock("~/t3team/t3team-KickoffRecipeList", () => ({
