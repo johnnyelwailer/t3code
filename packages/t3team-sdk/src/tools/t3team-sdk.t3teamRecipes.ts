@@ -35,7 +35,15 @@ export const RecipeListEntry = Schema.Struct({
    * pick. Absent when the recipe declares no extra actions.
    */
   actions: Schema.optional(
-    Schema.Array(Schema.Struct({ name: Schema.String, workflowPath: Schema.String })),
+    Schema.Array(
+      Schema.Struct({
+        name: Schema.String,
+        /** Absent when the action is a prompt (`definePrompt`) rather than a workflow. */
+        workflowPath: Schema.optional(Schema.String),
+        promptPath: Schema.optional(Schema.String),
+        promptText: Schema.optional(Schema.String),
+      }),
+    ),
   ),
   /**
    * Where the recipe came from (Epic 16 §Recipe Sources And Precedence). `pack` recipes are the

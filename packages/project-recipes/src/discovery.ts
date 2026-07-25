@@ -190,7 +190,12 @@ export type ProjectRecipeLaunchSource = "bundled" | ProjectRecipeSource;
  */
 export type ProjectRecipeDiscoveredAction = {
   readonly name: string;
-  readonly workflowPath: string;
+  /** Resolved `.workflow.ts`. Absent for a prompt action, which declares no workflow. */
+  readonly workflowPath?: string;
+  /** Resolved prompt file, for a `definePrompt("./prompt.md")` action. */
+  readonly promptPath?: string;
+  /** Inline prompt text, for a `definePrompt({ text })` action. */
+  readonly promptText?: string;
 };
 
 export type ProjectRecipeDiscovered = {

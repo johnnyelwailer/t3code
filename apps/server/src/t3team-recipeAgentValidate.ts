@@ -56,10 +56,22 @@ const resolveDirectoryWorkflowPath = Effect.fn("resolveDirectoryWorkflowPath")(f
     const ref = yield* importRecipeModuleRef(modulePath).pipe(
       Effect.mapError((error) => issue(modulePath, "load", errorMessage(error))),
     );
-    return yield* Effect.try({
+    const resolved = yield* Effect.try({
       try: () => resolveRecipeWorkflowPath(pathService, recipePath, ref),
       catch: (error) => issue(modulePath, "discover", errorMessage(error)),
     });
+    // A prompt-only recipe has no workflow to validate statically. Say so plainly rather than
+    // reporting a missing-file error for a path that was never supposed to exist.
+    if (resolved === undefined) {
+      return yield* Effect.fail(
+        issue(
+          modulePath,
+          "discover",
+          "Recipe's defaultAction is a prompt action (definePrompt), so there is no workflow to validate.",
+        ),
+      );
+    }
+    return resolved;
   }
   const manifestPath = pathService.join(recipePath, "recipe.json");
   if (!(yield* fileSystem.exists(manifestPath).pipe(Effect.orElseSucceed(() => false)))) {

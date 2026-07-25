@@ -15,9 +15,14 @@
 
 import type * as Path from "effect/Path";
 
-import type { AnyRecipeRef, AnyWorkflowRef } from "@t3team/sdk";
+import type { AnyActionRef, AnyRecipeRef, AnyWorkflowRef } from "@t3team/sdk";
+import { isPromptRef } from "@t3team/sdk";
 
 import { isRelativePath, resolveWithinRoot } from "./t3team-projectRecipeDiscoveryShared.ts";
+import {
+  resolvePromptActionSource,
+  type ResolvedPromptSource,
+} from "./t3team-projectRecipePromptAction.ts";
 
 /** How the wire spells "no action name given" — reserved, never a real action name. */
 export const DEFAULT_RECIPE_ACTION_NAME = "default";
@@ -25,7 +30,12 @@ export const DEFAULT_RECIPE_ACTION_NAME = "default";
 export type ResolvedRecipeAction = {
   /** `"default"` for `defaultAction`, otherwise the `actions` key. */
   readonly name: string;
-  readonly workflowPath: string;
+  /** Absolute `.workflow.ts` path. Absent for prompt actions, which declare no workflow. */
+  readonly workflowPath?: string;
+  /** Absolute prompt-file path. Present for a `definePrompt("./prompt.md")` action. */
+  readonly promptPath?: string;
+  /** Inline prompt text. Present for a `definePrompt({ text })` action. */
+  readonly promptText?: string;
 };
 
 /**
@@ -44,13 +54,42 @@ function resolveWorkflowRefPath(
     : ref.absolutePath;
 }
 
-/** The recipe's `defaultAction` workflow path — what a plain launch runs (unchanged behavior). */
+/** Resolve one action of either kind ({@link ./t3team-projectRecipePromptAction.ts}). */
+function resolveActionRef(
+  pathService: Path.Path,
+  recipePath: string,
+  name: string,
+  ref: AnyActionRef,
+): ResolvedRecipeAction {
+  return isPromptRef(ref)
+    ? { name, ...resolvePromptActionSource(pathService, recipePath, ref) }
+    : { name, workflowPath: resolveWorkflowRefPath(pathService, recipePath, ref) };
+}
+
+/**
+ * The recipe's `defaultAction` workflow path — what a plain launch runs. `undefined` when the
+ * default action is a prompt: such a recipe launches a thread with prompt material instead of a
+ * workflow run.
+ */
 export function resolveRecipeWorkflowPath(
   pathService: Path.Path,
   recipePath: string,
   ref: AnyRecipeRef,
-): string {
-  return resolveWorkflowRefPath(pathService, recipePath, ref.defaultAction);
+): string | undefined {
+  return isPromptRef(ref.defaultAction)
+    ? undefined
+    : resolveWorkflowRefPath(pathService, recipePath, ref.defaultAction);
+}
+
+/** The recipe's `defaultAction` prompt source, when the default action is a prompt. */
+export function resolveRecipeDefaultPrompt(
+  pathService: Path.Path,
+  recipePath: string,
+  ref: AnyRecipeRef,
+): ResolvedPromptSource | undefined {
+  return isPromptRef(ref.defaultAction)
+    ? resolvePromptActionSource(pathService, recipePath, ref.defaultAction)
+    : undefined;
 }
 
 /** Names of the recipe's named actions, in declaration order (excludes `defaultAction`). */
@@ -74,7 +113,7 @@ export function resolveRecipeActions(
     ...Object.entries(ref.actions ?? {}),
   ]) {
     try {
-      resolved.push({ name, workflowPath: resolveWorkflowRefPath(pathService, recipePath, action) });
+      resolved.push(resolveActionRef(pathService, recipePath, name, action));
     } catch {
       // Intentionally silent here; the caller surfaces load/discover issues for the default action.
     }
@@ -106,14 +145,19 @@ export function resolveRecipeActionPath(input: {
   readonly actionName?: string | undefined;
 }): string {
   const requested = input.actionName?.trim() ?? "";
-  if (requested.length === 0 || requested === DEFAULT_RECIPE_ACTION_NAME) {
-    return resolveRecipeWorkflowPath(input.pathService, input.recipePath, input.ref);
-  }
-  const action = input.ref.actions?.[requested];
+  const isDefault = requested.length === 0 || requested === DEFAULT_RECIPE_ACTION_NAME;
+  const action = isDefault ? input.ref.defaultAction : input.ref.actions?.[requested];
   if (action === undefined) {
     const available = [DEFAULT_RECIPE_ACTION_NAME, ...recipeActionNames(input.ref)].join(", ");
     throw new Error(
       `Recipe '${input.ref.id}' has no action '${requested}'. Available actions: ${available}.`,
+    );
+  }
+  // A prompt action has no workflow to run. Callers that need a runnable workflow must say so
+  // rather than receive a path that does not exist.
+  if (isPromptRef(action)) {
+    throw new Error(
+      `Recipe '${input.ref.id}' action '${isDefault ? DEFAULT_RECIPE_ACTION_NAME : requested}' is a prompt action, not a workflow; it has no workflow to run.`,
     );
   }
   return resolveWorkflowRefPath(input.pathService, input.recipePath, action);

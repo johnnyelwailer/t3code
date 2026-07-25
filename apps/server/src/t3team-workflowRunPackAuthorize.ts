@@ -48,10 +48,14 @@ export const EXECUTABLE_PACK_SCOPES: ReadonlySet<string> = new Set([
  */
 const declaredWorkflowPaths = (recipe: {
   readonly workflowPath?: string | undefined;
-  readonly actions?: ReadonlyArray<{ readonly workflowPath: string }> | undefined;
+  readonly actions?: ReadonlyArray<{ readonly workflowPath?: string | undefined }> | undefined;
 }): ReadonlyArray<string> => [
   ...(typeof recipe.workflowPath === "string" ? [recipe.workflowPath] : []),
-  ...(recipe.actions ?? []).map((action) => action.workflowPath),
+  // Prompt actions (`definePrompt`) declare no workflow: they must contribute NOTHING to the
+  // execution allow-list, so filter before mapping rather than letting an `undefined` through.
+  ...(recipe.actions ?? [])
+    .map((action) => action.workflowPath)
+    .filter((path): path is string => typeof path === "string"),
 ];
 
 /** Declared workflow paths of every discovered, unshadowed, locally-installed pack recipe. */

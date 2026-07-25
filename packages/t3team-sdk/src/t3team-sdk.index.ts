@@ -42,6 +42,7 @@ export {
   buildToolTree,
   DEFAULT_RECIPE_ACTION_NAME,
   defineModel,
+  definePrompt,
   defineRecipe,
   defineScript,
   defineTool,
@@ -53,6 +54,7 @@ export {
   getRegisteredRecipe,
   getRegisteredTool,
   getRegisteredToolGroup,
+  isPromptRef,
   listRegisteredRecipes,
   listRegisteredToolGroups,
   listRegisteredTools,
@@ -130,7 +132,9 @@ export type {
   WorkflowShapeStep,
   WorkflowStepKind,
 } from "./t3team-sdk.workflowShape.ts";
+export type { PromptRef } from "./t3team-sdk.prompt.ts";
 export type {
+  AnyActionRef,
   AnyRecipeRef,
   AnyScriptRef,
   AnyWorkflowRef,

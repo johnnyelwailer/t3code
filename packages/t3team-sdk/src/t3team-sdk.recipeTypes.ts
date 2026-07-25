@@ -1,3 +1,4 @@
+import type { PromptRef } from "./t3team-sdk.prompt.ts";
 import type { AnyScriptRef, WorkflowRef } from "./t3team-sdk.types.ts";
 
 /**
@@ -10,6 +11,13 @@ export type RecipeRenderContextLike = Readonly<Record<string, unknown>>;
 
 /** Any action's workflow, regardless of its own `Inputs`/`Outputs`. */
 export type AnyWorkflowRef = WorkflowRef<unknown, unknown>;
+
+/**
+ * One recipe action: a workflow (structured — steps, result contract, journal) or a prompt.
+ * Prefer a workflow; a prompt action is for recipes whose whole job is "open a thread with
+ * this instruction".
+ */
+export type AnyActionRef = AnyWorkflowRef | PromptRef;
 
 /**
  * Metadata that is either a plain value or a **pure function of the render context** — the form
@@ -83,15 +91,17 @@ export interface RecipeRef<Inputs = unknown, Outputs = unknown> {
   /** Recipe-private scripts (Epic 25 §Scripts): the launching recipe's registration becomes
    * the workflow body's `scripts.*` tree. No global identity — scoped to this recipe. */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
-  readonly defaultAction: WorkflowRef<Inputs, Outputs>;
+  /** The plain-launch entry: a workflow, or a prompt for prompt-only recipes. */
+  readonly defaultAction: WorkflowRef<Inputs, Outputs> | PromptRef;
   /**
    * Additional named actions of the SAME recipe — one recipe id, several workflows/surfaces
    * (`actions: { estimate: defineWorkflow(...) }`). `defaultAction` remains the entry a plain
-   * launch uses; a launch naming an action runs that action's workflow instead. Every action's
+   * launch uses; a launch naming an action runs that action instead. Every action's
    * resolved workflow is part of the recipe's DECLARED set, which is what execution
-   * authorization is bound to — declaring actions adds entries, never a directory.
+   * authorization is bound to — declaring actions adds entries, never a directory. Prompt
+   * actions declare no workflow, so they add nothing to that set.
    */
-  readonly actions?: Readonly<Record<string, AnyWorkflowRef>>;
+  readonly actions?: Readonly<Record<string, AnyActionRef>>;
   readonly defaults?: Partial<Inputs>;
   readonly Inputs?: Inputs;
   readonly Outputs?: Outputs;

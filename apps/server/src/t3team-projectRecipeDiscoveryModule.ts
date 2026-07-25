@@ -17,6 +17,7 @@
 import * as Clock from "effect/Clock";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as NodeURL from "node:url";
@@ -35,6 +36,7 @@ import {
 import type { AnyRecipeRef } from "@t3team/sdk";
 
 import {
+  resolveRecipeDefaultPrompt,
   resolveRecipeNamedActions,
   resolveRecipeWorkflowPath,
 } from "./t3team-projectRecipeActions.ts";
@@ -154,6 +156,17 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
     const workflowPath = resolveRecipeWorkflowPath(pathService, input.recipePath, ref);
     const actions = resolveRecipeNamedActions(pathService, input.recipePath, ref);
 
+    // A prompt default action (`definePrompt`) supplies the launcher's prompt material through the
+    // same `prompt`/`promptPath` fields the retired recipe.json form used, so no launcher has to
+    // learn a new shape. A prompt file that cannot be read degrades to empty prompt material
+    // rather than removing the recipe from the catalog.
+    const defaultPrompt = resolveRecipeDefaultPrompt(pathService, input.recipePath, ref);
+    const promptText = defaultPrompt?.promptPath
+      ? yield* (yield* FileSystem.FileSystem)
+          .readFileString(defaultPrompt.promptPath)
+          .pipe(Effect.orElseSucceed(() => ""))
+      : (defaultPrompt?.promptText ?? "");
+
     return Option.some({
       id: ref.id,
       version: ref.version,
@@ -165,13 +178,13 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
       surfaces: ref.surfaces as ReadonlyArray<RecipeSurface>,
       rank: match.score,
       ...(match.reason ? { reason: match.reason } : {}),
-      // recipe.ts recipes are workflow-first: their prompt material lives in the `.workflow.ts`
-      // body (each `agent` call), not a separate prompt.md, so the legacy prompt fields are empty.
-      prompt: "",
-      promptPath: "",
+      // Workflow-first recipes keep their prompt material in the `.workflow.ts` body (each `agent`
+      // call), so these stay empty; a `definePrompt` default action fills them.
+      prompt: promptText,
+      promptPath: defaultPrompt?.promptPath ?? "",
       sourcePath: input.modulePath,
       recipePath: input.recipePath,
-      workflowPath,
+      ...(workflowPath ? { workflowPath } : {}),
       ...(actions.length === 0 ? {} : { actions }),
       allowedToolGroups: ref.allowedToolGroups ?? [],
       ...(ref.scripts === undefined ? {} : { scriptNames: Object.keys(ref.scripts) }),

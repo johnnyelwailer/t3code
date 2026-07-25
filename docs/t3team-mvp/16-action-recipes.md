@@ -149,6 +149,39 @@ export default defineRecipe({
 });
 ```
 
+#### An action is a workflow or a prompt
+
+Each action is one of two kinds:
+
+| Kind         | Declared with                        | What a launch does                                              |
+| ------------ | ------------------------------------ | --------------------------------------------------------------- |
+| **workflow** | `defineWorkflow<typeof M>("./m.workflow.ts")` | Runs the orchestration: explicit steps, result contract, journal |
+| **prompt**   | `definePrompt("./prompt.md")` or `definePrompt({ text })` | Opens a thread with that prompt material as the kickoff |
+
+**Prefer a workflow.** It is the structured form — steps a person can follow, a typed result, a
+journal to resume from. A prompt action is the honest model for a recipe whose whole job is "open
+a thread with this instruction", and it is what lets such a recipe be a typed module instead of
+falling back to a manifest format.
+
+```ts
+export default defineRecipe({
+  id: "explain-selected-work",
+  version: "0.1.0",
+  title: "Explain selected work",
+  shortDescription: "Explain the selected item in plain language.",
+  surfaces: ["workitem.detail.sidepanel"],
+  defaultAction: definePrompt("./prompt.md"),
+});
+```
+
+A prompt action reaches the launcher through `ProjectRecipeDiscovered.prompt` / `promptPath` — the
+same fields every launcher already reads — so it needs no launch branch of its own. Because it
+declares no workflow, it contributes nothing to the recipe's executable set
+(`t3team-workflowRunPackAuthorize.ts`), and `t3team.recipe.validate` reports plainly that there is
+no workflow to validate rather than a missing file. Prompt paths are constrained to the recipe
+directory by the same containment check as workflow paths: a prompt is read and sent to a model,
+so an escaping `../` would exfiltrate file contents.
+
 A launcher runs one by naming it (`launch.actionName: "estimate"`); omitting the name — or passing
 `"default"`, which is reserved — runs `defaultAction` exactly as before. The name is resolved
 **server-side from the recipe module**, never from a caller-supplied path, and each action's resolved

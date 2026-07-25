@@ -1,4 +1,5 @@
 import { getRegistry } from "./t3team-sdk.internal.ts";
+import type { PromptRef } from "./t3team-sdk.prompt.ts";
 import type * as T from "./t3team-sdk.types.ts";
 
 /** Action names are wire identifiers (`launch.actionName`), so keep them boring and stable. */
@@ -19,13 +20,13 @@ function assertActions(recipeId: string, actions: Readonly<Record<string, unknow
         `Recipe '${recipeId}': '${DEFAULT_RECIPE_ACTION_NAME}' is reserved for defaultAction; name the action something else.`,
       );
     }
-    if (
-      typeof action !== "object" ||
-      action === null ||
-      (action as { kind?: unknown }).kind !== "workflow"
-    ) {
+    const kind =
+      typeof action === "object" && action !== null
+        ? (action as { kind?: unknown }).kind
+        : undefined;
+    if (kind !== "workflow" && kind !== "prompt") {
       throw new Error(
-        `Recipe '${recipeId}': actions.${name} is not a defineWorkflow(...) result. Each entry must be a WorkflowRef.`,
+        `Recipe '${recipeId}': actions.${name} is not a defineWorkflow(...) or definePrompt(...) result. Each entry must be a WorkflowRef or a PromptRef.`,
       );
     }
   }
@@ -49,9 +50,13 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
   /** Recipe-private scripts (Epic 25 §Scripts): `scripts: { fetchPr }` makes `scripts.fetchPr`
    * available inside this recipe's workflows (bodies must declare the `"script"` capability). */
   readonly scripts?: Readonly<Record<string, T.AnyScriptRef>>;
-  readonly defaultAction: T.WorkflowRef<RInputs, ROutputs>;
+  /**
+   * The plain-launch entry. `defineWorkflow(...)` is the structured form and the default
+   * choice; `definePrompt(...)` is for recipes whose whole action is a prompt.
+   */
+  readonly defaultAction: T.WorkflowRef<RInputs, ROutputs> | PromptRef;
   /** Named sibling actions of the same recipe; `defaultAction` stays the plain-launch entry. */
-  readonly actions?: Readonly<Record<string, T.AnyWorkflowRef>>;
+  readonly actions?: Readonly<Record<string, T.AnyActionRef>>;
   readonly defaults?: Partial<RInputs>;
 }): T.RecipeRef<RInputs, ROutputs> {
   if (opts.scope !== undefined && opts.scope !== "project") {
