@@ -75,6 +75,7 @@ import {
 } from "../ProviderUpdateLaunchNotification.logic";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
+import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
 import {
   buildProviderInstanceUpdatePatch,
@@ -489,6 +490,9 @@ export function useSettingsRestore(onRestored?: () => void) {
 
 export function GeneralSettingsPanel() {
   const { theme, setTheme } = useTheme();
+  // A distribution renames the product; the Theme row is the only General copy
+  // that still spelled the upstream name out.
+  const productName = useT3TeamPackAppearance()?.labels?.appName ?? "T3 Code";
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const observability = useAtomValue(primaryServerObservabilityAtom);
@@ -530,7 +534,7 @@ export function GeneralSettingsPanel() {
       <SettingsSection title="General">
         <SettingsRow
           title="Theme"
-          description="Choose how T3 Code looks across the app."
+          description={`Choose how ${productName} looks across the app.`}
           resetAction={
             theme !== "system" ? (
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />
