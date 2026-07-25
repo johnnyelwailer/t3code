@@ -24,6 +24,11 @@ export interface WorkflowStatusToolResult {
   readonly wakeAt?: WorkflowRun["wakeAt"] | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** WHY a `failed` run failed — readable, no stack traces or internal ids (migration 044).
+   * Absent for a run that never failed, and for a pre-044 row. */
+  readonly failureReason?: string | undefined;
+  /** WHERE it failed — settle phase plus the primitive in flight (migration 044). */
+  readonly failureStep?: string | undefined;
   readonly hint: string;
 }
 
@@ -50,7 +55,9 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 const hintForStatus = (row: WorkflowRun): string => {
   switch (row.status) {
     case "failed":
-      return "The run failed — the failure reason was posted to the launching thread; fix the source and launch again.";
+      return row.failureReason
+        ? `The run failed in ${row.failureStep ?? "an unknown step"}: ${row.failureReason} — fix that cause, then resume (keeps the executed prefix) or launch again.`
+        : "The run failed — the failure reason was posted to the launching thread; fix the source and launch again.";
     case "suspended":
       return row.pendingKind
         ? `Parked waiting on ${row.pendingKind}; it resumes automatically when that resolves.`
@@ -82,6 +89,10 @@ const toStatusResult = (row: WorkflowRun): WorkflowStatusToolResult => ({
   wakeAt: row.wakeAt ?? undefined,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
+  // Strictly additive: the keys are absent (not `undefined`-valued) for a run that never
+  // failed, so an existing result shape is unchanged.
+  ...(row.failureReason ? { failureReason: row.failureReason } : {}),
+  ...(row.failureStep ? { failureStep: row.failureStep } : {}),
   hint: hintForStatus(row),
 });
 

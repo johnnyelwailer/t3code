@@ -1,7 +1,14 @@
 import { type ProviderInteractionMode } from "@t3tools/contracts";
+import type { AgentEffort } from "@t3work/sdk";
+
+import {
+  readStartChildEffort,
+  readStartChildReasoningEffort,
+  type T3workStartChildReasoningEffort,
+} from "./t3work-toolBrokerStartChildEffortArgs.ts";
 
 export type T3workStartChildKickoffMode = "plan" | "interactive" | "autopilot";
-export type T3workStartChildReasoningEffort = "low" | "medium" | "high";
+export type { T3workStartChildReasoningEffort };
 export type T3workStartChildExecutionScope = "metarepo" | "repository";
 
 export type T3workStartChildArgs = {
@@ -13,6 +20,14 @@ export type T3workStartChildArgs = {
   readonly provider?: string;
   readonly model?: string;
   readonly reasoningEffort?: T3workStartChildReasoningEffort;
+  /**
+   * Provider-AGNOSTIC thinking tier, the same ladder workflow child turns use
+   * ({@link applyWorkflowEffort}): the caller asks for `light` / `standard` / `high` without
+   * naming a provider, a model, or that provider's own vocabulary. Ignored when the explicit,
+   * provider-specific `reasoningEffort` is also given (that one is more specific), and a
+   * documented no-op on a provider that exposes no reasoning control.
+   */
+  readonly effort?: AgentEffort;
   readonly repoFullName?: string;
   readonly repoRef?: string;
 };
@@ -25,11 +40,6 @@ const START_CHILD_KICKOFF_MODES = new Set<T3workStartChildKickoffMode>([
   "plan",
   "interactive",
   "autopilot",
-]);
-const START_CHILD_REASONING_EFFORTS = new Set<T3workStartChildReasoningEffort>([
-  "low",
-  "medium",
-  "high",
 ]);
 const START_CHILD_EXECUTION_SCOPES = new Set<T3workStartChildExecutionScope>([
   "metarepo",
@@ -58,6 +68,7 @@ export const readStartChildArgs = (value: unknown): T3workStartChildArgsResult =
     readonly provider?: unknown;
     readonly model?: unknown;
     readonly reasoning_effort?: unknown;
+    readonly effort?: unknown;
     readonly repo_full_name?: unknown;
     readonly repo_ref?: unknown;
   };
@@ -118,27 +129,12 @@ export const readStartChildArgs = (value: unknown): T3workStartChildArgsResult =
     kickoffMode = normalized;
   }
 
-  let reasoningEffort: T3workStartChildReasoningEffort | undefined;
-  if (candidate.reasoning_effort !== undefined) {
-    if (typeof candidate.reasoning_effort !== "string") {
-      return {
-        ok: false,
-        message:
-          "t3work.thread.start_child 'reasoning_effort' must be one of 'low', 'medium', or 'high'.",
-      };
-    }
-    const normalized = candidate.reasoning_effort
-      .trim()
-      .toLowerCase() as T3workStartChildReasoningEffort;
-    if (!START_CHILD_REASONING_EFFORTS.has(normalized)) {
-      return {
-        ok: false,
-        message:
-          "t3work.thread.start_child 'reasoning_effort' must be one of 'low', 'medium', or 'high'.",
-      };
-    }
-    reasoningEffort = normalized;
-  }
+  const reasoning = readStartChildReasoningEffort(candidate.reasoning_effort);
+  if (!reasoning.ok) return reasoning;
+  const reasoningEffort = reasoning.value;
+  const tier = readStartChildEffort(candidate.effort);
+  if (!tier.ok) return tier;
+  const effort = tier.value;
 
   const provider = trimmedArg(candidate.provider);
   const model = trimmedArg(candidate.model);
@@ -171,6 +167,7 @@ export const readStartChildArgs = (value: unknown): T3workStartChildArgsResult =
       ...(provider ? { provider } : {}),
       ...(model ? { model } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
+      ...(effort ? { effort } : {}),
       ...(repoFullName ? { repoFullName } : {}),
       ...(repoRef ? { repoRef } : {}),
     },

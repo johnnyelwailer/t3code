@@ -57,7 +57,12 @@ export const T3workRenameThreadTool = Tool.make("t3work_rename_thread", {
 });
 
 export const T3workStartChildTool = Tool.make("t3work_start_child", {
-  description: "Create a child t3work session from the current thread.",
+  description:
+    "Create a child t3work session from the current thread. Use `effort` " +
+    "('light' | 'standard' | 'high') to ask for a thinking tier WITHOUT naming a provider or " +
+    "model — it is mapped onto whatever reasoning control the resolved provider exposes, and " +
+    "is simply ignored by providers that expose none. Only reach for `provider`/`model`/" +
+    "`reasoning_effort` when you genuinely need that exact target.",
   parameters: Schema.Struct({
     name: Schema.String,
     execution_scope: Schema.Literals(["metarepo", "repository"]),
@@ -71,6 +76,10 @@ export const T3workStartChildTool = Tool.make("t3work_start_child", {
     provider: Schema.optional(Schema.String),
     model: Schema.optional(Schema.String),
     reasoning_effort: Schema.optional(Schema.Literals(["low", "medium", "high"])),
+    // Provider-agnostic thinking tier — the same ladder workflow child turns use. Prefer this
+    // over `reasoning_effort`, which needs the provider's own vocabulary. `reasoning_effort`
+    // wins if both are given.
+    effort: Schema.optional(Schema.Literals(["light", "standard", "high"])),
     repo_full_name: Schema.optional(Schema.String),
     repo_ref: Schema.optional(Schema.String),
   }),

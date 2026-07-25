@@ -56,8 +56,12 @@ export interface WorkflowRunLifecycle {
   readonly recordSleeping: (sleep: WorkflowEngineSleep) => Promise<void>;
   /** Mark the run `completed` and clear the pending ask. */
   readonly recordCompleted: () => Promise<void>;
-  /** Mark the run `failed` and clear the pending ask. */
-  readonly recordFailed: () => Promise<void>;
+  /** Mark the run `failed`, clear the pending ask, and persist the agent-facing failure detail
+   * (migration 044) so `status`/`resume` can report WHY without a journal read. */
+  readonly recordFailed: (detail?: {
+    readonly reason: string;
+    readonly step: string;
+  }) => Promise<void>;
   /** Crash-recovery: if this correlation still owns a sleeping or newly-claimed active row and
    * its reply was already journaled, mark it failed. Correlation pinning protects newer work. */
   readonly orphanIfSleeping: (correlationId: string) => Promise<void>;

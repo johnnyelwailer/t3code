@@ -32,6 +32,11 @@ export interface WorkflowResumeToolValue {
   readonly ok: true;
   readonly runId: string;
   readonly status: "accepted" | "suspended" | "sleeping";
+  /** The reason the run had failed before this resume (migration 044) — so an agent that
+   * resumes blind still learns the cause it may need to fix. Absent for a paused run. */
+  readonly failureReason?: string | undefined;
+  /** Where it had failed — settle phase plus the primitive in flight (migration 044). */
+  readonly failureStep?: string | undefined;
   readonly hint: string;
 }
 

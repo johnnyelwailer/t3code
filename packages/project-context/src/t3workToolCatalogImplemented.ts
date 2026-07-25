@@ -40,8 +40,15 @@ const START_CHILD_INPUT_SCHEMA = {
     },
     reasoning_effort: {
       type: "string",
-      description: "Optional reasoning effort override for the child session.",
+      description:
+        "Optional PROVIDER-SPECIFIC reasoning effort override for the child session. Prefer the provider-agnostic 'effort' unless you need this exact value; 'reasoning_effort' wins when both are given.",
       enum: ["low", "medium", "high"],
+    },
+    effort: {
+      type: "string",
+      description:
+        "Optional provider-agnostic thinking tier for the child session. Ask for a tier without naming a provider or model: it is mapped onto whatever reasoning control the resolved provider/model exposes, and is ignored when it exposes none.",
+      enum: ["light", "standard", "high"],
     },
     repo_full_name: {
       type: "string",
