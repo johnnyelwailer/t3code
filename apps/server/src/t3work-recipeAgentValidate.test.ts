@@ -142,7 +142,7 @@ describe("validateProjectRecipeWorkflowForAgent", () => {
           expect(result.errors).toHaveLength(1);
           expect(result.errors[0]).toMatchObject({
             phase: "discover",
-            message: expect.stringContaining("Paths must stay inside the project workspace root."),
+            message: expect.stringContaining("Paths must stay inside the project workspace root"),
           });
         }).pipe(Effect.provide(NodeServices.layer)),
       ),
@@ -164,7 +164,7 @@ describe("validateProjectRecipeWorkflowForAgent", () => {
           expect(result.errors).toHaveLength(1);
           expect(result.errors[0]).toMatchObject({
             phase: "discover",
-            message: expect.stringContaining("Paths must stay inside the project workspace root."),
+            message: expect.stringContaining("Paths must stay inside the project workspace root"),
           });
         }).pipe(Effect.provide(NodeServices.layer)),
       ),

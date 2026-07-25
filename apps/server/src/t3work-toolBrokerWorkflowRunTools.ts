@@ -13,8 +13,8 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 
-import { resolveWithinRoot } from "./t3work-projectRecipeDiscoveryShared.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
+import { resolveAgentRecipePath } from "./t3work-recipeAgentPaths.ts";
 import {
   launchPreparedWorkflow,
   type PreparedWorkflowLaunchDeps,
@@ -134,7 +134,8 @@ export function makeWorkflowRunToolHandlers<E>(deps: {
 }
 
 /** Persist inline `source` under `.t3work-runs/<runId>/workflow.ts`, or containment-check an
- * existing `workflowPath` against the workspace root (same rule as `t3work.recipe.validate`). */
+ * existing `workflowPath` against the workspace root and the active packs' recipe roots (same rule
+ * as `t3work.recipe.validate` — a pack recipe's `workflowPath` must be runnable, not just listed). */
 function resolveRunWorkflowPath(input: {
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
@@ -161,8 +162,9 @@ function resolveRunWorkflowPath(input: {
   }
   const requestedPath = args.workflowPath?.trim() ?? "";
   return Effect.try({
-    try: () => resolveWithinRoot(path, workspaceRoot, requestedPath),
-    catch: (error) => `${errorMessage(error)} Paths must stay inside the project workspace root.`,
+    try: () => resolveAgentRecipePath(path, workspaceRoot, requestedPath),
+    catch: (error) =>
+      `${errorMessage(error)} Paths must stay inside the project workspace root or an active pack's recipe directory.`,
   }).pipe(
     Effect.flatMap((resolved) =>
       fileSystem.exists(resolved).pipe(
