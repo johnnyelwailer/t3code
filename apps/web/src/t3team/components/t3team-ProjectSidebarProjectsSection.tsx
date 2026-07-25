@@ -23,6 +23,7 @@ type ProjectSidebarProjectsSectionProps = Pick<
   | "onSelectThread"
   | "onToggleExpand"
   | "onCreateProject"
+  | "onManageProjectRecipes"
   | "onManageProjectRepositories"
   | "onDeleteProject"
   | "onRenameProject"
@@ -72,6 +73,7 @@ export function ProjectSidebarProjectsSection({
   onSelectThread,
   onToggleExpand,
   onCreateProject,
+  onManageProjectRecipes,
   onManageProjectRepositories,
   onDeleteProject,
   onRenameProject,
@@ -153,6 +155,7 @@ export function ProjectSidebarProjectsSection({
                 onToggleExpand={onToggleExpand}
                 onSelectThread={onSelectThread}
                 onSelectTicket={onSelectTicket}
+                onManageProjectRecipes={onManageProjectRecipes}
                 onManageProjectRepositories={onManageProjectRepositories}
                 onDeleteProject={onDeleteProject}
                 onRenameProject={onRenameProject}

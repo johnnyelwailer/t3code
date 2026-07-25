@@ -166,6 +166,7 @@ function createProps(overrides: Partial<ProjectRowProps> = {}): ProjectRowProps 
     onToggleExpand: () => {},
     onSelectThread: () => {},
     onSelectTicket: () => {},
+    onManageProjectRecipes: () => {},
     onManageProjectRepositories: () => {},
     onDeleteProject: () => {},
     onRenameProject: () => {},

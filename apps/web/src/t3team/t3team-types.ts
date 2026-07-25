@@ -129,6 +129,7 @@ export type ProjectBacklogSubtaskCreateInput = {
 export type ViewState =
   | { type: "dashboard"; projectId: string; embeddedThreadId?: string }
   | { type: "ticket"; projectId: string; ticketId: string; embeddedThreadId?: string }
+  | { type: "recipes"; projectId: string; embeddedThreadId?: string }
   | {
       type: "thread";
       projectId: string;

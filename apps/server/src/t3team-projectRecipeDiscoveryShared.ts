@@ -1,6 +1,7 @@
 /* oxlint-disable t3code/no-inline-schema-compile -- Existing merged lint debt; keep green while preserving behavior. */
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import {
   ProjectRecipeKickoffProgram,
   RecipeSurface,
@@ -20,6 +21,7 @@ const RawProjectRecipeManifestSchema = Schema.Struct({
   scope: Schema.optional(Schema.String),
   displayName: Schema.String,
   shortDescription: Schema.String,
+  topic: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.String),
   surfaces: Schema.Array(RecipeSurface),
   rank: Schema.optional(Schema.Union([Schema.Number, Schema.String])),
@@ -36,6 +38,8 @@ const RawProjectRecipeManifestSchema = Schema.Struct({
 export const decodeRawProjectRecipeManifest = Schema.decodeEffect(
   Schema.fromJsonString(RawProjectRecipeManifestSchema),
 );
+const RawProjectRecipeManifestJson = fromJsonStringPretty(RawProjectRecipeManifestSchema);
+export const encodeRawProjectRecipeManifest = Schema.encodeEffect(RawProjectRecipeManifestJson);
 
 export function isRelativePath(value: string): boolean {
   return value.startsWith("./") || value.startsWith("../");

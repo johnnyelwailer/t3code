@@ -107,6 +107,11 @@ import {
 import { t3teamAtlassianOAuthExchangeRouteLayer } from "./t3team-atlassian-oauth-routes.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
+import {
+  t3teamProjectWorkspaceDeleteManagedRecipeRouteLayer,
+  t3teamProjectWorkspaceListManagedRecipesRouteLayer,
+  t3teamProjectWorkspaceUpdateManagedRecipeRouteLayer,
+} from "./t3team-project-workspace-recipe-management-routes.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
 import {
   t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
@@ -461,6 +466,9 @@ export const makeRoutesLayer = Layer.mergeAll(
   t3teamTempoRouteLayer,
   t3teamProjectWorkspaceBootstrapRouteLayer,
   t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
+  t3teamProjectWorkspaceListManagedRecipesRouteLayer,
+  t3teamProjectWorkspaceUpdateManagedRecipeRouteLayer,
+  t3teamProjectWorkspaceDeleteManagedRecipeRouteLayer,
   t3teamThreadPlacementRouteLayer,
   t3teamThreadRecipeWorkflowLaunchRouteLayer,
   t3teamThreadWorkflowControlRouteLayer,

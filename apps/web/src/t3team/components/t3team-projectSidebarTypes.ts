@@ -29,6 +29,7 @@ export interface ProjectSidebarProps {
   onOpenSearch: () => void;
   onCreateProject: () => void;
   onOpenSettings: (() => void) | undefined;
+  onManageProjectRecipes: (id: string) => void;
   onManageProjectRepositories: (id: string) => void;
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, newTitle: string) => void;

@@ -181,6 +181,13 @@ export function T3TeamRouteSurface() {
               resetScroll: false,
             });
           }}
+          onOpenProjectRecipes={(projectId) => {
+            void navigate({
+              to: "/t3team/projects/$projectId/recipes",
+              params: { projectId },
+              search: buildRouteSearch(search),
+            });
+          }}
           onProjectCreated={(project: ProjectShellProject) => {
             void navigate({
               to: project.source.provider === "local" ? "/t3team" : "/t3team/projects/$projectId",

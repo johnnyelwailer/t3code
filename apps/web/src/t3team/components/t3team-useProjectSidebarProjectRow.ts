@@ -27,6 +27,7 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
     expanded,
     onSelectProject,
     onToggleExpand,
+    onManageProjectRecipes,
     onManageProjectRepositories,
     onDeleteProject,
     onRenameProject,
@@ -105,6 +106,7 @@ export function useProjectSidebarProjectRow(props: ProjectRowProps) {
   } = useProjectSidebarProjectRename({
     project,
     onDeleteProject,
+    onManageProjectRecipes,
     onManageProjectRepositories,
     onRenameProject,
   });

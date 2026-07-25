@@ -13,6 +13,7 @@ export const T3TEAM_CREATE_PATH = "/t3team/new";
 const T3TEAM_PATH_SEGMENT = "projects";
 const T3TEAM_TICKET_SEGMENT = "tickets";
 const T3TEAM_THREAD_SEGMENT = "threads";
+const T3TEAM_RECIPES_SEGMENT = "recipes";
 const T3TEAM_CHAT_THREAD_SEARCH_KEY = "chatThreadId";
 const T3TEAM_SETUP_SEARCH_KEY = "setup";
 const T3TEAM_SETUP_WELCOME_VALUE = "welcome";
@@ -32,6 +33,10 @@ export type T3TeamRouteSearchTarget =
   | {
       to: "/t3team/projects/$projectId/tickets/$ticketId";
       params: { projectId: string; ticketId: string };
+    }
+  | {
+      to: "/t3team/projects/$projectId/recipes";
+      params: { projectId: string };
     }
   | {
       to: "/t3team/projects/$projectId/threads/$threadId";
@@ -96,6 +101,14 @@ export function parseT3TeamViewFromPath(
     };
   }
 
+  if (segments.length === 3 && segments[2] === T3TEAM_RECIPES_SEGMENT) {
+    return {
+      type: "recipes",
+      projectId,
+      ...(embeddedThreadId ? { embeddedThreadId } : {}),
+    };
+  }
+
   if (segments.length === 4 && segments[2] === T3TEAM_THREAD_SEGMENT && segments[3]) {
     return {
       type: "thread",
@@ -133,6 +146,13 @@ export function resolveT3TeamRouteSearchTarget(pathname: string): T3TeamRouteSea
     return {
       to: "/t3team/projects/$projectId/tickets/$ticketId",
       params: { projectId: view.projectId, ticketId: view.ticketId },
+    };
+  }
+
+  if (view.type === "recipes") {
+    return {
+      to: "/t3team/projects/$projectId/recipes",
+      params: { projectId: view.projectId },
     };
   }
 

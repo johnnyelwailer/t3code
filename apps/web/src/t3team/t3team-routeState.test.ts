@@ -53,4 +53,16 @@ describe("t3team route state", () => {
       embeddedThreadId: "thread-456",
     });
   });
+
+  it("parses the recipe manager page route with an embedded chat thread", () => {
+    expect(
+      parseT3TeamViewFromPath("/t3team/projects/acme/recipes", {
+        chatThreadId: "thread-123",
+      }),
+    ).toEqual({
+      type: "recipes",
+      projectId: "acme",
+      embeddedThreadId: "thread-123",
+    });
+  });
 });

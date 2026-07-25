@@ -1,3 +1,4 @@
+import type { ProjectShellProject } from "@t3tools/project-context";
 import { SidebarInset, useSidebar } from "~/t3team/components/ui/t3team-sidebar";
 import { isElectron } from "~/env";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
@@ -25,6 +26,7 @@ export function AppContentPane({
   onThreadDisplayModeChange,
   onBackToDashboard,
   onManageRepositories,
+  onManageRecipes,
 }: {
   activeDashboardMode: ProjectDashboardMode;
   resolvedView: ViewState | null;
@@ -42,6 +44,7 @@ export function AppContentPane({
   onThreadDisplayModeChange: (threadId: string, displayMode: ProjectThreadDisplayMode) => void;
   onBackToDashboard: (projectId: string) => void;
   onManageRepositories: (projectId: string | null) => void;
+  onManageRecipes: (projectId: string) => void;
 }) {
   const { isMobile, open } = useSidebar();
   const shouldInsetDesktopHeader = isElectron && !isMobile && !open;
@@ -49,7 +52,7 @@ export function AppContentPane({
   return (
     <T3TeamInlineRecipeLaunchProvider>
       <SidebarInset className="h-full min-h-0 overflow-hidden bg-background text-foreground">
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <AppMainContent
             view={resolvedView}
             activeDashboardMode={activeDashboardMode}
@@ -81,6 +84,7 @@ export function AppContentPane({
                 shouldInsetDesktopHeader={shouldInsetDesktopHeader}
                 onOpenTicket={onOpenTicket}
                 onManageRepositories={onManageRepositories}
+                onManageRecipes={onManageRecipes}
               />
             )}
             renderTicketDetail={(project, ticketId, activeThreadId) => (
