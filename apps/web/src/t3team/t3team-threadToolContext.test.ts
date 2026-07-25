@@ -108,6 +108,13 @@ describe("createT3TeamTurnToolContext", () => {
     expect(toolContext).toEqual({
       surface: "t3team",
       tools: [
+        // Catalog order: t3team.widget.show is the first defaultEnabled entry
+        // in IMPLEMENTED_T3TEAM_TOOL_CATALOG.
+        {
+          id: "t3team.widget.show",
+          label: "Show widget",
+          capabilities: ["write"],
+        },
         {
           id: "t3team.view.read",
           label: "Read view",

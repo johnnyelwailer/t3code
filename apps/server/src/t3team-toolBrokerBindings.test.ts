@@ -17,6 +17,7 @@ const orchestrationMock: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
   dispatch: () => Effect.succeed({ sequence: 1 }),
   streamDomainEvents: Stream.empty,
+  latestSequence: Effect.succeed(0),
 };
 
 function makeRenderContext() {

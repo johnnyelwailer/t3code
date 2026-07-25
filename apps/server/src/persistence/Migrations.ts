@@ -55,8 +55,19 @@ import Migration0039 from "./Migrations/t3team-039_WorkflowOrigin.ts";
 import Migration0040 from "./Migrations/t3team-040_ProjectionThreadMessageSequence.ts";
 import Migration0041 from "./Migrations/t3team-041_ProjectionThreadRetention.ts";
 import Migration0042 from "./Migrations/t3team-042_ProjectionThreadChildStatus.ts";
-import Migration0043 from "./Migrations/t3team-043_WorkflowRecipePath.ts";
-import Migration0044 from "./Migrations/t3team-044_WorkflowFailureReason.ts";
+// Upstream added these as 033/034, but this fork already occupies 33-42. The runner only
+// applies migrations with an id greater than the last applied one, so re-using 33/34 would
+// silently skip them on every existing fork database. They keep their upstream filenames and
+// contents; only the registered id moves. Rule for future syncs: append upstream migrations
+// above the fork's current maximum id instead of renumbering fork migrations.
+import Migration0043 from "./Migrations/033_ProjectionThreadsSettled.ts";
+import Migration0044 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
+// This branch's own migrations. They were authored as 043/044 before main took those ids; by
+// main's rule above the ESTABLISHED ids win and the newcomer appends, so they moved to 045/046.
+// Safe here because they had only ever been applied on this branch's throwaway dev databases —
+// both are plain ADD COLUMN and would fail if re-applied to a database that ran them as 043/044.
+import Migration0045 from "./Migrations/t3team-045_WorkflowRecipePath.ts";
+import Migration0046 from "./Migrations/t3team-046_WorkflowFailureReason.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -111,8 +122,10 @@ export const migrationEntries = [
   [40, "ProjectionThreadMessageSequence", Migration0040],
   [41, "ProjectionThreadRetention", Migration0041],
   [42, "ProjectionThreadChildStatus", Migration0042],
-  [43, "WorkflowRecipePath", Migration0043],
-  [44, "WorkflowFailureReason", Migration0044],
+  [43, "ProjectionThreadsSettled", Migration0043],
+  [44, "ProjectionThreadsSnoozed", Migration0044],
+  [45, "WorkflowRecipePath", Migration0045],
+  [46, "WorkflowFailureReason", Migration0046],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

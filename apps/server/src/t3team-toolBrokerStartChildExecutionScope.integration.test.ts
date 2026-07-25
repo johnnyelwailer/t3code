@@ -127,6 +127,7 @@ function createEvalHarness() {
   const orchestrationMock: OrchestrationEngineShape = {
     readEvents: () => Stream.empty,
     streamDomainEvents: Stream.empty,
+    latestSequence: Effect.sync(() => sequence),
     dispatch: (command) =>
       Effect.sync(() => {
         sequence += 1;
@@ -201,6 +202,8 @@ function createEvalHarness() {
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
           archivedAt: null,
+          settledOverride: null,
+          settledAt: null,
           deletedAt: null,
           messages: [],
           proposedPlans: [],

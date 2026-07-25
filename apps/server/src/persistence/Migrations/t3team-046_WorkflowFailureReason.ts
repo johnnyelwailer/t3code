@@ -13,7 +13,7 @@
  * recorded results — a thrown body error is never a journal entry, so a read-back can only ever
  * report the last successful position, not the cause. The reason has to be written at settle
  * time to exist at all; once it is written, a column also makes `status`/`resume` O(1) instead
- * of parsing a journal per query. NULL for a run that never failed (or any pre-044 row).
+ * of parsing a journal per query. NULL for a run that never failed (or any pre-046 row).
  */
 
 import * as SqlClient from "effect/unstable/sql/SqlClient";

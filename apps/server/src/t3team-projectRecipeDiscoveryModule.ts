@@ -40,7 +40,6 @@ import {
   resolveRecipeNamedActions,
   resolveRecipeWorkflowPath,
 } from "./t3team-projectRecipeActions.ts";
-import { ensureProjectRecipeModuleResolution } from "./t3team-projectRecipeModuleResolution.ts";
 import {
   renderRecipeMetadata,
   type RenderedRecipeMetadata,
@@ -107,9 +106,6 @@ export { resolveRecipeWorkflowPath };
 export const importRecipeModuleRef = Effect.fn("importRecipeModuleRef")(function* (
   modulePath: string,
 ) {
-  // Project-local modules import `@t3team/sdk`; without this they fail with ERR_MODULE_NOT_FOUND
-  // in any workspace that is not itself under an install.
-  ensureProjectRecipeModuleResolution();
   const moduleUrl = NodeURL.pathToFileURL(modulePath);
   moduleUrl.searchParams.set("v", String(yield* Clock.currentTimeMillis));
   const imported = (yield* Effect.tryPromise(() => import(moduleUrl.toString()))) as {

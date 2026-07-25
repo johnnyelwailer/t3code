@@ -51,8 +51,12 @@ export function T3TeamSetupWelcomeSurface({
   const selectedProfile =
     cardOptions.find((option) => option.id === setupProfileId) ?? cardOptions[0];
 
+  // `align-items: safe center` rather than `items-center`: once the card is taller
+  // than the viewport, plain centering overflows the *start* edge, and that overflow
+  // is unreachable because scrollTop is already 0 — the heading gets clipped with no
+  // way to scroll up to it. `safe` falls back to flex-start exactly in that case.
   return (
-    <div className="relative flex flex-1 items-center justify-center overflow-auto p-4 sm:p-6">
+    <div className="relative flex flex-1 [align-items:safe_center] justify-center overflow-auto p-4 sm:p-6">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-[radial-gradient(44rem_22rem_at_top,color-mix(in_srgb,var(--color-sky-400)_22%,transparent),transparent)] opacity-80" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_88%,white)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-amber-100))_100%)] dark:bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_92%,black)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-sky-950))_100%)]" />
 

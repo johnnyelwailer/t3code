@@ -23,6 +23,7 @@ const orchestrationMock: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
   dispatch: () => Effect.succeed({ sequence: 1 }),
   streamDomainEvents: Stream.empty,
+  latestSequence: Effect.succeed(0),
 };
 
 const REFRESH_CONTEXT_TOOL = "t3team.work_item.refresh_context_bundle" as const;

@@ -85,10 +85,19 @@ describe("orchestration projector", () => {
         interactionMode: "default",
         branch: null,
         worktreePath: null,
+        // t3team: threads default to "retained" retention (only ephemeral
+        // workflow runs opt out), matching ProjectionPipeline's NOT NULL
+        // DEFAULT 'retained' column so the in-memory and hydrated read
+        // models agree.
+        retention: "retained",
         latestTurn: null,
         createdAt: now,
         updatedAt: now,
         archivedAt: null,
+        settledOverride: null,
+        settledAt: null,
+        snoozedUntil: null,
+        snoozedAt: null,
         deletedAt: null,
         messages: [],
         proposedPlans: [],
