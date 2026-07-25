@@ -109,6 +109,8 @@ import {
 import { t3teamAtlassianOAuthExchangeRouteLayer } from "./t3team-atlassian-oauth-routes.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
+import { localProviderSessionsRouteLayer } from "./local-provider-sessions-routes.ts";
+import { LocalProviderSessionsWatcherLive } from "./localProviderSessionsWatcher.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
 import {
   t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
@@ -326,10 +328,10 @@ const CloudManagedEndpointRuntimeLive = Layer.mergeAll(
   ),
 );
 
-const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
-  Layer.provideMerge(ProviderLayerLive),
-  Layer.provideMerge(OrchestrationLayerLive),
-);
+const ProviderRuntimeLayerLive = Layer.mergeAll(
+  ProviderSessionReaperLive,
+  LocalProviderSessionsWatcherLive,
+).pipe(Layer.provideMerge(ProviderLayerLive), Layer.provideMerge(OrchestrationLayerLive));
 
 // The workflow-engine singletons share one provideMerge slot (the `pipe` arity is capped):
 // the in-memory run registry (reactor's hot index) + the durable run record + the SQLite
@@ -407,10 +409,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(WorkspaceLayerLive),
   // Project favicon + repo identity share one provideMerge slot (the `pipe` arity is capped).
   Layer.provideMerge(
-    Layer.mergeAll(
-      ProjectFaviconResolverLayerLive,
-      RepositoryIdentityResolver.layer,
-    ),
+    Layer.mergeAll(ProjectFaviconResolverLayerLive, RepositoryIdentityResolver.layer),
   ),
   Layer.provideMerge(ServerEnvironment.layer),
   Layer.provideMerge(AuthLayerLive),
@@ -468,6 +467,7 @@ export const makeRoutesLayer = Layer.mergeAll(
   t3teamTempoRouteLayer,
   t3teamProjectWorkspaceBootstrapRouteLayer,
   t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
+  localProviderSessionsRouteLayer,
   t3teamThreadPlacementRouteLayer,
   t3teamThreadRecipeWorkflowLaunchRouteLayer,
   t3teamThreadWorkflowControlRouteLayer,

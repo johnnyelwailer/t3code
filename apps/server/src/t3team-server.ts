@@ -110,6 +110,8 @@ import { t3teamAtlassianOAuthExchangeRouteLayer } from "./t3team-atlassian-oauth
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
+import { localProviderSessionsRouteLayer } from "./local-provider-sessions-routes.ts";
+import { LocalProviderSessionsWatcherLive } from "./localProviderSessionsWatcher.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
 import {
   t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
@@ -318,10 +320,10 @@ const CloudManagedEndpointRuntimeLive = Layer.mergeAll(
   ),
 );
 
-const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
-  Layer.provideMerge(ProviderLayerLive),
-  Layer.provideMerge(OrchestrationLayerLive),
-);
+const ProviderRuntimeLayerLive = Layer.mergeAll(
+  ProviderSessionReaperLive,
+  LocalProviderSessionsWatcherLive,
+).pipe(Layer.provideMerge(ProviderLayerLive), Layer.provideMerge(OrchestrationLayerLive));
 
 // Durable workflow-engine singletons (Epic 25 §Open question 2): registry + run record +
 // SQLite journal store, shared in one provideMerge slot. Boot rehydration (in the shared
@@ -456,6 +458,7 @@ export const makeT3TeamRoutesLayer = Layer.mergeAll(
   t3teamTempoRouteLayer,
   t3teamProjectWorkspaceBootstrapRouteLayer,
   t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
+  localProviderSessionsRouteLayer,
   t3teamThreadPlacementRouteLayer,
   t3teamThreadRecipeWorkflowLaunchRouteLayer,
   t3teamThreadWorkflowControlRouteLayer,

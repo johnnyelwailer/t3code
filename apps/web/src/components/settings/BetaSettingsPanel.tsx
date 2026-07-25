@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import {
+  useClientSettings,
+  usePrimarySettings,
+  useUpdateClientSettings,
+  useUpdatePrimarySettings,
+} from "../../hooks/useSettings";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
@@ -51,15 +56,31 @@ function AutoSettleDaysInput({
 }
 
 export function BetaSettingsPanel() {
+  const showLocalProviderSessions = usePrimarySettings(
+    (settings) => settings.showLocalProviderSessions,
+  );
+  const updatePrimarySettings = useUpdatePrimarySettings();
   const sidebarV2Enabled = useClientSettings((settings) => settings.sidebarV2Enabled);
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
   );
   const updateSettings = useUpdateClientSettings();
-
   return (
     <SettingsPageContainer>
       <SettingsSection title="Beta features">
+        <SettingsRow
+          title="Local provider sessions"
+          description="Watch official Codex and Claude profile folders. Matching sessions appear in existing project worktrees and resume from the original native session."
+          control={
+            <Switch
+              checked={showLocalProviderSessions}
+              onCheckedChange={(checked) =>
+                updatePrimarySettings({ showLocalProviderSessions: Boolean(checked) })
+              }
+              aria-label="Show local provider sessions"
+            />
+          }
+        />
         <SettingsRow
           title="Sidebar v2"
           description="One flat thread list in creation order. Active work renders as rich cards; settled threads collapse to compact rows. Settling requires an up-to-date server — on older servers threads simply stay active. Switch back any time."

@@ -80,6 +80,7 @@ import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import { cn, isMacPlatform, isWindowsPlatform, newProjectId } from "../lib/utils";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { buildThreadRouteParams, resolveThreadRouteTarget } from "../threadRoutes";
+import { ExternalWorkspaceProviderIcons } from "./ExternalWorkspaceProviderIcons";
 import {
   applyWslEnvironmentConfiguration,
   parseWslUncPath,
@@ -161,6 +162,11 @@ interface AddProjectEnvironmentOption {
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly isPrimary: boolean;
+}
+
+interface LocalProviderWorkspace {
+  readonly cwd: string;
+  readonly providers: ReadonlyArray<string>;
 }
 
 type AddProjectRemoteProviderKind = Extract<
@@ -506,12 +512,37 @@ function OpenCommandPaletteDialog(props: {
   );
   const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
   const [addProjectCloneFlow, setAddProjectCloneFlow] = useState<AddProjectCloneFlow | null>(null);
+  const [localProviderWorkspaces, setLocalProviderWorkspaces] = useState<
+    ReadonlyArray<LocalProviderWorkspace>
+  >([]);
   const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
   const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
   const projectGroupingSettings = useMemo(
     () => selectProjectGroupingSettings(clientSettings),
     [clientSettings],
   );
+
+  useEffect(() => {
+    if (addProjectEnvironmentId !== primaryEnvironmentId) return;
+    let cancelled = false;
+    void fetch("/api/local-provider-sessions/workspaces")
+      .then(async (response) => {
+        if (!response.ok) return [];
+        const payload = (await response.json()) as {
+          workspaces?: ReadonlyArray<LocalProviderWorkspace>;
+        };
+        return payload.workspaces ?? [];
+      })
+      .then((workspaces) => {
+        if (!cancelled) setLocalProviderWorkspaces(workspaces);
+      })
+      .catch(() => {
+        if (!cancelled) setLocalProviderWorkspaces([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addProjectEnvironmentId, primaryEnvironmentId]);
 
   const environmentLabelById = useMemo(
     () =>
@@ -1023,9 +1054,60 @@ function OpenCommandPaletteDialog(props: {
         });
       }
 
-      return [{ value: `sources:${environmentId}`, label: "Sources", items: sourceItems }];
+      const localWorkspaceItems =
+        environmentId === primaryEnvironmentId
+          ? localProviderWorkspaces
+              .filter(
+                (workspace) =>
+                  !findProjectByPath(
+                    projects.filter((project) => project.environmentId === environmentId),
+                    workspace.cwd,
+                  ),
+              )
+              .map((workspace) => ({
+                kind: "action" as const,
+                value: `action:add-project:${environmentId}:provider-workspace:${workspace.cwd}`,
+                searchTerms: ["workspace", "local", "codex", "claude", workspace.cwd],
+                title: inferProjectTitleFromPath(workspace.cwd),
+                description: `External workspace · ${workspace.cwd}`,
+                icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+                titleTrailingContent: (
+                  <ExternalWorkspaceProviderIcons
+                    providers={workspace.providers.filter(
+                      (provider): provider is "Codex" | "Claude" =>
+                        provider === "Codex" || provider === "Claude",
+                    )}
+                  />
+                ),
+                keepOpen: true,
+                run: async () => {
+                  startAddProjectBrowse(environmentId);
+                  setQuery(workspace.cwd);
+                  setBrowseGeneration((generation) => generation + 1);
+                },
+              }))
+          : [];
+      return [
+        { value: `sources:${environmentId}`, label: "Sources", items: sourceItems },
+        ...(localWorkspaceItems.length > 0
+          ? [
+              {
+                value: `local-provider-workspaces:${environmentId}`,
+                label: "External workspaces",
+                items: localWorkspaceItems,
+              },
+            ]
+          : []),
+      ];
     },
-    [openSourceControlSettings, startAddProjectBrowse, startAddProjectClone],
+    [
+      localProviderWorkspaces,
+      openSourceControlSettings,
+      primaryEnvironmentId,
+      projects,
+      startAddProjectBrowse,
+      startAddProjectClone,
+    ],
   );
 
   const startAddProjectSourceSelection = useCallback(
