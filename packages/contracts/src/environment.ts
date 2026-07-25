@@ -87,6 +87,17 @@ export const EnvironmentAppearance = Schema.Struct({
   ),
   shape: Schema.optionalKey(Schema.Struct({ radius: Schema.optionalKey(Schema.String) })),
   density: Schema.optionalKey(Schema.Number),
+  /**
+   * Starting values for user-owned client appearance settings, carried from the pack theme's
+   * `appearanceDefaults`. Applied once per distinct set of values, never over a later user choice
+   * — see `t3team-packAppearanceDefaults.ts`.
+   */
+  appearanceDefaults: Schema.optionalKey(
+    Schema.Struct({
+      sidebarLens: Schema.optionalKey(Schema.Literals(["code", "work"])),
+      glassOpacity: Schema.optionalKey(Schema.Number),
+    }),
+  ),
 });
 export type EnvironmentAppearance = typeof EnvironmentAppearance.Type;
 
