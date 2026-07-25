@@ -95,11 +95,12 @@ export function WorkItemTitleBand({
           space is not an answer — "nobody" is, and it is the one that prompts someone to pick it up.
         */}
         <WorkItemPersonChip person={model.assignee} isCurrentUser={isAssignedToCurrentUser} />
-        <WorkItemPriorityChip priority={model.priority} />
 
         {estimateLabel ? (
           <span className="text-xs tabular-nums text-muted-foreground">{estimateLabel}</span>
         ) : null}
+
+        <WorkItemPriorityChip priority={model.priority} />
 
         {model.dueDateMs !== undefined ? (
           <WorkItemDate
