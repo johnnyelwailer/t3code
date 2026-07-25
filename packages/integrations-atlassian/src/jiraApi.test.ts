@@ -107,4 +107,102 @@ describe("JiraApiClient", () => {
       }),
     });
   });
+
+  it("requests the widened issue field list with default expand", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      Response.json({ id: "1", key: "TEST-1", self: "https://test.atlassian.net/rest/api/3/issue/1", fields: {} }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await client.getIssue("TEST-1");
+
+    const expectedFields = [
+      "key",
+      "summary",
+      "parent",
+      "subtasks",
+      "issuelinks",
+      "issuetype",
+      "status",
+      "priority",
+      "assignee",
+      "reporter",
+      "labels",
+      "description",
+      "updated",
+      "created",
+      "comment",
+      "project",
+      "attachment",
+      "duedate",
+      "resolution",
+      "resolutiondate",
+      "timetracking",
+      "worklog",
+      "watches",
+      "votes",
+      "components",
+      "fixVersions",
+      "versions",
+      "environment",
+      "security",
+    ].join(",");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://test.atlassian.net/rest/api/3/issue/TEST-1?fields=${expectedFields}&expand=renderedFields`,
+      expect.any(Object),
+    );
+  });
+
+  it("merges extraFields into the issue field list without duplicating them", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      Response.json({ id: "1", key: "TEST-1", self: "https://test.atlassian.net/rest/api/3/issue/1", fields: {} }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await client.getIssue("TEST-1", ["customfield_10016", "created"]);
+
+    const calledUrl = fetchMock.mock.calls[0]?.[0] as string;
+    expect(calledUrl).toContain("customfield_10016");
+    // "created" is already a base field — must not be duplicated.
+    expect(calledUrl.match(/created/g)).toHaveLength(1);
+  });
+
+  it("adds changelog to expand only when expandChangelog is requested, leaving default behaviour unchanged", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      Response.json({ id: "1", key: "TEST-1", self: "https://test.atlassian.net/rest/api/3/issue/1", fields: {} }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await client.getIssue("TEST-1", [], { expandChangelog: true });
+    const withChangelogUrl = fetchMock.mock.calls[0]?.[0] as string;
+    expect(withChangelogUrl).toContain("expand=renderedFields,changelog");
+
+    fetchMock.mockClear();
+    await client.getIssue("TEST-1");
+    const defaultUrl = fetchMock.mock.calls[0]?.[0] as string;
+    expect(defaultUrl).toContain("expand=renderedFields");
+    expect(defaultUrl).not.toContain("changelog");
+  });
 });

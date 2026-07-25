@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { ProjectBacklogRowSubtaskCell } from "~/t3team/t3team-ProjectBacklogRowPlanningCells";
 import type { ProjectBacklogSubtaskCreateInput, ProjectTicket } from "~/t3team/t3team-types";
 
@@ -55,7 +56,9 @@ export function ProjectBacklogTableRowActionCell({
         )}
       </div>
       {rowError ? (
-        <div className="mt-1 text-[10px] text-right text-destructive">{rowError}</div>
+        <div className="mt-1">
+          <T3TeamErrorState error={rowError} variant="inline" />
+        </div>
       ) : null}
     </td>
   );

@@ -1453,8 +1453,15 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     };
     const entry = this.getDefaultClient();
     if (!entry) throw new Error("No Jira client available");
-    const issue = await entry.client.getIssue(typedRef.id);
-    return normalizeIssue(issue, entry.siteUrl);
+    const [estimateField, sprintField] = await Promise.all([
+      this.resolveEstimateField(entry.client),
+      this.resolveSprintField(entry.client),
+    ]);
+    const issue = await entry.client.getIssue(typedRef.id, [
+      ...(estimateField ? [estimateField.id] : []),
+      ...(sprintField ? [sprintField.id] : []),
+    ]);
+    return normalizeIssue(issue, entry.siteUrl, { estimateField, sprintField });
   }
 
   async downloadAsset(url: string): Promise<{ bytes: Uint8Array; mimeType?: string }> {

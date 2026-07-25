@@ -1,3 +1,4 @@
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { Input } from "~/t3team/components/ui/t3team-input";
 import {
   InputGroup,
@@ -69,7 +70,7 @@ export function ProjectBacklogSubtaskCreateForm({
         <span>{`${ticket.subtaskCount ?? 0} existing subtasks`}</span>
       </div>
 
-      {error ? <div className="text-xs text-destructive">{error}</div> : null}
+      {error ? <T3TeamErrorState error={error} action="creating the subtask" variant="inline" /> : null}
     </div>
   );
 }

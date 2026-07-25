@@ -1,5 +1,6 @@
 import { CheckCircle2, FileText, Loader2, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import {
@@ -99,7 +100,13 @@ export function DraftDocumentReviewPanel({
           </div>
         )}
 
-        {draft.error ? <p className="text-sm text-destructive">{draft.error}</p> : null}
+        {draft.error ? (
+          <T3TeamErrorState
+            error={draft.error}
+            variant="inline"
+            {...(onApply ? { onRetry: () => void onApply(draft) } : {})}
+          />
+        ) : null}
         {unavailableReason ? (
           <p className="text-xs text-muted-foreground">{unavailableReason}</p>
         ) : null}

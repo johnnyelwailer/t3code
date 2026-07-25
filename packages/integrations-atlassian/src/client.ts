@@ -181,11 +181,38 @@ export type JiraIssueSearchResponse = {
   readonly isLast?: boolean;
 };
 
+export type JiraChangelogHistoryItem = {
+  readonly field?: string;
+  readonly fieldtype?: string;
+  readonly from?: string | null;
+  readonly fromString?: string | null;
+  readonly to?: string | null;
+  readonly toString?: string | null;
+};
+
+export type JiraChangelogHistory = {
+  readonly id: string;
+  readonly author?: {
+    readonly accountId?: string;
+    readonly displayName?: string;
+  };
+  readonly created?: string;
+  readonly items?: ReadonlyArray<JiraChangelogHistoryItem>;
+};
+
+export type JiraChangelog = {
+  readonly startAt?: number;
+  readonly maxResults?: number;
+  readonly total?: number;
+  readonly histories?: ReadonlyArray<JiraChangelogHistory>;
+};
+
 export type JiraIssue = {
   readonly id: string;
   readonly key: string;
   readonly self: string;
   readonly fields: Record<string, unknown>;
+  readonly changelog?: JiraChangelog;
 };
 
 export type JiraStatusCategory = {
@@ -246,10 +273,14 @@ export type JiraComment = {
   readonly id: string;
   readonly body?: unknown;
   readonly author?: {
+    readonly accountId?: string;
     readonly displayName?: string;
+    readonly avatarUrls?: Record<string, string>;
   };
   readonly created?: string;
   readonly updated?: string;
+  /** Jira Service Management only: whether the comment is visible to customers. Absent on plain Jira Software comments. */
+  readonly jsdPublic?: boolean;
 };
 
 export type JiraCommentsResponse = {

@@ -224,6 +224,18 @@ export class JiraApiClient {
       "comment",
       "project",
       "attachment",
+      "duedate",
+      "resolution",
+      "resolutiondate",
+      "timetracking",
+      "worklog",
+      "watches",
+      "votes",
+      "components",
+      "fixVersions",
+      "versions",
+      "environment",
+      "security",
     ];
 
     const merged = [...new Set([...baseFields, ...extraFields])];
@@ -380,10 +392,12 @@ export class JiraApiClient {
   async getIssue(
     issueIdOrKey: string,
     extraFields: ReadonlyArray<string> = [],
+    options?: { expandChangelog?: boolean },
   ): Promise<JiraIssue> {
     const fields = this.buildIssueFields(extraFields);
+    const expand = options?.expandChangelog ? "renderedFields,changelog" : "renderedFields";
     return this.fetchJson<JiraIssue>(
-      `/rest/api/3/issue/${issueIdOrKey}?fields=${fields}&expand=renderedFields`,
+      `/rest/api/3/issue/${issueIdOrKey}?fields=${fields}&expand=${expand}`,
     );
   }
 
