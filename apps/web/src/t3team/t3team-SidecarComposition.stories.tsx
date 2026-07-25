@@ -1,14 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { T3workSidecarCompositionPreview } from "~/t3team/t3team-SidecarCompositionPreview";
+import { T3TeamSidecarCompositionPreview } from "~/t3team/t3team-SidecarCompositionPreview";
 
 const meta = {
-  title: "T3work/Sidecar/SidecarComposition",
-  component: T3workSidecarCompositionPreview,
+  title: "T3Team/Sidecar/SidecarComposition",
+  component: T3TeamSidecarCompositionPreview,
   parameters: {
     layout: "fullscreen",
   },
-} satisfies Meta<typeof T3workSidecarCompositionPreview>;
+} satisfies Meta<typeof T3TeamSidecarCompositionPreview>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

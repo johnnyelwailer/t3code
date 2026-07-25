@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildProjectDashboardSelectedRecipe } from "~/t3team/t3team-dashboardRecipeSelection";
-import type { T3workSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
 
 function createQuickStart(
-  overrides: Partial<T3workSidecarRecipeQuickStart> = {},
-): T3workSidecarRecipeQuickStart {
+  overrides: Partial<T3TeamSidecarRecipeQuickStart> = {},
+): T3TeamSidecarRecipeQuickStart {
   return {
     id: "explain-selected-work",
     title: "Explain this simply",

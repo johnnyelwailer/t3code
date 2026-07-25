@@ -4,7 +4,7 @@ import { queryableToReadonlyArray } from "@t3tools/project-context";
 
 import {
   buildProjectRecipeDiscoveryRequest,
-  buildT3workSidecarRecipeQuickStarts,
+  buildT3TeamSidecarRecipeQuickStarts,
 } from "~/t3team/t3team-sidecarRecipes";
 
 function createProject(profileId: string, workspaceRoot?: string): ProjectShellProject {
@@ -33,9 +33,9 @@ function createProject(profileId: string, workspaceRoot?: string): ProjectShellP
   };
 }
 
-describe("buildT3workSidecarRecipeQuickStarts", () => {
+describe("buildT3TeamSidecarRecipeQuickStarts", () => {
   it("surfaces review-acceptance-criteria for engineering-biased ticket detail", () => {
-    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("engineering-copilot"),
       profileId: "engineering-copilot",
@@ -80,7 +80,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   });
 
   it("shows dashboard recipes without attached items while hiding selected-work recipes", () => {
-    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("product-partner"),
       profileId: "product-partner",
@@ -99,7 +99,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   });
 
   it("surfaces backlog-only assignee filter on the backlog dashboard", () => {
-    const backlogQuickStarts = buildT3workSidecarRecipeQuickStarts({
+    const backlogQuickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("delivery-coordinator"),
       profileId: "delivery-coordinator",
@@ -112,7 +112,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
       },
       availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
     });
-    const myWorkQuickStarts = buildT3workSidecarRecipeQuickStarts({
+    const myWorkQuickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("delivery-coordinator"),
       profileId: "delivery-coordinator",
@@ -131,7 +131,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   });
 
   it("renders bundled dashboard recipe titles from the current view context", () => {
-    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("product-partner"),
       profileId: "product-partner",
@@ -151,7 +151,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   });
 
   it("renders the recipe-authoring quick start against selected ticket context", () => {
-    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("engineering-copilot"),
       profileId: "engineering-copilot",
@@ -168,7 +168,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   });
 
   it("does not attach workflow launch metadata to prompt-only bundled recipes", () => {
-    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("product-partner", "/tmp/project-alpha"),
       profileId: "product-partner",
@@ -193,7 +193,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   });
 
   it("hides broad-dashboard focus recipe for very large unfocused views", () => {
-    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("delivery-coordinator"),
       profileId: "delivery-coordinator",
@@ -213,7 +213,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   });
 
   it("attaches bundled action views with rendered placeholders and recipe context", () => {
-    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("delivery-coordinator"),
       profileId: "delivery-coordinator",
@@ -424,7 +424,7 @@ describe("buildT3workSidecarRecipeQuickStarts", () => {
   });
 
   it("surfaces selected-work recipes on the dashboard when ticket context exists", () => {
-    const quickStarts = buildT3workSidecarRecipeQuickStarts({
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("product-partner"),
       profileId: "product-partner",

@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { T3workSelectedRecipeChip } from "~/t3team/t3team-SelectedRecipeChip";
+import { T3TeamSelectedRecipeChip } from "~/t3team/t3team-SelectedRecipeChip";
 
 const meta = {
-  title: "T3work/Sidecar/SelectedRecipeChip",
-  component: T3workSelectedRecipeChip,
+  title: "T3Team/Sidecar/SelectedRecipeChip",
+  component: T3TeamSelectedRecipeChip,
   parameters: {
     layout: "centered",
   },
@@ -15,7 +15,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof T3workSelectedRecipeChip>;
+} satisfies Meta<typeof T3TeamSelectedRecipeChip>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

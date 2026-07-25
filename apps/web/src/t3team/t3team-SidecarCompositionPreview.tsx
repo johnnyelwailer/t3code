@@ -1,14 +1,14 @@
 import { useState } from "react";
 
-import { T3workFilterActionCard } from "~/t3team/t3team-FilterActionCard";
-import { T3workRecipeListCard } from "~/t3team/t3team-RecipeListCard";
+import { T3TeamFilterActionCard } from "~/t3team/t3team-FilterActionCard";
+import { T3TeamRecipeListCard } from "~/t3team/t3team-RecipeListCard";
 import {
   sidecarStoryDefaultCompositionRecipes,
   sidecarStoryEngineeringCompositionRecipes,
   sidecarStoryQaCompositionRecipes,
 } from "~/t3team/t3team-sidecarStoryFixtures";
-import type { T3workSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
-import { T3workTopicSection } from "~/t3team/t3team-TopicSection";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
+import { T3TeamTopicSection } from "~/t3team/t3team-TopicSection";
 
 type SidecarCompositionPreviewVariant = "default" | "engineering" | "qa";
 
@@ -40,7 +40,7 @@ const COMPOSITION_SECTIONS: Record<SidecarCompositionPreviewVariant, ReadonlyArr
 
 const RECIPES_BY_VARIANT: Record<
   SidecarCompositionPreviewVariant,
-  ReadonlyArray<T3workSidecarRecipeQuickStart>
+  ReadonlyArray<T3TeamSidecarRecipeQuickStart>
 > = {
   default: sidecarStoryDefaultCompositionRecipes,
   engineering: sidecarStoryEngineeringCompositionRecipes,
@@ -48,14 +48,14 @@ const RECIPES_BY_VARIANT: Record<
 };
 
 function renderRecipeCard(
-  recipe: T3workSidecarRecipeQuickStart,
+  recipe: T3TeamSidecarRecipeQuickStart,
   kind: TopicSectionConfig["kind"],
   selectedRecipeId: string | undefined,
   onSelectRecipe: (recipeId: string) => void,
 ) {
   if (kind === "filters") {
     return (
-      <T3workFilterActionCard
+      <T3TeamFilterActionCard
         key={recipe.id}
         recipe={recipe}
         isSelected={selectedRecipeId === recipe.id}
@@ -68,7 +68,7 @@ function renderRecipeCard(
   }
 
   return (
-    <T3workRecipeListCard
+    <T3TeamRecipeListCard
       key={recipe.id}
       recipe={recipe}
       isSelected={selectedRecipeId === recipe.id}
@@ -77,7 +77,7 @@ function renderRecipeCard(
   );
 }
 
-export function T3workSidecarCompositionPreview({
+export function T3TeamSidecarCompositionPreview({
   variant = "default",
 }: {
   readonly variant?: SidecarCompositionPreviewVariant;
@@ -97,7 +97,7 @@ export function T3workSidecarCompositionPreview({
         });
 
         return (
-          <T3workTopicSection
+          <T3TeamTopicSection
             key={section.sectionId}
             sectionId={section.sectionId}
             title={section.title}
@@ -112,7 +112,7 @@ export function T3workSidecarCompositionPreview({
             {sectionRecipes.map((recipe) =>
               renderRecipeCard(recipe, section.kind, selectedRecipeId, setSelectedRecipeId),
             )}
-          </T3workTopicSection>
+          </T3TeamTopicSection>
         );
       })}
     </div>

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { T3workFilterActionCard } from "~/t3team/t3team-FilterActionCard";
+import { T3TeamFilterActionCard } from "~/t3team/t3team-FilterActionCard";
 import {
   assignedToMeFilterRecipe,
   clearFiltersRecipe,
@@ -8,8 +8,8 @@ import {
 } from "~/t3team/t3team-sidecarStoryFixtures";
 
 const meta = {
-  title: "T3work/Sidecar/FilterActionCard",
-  component: T3workFilterActionCard,
+  title: "T3Team/Sidecar/FilterActionCard",
+  component: T3TeamFilterActionCard,
   parameters: {
     layout: "centered",
   },
@@ -20,7 +20,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof T3workFilterActionCard>;
+} satisfies Meta<typeof T3TeamFilterActionCard>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

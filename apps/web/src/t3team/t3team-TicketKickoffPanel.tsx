@@ -2,32 +2,32 @@ import { useEffect, useState } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import type { ProjectThread, T3workThreadToolId } from "~/t3team/t3team-types";
+import type { ProjectThread, T3TeamThreadToolId } from "~/t3team/t3team-types";
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
-import type { T3WorkContextAttachment } from "~/t3team/t3team-contextAttachment";
+import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 import { mergeContextAttachmentsById } from "~/t3team/t3team-contextAttachmentMerge";
 import { ContextAttachmentChip } from "~/t3team/components/t3team-ContextAttachmentChip";
-import { T3workSidecarComposition } from "~/t3team/t3team-SidecarComposition";
+import { T3TeamSidecarComposition } from "~/t3team/t3team-SidecarComposition";
 import { readProjectSidecarCompositionFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
-import { resolveT3workKickoffSectionProps } from "~/t3team/t3team-sidecarKickoffSectionProps";
+import { resolveT3TeamKickoffSectionProps } from "~/t3team/t3team-sidecarKickoffSectionProps";
 import {
-  applyT3workRecipeQuickStartLaunchCustomization,
-  buildT3workSelectedRecipeKickoffLaunch,
-  type T3workSelectedRecipeQuickStart,
+  applyT3TeamRecipeQuickStartLaunchCustomization,
+  buildT3TeamSelectedRecipeKickoffLaunch,
+  type T3TeamSelectedRecipeQuickStart,
 } from "~/t3team/t3team-recipeQuickStartLaunch";
-import type { T3workSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
-import { type T3workKickoffComposerHandle } from "~/t3team/t3team-TicketKickoffComposer";
+import type { T3TeamSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
+import { type T3TeamKickoffComposerHandle } from "~/t3team/t3team-TicketKickoffComposer";
 import { useBundledSidecarRecipeLaunch } from "~/t3team/t3team-useBundledSidecarRecipeLaunch";
-import type { T3workKickoffWorkflow } from "~/t3team/t3team-types";
+import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
 type TicketKickoffPanelProps = {
   profileId?: string;
   projectId: string;
   issueThreads: ProjectThread[];
-  quickStartRecipeInput: T3workSidecarRecipeInput & {
+  quickStartRecipeInput: T3TeamSidecarRecipeInput & {
     readonly backend: BackendApi | null;
   };
-  injectedContextAttachments?: ReadonlyArray<T3WorkContextAttachment>;
+  injectedContextAttachments?: ReadonlyArray<T3TeamContextAttachment>;
   onOpenThread: (threadId: string) => void;
   onKickoff: (
     instruction: string,
@@ -35,21 +35,21 @@ type TicketKickoffPanelProps = {
     selection: ModelSelection,
     runtimeMode: RuntimeMode,
     interactionMode: ProviderInteractionMode,
-    selectedToolIds: ReadonlyArray<T3workThreadToolId>,
-    contextAttachments: ReadonlyArray<T3WorkContextAttachment>,
-    kickoffWorkflow?: T3workKickoffWorkflow,
+    selectedToolIds: ReadonlyArray<T3TeamThreadToolId>,
+    contextAttachments: ReadonlyArray<T3TeamContextAttachment>,
+    kickoffWorkflow?: T3TeamKickoffWorkflow,
   ) => void;
   renderComposer: (props: {
-    composerRef: React.RefObject<T3workKickoffComposerHandle | null>;
+    composerRef: React.RefObject<T3TeamKickoffComposerHandle | null>;
     prefillText?: string;
-    selectedRecipe?: T3workSelectedRecipeQuickStart;
+    selectedRecipe?: T3TeamSelectedRecipeQuickStart;
     onClearSelectedRecipe?: () => void;
     onSubmit: (
       text: string,
       selection: ModelSelection,
       runtimeMode: RuntimeMode,
       interactionMode: ProviderInteractionMode,
-      selectedToolIds: ReadonlyArray<T3workThreadToolId>,
+      selectedToolIds: ReadonlyArray<T3TeamThreadToolId>,
     ) => void;
   }) => React.ReactNode;
 };
@@ -66,7 +66,7 @@ export function TicketKickoffPanel({
 }: TicketKickoffPanelProps) {
   const environmentId = usePrimaryEnvironmentId();
   const [localContextAttachments, setLocalContextAttachments] = useState<
-    ReadonlyArray<T3WorkContextAttachment>
+    ReadonlyArray<T3TeamContextAttachment>
   >([]);
   const [dismissedAttachmentIds, setDismissedAttachmentIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -80,7 +80,7 @@ export function TicketKickoffPanel({
       projectWorkspaceRoot: quickStartRecipeInput.project.workspace?.rootPath,
       openThread: onOpenThread,
       buildSelectedRecipe: (recipe, customization) => ({
-        recipe: applyT3workRecipeQuickStartLaunchCustomization(recipe, customization),
+        recipe: applyT3TeamRecipeQuickStartLaunchCustomization(recipe, customization),
         ...(customization ? { customization } : {}),
       }),
       createThread: async ({ kickoffMessage, kickoffWorkflow, launchConfig }) =>
@@ -135,13 +135,13 @@ export function TicketKickoffPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ScrollArea className="min-h-0 flex-1">
-        <T3workSidecarComposition
+        <T3TeamSidecarComposition
           surface="workitem.detail.sidepanel"
           profileId={profileId}
           projectDefault={projectDefault}
           host={sidecarHost}
           resolveSectionProps={(sectionId) =>
-            resolveT3workKickoffSectionProps({
+            resolveT3TeamKickoffSectionProps({
               sectionId,
               recipeInput: quickStartRecipeInput,
               ...(selectedRecipe?.recipe.id ? { selectedRecipeId: selectedRecipe.recipe.id } : {}),
@@ -172,7 +172,7 @@ export function TicketKickoffPanel({
           onClearSelectedRecipe: clearSelectedRecipe,
           onSubmit: (text, selection, runtimeMode, interactionMode, selectedToolIds) => {
             const kickoff = selectedRecipe
-              ? buildT3workSelectedRecipeKickoffLaunch({
+              ? buildT3TeamSelectedRecipeKickoffLaunch({
                   selectedRecipe,
                   customMessage: text,
                 })

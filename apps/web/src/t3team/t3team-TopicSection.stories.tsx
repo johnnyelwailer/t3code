@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { T3workFilterActionCard } from "~/t3team/t3team-FilterActionCard";
-import { T3workRecipeListCard } from "~/t3team/t3team-RecipeListCard";
+import { T3TeamFilterActionCard } from "~/t3team/t3team-FilterActionCard";
+import { T3TeamRecipeListCard } from "~/t3team/t3team-RecipeListCard";
 import {
   assignedToMeFilterRecipe,
   explainSelectedWorkRecipe,
@@ -9,11 +9,11 @@ import {
   shapeBacklogSliceRecipe,
   tshirtSizeEpicRecipe,
 } from "~/t3team/t3team-sidecarStoryFixtures";
-import { T3workTopicSection } from "~/t3team/t3team-TopicSection";
+import { T3TeamTopicSection } from "~/t3team/t3team-TopicSection";
 
 const meta = {
-  title: "T3work/Sidecar/TopicSection",
-  component: T3workTopicSection,
+  title: "T3Team/Sidecar/TopicSection",
+  component: T3TeamTopicSection,
   parameters: {
     layout: "centered",
   },
@@ -24,7 +24,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof T3workTopicSection>;
+} satisfies Meta<typeof T3TeamTopicSection>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -38,9 +38,9 @@ export const Empty: Story = {
   render: () => (
     <div className="rounded-md border border-dashed border-border/60 px-3 py-6 text-center text-xs text-muted-foreground/70">
       Empty topic sections render nothing — the frame below should not appear.
-      <T3workTopicSection sectionId="refinement" title="Refinement">
+      <T3TeamTopicSection sectionId="refinement" title="Refinement">
         {[]}
-      </T3workTopicSection>
+      </T3TeamTopicSection>
     </div>
   ),
 };
@@ -52,9 +52,9 @@ export const OneCard: Story = {
     children: null,
   },
   render: () => (
-    <T3workTopicSection sectionId="quick-actions" title="Quick actions">
-      <T3workRecipeListCard recipe={explainSelectedWorkRecipe} onClick={() => {}} />
-    </T3workTopicSection>
+    <T3TeamTopicSection sectionId="quick-actions" title="Quick actions">
+      <T3TeamRecipeListCard recipe={explainSelectedWorkRecipe} onClick={() => {}} />
+    </T3TeamTopicSection>
   ),
 };
 
@@ -65,11 +65,11 @@ export const ThreeCards: Story = {
     children: null,
   },
   render: () => (
-    <T3workTopicSection sectionId="refinement" title="Refinement">
-      <T3workRecipeListCard recipe={tshirtSizeEpicRecipe} onClick={() => {}} />
-      <T3workRecipeListCard recipe={shapeBacklogSliceRecipe} onClick={() => {}} />
-      <T3workRecipeListCard recipe={reviewAcceptanceCriteriaRecipe} onClick={() => {}} />
-    </T3workTopicSection>
+    <T3TeamTopicSection sectionId="refinement" title="Refinement">
+      <T3TeamRecipeListCard recipe={tshirtSizeEpicRecipe} onClick={() => {}} />
+      <T3TeamRecipeListCard recipe={shapeBacklogSliceRecipe} onClick={() => {}} />
+      <T3TeamRecipeListCard recipe={reviewAcceptanceCriteriaRecipe} onClick={() => {}} />
+    </T3TeamTopicSection>
   ),
 };
 
@@ -80,8 +80,8 @@ export const FiltersSection: Story = {
     children: null,
   },
   render: () => (
-    <T3workTopicSection sectionId="filters" title="Filters">
-      <T3workFilterActionCard recipe={assignedToMeFilterRecipe} onApply={() => {}} />
-    </T3workTopicSection>
+    <T3TeamTopicSection sectionId="filters" title="Filters">
+      <T3TeamFilterActionCard recipe={assignedToMeFilterRecipe} onApply={() => {}} />
+    </T3TeamTopicSection>
   ),
 };

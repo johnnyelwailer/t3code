@@ -29,7 +29,7 @@ describe("resolveT3TeamProfileId", () => {
   });
 
   it("uses the shared topic section catalog for every bundled profile", () => {
-    for (const profile of listT3WorkProfiles()) {
+    for (const profile of listT3TeamProfiles()) {
       expect(profile.sidecarSections?.sections.map((section) => section.sectionId)).toEqual([
         "filters",
         "quick-actions",

@@ -1,6 +1,6 @@
-import type { T3workSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 
-export const explainSelectedWorkRecipe: T3workSidecarRecipeQuickStart = {
+export const explainSelectedWorkRecipe: T3TeamSidecarRecipeQuickStart = {
   id: "explain-selected-work",
   title: "Explain this simply",
   description: "Summarize the selected work with user impact, checks, and open questions.",
@@ -12,7 +12,7 @@ export const explainSelectedWorkRecipe: T3workSidecarRecipeQuickStart = {
   },
 };
 
-export const reviewAcceptanceCriteriaRecipe: T3workSidecarRecipeQuickStart = {
+export const reviewAcceptanceCriteriaRecipe: T3TeamSidecarRecipeQuickStart = {
   id: "review-acceptance-criteria",
   title: "Review acceptance criteria",
   description: "Call out ambiguity, missing testability notes, and follow-up questions.",
@@ -20,7 +20,7 @@ export const reviewAcceptanceCriteriaRecipe: T3workSidecarRecipeQuickStart = {
     "Review the acceptance criteria. Return a checklist, ambiguity warnings, missing testability notes, and questions to resolve before implementation or QA.",
 };
 
-export const tshirtSizeEpicRecipe: T3workSidecarRecipeQuickStart = {
+export const tshirtSizeEpicRecipe: T3TeamSidecarRecipeQuickStart = {
   id: "tshirt-size-epic",
   title: "T-shirt size this epic",
   description: "Estimate relative size, call out unknowns, and suggest a refinement slice.",
@@ -28,7 +28,7 @@ export const tshirtSizeEpicRecipe: T3workSidecarRecipeQuickStart = {
     "T-shirt size this epic. Explain the sizing rationale, major unknowns, and the smallest refinement slice that would reduce risk.",
 };
 
-export const shapeBacklogSliceRecipe: T3workSidecarRecipeQuickStart = {
+export const shapeBacklogSliceRecipe: T3TeamSidecarRecipeQuickStart = {
   id: "shape-next-backlog-slice",
   title: "Shape the next backlog slice",
   description: "Propose the next shippable slice with scope boundaries and rationale.",
@@ -36,14 +36,14 @@ export const shapeBacklogSliceRecipe: T3workSidecarRecipeQuickStart = {
     "Shape the next backlog slice. Propose scope boundaries, dependencies, and why this slice is the right next move.",
 };
 
-export const assignedToMeFilterRecipe: T3workSidecarRecipeQuickStart = {
+export const assignedToMeFilterRecipe: T3TeamSidecarRecipeQuickStart = {
   id: "show-only-assigned-to-me",
   title: "Assigned to me",
   description: "Narrow the backlog to items assigned to you.",
   prompt: "Filter the backlog to items assigned to me.",
 };
 
-export const needsMyActionFilterRecipe: T3workSidecarRecipeQuickStart = {
+export const needsMyActionFilterRecipe: T3TeamSidecarRecipeQuickStart = {
   id: "focus-needs-my-action",
   title: "Show what needs my action",
   description:
@@ -52,7 +52,7 @@ export const needsMyActionFilterRecipe: T3workSidecarRecipeQuickStart = {
     "Filter the view to work most likely needing my action, then rank the next concrete move.",
 };
 
-export const clearFiltersRecipe: T3workSidecarRecipeQuickStart = {
+export const clearFiltersRecipe: T3TeamSidecarRecipeQuickStart = {
   id: "clear-filters",
   title: "Clear filters",
   description: "Reset view filters to the default backlog slice.",

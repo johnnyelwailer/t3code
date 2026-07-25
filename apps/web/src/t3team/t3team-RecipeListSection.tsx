@@ -1,25 +1,25 @@
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { T3workKickoffRecipeList } from "~/t3team/t3team-KickoffRecipeList";
+import { T3TeamKickoffRecipeList } from "~/t3team/t3team-KickoffRecipeList";
 import {
-  buildT3workSidecarRecipeQuickStarts,
-  useT3workSidecarRecipeQuickStarts,
+  buildT3TeamSidecarRecipeQuickStarts,
+  useT3TeamSidecarRecipeQuickStarts,
 } from "~/t3team/t3team-sidecarRecipes";
-import { filterT3workSidecarRecipesByTopic } from "~/t3team/t3team-sidecarRecipeTopics";
-import type { T3workSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
-import type { T3workSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
+import { filterT3TeamSidecarRecipesByTopic } from "~/t3team/t3team-sidecarRecipeTopics";
+import type { T3TeamSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import {
-  orderT3workSidecarSectionItems,
-  type T3workSidecarSectionShellProps,
+  orderT3TeamSidecarSectionItems,
+  type T3TeamSidecarSectionShellProps,
 } from "~/t3team/t3team-sidecarSectionShellProps";
 import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 
 export type RecipeListSectionProps = {
-  readonly recipeInput: T3workSidecarRecipeInput & {
+  readonly recipeInput: T3TeamSidecarRecipeInput & {
     readonly backend: BackendApi | null;
   };
   readonly topic: string;
   readonly selectedRecipeId?: string | undefined;
-  readonly shell?: T3workSidecarSectionShellProps<T3workSidecarRecipeQuickStart> | undefined;
+  readonly shell?: T3TeamSidecarSectionShellProps<T3TeamSidecarRecipeQuickStart> | undefined;
 };
 
 function isRecipeListSectionProps(props: unknown): props is RecipeListSectionProps {
@@ -54,8 +54,8 @@ export function resolveRecipeListSectionIsEmpty(props: unknown): boolean {
   }
 
   return (
-    filterT3workSidecarRecipesByTopic(
-      buildT3workSidecarRecipeQuickStarts(sectionProps.recipeInput),
+    filterT3TeamSidecarRecipesByTopic(
+      buildT3TeamSidecarRecipeQuickStarts(sectionProps.recipeInput),
       sectionProps.topic,
     ).length === 0
   );
@@ -68,9 +68,9 @@ function RecipeListSectionContent({
   host: SidecarSectionHost;
   sectionProps: RecipeListSectionProps;
 }) {
-  const quickStarts = useT3workSidecarRecipeQuickStarts(sectionProps.recipeInput);
-  const topicQuickStarts = filterT3workSidecarRecipesByTopic(quickStarts, sectionProps.topic);
-  const orderedQuickStarts = orderT3workSidecarSectionItems({
+  const quickStarts = useT3TeamSidecarRecipeQuickStarts(sectionProps.recipeInput);
+  const topicQuickStarts = filterT3TeamSidecarRecipesByTopic(quickStarts, sectionProps.topic);
+  const orderedQuickStarts = orderT3TeamSidecarSectionItems({
     items: topicQuickStarts,
     getItemId: (quickStart) => quickStart.id,
     shell: sectionProps.shell,
@@ -81,7 +81,7 @@ function RecipeListSectionContent({
   }
 
   return (
-    <T3workKickoffRecipeList
+    <T3TeamKickoffRecipeList
       recipes={orderedQuickStarts}
       {...(sectionProps.selectedRecipeId
         ? { selectedRecipeId: sectionProps.selectedRecipeId }
@@ -96,7 +96,7 @@ function RecipeListSectionContent({
   );
 }
 
-export function T3workRecipeListSection({
+export function T3TeamRecipeListSection({
   host,
   props,
 }: {
@@ -112,4 +112,4 @@ export function T3workRecipeListSection({
 }
 
 // Backward-compatible alias while kickoff stories migrate off the old component name.
-export const T3workQuickStartsSection = T3workRecipeListSection;
+export const T3TeamQuickStartsSection = T3TeamRecipeListSection;

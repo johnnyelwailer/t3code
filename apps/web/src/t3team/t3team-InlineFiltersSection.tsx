@@ -1,22 +1,22 @@
-import { getBundledT3WorkRecipe } from "@t3tools/t3team-skill-packs";
+import { getBundledT3TeamRecipe } from "@t3tools/t3team-skill-packs";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import {
-  resolveT3workDashboardRecipeAction,
-  useRunT3workDashboardRecipeAction,
+  resolveT3TeamDashboardRecipeAction,
+  useRunT3TeamDashboardRecipeAction,
 } from "~/t3team/t3team-dashboardRecipeActions";
-import { T3workFilterActionCard } from "~/t3team/t3team-FilterActionCard";
-import { useRunT3workDeterministicWorkflowLaunch } from "~/t3team/t3team-inlineRecipeLaunch";
+import { T3TeamFilterActionCard } from "~/t3team/t3team-FilterActionCard";
+import { useRunT3TeamDeterministicWorkflowLaunch } from "~/t3team/t3team-inlineRecipeLaunch";
 import {
-  buildT3workSidecarRecipeQuickStarts,
-  useT3workSidecarRecipeQuickStarts,
+  buildT3TeamSidecarRecipeQuickStarts,
+  useT3TeamSidecarRecipeQuickStarts,
 } from "~/t3team/t3team-sidecarRecipes";
-import { filterT3workSidecarRecipesByTopic } from "~/t3team/t3team-sidecarRecipeTopics";
-import type { T3workSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
-import type { T3workSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
+import { filterT3TeamSidecarRecipesByTopic } from "~/t3team/t3team-sidecarRecipeTopics";
+import type { T3TeamSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import {
-  orderT3workSidecarSectionItems,
-  type T3workSidecarSectionShellProps,
+  orderT3TeamSidecarSectionItems,
+  type T3TeamSidecarSectionShellProps,
 } from "~/t3team/t3team-sidecarSectionShellProps";
 import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 
@@ -25,12 +25,12 @@ function supportsFilterRankNext(recipeId: string): boolean {
 }
 
 export type InlineFiltersSectionProps = {
-  readonly recipeInput: T3workSidecarRecipeInput & {
+  readonly recipeInput: T3TeamSidecarRecipeInput & {
     readonly backend: BackendApi | null;
   };
   readonly topic?: string | undefined;
   readonly selectedRecipeId?: string | undefined;
-  readonly shell?: T3workSidecarSectionShellProps<T3workSidecarRecipeQuickStart> | undefined;
+  readonly shell?: T3TeamSidecarSectionShellProps<T3TeamSidecarRecipeQuickStart> | undefined;
 };
 
 function isInlineFiltersSectionProps(props: unknown): props is InlineFiltersSectionProps {
@@ -44,7 +44,7 @@ export function resolveInlineFiltersSectionIsEmpty(props: unknown): boolean {
 
   const topic = props.topic ?? "filters";
   return (
-    filterT3workSidecarRecipesByTopic(buildT3workSidecarRecipeQuickStarts(props.recipeInput), topic)
+    filterT3TeamSidecarRecipesByTopic(buildT3TeamSidecarRecipeQuickStarts(props.recipeInput), topic)
       .length === 0
   );
 }
@@ -57,11 +57,11 @@ function InlineFiltersSectionContent({
   sectionProps: InlineFiltersSectionProps;
 }) {
   const topic = sectionProps.topic ?? "filters";
-  const runDashboardRecipeAction = useRunT3workDashboardRecipeAction();
-  const runWorkflowLaunch = useRunT3workDeterministicWorkflowLaunch();
-  const quickStarts = useT3workSidecarRecipeQuickStarts(sectionProps.recipeInput);
-  const filterQuickStarts = filterT3workSidecarRecipesByTopic(quickStarts, topic);
-  const orderedQuickStarts = orderT3workSidecarSectionItems({
+  const runDashboardRecipeAction = useRunT3TeamDashboardRecipeAction();
+  const runWorkflowLaunch = useRunT3TeamDeterministicWorkflowLaunch();
+  const quickStarts = useT3TeamSidecarRecipeQuickStarts(sectionProps.recipeInput);
+  const filterQuickStarts = filterT3TeamSidecarRecipesByTopic(quickStarts, topic);
+  const orderedQuickStarts = orderT3TeamSidecarSectionItems({
     items: filterQuickStarts,
     getItemId: (quickStart) => quickStart.id,
     shell: sectionProps.shell,
@@ -71,14 +71,14 @@ function InlineFiltersSectionContent({
     return null;
   }
 
-  const applyFilterRecipe = (recipe: T3workSidecarRecipeQuickStart) => {
-    const dashboardAction = resolveT3workDashboardRecipeAction(recipe.id);
+  const applyFilterRecipe = (recipe: T3TeamSidecarRecipeQuickStart) => {
+    const dashboardAction = resolveT3TeamDashboardRecipeAction(recipe.id);
     if (dashboardAction) {
       runDashboardRecipeAction(dashboardAction);
       return;
     }
 
-    const bundledRecipe = getBundledT3WorkRecipe(recipe.id);
+    const bundledRecipe = getBundledT3TeamRecipe(recipe.id);
     if (!bundledRecipe?.kickoff || !recipe.workflow) {
       return;
     }
@@ -94,9 +94,9 @@ function InlineFiltersSectionContent({
     });
   };
 
-  const renderFilterCard = (recipe: T3workSidecarRecipeQuickStart) => {
+  const renderFilterCard = (recipe: T3TeamSidecarRecipeQuickStart) => {
     const card = (
-      <T3workFilterActionCard
+      <T3TeamFilterActionCard
         recipe={recipe}
         isSelected={sectionProps.selectedRecipeId === recipe.id}
         onApply={() => applyFilterRecipe(recipe)}
@@ -112,7 +112,7 @@ function InlineFiltersSectionContent({
   return <div className="space-y-2.5">{orderedQuickStarts.map(renderFilterCard)}</div>;
 }
 
-export function T3workInlineFiltersSection({
+export function T3TeamInlineFiltersSection({
   host,
   props,
 }: {

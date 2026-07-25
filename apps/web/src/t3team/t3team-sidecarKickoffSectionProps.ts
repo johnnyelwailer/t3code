@@ -1,7 +1,7 @@
 import { getBundledSidecarSection } from "@t3tools/t3team-skill-packs";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import type { T3workSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
+import type { T3TeamSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 const LEGACY_SECTION_TOPIC: Readonly<Record<string, string>> = {
@@ -9,9 +9,9 @@ const LEGACY_SECTION_TOPIC: Readonly<Record<string, string>> = {
   "recent-conversations": "recent",
 };
 
-export function resolveT3workKickoffSectionProps(input: {
+export function resolveT3TeamKickoffSectionProps(input: {
   readonly sectionId: string;
-  readonly recipeInput: T3workSidecarRecipeInput & {
+  readonly recipeInput: T3TeamSidecarRecipeInput & {
     readonly backend: BackendApi | null;
   };
   readonly selectedRecipeId?: string | undefined;

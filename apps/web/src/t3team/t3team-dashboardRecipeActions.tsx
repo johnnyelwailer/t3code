@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode }
 import {
   resolveBacklogNeedsMyActionPreset,
   resolveMyWorkNeedsMyActionPreset,
-  type T3workDashboardNeedsMyActionPreset,
+  type T3TeamDashboardNeedsMyActionPreset,
 } from "~/t3team/t3team-dashboardRecipeSummary";
 import {
   type ProjectDashboardBacklogState,
@@ -12,7 +12,7 @@ import type { ProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboa
 import type { ProjectBacklogFocusFilter } from "~/t3team/t3team-projectBacklogUtils";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
-export type T3workDashboardRecipeAction =
+export type T3TeamDashboardRecipeAction =
   | {
       readonly kind: "focus-needs-my-action";
     }
@@ -23,23 +23,23 @@ export type T3workDashboardRecipeAction =
       readonly kind: "clear-filters";
     };
 
-export type T3workDashboardRecipeActionOutcome = {
+export type T3TeamDashboardRecipeActionOutcome = {
   readonly applied: boolean;
   readonly promptText?: string;
 };
 
-type T3workDashboardRecipeActionHandler = (
-  action: T3workDashboardRecipeAction,
-) => T3workDashboardRecipeActionOutcome | null;
+type T3TeamDashboardRecipeActionHandler = (
+  action: T3TeamDashboardRecipeAction,
+) => T3TeamDashboardRecipeActionOutcome | null;
 
-const T3workDashboardRecipeActionContext = createContext<{
-  registerHandler: (handler: T3workDashboardRecipeActionHandler | null) => () => void;
-  runAction: (action: T3workDashboardRecipeAction) => T3workDashboardRecipeActionOutcome | null;
+const T3TeamDashboardRecipeActionContext = createContext<{
+  registerHandler: (handler: T3TeamDashboardRecipeActionHandler | null) => () => void;
+  runAction: (action: T3TeamDashboardRecipeAction) => T3TeamDashboardRecipeActionOutcome | null;
 } | null>(null);
 
-export function resolveT3workDashboardRecipeAction(
+export function resolveT3TeamDashboardRecipeAction(
   recipeId: string,
-): T3workDashboardRecipeAction | undefined {
+): T3TeamDashboardRecipeAction | undefined {
   if (recipeId === "focus-needs-my-action") {
     return { kind: "focus-needs-my-action" };
   }
@@ -120,7 +120,7 @@ export function buildBacklogNeedsMyActionOutcome(
 }
 
 function describeMyWorkNeedsMyActionCategory(
-  statusCategory: Extract<T3workDashboardNeedsMyActionPreset, "review" | "active">,
+  statusCategory: Extract<T3TeamDashboardNeedsMyActionPreset, "review" | "active">,
 ): string {
   return statusCategory === "review"
     ? "The dashboard is now filtered to your review-stage work so you can respond to the items already waiting on you."
@@ -149,15 +149,15 @@ export function buildMyWorkNeedsMyActionOutcome(
   };
 }
 
-export function T3workDashboardRecipeActionProvider({
+export function T3TeamDashboardRecipeActionProvider({
   children,
 }: {
   readonly children: ReactNode;
 }) {
-  const handlerRef = useRef<T3workDashboardRecipeActionHandler | null>(null);
+  const handlerRef = useRef<T3TeamDashboardRecipeActionHandler | null>(null);
   const value = useMemo(
     () => ({
-      registerHandler: (handler: T3workDashboardRecipeActionHandler | null) => {
+      registerHandler: (handler: T3TeamDashboardRecipeActionHandler | null) => {
         handlerRef.current = handler;
         return () => {
           if (handlerRef.current === handler) {
@@ -165,36 +165,36 @@ export function T3workDashboardRecipeActionProvider({
           }
         };
       },
-      runAction: (action: T3workDashboardRecipeAction) => handlerRef.current?.(action) ?? null,
+      runAction: (action: T3TeamDashboardRecipeAction) => handlerRef.current?.(action) ?? null,
     }),
     [],
   );
 
   return (
-    <T3workDashboardRecipeActionContext.Provider value={value}>
+    <T3TeamDashboardRecipeActionContext.Provider value={value}>
       {children}
-    </T3workDashboardRecipeActionContext.Provider>
+    </T3TeamDashboardRecipeActionContext.Provider>
   );
 }
 
-function useT3workDashboardRecipeActionContext() {
-  const context = useContext(T3workDashboardRecipeActionContext);
+function useT3TeamDashboardRecipeActionContext() {
+  const context = useContext(T3TeamDashboardRecipeActionContext);
   if (!context) {
     throw new Error(
-      "Dashboard recipe actions must be used inside T3workDashboardRecipeActionProvider.",
+      "Dashboard recipe actions must be used inside T3TeamDashboardRecipeActionProvider.",
     );
   }
   return context;
 }
 
-export function useRegisterT3workDashboardRecipeActionHandler(
-  handler: T3workDashboardRecipeActionHandler | null,
+export function useRegisterT3TeamDashboardRecipeActionHandler(
+  handler: T3TeamDashboardRecipeActionHandler | null,
 ) {
-  const { registerHandler } = useT3workDashboardRecipeActionContext();
+  const { registerHandler } = useT3TeamDashboardRecipeActionContext();
 
   useEffect(() => registerHandler(handler), [handler, registerHandler]);
 }
 
-export function useRunT3workDashboardRecipeAction() {
-  return useT3workDashboardRecipeActionContext().runAction;
+export function useRunT3TeamDashboardRecipeAction() {
+  return useT3TeamDashboardRecipeActionContext().runAction;
 }

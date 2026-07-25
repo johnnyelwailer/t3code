@@ -2,26 +2,26 @@ import { useCallback, useRef, type MouseEvent, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import {
-  areT3workRecipeQuickStartLaunchCustomizationsEqual,
-  type T3workRecipeQuickStartLaunchCustomization,
+  areT3TeamRecipeQuickStartLaunchCustomizationsEqual,
+  type T3TeamRecipeQuickStartLaunchCustomization,
 } from "~/t3team/t3team-recipeQuickStartLaunch";
-import { T3workRecipeQuickStartBody } from "~/t3team/t3team-recipeActionView";
-import type { T3workSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
+import { T3TeamRecipeQuickStartBody } from "~/t3team/t3team-recipeActionView";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 
 const INTERACTIVE_SELECTOR = "button, input, select, textarea, a, [role='button'], label";
 
-export function T3workRecipeListCard({
+export function T3TeamRecipeListCard({
   recipe,
   isSelected = false,
   onClick,
   onSelectRecipe,
   children,
 }: {
-  readonly recipe: T3workSidecarRecipeQuickStart;
+  readonly recipe: T3TeamSidecarRecipeQuickStart;
   readonly isSelected?: boolean;
   readonly onClick?: () => void;
   readonly onSelectRecipe?: (
-    customization?: T3workRecipeQuickStartLaunchCustomization,
+    customization?: T3TeamRecipeQuickStartLaunchCustomization,
   ) => void;
   readonly children?: ReactNode;
 }) {
@@ -29,14 +29,14 @@ export function T3workRecipeListCard({
   isSelectedRef.current = isSelected;
   const onSelectRef = useRef(onSelectRecipe);
   onSelectRef.current = onSelectRecipe;
-  const latestCustomizationRef = useRef<T3workRecipeQuickStartLaunchCustomization | undefined>(
+  const latestCustomizationRef = useRef<T3TeamRecipeQuickStartLaunchCustomization | undefined>(
     undefined,
   );
 
   const handleCustomizationChange = useCallback(
-    (customization: T3workRecipeQuickStartLaunchCustomization | undefined) => {
+    (customization: T3TeamRecipeQuickStartLaunchCustomization | undefined) => {
       if (
-        areT3workRecipeQuickStartLaunchCustomizationsEqual(
+        areT3TeamRecipeQuickStartLaunchCustomizationsEqual(
           latestCustomizationRef.current,
           customization,
         )
@@ -70,7 +70,7 @@ export function T3workRecipeListCard({
 
   const body = (
     <div className="space-y-2">
-      <T3workRecipeQuickStartBody
+      <T3TeamRecipeQuickStartBody
         recipe={recipe}
         {...(onSelectRecipe ? { onCustomizationChange: handleCustomizationChange } : {})}
       />

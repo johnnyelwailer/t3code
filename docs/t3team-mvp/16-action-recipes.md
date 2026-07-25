@@ -20,7 +20,7 @@ in code, and reused everywhere. Avoid inventing recipe-specific parallels to any
 | Primitive    | What it is                                                                                                                                                                                                                                       | Owns                       |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
 | **Context**  | A read-only snapshot of the world the agent and workflows read. Two depths: a light _render context_ used before launch, and a rich _full context_ available after launch.                                                                       | `packages/project-context` |
-| **Tools**    | The single capability surface — the verbs that read or mutate `t3team` and external state. The _same_ surface is consumed by agent turns, workflow steps, and views, scoped by `allowedToolGroups`. See [Epic 21](./21-context-tool-catalog.md). | `T3workToolBroker`         |
+| **Tools**    | The single capability surface — the verbs that read or mutate `t3team` and external state. The _same_ surface is consumed by agent turns, workflow steps, and views, scoped by `allowedToolGroups`. See [Epic 21](./21-context-tool-catalog.md). | `T3TeamToolBroker`         |
 | **Workflow** | The core engine: a TS-native, replay-based durable-execution engine (Epic 25) where workflows are plain async TypeScript `.workflow.ts` bodies and primitive calls are journaled. The earlier step-union runtime has been deleted.               | `packages/project-recipes` |
 | **View**     | A code-based, interactive UI unit that mounts on any surface — the action list, a conversation message, a dashboard slot, a side panel. Action launchers and conversation cards are both Views. See [Epic 19](./19-workspace-miniapps.md).       | `@t3team/sdk`              |
 
@@ -595,11 +595,11 @@ single optional field on `Message`:
 // packages/contracts/src/model.ts  (already allowlisted)
 export type Message = {
   // ...existing upstream fields
-  t3teamExt?: T3workMessageExt;
+  t3teamExt?: T3TeamMessageExt;
 };
 
 // packages/contracts/src/t3team-message-ext.ts  (new, prefix-compliant)
-export type T3workMessageExt = {
+export type T3TeamMessageExt = {
   author?: { kind: "system"; source?: { workflowRunId: string; stepId?: string } };
   visibleToUser?: boolean;
   visibleToAgent?: boolean;
@@ -932,7 +932,7 @@ they do not crash the run or the page.
 ## Tools
 
 Tools are one shared capability surface, not a recipe-specific API. They began as
-agent-scoped tools (`T3workToolBroker` binds a per-thread set of `callTool`/`readResource`
+agent-scoped tools (`T3TeamToolBroker` binds a per-thread set of `callTool`/`readResource`
 capabilities for an agent turn). The same surface is consumed by:
 
 - agent turns (today),
@@ -1102,14 +1102,14 @@ and agents to read.
 
 ```ts
 type ActionRecipeContext = {
-  project: T3WorkProjectSnapshot;
+  project: T3TeamProjectSnapshot;
   workitem?: ResourceSnapshot;
   selectedResource?: ResourceSnapshot;
   linkedResources: ResourceSnapshot[];
   sourceProject?: ExternalProjectSnapshot;
   artifacts: RichArtifactSummary[];
   recentRuns: RecipeRunSummary[];
-  profile: T3WorkProfile;
+  profile: T3TeamProfile;
   enabledSkillPacks: string[];
   memory: ProjectMemorySnapshot;
   capabilities: RecipeCapabilitySummary;
@@ -1188,7 +1188,7 @@ or reviewed by the project owner on their own machine.
 
 **Stage 2 — Sandboxed (planned).** Project-hosted code runs with **no ambient
 capabilities** — no direct filesystem, network, process, or React/DOM access. Everything
-goes through host-injected APIs: the `T3workToolBroker` for tools, structured props for
+goes through host-injected APIs: the `T3TeamToolBroker` for tools, structured props for
 data, and the typed-event path for View actions. Isolation is enforced by a worker/isolate
 boundary (scripts) and a sandboxed iframe-equivalent (Views).
 
@@ -1420,7 +1420,7 @@ project is created. Project-local recipes are the editable source of truth for t
   `defineToolGroup`, `defineModel`, `defineScript`) and the public import path for the
   recipe/plugin-module and View `define*` helpers. Some helpers (e.g. `defineSidecarSection`)
   currently live in `packages/project-recipes` and are surfaced through `@t3team/sdk`.
-- `T3workToolBroker` (`apps/server`) is the single tool surface for agents, scripts, and
+- `T3TeamToolBroker` (`apps/server`) is the single tool surface for agents, scripts, and
   Views. Mutations through it emit events on the existing orchestration bus.
 - **The Queryable runtime is backed by the existing local SQLite persistence layer**
   ([apps/server/src/persistence/Layers/Sqlite.ts](apps/server/src/persistence/Layers/Sqlite.ts)

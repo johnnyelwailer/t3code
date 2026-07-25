@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 
-import { usePublishT3workDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
+import { usePublishT3TeamDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
 import {
   buildMyWorkNeedsMyActionOutcome,
-  useRegisterT3workDashboardRecipeActionHandler,
+  useRegisterT3TeamDashboardRecipeActionHandler,
 } from "~/t3team/t3team-dashboardRecipeActions";
 import {
   buildMyWorkClearFiltersOutcome,
@@ -30,8 +30,8 @@ export function useProjectDashboardMyWorkRecipeSupport(input: {
     [input.filteredWorkItems, input.state],
   );
 
-  usePublishT3workDashboardRecipeViewSummary(recipeViewSummary);
-  useRegisterT3workDashboardRecipeActionHandler(
+  usePublishT3TeamDashboardRecipeViewSummary(recipeViewSummary);
+  useRegisterT3TeamDashboardRecipeActionHandler(
     useMemo(
       () => (action) => {
         if (action.kind === "clear-filters") {

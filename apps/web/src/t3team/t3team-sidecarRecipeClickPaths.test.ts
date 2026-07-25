@@ -2,13 +2,13 @@ import { describe, expect, it } from "vite-plus/test";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { buildProjectDashboardSelectedRecipe } from "~/t3team/t3team-dashboardRecipeSelection";
-import { resolveT3workDashboardRecipeAction } from "~/t3team/t3team-dashboardRecipeActions";
-import { buildT3workSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
-import type { T3workSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
+import { resolveT3TeamDashboardRecipeAction } from "~/t3team/t3team-dashboardRecipeActions";
+import { buildT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 
 function createQuickStart(
-  overrides: Partial<T3workSidecarRecipeQuickStart> = {},
-): T3workSidecarRecipeQuickStart {
+  overrides: Partial<T3TeamSidecarRecipeQuickStart> = {},
+): T3TeamSidecarRecipeQuickStart {
   return {
     id: "explain-selected-work",
     title: "Explain this simply",
@@ -34,7 +34,7 @@ function createProject(profileId: string): ProjectShellProject {
 
 describe("KEEP recipe click paths", () => {
   it("maps show-only-assigned-to-me to a dashboard filter action, not chat staging", () => {
-    expect(resolveT3workDashboardRecipeAction("show-only-assigned-to-me")).toEqual({
+    expect(resolveT3TeamDashboardRecipeAction("show-only-assigned-to-me")).toEqual({
       kind: "show-only-assigned-to-me",
     });
 
@@ -51,7 +51,7 @@ describe("KEEP recipe click paths", () => {
   });
 
   it("maps clear-filters to a dashboard filter action", () => {
-    expect(resolveT3workDashboardRecipeAction("clear-filters")).toEqual({
+    expect(resolveT3TeamDashboardRecipeAction("clear-filters")).toEqual({
       kind: "clear-filters",
     });
   });
@@ -66,7 +66,7 @@ describe("KEEP recipe click paths", () => {
   });
 
   it("stages focus-needs-my-action rank-next without treating it as a plain filter action", () => {
-    const dashboardAction = resolveT3workDashboardRecipeAction("focus-needs-my-action");
+    const dashboardAction = resolveT3TeamDashboardRecipeAction("focus-needs-my-action");
     expect(dashboardAction).toEqual({ kind: "focus-needs-my-action" });
 
     const selected = buildProjectDashboardSelectedRecipe({
@@ -92,12 +92,12 @@ describe("KEEP recipe click paths", () => {
         recipe: createQuickStart({ id: recipeId, prompt: `${recipeId} prompt` }),
       });
       expect(selected.recipe.id).toBe(recipeId);
-      expect(resolveT3workDashboardRecipeAction(recipeId)).toBeUndefined();
+      expect(resolveT3TeamDashboardRecipeAction(recipeId)).toBeUndefined();
     }
   });
 
   it("hides clear-filters until dashboard.view.filtered is available", () => {
-    const withoutFilters = buildT3workSidecarRecipeQuickStarts({
+    const withoutFilters = buildT3TeamSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("delivery-coordinator"),
       profileId: "delivery-coordinator",
@@ -106,7 +106,7 @@ describe("KEEP recipe click paths", () => {
       currentViewSummary: { itemCount: 6, bugCount: 1 },
       availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
     });
-    const withFilters = buildT3workSidecarRecipeQuickStarts({
+    const withFilters = buildT3TeamSidecarRecipeQuickStarts({
       surface: "project.dashboard",
       project: createProject("delivery-coordinator"),
       profileId: "delivery-coordinator",
@@ -125,7 +125,7 @@ describe("KEEP recipe click paths", () => {
   });
 
   it("gates PACK engineering recipe behind engineering skill pack", () => {
-    const withoutEngineering = buildT3workSidecarRecipeQuickStarts({
+    const withoutEngineering = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("product-partner"),
       profileId: "product-partner",
@@ -153,7 +153,7 @@ describe("KEEP recipe click paths", () => {
       },
       availableContextKeys: ["project.summary", "ticket.summary", "ticket.context.pre-implementation"],
     });
-    const withEngineering = buildT3workSidecarRecipeQuickStarts({
+    const withEngineering = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("engineering-copilot"),
       profileId: "engineering-copilot",
@@ -191,7 +191,7 @@ describe("KEEP recipe click paths", () => {
   });
 
   it("gates PACK qa test plan behind qa skill pack", () => {
-    const deliveryOnly = buildT3workSidecarRecipeQuickStarts({
+    const deliveryOnly = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("delivery-coordinator"),
       profileId: "delivery-coordinator",
@@ -219,7 +219,7 @@ describe("KEEP recipe click paths", () => {
       },
       availableContextKeys: ["project.summary", "ticket.summary", "ticket.context.pre-implementation"],
     });
-    const qaProfile = buildT3workSidecarRecipeQuickStarts({
+    const qaProfile = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("qa-assistant"),
       profileId: "qa-assistant",

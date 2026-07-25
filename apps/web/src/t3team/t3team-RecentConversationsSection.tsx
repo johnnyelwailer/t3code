@@ -1,7 +1,7 @@
-import { T3workRecentConversations } from "~/t3team/t3team-ProjectDashboardRecentConversations";
+import { T3TeamRecentConversations } from "~/t3team/t3team-ProjectDashboardRecentConversations";
 import {
-  orderT3workSidecarSectionItems,
-  type T3workSidecarSectionShellProps,
+  orderT3TeamSidecarSectionItems,
+  type T3TeamSidecarSectionShellProps,
 } from "~/t3team/t3team-sidecarSectionShellProps";
 import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 import type { ProjectThread } from "~/t3team/t3team-types";
@@ -12,7 +12,7 @@ export type RecentConversationsSectionProps = {
   readonly searchPlaceholder?: string | undefined;
   readonly showSearch?: boolean | undefined;
   readonly showCount?: boolean | undefined;
-  readonly shell?: T3workSidecarSectionShellProps<ProjectThread> | undefined;
+  readonly shell?: T3TeamSidecarSectionShellProps<ProjectThread> | undefined;
 };
 
 function isRecentConversationsSectionProps(
@@ -29,7 +29,7 @@ export function resolveRecentConversationsSectionIsEmpty(props: unknown): boolea
   return (props.threads?.length ?? 0) === 0;
 }
 
-export function T3workRecentConversationsSection({
+export function T3TeamRecentConversationsSection({
   host,
   props,
 }: {
@@ -37,7 +37,7 @@ export function T3workRecentConversationsSection({
   props?: unknown;
 }) {
   const sectionProps = props as RecentConversationsSectionProps | undefined;
-  const orderedThreads = orderT3workSidecarSectionItems({
+  const orderedThreads = orderT3TeamSidecarSectionItems({
     items: [...(sectionProps?.threads ?? [])],
     getItemId: (thread) => thread.id,
     shell: sectionProps?.shell,
@@ -48,7 +48,7 @@ export function T3workRecentConversationsSection({
   }
 
   return (
-    <T3workRecentConversations
+    <T3TeamRecentConversations
       threads={orderedThreads}
       onOpenThread={host.openThread}
       showHeader={false}

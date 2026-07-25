@@ -1,30 +1,30 @@
 import { autoAnimate } from "@formkit/auto-animate";
 import { Fragment, useCallback, useRef, type ReactNode } from "react";
 
-import type { T3workRecipeQuickStartLaunchCustomization } from "~/t3team/t3team-recipeQuickStartLaunch";
-import type { T3workSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
+import type { T3TeamRecipeQuickStartLaunchCustomization } from "~/t3team/t3team-recipeQuickStartLaunch";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
 
-import { T3workRecipeListCard } from "~/t3team/t3team-RecipeListCard";
+import { T3TeamRecipeListCard } from "~/t3team/t3team-RecipeListCard";
 
 const RECIPE_LIST_ANIMATION_OPTIONS = {
   duration: 180,
   easing: "ease-out",
 } as const;
 
-export function T3workKickoffRecipeList({
+export function T3TeamKickoffRecipeList({
   recipes,
   onSelectRecipe,
   selectedRecipeId,
   renderRecipe,
 }: {
-  recipes: ReadonlyArray<T3workSidecarRecipeQuickStart>;
+  recipes: ReadonlyArray<T3TeamSidecarRecipeQuickStart>;
   onSelectRecipe: (
-    recipe: T3workSidecarRecipeQuickStart,
-    customization?: T3workRecipeQuickStartLaunchCustomization,
+    recipe: T3TeamSidecarRecipeQuickStart,
+    customization?: T3TeamRecipeQuickStartLaunchCustomization,
   ) => void;
   selectedRecipeId?: string;
   renderRecipe?:
-    | ((recipe: T3workSidecarRecipeQuickStart, content: ReactNode) => ReactNode)
+    | ((recipe: T3TeamSidecarRecipeQuickStart, content: ReactNode) => ReactNode)
     | undefined;
 }) {
   const animatedRecipeListsRef = useRef(new WeakSet<HTMLElement>());
@@ -42,7 +42,7 @@ export function T3workKickoffRecipeList({
       {recipes.map((recipe) => {
         const isSelected = recipe.id === selectedRecipeId;
         const content = (
-          <T3workRecipeListCard
+          <T3TeamRecipeListCard
             recipe={recipe}
             isSelected={isSelected}
             onSelectRecipe={(customization) => onSelectRecipe(recipe, customization)}

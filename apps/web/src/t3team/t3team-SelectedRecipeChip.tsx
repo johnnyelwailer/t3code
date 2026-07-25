@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
 
-export function T3workSelectedRecipeChip({
+export function T3TeamSelectedRecipeChip({
   title,
   description,
   summary,

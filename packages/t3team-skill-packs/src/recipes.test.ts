@@ -63,16 +63,16 @@ const RECIPE_TOPICS: Record<(typeof KEEP_PACK_META_RECIPE_IDS)[number], string> 
 
 describe("bundled t3team recipe catalog", () => {
   it("keeps KEEP/PACK/META recipes with explicit topics", () => {
-    expect(listBundledT3WorkRecipes().map((recipe) => recipe.id)).toEqual([
+    expect(listBundledT3TeamRecipes().map((recipe) => recipe.id)).toEqual([
       ...KEEP_PACK_META_RECIPE_IDS,
     ]);
     for (const recipeId of KEEP_PACK_META_RECIPE_IDS) {
-      expect(getBundledT3WorkRecipe(recipeId)?.topic).toBe(RECIPE_TOPICS[recipeId]);
+      expect(getBundledT3TeamRecipe(recipeId)?.topic).toBe(RECIPE_TOPICS[recipeId]);
     }
   });
 
   it("defines inline assignee filtering for show-only-assigned-to-me", () => {
-    const recipe = getBundledT3WorkRecipe("show-only-assigned-to-me")!;
+    const recipe = getBundledT3TeamRecipe("show-only-assigned-to-me")!;
 
     expect(recipe.kickoff?.steps).toEqual([
       expect.objectContaining({
@@ -87,7 +87,7 @@ describe("bundled t3team recipe catalog", () => {
   });
 
   it("defines clear-filters for active dashboard slices", () => {
-    const recipe = getBundledT3WorkRecipe("clear-filters")!;
+    const recipe = getBundledT3TeamRecipe("clear-filters")!;
 
     expect(recipe.topic).toBe("filters");
     expect(recipe.requiredContext?.map((entry) => entry.key)).toContain("dashboard.view.filtered");
@@ -95,7 +95,7 @@ describe("bundled t3team recipe catalog", () => {
   });
 
   it("defines ticket-depth acceptance review for workitem sidepanel", () => {
-    const recipe = getBundledT3WorkRecipe("review-acceptance-criteria")!;
+    const recipe = getBundledT3TeamRecipe("review-acceptance-criteria")!;
 
     expect(recipe.surfaces).toEqual(["workitem.detail.sidepanel"]);
     expect(recipe.promptTemplate).toContain("acceptance criteria");

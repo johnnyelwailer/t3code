@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { usePublishT3workDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
+import { usePublishT3TeamDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
 import { buildBacklogRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeSummary";
 import { hasBacklogViewFiltersActive } from "~/t3team/t3team-dashboardRecipeFilterOutcomes";
 import {
@@ -92,7 +92,7 @@ export function useProjectDashboardBacklogDerivedData(
     visibleIssueTypes,
   ]);
 
-  usePublishT3workDashboardRecipeViewSummary(derived.recipeViewSummary);
+  usePublishT3TeamDashboardRecipeViewSummary(derived.recipeViewSummary);
 
   return derived;
 }

@@ -4,7 +4,7 @@ import {
   buildBacklogAssignedToMeOutcome,
   buildBacklogNeedsMyActionOutcome,
   buildMyWorkNeedsMyActionOutcome,
-  resolveT3workDashboardRecipeAction,
+  resolveT3TeamDashboardRecipeAction,
 } from "~/t3team/t3team-dashboardRecipeActions";
 import {
   buildBacklogClearFiltersOutcome,
@@ -47,16 +47,16 @@ function createTicket(overrides: Partial<ProjectTicket> = {}): ProjectTicket {
 
 describe("t3team-dashboardRecipeActions", () => {
   it("maps dashboard inline-action recipe ids to dashboard actions", () => {
-    expect(resolveT3workDashboardRecipeAction("focus-needs-my-action")).toEqual({
+    expect(resolveT3TeamDashboardRecipeAction("focus-needs-my-action")).toEqual({
       kind: "focus-needs-my-action",
     });
-    expect(resolveT3workDashboardRecipeAction("show-only-assigned-to-me")).toEqual({
+    expect(resolveT3TeamDashboardRecipeAction("show-only-assigned-to-me")).toEqual({
       kind: "show-only-assigned-to-me",
     });
-    expect(resolveT3workDashboardRecipeAction("clear-filters")).toEqual({
+    expect(resolveT3TeamDashboardRecipeAction("clear-filters")).toEqual({
       kind: "clear-filters",
     });
-    expect(resolveT3workDashboardRecipeAction("prioritize-pending-work")).toBeUndefined();
+    expect(resolveT3TeamDashboardRecipeAction("prioritize-pending-work")).toBeUndefined();
   });
 
   it("updates the backlog assignee filter to the current user", () => {

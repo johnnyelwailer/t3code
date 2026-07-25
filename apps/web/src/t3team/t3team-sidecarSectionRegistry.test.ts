@@ -1,23 +1,23 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  getT3workSidecarSectionComponent,
-  resolveT3workSidecarSectionIsEmpty,
+  getT3TeamSidecarSectionComponent,
+  resolveT3TeamSidecarSectionIsEmpty,
 } from "~/t3team/t3team-sidecarSectionRegistry";
 
 describe("t3team sidecar section registry", () => {
   it("resolves modern and legacy component keys to recipe-list behavior", () => {
-    expect(getT3workSidecarSectionComponent("recipe-list")).toBeTypeOf("function");
-    expect(getT3workSidecarSectionComponent("quick-starts")).toBe(
-      getT3workSidecarSectionComponent("recipe-list"),
+    expect(getT3TeamSidecarSectionComponent("recipe-list")).toBeTypeOf("function");
+    expect(getT3TeamSidecarSectionComponent("quick-starts")).toBe(
+      getT3TeamSidecarSectionComponent("recipe-list"),
     );
-    expect(getT3workSidecarSectionComponent("inline-filters")).toBeTypeOf("function");
-    expect(getT3workSidecarSectionComponent("recent-conversations")).toBeTypeOf("function");
+    expect(getT3TeamSidecarSectionComponent("inline-filters")).toBeTypeOf("function");
+    expect(getT3TeamSidecarSectionComponent("recent-conversations")).toBeTypeOf("function");
   });
 
   it("treats missing recipe input as empty for recipe-list and inline-filters", () => {
-    expect(resolveT3workSidecarSectionIsEmpty("recipe-list", undefined)).toBe(true);
-    expect(resolveT3workSidecarSectionIsEmpty("quick-starts", undefined)).toBe(true);
-    expect(resolveT3workSidecarSectionIsEmpty("inline-filters", undefined)).toBe(true);
+    expect(resolveT3TeamSidecarSectionIsEmpty("recipe-list", undefined)).toBe(true);
+    expect(resolveT3TeamSidecarSectionIsEmpty("quick-starts", undefined)).toBe(true);
+    expect(resolveT3TeamSidecarSectionIsEmpty("inline-filters", undefined)).toBe(true);
   });
 });

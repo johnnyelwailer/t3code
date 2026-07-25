@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-import { T3workSidecarSectionFrame } from "~/t3team/t3team-sidecarSectionFrame";
+import { T3TeamSidecarSectionFrame } from "~/t3team/t3team-sidecarSectionFrame";
 
-export function T3workTopicSection({
+export function T3TeamTopicSection({
   sectionId,
   title,
   collapsed = false,
@@ -23,7 +23,7 @@ export function T3workTopicSection({
   }
 
   return (
-    <T3workSidecarSectionFrame
+    <T3TeamSidecarSectionFrame
       sectionId={sectionId}
       title={title}
       collapsed={collapsed}
@@ -31,6 +31,6 @@ export function T3workTopicSection({
       menuEntries={[]}
     >
       <div className="space-y-2.5">{visibleItems}</div>
-    </T3workSidecarSectionFrame>
+    </T3TeamSidecarSectionFrame>
   );
 }

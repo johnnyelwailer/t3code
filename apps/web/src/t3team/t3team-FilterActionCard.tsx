@@ -1,12 +1,12 @@
 import { ListFilter } from "lucide-react";
 
 import { cn } from "~/lib/utils";
-import type { T3workSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 
 function FilterActionCardBody({
   recipe,
 }: {
-  readonly recipe: T3workSidecarRecipeQuickStart;
+  readonly recipe: T3TeamSidecarRecipeQuickStart;
 }) {
   return (
     <div className="relative min-w-0 pr-7">
@@ -38,14 +38,14 @@ function filterCardSurfaceClassName({
   );
 }
 
-export function T3workFilterActionCard({
+export function T3TeamFilterActionCard({
   recipe,
   onApply,
   onRankNext,
   disabled = false,
   isSelected = false,
 }: {
-  readonly recipe: T3workSidecarRecipeQuickStart;
+  readonly recipe: T3TeamSidecarRecipeQuickStart;
   readonly onApply?: () => void;
   readonly onRankNext?: () => void;
   readonly disabled?: boolean;

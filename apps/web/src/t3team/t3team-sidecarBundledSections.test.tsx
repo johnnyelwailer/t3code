@@ -8,34 +8,34 @@ const { mockUseQuickStarts } = vi.hoisted(() => ({
 }));
 
 vi.mock("~/t3team/t3team-sidecarRecipes", () => ({
-  useT3workSidecarRecipeQuickStarts: (input: unknown) => mockUseQuickStarts(input),
+  useT3TeamSidecarRecipeQuickStarts: (input: unknown) => mockUseQuickStarts(input),
 }));
 
 vi.mock("@t3tools/t3team-skill-packs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@t3tools/t3team-skill-packs")>();
   return {
     ...actual,
-    getBundledT3WorkRecipe: (recipeId: string) => ({
-      ...actual.getBundledT3WorkRecipe(recipeId),
+    getBundledT3TeamRecipe: (recipeId: string) => ({
+      ...actual.getBundledT3TeamRecipe(recipeId),
       topic: "quick-actions",
     }),
   };
 });
 
 vi.mock("~/t3team/t3team-KickoffRecipeList", () => ({
-  T3workKickoffRecipeList: ({ recipes }: { recipes: ReadonlyArray<{ id: string }> }) => {
+  T3TeamKickoffRecipeList: ({ recipes }: { recipes: ReadonlyArray<{ id: string }> }) => {
     return <div>{recipes.map((recipe) => recipe.id).join(",")}</div>;
   },
 }));
 
 vi.mock("~/t3team/t3team-ProjectDashboardRecentConversations", () => ({
-  T3workRecentConversations: ({ threads }: { threads: ReadonlyArray<{ id: string }> }) => {
+  T3TeamRecentConversations: ({ threads }: { threads: ReadonlyArray<{ id: string }> }) => {
     return <div>{threads.map((thread) => thread.id).join(",")}</div>;
   },
 }));
 
-import { T3workQuickStartsSection } from "~/t3team/t3team-QuickStartsSection";
-import { T3workRecentConversationsSection } from "~/t3team/t3team-RecentConversationsSection";
+import { T3TeamQuickStartsSection } from "~/t3team/t3team-QuickStartsSection";
+import { T3TeamRecentConversationsSection } from "~/t3team/t3team-RecentConversationsSection";
 import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 
 const project: ProjectShellProject = {
@@ -122,7 +122,7 @@ describe("bundled sidecar sections", () => {
     ]);
 
     const markup = renderToStaticMarkup(
-      <T3workQuickStartsSection
+      <T3TeamQuickStartsSection
         host={host}
         props={{
           recipeInput: {
@@ -146,7 +146,7 @@ describe("bundled sidecar sections", () => {
 
   it("applies hidden and pinned recent-conversation order before rendering", () => {
     const markup = renderToStaticMarkup(
-      <T3workRecentConversationsSection
+      <T3TeamRecentConversationsSection
         host={host}
         props={{
           threads: [

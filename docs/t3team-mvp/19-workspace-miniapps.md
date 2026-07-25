@@ -264,7 +264,7 @@ Profiles may reorder (e.g. put `planning` before `refinement`) or collapse `filt
 `customize` is usually last or collapsed until needed.
 
 **Project manifest wiring:** project setup persists `sidecarSections` into
-`.t3team/setup/profile.json`. `T3workSidecarComposition` merges
+`.t3team/setup/profile.json`. `T3TeamSidecarComposition` merges
 `bundled → profile → project → user` via `projectDefault?: SidecarComposition`.
 Kickoff panels read synced `agentSetup.sidecarSections` with
 `readProjectSidecarCompositionFromProject` (`t3team-createProjectBootstrap.ts`) and pass
@@ -303,7 +303,7 @@ Existing sidecar stories: `RecipeListCard`, `FilterActionCard`, `TopicSection`,
 `SidecarComposition` (engineering + QA fixture variants).
 
 Workflow per feature: add/update story states (default, empty, populated) → implement
-component → wire into `T3workSidecarComposition` → unit test click paths. Recipe
+component → wire into `T3TeamSidecarComposition` → unit test click paths. Recipe
 **logic** (matching, topics) stays in tests; recipe **presentation** (cards, sections,
 spacing) lives in Storybook for fast iteration.
 
@@ -613,7 +613,7 @@ exist to prevent.
 
 | Helper               | What it contributes                                                                                                       | Status  |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `defineTool`         | Custom tool registered with `T3workToolBroker` (project-local or pack-bundled). Today tools are only built-in.            | Planned |
+| `defineTool`         | Custom tool registered with `T3TeamToolBroker` (project-local or pack-bundled). Today tools are only built-in.            | Planned |
 | `defineSkillPack`    | Bundle of recipes + sections + profile defaults + tool grants under one id ([Epic 12](./12-profiles-and-skill-packs.md)). | Planned |
 | `defineProfile`      | A starter profile with preference fields. Today profiles are hardcoded; this makes them authorable.                       | Planned |
 | `defineResourceType` | Typed resource shape + renderer (for new integration providers).                                                          | Planned |
@@ -753,7 +753,7 @@ components should be intentionally exported and versioned through the SDK.
 
 ## Tool Access
 
-Miniapps use the **single shared tool surface** — the same `T3workToolBroker` capability
+Miniapps use the **single shared tool surface** — the same `T3TeamToolBroker` capability
 surface consumed by agent turns and workflow steps, scoped by the declared tool groups.
 There is no miniapp-specific tool API. The catalog, tool classes, and safety matrix are in
 [Epic 21](./21-context-tool-catalog.md); the recipe/workflow side is in

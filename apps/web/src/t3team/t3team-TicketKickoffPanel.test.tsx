@@ -37,27 +37,27 @@ vi.mock("~/t3team/components/t3team-ContextAttachmentChip", () => ({
 }));
 
 vi.mock("~/t3team/t3team-KickoffRecipeList", () => ({
-  T3workKickoffRecipeList: () => <div>quick-starts</div>,
+  T3TeamKickoffRecipeList: () => <div>quick-starts</div>,
 }));
 
 vi.mock("~/t3team/t3team-runViewTransition", () => ({
-  runT3workViewTransition: (callback: () => void) => callback(),
+  runT3TeamViewTransition: (callback: () => void) => callback(),
 }));
 
 vi.mock("~/t3team/hooks/t3team-useSidecarComposition", () => ({
-  useT3workSidecarComposition: (input: unknown) => mockUseSidecarComposition(input),
+  useT3TeamSidecarComposition: (input: unknown) => mockUseSidecarComposition(input),
 }));
 
 vi.mock("~/t3team/t3team-sidecarRecipes", async (importOriginal) => {
   const actual = await importOriginal<typeof import("~/t3team/t3team-sidecarRecipes")>();
   return {
     ...actual,
-    useT3workSidecarRecipeQuickStarts: () => [],
+    useT3TeamSidecarRecipeQuickStarts: () => [],
   };
 });
 
 vi.mock("~/t3team/t3team-TicketKickoffComposer", () => ({
-  createDefaultT3workKickoffLaunchConfig: () => ({
+  createDefaultT3TeamKickoffLaunchConfig: () => ({
     selection: { model: "gpt-5.4", instanceId: "provider" },
     runtimeMode: "full-access",
     interactionMode: "default",

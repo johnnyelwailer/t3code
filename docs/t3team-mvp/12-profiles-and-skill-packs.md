@@ -90,7 +90,7 @@ surfacing engineering recipes, artifacts, and project views.
 
 The runtime should resolve a selected profile set into one effective profile at the
 configuration boundary, so downstream recipe ranking and surface code can continue to
-consume a single `T3WorkProfile`-shaped object.
+consume a single `T3TeamProfile`-shaped object.
 
 Profile-set rules:
 
@@ -161,7 +161,7 @@ packages/t3team-skill-packs/src/
 ## Profile Model
 
 ```ts
-type T3WorkProfile = {
+type T3TeamProfile = {
   id: string;
   title: string;
   description: string;
@@ -186,7 +186,7 @@ type T3WorkProfile = {
 Project setup stores profile selection separately from profile definitions:
 
 ```ts
-type T3WorkProjectProfileSelection = {
+type T3TeamProjectProfileSelection = {
   primaryProfileId: string;
   profileIds: string[];
 };
@@ -205,7 +205,7 @@ Interpretation rules:
 ## Skill Pack Model
 
 ```ts
-type T3WorkSkillPack = {
+type T3TeamSkillPack = {
   id: string;
   title: string;
   description: string;

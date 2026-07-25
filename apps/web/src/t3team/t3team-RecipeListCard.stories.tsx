@@ -4,12 +4,12 @@ import {
   LaunchOptionGroup,
   RecipeLaunchControlsProvider,
 } from "~/t3team/t3team-recipeActionLaunchControls";
-import { T3workRecipeListCard } from "~/t3team/t3team-RecipeListCard";
+import { T3TeamRecipeListCard } from "~/t3team/t3team-RecipeListCard";
 import { explainSelectedWorkRecipe } from "~/t3team/t3team-sidecarStoryFixtures";
 
 const meta = {
-  title: "T3work/Sidecar/RecipeListCard",
-  component: T3workRecipeListCard,
+  title: "T3Team/Sidecar/RecipeListCard",
+  component: T3TeamRecipeListCard,
   parameters: {
     layout: "centered",
   },
@@ -20,7 +20,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof T3workRecipeListCard>;
+} satisfies Meta<typeof T3TeamRecipeListCard>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -47,7 +47,7 @@ export const WithLaunchOptionGroup: Story = {
   },
   render: () => (
     <RecipeLaunchControlsProvider>
-      <T3workRecipeListCard recipe={explainSelectedWorkRecipe} onClick={() => {}}>
+      <T3TeamRecipeListCard recipe={explainSelectedWorkRecipe} onClick={() => {}}>
         <LaunchOptionGroup
           name="explanationAudience"
           label="Explain for"
@@ -70,7 +70,7 @@ export const WithLaunchOptionGroup: Story = {
             },
           ]}
         />
-      </T3workRecipeListCard>
+      </T3TeamRecipeListCard>
     </RecipeLaunchControlsProvider>
   ),
 };

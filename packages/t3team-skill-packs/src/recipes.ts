@@ -15,7 +15,7 @@ import {
   UNBLOCK_BLOCKED_TICKET_ACTION_VIEW,
 } from "./recipeActionViews.ts";
 
-export type BundledT3WorkRecipe = Recipe & {
+export type BundledT3TeamRecipe = Recipe & {
   readonly topic: string;
   readonly version: string;
   readonly manifestDisplayName: string;
@@ -36,10 +36,10 @@ const DASHBOARD_AND_WORKITEM_SURFACES = [
 const BACKLOG_DASHBOARD_SURFACE = ["project.dashboard.backlog"] as const;
 
 function createBundledRecipe(
-  recipe: Omit<BundledT3WorkRecipe, "version" | "allowedToolGroups"> & {
+  recipe: Omit<BundledT3TeamRecipe, "version" | "allowedToolGroups"> & {
     readonly allowedToolGroups?: ReadonlyArray<string>;
   },
-): BundledT3WorkRecipe {
+): BundledT3TeamRecipe {
   return {
     version: "0.1.0",
     allowedToolGroups: recipe.allowedToolGroups ?? DEFAULT_ALLOWED_TOOL_GROUPS,
@@ -47,7 +47,7 @@ function createBundledRecipe(
   };
 }
 
-const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
+const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
   createBundledRecipe({
     topic: "customize",
     id: "create-recipe",
@@ -578,10 +578,10 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [
   }),
 ] as const;
 
-export function listBundledT3WorkRecipes(): ReadonlyArray<BundledT3WorkRecipe> {
+export function listBundledT3TeamRecipes(): ReadonlyArray<BundledT3TeamRecipe> {
   return BUNDLED_RECIPES;
 }
 
-export function getBundledT3WorkRecipe(recipeId: string): BundledT3WorkRecipe | undefined {
+export function getBundledT3TeamRecipe(recipeId: string): BundledT3TeamRecipe | undefined {
   return BUNDLED_RECIPES.find((recipe) => recipe.id === recipeId);
 }

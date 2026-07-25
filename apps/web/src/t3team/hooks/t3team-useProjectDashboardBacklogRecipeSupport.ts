@@ -4,13 +4,13 @@ import { useBackend } from "~/t3team/backend/t3team-index";
 import {
   buildBacklogAssignedToMeOutcome,
   buildBacklogNeedsMyActionOutcome,
-  useRegisterT3workDashboardRecipeActionHandler,
+  useRegisterT3TeamDashboardRecipeActionHandler,
 } from "~/t3team/t3team-dashboardRecipeActions";
 import { buildBacklogClearFiltersOutcome } from "~/t3team/t3team-dashboardRecipeFilterOutcomes";
 import {
-  type T3workDeterministicWorkflowLaunch,
+  type T3TeamDeterministicWorkflowLaunch,
   launchProjectDashboardBacklogInlineRecipe,
-  useRegisterT3workInlineRecipeLaunchHandler,
+  useRegisterT3TeamInlineRecipeLaunchHandler,
 } from "~/t3team/t3team-inlineRecipeLaunch";
 import { launchProjectDashboardBacklogDeterministicWorkflow } from "~/t3team/t3team-deterministicWorkflowLaunch";
 import type { ProjectDashboardBacklogState } from "~/t3team/t3team-projectDashboardBacklogState";
@@ -32,7 +32,7 @@ export function useProjectDashboardBacklogRecipeSupport(input: {
 }) {
   const backend = useBackend();
 
-  useRegisterT3workDashboardRecipeActionHandler(
+  useRegisterT3TeamDashboardRecipeActionHandler(
     useMemo(
       () => (action) => {
         if (action.kind === "show-only-assigned-to-me") {
@@ -70,7 +70,7 @@ export function useProjectDashboardBacklogRecipeSupport(input: {
     ),
   );
 
-  useRegisterT3workInlineRecipeLaunchHandler(
+  useRegisterT3TeamInlineRecipeLaunchHandler(
     useMemo(
       () =>
         backend
@@ -90,7 +90,7 @@ export function useProjectDashboardBacklogRecipeSupport(input: {
                 });
               }
 
-              const workflowLaunch = launch as T3workDeterministicWorkflowLaunch;
+              const workflowLaunch = launch as T3TeamDeterministicWorkflowLaunch;
               if (workflowLaunch.surface !== "project.dashboard.backlog") {
                 return null;
               }

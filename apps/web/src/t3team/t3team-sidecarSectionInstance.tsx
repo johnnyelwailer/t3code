@@ -10,34 +10,34 @@ import {
   type SidecarSectionDefinition,
 } from "@t3tools/project-recipes";
 
-import { T3workSidecarSectionItemMenu } from "~/t3team/t3team-sidecarSectionMenu";
+import { T3TeamSidecarSectionItemMenu } from "~/t3team/t3team-sidecarSectionMenu";
 import {
-  T3workSidecarSectionErrorBoundary,
-  T3workSidecarSectionFrame,
+  T3TeamSidecarSectionErrorBoundary,
+  T3TeamSidecarSectionFrame,
 } from "~/t3team/t3team-sidecarSectionFrame";
 import {
-  buildT3workSidecarItemMenuEntries,
-  buildT3workSidecarSectionHeaderMenuEntries,
+  buildT3TeamSidecarItemMenuEntries,
+  buildT3TeamSidecarSectionHeaderMenuEntries,
 } from "~/t3team/t3team-sidecarSectionMenuActions";
 import {
-  getT3workSidecarItemId,
-  getT3workSidecarItemLabel,
-  getT3workSidecarItemSourcePath,
-  mergeT3workSidecarSectionProps,
-  runT3workSidecarDeclaredAction,
+  getT3TeamSidecarItemId,
+  getT3TeamSidecarItemLabel,
+  getT3TeamSidecarItemSourcePath,
+  mergeT3TeamSidecarSectionProps,
+  runT3TeamSidecarDeclaredAction,
 } from "~/t3team/t3team-sidecarSectionShellHelpers";
 import {
-  getT3workSidecarSectionComponent,
-  resolveT3workSidecarSectionIsEmpty,
+  getT3TeamSidecarSectionComponent,
+  resolveT3TeamSidecarSectionIsEmpty,
 } from "~/t3team/t3team-sidecarSectionRegistry";
 import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
-import type { useRunT3workDeterministicWorkflowLaunch } from "~/t3team/t3team-inlineRecipeLaunch";
+import type { useRunT3TeamDeterministicWorkflowLaunch } from "~/t3team/t3team-inlineRecipeLaunch";
 import {
-  buildT3workSidecarItemResetLaunch,
-  buildT3workSidecarSectionResetLaunch,
+  buildT3TeamSidecarItemResetLaunch,
+  buildT3TeamSidecarSectionResetLaunch,
 } from "~/t3team/t3team-sidecarPersonalizationReset";
 
-export function T3workSidecarSectionInstance({
+export function T3TeamSidecarSectionInstance({
   definition,
   sectionState,
   sectionIndex,
@@ -64,7 +64,7 @@ export function T3workSidecarSectionInstance({
   readonly defaultComposition: { readonly sections: ReadonlyArray<SidecarCompositionSection> };
   readonly personalization: SidecarPersonalization;
   readonly resolveSectionProps?: ((sectionId: string) => unknown) | undefined;
-  readonly runWorkflowLaunch: ReturnType<typeof useRunT3workDeterministicWorkflowLaunch>;
+  readonly runWorkflowLaunch: ReturnType<typeof useRunT3TeamDeterministicWorkflowLaunch>;
   readonly setCollapsed: (sectionId: string, collapsed: boolean) => void;
   readonly hideSection: (sectionId: string) => void;
   readonly moveSection: (sectionId: string, direction: "up" | "down") => void;
@@ -72,7 +72,7 @@ export function T3workSidecarSectionInstance({
   readonly pinItem: (sectionId: string, itemId: string) => void;
   readonly unpinItem: (sectionId: string, itemId: string) => void;
 }) {
-  const SectionComponent = getT3workSidecarSectionComponent(definition.component);
+  const SectionComponent = getT3TeamSidecarSectionComponent(definition.component);
   const collapsed = sectionState.collapsed === true;
   const fallback = (
     <p className="rounded-md border border-dashed border-border/60 bg-background/40 px-3 py-2 text-xs text-muted-foreground/70">
@@ -83,7 +83,7 @@ export function T3workSidecarSectionInstance({
     sectionId: definition.id,
     personalization,
   });
-  const sectionResetLaunch = buildT3workSidecarSectionResetLaunch({
+  const sectionResetLaunch = buildT3TeamSidecarSectionResetLaunch({
     surface,
     sectionId: definition.id,
     sectionTitle: definition.title,
@@ -91,11 +91,11 @@ export function T3workSidecarSectionInstance({
     personalization,
   });
   const runDeclaredAction = (
-    action: Parameters<typeof runT3workSidecarDeclaredAction>[0]["action"],
+    action: Parameters<typeof runT3TeamSidecarDeclaredAction>[0]["action"],
     itemId?: string,
   ) => {
     startTransition(() => {
-      void runT3workSidecarDeclaredAction({
+      void runT3TeamSidecarDeclaredAction({
         runWorkflowLaunch,
         sectionId: definition.id,
         sectionTitle: definition.title,
@@ -106,20 +106,20 @@ export function T3workSidecarSectionInstance({
       });
     });
   };
-  const mergedSectionProps = mergeT3workSidecarSectionProps(resolveSectionProps?.(definition.id), {
+  const mergedSectionProps = mergeT3TeamSidecarSectionProps(resolveSectionProps?.(definition.id), {
     orderItemIds: (itemIds: ReadonlyArray<string>) =>
       resolveSidecarSectionItemOrder({
         itemIds,
         personalization: sectionItemPersonalization,
       }),
     wrapItem: (item: unknown, content: ReactNode) => {
-      const itemId = getT3workSidecarItemId(item);
-      const itemLabel = getT3workSidecarItemLabel(item);
-      const sourcePath = getT3workSidecarItemSourcePath(item);
+      const itemId = getT3TeamSidecarItemId(item);
+      const itemLabel = getT3TeamSidecarItemLabel(item);
+      const sourcePath = getT3TeamSidecarItemSourcePath(item);
       if (!itemId) {
         return content;
       }
-      const itemResetLaunch = buildT3workSidecarItemResetLaunch({
+      const itemResetLaunch = buildT3TeamSidecarItemResetLaunch({
         surface,
         sectionId: definition.id,
         itemId,
@@ -128,8 +128,8 @@ export function T3workSidecarSectionInstance({
       });
 
       return (
-        <T3workSidecarSectionItemMenu
-          entries={buildT3workSidecarItemMenuEntries({
+        <T3TeamSidecarSectionItemMenu
+          entries={buildT3TeamSidecarItemMenuEntries({
             pinned: isSidecarItemPinned({
               itemId,
               personalization: sectionItemPersonalization,
@@ -155,22 +155,22 @@ export function T3workSidecarSectionInstance({
           label={itemLabel}
         >
           {content}
-        </T3workSidecarSectionItemMenu>
+        </T3TeamSidecarSectionItemMenu>
       );
     },
   });
 
-  if (resolveT3workSidecarSectionIsEmpty(definition.component, mergedSectionProps) === true) {
+  if (resolveT3TeamSidecarSectionIsEmpty(definition.component, mergedSectionProps) === true) {
     return null;
   }
 
   return (
-    <T3workSidecarSectionFrame
+    <T3TeamSidecarSectionFrame
       sectionId={definition.id}
       title={definition.title}
       collapsed={collapsed}
       onToggleCollapsed={() => setCollapsed(definition.id, !collapsed)}
-      menuEntries={buildT3workSidecarSectionHeaderMenuEntries({
+      menuEntries={buildT3TeamSidecarSectionHeaderMenuEntries({
         collapsed,
         canMoveUp: sectionIndex > 0,
         canMoveDown: sectionIndex < totalVisibleSections - 1,
@@ -190,9 +190,9 @@ export function T3workSidecarSectionInstance({
         onRunDeclaredAction: (action) => runDeclaredAction(action),
       })}
     >
-      <T3workSidecarSectionErrorBoundary fallback={fallback}>
+      <T3TeamSidecarSectionErrorBoundary fallback={fallback}>
         {SectionComponent ? <SectionComponent host={host} props={mergedSectionProps} /> : fallback}
-      </T3workSidecarSectionErrorBoundary>
-    </T3workSidecarSectionFrame>
+      </T3TeamSidecarSectionErrorBoundary>
+    </T3TeamSidecarSectionFrame>
   );
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import { resolveT3workKickoffSectionProps } from "~/t3team/t3team-sidecarKickoffSectionProps";
+import { resolveT3TeamKickoffSectionProps } from "~/t3team/t3team-sidecarKickoffSectionProps";
 
 function createRecipeInput() {
   const project: ProjectShellProject = {
@@ -26,10 +26,10 @@ function createRecipeInput() {
   };
 }
 
-describe("resolveT3workKickoffSectionProps", () => {
+describe("resolveT3TeamKickoffSectionProps", () => {
   it("maps legacy quick-starts section id to quick-actions topic", () => {
     expect(
-      resolveT3workKickoffSectionProps({
+      resolveT3TeamKickoffSectionProps({
         sectionId: "quick-starts",
         recipeInput: createRecipeInput(),
       }),
@@ -41,7 +41,7 @@ describe("resolveT3workKickoffSectionProps", () => {
 
   it("maps legacy recent-conversations section id to recent threads props", () => {
     expect(
-      resolveT3workKickoffSectionProps({
+      resolveT3TeamKickoffSectionProps({
         sectionId: "recent-conversations",
         recipeInput: createRecipeInput(),
         recentThreads: [],
@@ -55,7 +55,7 @@ describe("resolveT3workKickoffSectionProps", () => {
 
   it("maps bundled filters section to inline-filters topic", () => {
     expect(
-      resolveT3workKickoffSectionProps({
+      resolveT3TeamKickoffSectionProps({
         sectionId: "filters",
         recipeInput: createRecipeInput(),
       }),
