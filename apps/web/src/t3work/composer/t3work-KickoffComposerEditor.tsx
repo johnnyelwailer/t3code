@@ -1,3 +1,4 @@
+import { useId, useRef } from "react";
 import type { ServerProviderSkill } from "@t3tools/contracts";
 
 import {
@@ -8,6 +9,8 @@ import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu"
 import { ComposerCommandMenu } from "~/components/chat/ComposerCommandMenu";
 import { useTheme } from "~/hooks/useTheme";
 import { T3workComposerSlashMenu } from "~/t3work/composer/t3work-ComposerSlashMenuGroups";
+import { t3workComposerMenuOptionDomId } from "~/t3work/composer/t3work-composerMenuKeyboard";
+import { useT3workComposerActiveDescendant } from "~/t3work/composer/t3work-useComposerActiveDescendant";
 import type { useT3workKickoffComposerMenu } from "~/t3work/composer/t3work-useKickoffComposerMenu";
 
 type KickoffComposerCommandMenu = ReturnType<typeof useT3workKickoffComposerMenu>;
@@ -31,14 +34,37 @@ type KickoffComposerEditorProps = {
 export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
   const { resolvedTheme } = useTheme();
   const { commandMenu } = props;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const reactId = useId();
+  const listboxId = `t3work-composer-menu${reactId}`;
+  const slashMenuOpen = commandMenu.menuOpen && commandMenu.trigger?.kind === "slash-command";
+
+  useT3workComposerActiveDescendant({
+    containerRef,
+    listboxId,
+    menuOpen: slashMenuOpen,
+    activeOptionDomId: commandMenu.activeItemId
+      ? t3workComposerMenuOptionDomId(listboxId, commandMenu.activeItemId)
+      : null,
+  });
 
   return (
-    <div className="relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4">
+    <div
+      ref={containerRef}
+      className="relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4"
+      onKeyDownCapture={(event) => {
+        if (event.key !== "Escape" || !commandMenu.menuOpen) return;
+        if (!commandMenu.handleCommandKeyDown("Escape")) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
       {commandMenu.menuOpen ? (
         <div className="absolute inset-x-0 bottom-full z-20 mb-2">
           {commandMenu.trigger?.kind === "slash-command" ? (
             <T3workComposerSlashMenu
               items={commandMenu.menuItems}
+              listboxId={listboxId}
               activeItemId={commandMenu.activeItemId}
               onHighlightedItemChange={commandMenu.onHighlightedItemChange}
               onSelect={commandMenu.selectItem}
