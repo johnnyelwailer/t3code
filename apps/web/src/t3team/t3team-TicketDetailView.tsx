@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useCanGoBack } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
+import { useAgentContext } from "~/t3team/hooks/t3team-useAgentContext";
 import { useWorkItemDetailViewModel } from "~/t3team/hooks/t3team-useWorkItemDetailViewModel";
 import type { TicketKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import { TicketDetailBody } from "~/t3team/t3team-TicketDetailBody";
@@ -46,6 +47,7 @@ export function TicketDetailView({
   onBack: () => void;
 }) {
   const canGoBack = useCanGoBack();
+  const { showAgentContextMenu } = useAgentContext();
   const view = useWorkItemDetailViewModel({
     project,
     ticketId,
@@ -89,6 +91,7 @@ export function TicketDetailView({
               view,
               project,
               onOpenTicket: handleOpenTicket,
+              showAgentContextMenu,
             })}
           />
         }

@@ -21,6 +21,7 @@ export function WorkItemSection({
   action,
   collapsible = false,
   defaultCollapsed = false,
+  onContextMenu,
   children,
   className,
 }: {
@@ -31,6 +32,12 @@ export function WorkItemSection({
   readonly action?: ReactNode;
   readonly collapsible?: boolean;
   readonly defaultCollapsed?: boolean;
+  /**
+   * Right-click hands this section to the agent. Every section in the previous design carried this,
+   * and it is the affordance that makes the view agentic rather than merely readable — a section is
+   * the unit you want to hand over, not the whole item.
+   */
+  readonly onContextMenu?: ((event: React.MouseEvent) => void) | undefined;
   readonly children: ReactNode;
   readonly className?: string;
 }) {
@@ -39,16 +46,26 @@ export function WorkItemSection({
   const isCollapsed = collapsible && collapsed;
   const anchorProps = anchorId ? { id: anchorId } : {};
 
+  const contextMenuProps = onContextMenu ? { onContextMenu } : {};
+
   if (!title) {
     return (
-      <section className={cn("min-w-0 scroll-mt-16", className)} {...anchorProps}>
+      <section
+        className={cn("min-w-0 scroll-mt-16", className)}
+        {...anchorProps}
+        {...contextMenuProps}
+      >
         {children}
       </section>
     );
   }
 
   return (
-    <section className={cn("min-w-0 scroll-mt-16", className)} {...anchorProps}>
+    <section
+      className={cn("min-w-0 scroll-mt-16", className)}
+      {...anchorProps}
+      {...contextMenuProps}
+    >
       <div className="mb-2.5 flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <HeadingControl
           collapsible={collapsible}

@@ -9,11 +9,13 @@ import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
  * `t3team-TicketAttachments.tsx` used.
  */
 export function WorkItemAttachments({
+  onContextMenu,
   anchorId,
   attachments,
   resolveAssetUrl,
   nowMs,
 }: {
+  readonly onContextMenu?: ((event: React.MouseEvent) => void) | undefined;
   /** Section nav target. */
   readonly anchorId?: string | undefined;
   readonly attachments: ReadonlyArray<JiraAttachment>;
@@ -26,6 +28,7 @@ export function WorkItemAttachments({
     <WorkItemSection
       title="Attachments"
       {...(anchorId ? { anchorId } : {})}
+      {...(onContextMenu ? { onContextMenu } : {})}
       count={attachments.length}
     >
       <div className="grid grid-cols-2 gap-2.5 @lg/workitem:grid-cols-3 @3xl/workitem:grid-cols-4">

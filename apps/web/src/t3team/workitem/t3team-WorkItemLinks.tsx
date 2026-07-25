@@ -21,12 +21,16 @@ function findProjectTicket(
  * `WorkItemIssueRow` already renders it for children.
  */
 export function WorkItemLinks({
+  currentUserName,
+  onContextMenu,
   anchorId,
   snapshotRaw,
   projectTickets,
   projectId,
   onOpenTicket,
 }: {
+  readonly onContextMenu?: ((event: React.MouseEvent) => void) | undefined;
+  readonly currentUserName?: string | undefined;
   /** Section nav target. */
   readonly anchorId?: string | undefined;
   readonly snapshotRaw: unknown;
@@ -41,12 +45,18 @@ export function WorkItemLinks({
   if (total === 0) return null;
 
   return (
-    <WorkItemSection title="Linked issues" {...(anchorId ? { anchorId } : {})} count={total}>
+    <WorkItemSection
+      title="Linked issues"
+      {...(anchorId ? { anchorId } : {})}
+      {...(onContextMenu ? { onContextMenu } : {})}
+      count={total}
+    >
       <div className="space-y-3">
         {groups.map((group) => (
           <WorkItemIssueList key={group.label}>
             {group.issues.map((issue) => (
               <WorkItemIssueRow
+                {...(currentUserName ? { currentUserName } : {})}
                 key={issue.key}
                 ticket={issue.ticket ?? toRelationshipTicket({ key: issue.key }, projectId)}
                 relationLabel={group.label}

@@ -5,6 +5,7 @@ import { TicketDetailDraftDocumentReview } from "~/t3team/t3team-TicketDetailDra
 import { TicketDetailGitHubSection } from "~/t3team/t3team-TicketDetailGitHubSection";
 import { buildTicketRelationships } from "~/t3team/t3team-ticketRelationships-helpers";
 import {
+  createSectionContextMenuHandler,
   normalizeTicketAttachments,
   normalizeTicketComments,
 } from "~/t3team/t3team-ticketDetailMainColumn.helpers";
@@ -22,10 +23,14 @@ export function buildWorkItemDetailMainProps({
   view,
   project,
   onOpenTicket,
+  showAgentContextMenu,
 }: {
   readonly view: WorkItemDetailView;
   readonly project: ProjectShellProject;
   readonly onOpenTicket: (ticketId: string) => void;
+  readonly showAgentContextMenu: Parameters<
+    typeof createSectionContextMenuHandler
+  >[0]["showAgentContextMenu"];
 }): WorkItemDetailMainProps {
   const resolvedTicketId = view.ticket?.id ?? view.canonicalTicketId;
 
@@ -43,8 +48,27 @@ export function buildWorkItemDetailMainProps({
     .map((entry) => entry.ticket)
     .filter((child) => child !== undefined);
 
+  /**
+   * Right-clicking a section hands it to the agent. This existed on every section of the previous
+   * view and was lost when that component was replaced; the handler itself never went away, so this
+   * reconnects it rather than reinventing it.
+   */
+  const handleSectionContextMenu = createSectionContextMenuHandler({
+    backend: view.backend ?? undefined,
+    ...(view.ticket ? { ticket: view.ticket } : { ticket: undefined }),
+    projectId: project.id,
+    project,
+    projectTickets: view.ticketsWithRelated,
+    githubActivityItems: view.matchedGitHubActivityItems,
+    snapshot: view.snapshot,
+    showAgentContextMenu,
+  });
+
   return {
     model: view.fieldModel,
+    ...(view.currentUserName ? { currentUserName: view.currentUserName } : {}),
+    onSectionContextMenu: (event, section, label) =>
+      handleSectionContextMenu(event, section, label),
     projectId: project.id,
     ...(project.source.accountId ? { accountId: project.source.accountId } : {}),
     ...(view.backend?.httpBaseUrl ? { httpBaseUrl: view.backend.httpBaseUrl } : {}),

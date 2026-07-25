@@ -26,6 +26,9 @@ import {
 import { WorkItemSkeleton } from "~/t3team/workitem/t3team-WorkItemSkeleton";
 import { WorkItemTitleBand } from "~/t3team/workitem/t3team-WorkItemTitleBand";
 
+/** The sections a reader can hand to the agent, mirroring the targets the previous view exposed. */
+export type WorkItemSectionTarget = "description" | "relationships" | "attachments" | "comments";
+
 export type WorkItemDetailMainProps = {
   readonly model: WorkItemFieldModel;
   readonly projectId: string;
@@ -44,6 +47,15 @@ export type WorkItemDetailMainProps = {
   readonly error: string | null;
   readonly onReload: () => void;
   readonly onOpenTicket: (ticketId: string) => void;
+  /** Signed-in user, so rows assigned to them are distinguishable at a glance. */
+  readonly currentUserName?: string | undefined;
+  /**
+   * Right-click on a section hands it to the agent. Supplied by the caller because building the
+   * handler needs the backend, the project and the snapshot — none of which this column should own.
+   */
+  readonly onSectionContextMenu?:
+    | ((event: React.MouseEvent, section: WorkItemSectionTarget, label: string) => void)
+    | undefined;
   /** Extra sections rendered under the description — GitHub activity, draft review. */
   readonly supplementalSections?: ReactNode;
 };
@@ -74,8 +86,14 @@ export function WorkItemDetailMain({
   error,
   onReload,
   onOpenTicket,
+  currentUserName,
+  onSectionContextMenu,
   supplementalSections,
 }: WorkItemDetailMainProps) {
+  const sectionMenu = (section: WorkItemSectionTarget, label: string) =>
+    onSectionContextMenu
+      ? { onContextMenu: (event: React.MouseEvent) => onSectionContextMenu(event, section, label) }
+      : {};
   const resolveAssetUrl = useMemo(
     () =>
       createJiraTicketAssetUrlResolver({
@@ -117,7 +135,7 @@ export function WorkItemDetailMain({
 
   return (
     <WorkItemDetailLayout
-      titleBand={<WorkItemTitleBand model={model} />}
+      titleBand={<WorkItemTitleBand model={model} nowMs={nowMs} />}
       sectionNav={<WorkItemSectionNav entries={navEntries} />}
       properties={<WorkItemProperties model={model} nowMs={nowMs} />}
       primary={
@@ -126,7 +144,11 @@ export function WorkItemDetailMain({
             <T3TeamErrorState error={error} action="load this work item" onRetry={onReload} />
           ) : null}
 
-          <WorkItemSection title="Description" anchorId={anchors.description}>
+          <WorkItemSection
+            title="Description"
+            anchorId={anchors.description}
+            {...sectionMenu("description", `${model.key} description`)}
+          >
             {/* Only the first load shows a skeleton; a refresh keeps the current content visible. */}
             {loading && !model.descriptionAdf && !model.descriptionText ? (
               <WorkItemSkeleton lines={4} />
@@ -147,6 +169,8 @@ export function WorkItemDetailMain({
             items={childItems}
             anchorId={anchors.children}
             onOpenTicket={onOpenTicket}
+            {...(currentUserName ? { currentUserName } : {})}
+            {...sectionMenu("relationships", `${model.key} child items`)}
           />
 
           <WorkItemLinks
@@ -155,6 +179,8 @@ export function WorkItemDetailMain({
             projectId={projectId}
             anchorId={anchors.links}
             onOpenTicket={onOpenTicket}
+            {...(currentUserName ? { currentUserName } : {})}
+            {...sectionMenu("relationships", `${model.key} linked issues`)}
           />
 
           <WorkItemAttachments
@@ -162,6 +188,7 @@ export function WorkItemDetailMain({
             anchorId={anchors.attachments}
             {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
             nowMs={nowMs}
+            {...sectionMenu("attachments", `${model.key} attachments`)}
           />
 
           <WorkItemComments
@@ -171,6 +198,7 @@ export function WorkItemDetailMain({
             {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
             renderBody={renderCommentBody}
             {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
+            {...sectionMenu("comments", `${model.key} comments`)}
           />
 
           {supplementalSections}

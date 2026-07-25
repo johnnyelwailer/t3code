@@ -19,8 +19,6 @@ function WorkItemChildrenProgress({
   done,
   total,
 }: {
-  /** Section nav target. */
-  readonly anchorId?: string | undefined;
   readonly done: number;
   readonly total: number;
 }) {
@@ -45,12 +43,16 @@ function WorkItemChildrenProgress({
  * each child's status category so it stays accurate across any workflow's own status names.
  */
 export function WorkItemChildren({
+  currentUserName,
+  onContextMenu,
   anchorId,
   items,
   onOpenTicket,
 }: {
   /** Section nav target. */
   readonly anchorId?: string | undefined;
+  readonly onContextMenu?: ((event: React.MouseEvent) => void) | undefined;
+  readonly currentUserName?: string | undefined;
   /** Named `items`, not `children`: these are child work items, not this component's React children. */
   readonly items: ReadonlyArray<ProjectTicket>;
   readonly onOpenTicket?: (ticketId: string) => void;
@@ -62,6 +64,7 @@ export function WorkItemChildren({
   return (
     <WorkItemSection
       {...(anchorId ? { anchorId } : {})}
+      {...(onContextMenu ? { onContextMenu } : {})}
       title="Child items"
       count={items.length}
       action={<WorkItemChildrenProgress done={done} total={total} />}
@@ -69,6 +72,7 @@ export function WorkItemChildren({
       <WorkItemIssueList>
         {items.map((child) => (
           <WorkItemIssueRow
+            {...(currentUserName ? { currentUserName } : {})}
             key={child.id}
             ticket={child}
             {...(onOpenTicket ? { onOpen: onOpenTicket } : {})}

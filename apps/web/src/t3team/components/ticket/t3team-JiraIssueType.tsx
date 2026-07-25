@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { cn } from "~/t3team/lib/t3team-utils";
 
 export type JiraIssueTypeKey = "task" | "story" | "bug" | "epic" | "subtask" | "issue";
@@ -139,9 +141,16 @@ export function JiraIssueTypeIcon({
   className?: string | undefined;
 }) {
   const visual = resolveJiraIssueType(issueType);
+  const [officialIconFailed, setOfficialIconFailed] = useState(false);
   const hasOfficialIcon = typeof issueTypeIconUrl === "string" && issueTypeIconUrl.length > 0;
 
-  if (hasOfficialIcon) {
+  /*
+    Jira's icon URLs are per-site and not always reachable from here — a site can restrict them,
+    the avatar id can be stale, or the request can simply fail. Without a fallback the row was left
+    showing a broken image, which is how "some icons don't load" looked. Our own glyph carries the
+    same meaning, so fall back to it rather than to nothing.
+  */
+  if (hasOfficialIcon && !officialIconFailed) {
     return (
       <img
         src={issueTypeIconUrl}
@@ -150,6 +159,7 @@ export function JiraIssueTypeIcon({
         className={cn("size-4 shrink-0 rounded-sm object-contain", className)}
         loading="lazy"
         decoding="async"
+        onError={() => setOfficialIconFailed(true)}
       />
     );
   }

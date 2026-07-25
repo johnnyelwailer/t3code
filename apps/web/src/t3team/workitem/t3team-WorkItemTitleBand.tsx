@@ -2,7 +2,13 @@ import type { ReactNode } from "react";
 
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { cn } from "~/t3team/lib/t3team-utils";
-import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
+import {
+  isWorkItemOverdue,
+  type WorkItemFieldModel,
+} from "~/t3team/workitem/t3team-workItemFieldModel";
+import { WorkItemDate } from "~/t3team/workitem/t3team-WorkItemDate";
+import { WorkItemPersonChip } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
+import { WorkItemPriorityChip } from "~/t3team/workitem/t3team-WorkItemPriorityIcon";
 import { WorkItemStatusBadge } from "~/t3team/workitem/t3team-WorkItemStatusBadge";
 
 /**
@@ -15,11 +21,13 @@ import { WorkItemStatusBadge } from "~/t3team/workitem/t3team-WorkItemStatusBadg
  */
 export function WorkItemTitleBand({
   model,
+  nowMs,
   statusControl,
   titleControl,
   className,
 }: {
   readonly model: WorkItemFieldModel;
+  readonly nowMs: number;
   /** Slice B replaces the static badge with a transition picker. */
   readonly statusControl?: ReactNode;
   /** Slice B replaces the static heading with an inline editor. */
@@ -49,8 +57,31 @@ export function WorkItemTitleBand({
         </div>
       </div>
 
-      <div className="shrink-0 @md/workitem:mt-0.5">
+      {/*
+        Status shares its row with the fields people look for in the same glance: who owns it, how
+        urgent it is, its size and whether it is late. These were only in the properties list, which
+        collapses on a narrow column — so on a phone the answer to "who is on this" was two taps away.
+      */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 @md/workitem:mt-0.5">
         {statusControl ?? <WorkItemStatusBadge status={model.status} />}
+
+        {model.assignee ? <WorkItemPersonChip person={model.assignee} /> : null}
+        <WorkItemPriorityChip priority={model.priority} />
+
+        {model.storyPoints !== undefined ? (
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {model.storyPoints} pts
+          </span>
+        ) : null}
+
+        {model.dueDateMs !== undefined ? (
+          <WorkItemDate
+            timestampMs={model.dueDateMs}
+            nowMs={nowMs}
+            emphasis={isWorkItemOverdue(model, nowMs)}
+            className="text-xs text-muted-foreground"
+          />
+        ) : null}
       </div>
     </div>
   );

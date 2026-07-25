@@ -8,6 +8,7 @@ import {
 } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
 import { useAddToChat } from "~/t3team/hooks/t3team-useAddToChat";
+import { useAtlassianCurrentUserDisplayName } from "~/t3team/hooks/t3team-useAtlassianCurrentUserDisplayName";
 import { useProjectGitHubActivity } from "~/t3team/hooks/t3team-useProjectGitHubActivity";
 import { useProjectResources } from "~/t3team/hooks/t3team-useProjectResources";
 import { useRelatedTickets } from "~/t3team/hooks/t3team-useRelatedTickets";
@@ -52,6 +53,7 @@ export function useWorkItemDetailViewModel({
   const { addToChatFromRequest } = useAddToChat();
   const { tickets: projectTickets, lastCheckedAt: jiraLastCheckedAt } =
     useProjectResources(project);
+  const currentUserName = useAtlassianCurrentUserDisplayName(project.source.accountId);
 
   const ticketLookup = useMemo(() => buildProjectTicketLookup(projectTickets), [projectTickets]);
   const canonicalTicketId = resolveCanonicalProjectTicketId(ticketId, ticketLookup) ?? ticketId;
@@ -158,5 +160,6 @@ export function useWorkItemDetailViewModel({
     matchedGitHubActivityItems,
     issueThreads,
     activeThread,
+    currentUserName,
   };
 }

@@ -42,6 +42,7 @@ export function selectVisibleWorkItemComments(
  * "Show N earlier" button is a single predictable control, and the whole page already scrolls.
  */
 export function WorkItemComments({
+  onContextMenu,
   anchorId,
   comments,
   nowMs,
@@ -49,6 +50,7 @@ export function WorkItemComments({
   resolveAssetUrl,
   renderBody,
 }: {
+  readonly onContextMenu?: ((event: React.MouseEvent) => void) | undefined;
   /** Section nav target. */
   readonly anchorId?: string | undefined;
   readonly comments: ReadonlyArray<JiraCommentItem>;
@@ -64,7 +66,12 @@ export function WorkItemComments({
   const { visible, hiddenCount } = selectVisibleWorkItemComments(sorted, expanded);
 
   return (
-    <WorkItemSection title="Comments" {...(anchorId ? { anchorId } : {})} count={comments.length}>
+    <WorkItemSection
+      title="Comments"
+      {...(anchorId ? { anchorId } : {})}
+      {...(onContextMenu ? { onContextMenu } : {})}
+      count={comments.length}
+    >
       <div className="divide-y divide-border/50">
         {visible.map((comment, index) => (
           <WorkItemCommentItem

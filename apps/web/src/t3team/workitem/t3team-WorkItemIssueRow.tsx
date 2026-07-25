@@ -14,16 +14,23 @@ import { WorkItemStatusBadge } from "~/t3team/workitem/t3team-WorkItemStatusBadg
 export function WorkItemIssueRow({
   ticket,
   relationLabel,
+  currentUserName,
   onOpen,
   className,
 }: {
   readonly ticket: ProjectTicket;
   /** Link semantics, e.g. "blocks" or "relates to". Absent for plain children. */
   readonly relationLabel?: string | undefined;
+  /** Display name of the signed-in user, so their own rows stand out. */
+  readonly currentUserName?: string | undefined;
   readonly onOpen?: ((ticketId: string) => void) | undefined;
   readonly className?: string;
 }) {
   const summary = ticket.ref.title;
+  const isAssignedToCurrentUser =
+    currentUserName !== undefined &&
+    ticket.assignee !== undefined &&
+    ticket.assignee.trim().toLowerCase() === currentUserName.trim().toLowerCase();
   const isPlaceholder = summary === ticket.ref.displayId;
 
   const content = (
@@ -65,7 +72,8 @@ export function WorkItemIssueRow({
       {ticket.assignee ? (
         <WorkItemPersonAvatar
           person={{ displayName: ticket.assignee }}
-          size="sm"
+          size="md"
+          isCurrentUser={isAssignedToCurrentUser}
           className="hidden @md/workitem:inline-flex"
         />
       ) : null}

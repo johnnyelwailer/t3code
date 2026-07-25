@@ -1,3 +1,4 @@
+import { User } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "~/t3team/lib/t3team-utils";
@@ -37,25 +38,34 @@ export function initialsForDisplayName(displayName: string): string {
 export function WorkItemPersonAvatar({
   person,
   size = "md",
+  isCurrentUser = false,
   className,
 }: {
   readonly person: WorkItemPerson | undefined;
   readonly size?: WorkItemAvatarSize;
+  /** Rings the avatar so your own work is findable by glance in a long list. */
+  readonly isCurrentUser?: boolean;
   readonly className?: string;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const shape = cn(
     "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium select-none",
     SIZE_CLASSES[size],
+    // A ring rather than a different fill: it survives an avatar photo, which a fill would cover.
+    isCurrentUser && "ring-2 ring-primary ring-offset-1 ring-offset-background",
     className,
   );
 
   if (!person) {
+    /*
+      A glyph, not an empty dashed ring. `--border` is 6% white in dark themes, so an outline-only
+      placeholder was almost invisible there and read as a rendering artefact rather than as
+      "nobody". A muted silhouette says the same thing legibly in both themes.
+    */
     return (
-      <span
-        aria-hidden="true"
-        className={cn(shape, "border border-dashed border-border text-muted-foreground/70")}
-      />
+      <span aria-hidden="true" className={cn(shape, "bg-muted text-muted-foreground/70")}>
+        <User className="size-[62%]" />
+      </span>
     );
   }
 
@@ -84,16 +94,23 @@ export function WorkItemPersonChip({
   person,
   emptyLabel = "Unassigned",
   size = "md",
+  isCurrentUser = false,
   className,
 }: {
   readonly person: WorkItemPerson | undefined;
   readonly emptyLabel?: string;
   readonly size?: WorkItemAvatarSize;
+  readonly isCurrentUser?: boolean;
   readonly className?: string;
 }) {
   return (
-    <span className={cn("flex min-w-0 items-center gap-1.5", className)}>
-      <WorkItemPersonAvatar person={person} size={size} />
+    <span
+      className={cn("flex min-w-0 items-center gap-1.5", className)}
+      title={
+        person ? (isCurrentUser ? `${person.displayName} (you)` : person.displayName) : emptyLabel
+      }
+    >
+      <WorkItemPersonAvatar person={person} size={size} isCurrentUser={isCurrentUser} />
       <span
         className={cn("truncate text-xs", person ? "text-foreground" : "text-muted-foreground")}
       >

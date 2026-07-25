@@ -61,16 +61,24 @@ const PRIORITY_ALIASES: Record<WorkItemPriorityTone, ReadonlyArray<string>> = {
   lowest: ["lowest", "trivial", "p4"],
 };
 
+/**
+ * Sites rarely name priorities as bare words. Jira ships "1 - Critical", "2 - Major", and plenty of
+ * projects use "P1" or "Highest priority" — matching the whole string exactly found none of them,
+ * which left real issues with no priority icon at all. Match on word tokens instead, so the numbering
+ * and decoration around the meaningful word stop mattering.
+ */
 export function resolveWorkItemPriorityTone(
   priority: string | undefined,
 ): WorkItemPriorityTone | undefined {
   const normalized = priority?.trim().toLowerCase();
   if (!normalized) return undefined;
 
+  const tokens = new Set(normalized.split(/[^a-z0-9]+/).filter((token) => token.length > 0));
+
   for (const [tone, aliases] of Object.entries(PRIORITY_ALIASES) as Array<
     [WorkItemPriorityTone, ReadonlyArray<string>]
   >) {
-    if (aliases.includes(normalized)) return tone;
+    if (aliases.some((alias) => tokens.has(alias))) return tone;
   }
   return undefined;
 }
