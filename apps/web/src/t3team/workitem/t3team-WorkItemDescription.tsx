@@ -8,6 +8,7 @@ import { cn } from "~/t3team/lib/t3team-utils";
 import { T3TeamAdfRenderer } from "~/t3team/workitem/adf/t3team-AdfRenderer";
 import type { AdfDocument } from "~/t3team/workitem/adf/t3team-adfRendererTypes";
 import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
+import { useInAppIssueLinks } from "~/t3team/workitem/t3team-useInAppIssueLinks";
 
 /**
  * The description body.
@@ -39,6 +40,13 @@ export function WorkItemDescription({
   readonly onContextMenu?: ((event: React.MouseEvent) => void) | undefined;
   readonly className?: string;
 }) {
+  /*
+    The ADF renderer routes issue links itself, but the HTML and markdown fallbacks emit plain
+    anchors — so a link to a sibling issue used to leave the app. Intercepting at the container
+    covers both fallbacks without rewriting their output.
+  */
+  const handleIssueLinkClick = useInAppIssueLinks(onOpenIssue);
+
   const body = resolveBody({
     model,
     adfBody,
@@ -48,7 +56,11 @@ export function WorkItemDescription({
   });
 
   return (
-    <div className={cn("min-w-0", className)} {...(onContextMenu ? { onContextMenu } : {})}>
+    <div
+      className={cn("min-w-0", className)}
+      {...(onContextMenu ? { onContextMenu } : {})}
+      {...(handleIssueLinkClick ? { onClick: handleIssueLinkClick } : {})}
+    >
       {body ?? (
         // A single quiet line, not a card announcing that a card is empty.
         <p className="text-sm text-muted-foreground">No description.</p>
