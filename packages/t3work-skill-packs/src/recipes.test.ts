@@ -2,6 +2,7 @@ import { isRecipeApplicable, matchRecipes, type RecipeMatchInput } from "@t3tool
 import { recipeSignalPredicates } from "@t3tools/project-recipes";
 import { describe, expect, it } from "vite-plus/test";
 
+import { buildBundledActionPlacement } from "./actionPlacements.js";
 import { getBundledT3WorkRecipe, listBundledT3WorkRecipes } from "./recipes.js";
 
 function buildMatchInput(overrides: Partial<RecipeMatchInput> = {}): RecipeMatchInput {
@@ -98,6 +99,56 @@ describe("tshirt-size-epic bundled recipe", () => {
     expect(match?.recipe.suggestedActions?.map((action) => action.recipeId)).toContain(
       "shape-next-backlog-slice",
     );
+  });
+});
+
+describe("bundled action views run through the defineAction gate", () => {
+  it("gives every recipe with an action view a decoded `action` placement", () => {
+    const withViews = listBundledT3WorkRecipes().filter(
+      (recipe) => recipe.actionViewTemplate !== undefined,
+    );
+    expect(withViews.length).toBeGreaterThan(0);
+    for (const recipe of withViews) {
+      const placement = recipe.actionPlacement;
+      expect(placement, `recipe ${recipe.id} has no gated action placement`).toBeDefined();
+      expect(placement?.id).toBe(`${recipe.id}.action`);
+      expect(placement?.recipeId).toBe(recipe.id);
+      expect(placement?.version).toBe(recipe.version);
+      expect(placement?.surfaces).toEqual(recipe.surfaces);
+      // The template the web layer compiles is the gated view itself, not a second copy.
+      expect(recipe.actionViewTemplate).toBe(placement?.view);
+      expect(placement?.view).toMatch(/export\s+default\b/);
+    }
+  });
+
+  it("leaves recipes without an action view unplaced", () => {
+    for (const recipe of listBundledT3WorkRecipes()) {
+      if (recipe.actionViewTemplate === undefined) {
+        expect(recipe.actionPlacement).toBeUndefined();
+      }
+    }
+  });
+
+  it("rejects a launcher view with no default export", () => {
+    expect(() =>
+      buildBundledActionPlacement({
+        id: "broken-recipe",
+        version: "0.1.0",
+        surfaces: ["project.dashboard.backlog"],
+        view: "function Action() { return null; }",
+      }),
+    ).toThrow(/default export/);
+  });
+
+  it("rejects a launcher with no surfaces", () => {
+    expect(() =>
+      buildBundledActionPlacement({
+        id: "surfaceless-recipe",
+        version: "0.1.0",
+        surfaces: [],
+        view: "export default function Action() { return null; }",
+      }),
+    ).toThrow(/no surfaces/);
   });
 });
 

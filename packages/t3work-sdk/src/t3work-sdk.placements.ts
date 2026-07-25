@@ -1,30 +1,33 @@
 /**
  * Placement `define*` helpers, surfaced on the SDK's public import path (Epic 16
  * §Implementation Notes: "`@t3work/sdk` … is the public import path for the recipe/plugin-module
- * and View `define*` helpers. Some helpers (e.g. `defineSidecarSection`) currently live in
- * `packages/project-recipes` and are surfaced through `@t3work/sdk`"; Epic 19 §Where helpers
- * live in code).
+ * and View `define*` helpers"; Epic 19 §Where helpers live in code).
  *
- * The implementations stay in `packages/project-recipes` — this module is the seam that makes
- * `@t3work/sdk` the one authoring import path. Deep-imports the `@t3tools/project-recipes/placements`
- * subpath, not its barrel, so the SDK does not pick up discovery/runtime/kickoff.
+ * The implementations now live HERE, in the SDK — the public authoring surface (Epic 10
+ * §Package Boundaries). `@t3tools/project-recipes` re-exports them from `@t3work/sdk` for its
+ * existing importers, so the dependency runs one way only: project-recipes → SDK. (Until this
+ * module owned them, the SDK deep-imported `@t3tools/project-recipes/placements`, which inverted
+ * that direction and forced consumers to resolve project-recipes just to import the SDK.)
  *
  * SHIPPED helpers cover the placements that exist on disk today: `sidecar.section`
  * (`defineSidecarSection`, Epic 19 status "Built (Phase 5a)") and `action`
- * (`defineAction` — the recipe-launcher action view the quick-starts surface renders).
+ * (`defineAction` — the recipe-launcher action view the quick-starts surface renders; the
+ * bundled skill-pack recipes run their views through it).
  * The remaining helpers in the Epic 19 table (`defineWorkItemSection`, `defineDashboardWidget`,
  * `defineNavSection`, `defineHomeBlock`, `defineProjectView`, `defineCommandPaletteContributor`,
  * `defineArtifactRenderer`, `defineConversationCard`, `defineConversationSidecar`,
  * `defineContextAction`, `defineInlineAction`) are intentionally absent: their placements are not
  * built, and Epic 19 §No generic primitive is explicit that a helper ships *with* its placement.
  */
+export { ActionDefinition, defineAction } from "./t3work-sdk.actionPlacement.ts";
 export {
-  ActionDefinition,
-  defineAction,
+  ActionRecipeSurface,
   defineSidecarSection,
-  RecipeSurface,
   SidecarSectionAction,
   SidecarSectionActionRun,
   SidecarSectionDefaults,
   SidecarSectionDefinition,
-} from "@t3tools/project-recipes/placements";
+  SidecarSectionScriptActionRun,
+  SidecarSectionToolActionRun,
+} from "./t3work-sdk.sidecarSection.ts";
+export { RecipeSurface } from "./t3work-sdk.surface.ts";

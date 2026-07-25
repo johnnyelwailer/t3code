@@ -1474,8 +1474,9 @@ the editable source of truth for the early MVP.
   hand-maintained.
 - `@t3work/sdk` is the orchestration/tool authoring SDK (Epic 25: `defineWorkflow`, `defineTool`,
   `defineToolGroup`, `defineModel`, `defineScript`) and the public import path for the
-  recipe/plugin-module and View `define*` helpers. Some helpers (e.g. `defineSidecarSection`)
-  currently live in `packages/project-recipes` and are surfaced through `@t3work/sdk`.
+  recipe/plugin-module and View `define*` helpers. The shipped placement helpers
+  (`defineSidecarSection`, `defineAction`) live in `packages/t3work-sdk`;
+  `packages/project-recipes` re-exports them from `@t3work/sdk` for its existing importers.
 - `T3workToolBroker` (`apps/server`) is the single tool surface for agents, scripts, and
   Views. Mutations through it emit events on the existing orchestration bus.
 - **The Queryable runtime is backed by the existing local SQLite persistence layer**

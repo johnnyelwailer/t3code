@@ -4,11 +4,38 @@
  * helper is reachable from `@t3work/sdk`'s index, accepts a well-formed definition, and rejects
  * a malformed one.
  */
+import * as NodeFS from "node:fs";
+import * as NodeURL from "node:url";
+
 import { describe, expect, it } from "vite-plus/test";
 
 import { defineAction, defineSidecarSection } from "./t3work-sdk.index.ts";
 
+const PLACEMENT_MODULES = [
+  "./t3work-sdk.placements.ts",
+  "./t3work-sdk.actionPlacement.ts",
+  "./t3work-sdk.sidecarSection.ts",
+  "./t3work-sdk.surface.ts",
+];
+
 describe("@t3work/sdk placement helpers", () => {
+  // The SDK is the LOWER layer: project-recipes re-exports from it, never the reverse. A
+  // deep-import back into @t3tools/project-recipes is what forced every SDK consumer to resolve
+  // project-recipes too (and needed an extra symlink in the private distro).
+  it("owns the placement implementations without importing project-recipes", () => {
+    for (const specifier of PLACEMENT_MODULES) {
+      const source = NodeFS.readFileSync(
+        NodeURL.fileURLToPath(new URL(specifier, import.meta.url)),
+        "utf8",
+      );
+      const imports = [...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+"([^"]+)"/gm)].map(
+        (match) => match[1],
+      );
+      expect(imports, `${specifier} imports`).not.toContain("@t3tools/project-recipes");
+      expect(imports.filter((from) => from.startsWith("@t3tools/"))).toEqual([]);
+    }
+  });
+
   describe("defineSidecarSection", () => {
     it("accepts a well-formed sidecar.section contribution", () => {
       expect(
