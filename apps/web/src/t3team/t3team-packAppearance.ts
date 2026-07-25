@@ -30,6 +30,19 @@ const COLOR_VARIABLES: Readonly<Record<string, string>> = {
   warning: "--warning",
   warningForeground: "--warning-foreground",
   appChromeBackground: "--app-chrome-background",
+  sidebar: "--sidebar",
+  sidebarForeground: "--sidebar-foreground",
+  sidebarMutedForeground: "--sidebar-muted-foreground",
+  sidebarControlSurface: "--sidebar-control-surface",
+  sidebarRowHover: "--sidebar-row-hover",
+  sidebarRowActive: "--sidebar-row-active",
+  sidebarRowSelected: "--sidebar-row-selected",
+  sidebarBorder: "--sidebar-border",
+  sidebarStageFade: "--sidebar-stage-fade",
+  // Raw CSS value (color, gradient, or url(...)) applied via `background` on the
+  // Team sidebar header's background layer; unset falls back to transparent so
+  // the stage backdrop (or bare header) still shows through unchanged.
+  sidebarHeaderBackground: "--t3team-sidebar-header-background",
 };
 const STYLE_ID = "t3team-pack-theme";
 let activeAppearance: EnvironmentAppearance | undefined;

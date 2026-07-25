@@ -169,6 +169,8 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
                 role: "user",
                 text: p.prompt,
                 attachments: [],
+                // Marks this as an automated start for decider turn admission.
+                t3teamExt: { author: { kind: "system", workflowRunId: deps.runId } },
               },
               modelSelection,
               runtimeMode: deps.runtimeMode,

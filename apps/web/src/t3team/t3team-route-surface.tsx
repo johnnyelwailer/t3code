@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 
 import { BackendProvider, createT3Backend } from "~/t3team/backend/t3team-index";
 import { App as T3TeamApp } from "~/t3team/t3team-App";
 import { T3TeamAddLocalWorkspaceProvider } from "~/t3team/components/t3team-addLocalWorkspaceContext";
-import { useOpenAddProjectCommandPalette } from "~/commandPaletteContext";
+import { openCommandPalette } from "~/commandPaletteBus";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
 import { recordT3TeamThreadDebug } from "~/t3team/chat/t3team-threadDebug";
@@ -67,7 +67,12 @@ export function T3TeamRouteSurface() {
   const viewProjectId = view?.projectId ?? null;
   const viewThreadId = readActiveThreadIdFromView(view);
   const viewTicketId = view?.type === "ticket" ? view.ticketId : null;
-  const openAddProjectCommandPalette = useOpenAddProjectCommandPalette();
+  // Upstream replaced the add-project context with a window event bus, so the palette no
+  // longer has to be an ancestor provider of this surface.
+  const openAddProjectCommandPalette = useCallback(
+    () => openCommandPalette({ open: "add-project" }),
+    [],
+  );
 
   useEffect(() => {
     if (!authenticated) {
