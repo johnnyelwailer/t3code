@@ -67,6 +67,18 @@ const exitCode = await Effect.runPromise(
       Effect.catchCause((cause) =>
         Effect.sync(() => {
           console.error(String(cause));
+          // On failure the capture is the only window into how far the body got:
+          // which orchestration commands were dispatched, and what was asked.
+          console.error(
+            `capture: ${JSON.stringify(
+              {
+                commandTypes: capture.commands.map((c: { type?: string }) => c.type),
+                agentPrompts: capture.agentPrompts.length,
+              },
+              null,
+              2,
+            )}`,
+          );
           return 1;
         }),
       ),
