@@ -15,7 +15,6 @@ import { resolveServerBackedAppDisplayName } from "../branding.logic";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
-import { OpenAddProjectCommandPaletteProvider } from "../commandPaletteContext";
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
@@ -56,9 +55,6 @@ import {
   createKeybindingsUpdateToastController,
   type KeybindingsUpdateToastController,
 } from "../components/KeybindingsUpdateToast.logic";
-
-// Pre-auth surfaces render outside CommandPalette; add-project is a no-op until authenticated.
-const noopOpenAddProject = () => undefined;
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -146,9 +142,7 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
-        <OpenAddProjectCommandPaletteProvider openAddProject={noopOpenAddProject}>
-          <Outlet />
-        </OpenAddProjectCommandPaletteProvider>
+        <Outlet />
       </>
     );
   }
@@ -169,6 +163,7 @@ function RootRouteView() {
     <ToastProvider>
       <AnchoredToastProvider>
         <DocumentTitleSync />
+        <GlassAppearanceSync />
         <T3TeamPackAppearanceSync />
         {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
         <RelayClientInstallDialog />
@@ -182,6 +177,16 @@ function RootRouteView() {
       </AnchoredToastProvider>
     </ToastProvider>
   );
+}
+
+function GlassAppearanceSync() {
+  const glassOpacity = useClientSettings((settings) => settings.glassOpacity);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--glass-opacity", `${glassOpacity}%`);
+  }, [glassOpacity]);
+
+  return null;
 }
 
 function DocumentTitleSync() {

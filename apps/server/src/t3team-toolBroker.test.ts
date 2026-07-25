@@ -28,6 +28,7 @@ describe("T3TeamToolBrokerLive", () => {
       readEvents: () => Stream.empty,
       dispatch: () => Effect.succeed({ sequence: 1 }),
       streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(0),
     };
 
     const binding = await Effect.runPromise(
@@ -89,6 +90,7 @@ describe("T3TeamToolBrokerLive", () => {
       readEvents: () => Stream.empty,
       dispatch: (command) => Effect.promise(() => dispatch(command)),
       streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(0),
     };
 
     const result = await Effect.runPromise(
@@ -138,6 +140,7 @@ describe("T3TeamToolBrokerLive", () => {
       readEvents: () => Stream.empty,
       dispatch: () => Effect.succeed({ sequence: 1 }),
       streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(0),
     };
 
     const binding = await Effect.runPromise(
@@ -167,6 +170,7 @@ describe("T3TeamToolBrokerLive", () => {
       readEvents: () => Stream.empty,
       dispatch: () => Effect.succeed({ sequence: 1 }),
       streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(0),
     };
 
     const binding = await Effect.runPromise(
@@ -191,6 +195,7 @@ describe("T3TeamToolBrokerLive", () => {
       readEvents: () => Stream.empty,
       dispatch: (command) => Effect.promise(() => dispatch(command)),
       streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(0),
     };
 
     const result = await Effect.runPromise(
@@ -334,6 +339,7 @@ describe("T3TeamToolBrokerLive", () => {
       readEvents: () => Stream.empty,
       dispatch: (command) => Effect.promise(() => dispatch(command)),
       streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(0),
     };
 
     const result = await Effect.runPromise(
@@ -407,6 +413,7 @@ describe("T3TeamToolBrokerLive", () => {
       readEvents: () => Stream.empty,
       dispatch: (command) => Effect.promise(() => dispatch(command)),
       streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(0),
     };
 
     const result = await Effect.runPromise(
@@ -511,6 +518,7 @@ describe("T3TeamToolBrokerLive", () => {
       readEvents: () => Stream.empty,
       dispatch: (command) => Effect.promise(() => dispatch(command)),
       streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(0),
     };
 
     const result = await Effect.runPromise(

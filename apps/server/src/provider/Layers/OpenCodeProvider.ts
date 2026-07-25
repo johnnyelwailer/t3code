@@ -1,5 +1,4 @@
 import {
-  ProviderDriverKind,
   type ModelCapabilities,
   type OpenCodeSettings,
   type ServerProviderModel,
@@ -25,7 +24,6 @@ import {
 } from "../opencodeRuntime.ts";
 import type { Agent, ProviderListResponse } from "@opencode-ai/sdk/v2";
 
-const PROVIDER = ProviderDriverKind.make("opencode");
 const OPENCODE_PRESENTATION = {
   displayName: "OpenCode",
   showInteractionModeToggle: false,
@@ -259,7 +257,6 @@ export const makePendingOpenCodeProvider = (
     const checkedAt = yield* Effect.map(DateTime.now, DateTime.formatIso);
     const models = providerModelsFromSettings(
       [],
-      PROVIDER,
       openCodeSettings.customModels,
       DEFAULT_OPENCODE_MODEL_CAPABILITIES,
     );
@@ -319,12 +316,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
       presentation: OPENCODE_PRESENTATION,
       enabled: openCodeSettings.enabled,
       checkedAt,
-      models: providerModelsFromSettings(
-        [],
-        PROVIDER,
-        customModels,
-        DEFAULT_OPENCODE_MODEL_CAPABILITIES,
-      ),
+      models: providerModelsFromSettings([], customModels, DEFAULT_OPENCODE_MODEL_CAPABILITIES),
       probe: {
         installed: failure.installed,
         version,
@@ -340,12 +332,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
       presentation: OPENCODE_PRESENTATION,
       enabled: false,
       checkedAt,
-      models: providerModelsFromSettings(
-        [],
-        PROVIDER,
-        customModels,
-        DEFAULT_OPENCODE_MODEL_CAPABILITIES,
-      ),
+      models: providerModelsFromSettings([], customModels, DEFAULT_OPENCODE_MODEL_CAPABILITIES),
       probe: {
         installed: false,
         version: null,
@@ -391,12 +378,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
         presentation: OPENCODE_PRESENTATION,
         enabled: openCodeSettings.enabled,
         checkedAt,
-        models: providerModelsFromSettings(
-          [],
-          PROVIDER,
-          customModels,
-          DEFAULT_OPENCODE_MODEL_CAPABILITIES,
-        ),
+        models: providerModelsFromSettings([], customModels, DEFAULT_OPENCODE_MODEL_CAPABILITIES),
         probe: {
           installed: true,
           version,
@@ -409,27 +391,42 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
   }
 
   const inventoryExit = yield* Effect.exit(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const server = yield* openCodeRuntime.connectToOpenCodeServer({
-          binaryPath: openCodeSettings.binaryPath,
-          serverUrl: openCodeSettings.serverUrl,
-          configContent: openCodeSettings.configContent,
-          environment: resolvedEnvironment,
-        });
-        return yield* openCodeRuntime.loadOpenCodeInventory(
-          openCodeRuntime.createOpenCodeSdkClient({
-            baseUrl: server.url,
-            directory: cwd,
-            ...(isExternalServer && openCodeSettings.serverPassword
-              ? { serverPassword: openCodeSettings.serverPassword }
-              : {}),
+    (isExternalServer
+      ? Effect.scoped(
+          Effect.gen(function* () {
+            const server = yield* openCodeRuntime.connectToOpenCodeServer({
+              binaryPath: openCodeSettings.binaryPath,
+              serverUrl: openCodeSettings.serverUrl,
+              configContent: openCodeSettings.configContent,
+              environment: resolvedEnvironment,
+            });
+            return yield* openCodeRuntime.loadOpenCodeInventory(
+              openCodeRuntime.createOpenCodeSdkClient({
+                baseUrl: server.url,
+                directory: cwd,
+                ...(openCodeSettings.serverPassword
+                  ? { serverPassword: openCodeSettings.serverPassword }
+                  : {}),
+              }),
+            );
           }),
-        );
-      }).pipe(
-        Effect.mapError(
-          (cause) => new OpenCodeProbeError({ cause, detail: openCodeRuntimeErrorDetail(cause) }),
-        ),
+        )
+      : openCodeRuntime.loadInventoryFromCli({
+          binaryPath: openCodeSettings.binaryPath,
+          // Upstream probes local installs through the CLI instead of spawning a server.
+          // The fork's custom OpenCode config reaches a spawned server via
+          // OPENCODE_CONFIG_CONTENT, so forward it here too — but only when it is actually
+          // set, otherwise an empty override would hide the user's own OpenCode config.
+          environment: openCodeSettings.configContent?.trim()
+            ? {
+                ...resolvedEnvironment,
+                OPENCODE_CONFIG_CONTENT: openCodeSettings.configContent,
+              }
+            : resolvedEnvironment,
+        })
+    ).pipe(
+      Effect.mapError(
+        (cause) => new OpenCodeProbeError({ cause, detail: openCodeRuntimeErrorDetail(cause) }),
       ),
     ),
   );
@@ -439,7 +436,6 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
 
   const models = providerModelsFromSettings(
     flattenOpenCodeModels(inventoryExit.value),
-    PROVIDER,
     customModels,
     DEFAULT_OPENCODE_MODEL_CAPABILITIES,
   );

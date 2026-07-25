@@ -57,6 +57,8 @@ import { T3TeamThreadToolContextEvictionReactorLive } from "./t3team-threadToolC
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as ProjectFaviconResolver from "./project/ProjectFaviconResolver.ts";
+import * as T3ProjectFileLoader from "./project/T3ProjectFileLoader.ts";
+import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
@@ -392,7 +394,10 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(WorkspaceLayerLive),
   Layer.provideMerge(
     Layer.mergeAll(
-      ProjectFaviconResolver.layer.pipe(Layer.provide(WorkspacePaths.layer)),
+      ProjectFaviconResolver.layer.pipe(
+        Layer.provide(WorkspacePaths.layer),
+        Layer.provide(T3ProjectFileLoader.layer),
+      ),
       RepositoryIdentityResolver.layer,
     ),
   ),
@@ -465,7 +470,12 @@ export const makeT3TeamRoutesLayer = Layer.mergeAll(
   staticAndDevRouteLayer,
   websocketRpcRouteLayer,
   McpHttpServer.layer.pipe(Layer.provide(McpSessionRegistry.layer)),
-).pipe(Layer.provide(PreviewAutomationBroker.layer), Layer.provide(browserApiCorsLayer));
+).pipe(
+  Layer.provide(PreviewAutomationBroker.layer),
+  // Mirrors server.ts: upstream's self-update routes need this provided here too.
+  Layer.provide(ServerSelfUpdate.layer),
+  Layer.provide(browserApiCorsLayer),
+);
 
 export const makeT3TeamServerLayer = Layer.unwrap(
   Effect.gen(function* () {
