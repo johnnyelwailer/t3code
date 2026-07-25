@@ -17,6 +17,7 @@ import {
   type T3workComposerMenuSelectionEffect,
 } from "~/t3work/composer/t3work-composerMenuSelection";
 import type { T3workComposerMenuItem } from "~/t3work/composer/t3work-composerRecipeSlashItems";
+import { useT3workComposerMenuKeyboard } from "~/t3work/composer/t3work-useComposerMenuKeyboard";
 
 export type T3workComposerPathSearchScope = {
   readonly environmentId: EnvironmentId | null;
@@ -71,7 +72,6 @@ export function useT3workComposerCommandMenu(input: T3workComposerCommandMenuInp
   }, [buildExtraItems, sharedItems, trigger]);
   const searchKey = trigger ? `${trigger.kind}:${trigger.query.trim().toLowerCase()}` : null;
   const highlight = useT3workComposerMenuHighlight(menuItems, searchKey);
-  const activeItem = menuItems.find((item) => item.id === highlight.activeItemId) ?? null;
 
   const handleEditorChange = useCallback(
     (nextValue: string, expandedCursor: number, cursorAdjacentToMention: boolean) => {
@@ -109,31 +109,19 @@ export function useT3workComposerCommandMenu(input: T3workComposerCommandMenuInp
     [highlight, input],
   );
 
-  const handleCommandKeyDown = useCallback(
-    (key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab"): boolean => {
-      if (!trigger) return false;
-      if (key === "ArrowDown" || key === "ArrowUp") {
-        if (menuItems.length === 0) return false;
-        const highlightedIndex = menuItems.findIndex((item) => item.id === highlight.activeItemId);
-        const normalizedIndex =
-          highlightedIndex >= 0 ? highlightedIndex : key === "ArrowDown" ? -1 : 0;
-        const offset = key === "ArrowDown" ? 1 : -1;
-        const nextIndex = (normalizedIndex + offset + menuItems.length) % menuItems.length;
-        highlight.onHighlightedItemChange(menuItems[nextIndex]?.id ?? null);
-        return true;
-      }
-      const selectedItem = activeItem ?? menuItems[0];
-      if (!selectedItem) return false;
-      selectItem(selectedItem);
-      return true;
-    },
-    [activeItem, highlight, menuItems, selectItem, trigger],
-  );
-
   const resetTrigger = useCallback(() => {
     setTrigger(null);
     highlight.setHighlightedItemId(null);
   }, [highlight]);
+
+  const handleCommandKeyDown = useT3workComposerMenuKeyboard({
+    trigger,
+    items: menuItems,
+    activeItemId: highlight.activeItemId,
+    onHighlightItem: highlight.onHighlightedItemChange,
+    onAcceptItem: selectItem,
+    onClose: resetTrigger,
+  });
 
   return {
     trigger,

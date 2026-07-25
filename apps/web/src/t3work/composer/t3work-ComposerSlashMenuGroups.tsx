@@ -1,4 +1,5 @@
 import { BotIcon, SparklesIcon, TerminalIcon } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 
 import { cn } from "~/lib/utils";
 import {
@@ -9,6 +10,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "~/components/ui/command";
+import { t3workComposerMenuOptionDomId } from "~/t3work/composer/t3work-composerMenuKeyboard";
 import type { T3workComposerMenuItem } from "~/t3work/composer/t3work-composerRecipeSlashItems";
 
 type SlashMenuGroup = {
@@ -59,11 +61,24 @@ function SlashMenuGlyph(props: { readonly item: T3workComposerMenuItem }) {
  */
 export function T3workComposerSlashMenu(props: {
   readonly items: ReadonlyArray<T3workComposerMenuItem>;
+  readonly listboxId: string;
   readonly activeItemId: string | null;
   readonly onHighlightedItemChange: (itemId: string | null) => void;
   readonly onSelect: (item: T3workComposerMenuItem) => void;
 }) {
   const groups = groupT3workSlashMenuItems(props.items);
+  const listRef = useRef<HTMLDivElement>(null);
+  const activeItemId = props.activeItemId;
+  const listboxId = props.listboxId;
+
+  useLayoutEffect(() => {
+    if (!activeItemId || !listRef.current) return;
+    // Option ids are stable (see t3workComposerMenuOptionDomId), so the active
+    // row can be found without escaping the item id into a selector.
+    const optionId = t3workComposerMenuOptionDomId(listboxId, activeItemId);
+    const option = listRef.current.ownerDocument.getElementById(optionId);
+    option?.scrollIntoView?.({ block: "nearest" });
+  }, [activeItemId, listboxId]);
 
   return (
     <Command
@@ -75,9 +90,12 @@ export function T3workComposerSlashMenu(props: {
         );
       }}
     >
-      <div className="relative w-full overflow-hidden rounded-[20px] border border-border/80 bg-popover/96 shadow-lg/8 backdrop-blur-xs">
+      <div
+        ref={listRef}
+        className="relative w-full overflow-hidden rounded-[20px] border border-border/80 bg-popover/96 shadow-lg/8 backdrop-blur-xs"
+      >
         {groups.length > 0 ? (
-          <CommandList className="max-h-72">
+          <CommandList id={listboxId} role="listbox" className="max-h-72">
             {groups.map((group, groupIndex) => (
               <div key={group.id}>
                 {groupIndex > 0 ? <CommandSeparator className="my-0.5" /> : null}
@@ -89,13 +107,19 @@ export function T3workComposerSlashMenu(props: {
                     <CommandItem
                       key={item.id}
                       value={item.id}
+                      // Base UI owns `id` on its item props, so the stable
+                      // aria-activedescendant target is supplied through the
+                      // rendered element instead.
+                      render={<div id={t3workComposerMenuOptionDomId(listboxId, item.id)} />}
+                      role="option"
+                      aria-selected={activeItemId === item.id}
                       data-composer-item-id={item.id}
                       className={cn(
                         "cursor-pointer select-none gap-2 hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit",
-                        props.activeItemId === item.id && "bg-accent! text-accent-foreground!",
+                        activeItemId === item.id && "bg-accent! text-accent-foreground!",
                       )}
                       onMouseMove={() => {
-                        if (props.activeItemId !== item.id) props.onHighlightedItemChange(item.id);
+                        if (activeItemId !== item.id) props.onHighlightedItemChange(item.id);
                       }}
                       onMouseDown={(event) => {
                         event.preventDefault();
