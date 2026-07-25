@@ -62,6 +62,16 @@ const exitCode = await Effect.runPromise(
       Effect.provide(layer),
       Effect.map((report) => {
         console.log(JSON.stringify(report, null, 2));
+        // `scriptCalls` is the journal-derived invocation log, so a script the recipe declares
+        // but never dispatches is now visible — and fails the gate. A recipe must not claim a
+        // `scripts.*` handler it does not use.
+        if (report.uncalledScripts.length > 0) {
+          console.error(
+            `declared but never called: ${report.uncalledScripts.join(", ")} ` +
+              `(journaled calls: ${report.scriptCalls.join(", ") || "none"})`,
+          );
+          return 1;
+        }
         return report.status === "completed" ? 0 : 1;
       }),
       Effect.catchCause((cause) =>

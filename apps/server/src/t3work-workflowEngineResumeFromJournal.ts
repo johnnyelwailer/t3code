@@ -52,6 +52,7 @@ export async function resumeWorkflowRunFromJournal(
       newId: input.newId,
       nowIso: input.nowIso,
       onError: input.onError,
+      phase: "rehydration",
     });
     return { runId: input.runId, status: "failed" };
   }

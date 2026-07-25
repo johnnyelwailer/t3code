@@ -13,10 +13,12 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
+import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { launchT3workRecipeHarnessRun } from "./t3work-recipeWorkflowHarnessLaunch.ts";
 import { driveT3workRecipeHarnessAsks } from "./t3work-recipeWorkflowHarnessLoop.ts";
 import { assembleT3workRecipeHarnessReport } from "./t3work-recipeWorkflowHarnessReport.ts";
+import { readT3workHarnessScriptLog } from "./t3work-recipeWorkflowHarnessScriptLog.ts";
 import {
   cleanupT3workRecipeHarnessRoots,
   prepareT3workRecipeHarnessProject,
@@ -45,6 +47,7 @@ export function runT3workRecipeWorkflowHarness(spec: T3workRecipeHarnessSpec) {
   return Effect.gen(function* () {
     const timeoutMs = spec.timeoutMs ?? 20_000;
     const runRepository = yield* WorkflowRunRepository;
+    const journalStore = yield* WorkflowJournalStore;
 
     const prepared = yield* prepareT3workRecipeHarnessProject({
       recipeDir: spec.recipeDir,
@@ -78,10 +81,19 @@ export function runT3workRecipeWorkflowHarness(spec: T3workRecipeHarnessSpec) {
     const row = Option.isSome(liveRow)
       ? liveRow
       : yield* runRepository.getById({ runId: prepared.runId });
+    // Recorded truth, read BEFORE the temp roots are dropped: the journal is what the run
+    // actually dispatched, so `scriptCalls` is an invocation log rather than a declaration list.
+    const scriptLog = yield* Effect.promise(() =>
+      readT3workHarnessScriptLog({
+        store: journalStore,
+        runId: prepared.runId,
+        declaredScripts: prepared.recipe.scriptNames,
+      }),
+    );
     cleanupT3workRecipeHarnessRoots(prepared);
     return assembleT3workRecipeHarnessReport({
       recipeId: prepared.recipe.id,
-      scriptCalls: prepared.recipe.scriptNames,
+      scriptLog,
       commands: capture.commands,
       completed,
       launchStatus: launched.status,

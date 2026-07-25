@@ -6,11 +6,14 @@ import {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
+import type { AgentEffort } from "@t3work/sdk";
+
 import {
   buildStartChildModelSelection,
   type T3workStartChildArgs,
   type T3workStartChildReasoningEffort,
 } from "./t3work-toolBrokerStartChildArgs.ts";
+import { applyWorkflowEffort } from "./t3work-workflowEffortOptions.ts";
 
 /**
  * Free cross-provider + model resolution for `t3work.thread.start_child`.
@@ -32,6 +35,9 @@ export type ResolveStartChildModelSelectionInput = {
   readonly requestedProvider?: string | undefined;
   readonly requestedModel?: string | undefined;
   readonly reasoningEffort?: T3workStartChildReasoningEffort | undefined;
+  /** Provider-agnostic thinking tier; mapped by the SHARED {@link applyWorkflowEffort} seam
+   * (same one workflow child turns use). Ignored when `reasoningEffort` is also set. */
+  readonly effort?: AgentEffort | undefined;
   readonly providers: ReadonlyArray<ServerProvider>;
 };
 
@@ -103,6 +109,13 @@ const resolveSlug = (
 export function resolveStartChildModelSelection(
   input: ResolveStartChildModelSelectionInput,
 ): ResolveStartChildModelSelectionResult {
+  // The provider-agnostic tier goes through the SAME seam workflow child turns use, and only
+  // when no explicit provider-vocabulary `reasoningEffort` was requested (that one is more
+  // specific, and both write the same option, so applying both would be a silent override).
+  const withTier = (selection: ModelSelection): ModelSelection =>
+    input.reasoningEffort
+      ? selection
+      : applyWorkflowEffort(selection, input.effort, input.providers);
   const requested = input.requestedProvider?.trim();
   if (!requested) {
     const target = input.providers.find(
@@ -110,13 +123,15 @@ export function resolveStartChildModelSelection(
     );
     return {
       ok: true,
-      value: buildStartChildModelSelection(
-        input.parentModelSelection,
-        {
-          ...(input.requestedModel ? { model: input.requestedModel } : {}),
-          ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-        },
-        target,
+      value: withTier(
+        buildStartChildModelSelection(
+          input.parentModelSelection,
+          {
+            ...(input.requestedModel ? { model: input.requestedModel } : {}),
+            ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+          },
+          target,
+        ),
       ),
     };
   }
@@ -149,12 +164,14 @@ export function resolveStartChildModelSelection(
   };
   return {
     ok: true,
-    value: buildStartChildModelSelection(
-      base,
-      {
-        ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-      },
-      target,
+    value: withTier(
+      buildStartChildModelSelection(
+        base,
+        {
+          ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+        },
+        target,
+      ),
     ),
   };
 }
@@ -167,7 +184,7 @@ export function resolveStartChildModelSelection(
  */
 export function resolveChildModel(
   baseModelSelection: ModelSelection,
-  args: Pick<T3workStartChildArgs, "provider" | "model" | "reasoningEffort">,
+  args: Pick<T3workStartChildArgs, "provider" | "model" | "reasoningEffort" | "effort">,
   listProviders: (() => Effect.Effect<ReadonlyArray<ServerProvider>>) | undefined,
 ): Effect.Effect<ModelSelection, string> {
   return Effect.gen(function* () {
@@ -183,6 +200,7 @@ export function resolveChildModel(
       ...(args.provider ? { requestedProvider: args.provider } : {}),
       ...(args.model ? { requestedModel: args.model } : {}),
       ...(args.reasoningEffort ? { reasoningEffort: args.reasoningEffort } : {}),
+      ...(args.effort ? { effort: args.effort } : {}),
       providers,
     });
     return result.ok ? result.value : yield* Effect.fail(result.message);

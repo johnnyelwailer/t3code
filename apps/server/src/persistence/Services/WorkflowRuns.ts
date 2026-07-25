@@ -73,6 +73,12 @@ export const WorkflowRun = Schema.Struct({
    * entry for `sleeping` (the scheduler resolves this when the deadline arrives). */
   pendingCorrelationId: Schema.NullOr(Schema.String),
   pendingKind: Schema.NullOr(WorkflowRunPendingKind),
+  /** Agent-facing readable reason the run failed (migration 044), written by the ONE terminal
+   * failure funnel and cleared by any non-failing settle. NULL unless the run failed. Optional
+   * on the domain shape so existing row builders stay valid; the column itself is nullable. */
+  failureReason: Schema.optional(Schema.NullOr(Schema.String)),
+  /** Where it failed — the settle phase plus the primitive in flight (migration 044). */
+  failureStep: Schema.optional(Schema.NullOr(Schema.String)),
   /** The wall-clock instant a `sleeping` run is due (Epic 27) — the scheduler's index. Null
    * for a run not parked on a timer. */
   wakeAt: Schema.NullOr(IsoDateTime),
@@ -115,11 +121,15 @@ export const SetWorkflowRunPendingInput = Schema.Struct({
 });
 export type SetWorkflowRunPendingInput = typeof SetWorkflowRunPendingInput.Type;
 
-/** Clear the pending ask and set a (typically terminal) status, in one update. */
+/** Clear the pending ask and set a (typically terminal) status, in one update. A failing settle
+ * also records WHY here; a non-failing settle omits both and the columns are reset to NULL, so a
+ * later successful resume never leaves a stale reason behind. */
 export const ClearWorkflowRunPendingInput = Schema.Struct({
   runId: Schema.String,
   status: WorkflowRunStatus,
   updatedAt: IsoDateTime,
+  failureReason: Schema.optional(Schema.String),
+  failureStep: Schema.optional(Schema.String),
 });
 export type ClearWorkflowRunPendingInput = typeof ClearWorkflowRunPendingInput.Type;
 

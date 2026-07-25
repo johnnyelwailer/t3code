@@ -72,10 +72,17 @@ export const makeResumeFailedRun =
           lifecycle,
         }),
       ).pipe(Effect.forkDetach({ startImmediately: true }));
+      // Echo the recorded cause of the PREVIOUS failure: the resume replays the executed prefix
+      // and runs live past it, so an agent that did not first call `status` still learns what
+      // broke and can judge whether resuming without a fix can possibly succeed.
       return {
         ok: true as const,
         runId: run.runId,
         status: "accepted" as const,
-        hint: "Resuming from the journal (same-prefix replay); observe progress via t3work.orchestration.status.",
+        ...(run.failureReason ? { failureReason: run.failureReason } : {}),
+        ...(run.failureStep ? { failureStep: run.failureStep } : {}),
+        hint: run.failureReason
+          ? `Resuming from the journal (same-prefix replay) after: ${run.failureReason} — observe progress via t3work.orchestration.status.`
+          : "Resuming from the journal (same-prefix replay); observe progress via t3work.orchestration.status.",
       };
     });

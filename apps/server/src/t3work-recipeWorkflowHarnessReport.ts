@@ -1,6 +1,8 @@
 // @effect-diagnostics preferSchemaOverJson:off - the harness report is plain JSON for a CLI.
 import type { OrchestrationCommand } from "@t3tools/contracts";
 
+import type { T3workHarnessScriptLog } from "./t3work-recipeWorkflowHarnessScriptLog.ts";
+
 export type T3workHarnessWidget = {
   readonly title: string;
   readonly format: string;
@@ -22,7 +24,13 @@ export type T3workRecipeHarnessReport = {
   readonly notifications: ReadonlyArray<string>;
   readonly agentPromptCount: number;
   readonly asksAnswered: number;
+  /** Every `scripts.*` dispatch the run JOURNALED, in call order (repeats kept) — an
+   * invocation log, not the recipe's declarations. See `…HarnessScriptLog`. */
   readonly scriptCalls: ReadonlyArray<string>;
+  /** The names the recipe registered under `scripts` (sorted). */
+  readonly declaredScripts: ReadonlyArray<string>;
+  /** Declared but never dispatched; non-empty means the recipe over-claims — the runner fails. */
+  readonly uncalledScripts: ReadonlyArray<string>;
   readonly workflowRun: {
     readonly runId: string;
     readonly status: string;
@@ -100,7 +108,8 @@ export function summarizeT3workHarnessCommands(commands: ReadonlyArray<Orchestra
 /** Shape the harness's terminal state into the report the CLI runner prints. */
 export function assembleT3workRecipeHarnessReport(input: {
   readonly recipeId: string;
-  readonly scriptCalls: ReadonlyArray<string>;
+  /** The journal-derived invocation log + declaration diff (`…HarnessScriptLog`). */
+  readonly scriptLog: T3workHarnessScriptLog;
   readonly commands: ReadonlyArray<OrchestrationCommand>;
   /** Outputs collected by the launch-time `onComplete` sink; non-empty means it fired. */
   readonly completed: ReadonlyArray<unknown>;
@@ -123,7 +132,9 @@ export function assembleT3workRecipeHarnessReport(input: {
       (command) => (command as { type?: string }).type === "thread.turn.start",
     ).length,
     asksAnswered: input.asksAnswered,
-    scriptCalls: input.scriptCalls,
+    scriptCalls: input.scriptLog.scriptCalls,
+    declaredScripts: input.scriptLog.declaredScripts,
+    uncalledScripts: input.scriptLog.uncalledScripts,
     workflowRun: input.workflowRun,
     commandTypes: [...new Set(input.commands.map((command) => command.type))],
     seededWorkItemCount: input.seededWorkItemCount,
