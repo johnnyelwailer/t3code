@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  readThreadBootstrapDispatchState,
+  resetThreadBootstrapDispatchState,
+} from "~/t3work/chat/t3work-threadBootstrapDispatchRegistry";
+import {
   DEFAULT_RUNTIME_MODE,
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
 } from "@t3tools/contracts";
 import type { BackendApi } from "~/t3work/backend/t3work-types";
-import {
-  planThreadBootstrap,
-  type ThreadBootstrapDispatchState,
-} from "~/t3work/chat/t3work-threadBootstrapPlan";
+import { planThreadBootstrap } from "~/t3work/chat/t3work-threadBootstrapPlan";
 import { runThreadBootstrap } from "~/t3work/chat/t3work-runThreadBootstrap";
 import type { T3workTurnToolContext } from "~/t3work/t3work-threadToolContext";
 import type { T3workKickoffWorkflow } from "~/t3work/t3work-types";
@@ -62,17 +63,16 @@ export function useThreadBootstrap({
   bootstrapStatus: ThreadBootstrapStatus;
   retryThreadBootstrap: () => void;
 } {
-  const dispatchStateRef = useRef<ThreadBootstrapDispatchState | undefined>(undefined);
   const onInitialUserMessageSentRef = useRef(onInitialUserMessageSent);
   const [bootstrapStatus, setBootstrapStatus] = useState<ThreadBootstrapStatus>("idle");
   const [retryGeneration, setRetryGeneration] = useState(0);
   onInitialUserMessageSentRef.current = onInitialUserMessageSent;
 
   const retryThreadBootstrap = useCallback(() => {
-    dispatchStateRef.current = undefined;
+    resetThreadBootstrapDispatchState(threadId);
     setBootstrapStatus("idle");
     setRetryGeneration((value) => value + 1);
-  }, []);
+  }, [threadId]);
 
   useEffect(() => {
     let active = true;
@@ -94,14 +94,15 @@ export function useThreadBootstrap({
     }
 
     const bootstrapPlan = planThreadBootstrap({
-      currentState: dispatchStateRef.current,
+      // Shared per threadId, not per component instance: one launch remounts this view, and a
+      // per-instance ref made the fresh mount replay the kickoff (duplicate `thread.create`).
+      currentState: readThreadBootstrapDispatchState(threadId),
       threadId,
       hasServerThread: serverThread != null,
       hasInitialUserMessage: Boolean(initialUserMessage),
       hasProjectWorkspaceRoot: Boolean(projectWorkspaceRoot),
       projectExists,
     });
-    dispatchStateRef.current = bootstrapPlan.state;
 
     recordThreadBootstrapPlan({
       environmentId,
@@ -133,6 +134,14 @@ export function useThreadBootstrap({
       return () => {
         active = false;
       };
+    }
+
+    // Claim the dispatch synchronously, before the first `await` inside runThreadBootstrap can
+    // yield: a second effect pass in the same tick would otherwise still read the un-flagged state.
+    if (bootstrapPlan.action === "kickoff") {
+      bootstrapPlan.state.kickoffSent = true;
+    } else {
+      bootstrapPlan.state.threadCreateSent = true;
     }
 
     const createdAt = new Date().toISOString();

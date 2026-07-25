@@ -1,10 +1,8 @@
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 
 import type { BackendApi } from "~/t3work/backend/t3work-types";
-import {
-  dispatchThreadBootstrapCreate,
-  isDuplicateThreadCreateError,
-} from "~/t3work/chat/t3work-runThreadBootstrapHelpers";
+import { isDuplicateThreadCreateError } from "~/t3work/chat/t3work-duplicateThreadCreateError";
+import { dispatchThreadBootstrapCreate } from "~/t3work/chat/t3work-runThreadBootstrapHelpers";
 import {
   appendContextAttachmentsToPrompt,
   prepareThreadContextAttachments,
