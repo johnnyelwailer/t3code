@@ -48,6 +48,7 @@ export type T3TeamProfile = {
 export type T3TeamProfileResolutionSource =
   | "bundled"
   | "project-local"
+  | "pack"
   | "manifest-inline"
   | "fallback";
 
@@ -80,6 +81,8 @@ export type T3TeamProjectProfileManifest = {
 export type ResolveT3TeamProfileInput = {
   readonly profileId?: string;
   readonly projectLocalProfiles?: Readonly<Record<string, T3TeamProfile>>;
+  /** Profiles contributed by an active workspace pack, keyed by id. */
+  readonly packProfiles?: Readonly<Record<string, T3TeamProfile>>;
   readonly manifest?: T3TeamProjectProfileManifest;
   readonly allowFallback?: boolean;
 };
@@ -289,6 +292,10 @@ export function resolveT3TeamProfile(
   const projectLocalProfile = input.projectLocalProfiles?.[requestedProfileId];
   if (projectLocalProfile) {
     return buildResolution(projectLocalProfile, "project-local", requestedProfileId);
+  }
+  const packProfile = input.packProfiles?.[requestedProfileId];
+  if (packProfile) {
+    return buildResolution(packProfile, "pack", requestedProfileId);
   }
   if (
     input.manifest?.profileId === requestedProfileId &&

@@ -18,6 +18,9 @@ are the four shared primitives all `t3team` automation is built on; this epic ow
 ## Product Model
 
 Miniapps should let users and agents extend the shell without changing core app code.
+Under the pack-driven model, miniapps are also the UI module format for packs
+([Epic 36](./36-workspace-packs-and-distributions.md)). A miniapp can be project-local,
+user-local, distribution-bundled, or remote-managed.
 
 Examples:
 
@@ -35,7 +38,7 @@ result as inspectable source.
 
 ## Workspace Ownership
 
-Miniapps live in the workspace that owns them.
+Miniapps live in the workspace or pack scope that owns them.
 
 Project-scoped miniapps:
 
@@ -67,6 +70,14 @@ present so miniapp changes have normal source history.
 
 Sharing can be added by promoting a project miniapp into the home workspace, or by
 including/referencing a miniapp from another trusted workspace.
+
+Remote-managed and globally installed pack miniapps should live in the host pack install
+location, not be copied into every project workspace. The project workspace may hold only
+project-local miniapps and references to enabled packs.
+
+The `.t3team` paths above are transitional storage spelling. Under Epic 36, generated or
+synced miniapp state should move to host app-data, and repo files should exist only when
+the project explicitly owns the miniapp source.
 
 ## Manifest
 
@@ -409,7 +420,8 @@ epic + engineer → Filters + Refinement + Quick actions.
 
 ### Example sections
 
-Each of these is a miniapp at `sidecar.section` — built-in, bundled, or project-local:
+Each of these is a miniapp at `sidecar.section` — distribution-bundled, pack-provided,
+user-local, or project-local:
 
 **Topic-grouped recipe sections (bundled default catalog):**
 
@@ -427,10 +439,11 @@ Each of these is a miniapp at `sidecar.section` — built-in, bundled, or projec
 - **Drafts** — pending mutation drafts awaiting commit
 - **Status Widgets** — health / build / sync indicators
 
-Skill packs and project workspaces contribute sections the same way they contribute
-recipes — a `defineSidecarSection` plugin module discovered alongside `recipes/` (see
-[Epic 16 — Plugin Modules](./16-action-recipes.md#plugin-modules) for the discovery
-pattern; sections live under `<workspace>/.t3team/sections/<id>/section.ts`).
+Workspace packs and project workspaces contribute sections the same way they contribute
+recipes — a `defineSidecarSection` plugin module discovered from active pack manifests or
+project-local source (see [Epic 16 — Plugin Modules](./16-action-recipes.md#plugin-modules)
+for the module pattern; project-local sections may live under
+`<workspace>/.t3team/sections/<id>/section.ts`).
 
 ### Context menus
 
@@ -527,9 +540,11 @@ type SidecarPersonalization = {
 };
 ```
 
-Layering: `bundled defaults → profile defaults → project config → user overrides`.
-Higher layers override lower. Hidden items don't render; pinned items render first; the
-section's natural order fills the rest.
+Layering follows the pack merge model:
+`core defaults → distribution packs → global packs → user packs → project packs →
+remote-managed packs → explicit locks`, then per-user runtime personalization where policy
+allows it. Hidden items don't render; pinned items render first; the section's natural
+order fills the rest.
 
 #### What's not in MVP
 
@@ -598,6 +613,7 @@ exist to prevent.
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
 | `defineSidecarSection`            | `sidecar.section`                                                                                                   | Labeled group in the right contextual sidecar (Filters, topic-grouped recipe lists, Recent, PR lists, Status Widgets)                                                                                                                                                                    | Built (Phase 5a)    |
 | `defineWorkItemSection`           | `workitem.detail.section`                                                                                           | Section inside a work-item detail page (e.g., "Risk Assessment" between Description and Comments)                                                                                                                                                                                      | Planned (Phase 5+)  |
+| `defineProjectView`               | `project.navView`                                                                                                   | Full project page assembled from safe project blocks (Backlog, My Work, triage dashboards, release readiness). See [Epic 31](./31-composable-project-views.md).                                                                                                                        | Planned (Epic 31)   |
 | `defineDashboardWidget`           | `dashboard.widget`                                                                                                  | Widget tile inside a project dashboard (backlog overview, my-work overview)                                                                                                                                                                                                            | Planned (Phase 5+)  |
 | `defineNavSection`                | `nav.section`                                                                                                       | Section inside the left navigation tree (e.g., a "Saved Filters" subtree)                                                                                                                                                                                                              | Planned (Phase 5+)  |
 | `defineHomeBlock`                 | `home.block`                                                                                                        | Block on the home workspace                                                                                                                                                                                                                                                            | Planned (Phase 5+)  |
@@ -615,7 +631,7 @@ exist to prevent.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------- |
 | `defineTool`         | Custom tool registered with `T3TeamToolBroker` (project-local or pack-bundled). Today tools are only built-in.            | Planned |
 | `defineSkillPack`    | Bundle of recipes + sections + profile defaults + tool grants under one id ([Epic 12](./12-profiles-and-skill-packs.md)). | Planned |
-| `defineProfile`      | A starter profile with preference fields. Today profiles are hardcoded; this makes them authorable.                       | Planned |
+| `defineProfile`      | A configuration-defined starter profile with preference fields; starter profiles are seed config, not behavior enums.     | Planned |
 | `defineResourceType` | Typed resource shape + renderer (for new integration providers).                                                          | Planned |
 
 ### No generic primitive
@@ -660,6 +676,11 @@ Current first-party surfaces such as Backlog and My Work are effectively hardcod
 project dashboards. They prove the interaction model, but they should not remain the
 only way to add dense project views.
 
+[Epic 31: Composable Project Views](./31-composable-project-views.md) narrows this into
+the concrete product path: project nav views are composed from safe blocks and
+high-level capabilities, not raw Jira/Tempo/GitHub APIs. Backlog and My Work are the
+dogfood targets for that block library.
+
 The miniapp model should allow custom views to register into navigation:
 
 - project nav: views scoped to one project workspace.
@@ -682,8 +703,8 @@ Example:
       "order": 40
     }
   ],
-  "tools": ["artifact.list", "integration.search", "recipe.run"],
-  "components": ["Button", "Table", "KanbanBoard", "Timeline"]
+  "capabilities": ["workItems.read", "recipes.read", "recipes.run", "threads.read"],
+  "blocks": ["ProjectView", "WorkItemTable", "WorkItemBoard", "RecipeSection"]
 }
 ```
 
@@ -710,6 +731,26 @@ export default function App({ host }: { host: MiniappHostContext }) {
 ## Runtime Contract
 
 Miniapps are full React code, but they should import through a narrow SDK.
+
+For full project nav views, the preferred import surface is the block library from
+[Epic 31](./31-composable-project-views.md):
+
+```tsx
+import { ProjectView, RecipeSection, WorkItemFilters, WorkItemTable } from "@t3team/blocks";
+
+export default function App() {
+  return (
+    <ProjectView title="Planning">
+      <WorkItemFilters presets={["assigned-to-me", "blocked"]} />
+      <WorkItemTable query="workItems.myWork" columns={["key", "title", "status", "assignee"]} />
+      <RecipeSection topic="planning" />
+    </ProjectView>
+  );
+}
+```
+
+Lower-level miniapps still use `@t3team/sdk` for host context, tool bridge, shell controls,
+and non-project-view placements.
 
 ```tsx
 import { Badge, Button, Chart, Table, useMiniappTools } from "@t3team/sdk";
@@ -749,7 +790,8 @@ Useful component families to whitelist over time:
 - motion: constrained animation primitives that respect shell accessibility settings
 
 Direct access to arbitrary internal app modules should stay blocked. Public miniapp
-components should be intentionally exported and versioned through the SDK.
+components should be intentionally exported and versioned through `@t3team/sdk` or
+`@t3team/blocks`.
 
 ## Tool Access
 
@@ -771,6 +813,8 @@ await tools.integration.prepareMutation({ ref, action: "comment" });
 Rules:
 
 - tool calls must be declared in `miniapp.json`
+- project nav views should prefer high-level capabilities and `@t3team/blocks`; raw
+  provider-shaped tools stay out of the default view authoring surface
 - shell resolves tools from the active workspace and user permissions
 - mutation-capable tools keep the same review and approval gates as agent actions
 - tool calls should be logged into run or artifact history when they affect workflow state
@@ -826,18 +870,29 @@ Start with:
 
 - project workspace miniapps only
 - home workspace concept stubbed but not required
-- `dashboard`, `conversation.inlineCard`, and `conversation.sidecar` placements
+- `project.navView`, `dashboard`, `conversation.inlineCard`, and `conversation.sidecar`
+  placements
 - manifest schema and discovery under `.t3team/miniapps`
-- SDK exports for core shell components, tables, simple charts, artifact links, and tool bridge
+- SDK/block exports for core shell components, work-item tables/boards/filters, simple
+  charts, artifact links, and tool bridge
 - no arbitrary npm dependencies
 - declared tools only
 - explicit enablement UI
 - agent recipe for creating a miniapp from a short interview
 
-## Open Questions
+## Working Decisions
 
-- Should miniapp files be committed automatically after creation, or only staged for user review?
-- How should SDK version compatibility be represented in `miniapp.json`?
-- Which visualization library should back the first chart/graph exports?
-- Should home workspace miniapps be globally enabled by default, or opt-in per project?
-- What is the smallest safe runtime that still supports real React authoring?
+- Pack-installed miniapps do not copy into project workspaces. Project-local miniapps are
+  explicit project-authored code.
+- v1 miniapps are trusted code. The smallest safe runtime question moves to the later
+  untrusted marketplace/sandbox track.
+- Generated miniapp source is never auto-committed. The workflow writes a draft or
+  unstaged files, shows the diff, and lets the user decide whether to commit.
+- `miniapp.json` declares SDK compatibility as a semver range, for example
+  `sdk: { "@t3team/sdk": "^1.0.0" }`, plus optional host capability strings.
+- First chart/graph exports should use shell-owned SVG/HTML primitives. Do not add a chart
+  library dependency for v1 unless a specific block needs it.
+- Home-scope miniapps are not globally enabled by default. They are enabled by user choice,
+  active profile, or pack policy, then filtered by project policy.
+- Explicitly project-owned miniapp source follows the project-local storage decision in
+  Epic 36; pack-installed miniapps stay in host app-data.

@@ -55,8 +55,9 @@ Profiles affect:
 
 A skill pack is a bundle of recipes (authored as `recipe.ts` plugin modules), prompt
 blocks, artifact templates, and tool-group permissions for a type of work. A skill pack's
-recipes are bundled-source recipes — the same recipe model as project-local recipes, just
-shipped with the app (see [Epic 16](./16-action-recipes.md)).
+recipes use the same recipe model as project-local recipes. Skill packs may be shipped by
+a distribution pack, remote-managed pack, user pack, project pack, or temporary in-repo
+starter package (see [Epic 16](./16-action-recipes.md)).
 
 Examples:
 
@@ -354,13 +355,13 @@ Recipes:
 
 ## Project Creation Defaults
 
-When creating from Jira:
+When creating from a pack-provided source:
 
 - show recommended skill packs based on project type and issue data
 - default packs based on project signals plus profile preference fields, not on profile id
   or title
 - allow Product, Support, Delivery, Engineering, and Release packs to be enabled too
-- never imply Jira projects are only for QA work
+- never imply one source, for example Jira, is only for QA work
 
 Example recommendation inputs:
 
@@ -368,11 +369,12 @@ Example recommendation inputs:
 - `communicationStyle.technicalDepth`
 - `preferredArtifactKinds`
 - `defaultActionFamilies`
-- provider/project metadata such as Jira project type and issue patterns
+- connector/project metadata such as Jira project type and issue patterns
 
 Confirm screen should show:
 
-- selected profile
+- selected profiles
+- primary profile
 - enabled skill packs
 - top recipes that will appear first
 - mutation safety policy
@@ -383,10 +385,22 @@ Profile selection should be a normal setup step, not hidden in settings.
 
 Use existing T3 primitives:
 
-- cards for profile choices
+- multi-select cards for profile choices
 - badges for skill pack categories
 - select/menu for compact profile switching
 - settings rows for later edits
+
+Project setup should keep the flow simple:
+
+1. Let the user select one or more profiles from the normal profile card grid.
+2. If exactly one profile is selected, continue with that profile as primary.
+3. If multiple profiles are selected, show a short review step listing the selected
+   profiles, with remove controls and a primary-profile choice.
+4. The primary choice should be explicit but lightweight, for example radio buttons inside
+   the selected-profile review list.
+
+The second step exists only for multi-select. Do not force all users through a heavier
+profile composition screen.
 
 Users should also be able to clone a starter profile into a custom profile and edit its
 preferences without leaving the normal setup/settings flow.
@@ -394,9 +408,11 @@ preferences without leaving the normal setup/settings flow.
 Project overview should show enabled skill packs as quiet badges near the project source
 badges.
 
-GitHub PR and review surfaces should also expose the active profile as a lightweight mode
-switch. Switching profiles should immediately rerank actions, adjust explanation density,
-and change guided-vs-expert defaults without forcing the user to reopen chat.
+GitHub PR and review surfaces should also expose the active primary profile as a
+lightweight mode switch. Switching the primary profile should immediately rerank actions,
+adjust explanation density, and change guided-vs-expert defaults without forcing the user
+to reopen chat. Secondary selected profiles should remain available as project role
+coverage unless the user removes them from project settings.
 
 That mode switch should operate on the selected profile configuration's preferences. It
 must not special-case named starter profiles.

@@ -7,7 +7,7 @@ import {
 import { T3TeamRecipeListCard } from "~/t3team/t3team-RecipeListCard";
 import { explainSelectedWorkRecipe } from "~/t3team/t3team-sidecarStoryFixtures";
 
-const meta = {
+const meta: Meta<typeof T3TeamRecipeListCard> = {
   title: "T3Team/Sidecar/RecipeListCard",
   component: T3TeamRecipeListCard,
   parameters: {
@@ -20,7 +20,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof T3TeamRecipeListCard>;
+};
 
 export default meta;
 type Story = StoryObj<typeof meta>;

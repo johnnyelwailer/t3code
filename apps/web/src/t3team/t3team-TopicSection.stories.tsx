@@ -11,7 +11,7 @@ import {
 } from "~/t3team/t3team-sidecarStoryFixtures";
 import { T3TeamTopicSection } from "~/t3team/t3team-TopicSection";
 
-const meta = {
+const meta: Meta<typeof T3TeamTopicSection> = {
   title: "T3Team/Sidecar/TopicSection",
   component: T3TeamTopicSection,
   parameters: {
@@ -24,7 +24,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof T3TeamTopicSection>;
+};
 
 export default meta;
 type Story = StoryObj<typeof meta>;

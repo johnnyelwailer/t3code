@@ -7,7 +7,7 @@ import {
   needsMyActionFilterRecipe,
 } from "~/t3team/t3team-sidecarStoryFixtures";
 
-const meta = {
+const meta: Meta<typeof T3TeamFilterActionCard> = {
   title: "T3Team/Sidecar/FilterActionCard",
   component: T3TeamFilterActionCard,
   parameters: {
@@ -20,7 +20,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof T3TeamFilterActionCard>;
+};
 
 export default meta;
 type Story = StoryObj<typeof meta>;
