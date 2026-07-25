@@ -8,6 +8,8 @@ import { useThreadChatDebug } from "~/t3team/chat/t3team-useThreadChatDebug";
 import { useThreadChatServerState } from "~/t3team/chat/t3team-useThreadChatServerState";
 import { useThreadChatTurnToolContext } from "~/t3team/chat/t3team-useThreadChatTurnToolContext";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
+import { ExternalSessionReadOnlyOverlay } from "~/t3team/chat/t3team-ExternalSessionReadOnlyOverlay";
+import { useExternalSessionReadOnly } from "~/t3team/chat/t3team-useExternalSessionReadOnly";
 import { ContextAttachmentStrip } from "~/t3team/components/t3team-ContextAttachmentChip";
 import type { T3TeamKickoffWorkflow, T3TeamThreadToolId } from "~/t3team/t3team-types";
 
@@ -150,6 +152,7 @@ export function ThreadChatView({
     ? ({ workflowRunId, action }: { workflowRunId: string; action: "pause" | "resume" | "stop" }) =>
         backend.controlWorkflow!({ threadId, workflowRunId, action })
     : undefined;
+  const externalSession = useExternalSessionReadOnly(serverThread);
 
   if (!environmentId) {
     return <div className="flex h-full min-h-0 flex-1 bg-background" />;
@@ -178,10 +181,20 @@ export function ThreadChatView({
             hideBranchToolbar={embeddedMode}
             minimalComposer={embeddedMode}
             beforeDispatchTurnStart={prepareTurnStart}
-            dispatchTurnStartOverride={dispatchTurnStartOverride}
+            dispatchTurnStartOverride={async (turnStart) => {
+              if (externalSession.active) return true;
+              return dispatchTurnStartOverride(turnStart);
+            }}
             composerContextAttachmentSlot={contextAttachmentSlot}
             composerContainerProps={composerDropTarget.composerContainerProps}
-            composerContainerOverlay={composerDropTarget.composerContainerOverlay}
+            composerContainerOverlay={
+              <>
+                {composerDropTarget.composerContainerOverlay}
+                {externalSession.active && externalSession.session ? (
+                  <ExternalSessionReadOnlyOverlay session={externalSession.session} />
+                ) : null}
+              </>
+            }
             composerContextAttachments={contextAttachments}
             prepareComposerContextAttachments={prepareComposerContextAttachments}
             onComposerContextAttachmentsConsumed={clearThreadAttachments}

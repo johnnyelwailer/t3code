@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef, useState } from "react";
-import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
+import { EllipsisIcon, LockIcon, MessageSquareIcon } from "lucide-react";
 import { ProviderDriverKind } from "@t3tools/contracts";
 import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";
 import type { ProjectThread } from "~/t3team/t3team-types";
@@ -12,6 +12,7 @@ import {
   type SidebarItemState,
 } from "./t3team-projectSidebarItemState";
 import { useAutoScrollIntoView } from "./t3team-useAutoScrollIntoView";
+import { EXTERNAL_SESSION_ACTIVE_WINDOW_MS } from "~/t3team/chat/t3team-externalSessionState";
 
 interface ThreadRowProps {
   thread: ProjectThread;
@@ -40,6 +41,10 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const rowRef = useAutoScrollIntoView<HTMLAnchorElement>(state.isOpen);
   const statusPill = resolveThreadStatusPill(thread);
+  const externalActive =
+    thread.providerKind !== undefined &&
+    Date.now() - Date.parse(thread.lastMessageAt) >= 0 &&
+    Date.now() - Date.parse(thread.lastMessageAt) < EXTERNAL_SESSION_ACTIVE_WINDOW_MS;
 
   const openThreadMenu = useCallback(
     async (x: number, y: number) => {
@@ -122,7 +127,9 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
         {thread.providerKind ? (
-          <span title={`External ${thread.providerKind === "codex" ? "Codex" : "Claude"} session`}>
+          <span
+            title={`External ${thread.providerKind === "codex" ? "Codex" : "Claude"} session${externalActive ? " · active · read-only" : ""}`}
+          >
             <ProviderInstanceIcon
               driverKind={ProviderDriverKind.make(thread.providerKind)}
               displayName={thread.providerKind === "codex" ? "Codex" : "Claude"}
@@ -171,6 +178,12 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
             ) : null}
           </span>
         )}
+        {externalActive ? (
+          <LockIcon
+            className="size-3 shrink-0 text-amber-500 animate-[pulse_3s_ease-in-out_infinite]"
+            aria-label="Active external session, read-only"
+          />
+        ) : null}
       </div>
       <div className="ml-auto flex shrink-0 items-center">
         <div className="relative flex min-w-12 justify-end pr-1">
