@@ -182,7 +182,9 @@ export function useT3workSidecarRecipeQuickStarts(
         if (cancelled) {
           return;
         }
-        if (!response.hasProjectLocalRecipes) {
+        // Gate on what was DISCOVERED, not on `hasProjectLocalRecipes` — pack-shipped recipes are a
+        // legitimate source that reports that flag false. Empty list still means bundled fallback.
+        if (response.recipes.length === 0) {
           setQuickStartsIfChanged(fallbackQuickStarts);
           return;
         }

@@ -336,4 +336,43 @@ describe("pack-provided recipe discovery", () => {
       }),
     );
   });
+
+  // Regression: a module that fails to load used to be dropped with NO diagnostic, so a whole
+  // unloadable pack library was indistinguishable from an ordinary empty recipe list. The failure
+  // must name the recipe, its path, and the underlying error.
+  it("reports a diagnostic when a pack recipe module fails to load", async () => {
+    await run(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const packDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-pack-" });
+        const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3work-ws-" });
+        const recipeRoot = path.join(packDir, "recipes/triage");
+        yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
+        // A `recipe.ts` whose bare import cannot resolve from the pack directory — exactly the
+        // real-world failure (`@t3work/sdk` / `effect` not linked into the distro's node_modules).
+        yield* fileSystem.writeFileString(
+          path.join(recipeRoot, "recipe.ts"),
+          'import { defineRecipe } from "@t3work/definitely-not-installed";\nexport default defineRecipe({});\n',
+        );
+
+        setPackRecipeSources(
+          loadPackRecipeSources(
+            makePackDiagnostic({
+              directory: packDir,
+              recipes: [{ id: "triage", path: "recipes/triage" }],
+            }),
+          ),
+        );
+
+        const result = yield* discoverProjectRecipes({ workspaceRoot, context });
+        expect(result.recipes).toHaveLength(0);
+        const diagnostics = result.diagnostics?.join(" ") ?? "";
+        expect(diagnostics).toContain("recipe triage");
+        expect(diagnostics).toContain(recipeRoot);
+        expect(diagnostics).toContain("failed to load");
+        expect(diagnostics).toContain("@t3work/definitely-not-installed");
+      }),
+    );
+  });
 });

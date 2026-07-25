@@ -52,6 +52,20 @@ function createLocalRecipe(id: string): ProjectRecipeDiscovered {
   };
 }
 
+/** A pack-shipped recipe: same discovery shape, but it reports `hasProjectLocalRecipes: false`. */
+function createPackRecipe(id: string): ProjectRecipeDiscovered {
+  return {
+    ...createLocalRecipe(id),
+    source: "pack",
+    packId: "nexplore-global",
+    packScope: "distribution",
+    displayName: `Pack ${id}`,
+    recipePath: `/packs/nexplore-global/recipes/${id}`,
+    promptPath: `/packs/nexplore-global/recipes/${id}/prompt.md`,
+    workflowPath: `/packs/nexplore-global/recipes/${id}/workflow.ts`,
+  };
+}
+
 function QuickStartProbe({
   backend,
   project,
@@ -149,6 +163,83 @@ describe("useT3workSidecarRecipeQuickStarts", () => {
 
     await act(async () => {
       mountedRoots.pop()?.unmount();
+    });
+  });
+
+  // Regression: the hook used to gate on `hasProjectLocalRecipes`, so a pack-shipped library — which
+  // correctly reports that flag as false — was discarded wholesale and the sidecar showed only
+  // bundled quick starts. The gate belongs on whether anything was DISCOVERED, from any source.
+  it("surfaces pack-shipped recipes even though hasProjectLocalRecipes is false", async () => {
+    const baseBackend = createMockBackend();
+    const project = createProject();
+    const discovery =
+      createDeferred<Awaited<ReturnType<BackendApi["projectWorkspace"]["discoverRecipes"]>>>();
+    const backend: BackendApi = {
+      ...baseBackend,
+      projectWorkspace: {
+        ...baseBackend.projectWorkspace,
+        discoverRecipes: vi.fn(() => discovery.promise),
+      },
+    };
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<QuickStartProbe backend={backend} project={project} renderToken={1} />);
+    });
+
+    discovery.resolve({
+      workspaceRoot: project.workspace!.rootPath,
+      hasProjectLocalRecipes: false,
+      recipes: [createPackRecipe("whats-needing-me")],
+    });
+    await act(async () => {
+      await discovery.promise;
+    });
+
+    expect(host.textContent).toContain("whats-needing-me");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  // The legitimate case the old gate was standing in for: nothing discovered at all → bundled quick
+  // starts only. This must keep working, otherwise the fix above just moves the bug.
+  it("falls back to bundled quick starts when discovery returns no recipes", async () => {
+    const baseBackend = createMockBackend();
+    const project = createProject();
+    const discovery =
+      createDeferred<Awaited<ReturnType<BackendApi["projectWorkspace"]["discoverRecipes"]>>>();
+    const backend: BackendApi = {
+      ...baseBackend,
+      projectWorkspace: {
+        ...baseBackend.projectWorkspace,
+        discoverRecipes: vi.fn(() => discovery.promise),
+      },
+    };
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<QuickStartProbe backend={backend} project={project} renderToken={1} />);
+    });
+    const bundledOnly = host.textContent;
+
+    discovery.resolve({
+      workspaceRoot: project.workspace!.rootPath,
+      hasProjectLocalRecipes: false,
+      recipes: [],
+    });
+    await act(async () => {
+      await discovery.promise;
+    });
+
+    expect(host.textContent).toBe(bundledOnly);
+    expect(host.textContent).not.toContain("whats-needing-me");
+
+    await act(async () => {
+      root.unmount();
     });
   });
 
