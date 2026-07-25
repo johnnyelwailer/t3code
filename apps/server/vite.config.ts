@@ -32,7 +32,7 @@ export default mergeConfig(
       },
     },
     pack: {
-      entry: ["src/bin.ts", "src/t3work-bin.ts"],
+      entry: ["src/bin.ts", "src/t3team-bin.ts"],
       outDir: "dist",
       sourcemap: true,
       clean: true,
@@ -64,19 +64,19 @@ export default mergeConfig(
       },
     },
     resolve: {
-      // `@t3work/sdk` (and subpaths) resolve via tsconfig `paths`; tests and pack need
+      // `@t3team/sdk` (and subpaths) resolve via tsconfig `paths`; tests and pack need
       // the same mapping at runtime.
       tsconfigPaths: true,
     },
     test: {
-      // Run the server's own suites plus the @t3work/sdk source tests. The SDK is a
+      // Run the server's own suites plus the @t3team/sdk source tests. The SDK is a
       // path-aliased source package (no package.json / `test` script of its own), so
       // package-scoped test runs would otherwise never reach it; folding its tests into
       // the server run is what makes the monorepo test run cover both.
       include: [
         "src/**/*.{test,spec}.?(c|m)[jt]s?(x)",
         "integration/**/*.{test,spec}.?(c|m)[jt]s?(x)",
-        "../../packages/t3work-sdk/src/**/*.test.ts",
+        "../../packages/t3team-sdk/src/**/*.test.ts",
       ],
       // The server suite exercises sqlite, git, temp worktrees, and orchestration
       // runtimes heavily. Running files in parallel introduces load-sensitive flakes.

@@ -715,21 +715,21 @@ describe("deriveWorkLogEntries", () => {
     const entries = deriveWorkLogEntries([
       makeActivity({
         id: "workflow-handoff-started",
-        kind: "t3work.handoff.started",
+        kind: "t3team.handoff.started",
         summary: "Started child session Risk analysis",
         tone: "info",
         payload: { childThreadId: "child-1", workflowRunId: "run-1" },
       }),
       makeActivity({
         id: "workflow-handoff-created",
-        kind: "t3work.handoff.created",
+        kind: "t3team.handoff.created",
         summary: "Created by workflow",
         tone: "info",
         payload: { parentThreadId: "parent-1", workflowRunId: "run-1" },
       }),
       makeActivity({
         id: "manual-handoff-started",
-        kind: "t3work.handoff.started",
+        kind: "t3team.handoff.started",
         summary: "Started child session Fix login bug",
         tone: "info",
         payload: { childThreadId: "child-2" },

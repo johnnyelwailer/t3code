@@ -13,11 +13,11 @@ import { RecipeSurface } from "./surface.ts";
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
 
-export const PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH = "t3work.recipe.launch";
-export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP = "t3work.recipe.workflow.step";
-export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD = "t3work.recipe.workflow.card";
+export const PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH = "t3team.recipe.launch";
+export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP = "t3team.recipe.workflow.step";
+export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD = "t3team.recipe.workflow.card";
 export const PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD_ACTION =
-  "t3work.recipe.workflow.card-action";
+  "t3team.recipe.workflow.card-action";
 
 export const ProjectRecipeWorkflowAgentStep = Schema.Struct({
   kind: Schema.Literal("agent"),

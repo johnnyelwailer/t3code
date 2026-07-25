@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@t3tools/project-context": "workspace:*",
-    "@t3work/sdk": "workspace:*",
+    "@t3team/sdk": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

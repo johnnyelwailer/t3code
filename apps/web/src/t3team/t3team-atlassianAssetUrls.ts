@@ -1,0 +1,22 @@
+export function buildAtlassianAssetContentUrl(input: {
+  accountId: string;
+  url: string;
+  httpBaseUrl?: string;
+  workspaceRoot?: string;
+  relativePath?: string;
+}): string {
+  const params = new URLSearchParams({
+    accountId: input.accountId,
+    url: input.url,
+  });
+
+  if (input.workspaceRoot) {
+    params.set("workspaceRoot", input.workspaceRoot);
+  }
+  if (input.relativePath) {
+    params.set("relativePath", input.relativePath);
+  }
+
+  const path = `/api/t3team/atlassian/asset/content?${params.toString()}`;
+  return input.httpBaseUrl ? new URL(path, input.httpBaseUrl).toString() : path;
+}

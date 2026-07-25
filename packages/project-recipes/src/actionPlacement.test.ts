@@ -1,5 +1,5 @@
 /* oxlint-disable t3code/no-inline-schema-compile -- Mirrors sibling sidecarSection.test.ts. */
-import { defineAction as defineActionFromSdk } from "@t3work/sdk/placements";
+import { defineAction as defineActionFromSdk } from "@t3team/sdk/placements";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 

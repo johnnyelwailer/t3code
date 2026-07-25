@@ -1,0 +1,110 @@
+/* oxlint-disable t3code/no-inline-schema-compile -- Existing merged lint debt; keep green while preserving behavior. */
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
+import { isWithinCanonicalRoot } from "@t3team/packs";
+import {
+  ProjectRecipeKickoffProgram,
+  RecipeSurface,
+  type ProjectRecipeManifest,
+} from "@t3tools/project-recipes";
+
+export const DEFAULT_VISIBILITY_TIMEOUT_MS = 1_500;
+
+export type RawProjectRecipeManifest = Omit<ProjectRecipeManifest, "scope" | "kickoff"> & {
+  readonly scope?: string;
+  readonly kickoff?: unknown;
+};
+
+const RawProjectRecipeManifestSchema = Schema.Struct({
+  id: Schema.String,
+  version: Schema.String,
+  scope: Schema.optional(Schema.String),
+  displayName: Schema.String,
+  shortDescription: Schema.String,
+  icon: Schema.optional(Schema.String),
+  slashAlias: Schema.optional(Schema.String),
+  surfaces: Schema.Array(RecipeSurface),
+  rank: Schema.optional(Schema.Union([Schema.Number, Schema.String])),
+  visibleWhen: Schema.optional(Schema.String),
+  actionView: Schema.optional(Schema.String),
+  prompt: Schema.String,
+  kickoff: Schema.optional(Schema.Unknown),
+  files: Schema.optional(Schema.Array(Schema.String)),
+  initScript: Schema.optional(Schema.String),
+  workflow: Schema.optional(Schema.String),
+  allowedToolGroups: Schema.optional(Schema.Array(Schema.String)),
+});
+
+export const decodeRawProjectRecipeManifest = Schema.decodeEffect(
+  Schema.fromJsonString(RawProjectRecipeManifestSchema),
+);
+
+export function isRelativePath(value: string): boolean {
+  return value.startsWith("./") || value.startsWith("../");
+}
+
+/**
+ * Resolve `requestedPath` against `rootPath` and prove it stays inside it.
+ *
+ * Containment is checked on CANONICAL (realpath-resolved) forms, because lexical `resolve` +
+ * `relative` only proves the string sits under the root: a recipe directory that IS a symlink, or
+ * a symlink nested under a valid root, would otherwise pass and then be read/executed from
+ * outside. The returned path is the LEXICALLY resolved one — callers surface it to users and
+ * compare it with discovery output, so it must not be silently rewritten to its realpath.
+ */
+export function resolveWithinRoot(
+  pathService: Path.Path,
+  rootPath: string,
+  requestedPath: string,
+): string {
+  const resolvedPath = pathService.resolve(rootPath, requestedPath);
+  if (!isWithinCanonicalRoot(rootPath, resolvedPath)) {
+    throw new Error(`Path '${requestedPath}' resolves outside '${rootPath}'.`);
+  }
+  return resolvedPath;
+}
+
+export function normalizeRecipeManifest(raw: RawProjectRecipeManifest): ProjectRecipeManifest {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("Recipe manifest must be an object.");
+  }
+  if (typeof raw.id !== "string" || raw.id.trim().length === 0) {
+    throw new Error("Recipe manifest must include a non-empty id.");
+  }
+  if (typeof raw.version !== "string" || raw.version.trim().length === 0) {
+    throw new Error("Recipe manifest must include a non-empty version.");
+  }
+  if (raw.scope !== undefined && raw.scope !== "project") {
+    throw new Error("Only project-scoped recipes are supported.");
+  }
+  if (typeof raw.displayName !== "string" || raw.displayName.trim().length === 0) {
+    throw new Error("Recipe manifest must include a non-empty displayName.");
+  }
+  if (typeof raw.shortDescription !== "string" || raw.shortDescription.trim().length === 0) {
+    throw new Error("Recipe manifest must include a non-empty shortDescription.");
+  }
+  if (!Array.isArray(raw.surfaces) || raw.surfaces.some((surface) => typeof surface !== "string")) {
+    throw new Error("Recipe manifest must include surfaces.");
+  }
+  if (typeof raw.prompt !== "string" || raw.prompt.trim().length === 0) {
+    throw new Error("Recipe manifest must include a prompt file path.");
+  }
+
+  const kickoff =
+    raw.kickoff !== undefined
+      ? (() => {
+          try {
+            return Schema.decodeUnknownSync(ProjectRecipeKickoffProgram)(raw.kickoff);
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            throw new Error(`Recipe manifest kickoff is invalid: ${detail}`, { cause: error });
+          }
+        })()
+      : undefined;
+
+  return {
+    ...raw,
+    scope: "project",
+    ...(kickoff !== undefined ? { kickoff } : {}),
+  } as ProjectRecipeManifest;
+}

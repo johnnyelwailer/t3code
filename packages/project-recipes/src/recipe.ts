@@ -68,7 +68,7 @@ export const Recipe = Schema.Struct({
   icon: Schema.optional(Schema.String),
   // Composer `/` alias (stored without the leading slash). Optional; when
   // omitted the recipe is reachable as `/<id>` if the id is a valid alias.
-  // See docs/t3work-mvp/16-action-recipes.md#slashalias-semantics.
+  // See docs/t3team-mvp/16-action-recipes.md#slashalias-semantics.
   slashAlias: Schema.optional(Schema.String),
   appliesTo: RecipeApplicability,
   requiredContext: Schema.Array(RecipeContextRequirement),

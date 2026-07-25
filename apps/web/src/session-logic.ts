@@ -651,7 +651,7 @@ export function deriveWorkLogEntries(
 }
 
 function isWorkflowOwnedHandoffActivity(activity: OrchestrationThreadActivity): boolean {
-  if (activity.kind !== "t3work.handoff.started" && activity.kind !== "t3work.handoff.created") {
+  if (activity.kind !== "t3team.handoff.started" && activity.kind !== "t3team.handoff.created") {
     return false;
   }
   const payload =

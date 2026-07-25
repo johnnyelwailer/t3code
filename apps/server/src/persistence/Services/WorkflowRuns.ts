@@ -43,7 +43,7 @@ export const WorkflowRunPendingKind = Schema.Literals(["thread.turn", "user.inpu
 export type WorkflowRunPendingKind = typeof WorkflowRunPendingKind.Type;
 
 /** How the run was launched: from a discovered recipe, or agent-authored via
- * `t3work.orchestration.run` (ephemeral — no recipe on disk, source under `.t3work-runs/`). */
+ * `t3team.orchestration.run` (ephemeral — no recipe on disk, source under `.t3team-runs/`). */
 export const WorkflowRunOrigin = Schema.Literals(["recipe", "ephemeral"]);
 export type WorkflowRunOrigin = typeof WorkflowRunOrigin.Type;
 
@@ -93,7 +93,7 @@ export type GetWorkflowRunInput = typeof GetWorkflowRunInput.Type;
 export const ListWorkflowRunsByStatusInput = Schema.Struct({ status: WorkflowRunStatus });
 export type ListWorkflowRunsByStatusInput = typeof ListWorkflowRunsByStatusInput.Type;
 
-/** The N most recently updated runs, any status — backs `t3work.orchestration.status`'s list mode. */
+/** The N most recently updated runs, any status — backs `t3team.orchestration.status`'s list mode. */
 export const ListRecentWorkflowRunsInput = Schema.Struct({ limit: Schema.Number });
 export type ListRecentWorkflowRunsInput = typeof ListRecentWorkflowRunsInput.Type;
 

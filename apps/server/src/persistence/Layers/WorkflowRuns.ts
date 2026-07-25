@@ -168,7 +168,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
-  // Observability listing (t3work.orchestration.status list mode) — most recently touched runs,
+  // Observability listing (t3team.orchestration.status list mode) — most recently touched runs,
   // any status, newest first. Not used for boot rehydration (that scans by status).
   const listRecentWorkflowRunRows = SqlSchema.findAll({
     Request: ListRecentWorkflowRunsInput,

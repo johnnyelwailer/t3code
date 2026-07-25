@@ -10,8 +10,8 @@ import { memo, useLayoutEffect, useMemo, useRef } from "react";
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
 import { formatProviderSkillInstallSource } from "~/providerSkillPresentation";
 import { cn } from "~/lib/utils";
-import { t3workComposerMenuOptionDomId } from "~/t3work/composer/t3work-composerMenuKeyboard";
-import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipeTypes";
+import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import {
   Command,
   CommandGroup,
@@ -55,9 +55,9 @@ export type ComposerCommandItem =
       description: string;
     }
   /**
-   * t3work-owned kind. Unlike the kinds above it selects host state (stages the
+   * t3team-owned kind. Unlike the kinds above it selects host state (stages the
    * recipe as the composer's pre-submit chip) instead of mutating editor text —
-   * see docs/t3work-mvp/16-action-recipes.md#composer-slash-command-launchers.
+   * see docs/t3team-mvp/16-action-recipes.md#composer-slash-command-launchers.
    * It lives in this union so every `/` menu renders through one component
    * instead of a parallel panel duplicating the row chrome.
    */
@@ -65,7 +65,7 @@ export type ComposerCommandItem =
       id: string;
       type: "recipe-slash-command";
       alias: string;
-      recipe: T3workSidecarRecipeQuickStart;
+      recipe: T3TeamSidecarRecipeQuickStart;
       label: string;
       description: string;
     };
@@ -119,7 +119,7 @@ function groupCommandItems(
     groups.push({ id: "provider", label: "Provider", items: providerItems });
   }
   // Recipes come last so a project recipe can never appear to shadow a host
-  // command (docs/t3work-mvp/16-action-recipes.md#menu-grouping).
+  // command (docs/t3team-mvp/16-action-recipes.md#menu-grouping).
   if (recipeItems.length > 0) {
     groups.push({ id: "recipes", label: "Recipes", items: recipeItems });
   }
@@ -153,11 +153,11 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
   const listboxId = props.listboxId;
   useLayoutEffect(() => {
     if (!props.activeItemId || !listRef.current) return;
-    // With a listbox id the option ids are stable (t3workComposerMenuOptionDomId),
+    // With a listbox id the option ids are stable (t3teamComposerMenuOptionDomId),
     // so the active row is found by id and no selector escaping is needed.
     const el = listboxId
       ? listRef.current.ownerDocument.getElementById(
-          t3workComposerMenuOptionDomId(listboxId, props.activeItemId),
+          t3teamComposerMenuOptionDomId(listboxId, props.activeItemId),
         )
       : listRef.current.querySelector<HTMLElement>(
           `[data-composer-item-id="${CSS.escape(props.activeItemId)}"]`,
@@ -200,7 +200,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                       resolvedTheme={props.resolvedTheme}
                       isActive={props.activeItemId === item.id}
                       {...(props.listboxId
-                        ? { optionDomId: t3workComposerMenuOptionDomId(props.listboxId, item.id) }
+                        ? { optionDomId: t3teamComposerMenuOptionDomId(props.listboxId, item.id) }
                         : {})}
                       onHighlight={props.onHighlightedItemChange}
                       onSelect={props.onSelect}

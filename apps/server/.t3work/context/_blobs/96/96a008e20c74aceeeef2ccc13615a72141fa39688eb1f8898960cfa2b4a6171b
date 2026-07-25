@@ -1,0 +1,21 @@
+{
+  "project": {
+    "id": "d60dcfac-b8d6-45f9-9903-5d732591b5aa",
+    "title": "server",
+    "source": {
+      "provider": "local",
+      "externalProjectId": "d60dcfac-b8d6-45f9-9903-5d732591b5aa",
+      "externalProjectKey": "server",
+      "raw": {
+        "environmentId": "53aff2df-6373-4f38-9b44-c3f877063cef"
+      }
+    },
+    "workspace": {
+      "rootPath": "/Users/pj/Dev/github/nexi-distribution/vendor/t3code/apps/server",
+      "createdAt": "2026-07-18T22:43:04.015Z"
+    },
+    "createdAt": "2026-07-18T22:43:04.015Z",
+    "updatedAt": "2026-07-18T22:43:04.015Z"
+  },
+  "linkedRepositoryUrls": []
+}

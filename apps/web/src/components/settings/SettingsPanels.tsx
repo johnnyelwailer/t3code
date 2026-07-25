@@ -75,7 +75,7 @@ import {
 } from "../ProviderUpdateLaunchNotification.logic";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
-import { T3workWorkModeSetting } from "./t3work-WorkModeSetting";
+import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
 import {
   buildProviderInstanceUpdatePatch,
   formatDiagnosticsDescription,
@@ -561,8 +561,8 @@ export function GeneralSettingsPanel() {
           }
         />
 
-        {/* T3work settings insertion seam: keep this mount stable to minimize merge conflicts. */}
-        <T3workWorkModeSetting />
+        {/* T3Team settings insertion seam: keep this mount stable to minimize merge conflicts. */}
+        <T3TeamProjectSetupSetting />
 
         <SettingsRow
           title="Time format"

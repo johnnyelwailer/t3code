@@ -3,4 +3,4 @@ export * from "./resource.ts";
 export * from "./context.ts";
 export * from "./queryable.ts";
 export * from "./queryableLazy.ts";
-export * from "./t3workActionRecipeContext.ts";
+export * from "./t3teamActionRecipeContext.ts";

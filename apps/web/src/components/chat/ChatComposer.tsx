@@ -81,12 +81,12 @@ import {
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
-import { applyT3workComposerMenuReplacement } from "~/t3work/composer/t3work-composerMenuApply";
-import type { T3workComposerMenuAppliedText } from "~/t3work/composer/t3work-composerMenuApply";
-import { t3workComposerMenuOptionDomId } from "~/t3work/composer/t3work-composerMenuKeyboard";
-import { T3WORK_COMPOSER_BUILT_IN_SLASH_COMMANDS } from "~/t3work/composer/t3work-composerMenuItems";
-import { useT3workComposerActiveDescendant } from "~/t3work/composer/t3work-useComposerActiveDescendant";
-import { useT3workComposerCommandMenu } from "~/t3work/composer/t3work-useComposerCommandMenu";
+import { applyT3TeamComposerMenuReplacement } from "~/t3team/composer/t3team-composerMenuApply";
+import type { T3TeamComposerMenuAppliedText } from "~/t3team/composer/t3team-composerMenuApply";
+import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
+import { T3TEAM_COMPOSER_BUILT_IN_SLASH_COMMANDS } from "~/t3team/composer/t3team-composerMenuItems";
+import { useT3TeamComposerActiveDescendant } from "~/t3team/composer/t3team-useComposerActiveDescendant";
+import { useT3TeamComposerCommandMenu } from "~/t3team/composer/t3team-useComposerCommandMenu";
 import { cn, randomUUID } from "~/lib/utils";
 import { Separator } from "../ui/separator";
 import { Button } from "../ui/button";
@@ -953,7 +953,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
    * pending-answer channel, exactly as typing does.
    */
   const commitComposerText = useCallback(
-    (next: T3workComposerMenuAppliedText) => {
+    (next: T3TeamComposerMenuAppliedText) => {
       promptRef.current = next.text;
       const activePendingQuestion = activePendingProgress?.activeQuestion;
       if (activePendingQuestion && activePendingUserInput) {
@@ -988,7 +988,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // ------------------------------------------------------------------
   const composerMenuSources = useMemo(
     () => ({
-      builtInSlashCommands: T3WORK_COMPOSER_BUILT_IN_SLASH_COMMANDS,
+      builtInSlashCommands: T3TEAM_COMPOSER_BUILT_IN_SLASH_COMMANDS,
       provider: selectedProvider,
       providerSlashCommands: selectedProviderStatus?.slashCommands ?? [],
       skills: selectedProviderStatus?.skills ?? [],
@@ -999,7 +999,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () => ({ environmentId, cwd: gitCwd }),
     [environmentId, gitCwd],
   );
-  const composerMenu = useT3workComposerCommandMenu({
+  const composerMenu = useT3TeamComposerCommandMenu({
     sources: composerMenuSources,
     pathSearch: composerPathSearchScope,
     readInitialTrigger: () => detectComposerTrigger(prompt, prompt.length),
@@ -1027,12 +1027,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const composerMenuListboxId = `chat-composer-menu${useId()}`;
   const composerMenuIsRendered = composerMenuOpen && activePendingApproval === null;
-  useT3workComposerActiveDescendant({
+  useT3TeamComposerActiveDescendant({
     containerRef: composerMenuSurfaceRef,
     listboxId: composerMenuListboxId,
     menuOpen: composerMenuIsRendered,
     activeOptionDomId: composerMenu.activeItemId
-      ? t3workComposerMenuOptionDomId(composerMenuListboxId, composerMenu.activeItemId)
+      ? t3teamComposerMenuOptionDomId(composerMenuListboxId, composerMenu.activeItemId)
       : null,
   });
 
@@ -1454,7 +1454,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       const currentText = promptRef.current;
       const safeStart = Math.max(0, Math.min(currentText.length, rangeStart));
       const safeEnd = Math.max(safeStart, Math.min(currentText.length, rangeEnd));
-      const applied = applyT3workComposerMenuReplacement(currentText, {
+      const applied = applyT3TeamComposerMenuReplacement(currentText, {
         rangeStart,
         rangeEnd,
         replacement,

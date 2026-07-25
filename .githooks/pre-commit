@@ -4,8 +4,8 @@ set -eu
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-echo "pre-commit: running t3work additive guard"
-node t3work-additive-guard.mjs
+echo "pre-commit: running t3team additive guard"
+node t3team-additive-guard.mjs
 
 echo "pre-commit: verifying current branch contains upstream/main"
-node scripts/t3work-sync-upstream-fork.mjs verify-current
+node scripts/t3team-sync-upstream-fork.mjs verify-current

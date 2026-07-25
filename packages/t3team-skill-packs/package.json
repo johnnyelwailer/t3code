@@ -1,0 +1,23 @@
+{
+  "name": "@t3tools/t3team-skill-packs",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run --passWithNoTests"
+  },
+  "dependencies": {
+    "@t3tools/project-recipes": "workspace:*",
+    "@t3team/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}
