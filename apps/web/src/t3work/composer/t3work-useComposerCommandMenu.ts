@@ -37,6 +37,12 @@ export type T3workComposerCommandMenuInput = {
    * group). Called with the live trigger so the query can rank them.
    */
   readonly buildExtraItems?: (trigger: ComposerTrigger) => ReadonlyArray<T3workComposerMenuItem>;
+  /**
+   * Trigger to start from, read once on mount. Surfaces that restore a draft
+   * (the chat composer) open the menu straight away when the restored text ends
+   * in a live `/`, `@` or `$` token.
+   */
+  readonly readInitialTrigger?: () => ComposerTrigger | null;
 };
 
 /**
@@ -47,7 +53,10 @@ export type T3workComposerCommandMenuInput = {
  * chat composer implements inline.
  */
 export function useT3workComposerCommandMenu(input: T3workComposerCommandMenuInput) {
-  const [trigger, setTrigger] = useState<ComposerTrigger | null>(null);
+  const readInitialTrigger = input.readInitialTrigger;
+  const [trigger, setTrigger] = useState<ComposerTrigger | null>(
+    () => readInitialTrigger?.() ?? null,
+  );
   const selectLockRef = useRef(false);
 
   const isPathTrigger = trigger?.kind === "path";
@@ -72,9 +81,7 @@ export function useT3workComposerCommandMenu(input: T3workComposerCommandMenuInp
 
   const handleEditorChange = useCallback(
     (nextValue: string, expandedCursor: number, cursorAdjacentToMention: boolean) => {
-      setTrigger(
-        cursorAdjacentToMention ? null : detectComposerTrigger(nextValue, expandedCursor),
-      );
+      setTrigger(cursorAdjacentToMention ? null : detectComposerTrigger(nextValue, expandedCursor));
     },
     [],
   );
@@ -106,10 +113,25 @@ export function useT3workComposerCommandMenu(input: T3workComposerCommandMenuInp
     [highlight, input],
   );
 
+  const setHighlightedItemId = highlight.setHighlightedItemId;
+
   const resetTrigger = useCallback(() => {
     setTrigger(null);
-    highlight.setHighlightedItemId(null);
-  }, [highlight]);
+    setHighlightedItemId(null);
+  }, [setHighlightedItemId]);
+
+  /**
+   * Re-detects the trigger after the host wrote the editor text itself (draft
+   * restore, inline placeholder insert/remove, pending-answer sync). The menu
+   * must follow a programmatic write exactly as it follows typing.
+   */
+  const syncTrigger = useCallback((text: string, expandedCursor: number) => {
+    setTrigger(detectComposerTrigger(text, expandedCursor));
+  }, []);
+
+  const clearHighlight = useCallback(() => {
+    setHighlightedItemId(null);
+  }, [setHighlightedItemId]);
 
   const handleCommandKeyDown = useT3workComposerMenuKeyboard({
     trigger,
@@ -131,5 +153,7 @@ export function useT3workComposerCommandMenu(input: T3workComposerCommandMenuInp
     handleCommandKeyDown,
     selectItem,
     resetTrigger,
+    syncTrigger,
+    clearHighlight,
   };
 }
