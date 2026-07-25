@@ -12,21 +12,21 @@ import {
 import type { T3workSidecarRecipeQuickStart } from "~/t3work/t3work-sidecarRecipeTypes";
 
 /**
- * The `recipe-slash-command` menu item kind. Unlike the four upstream kinds it
- * selects host state (`setSelectedRecipe`) instead of mutating editor text —
- * see docs/t3work-mvp/16-action-recipes.md#composer-slash-command-launchers.
+ * The `recipe-slash-command` menu item kind. It is a member of
+ * `ComposerCommandItem`, so `ComposerCommandMenu` renders it alongside the host
+ * kinds — see docs/t3work-mvp/16-action-recipes.md#composer-slash-command-launchers.
  */
-export type T3workRecipeSlashCommandItem = {
-  readonly id: string;
-  readonly type: "recipe-slash-command";
-  readonly alias: string;
-  readonly recipe: T3workSidecarRecipeQuickStart;
-  readonly label: string;
-  readonly description: string;
-};
+export type T3workRecipeSlashCommandItem = Extract<
+  ComposerCommandItem,
+  { type: "recipe-slash-command" }
+>;
 
-/** Every menu item kind a t3work composer surface can render. */
-export type T3workComposerMenuItem = ComposerCommandItem | T3workRecipeSlashCommandItem;
+/**
+ * Every menu item kind a t3work composer surface can render. Kept as an alias
+ * so surfaces keep reading a t3work-owned name, but it is now exactly the
+ * upstream union — there is one menu item type, not two.
+ */
+export type T3workComposerMenuItem = ComposerCommandItem;
 
 function toItem(entry: T3workRecipeSlashAliasEntry): T3workRecipeSlashCommandItem {
   return {
