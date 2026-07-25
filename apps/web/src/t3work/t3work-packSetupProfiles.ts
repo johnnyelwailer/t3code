@@ -14,3 +14,19 @@ export function useT3workPackSetupProfiles(): readonly EnvironmentSetupProfile[]
   const profiles = welcome ?? config;
   return profiles && profiles.length > 0 ? profiles : undefined;
 }
+
+/**
+ * Id of the pack profile flagged `default: true`, used to preselect a card when
+ * nothing is stored yet. When several pack profiles claim the flag the FIRST
+ * REGISTERED one wins (descriptor order) — deterministic, never throws.
+ */
+export function resolveT3workPackDefaultSetupProfileId(
+  profiles: readonly EnvironmentSetupProfile[] | undefined,
+): string | undefined {
+  return profiles?.find((profile) => profile.default === true)?.id;
+}
+
+/** Live pack default profile id, or undefined when no pack declares one. */
+export function useT3workPackDefaultSetupProfileId(): string | undefined {
+  return resolveT3workPackDefaultSetupProfileId(useT3workPackSetupProfiles());
+}

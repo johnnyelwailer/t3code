@@ -3,7 +3,10 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { listBundledT3WorkRecipes } from "./recipes.js";
 import {
+  buildT3WorkProjectProfileManifest,
   cloneBundledT3WorkProfile,
+  DEFAULT_T3WORK_PROFILE_ID,
+  findDefaultPackProfile,
   getT3WorkProfile,
   listT3WorkProfiles,
   resolveEnabledSkillPackIds,
@@ -84,5 +87,76 @@ describe("custom profile recipe ranking", () => {
     expect(customEngineeringIndex).toBeGreaterThanOrEqual(0);
     expect(customEngineeringIndex).toBeLessThan(baselineEngineeringIndex);
     expect(customProfile.id).toBe("custom-eng-like");
+  });
+});
+
+describe("pack default profile resolution", () => {
+  const packProfile = (id: string, isDefault: boolean) => ({
+    id,
+    title: id,
+    description: `${id} description`,
+    audience: "engineering" as const,
+    communicationStyle: {
+      technicalDepth: "high" as const,
+      brevity: "balanced" as const,
+      guidanceStyle: "expert" as const,
+    },
+    preferredArtifactKinds: ["deployment-plan"],
+    defaultRecipeWeights: {},
+    recommendedSkillPackIds: ["engineering"],
+    hideImplementationComplexity: false,
+    ...(isDefault ? { default: true } : {}),
+  });
+
+  it("prefers a pack profile flagged default when nothing is stored", () => {
+    const resolution = resolveT3WorkProfile({
+      packProfiles: {
+        "cloud-engineer": packProfile("cloud-engineer", false),
+        "requirements-product": packProfile("requirements-product", true),
+      },
+    });
+    expect(resolution.profile.id).toBe("requirements-product");
+    expect(resolution.source).toBe("pack");
+  });
+
+  it("keeps an explicitly stored profile id ahead of the pack default", () => {
+    const resolution = resolveT3WorkProfile({
+      profileId: "cloud-engineer",
+      packProfiles: {
+        "cloud-engineer": packProfile("cloud-engineer", false),
+        "requirements-product": packProfile("requirements-product", true),
+      },
+    });
+    expect(resolution.profile.id).toBe("cloud-engineer");
+    expect(resolution.source).toBe("pack");
+    expect(resolveT3WorkProfile({ profileId: "qa-assistant" }).profile.id).toBe("qa-assistant");
+  });
+
+  it("keeps the bundled default when no pack profile claims default", () => {
+    expect(resolveT3WorkProfile({}).profile.id).toBe(DEFAULT_T3WORK_PROFILE_ID);
+    expect(
+      resolveT3WorkProfile({
+        packProfiles: { "cloud-engineer": packProfile("cloud-engineer", false) },
+      }).profile.id,
+    ).toBe(DEFAULT_T3WORK_PROFILE_ID);
+  });
+
+  it("picks the first registered pack default deterministically", () => {
+    const resolution = resolveT3WorkProfile({
+      packProfiles: {
+        "first-default": packProfile("first-default", true),
+        "second-default": packProfile("second-default", true),
+      },
+    });
+    expect(resolution.profile.id).toBe("first-default");
+    expect(findDefaultPackProfile(undefined)).toBeUndefined();
+  });
+
+  it("never persists the default flag into a project profile manifest", () => {
+    const manifest = buildT3WorkProjectProfileManifest({
+      profile: packProfile("requirements-product", true),
+      enabledSkillPackIds: ["engineering"],
+    });
+    expect("default" in manifest).toBe(false);
   });
 });

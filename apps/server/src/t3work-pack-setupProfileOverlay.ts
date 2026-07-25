@@ -42,6 +42,9 @@ export function getPackProfilesForResolver(): Readonly<Record<string, T3WorkProf
       defaultRecipeWeights: profile.recipeWeights,
       recommendedSkillPackIds: profile.recommendedSkillPackIds,
       hideImplementationComplexity: profile.hideImplementationComplexity,
+      // Must survive the mapping: the resolver preselects the pack default when
+      // no profileId is stored. Dropping it here made the bundled default win.
+      ...(profile.default ? { default: true } : {}),
     };
   }
   return map;

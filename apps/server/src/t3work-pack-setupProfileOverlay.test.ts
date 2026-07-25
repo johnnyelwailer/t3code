@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { resolveT3WorkProjectSetupProfile } from "./t3work-projectSetupShared.ts";
+import {
+  DEFAULT_T3WORK_PROJECT_SETUP_PROFILE_ID,
+  resolveT3WorkProjectSetupProfile,
+  resolveT3WorkProjectSetupProfileId,
+} from "./t3work-projectSetupShared.ts";
 import {
   getPackProfilesForResolver,
   getPackSetupProfileDescriptors,
@@ -69,5 +73,31 @@ describe("pack setup profile overlay", () => {
     expect(getPackSetupProfileDescriptors()).toBeUndefined();
     const resolution = resolveT3WorkProjectSetupProfile({ profileId: "product-partner" });
     expect(resolution.source).toBe("bundled");
+  });
+
+  it("keeps the default flag when mapping pack definitions for the resolver", () => {
+    setPackSetupProfileOverlay([profile]);
+    expect(getPackProfilesForResolver()?.["cloud-engineer"]?.default).toBe(true);
+  });
+
+  it("preselects the pack default when nothing is stored", () => {
+    setPackSetupProfileOverlay([{ ...profile, id: "plain-role", default: false }, profile]);
+    expect(resolveT3WorkProjectSetupProfileId(undefined)).toBe("cloud-engineer");
+    const resolution = resolveT3WorkProjectSetupProfile({});
+    expect(resolution.profile.id).toBe("cloud-engineer");
+    expect(resolution.source).toBe("pack");
+  });
+
+  it("keeps a stored profile id ahead of the pack default", () => {
+    setPackSetupProfileOverlay([{ ...profile, id: "plain-role", default: false }, profile]);
+    expect(resolveT3WorkProjectSetupProfileId("plain-role")).toBe("plain-role");
+    expect(resolveT3WorkProjectSetupProfileId("qa-assistant")).toBe("qa-assistant");
+  });
+
+  it("keeps the bundled default when the pack declares no default", () => {
+    setPackSetupProfileOverlay([{ ...profile, default: false }]);
+    expect(resolveT3WorkProjectSetupProfileId(undefined)).toBe(
+      DEFAULT_T3WORK_PROJECT_SETUP_PROFILE_ID,
+    );
   });
 });

@@ -41,6 +41,12 @@ export type T3WorkProfile = {
   readonly sidecarSections?: SidecarComposition | undefined;
   readonly recommendedSkillPackIds: ReadonlyArray<string>;
   readonly hideImplementationComplexity: boolean;
+  /**
+   * Marks this profile as the preselected default when nothing is stored yet.
+   * Only pack-contributed profiles set it; a pack default outranks the bundled
+   * {@link DEFAULT_T3WORK_PROFILE_ID}.
+   */
+  readonly default?: boolean;
 };
 
 export type T3WorkProfileResolutionSource =
@@ -274,11 +280,29 @@ function buildResolution(
   };
 }
 
+/**
+ * The pack-contributed profile flagged `default: true`, if any. When several
+ * pack profiles claim the flag the FIRST REGISTERED one wins (object insertion
+ * order) — deterministic on purpose, so a mis-authored pack never throws.
+ */
+export function findDefaultPackProfile(
+  packProfiles: Readonly<Record<string, T3WorkProfile>> | undefined,
+): T3WorkProfile | undefined {
+  if (!packProfiles) return undefined;
+  for (const profile of Object.values(packProfiles)) {
+    if (profile.default === true) return profile;
+  }
+  return undefined;
+}
+
 export function resolveT3WorkProfile(
   input: ResolveT3WorkProfileInput = {},
 ): T3WorkProfileResolution {
   const requestedProfileId = input.profileId?.trim();
   if (!requestedProfileId) {
+    // Nothing stored/requested: a pack default outranks the bundled default.
+    const packDefault = findDefaultPackProfile(input.packProfiles);
+    if (packDefault) return buildResolution(packDefault, "pack");
     return buildResolution(T3WORK_PROFILES[DEFAULT_T3WORK_PROFILE_ID], "fallback");
   }
   if (isBundledT3WorkProfileId(requestedProfileId)) {
@@ -426,7 +450,8 @@ export function buildT3WorkProjectProfileManifest(input: {
   readonly version?: number;
   readonly managedFileHashes?: Readonly<Record<string, string>>;
 }): T3WorkProjectProfileManifest {
-  const { id, sidecarSections, ...profileFields } = input.profile;
+  // `default` is a catalog-preselection hint, not project state — never persisted.
+  const { id, sidecarSections, default: _default, ...profileFields } = input.profile;
   return {
     version: input.version ?? 1,
     profileId: id,

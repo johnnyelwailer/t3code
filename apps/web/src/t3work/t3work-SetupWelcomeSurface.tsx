@@ -46,9 +46,10 @@ export function T3workSetupWelcomeSurface({
   const livePackProfiles = useT3workPackSetupProfiles();
   const packProfiles = profilesOverride ?? livePackProfiles;
   const setupProfileId = useT3workProjectSetupProfile();
-  const selectedProfile = listT3workProjectSetupCardOptions(packProfiles).find(
-    (option) => option.id === setupProfileId,
-  );
+  const cardOptions = listT3workProjectSetupCardOptions(packProfiles);
+  // Never label the chip with a profile that is not in the rendered catalog.
+  const selectedProfile =
+    cardOptions.find((option) => option.id === setupProfileId) ?? cardOptions[0];
 
   return (
     <div className="relative flex flex-1 items-center justify-center overflow-auto p-4 sm:p-6">

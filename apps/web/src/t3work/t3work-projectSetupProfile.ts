@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+import { useT3workPackDefaultSetupProfileId } from "~/t3work/t3work-packSetupProfiles";
 import {
   DEFAULT_T3WORK_PROJECT_SETUP_PROFILE_ID,
   resolveT3WorkProjectSetupProfileId,
@@ -10,13 +11,19 @@ export type T3workProjectSetupProfileId = T3WorkProjectSetupProfileId;
 export const T3WORK_PROJECT_SETUP_PROFILE_STORAGE_KEY = "t3work:project-setup-profile";
 export const T3WORK_PROJECT_SETUP_PROFILE_CHANGED_EVENT = "t3work:project-setup-profile-changed";
 
-export function readT3workProjectSetupProfile(): T3workProjectSetupProfileId {
+/**
+ * Stored profile id wins over everything. With nothing stored, a pack-declared
+ * default (`packDefaultProfileId`) outranks the bundled default.
+ */
+export function readT3workProjectSetupProfile(
+  packDefaultProfileId?: string,
+): T3workProjectSetupProfileId {
   if (typeof window === "undefined") {
-    return DEFAULT_T3WORK_PROJECT_SETUP_PROFILE_ID;
+    return packDefaultProfileId ?? DEFAULT_T3WORK_PROJECT_SETUP_PROFILE_ID;
   }
-  return resolveT3WorkProjectSetupProfileId(
-    window.localStorage.getItem(T3WORK_PROJECT_SETUP_PROFILE_STORAGE_KEY) ?? undefined,
-  );
+  const stored = window.localStorage.getItem(T3WORK_PROJECT_SETUP_PROFILE_STORAGE_KEY);
+  if (!stored?.trim() && packDefaultProfileId) return packDefaultProfileId;
+  return resolveT3WorkProjectSetupProfileId(stored ?? undefined);
 }
 
 export function writeT3workProjectSetupProfile(mode: T3workProjectSetupProfileId): void {
@@ -58,9 +65,14 @@ export function subscribeT3workProjectSetupProfile(onStoreChange: () => void): (
 }
 
 export function useT3workProjectSetupProfile(): T3workProjectSetupProfileId {
-  return useSyncExternalStore(
-    subscribeT3workProjectSetupProfile,
-    readT3workProjectSetupProfile,
-    () => DEFAULT_T3WORK_PROJECT_SETUP_PROFILE_ID,
+  const packDefaultProfileId = useT3workPackDefaultSetupProfileId();
+  const getSnapshot = useCallback(
+    () => readT3workProjectSetupProfile(packDefaultProfileId),
+    [packDefaultProfileId],
   );
+  const getServerSnapshot = useCallback(
+    () => packDefaultProfileId ?? DEFAULT_T3WORK_PROJECT_SETUP_PROFILE_ID,
+    [packDefaultProfileId],
+  );
+  return useSyncExternalStore(subscribeT3workProjectSetupProfile, getSnapshot, getServerSnapshot);
 }
