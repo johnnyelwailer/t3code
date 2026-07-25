@@ -40,6 +40,7 @@ export { models } from "./t3work-sdk.models.ts";
 export {
   buildScriptTree,
   buildToolTree,
+  DEFAULT_RECIPE_ACTION_NAME,
   defineModel,
   defineRecipe,
   defineScript,
@@ -132,6 +133,7 @@ export type {
 export type {
   AnyRecipeRef,
   AnyScriptRef,
+  AnyWorkflowRef,
   EngineCapability,
   FetchLike,
   IntegrationClient,
@@ -140,10 +142,12 @@ export type {
   ModelSelection,
   RecipeApplicabilitySpec,
   RecipeBrevity,
+  RecipeDerived,
   RecipeDetailDensity,
   RecipeGuidanceStyle,
   RecipeRef,
   RecipeTechnicalDepth,
+  RecipeVisiblePredicate,
   RegisteredWorkflowScriptsTree,
   RegisteredWorkflowToolsTree,
   ScriptHandlerCtx,

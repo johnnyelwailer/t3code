@@ -183,6 +183,16 @@ export type ProjectRecipeSource = "project-local" | "pack";
  */
 export type ProjectRecipeLaunchSource = "bundled" | ProjectRecipeSource;
 
+/**
+ * One named action of a multi-action recipe (Epic 16 §Plugin Modules). `defaultAction` is NOT
+ * listed here — it stays in `workflowPath`, so a launcher that knows nothing about actions keeps
+ * behaving exactly as before.
+ */
+export type ProjectRecipeDiscoveredAction = {
+  readonly name: string;
+  readonly workflowPath: string;
+};
+
 export type ProjectRecipeDiscovered = {
   readonly id: string;
   readonly version: string;
@@ -207,6 +217,9 @@ export type ProjectRecipeDiscovered = {
   readonly actionViewPath?: string;
   readonly actionViewSource?: string;
   readonly workflowPath?: string;
+  /** Named actions besides `defaultAction`; a launch may name one instead of launching the
+   * default. Absent for single-action recipes and for `recipe.json` recipes. */
+  readonly actions?: ReadonlyArray<ProjectRecipeDiscoveredAction>;
   readonly allowedToolGroups: ReadonlyArray<string>;
   /** Names of the recipe-private scripts a `recipe.ts` module registers (Epic 25 §Scripts).
    * The live ScriptRefs are re-materialized server-side at launch by re-importing the module;

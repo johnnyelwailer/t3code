@@ -6,12 +6,15 @@ import type { WorkflowRunIntent } from "./tools/t3work-sdk.workflow.ts";
 
 export type {
   AnyRecipeRef,
+  AnyWorkflowRef,
   RecipeApplicabilitySpec,
   RecipeBrevity,
+  RecipeDerived,
   RecipeDetailDensity,
   RecipeGuidanceStyle,
   RecipeRef,
   RecipeTechnicalDepth,
+  RecipeVisiblePredicate,
 } from "./t3work-sdk.recipeTypes.ts";
 export type { PrimitiveCall, PrimitiveKind, WorkflowRuntime } from "./t3work-sdk.runtimeTypes.ts";
 

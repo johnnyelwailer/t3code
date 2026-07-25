@@ -40,6 +40,20 @@ export const EXECUTABLE_PACK_SCOPES: ReadonlySet<string> = new Set([
   "project",
 ]);
 
+/**
+ * Every workflow one listed recipe declares: its default `workflowPath` PLUS each named action's
+ * workflow (Epic 16 §Plugin Modules — one recipe, several actions). Actions extend the allow-list by
+ * NAMED ENTRY only; a `.workflow.ts` the recipe does not declare as an action stays unrunnable even
+ * though it sits in the same directory.
+ */
+const declaredWorkflowPaths = (recipe: {
+  readonly workflowPath?: string | undefined;
+  readonly actions?: ReadonlyArray<{ readonly workflowPath: string }> | undefined;
+}): ReadonlyArray<string> => [
+  ...(typeof recipe.workflowPath === "string" ? [recipe.workflowPath] : []),
+  ...(recipe.actions ?? []).map((action) => action.workflowPath),
+];
+
 /** Declared workflow paths of every discovered, unshadowed, locally-installed pack recipe. */
 const executablePackWorkflowPaths = (input: {
   readonly fileSystem: FileSystem.FileSystem;
@@ -59,11 +73,9 @@ const executablePackWorkflowPaths = (input: {
             listed.recipes
               .filter(
                 (recipe) =>
-                  recipe.source === "pack" &&
-                  EXECUTABLE_PACK_SCOPES.has(recipe.packScope ?? "") &&
-                  typeof recipe.workflowPath === "string",
+                  recipe.source === "pack" && EXECUTABLE_PACK_SCOPES.has(recipe.packScope ?? ""),
               )
-              .map((recipe) => canonicalizePath(recipe.workflowPath as string)),
+              .flatMap((recipe) => declaredWorkflowPaths(recipe).map(canonicalizePath)),
           ),
       ),
     );

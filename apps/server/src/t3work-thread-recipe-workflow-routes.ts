@@ -23,6 +23,7 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { toT3workError } from "./t3work-project-repository-utils.ts";
+import { resolveLaunchWorkflowPath } from "./t3work-projectRecipeActionLaunch.ts";
 import { t3workRandomUUID } from "./t3work-random.ts";
 import { resolveRecipeWorkflowScripts } from "./t3work-recipeWorkflowScripts.ts";
 import { launchPreparedWorkflow } from "./t3work-workflowEphemeralLaunch.ts";
@@ -60,12 +61,20 @@ export const t3workThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     if (!input.launch || typeof input.launch !== "object") {
       return yield* new T3workAtlassianError({ message: "launch is required." });
     }
-    const workflowPath = input.launch.workflowPath?.trim() ?? "";
-    if (workflowPath.length === 0) {
+    const defaultWorkflowPath = input.launch.workflowPath?.trim() ?? "";
+    const actionName = input.launch.actionName?.trim() ?? "";
+    if (defaultWorkflowPath.length === 0 && actionName.length === 0) {
       return yield* new T3workAtlassianError({
         message: "launch.workflowPath is required: this recipe has no .workflow.ts to run.",
       });
     }
+    // One recipe, several actions (Epic 16): a named action is resolved from the recipe's own
+    // module, so it can only select a workflow the recipe declares. No name ⇒ defaultAction.
+    const workflowPath = yield* resolveLaunchWorkflowPath({
+      recipePath: input.launch.recipePath,
+      workflowPath: defaultWorkflowPath,
+      actionName,
+    });
     if (threadIdInput.length === 0) {
       return yield* new T3workAtlassianError({
         message:

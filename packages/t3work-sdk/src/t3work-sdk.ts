@@ -12,7 +12,12 @@ import {
 import type * as T from "./t3work-sdk.types.ts";
 
 export type * from "./t3work-sdk.types.ts";
-export { defineRecipe, getRegisteredRecipe, listRegisteredRecipes } from "./t3work-sdk.recipe.ts";
+export {
+  DEFAULT_RECIPE_ACTION_NAME,
+  defineRecipe,
+  getRegisteredRecipe,
+  listRegisteredRecipes,
+} from "./t3work-sdk.recipe.ts";
 
 export function withWorkflowRuntime<T>(
   runtime: T.WorkflowRuntime,

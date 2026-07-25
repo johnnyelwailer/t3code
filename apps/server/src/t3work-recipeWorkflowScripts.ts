@@ -8,8 +8,9 @@
  * discovery uses ({@link importRecipeModuleRef}), so launch and discovery cannot diverge on how
  * a recipe module is interpreted.
  *
- * Scope guard: the requested `workflowPath` must be the recipe's `defaultAction` workflow —
- * scripts are recipe-owned, so a launch pointing at some other file must not inherit them.
+ * Scope guard: the requested `workflowPath` must be one of the recipe's DECLARED action workflows
+ * (`defaultAction` or a named entry in `actions`) — scripts are recipe-owned, so a launch pointing
+ * at some other file must not inherit them.
  * Recipes without a `recipe.ts` (legacy `recipe.json`) resolve to an empty record: the engine
  * keeps its `scripts: {}` default and the body's `scripts.*` tree stays empty.
  */
@@ -21,9 +22,10 @@ import * as Path from "effect/Path";
 import type { AnyScriptRef } from "@t3work/sdk";
 
 import {
-  importRecipeModuleRef,
+  resolveRecipeActions,
   resolveRecipeWorkflowPath,
-} from "./t3work-projectRecipeDiscoveryModule.ts";
+} from "./t3work-projectRecipeActions.ts";
+import { importRecipeModuleRef } from "./t3work-projectRecipeDiscoveryModule.ts";
 
 /** The recipe module registered scripts but they cannot back this launch. */
 export class T3workRecipeScriptResolutionError extends Data.TaggedError(
@@ -66,10 +68,11 @@ export const resolveRecipeWorkflowScripts = Effect.fn("resolveRecipeWorkflowScri
     const scripts = ref.scripts;
     if (scripts === undefined || Object.keys(scripts).length === 0) return NO_RECIPE_SCRIPTS;
 
-    // Ownership: scripts are scoped to the recipe that registers them. `resolveRecipeWorkflowPath`
-    // re-resolves the ref's relative `defaultAction` within `recipePath` (resolveWithinRoot-guarded,
-    // so an escaping `../` path throws here rather than leaking scripts to an outside file).
-    const ownedWorkflowPath = yield* Effect.try({
+    // Ownership: scripts are scoped to the recipe that registers them. The default action is
+    // resolved strictly (resolveWithinRoot-guarded, so an escaping `../` path fails here rather
+    // than leaking scripts to an outside file); every NAMED action is resolved the same way and
+    // joins the owned set, so launching any declared action of THIS recipe inherits its scripts.
+    yield* Effect.try({
       try: () => resolveRecipeWorkflowPath(pathService, recipePath, ref),
       catch: (error) =>
         new T3workRecipeScriptResolutionError({
@@ -78,9 +81,12 @@ export const resolveRecipeWorkflowScripts = Effect.fn("resolveRecipeWorkflowScri
           }`,
         }),
     });
-    if (ownedWorkflowPath !== input.workflowPath) {
+    const owned = resolveRecipeActions(pathService, recipePath, ref);
+    if (!owned.some((action) => action.workflowPath === input.workflowPath)) {
       return yield* new T3workRecipeScriptResolutionError({
-        message: `Recipe '${ref.id}' registers scripts for its defaultAction workflow ('${ownedWorkflowPath}'), but this launch targets '${input.workflowPath}'. Scripts are recipe-owned; launch the recipe's own workflow to use them.`,
+        message: `Recipe '${ref.id}' registers scripts for its declared actions (${owned
+          .map((action) => `${action.name} -> ${action.workflowPath}`)
+          .join(", ")}), but this launch targets '${input.workflowPath}'. Scripts are recipe-owned; launch one of the recipe's own actions to use them.`,
       });
     }
     return scripts;

@@ -15,9 +15,11 @@ import * as Path from "effect/Path";
 import type { RecipeListEntry, RecipeToolIssue } from "@t3work/sdk";
 
 import {
-  importRecipeModuleRef,
+  resolveRecipeNamedActions,
   resolveRecipeWorkflowPath,
-} from "./t3work-projectRecipeDiscoveryModule.ts";
+} from "./t3work-projectRecipeActions.ts";
+import { importRecipeModuleRef } from "./t3work-projectRecipeDiscoveryModule.ts";
+import { staticRecipeText } from "./t3work-projectRecipeMetadata.ts";
 import {
   decodeRawProjectRecipeManifest,
   normalizeRecipeManifest,
@@ -65,14 +67,18 @@ const listTypedRecipe = Effect.fn("listTypedRecipe")(function* (
       message: errorMessage(error),
     });
   }
+  // No render context on this surface, so ctx-derived metadata cannot be evaluated here; the
+  // recipe id stands in rather than feeding author code a fabricated context.
+  const actions = resolveRecipeNamedActions(pathService, input.recipePath, ref);
   input.out.recipes.push({
     id: ref.id,
-    title: ref.title,
-    shortDescription: ref.shortDescription,
+    title: staticRecipeText(ref.title, ref.id),
+    shortDescription: staticRecipeText(ref.shortDescription, ""),
     surfaces: [...ref.surfaces],
     authoring: "recipe-ts",
     recipePath: input.recipePath,
     ...(workflowPath === undefined ? {} : { workflowPath }),
+    ...(actions.length === 0 ? {} : { actions }),
     ...originFields(input.origin),
   });
 });

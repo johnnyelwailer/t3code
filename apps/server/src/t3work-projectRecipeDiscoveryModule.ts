@@ -34,7 +34,14 @@ import {
 } from "@t3tools/project-recipes";
 import type { AnyRecipeRef } from "@t3work/sdk";
 
-import { isRelativePath, resolveWithinRoot } from "./t3work-projectRecipeDiscoveryShared.ts";
+import {
+  resolveRecipeNamedActions,
+  resolveRecipeWorkflowPath,
+} from "./t3work-projectRecipeActions.ts";
+import {
+  renderRecipeMetadata,
+  type RenderedRecipeMetadata,
+} from "./t3work-projectRecipeMetadata.ts";
 import {
   originFields,
   PROJECT_LOCAL_ORIGIN,
@@ -51,18 +58,18 @@ export class T3workRecipeModuleShapeError extends Data.TaggedError("T3workRecipe
  * {@link matchRecipes} applicability/scoring engine — the same one bundled recipes use — decides
  * visibility and rank. Keeps recipe.ts and recipe.json recipes ranked on one ruleset.
  */
-function toRecipe(ref: AnyRecipeRef): Recipe {
+function toRecipe(ref: AnyRecipeRef, metadata: RenderedRecipeMetadata): Recipe {
   return {
     id: ref.id,
-    title: ref.title,
-    shortDescription: ref.shortDescription,
+    title: metadata.title,
+    shortDescription: metadata.shortDescription,
     surfaces: ref.surfaces as ReadonlyArray<RecipeSurface>,
     appliesTo: (ref.appliesTo ?? {}) as RecipeApplicability,
     requiredContext: [],
     outputPreference: "markdown",
-    ...(ref.icon !== undefined ? { icon: ref.icon } : {}),
+    ...(metadata.icon !== undefined ? { icon: metadata.icon } : {}),
     ...(ref.slashAlias !== undefined ? { slashAlias: ref.slashAlias } : {}),
-    ...(ref.rank !== undefined ? { rankHint: ref.rank } : {}),
+    ...(metadata.rank !== undefined ? { rankHint: metadata.rank } : {}),
   };
 }
 
@@ -86,22 +93,8 @@ function buildMatchInput(context: ProjectRecipeRenderContext): RecipeMatchInput 
   };
 }
 
-/**
- * Resolve the recipe's `defaultAction` workflow to an absolute path within the recipe directory.
- * Recompute from `recipePath` + the ref's original relative `path` (rather than trusting the ref's
- * stack-derived `absolutePath`) so resolution is stable regardless of how the module was loaded;
- * fall back to `absolutePath` for absolute / `file://` author forms.
- */
-export function resolveRecipeWorkflowPath(
-  pathService: Path.Path,
-  recipePath: string,
-  ref: AnyRecipeRef,
-): string {
-  const actionPath = ref.defaultAction.path;
-  return isRelativePath(actionPath)
-    ? resolveWithinRoot(pathService, recipePath, actionPath)
-    : ref.defaultAction.absolutePath;
-}
+/** Re-exported so existing callers keep one import site for "the recipe's default workflow". */
+export { resolveRecipeWorkflowPath };
 
 /**
  * Import a project-local `recipe.ts` module (cache-busted so edits re-import fresh) and return its
@@ -145,20 +138,29 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
       return Option.none<ProjectRecipeDiscovered>();
     }
 
-    const match = matchRecipes([toRecipe(ref)], buildMatchInput(input.context))[0];
+    // ctx-derived metadata + `visible` (Epic 16 §Plugin Modules). A deriver that throws hides only
+    // this recipe; `visible` is ANDed with the declarative gates below, so it can only narrow.
+    const rendered = renderRecipeMetadata(ref, input.context);
+    if (rendered.kind !== "rendered") {
+      return Option.none<ProjectRecipeDiscovered>();
+    }
+    const metadata = rendered.metadata;
+
+    const match = matchRecipes([toRecipe(ref, metadata)], buildMatchInput(input.context))[0];
     if (!match) {
       return Option.none<ProjectRecipeDiscovered>();
     }
 
     const workflowPath = resolveRecipeWorkflowPath(pathService, input.recipePath, ref);
+    const actions = resolveRecipeNamedActions(pathService, input.recipePath, ref);
 
     return Option.some({
       id: ref.id,
       version: ref.version,
       ...originFields(input.origin ?? PROJECT_LOCAL_ORIGIN),
-      displayName: ref.title,
-      shortDescription: ref.shortDescription,
-      ...(ref.icon ? { icon: ref.icon } : {}),
+      displayName: metadata.title,
+      shortDescription: metadata.shortDescription,
+      ...(metadata.icon ? { icon: metadata.icon } : {}),
       ...(ref.slashAlias ? { slashAlias: ref.slashAlias } : {}),
       surfaces: ref.surfaces as ReadonlyArray<RecipeSurface>,
       rank: match.score,
@@ -170,6 +172,7 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
       sourcePath: input.modulePath,
       recipePath: input.recipePath,
       workflowPath,
+      ...(actions.length === 0 ? {} : { actions }),
       allowedToolGroups: ref.allowedToolGroups ?? [],
       ...(ref.scripts === undefined ? {} : { scriptNames: Object.keys(ref.scripts) }),
     } satisfies ProjectRecipeDiscovered);

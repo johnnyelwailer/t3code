@@ -30,6 +30,14 @@ export const RecipeListEntry = Schema.Struct({
   recipePath: Schema.String,
   workflowPath: Schema.optional(Schema.String),
   /**
+   * Named actions besides the default one (Epic 16 §Plugin Modules: one recipe, several actions).
+   * A launch may name one of these instead of running `workflowPath`; the agent needs the names to
+   * pick. Absent when the recipe declares no extra actions.
+   */
+  actions: Schema.optional(
+    Schema.Array(Schema.Struct({ name: Schema.String, workflowPath: Schema.String })),
+  ),
+  /**
    * Where the recipe came from (Epic 16 §Recipe Sources And Precedence). `pack` recipes are the
    * shipped library — runnable by `recipePath` exactly like a project-local one; the label only
    * tells the agent whether editing it would mean editing the project or a distribution.

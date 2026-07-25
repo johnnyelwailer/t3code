@@ -117,6 +117,40 @@ export default defineRecipe({
 > target. Phase 1 is not complete until discovery moves from "parse JSON + eval strings" to
 > "`import()` a typed module" and the expression-engine path is removed.
 
+### One recipe, several actions
+
+A recipe id is not limited to one orchestration. `defaultAction` is the entry a plain launch uses;
+`actions` adds named siblings that share the recipe's id, surfaces, `appliesTo`, tool groups and
+private `scripts`:
+
+```ts
+export default defineRecipe({
+  id: "story-readiness",
+  version: "0.2.0",
+  // Either a plain string or a function of the render context (both forms are accepted).
+  title: (ctx) => `Story readiness for ${ctx.workitem?.displayId ?? "selected work"}`,
+  shortDescription: "Check a story against the definition of ready.",
+  icon: (ctx) => (ctx.workitem?.type === "Bug" ? "bug" : "clipboard-check"),
+  rank: (ctx) => (ctx.workitem?.priority === "High" ? 90 : 50),
+  // Evaluated ALONGSIDE `appliesTo` — a recipe must satisfy both, so `visible` may narrow only.
+  visible: (ctx) => ctx.workitem?.provider === "jira",
+  surfaces: ["workitem.detail.sidepanel"],
+  defaultAction: defineWorkflow<typeof Readiness>("./readiness.workflow.ts"),
+  actions: {
+    estimate: defineWorkflow<typeof Estimate>("./estimate.workflow.ts"),
+    split: defineWorkflow<typeof Split>("./split.workflow.ts"),
+  },
+});
+```
+
+A launcher runs one by naming it (`launch.actionName: "estimate"`); omitting the name — or passing
+`"default"`, which is reserved — runs `defaultAction` exactly as before. The name is resolved
+**server-side from the recipe module**, never from a caller-supplied path, and each action's resolved
+workflow joins the recipe's declared set that execution authorization is bound to
+(`t3work-workflowRunPackAuthorize.ts`). So actions add named entries to an allow-list; they never
+turn a recipe directory into an execute-anything root. Discovery carries the names
+(`ProjectRecipeDiscovered.actions`) and `t3work.recipe.list` reports them so an agent can pick one.
+
 ### Supported authoring subset
 
 Recipe modules run server-side on the host Node runtime (Node 24+ for standalone/server;
@@ -1402,6 +1436,8 @@ the editable source of truth for the early MVP.
 | Pack-provided recipe discovery (`contents.recipes`, `source: "pack"`, precedence merge)                                                                                                                                                | Built (local packs; `recipe:v1` capability gate — signing/policy locks for remote-managed packs still pending)                                          |
 | Visibility (predicate + script, timeout, isolation)                                                                                                                                                                                    | Built (via `recipe.json` + expression engine)                                                                                                         |
 | TS-module authoring (`recipe.ts`), retire expression engine                                                                                                                                                                            | Partial (engine deleted; the discovery-layer `{{ }}` template renderer is kept and its removal deferred)                                              |
+| ctx-derived metadata + `visible` predicate in `defineRecipe` (`title`/`shortDescription`/`icon`/`rank` as `(ctx) => …`)                                                                                                                | Built (typed replacement for the `{{ }}` renderer; declarative form unchanged, `visible` is ANDed with `appliesTo`, a throwing deriver hides only that recipe) |
+| Multi-action recipes: `defineRecipe({ actions: { <name>: defineWorkflow(...) } })` + `launch.actionName`                                                                                                                               | Built (resolved server-side from the recipe module; every action joins the declared set execution authorization checks — the UI launcher still launches `defaultAction`) |
 | Unified orchestration step union; kickoff absorbed                                                                                                                                                                                          | Retired as a live runtime; replaced by the Epic 25 engine (legacy naming remnants persist as compat naming, see Implementation Notes)                 |
 | Orchestration runtime: bootstrap agent, card, await-card-action, script                                                                                                                                                                     | Retired as a live runtime; replaced by the Epic 25 engine                                                                                             |
 | Orchestration runtime: mid-flow agent, tool, present-message, collect-input                                                                                                                                                                 | Deleted (replaced by Epic 25 primitives + the Thread model)                                                                                           |
