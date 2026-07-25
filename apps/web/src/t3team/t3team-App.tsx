@@ -7,7 +7,7 @@ import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarS
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ViewState } from "~/t3team/t3team-types";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
-import { T3workLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
+import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
 import {
@@ -159,7 +159,7 @@ export function App({
         </div>
         <SidebarRail />
       </Sidebar>
-      <T3workLeftSidebarDesktopToggle />
+      <T3TeamLeftSidebarDesktopToggle />
 
       <AppContentPane
         activeDashboardMode={activeDashboardMode}
