@@ -7,8 +7,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { getPackAppearanceOverlay } from "../t3work-pack-appearanceOverlay.ts";
-import { getPackSetupProfileDescriptors } from "../t3work-pack-setupProfileOverlay.ts";
+import { getPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
+import { getPackSetupProfileDescriptors } from "../t3team-pack-setupProfileOverlay.ts";
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";

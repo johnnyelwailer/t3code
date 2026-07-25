@@ -88,11 +88,11 @@ export const ClientSettingsSchema = Schema.Struct({
   sidebarThreadPreviewCount: SidebarThreadPreviewCount.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT)),
   ),
-  t3workStoredSidebarNavPreferencesJson: Schema.optionalKey(TrimmedString),
-  t3workStoredProjectsJson: Schema.optionalKey(TrimmedString),
-  t3workStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
-  t3workStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
-  t3workStoredThreadsJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredSidebarNavPreferencesJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredProjectsJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredThreadsJson: Schema.optionalKey(TrimmedString),
   timestampFormat: TimestampFormat.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
   ),
@@ -417,8 +417,8 @@ export const ServerSettings = Schema.Struct({
   providerInstances: Schema.Record(ProviderInstanceId, ProviderInstanceConfig).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  t3workStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
-  t3workStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 });
 export type ServerSettings = typeof ServerSettings.Type;
@@ -521,8 +521,8 @@ export const ServerSettingsPatch = Schema.Struct({
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
-  t3workStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
-  t3workStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   observability: Schema.optionalKey(
     Schema.Struct({
@@ -580,9 +580,9 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarProjectSortOrder: Schema.optionalKey(SidebarProjectSortOrder),
   sidebarThreadSortOrder: Schema.optionalKey(SidebarThreadSortOrder),
   sidebarThreadPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
-  t3workStoredProjectsJson: Schema.optionalKey(TrimmedString),
-  t3workStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
-  t3workStoredThreadsJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredProjectsJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
+  t3teamStoredThreadsJson: Schema.optionalKey(TrimmedString),
   timestampFormat: Schema.optionalKey(TimestampFormat),
   wordWrap: Schema.optionalKey(Schema.Boolean),
 });

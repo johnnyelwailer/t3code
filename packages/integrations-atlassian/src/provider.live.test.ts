@@ -13,13 +13,13 @@ type PersistedAuths = {
   }>;
 };
 
-const RUN_LIVE_TESTS = /^(1|true)$/i.test(process.env.T3WORK_RUN_LIVE_ATLASSIAN_TESTS ?? "");
+const RUN_LIVE_TESTS = /^(1|true)$/i.test(process.env.T3TEAM_RUN_LIVE_ATLASSIAN_TESTS ?? "");
 const describeLive = RUN_LIVE_TESTS ? describe : describe.skip;
 
 function resolveAuthFilePath(): string {
   return (
-    process.env.T3WORK_ATLASSIAN_LIVE_AUTH_PATH ??
-    `${NodeOS.homedir()}/.t3/dev/secrets/t3work-atlassian-auths.bin`
+    process.env.T3TEAM_ATLASSIAN_LIVE_AUTH_PATH ??
+    `${NodeOS.homedir()}/.t3/dev/secrets/t3team-atlassian-auths.bin`
   );
 }
 
@@ -30,7 +30,7 @@ function loadLiveAuth(): JiraApiAuth {
   }
 
   const parsed = JSON.parse(NodeFS.readFileSync(authFilePath, "utf8")) as PersistedAuths;
-  const requestedAccountId = process.env.T3WORK_ATLASSIAN_LIVE_ACCOUNT_ID?.trim();
+  const requestedAccountId = process.env.T3TEAM_ATLASSIAN_LIVE_ACCOUNT_ID?.trim();
   const entry = requestedAccountId
     ? parsed.auths?.find((candidate) => candidate.accountId === requestedAccountId)
     : parsed.auths?.[0];

@@ -22,9 +22,9 @@
   - Subagents must not independently launch dev servers or repeat integrated client verification unless their delegated task explicitly requires it.
   - Stop dev servers, watchers, and other long-running verification processes when the focused verification is complete.
 - If changing native mobile code, `vp run lint:mobile` must also pass.
-- For t3work additive/prefix-constrained tasks, agents MUST run `node t3work-additive-guard.mjs` after finishing code changes and before reporting completion. DO NOT CHANGE THE WHITELIST WITHOUT APPROVAL.
+- For t3team additive/prefix-constrained tasks, agents MUST run `node t3team-additive-guard.mjs` after finishing code changes and before reporting completion. DO NOT CHANGE THE WHITELIST WITHOUT APPROVAL.
 - The additive prefix guard is a blocking completion gate for those tasks: if it fails, the task is not complete.
-- The guard caps prefixed (`t3work-*`) production files at **200 non-empty lines** (150 = warning); tests/fixtures/stories/`*.browser.*` get 600/300. This is a **design constraint to honor while writing**, not a formatting fix to do at the end — splitting a finished 1000-line file into compliant modules is expensive rework. Design modules under the cap from the start; when a file passes ~150 lines, split it _then_ into focused siblings (extract pure helpers, sub-components, hooks). A 400+-line file is a planning miss to catch in planning. A `PostToolUse` hook (`scripts/t3work-additive-fast-hook.mjs`, wired in `.claude/settings.json`) surfaces a live LOC warning the moment a new prefixed file crosses the cap — act on it immediately rather than waiting for the commit gate.
+- The guard caps prefixed (`t3team-*`) production files at **200 non-empty lines** (150 = warning); tests/fixtures/stories/`*.browser.*` get 600/300. This is a **design constraint to honor while writing**, not a formatting fix to do at the end — splitting a finished 1000-line file into compliant modules is expensive rework. Design modules under the cap from the start; when a file passes ~150 lines, split it _then_ into focused siblings (extract pure helpers, sub-components, hooks). A 400+-line file is a planning miss to catch in planning. A `PostToolUse` hook (`scripts/t3team-additive-fast-hook.mjs`, wired in `.claude/settings.json`) surfaces a live LOC warning the moment a new prefixed file crosses the cap — act on it immediately rather than waiting for the commit gate.
 
 ## Project Snapshot
 
@@ -46,15 +46,15 @@ Long term maintainability is a core priority. If you add new functionality, firs
 
 Keep files small and composable by default (see the 200-line cap under Task Completion Requirements). A large stateful component is a planning signal to decompose up front — a controller hook for state/effects plus presentational sub-components — not a monolith to split later.
 
-## T3work MVP Constitution
+## T3Team MVP Constitution
 
-When working on the t3work MVP docs, packages, or app surfaces, agents MUST follow the t3work engineering constitution:
+When working on the t3team MVP docs, packages, or app surfaces, agents MUST follow the t3team engineering constitution:
 
-- `docs/t3work-mvp/10-engineering-constitution.md`
+- `docs/t3team-mvp/10-engineering-constitution.md`
 
-In short: t3work work must reuse the existing T3 Code shell and UI as the baseline, keep additions isolated where possible, favor small composable code, target high-value 90-100% test coverage, provide Storybook and snapshot coverage for reusable UI and important screens, persist rich artifacts instead of chat-only output, and validate UI/workflow changes by opening the app in a browser and clicking through the changed flow end to end.
+In short: t3team work must reuse the existing T3 Code shell and UI as the baseline, keep additions isolated where possible, favor small composable code, target high-value 90-100% test coverage, provide Storybook and snapshot coverage for reusable UI and important screens, persist rich artifacts instead of chat-only output, and validate UI/workflow changes by opening the app in a browser and clicking through the changed flow end to end.
 
-After completing a repeatable t3work workflow, agents should mention that the workflow could be saved as a project-scoped action recipe and offer to create it. Do not create recipes silently.
+After completing a repeatable t3team workflow, agents should mention that the workflow could be saved as a project-scoped action recipe and offer to create it. Do not create recipes silently.
 
 ## Package Roles
 
@@ -88,7 +88,7 @@ agents.
 
 ## Session-learned gotchas (friction-optimizer, 2026-07-07)
 
-- `vp run dev:desktop` hot-reloads **web + desktop only**; the backend runs from the prebuilt `apps/server/dist/bin.mjs`. After server-source changes: `pnpm -C apps/server build:bundle` + restart, or use `dev:server` for a watched backend. **New HTTP routes must be registered in BOTH registries** — `makeT3workRoutesLayer` _and_ the route-merge list in `server.ts`. Verify a new endpoint against the actually-running server/port before claiming done.
+- `vp run dev:desktop` hot-reloads **web + desktop only**; the backend runs from the prebuilt `apps/server/dist/bin.mjs`. After server-source changes: `pnpm -C apps/server build:bundle` + restart, or use `dev:server` for a watched backend. **New HTTP routes must be registered in BOTH registries** — `makeT3TeamRoutesLayer` _and_ the route-merge list in `server.ts`. Verify a new endpoint against the actually-running server/port before claiming done.
 - Run vitest packages **serially** — full concurrent runs die with exit 137 (OOM SIGKILL). A 137 is a kill, not a test failure; re-run that package serially before triaging.
 - Pre-commit hook duplicates lint/test; bypass with `--no-verify` only when test+typecheck already ran green in-session, and say so.
 - Live testing = the **real user path**: never mint tokens, scan storage for credentials, or shim past auth/UI ("NO SHIMS"). If blocked, report the blocker.

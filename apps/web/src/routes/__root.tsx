@@ -39,10 +39,9 @@ import { syncBrowserChromeTheme } from "../hooks/useTheme";
 import { configureClientTracing } from "../observability/clientTracing";
 import { resolveInitialServerAuthGateState } from "../environments/primary";
 import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
-import { isAtlassianOAuthCallbackPath } from "../t3work/hooks/t3work-atlassianOAuthRedirect";
-import { useT3workWorkMode } from "../t3work/t3work-workMode";
-import { T3workPackAppearanceSync } from "../t3work/t3work-PackAppearanceSync";
-import { useT3workPackAppearance } from "../t3work/t3work-packAppearance";
+import { isAtlassianOAuthCallbackPath } from "../t3team/hooks/t3team-atlassianOAuthRedirect";
+import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
+import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 import { shellEnvironment } from "../state/shell";
 import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -105,28 +104,20 @@ function RootRouteView() {
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
 
-  const workMode = useT3workWorkMode();
+  // T3 Team is the product shell (no toggleable work mode): keep non-shell routes
+  // redirected to the team surface.
+  const isT3TeamRoute = pathname === "/t3team" || pathname.startsWith("/t3team/");
 
-  // Check actual route path to determine layout (t3work routes don't need sidebar)
-  const isT3workRoute = pathname === "/t3work" || pathname.startsWith("/t3work/");
-
-  // Redirect based on work mode
   useEffect(() => {
-    // If user has "For Teams" mode but is on a chat route, redirect to t3work
     if (
-      workMode === "t3work" &&
-      !isT3workRoute &&
+      !isT3TeamRoute &&
       !pathname.startsWith("/settings") &&
       !pathname.startsWith("/pair") &&
       !isAtlassianOAuthCallbackPath(pathname)
     ) {
-      void navigate({ to: "/t3work" });
+      void navigate({ to: "/t3team" });
     }
-    // If user has "For Code" mode but is on t3work route, redirect to chat
-    else if (workMode === "classic" && isT3workRoute) {
-      void navigate({ to: "/" });
-    }
-  }, [workMode, pathname, isT3workRoute, navigate]);
+  }, [pathname, isT3TeamRoute, navigate]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -164,7 +155,7 @@ function RootRouteView() {
 
   const appShell = (
     <CommandPalette>
-      {isT3workRoute ? (
+      {isT3TeamRoute ? (
         <Outlet />
       ) : (
         <AppSidebarLayout>
@@ -178,7 +169,7 @@ function RootRouteView() {
     <ToastProvider>
       <AnchoredToastProvider>
         <DocumentTitleSync />
-        <T3workPackAppearanceSync />
+        <T3TeamPackAppearanceSync />
         {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
         <RelayClientInstallDialog />
         <ConnectOnboardingDialog />
@@ -196,7 +187,7 @@ function RootRouteView() {
 function DocumentTitleSync() {
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
-  const packAppName = useT3workPackAppearance()?.labels?.appName;
+  const packAppName = useT3TeamPackAppearance()?.labels?.appName;
   const title = resolveServerBackedAppDisplayName({
     baseName: packAppName ?? APP_BASE_NAME,
     fallbackDisplayName: packAppName ?? APP_DISPLAY_NAME,

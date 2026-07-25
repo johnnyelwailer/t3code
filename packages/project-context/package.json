@@ -8,21 +8,21 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
-    "./t3workToolCatalog": {
-      "types": "./src/t3workToolCatalog.ts",
-      "import": "./src/t3workToolCatalog.ts"
+    "./t3teamToolCatalog": {
+      "types": "./src/t3teamToolCatalog.ts",
+      "import": "./src/t3teamToolCatalog.ts"
     },
-    "./t3workContextAvailability": {
-      "types": "./src/t3workContextAvailability.ts",
-      "import": "./src/t3workContextAvailability.ts"
+    "./t3teamContextAvailability": {
+      "types": "./src/t3teamContextAvailability.ts",
+      "import": "./src/t3teamContextAvailability.ts"
     },
-    "./t3workContextPaths": {
-      "types": "./src/t3workContextPaths.ts",
-      "import": "./src/t3workContextPaths.ts"
+    "./t3teamContextPaths": {
+      "types": "./src/t3teamContextPaths.ts",
+      "import": "./src/t3teamContextPaths.ts"
     },
-    "./t3workDirectoryBundle": {
-      "types": "./src/t3workDirectoryBundle.ts",
-      "import": "./src/t3workDirectoryBundle.ts"
+    "./t3teamDirectoryBundle": {
+      "types": "./src/t3teamDirectoryBundle.ts",
+      "import": "./src/t3teamDirectoryBundle.ts"
     }
   },
   "scripts": {

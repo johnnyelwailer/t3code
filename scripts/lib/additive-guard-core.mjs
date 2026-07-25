@@ -6,7 +6,7 @@ import {
   UPSTREAM_REPO_SLUG,
   expectedUpstreamRemoteHint,
   isExpectedUpstreamRemoteUrl,
-} from "./t3work-upstream-source-of-truth.mjs";
+} from "./t3team-upstream-source-of-truth.mjs";
 
 export function runGit(args) {
   return NodeChildProcess.execFileSync("git", args, { encoding: "utf8" }).trim();
@@ -46,7 +46,7 @@ export function assertCanonicalUpstreamRemote() {
 export function enforceCanonicalBaseRef(configBaseRef) {
   if (configBaseRef && configBaseRef !== UPSTREAM_BASE_REF) {
     throw new Error(
-      `Invalid .t3work-additive-guard.json baseRef '${configBaseRef}'. Expected '${UPSTREAM_BASE_REF}'.`,
+      `Invalid .t3team-additive-guard.json baseRef '${configBaseRef}'. Expected '${UPSTREAM_BASE_REF}'.`,
     );
   }
   return UPSTREAM_BASE_REF;
