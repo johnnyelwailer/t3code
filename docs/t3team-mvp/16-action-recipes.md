@@ -110,12 +110,18 @@ export default defineRecipe({
 });
 ```
 
-> **Implementation status.** Today recipes are still authored as `recipe.json` with `{{ }}`
-> expression strings evaluated by `new Function` engines in both
-> `t3team-projectRecipeDiscoveryVisibility.ts` and
-> `t3team-projectRecipeDiscoveryTemplate.ts`. The TS-module form above is still the Phase 1
-> target. Phase 1 is not complete until discovery moves from "parse JSON + eval strings" to
-> "`import()` a typed module" and the expression-engine path is removed.
+> **Implementation status.** The TS-module form above is built and is what every shipped
+> recipe uses: `t3team-projectRecipeDiscoveryModule.ts` `import()`s a typed `recipe.ts`, and
+> a directory containing both files resolves to the module. The legacy `recipe.json` +
+> `{{ }}` path still exists alongside it — `new Function` engines in
+> `t3team-projectRecipeDiscoveryVisibility.ts` and `t3team-projectRecipeDiscoveryTemplate.ts`,
+> reached from `t3team-projectRecipeDiscoveryRecipe.ts`, `t3team-recipeAgentValidate.ts` and
+> `t3team-recipeAgentListEntry.ts`.
+>
+> Phase 1 is not complete until that path is removed. No recipe in this repo or in the
+> Nexplore distribution ships a `recipe.json`, so it has no remaining consumers — but
+> removing it drops a documented authoring format, which is a product decision rather than a
+> cleanup, so it is called out here instead of being done silently.
 
 ### One recipe, several actions
 
@@ -871,27 +877,25 @@ one thread, one recipe (see [Conversation-Native Launch UX](#conversation-native
 
 #### Implementation status
 
-The composer-typeahead infrastructure (trigger detection, menu, item ranking, four-kind
-discriminated union) is built. The kickoff composer
-(`apps/web/src/t3team/t3team-TicketKickoffComposer.tsx`) currently **renders
-`ComposerPromptEditor` without wiring `detectComposerTrigger` or
-`ComposerCommandMenu`** — its placeholder advertises `/`, `@`, and `$` triggers that do
-nothing. This is a bug independent of recipe slash commands: `$skill` and `@file` are
-also broken in kickoff. The fix is to extract a shared `useComposerCommandMenu` hook from
-`ChatComposer` and consume it from both composers. Recipe slash items can then be added
-as a fifth item kind in one place.
+All four shipping steps below are built; this section is kept as the record of what each
+one covers.
 
-Shipping order:
+1. **Shared composer-menu hook** — `useT3TeamComposerCommandMenu`
+   (`apps/web/src/t3team/composer/`) owns trigger detection, item ranking, highlight state
+   and keyboard navigation. Both `ChatComposer` and the kickoff composer consume it, so
+   `/`, `@` and `$` work in kickoff (they previously did nothing there — a bug independent
+   of recipes, since `$skill` and `@file` were broken too).
+2. **The `recipe-slash-command` item kind** renders as its own group in
+   `ComposerCommandMenu` and selects via `setSelectedRecipe` rather than mutating text.
+3. **`slashAlias?: string` on `defineRecipe`** (`t3team-sdk.recipe.ts`), with the
+   collision rules in [Namespace and collision rules](#namespace-and-collision-rules)
+   enforced by `resolveT3TeamRecipeSlashAliases`.
+4. **Surface filtering and ranking** — callers hand in the surface-filtered catalog;
+   `scoreEntry` ranks `slashAlias` before `id` before `title`.
 
-1. **Extract shared composer-menu hook**, restore `/`, `@`, `$` triggers in the kickoff
-   composer. No recipe work involved.
-2. **Add the `recipe-slash-command` item kind** and the `setSelectedRecipe` selection
-   branch. Recipe items wired through `matchRecipes()`, no schema change yet — alias
-   defaults to `id`.
-3. **Add `slashAlias?: string` to `defineRecipe`**. Bundled recipes get explicit aliases;
-   collision validation lands at this step.
-4. **Surface filtering polish** — empty-query menu only shows applicable recipes; query
-   matching prefers `slashAlias` over `id`.
+Verified in the running app: in-thread `/` shows only Built-in for the bundled recipe set,
+which is correct — [In-thread composer](#in-thread-composer) scopes recipe aliases to the
+`thread.context` surface and none of those recipes declare it.
 
 #### Future: unifying with the command palette
 
