@@ -141,6 +141,9 @@ export function ProjectDashboardKickoffAside({
             if (sectionId === "quick-starts") {
               return {
                 recipeInput: quickStartRecipeInput,
+                // Reuse the catalog already resolved for the composer slash menu:
+                // one `discoverRecipes` round-trip per dashboard mount, not two.
+                quickStarts: slashRecipes,
                 ...(selectedRecipe?.recipe.id
                   ? { selectedRecipeId: selectedRecipe.recipe.id }
                   : {}),
