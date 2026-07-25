@@ -42,8 +42,8 @@ projection** over that raw data — exactly the pattern the backlog already impl
 
 - **Raw table** `t3team_atlassian_backlog_issues`: PK `(provider, account_id, external_project_id, issue_id)`, stores `resource_json`, indexed by `issue_key`. → the raw store.
 - **View table** `t3team_atlassian_backlog_views`: per selection, an ordered `issue_ids_json` referencing the raw store + metadata + page cursor. → the optimized projection.
-- **Sync walk** (`kickT3workAtlassianBacklogBackgroundSync`): paginates the provider in bounded bursts, upserts raw rows, and on completion **replaces** the view's id-list (prunes stale).
-- **Cached response** (`readCachedT3workAtlassianBacklogResponse`): joins view + raw, returns payload with a `fingerprint` and a `source` of `live | persisted | stale-fallback`.
+- **Sync walk** (`kickT3TeamAtlassianBacklogBackgroundSync`): paginates the provider in bounded bursts, upserts raw rows, and on completion **replaces** the view's id-list (prunes stale).
+- **Cached response** (`readCachedT3TeamAtlassianBacklogResponse`): joins view + raw, returns payload with a `fingerprint` and a `source` of `live | persisted | stale-fallback`.
 
 **Generalize this shape.** Every data cache becomes: *raw table(s)* + *view/projection
 row(s) keyed by scope* + *fingerprint* + *(optional) background sync*. The client hook
@@ -99,7 +99,7 @@ Only the backlog has a server cache; everything else is live + localStorage-mirr
 4. **GitHub raw store.** Replace the 4 in-memory `Map`s (account 5m, repos 2m, inbox 45s,
    response 20s) with SQLite raw rows (repos, notifications, linked PRs) + a per-project-set
    projection. Keep TTL semantics as `fetched_at` columns; keep the fingerprint poll envelope.
-5. **Fingerprint stays the contract.** Keep `toT3workPollResult` / `createT3workPollFingerprint`.
+5. **Fingerprint stays the contract.** Keep `toT3TeamPollResult` / `createT3TeamPollFingerprint`.
    The change is *where the payload lives when `unchanged`* — server SQLite, not the browser.
    On `unchanged` the client re-reads from the server projection (cheap, local SQLite), so
    the client never needs its own copy.
@@ -150,7 +150,7 @@ establishes the reusable pattern; later phases reuse it.
 ### Phase 0 — Foundations
 - Extract a reusable server helper set from the backlog cache: `rawUpsert`, `viewProjection`
   (ordered id-list join), `fingerprint`, `cachedResponse({source})`, `ensureTables`.
-- Define a `T3workServerCache` convention doc section (table naming, scope keys, TTL columns).
+- Define a `T3TeamServerCache` convention doc section (table naming, scope keys, TTL columns).
 - Add the `localStorage` guardrail (settings-only) — failing-but-allowlisted initially so the
   existing data caches still compile; tightened in Phase 7.
 - **No user-visible change.**
