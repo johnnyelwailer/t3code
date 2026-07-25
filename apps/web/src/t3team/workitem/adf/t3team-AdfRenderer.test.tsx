@@ -52,7 +52,8 @@ describe("T3TeamAdfRenderer node coverage", () => {
     expect(KITCHEN_SINK_MARKUP).toContain("<br");
     expect(KITCHEN_SINK_MARKUP).toContain("T3T-42");
     expect(KITCHEN_SINK_MARKUP).toContain("T3T-7");
-    expect(KITCHEN_SINK_MARKUP).toContain("example.com/dashboards/latency");
+    // Fallback smart-link label is host + last path segment, not the full URL.
+    expect(KITCHEN_SINK_MARKUP).toContain("example.com/latency");
   });
 
   it("renders all five panel types onto semantic tones", () => {
@@ -243,6 +244,54 @@ describe("T3TeamAdfRenderer media", () => {
     });
     expect(markup).toContain("report.pdf");
     expect(markup).not.toContain("<img");
+  });
+
+  it("renders a video attachment as <video>, never as a broken <img>", () => {
+    // Real Jira payload shape: no mime type at all, just a filename and the video's own
+    // dimensions (which a `<video>` must not blindly inherit as element width/height).
+    const markup = render({
+      doc: doc({
+        type: "mediaSingle",
+        content: [
+          {
+            type: "media",
+            attrs: {
+              id: "rec1",
+              alt: "20260511-1240-43.8755420.mp4",
+              width: 1870,
+              height: 1032,
+            },
+          },
+        ],
+      }),
+      resolveAssetUrl: (url) => `/local/${url}`,
+    });
+    expect(markup).toContain("<video");
+    expect(markup).not.toContain("<img");
+    expect(markup).not.toContain('width="1870"');
+    expect(markup).not.toContain('height="1032"');
+  });
+
+  it("renders an audio attachment as <audio>, never as <img>", () => {
+    const markup = render({
+      doc: doc({ type: "media", attrs: { id: "a1", alt: "voicemail.m4a" } }),
+      resolveAssetUrl: (url) => `/local/${url}`,
+    });
+    expect(markup).toContain("<audio");
+    expect(markup).not.toContain("<img");
+  });
+
+  it("renders an unrecognised extension as a file chip, never as <img>", () => {
+    const markup = render({
+      doc: doc({
+        type: "media",
+        attrs: { id: "u1", alt: "clip.unknownext", width: 640, height: 480 },
+      }),
+      resolveAssetUrl: (url) => `/local/${url}`,
+    });
+    expect(markup).toContain("clip.unknownext");
+    expect(markup).not.toContain("<img");
+    expect(markup).not.toContain("<video");
   });
 });
 

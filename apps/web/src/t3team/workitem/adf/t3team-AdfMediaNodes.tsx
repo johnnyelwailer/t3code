@@ -1,19 +1,69 @@
 import type { ReactNode } from "react";
 
 import { cn } from "~/t3team/lib/t3team-utils";
-import { safeAdfHref } from "./t3team-adfLinkTargets";
+import { workItemAttachmentGlyph } from "~/t3team/workitem/t3team-WorkItemAttachmentTile";
+import { classifyAdfMediaNode, resolveMediaSrc } from "./t3team-adfMediaResolution";
 import { T3TeamAdfNodes } from "./t3team-adfNodeRegistry";
 import {
   adfAttrNumber,
   adfAttrString,
   adfChildren,
-  type AdfNode,
   type AdfNodeProps,
   type AdfNodeRenderers,
-  type AdfRenderContext,
 } from "./t3team-adfRendererTypes";
 
-const IMAGE_EXTENSION_PATTERN = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)(?:[?#]|$)/i;
+const MEDIA_CHIP_CLASS =
+  "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-xs text-info-foreground";
+
+/** A screen recording should not dominate the column the way a native-resolution `<img>` would. */
+function T3TeamAdfMediaVideo({
+  src,
+  alt,
+}: {
+  readonly src: string;
+  readonly alt: string | undefined;
+}): ReactNode {
+  return (
+    <video
+      src={src}
+      controls
+      preload="metadata"
+      playsInline
+      aria-label={alt}
+      className="h-auto max-h-[70vh] max-w-full rounded-md border border-border/70"
+      data-adf-node="media-video"
+    />
+  );
+}
+
+function T3TeamAdfMediaAudio({ src }: { readonly src: string }): ReactNode {
+  return (
+    <audio
+      src={src}
+      controls
+      preload="metadata"
+      className="w-full max-w-full"
+      data-adf-node="media-audio"
+    />
+  );
+}
+
+/** Everything that isn't an image/video/audio (pdf, zip, docx, …): a file chip, never inlined. */
+function T3TeamAdfMediaFileChip({
+  src,
+  alt,
+}: {
+  readonly src: string;
+  readonly alt: string | undefined;
+}): ReactNode {
+  const Glyph = workItemAttachmentGlyph({ filename: alt });
+  return (
+    <a href={src} target="_blank" rel="noreferrer" className={MEDIA_CHIP_CLASS}>
+      <Glyph className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="truncate">{alt ?? src}</span>
+    </a>
+  );
+}
 
 const MEDIA_SINGLE_LAYOUT_CLASSES: Readonly<Record<string, string>> = {
   center: "mx-auto w-fit",
@@ -24,39 +74,6 @@ const MEDIA_SINGLE_LAYOUT_CLASSES: Readonly<Record<string, string>> = {
   wide: "w-full",
   "full-width": "w-full",
 };
-
-/**
- * ADF media carries a Media Services id rather than a URL, so we hand the host resolver
- * every plausible key (external URL, attachment-content path, filename) and take the first
- * one it rewrites. `createJiraTicketAssetUrlResolver` returns its input unchanged on a miss,
- * which is exactly the signal we need — and we never build a second resolver here.
- *
- * A rewritten URL is produced by the host application, so it is trusted as-is. A URL that
- * came straight out of the document is untrusted and must clear `safeAdfHref`.
- */
-function resolveMediaSrc(node: AdfNode, ctx: AdfRenderContext): string | undefined {
-  const url = adfAttrString(node, "url");
-  const id = adfAttrString(node, "id");
-  const alt = adfAttrString(node, "alt");
-  const resolve = ctx.resolveAssetUrl;
-  if (resolve !== undefined) {
-    const idPath = id === undefined ? undefined : `/rest/api/3/attachment/content/${id}`;
-    for (const candidate of [url, idPath, alt]) {
-      if (candidate === undefined) continue;
-      const resolved = resolve(candidate);
-      if (resolved !== candidate && resolved.trim().length > 0) return resolved.trim();
-    }
-  }
-  return safeAdfHref(url);
-}
-
-function looksLikeImage(node: AdfNode): boolean {
-  const alt = adfAttrString(node, "alt") ?? "";
-  const url = adfAttrString(node, "url") ?? "";
-  if (IMAGE_EXTENSION_PATTERN.test(alt) || IMAGE_EXTENSION_PATTERN.test(url)) return true;
-  // Jira omits the filename on pasted screenshots but always sizes displayable media.
-  return adfAttrNumber(node, "width") !== undefined && adfAttrNumber(node, "height") !== undefined;
-}
 
 function T3TeamAdfMedia({ node, ctx }: AdfNodeProps): ReactNode {
   const src = resolveMediaSrc(node, ctx);
@@ -71,20 +88,15 @@ function T3TeamAdfMedia({ node, ctx }: AdfNodeProps): ReactNode {
     );
   }
 
-  if (!looksLikeImage(node)) {
-    return (
-      <a
-        href={src}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex max-w-full items-center rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-xs text-info-foreground"
-      >
-        <span className="truncate">{alt ?? src}</span>
-      </a>
-    );
-  }
+  // Branch on what this actually is before picking an element — an `<img>` cannot play a video,
+  // and a video/file chip must never inherit the media node's own width/height attrs (those are
+  // the *image's* intrinsic size, not a sizing hint for a player or a chip).
+  const kind = classifyAdfMediaNode(node);
+  if (kind === "video") return <T3TeamAdfMediaVideo src={src} alt={alt} />;
+  if (kind === "audio") return <T3TeamAdfMediaAudio src={src} />;
+  if (kind === "file") return <T3TeamAdfMediaFileChip src={src} alt={alt} />;
 
-  return (
+  const img = (
     <img
       src={src}
       alt={alt ?? ""}
@@ -95,6 +107,22 @@ function T3TeamAdfMedia({ node, ctx }: AdfNodeProps): ReactNode {
       className="h-auto max-w-full rounded-md border border-border/70"
       data-adf-node="media"
     />
+  );
+
+  // No lightbox wired up (e.g. a bare `<T3TeamAdfRenderer>` in a context that never renders
+  // one) -> just the image, same as before.
+  const openImage = ctx.onOpenImage;
+  if (openImage === undefined) return img;
+
+  return (
+    <button
+      type="button"
+      className="block max-w-full cursor-zoom-in rounded-md text-left"
+      aria-label={alt ? `View image: ${alt}` : "View image"}
+      onClick={() => openImage(src)}
+    >
+      {img}
+    </button>
   );
 }
 

@@ -38,19 +38,3 @@ export function jiraIssueKeyFromUrl(href: string | undefined): string | undefine
   }
   return undefined;
 }
-
-/**
- * Compact display text for a smart link that never resolved: `site.atlassian.net/wiki/Spec`
- * rather than a full URL with query noise.
- */
-export function adfLinkDisplayText(href: string): string {
-  try {
-    const url = new URL(href, "https://placeholder.invalid");
-    const path = url.pathname.replace(/\/+$/, "");
-    const host = url.hostname === "placeholder.invalid" ? "" : url.hostname;
-    const label = `${host}${path}`;
-    return label.length > 0 ? label : href;
-  } catch {
-    return href;
-  }
-}

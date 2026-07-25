@@ -208,6 +208,27 @@ export const T3TEAM_ADF_KITCHEN_SINK_DOC: AdfDocument = {
           type: "media",
           attrs: { id: "media-2", type: "file", collection: "jira", alt: "report.pdf" },
         },
+        // A second gallery image — proves the lightbox's next/previous, not just open/close.
+        {
+          type: "media",
+          attrs: { id: "media-3", type: "file", collection: "jira-attachments", alt: "chart-2.png" },
+        },
+        // Real Jira attachment shapes the ADF media renderer must never treat as an `<img>`.
+        {
+          type: "media",
+          attrs: {
+            id: "media-4",
+            type: "file",
+            alt: "20260511-1240-43.8755420.mp4",
+            width: 1870,
+            height: 1032,
+          },
+        },
+        { type: "media", attrs: { id: "media-5", type: "file", alt: "voicemail.m4a" } },
+        {
+          type: "media",
+          attrs: { id: "media-6", type: "file", alt: "clip.unknownext", width: 640, height: 480 },
+        },
       ],
     },
     { type: "blockCard", attrs: { url: "https://example.atlassian.net/browse/T3T-7" } },

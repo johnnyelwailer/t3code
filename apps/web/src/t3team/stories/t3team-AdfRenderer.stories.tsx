@@ -20,8 +20,21 @@ const STORY_IMAGE =
      </svg>`,
   );
 
+/**
+ * Storybook has no real video/audio CDN either, so non-image media resolve to a URL that will
+ * 404 in the browser — enough to prove the renderer picked a `<video>`/`<audio>`/file-chip
+ * element instead of an `<img>`, which is the thing worth reviewing here.
+ */
+const STORY_MEDIA_URLS: Readonly<Record<string, string>> = {
+  "diagram.png": STORY_IMAGE,
+  "chart-2.png": STORY_IMAGE,
+  "20260511-1240-43.8755420.mp4": "https://example.com/story-assets/screen-recording.mp4",
+  "voicemail.m4a": "https://example.com/story-assets/voicemail.m4a",
+  "clip.unknownext": "https://example.com/story-assets/clip.unknownext",
+};
+
 function resolveStoryAssetUrl(url: string): string {
-  return url === "diagram.png" ? STORY_IMAGE : url;
+  return STORY_MEDIA_URLS[url] ?? url;
 }
 
 function T3TeamAdfStoryFrame({

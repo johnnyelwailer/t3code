@@ -19,6 +19,8 @@ export type AdfRenderContext = {
   readonly resolveAssetUrl?: ((url: string) => string) | undefined;
   /** Keeps Jira issue navigation in-app instead of opening a browser tab. */
   readonly onOpenIssue?: ((issueKey: string) => void) | undefined;
+  /** Opens a resolved image `src` in the description's lightbox instead of rendering it inert. */
+  readonly onOpenImage?: ((src: string) => void) | undefined;
 };
 
 export type AdfNodeProps = {

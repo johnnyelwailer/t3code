@@ -29,6 +29,18 @@ describe("workItemAttachmentGlyph", () => {
     );
   });
 
+  it("still recognises video/audio extensions after the shared classifyMediaKind refactor", () => {
+    expect(workItemAttachmentGlyph({ filename: "clip.avi" })).toBe(
+      workItemAttachmentGlyph({ mimeType: "video/mp4" }),
+    );
+    expect(workItemAttachmentGlyph({ filename: "clip.mkv" })).toBe(
+      workItemAttachmentGlyph({ mimeType: "video/mp4" }),
+    );
+    expect(workItemAttachmentGlyph({ filename: "voicemail.m4a" })).toBe(
+      workItemAttachmentGlyph({ mimeType: "audio/mpeg" }),
+    );
+  });
+
   it("defaults to a generic glyph for unknown types", () => {
     const generic = workItemAttachmentGlyph({});
     expect(generic).toBe(workItemAttachmentGlyph({ mimeType: "application/octet-stream" }));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { adfLinkDisplayText, jiraIssueKeyFromUrl, safeAdfHref } from "./t3team-adfLinkTargets";
+import { jiraIssueKeyFromUrl, safeAdfHref } from "./t3team-adfLinkTargets";
 import { extractAdfPlainText } from "./t3team-adfNodeText";
 import { adfPanelTone, adfStatusTone, adfTextColor } from "./t3team-adfColorTokens";
 import type { AdfNode } from "./t3team-adfRendererTypes";
@@ -40,15 +40,6 @@ describe("jiraIssueKeyFromUrl", () => {
     expect(jiraIssueKeyFromUrl("https://example.com/docs/browse/not-a-key")).toBeUndefined();
     expect(jiraIssueKeyFromUrl("javascript:/browse/ABC-1")).toBeUndefined();
     expect(jiraIssueKeyFromUrl(undefined)).toBeUndefined();
-  });
-});
-
-describe("adfLinkDisplayText", () => {
-  it("trims a URL down to host and path", () => {
-    expect(adfLinkDisplayText("https://site.atlassian.net/wiki/Spec?utm=1")).toBe(
-      "site.atlassian.net/wiki/Spec",
-    );
-    expect(adfLinkDisplayText("/wiki/Spec/")).toBe("/wiki/Spec");
   });
 });
 
