@@ -21,6 +21,7 @@ import {
   requireThreadNotArchived,
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
+import { admitsTurnStart } from "../t3team-deciderTurnAdmission.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -720,13 +721,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
-      const sessionStatus = targetThread.session?.status;
-      const turnIsBusy =
-        targetThread.turnStartPending === true ||
-        sessionStatus === "starting" ||
-        sessionStatus === "running" ||
-        targetThread.latestTurn?.state === "running";
-      if (turnIsBusy) {
+      // t3team: automated turn starts (actor delivery, workflow step, child
+      // kickoff) may not race each other on one thread. User turns are steers
+      // and are always admitted. See t3team-deciderTurnAdmission.
+      if (!admitsTurnStart({ command, thread: targetThread })) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Thread '${command.threadId}' already has a turn in progress.`,

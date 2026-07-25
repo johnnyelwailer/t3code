@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { Sidebar, SidebarProvider, SidebarRail } from "~/t3team/components/ui/t3team-sidebar";
 import { AppContentPane } from "~/t3team/t3team-AppContentPane";
-import { ProjectSidebar } from "~/t3team/components/t3team-ProjectSidebar";
+import { AppSidebarLens } from "~/t3team/components/t3team-AppSidebarLens";
 import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarState";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ViewState } from "~/t3team/t3team-types";
@@ -115,7 +115,7 @@ export function App({
       <Sidebar
         side="left"
         collapsible="offcanvas"
-        className="min-h-0 overflow-hidden border-r border-border bg-card text-foreground"
+        className="min-h-0 overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
         resizable={{
           minWidth: T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
           shouldAcceptWidth: ({ nextWidth, wrapper }) =>
@@ -124,7 +124,7 @@ export function App({
         }}
       >
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ProjectSidebar
+          <AppSidebarLens
             projects={store.projects}
             looseWorkspaceProjects={store.looseWorkspaceProjects}
             selectedId={selectedProjectId}

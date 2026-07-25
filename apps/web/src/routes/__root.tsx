@@ -39,6 +39,8 @@ import { configureClientTracing } from "../observability/clientTracing";
 import { resolveInitialServerAuthGateState } from "../environments/primary";
 import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
 import { isAtlassianOAuthCallbackPath } from "../t3team/hooks/t3team-atlassianOAuthRedirect";
+import { isT3TeamShellPath } from "../t3team/t3team-upstreamRouteBridge";
+import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 import { shellEnvironment } from "../state/shell";
@@ -96,24 +98,17 @@ export const Route = createRootRoute({
 
 function RootRouteView() {
   const pathname = useLocation({ select: (location) => location.pathname });
-  const navigate = useNavigate();
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
 
   // T3 Team is the product shell (no toggleable work mode): keep non-shell routes
   // redirected to the team surface.
-  const isT3TeamRoute = pathname === "/t3team" || pathname.startsWith("/t3team/");
+  const isT3TeamRoute = isT3TeamShellPath(pathname);
 
-  useEffect(() => {
-    if (
-      !isT3TeamRoute &&
-      !pathname.startsWith("/settings") &&
-      !pathname.startsWith("/pair") &&
-      !isAtlassianOAuthCallbackPath(pathname)
-    ) {
-      void navigate({ to: "/t3team" });
-    }
-  }, [pathname, isT3TeamRoute, navigate]);
+  // Upstream's sidebar navigates to upstream route shapes. The bridge maps those
+  // onto the equivalent Team route (and falls back to the dashboard) so upstream's
+  // components need no fork-side navigation patches.
+  useUpstreamRouteBridge(pathname, !isT3TeamRoute && !isAtlassianOAuthCallbackPath(pathname));
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {

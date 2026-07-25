@@ -6,6 +6,9 @@
   "locFailThreshold": 200,
   "allowedModifiedFiles": [
     ".t3team-additive-guard.json",
+    "apps/web/src/components/SidebarV2.tsx",
+    "apps/server/src/orchestration/projector.test.ts",
+    "apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.test.ts",
     "README.md",
     "vitest.config.ts",
     "apps/server/vitest.config.ts",

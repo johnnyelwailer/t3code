@@ -758,6 +758,15 @@ export const ThreadTurnStartCommand = Schema.Struct({
   ),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  /**
+   * t3team: who raised this turn. "automated" marks a start raised by fork
+   * automation (actor delivery, workflow step/repair, child kickoff) rather
+   * than by a person; those are admitted only while the thread is idle, so
+   * two automations cannot race a thread into a double submit. Absent or
+   * "user" means a person typed it, which may steer a running turn. Server
+   * side only — the client command variant deliberately cannot set it.
+   */
+  t3teamTurnOrigin: Schema.optional(Schema.Literals(["user", "automated"])),
   createdAt: IsoDateTime,
 });
 

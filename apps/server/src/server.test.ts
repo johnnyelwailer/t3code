@@ -5667,6 +5667,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     "keeps ephemeral repair upserts out of the live shell stream used by Local workspaces",
     () =>
       Effect.gen(function* () {
+        // The shell subscription is permanently live (queue-backed), so it is
+        // terminated here the same way the neighbouring buffering tests do:
+        // publish the event while the snapshot loads, then request the
+        // completion marker. Everything buffered during the snapshot load is
+        // drained ahead of "synchronized", so a leaked ephemeral upsert would
+        // show up as items[1] instead of the marker.
+        const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
         const repairThreadId = ThreadId.make("run:repair:1");
         const now = "2026-07-19T00:00:00.000Z";
         const ephemeralRepairCreated: Extract<OrchestrationEvent, { type: "thread.created" }> = {
@@ -5703,8 +5710,18 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         };
         yield* buildAppUnderTest({
           layers: {
-            orchestrationEngine: { streamDomainEvents: Stream.make(ephemeralRepairCreated) },
+            orchestrationEngine: { streamDomainEvents: Stream.fromPubSub(liveEvents) },
             projectionSnapshotQuery: {
+              getShellSnapshot: () =>
+                Effect.gen(function* () {
+                  yield* PubSub.publish(liveEvents, ephemeralRepairCreated);
+                  return {
+                    snapshotSequence: 1,
+                    projects: [],
+                    threads: [makeDefaultOrchestrationThreadShell()],
+                    updatedAt: now,
+                  };
+                }),
               getThreadShellById: () =>
                 Effect.succeed(
                   Option.some(
@@ -5722,13 +5739,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         const wsUrl = yield* getWsServerUrl("/ws");
         const items = yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
-            client[ORCHESTRATION_WS_METHODS.subscribeShell]({}).pipe(Stream.runCollect),
+            client[ORCHESTRATION_WS_METHODS.subscribeShell]({
+              requestCompletionMarker: true,
+            }).pipe(Stream.take(2), Stream.runCollect),
           ),
-        );
+        ).pipe(Effect.timeout("2 seconds"));
 
-        assert.equal(items.length, 1);
         assert.equal(items[0]?.kind, "snapshot");
-      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+        assert.deepEqual(items[1], { kind: "synchronized" });
+      }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 
   it.effect("marks an empty shell catch-up replay as synchronized when requested", () =>

@@ -22,14 +22,19 @@ import {
   threadId,
 } from "./t3team-toolBrokerTestUtils.ts";
 
+// Every case drives the broker through the same engine stub; only dispatch differs.
+const makeOrchestrationMock = (
+  dispatch: OrchestrationEngineShape["dispatch"] = () => Effect.succeed({ sequence: 1 }),
+): OrchestrationEngineShape => ({
+  readEvents: () => Stream.empty,
+  dispatch,
+  streamDomainEvents: Stream.empty,
+  latestSequence: Effect.succeed(0),
+});
+
 describe("T3TeamToolBrokerLive", () => {
   it("lists selected tools and returns the current view payload", async () => {
-    const orchestrationMock: OrchestrationEngineShape = {
-      readEvents: () => Stream.empty,
-      dispatch: () => Effect.succeed({ sequence: 1 }),
-      streamDomainEvents: Stream.empty,
-      latestSequence: Effect.succeed(0),
-    };
+    const orchestrationMock = makeOrchestrationMock();
 
     const binding = await Effect.runPromise(
       Effect.gen(function* () {
@@ -86,12 +91,9 @@ describe("T3TeamToolBrokerLive", () => {
 
   it("dispatches thread metadata updates for rename", async () => {
     const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 7 }));
-    const orchestrationMock: OrchestrationEngineShape = {
-      readEvents: () => Stream.empty,
-      dispatch: (command) => Effect.promise(() => dispatch(command)),
-      streamDomainEvents: Stream.empty,
-      latestSequence: Effect.succeed(0),
-    };
+    const orchestrationMock = makeOrchestrationMock((command) =>
+      Effect.promise(() => dispatch(command)),
+    );
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -136,12 +138,7 @@ describe("T3TeamToolBrokerLive", () => {
   });
 
   it("falls back to the stored thread tool context when no toolContext is passed", async () => {
-    const orchestrationMock: OrchestrationEngineShape = {
-      readEvents: () => Stream.empty,
-      dispatch: () => Effect.succeed({ sequence: 1 }),
-      streamDomainEvents: Stream.empty,
-      latestSequence: Effect.succeed(0),
-    };
+    const orchestrationMock = makeOrchestrationMock();
 
     const binding = await Effect.runPromise(
       Effect.gen(function* () {
@@ -166,12 +163,7 @@ describe("T3TeamToolBrokerLive", () => {
   });
 
   it("binds generic thread tools without a stored view context", async () => {
-    const orchestrationMock: OrchestrationEngineShape = {
-      readEvents: () => Stream.empty,
-      dispatch: () => Effect.succeed({ sequence: 1 }),
-      streamDomainEvents: Stream.empty,
-      latestSequence: Effect.succeed(0),
-    };
+    const orchestrationMock = makeOrchestrationMock();
 
     const binding = await Effect.runPromise(
       Effect.gen(function* () {
@@ -186,17 +178,17 @@ describe("T3TeamToolBrokerLive", () => {
         name: "t3team.thread.start_child",
       }),
       "t3team.workflow.run": expect.objectContaining({ name: "t3team.workflow.run" }),
+      // Ad-hoc widgets are a host tool too — bound for every thread, with or
+      // without a stored view context (see genericThreadToolIds).
+      "t3team.widget.show": expect.objectContaining({ name: "t3team.widget.show" }),
     });
   });
 
   it("creates and optionally starts a child session with session-style arguments", async () => {
     const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 11 }));
-    const orchestrationMock: OrchestrationEngineShape = {
-      readEvents: () => Stream.empty,
-      dispatch: (command) => Effect.promise(() => dispatch(command)),
-      streamDomainEvents: Stream.empty,
-      latestSequence: Effect.succeed(0),
-    };
+    const orchestrationMock = makeOrchestrationMock((command) =>
+      Effect.promise(() => dispatch(command)),
+    );
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -335,12 +327,9 @@ describe("T3TeamToolBrokerLive", () => {
 
   it("attaches a retargeted child session beneath its parent", async () => {
     const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 17 }));
-    const orchestrationMock: OrchestrationEngineShape = {
-      readEvents: () => Stream.empty,
-      dispatch: (command) => Effect.promise(() => dispatch(command)),
-      streamDomainEvents: Stream.empty,
-      latestSequence: Effect.succeed(0),
-    };
+    const orchestrationMock = makeOrchestrationMock((command) =>
+      Effect.promise(() => dispatch(command)),
+    );
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -409,12 +398,9 @@ describe("T3TeamToolBrokerLive", () => {
 
   it("creates a child session without optional repo services", async () => {
     const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 13 }));
-    const orchestrationMock: OrchestrationEngineShape = {
-      readEvents: () => Stream.empty,
-      dispatch: (command) => Effect.promise(() => dispatch(command)),
-      streamDomainEvents: Stream.empty,
-      latestSequence: Effect.succeed(0),
-    };
+    const orchestrationMock = makeOrchestrationMock((command) =>
+      Effect.promise(() => dispatch(command)),
+    );
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -514,12 +500,9 @@ describe("T3TeamToolBrokerLive", () => {
         }),
     );
     const runForThread = vi.fn(() => Effect.succeed({ status: "no-script" as const }));
-    const orchestrationMock: OrchestrationEngineShape = {
-      readEvents: () => Stream.empty,
-      dispatch: (command) => Effect.promise(() => dispatch(command)),
-      streamDomainEvents: Stream.empty,
-      latestSequence: Effect.succeed(0),
-    };
+    const orchestrationMock = makeOrchestrationMock((command) =>
+      Effect.promise(() => dispatch(command)),
+    );
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {

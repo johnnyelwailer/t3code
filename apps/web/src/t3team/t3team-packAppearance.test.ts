@@ -39,6 +39,32 @@ describe("pack appearance", () => {
     expect(css).not.toContain("body{font-family:var(--t3team-font-display)");
   });
 
+  it("maps sidebar tokens and a raw header background value onto CSS variables", () => {
+    applyT3TeamPackAppearance({
+      themeId: "nexplore",
+      name: "Nexplore",
+      colors: {
+        light: {
+          sidebar: "#fafafa",
+          sidebarRowHover: "#eeeeee",
+          sidebarHeaderBackground: "linear-gradient(90deg, #f05a00, #ff8a3d)",
+        },
+        dark: {
+          sidebar: "#111111",
+          sidebarHeaderBackground: "url(https://packs.example/header.png)",
+        },
+      },
+    });
+    const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
+    expect(css).toContain(":root{--sidebar:#fafafa");
+    expect(css).toContain("--sidebar-row-hover:#eeeeee");
+    expect(css).toContain("--t3team-sidebar-header-background:linear-gradient(90deg, #f05a00, #ff8a3d)");
+    expect(css).toContain(":root.dark{--sidebar:#111111");
+    expect(css).toContain(
+      "--t3team-sidebar-header-background:url(https://packs.example/header.png)",
+    );
+  });
+
   it("swaps the favicon to the brand mark and restores it on reset", () => {
     const original = Object.assign(document.createElement("link"), {
       rel: "icon",

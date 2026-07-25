@@ -150,6 +150,11 @@ import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./u
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
 import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+// t3team: the fork's only additions to this file are the two slots imported here.
+import {
+  InboxThreadAttribution,
+  InboxWorkItemSection,
+} from "~/t3team/components/t3team-InboxSlots";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -879,6 +884,8 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
               ) : (
                 <span className="flex-1" />
               )}
+              {/* t3team: compact work-item attribution; renders null when there is none. */}
+              <InboxThreadAttribution threadId={thread.id} />
               <span className="relative ml-auto flex h-5 min-w-8 shrink-0 items-center justify-end pl-1 text-xs">
                 <span
                   className={cn(
@@ -2452,6 +2459,8 @@ export default function SidebarV2() {
                 const items: ReactNode[] = activeThreads.map((thread) =>
                   renderThreadRow(thread, "active"),
                 );
+                // t3team: assigned/pinned work items as peers in the same stream.
+                items.unshift(<InboxWorkItemSection key="t3team-inbox-work-items" />);
                 // Snoozed shelf: between the inbox and Settled — out of the
                 // way, never gone. The header always renders while anything
                 // is snoozed (the count is the whole footprint when

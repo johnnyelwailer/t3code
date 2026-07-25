@@ -79,8 +79,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.pendingUserInputCount},
           ${row.hasActionableProposedPlan},
           ${row.deletedAt},
-          ${row.childStatus},
-          ${row.childStatusUpdatedAt}
+          ${row.childStatus ?? null},
+          ${row.childStatusUpdatedAt ?? null}
         )
         ON CONFLICT (thread_id)
         DO UPDATE SET

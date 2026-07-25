@@ -293,6 +293,10 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           runtimeMode: "full-access",
           branch: null,
           worktreePath: null,
+          // t3team: projection_threads.retention is NOT NULL DEFAULT
+          // 'retained', so rows inserted without the column hydrate as
+          // "retained".
+          retention: "retained",
           latestTurn: {
             turnId: asTurnId("turn-1"),
             state: "completed",
