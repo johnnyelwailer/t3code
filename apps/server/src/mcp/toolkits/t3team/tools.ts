@@ -163,14 +163,17 @@ export const T3TeamHelpTool = Tool.make("t3team_help", {
 });
 
 // Read-only listing of the project's saved recipe workflows. Routes to the
-// t3team.recipe.list broker tool. This tool takes no arguments; declared via
-// Tool.dynamic with an explicit `{type:"object"}` JSON schema because an effect
-// `Schema.Struct({})` renders as `{anyOf:[{object},{array}]}` (an empty TS object
-// type means "any non-null"), and MCP clients reject a non-object tool inputSchema
-// on tools/list — which would take the whole toolkit down for that client.
-export const T3TeamRecipeListTool = Tool.dynamic("t3team_recipe_list", {
+// t3team.recipe.list broker tool. This tool takes no arguments, so it omits
+// `parameters` entirely and picks up Tool.EmptyParams (a `Record<string, never>`),
+// which `Tool.getJsonSchema` renders as `{type:"object",additionalProperties:false}`.
+// Do NOT reach for `Schema.Struct({})`: that renders as `{anyOf:[{object},{array}]}`
+// (an empty TS object type means "any non-null") and MCP clients reject a non-object
+// tool inputSchema on tools/list, which would take the whole toolkit down for that
+// client. Tool.dynamic would also render a valid object schema, but it accepts no
+// `dependencies` and types its handler context as `never`, so the handler could not
+// reach McpInvocationContext / T3TeamToolBroker to call the broker.
+export const T3TeamRecipeListTool = Tool.make("t3team_recipe_list", {
   description: "List the project's saved recipe workflows (id, title, paths). Read-only.",
-  parameters: { type: "object", properties: {}, additionalProperties: false },
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
