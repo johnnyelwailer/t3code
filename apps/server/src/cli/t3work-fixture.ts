@@ -52,7 +52,10 @@ export const fixtureSeedCommand = Command.make("seed", {
       }).pipe(
         Effect.provide(
           Layer.mergeAll(SqlitePersistenceLayerLive, WorkspacePaths.layer).pipe(
-            Layer.provide(ServerConfig.layer(config)),
+            // provideMerge, not provide: the seed effect itself reads ServerConfig,
+            // so it must stay in the output context rather than being consumed by
+            // the layers above it.
+            Layer.provideMerge(ServerConfig.layer(config)),
             Layer.provide(Layer.succeed(References.MinimumLogLevel, "Error")),
           ),
         ),
