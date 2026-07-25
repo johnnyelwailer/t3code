@@ -8,7 +8,10 @@ import {
   type WorkItemFieldModel,
 } from "~/t3team/workitem/t3team-workItemFieldModel";
 import { WorkItemDate } from "~/t3team/workitem/t3team-WorkItemDate";
-import { WorkItemPersonChip } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
+import {
+  WorkItemPersonAvatar,
+  WorkItemPersonChip,
+} from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 import { WorkItemPriorityChip } from "~/t3team/workitem/t3team-WorkItemPriorityIcon";
 import { WorkItemStatusBadge } from "~/t3team/workitem/t3team-WorkItemStatusBadge";
 
@@ -94,18 +97,6 @@ export function WorkItemTitleBand({
         <WorkItemPersonChip person={model.assignee} isCurrentUser={isAssignedToCurrentUser} />
         <WorkItemPriorityChip priority={model.priority} />
 
-        {/*
-          Reporter sits behind a "by" so two adjacent avatars cannot be mistaken for each other —
-          without it, assignee and reporter read as one ambiguous pair of faces.
-        */}
-        {model.reporter ? (
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">by</span>
-            <WorkItemPersonChip person={model.reporter} size="sm" />
-          </span>
-        ) : null}
-
-        {/* Points where a team estimates in points, the original estimate where it estimates in time. */}
         {estimateLabel ? (
           <span className="text-xs tabular-nums text-muted-foreground">{estimateLabel}</span>
         ) : null}
@@ -117,6 +108,17 @@ export function WorkItemTitleBand({
             emphasis={isWorkItemOverdue(model, nowMs)}
             className="text-xs text-muted-foreground"
           />
+        ) : null}
+
+        {/*
+          Reporter last, and as a face rather than a name. It is the least-consulted field here, and
+          spelling it out next to the size read as though that person logged the time — adjacency
+          implies a relationship the row does not intend. The name is on hover, where it is enough.
+        */}
+        {model.reporter ? (
+          <span title={`Reported by ${model.reporter.displayName}`} className="flex items-center">
+            <WorkItemPersonAvatar person={model.reporter} size="sm" />
+          </span>
         ) : null}
       </div>
     </div>
