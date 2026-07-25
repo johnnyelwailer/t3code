@@ -110,8 +110,8 @@ import { t3teamAtlassianOAuthExchangeRouteLayer } from "./t3team-atlassian-oauth
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
-import { localProviderSessionsRouteLayer } from "./local-provider-sessions-routes.ts";
-import { LocalProviderSessionsWatcherLive } from "./localProviderSessionsWatcher.ts";
+import { localProviderSessionsRouteLayer } from "./t3team-localProviderSessions-routes.ts";
+import { LocalProviderSessionsWatcherLive } from "./t3team-localProviderSessionsWatcher.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
 import {
   t3teamProjectWorkspaceRefreshProjectContextRouteLayer,

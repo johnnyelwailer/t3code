@@ -1,6 +1,6 @@
 import { ProviderDriverKind } from "@t3tools/contracts";
 
-import { ProviderInstanceIcon } from "./chat/ProviderInstanceIcon";
+import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";
 
 export type ExternalWorkspaceProvider = "Codex" | "Claude";
 

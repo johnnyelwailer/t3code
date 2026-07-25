@@ -16,7 +16,7 @@ import {
   type LocalProviderSession,
   normalizeWorkspacePath,
   workspacePathsMatch,
-} from "./localProviderSessions.ts";
+} from "./t3team-localProviderSessions.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDirectory.ts";

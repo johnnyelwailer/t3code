@@ -80,7 +80,7 @@ import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import { cn, isMacPlatform, isWindowsPlatform, newProjectId } from "../lib/utils";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { buildThreadRouteParams, resolveThreadRouteTarget } from "../threadRoutes";
-import { ExternalWorkspaceProviderIcons } from "./ExternalWorkspaceProviderIcons";
+import { ExternalWorkspaceProviderIcons } from "~/t3team/components/t3team-ExternalWorkspaceProviderIcons";
 import {
   applyWslEnvironmentConfiguration,
   parseWslUncPath,

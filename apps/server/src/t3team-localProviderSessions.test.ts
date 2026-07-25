@@ -5,7 +5,7 @@ import {
   parseCodexLocalSession,
   normalizeWorkspacePath,
   workspacePathsMatch,
-} from "./localProviderSessions.ts";
+} from "./t3team-localProviderSessions.ts";
 
 describe("local provider session parsing", () => {
   it("reads a resumable Codex profile session", () => {

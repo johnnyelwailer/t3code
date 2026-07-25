@@ -7,7 +7,7 @@ import * as Path from "effect/Path";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 
-import { syncLocalProviderSessions } from "./local-provider-sessions-routes.ts";
+import { syncLocalProviderSessions } from "./t3team-localProviderSessions-routes.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 
 const WATCH_DEBOUNCE = Duration.seconds(1);

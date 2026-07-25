@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import {
   ExternalWorkspaceProviderIcons,
   type ExternalWorkspaceProvider,
-} from "~/components/ExternalWorkspaceProviderIcons";
+} from "~/t3team/components/t3team-ExternalWorkspaceProviderIcons";
 
 const meta: Meta<typeof ExternalWorkspaceProviderIcons> = {
   title: "External sessions/Provider icons",
