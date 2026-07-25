@@ -1,4 +1,4 @@
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -24,6 +24,19 @@ export interface LocalProviderSession {
 const MAX_FILES = 500;
 const MAX_SESSIONS = 100;
 const MAX_MESSAGES = 100;
+
+export const workspacePathsMatch = (
+  left: string,
+  right: string,
+  hostPlatform: string = platform(),
+): boolean => {
+  const normalize = (value: string) => value.trim().replace(/[\\/]+$/u, "");
+  if (hostPlatform !== "win32") return normalize(left) === normalize(right);
+  return (
+    normalize(left).replaceAll("/", "\\").toLocaleLowerCase() ===
+    normalize(right).replaceAll("/", "\\").toLocaleLowerCase()
+  );
+};
 
 const textFromContent = (content: unknown): string => {
   if (typeof content === "string") return content.trim();

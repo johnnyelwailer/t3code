@@ -1,6 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { parseClaudeLocalSession, parseCodexLocalSession } from "./localProviderSessions.ts";
+import {
+  parseClaudeLocalSession,
+  parseCodexLocalSession,
+  workspacePathsMatch,
+} from "./localProviderSessions.ts";
 
 describe("local provider session parsing", () => {
   it("reads a resumable Codex profile session", () => {
@@ -30,5 +34,10 @@ describe("local provider session parsing", () => {
       cwd: "/repo",
       messages: [{ role: "assistant", text: "Done" }],
     });
+  });
+
+  it("matches Windows workspace paths without case or slash sensitivity", () => {
+    expect(workspacePathsMatch("C:\\Dev\\App\\", "c:/dev/app", "win32")).toBe(true);
+    expect(workspacePathsMatch("/Users/pj/app", "/users/pj/app", "darwin")).toBe(false);
   });
 });

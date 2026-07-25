@@ -11,7 +11,11 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import { HttpRouter } from "effect/unstable/http";
 
-import { listLocalProviderSessions, type LocalProviderSession } from "./localProviderSessions.ts";
+import {
+  listLocalProviderSessions,
+  type LocalProviderSession,
+  workspacePathsMatch,
+} from "./localProviderSessions.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDirectory.ts";
@@ -60,9 +64,12 @@ function syncSession(session: LocalProviderSession) {
     }
     const query = yield* ProjectionSnapshotQuery;
     const snapshot = yield* query.getSnapshot();
-    const existingThread = snapshot.threads.find((thread) => thread.worktreePath === session.cwd);
+    const existingThread = snapshot.threads.find(
+      (thread) =>
+        thread.worktreePath !== null && workspacePathsMatch(thread.worktreePath, session.cwd),
+    );
     const project =
-      snapshot.projects.find((entry) => entry.workspaceRoot === session.cwd) ??
+      snapshot.projects.find((entry) => workspacePathsMatch(entry.workspaceRoot, session.cwd)) ??
       snapshot.projects.find((entry) => entry.id === existingThread?.projectId);
     if (!project) return { status: "skipped" as const, reason: "no matching worktree" };
 
