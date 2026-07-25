@@ -151,6 +151,10 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     }
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
+      if (process.env["T3WORK_TRACE_TURNS"])
+        console.error(
+          `[TRACE create] cid=${correlationId} thread=${p.threadId}\n${new Error().stack}`,
+        );
       // Resolve BEFORE registering/dispatching: enqueueOneWay swallows dispatch errors, so an
       // invalid provider/model must reject this send() while the SDK still observes it.
       // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
@@ -165,6 +169,10 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     }
     if (kind === "thread.turn") {
       const p = payload as ThreadTurnPayload;
+      if (process.env["T3WORK_TRACE_TURNS"])
+        console.error(
+          `[TRACE turn] cid=${correlationId} thread=${p.threadId}\n${new Error().stack}`,
+        );
       // Resolve BEFORE recording pending state (registry + durable recordPending): an invalid
       // provider/model must reject this ask cleanly, not park the run on an undispatched turn.
       // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
