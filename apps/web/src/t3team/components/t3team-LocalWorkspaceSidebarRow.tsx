@@ -2,14 +2,9 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { ChevronRightIcon, FolderIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ProjectFavicon } from "~/components/ProjectFavicon";
-import type {
-  ProjectThread,
-  ThreadSortOrder,
-  ThreadStatusPill,
-  ViewState,
-} from "~/t3team/t3team-types";
+import type { ProjectThread, ThreadSortOrder, ThreadStatusPill, ViewState } from "~/t3team/t3team-types";
 import { useAddToChat } from "~/t3team/hooks/t3team-useAddToChat";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
 import { SidebarMenuButton, SidebarMenuSub } from "~/t3team/components/ui/t3team-sidebar";
@@ -69,6 +64,7 @@ export function LocalWorkspaceSidebarRow({
   onRenameProject,
   onDeleteProject,
 }: LocalWorkspaceSidebarRowProps) {
+  const [showAllThreads, setShowAllThreads] = useState(false);
   const environmentId = readWorkspaceEnvironmentId(project);
   const workspaceRoot = project.workspace?.rootPath ?? null;
   const { addToChatFromRequest } = useAddToChat();
@@ -84,7 +80,9 @@ export function LocalWorkspaceSidebarRow({
     () => buildProjectSidebarThreadTree(sortedProjectThreads),
     [sortedProjectThreads],
   );
-  const visibleRootThreads = threadTree.rootThreads.slice(0, threadPreviewCount);
+  const visibleRootThreads = showAllThreads
+    ? threadTree.rootThreads
+    : threadTree.rootThreads.slice(0, threadPreviewCount);
   const visibleThreadCount = countProjectSidebarThreadBranches(visibleRootThreads, threadTree);
   const hiddenThreadCount = Math.max(0, sortedProjectThreads.length - visibleThreadCount);
   const projectState = getSidebarProjectState({ view, projectId: project.id });
@@ -189,10 +187,14 @@ export function LocalWorkspaceSidebarRow({
             onDeleteThread={onDeleteThread}
             onRenameThread={onRenameThread}
           />
-          {hiddenThreadCount > 0 ? (
-            <div className="px-2 py-1 text-[10px] text-muted-foreground/60">
-              +{hiddenThreadCount} more
-            </div>
+          {hiddenThreadCount > 0 || showAllThreads ? (
+            <button
+              type="button"
+              className="w-full px-2 py-1 text-left text-[10px] text-muted-foreground/60 hover:text-foreground"
+              onClick={() => setShowAllThreads((current) => !current)}
+            >
+              {showAllThreads ? "Show less" : `+${hiddenThreadCount} more`}
+            </button>
           ) : null}
           {sortedProjectThreads.length === 0 ? (
             <div className="px-2 py-1 text-[10px] text-muted-foreground/60">No threads yet</div>

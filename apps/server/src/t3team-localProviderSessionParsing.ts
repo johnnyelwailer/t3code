@@ -1,6 +1,7 @@
 export type LocalProviderKind = "codex" | "claudeAgent";
 
 export interface LocalProviderMessage {
+  readonly nativeIndex: number;
   readonly role: "user" | "assistant";
   readonly text: string;
   readonly createdAt: string;
@@ -42,6 +43,7 @@ export const parseCodexLocalSession = (raw: string): LocalProviderSession | null
   let cwd = "";
   let updatedAt = "";
   let branch: string | null = null;
+  let messageIndex = 0;
   for (const line of raw.split("\n").filter(Boolean)) {
     try {
       const row = JSON.parse(line) as {
@@ -61,7 +63,7 @@ export const parseCodexLocalSession = (raw: string): LocalProviderSession | null
         const role = row.payload.role;
         const text = textFromContent(row.payload.content);
         if ((role === "user" || role === "assistant") && text) {
-          messages.push({ role, text, createdAt: timestamp });
+          messages.push({ nativeIndex: messageIndex++, role, text, createdAt: timestamp });
         }
       }
     } catch {}
@@ -76,6 +78,7 @@ export const parseClaudeLocalSession = (raw: string): LocalProviderSession | nul
   let cwd = "";
   let updatedAt = "";
   let branch: string | null = null;
+  let messageIndex = 0;
   for (const line of raw.split("\n").filter(Boolean)) {
     try {
       const row = JSON.parse(line) as {
@@ -90,7 +93,7 @@ export const parseClaudeLocalSession = (raw: string): LocalProviderSession | nul
       const role = row.message?.role;
       const text = textFromContent(row.message?.content);
       if ((role === "user" || role === "assistant") && text) {
-        messages.push({ role, text, createdAt: timestamp });
+        messages.push({ nativeIndex: messageIndex++, role, text, createdAt: timestamp });
       }
     } catch {}
   }

@@ -1,11 +1,4 @@
-import {
-  CommandId,
-  DEFAULT_MODEL_BY_PROVIDER,
-  MessageId,
-  ProviderDriverKind,
-  ProviderInstanceId,
-  ThreadId,
-} from "@t3tools/contracts";
+import { CommandId, DEFAULT_MODEL_BY_PROVIDER, MessageId, ProviderDriverKind, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -38,11 +31,7 @@ function isSameNativeSession(
   binding: { readonly provider: string; readonly resumeCursor?: unknown | null },
   session: LocalProviderSession,
 ) {
-  if (
-    binding.provider !== session.provider ||
-    !binding.resumeCursor ||
-    typeof binding.resumeCursor !== "object"
-  ) {
+  if (binding.provider !== session.provider || !binding.resumeCursor || typeof binding.resumeCursor !== "object") {
     return false;
   }
   const cursor = binding.resumeCursor as { threadId?: unknown; resume?: unknown };
@@ -75,8 +64,8 @@ function syncSession(session: LocalProviderSession) {
     const alreadyBound = existing.find((binding) => isSameNativeSession(binding, session));
     if (alreadyBound) {
       const thread = snapshot.threads.find((entry) => entry.id === alreadyBound.threadId);
+      const orchestration = yield* OrchestrationEngineService;
       if (session.branch && !thread?.branch) {
-        const orchestration = yield* OrchestrationEngineService;
         yield* orchestration.dispatch({
           type: "thread.meta.update",
           commandId: CommandId.make(yield* crypto.randomUUIDv4),
@@ -84,6 +73,20 @@ function syncSession(session: LocalProviderSession) {
           branch: session.branch,
         });
       }
+      const messageIds = new Set(thread?.messages.map((message) => message.id) ?? []);
+      yield* Effect.forEach(session.messages, (message) =>
+        Effect.gen(function* () {
+          const messageId = MessageId.make(`local:${session.provider}:${session.nativeId}:${message.nativeIndex}`);
+          if (messageIds.has(messageId)) return;
+          yield* orchestration.dispatch({
+            type: "thread.message.upsert",
+            commandId: CommandId.make(yield* crypto.randomUUIDv4),
+            threadId: alreadyBound.threadId,
+            message: { messageId, role: message.role, text: message.text, turnId: null, streaming: false },
+            createdAt: message.createdAt || session.updatedAt,
+          });
+        }),
+      );
       return { status: "existing" as const, threadId: alreadyBound.threadId };
     }
 
@@ -112,14 +115,14 @@ function syncSession(session: LocalProviderSession) {
       resumeCursor: resumeCursor(session),
       runtimePayload: { cwd: session.cwd, localProviderSession: true },
     });
-    yield* Effect.forEach(session.messages, (message, index) =>
+    yield* Effect.forEach(session.messages, (message) =>
       Effect.gen(function* () {
         yield* orchestration.dispatch({
           type: "thread.message.upsert",
           commandId: CommandId.make(yield* crypto.randomUUIDv4),
           threadId,
           message: {
-            messageId: MessageId.make(`local:${session.provider}:${session.nativeId}:${index}`),
+            messageId: MessageId.make(`local:${session.provider}:${session.nativeId}:${message.nativeIndex}`),
             role: message.role,
             text: message.text,
             turnId: null,

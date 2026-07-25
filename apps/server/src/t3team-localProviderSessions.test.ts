@@ -35,7 +35,7 @@ describe("local provider session parsing", () => {
       nativeId: "claude-native-id",
       cwd: "/repo",
       branch: "feature/session-import",
-      messages: [{ role: "assistant", text: "Done" }],
+      messages: [{ nativeIndex: 0, role: "assistant", text: "Done" }],
     });
   });
 
