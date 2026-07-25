@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { cn } from "~/t3team/lib/t3team-utils";
 import {
   formatWorkItemDuration,
@@ -26,10 +28,16 @@ import {
 export function WorkItemProperties({
   model,
   nowMs,
+  assigneeControl,
+  estimateControl,
   className,
 }: {
   readonly model: WorkItemFieldModel;
   readonly nowMs: number;
+  /** Slice B replaces the assignee chip with a search-and-assign popover. */
+  readonly assigneeControl?: ReactNode;
+  /** Slice B replaces the static points value with a click-to-edit number. */
+  readonly estimateControl?: ReactNode;
   readonly className?: string;
 }) {
   const overdue = isWorkItemOverdue(model, nowMs);
@@ -45,7 +53,7 @@ export function WorkItemProperties({
       )}
     >
       <WorkItemPropertyRow label="Assignee" value={model.assignee?.displayName ?? "—"}>
-        <WorkItemPersonChip person={model.assignee} />
+        {assigneeControl ?? <WorkItemPersonChip person={model.assignee} />}
       </WorkItemPropertyRow>
 
       <WorkItemPropertyRow label="Reporter" value={model.reporter?.displayName}>
@@ -57,7 +65,7 @@ export function WorkItemProperties({
       </WorkItemPropertyRow>
 
       <WorkItemPropertyRow label="Points" value={model.storyPoints}>
-        <span className="tabular-nums">{model.storyPoints}</span>
+        {estimateControl ?? <span className="tabular-nums">{model.storyPoints}</span>}
       </WorkItemPropertyRow>
 
       <WorkItemPropertyRow label="Sprint" values={model.sprints}>

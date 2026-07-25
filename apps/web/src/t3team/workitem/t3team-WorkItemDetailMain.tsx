@@ -1,15 +1,10 @@
-import { useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
-import { createJiraTicketAssetUrlResolver } from "~/t3team/components/ticket/t3team-ticketAssetUrls";
-import type {
-  JiraAttachment,
-  JiraCommentItem,
-} from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
+import type { JiraAttachment, JiraCommentItem } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
 import type { ProjectTicket } from "~/t3team/t3team-types";
-import { T3TeamAdfRenderer } from "~/t3team/workitem/adf/t3team-AdfRenderer";
-import type { AdfDocument } from "~/t3team/workitem/adf/t3team-adfRendererTypes";
-import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
+import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
+import { buildWorkItemDetailMainControls } from "~/t3team/workitem/t3team-buildWorkItemDetailMainControls";
 import { WorkItemAttachments } from "~/t3team/workitem/t3team-WorkItemAttachments";
 import { WorkItemChildren } from "~/t3team/workitem/t3team-WorkItemChildren";
 import { WorkItemComments } from "~/t3team/workitem/t3team-WorkItemComments";
@@ -19,20 +14,24 @@ import { WorkItemLinks } from "~/t3team/workitem/t3team-WorkItemLinks";
 import { WorkItemProperties } from "~/t3team/workitem/t3team-WorkItemProperties";
 import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
 import { WorkItemSectionNav } from "~/t3team/workitem/t3team-WorkItemSectionNav";
-import {
-  buildWorkItemSectionAnchors,
-  buildWorkItemSectionNavEntries,
-} from "~/t3team/workitem/t3team-workItemSectionAnchors";
 import { WorkItemSkeleton } from "~/t3team/workitem/t3team-WorkItemSkeleton";
 import { WorkItemTitleBand } from "~/t3team/workitem/t3team-WorkItemTitleBand";
+import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
+import {
+  useWorkItemDetailMainContent,
+  type WorkItemSectionTarget,
+} from "~/t3team/workitem/t3team-useWorkItemDetailMainContent";
 
-/** The sections a reader can hand to the agent, mirroring the targets the previous view exposed. */
-export type WorkItemSectionTarget = "description" | "relationships" | "attachments" | "comments";
+export type { WorkItemSectionTarget };
 
 export type WorkItemDetailMainProps = {
   readonly model: WorkItemFieldModel;
   readonly projectId: string;
   readonly accountId?: string | undefined;
+  /** Slice B mutation access. Absent when there is no live Atlassian connection — the view stays read-only. */
+  readonly backend?: AtlassianBackendApi | undefined;
+  /** Jira's own project id, needed only for the status control's board-column lookup. */
+  readonly externalProjectId?: string | undefined;
   readonly httpBaseUrl?: string | undefined;
   readonly workspaceRoot?: string | undefined;
   readonly htmlBaseUrl?: string | undefined;
@@ -73,6 +72,8 @@ export function WorkItemDetailMain({
   model,
   projectId,
   accountId,
+  backend,
+  externalProjectId,
   httpBaseUrl,
   workspaceRoot,
   htmlBaseUrl,
@@ -90,48 +91,32 @@ export function WorkItemDetailMain({
   onSectionContextMenu,
   supplementalSections,
 }: WorkItemDetailMainProps) {
-  const sectionMenu = (section: WorkItemSectionTarget, label: string) =>
-    onSectionContextMenu
-      ? { onContextMenu: (event: React.MouseEvent) => onSectionContextMenu(event, section, label) }
-      : {};
-  const resolveAssetUrl = useMemo(
-    () =>
-      createJiraTicketAssetUrlResolver({
-        projectId,
-        ticketKey: model.key,
-        ...(accountId ? { accountId } : {}),
-        ...(httpBaseUrl ? { httpBaseUrl } : {}),
-        ...(workspaceRoot ? { workspaceRoot } : {}),
-        ...(htmlBaseUrl ? { baseUrl: htmlBaseUrl } : {}),
-        attachments: [...attachments],
-      }),
-    [accountId, attachments, htmlBaseUrl, httpBaseUrl, model.key, projectId, workspaceRoot],
-  );
+  const { resolveAssetUrl, anchors, navEntries, sectionMenu, renderCommentBody } =
+    useWorkItemDetailMainContent({
+      model,
+      projectId,
+      ...(accountId ? { accountId } : {}),
+      ...(httpBaseUrl ? { httpBaseUrl } : {}),
+      ...(workspaceRoot ? { workspaceRoot } : {}),
+      ...(htmlBaseUrl ? { htmlBaseUrl } : {}),
+      attachments,
+      childCount: childItems.length,
+      snapshotRaw,
+      commentCount: comments.length,
+      onOpenTicket,
+      ...(onSectionContextMenu ? { onSectionContextMenu } : {}),
+    });
 
-  const anchors = buildWorkItemSectionAnchors(model.key);
-  const navEntries = buildWorkItemSectionNavEntries({
-    anchors,
-    childCount: childItems.length,
-    snapshotRaw,
-    attachmentCount: attachments.length,
-    commentCount: comments.length,
+  // Editable controls need a live backend and a connected account; without either the view stays
+  // read-only, same as before Slice B.
+  const { statusControl, assigneeControl, estimateControl } = buildWorkItemDetailMainControls({
+    model,
+    ...(accountId ? { accountId } : {}),
+    ...(backend ? { backend } : {}),
+    ...(externalProjectId ? { externalProjectId } : {}),
+    ...(currentUserName ? { currentUserName } : {}),
+    onReload,
   });
-
-  /**
-   * Comment bodies render from ADF for the same reason descriptions do — it is the format Jira
-   * stores, so nothing is lost on the way in or, later, on the way back out.
-   *
-   * Returning `null` defers to the comment component's own HTML/markdown fallback, which is what a
-   * comment cached before ADF capture will need.
-   */
-  const renderCommentBody = (comment: JiraCommentItem): ReactNode =>
-    comment.bodyAdf ? (
-      <T3TeamAdfRenderer
-        doc={comment.bodyAdf as AdfDocument}
-        {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
-        onOpenIssue={onOpenTicket}
-      />
-    ) : null;
 
   return (
     <WorkItemDetailLayout
@@ -140,10 +125,19 @@ export function WorkItemDetailMain({
           model={model}
           nowMs={nowMs}
           {...(currentUserName ? { currentUserName } : {})}
+          {...(statusControl ? { statusControl } : {})}
+          {...(assigneeControl ? { assigneeControl } : {})}
         />
       }
       sectionNav={<WorkItemSectionNav entries={navEntries} />}
-      properties={<WorkItemProperties model={model} nowMs={nowMs} />}
+      properties={
+        <WorkItemProperties
+          model={model}
+          nowMs={nowMs}
+          {...(assigneeControl ? { assigneeControl } : {})}
+          {...(estimateControl ? { estimateControl } : {})}
+        />
+      }
       primary={
         <>
           {error ? (

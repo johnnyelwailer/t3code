@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react";
 
 import type { JiraCommentItem } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
@@ -5,6 +6,8 @@ import type { ProjectTicket } from "~/t3team/t3team-types";
 import { WorkItemDetailHeader } from "~/t3team/workitem/t3team-WorkItemDetailHeader";
 import { WorkItemDetailMain } from "~/t3team/workitem/t3team-WorkItemDetailMain";
 import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
+
+import { createWorkItemDetailMockBackend } from "./t3team-workItemDetailMockBackend";
 
 const NOW_MS = Date.UTC(2026, 6, 25, 9, 30);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -101,7 +104,10 @@ const MODEL: WorkItemFieldModel = {
         type: "codeBlock",
         attrs: { language: "typescript" },
         content: [
-          { type: "text", text: "// viewport write is dropped before the controller mounts\ncontroller.restoreCamera(snapshot.camera);" },
+          {
+            type: "text",
+            text: "// viewport write is dropped before the controller mounts\ncontroller.restoreCamera(snapshot.camera);",
+          },
         ],
       },
     ],
@@ -188,6 +194,25 @@ const COMMENTS: JiraCommentItem[] = [
   },
 ];
 
+const ATTACHMENTS = [
+  {
+    id: "a1",
+    filename: "viewport-drift.png",
+    mimeType: "image/png",
+    size: 284_512,
+    author: "Grace Hopper",
+    created: new Date(NOW_MS - 3 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "a2",
+    filename: "session-trace.har",
+    mimeType: "application/json",
+    size: 1_942_016,
+    author: "Grace Hopper",
+    created: new Date(NOW_MS - 3 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
 function WorkItemDetailPreview({ loading = false }: { readonly loading?: boolean }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -208,27 +233,48 @@ function WorkItemDetailPreview({ loading = false }: { readonly loading?: boolean
         childItems={CHILDREN}
         projectTickets={[...CHILDREN, ...LINKED]}
         snapshotRaw={SNAPSHOT_RAW}
-        attachments={[
-          {
-            id: "a1",
-            filename: "viewport-drift.png",
-            mimeType: "image/png",
-            size: 284_512,
-            author: "Grace Hopper",
-            created: new Date(NOW_MS - 3 * 60 * 60 * 1000).toISOString(),
-          },
-          {
-            id: "a2",
-            filename: "session-trace.har",
-            mimeType: "application/json",
-            size: 1_942_016,
-            author: "Grace Hopper",
-            created: new Date(NOW_MS - 3 * 60 * 60 * 1000).toISOString(),
-          },
-        ]}
+        attachments={ATTACHMENTS}
         comments={COMMENTS}
         nowMs={NOW_MS}
         loading={loading}
+        error={null}
+        onReload={() => undefined}
+        onOpenTicket={() => undefined}
+      />
+    </div>
+  );
+}
+
+/**
+ * Slice B: the same item, but with a live-feeling backend behind it — status, assignee and story
+ * points are editable, and each write shows a brief pending state before it lands. `onReload` here
+ * is a no-op because the mock backend already updates `model` directly; a real caller re-fetches.
+ */
+function EditableWorkItemDetailPreview() {
+  const [model, setModel] = useState<WorkItemFieldModel>(MODEL);
+  const [backend] = useState(() => createWorkItemDetailMockBackend(setModel));
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <WorkItemDetailHeader
+        breadcrumb={{ projectTitle: "IES Koordination", itemKey: model.key }}
+        isRefreshing={false}
+        onBack={() => undefined}
+        onRefresh={() => undefined}
+      />
+      <WorkItemDetailMain
+        model={model}
+        projectId={PROJECT_ID}
+        accountId="acct-demo"
+        externalProjectId="proj-demo"
+        backend={backend as never}
+        childItems={CHILDREN}
+        projectTickets={[...CHILDREN, ...LINKED]}
+        snapshotRaw={SNAPSHOT_RAW}
+        attachments={ATTACHMENTS}
+        comments={COMMENTS}
+        nowMs={NOW_MS}
+        loading={false}
         error={null}
         onReload={() => undefined}
         onOpenTicket={() => undefined}
@@ -311,6 +357,24 @@ export const ResponsiveLadder: Story = {
       <Frame width="360px" label="360px — small phone" height="30rem" />
       <Frame width="520px" label="520px — detail pane with the agent panel open" height="30rem" />
       <Frame width="900px" label="900px — rail appears" height="30rem" />
+    </div>
+  ),
+};
+
+/**
+ * Slice B: status, assignee and story points are live. Click a value to open its picker — status and
+ * assignee popovers commit only when you pick something; story points opens a small editor where
+ * Enter saves and Escape restores. Every successful write shows a brief "field → value · Undo".
+ */
+export const Editable: Story = {
+  render: () => (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-muted-foreground">
+        1100px — status, assignee and story points are editable against a mock backend
+      </p>
+      <div className="h-[min(44rem,80vh)] w-[1100px] overflow-hidden rounded-xl border border-border bg-background">
+        <EditableWorkItemDetailPreview />
+      </div>
     </div>
   ),
 };

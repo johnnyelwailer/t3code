@@ -74,6 +74,10 @@ export function buildWorkItemDetailMainProps({
       handleSectionContextMenu(event, section, label),
     projectId: project.id,
     ...(project.source.accountId ? { accountId: project.source.accountId } : {}),
+    ...(view.backend ? { backend: view.backend.atlassian } : {}),
+    ...(project.source.externalProjectId
+      ? { externalProjectId: project.source.externalProjectId }
+      : {}),
     ...(view.backend?.httpBaseUrl ? { httpBaseUrl: view.backend.httpBaseUrl } : {}),
     ...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {}),
     ...(view.htmlBaseUrl ? { htmlBaseUrl: view.htmlBaseUrl } : {}),

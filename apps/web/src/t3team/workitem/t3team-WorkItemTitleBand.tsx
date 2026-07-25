@@ -29,6 +29,7 @@ export function WorkItemTitleBand({
   currentUserName,
   statusControl,
   titleControl,
+  assigneeControl,
   className,
 }: {
   readonly model: WorkItemFieldModel;
@@ -38,6 +39,8 @@ export function WorkItemTitleBand({
   readonly statusControl?: ReactNode;
   /** Slice B replaces the static heading with an inline editor. */
   readonly titleControl?: ReactNode;
+  /** Slice B replaces the assignee chip with a search-and-assign popover. */
+  readonly assigneeControl?: ReactNode;
   readonly className?: string;
 }) {
   /**
@@ -94,7 +97,9 @@ export function WorkItemTitleBand({
           Always rendered, unassigned included. Who owns an item is a primary question, and an empty
           space is not an answer — "nobody" is, and it is the one that prompts someone to pick it up.
         */}
-        <WorkItemPersonChip person={model.assignee} isCurrentUser={isAssignedToCurrentUser} />
+        {assigneeControl ?? (
+          <WorkItemPersonChip person={model.assignee} isCurrentUser={isAssignedToCurrentUser} />
+        )}
 
         {estimateLabel ? (
           <span className="text-xs tabular-nums text-muted-foreground">{estimateLabel}</span>
