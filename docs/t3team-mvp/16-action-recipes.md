@@ -81,7 +81,7 @@ export default defineRecipe({
   surfaces: ["workitem.detail.sidepanel"],
 
   // Metadata is derived from context in code, not via {{ }} expressions.
-  displayName: (ctx) => `Create QA plan for ${ctx.workitem?.displayId ?? "selected work"}`,
+  title: (ctx) => `Create QA plan for ${ctx.workitem?.displayId ?? "selected work"}`,
   shortDescription: "Build a test matrix from current ticket context",
   icon: (ctx) => (ctx.workitem?.type === "Bug" ? "bug" : "clipboard-check"),
   rank: (ctx) => (ctx.workitem?.priority === "High" ? 90 : 50),
@@ -181,7 +181,7 @@ is needed repeatedly, expose it as a **Tool** rather than a library import.
 ## Context: Reactive Queryable Surface
 
 Context is the read substrate that every consumer of the recipe system reads — recipe
-discovery (`visible(ctx)`, `displayName(ctx)`, `rank(ctx)`), Views, and orchestration steps
+discovery (`visible(ctx)`, `title(ctx)`, `rank(ctx)`), Views, and orchestration steps
 (`script`, `agent`, `tool`) all bind the same model. It is not a recipe-specific concept.
 
 This section defines the contract. Surfaces (next section) declare which context shapes
@@ -206,7 +206,7 @@ type RenderContext =
 ```
 
 A single-surface recipe gets a narrowed context type for free. A multi-surface recipe
-narrows by `ctx.surface === "..."` inside `visible`/`displayName`/etc. TS prevents
+narrows by `ctx.surface === "..."` inside `visible`/`title`/etc. TS prevents
 accessing fields not present on the declared surfaces.
 
 ### Queryable contract
@@ -247,7 +247,7 @@ them via Proxy.
 
 ### Pure functions, Proxy-traced reactivity
 
-Recipes never subscribe to events. `visible` (and metadata derivers like `displayName` and
+Recipes never subscribe to events. `visible` (and metadata derivers like `title` and
 `rank`) are **pure functions of the context**:
 
 ```ts
@@ -362,7 +362,7 @@ The Context contract is consumed identically by all three places that need data:
 
 | Consumer                                            | Binding                                            | Reactivity                         |
 | --------------------------------------------------- | -------------------------------------------------- | ---------------------------------- |
-| Recipe discovery (`visible`, `displayName`, `rank`) | UI side, live context                              | Yes — Proxy-traced                 |
+| Recipe discovery (`visible`, `title`, `rank`) | UI side, live context                              | Yes — Proxy-traced                 |
 | Views (in conversation, dashboards, side panels)    | UI side, live context as props                     | Yes — field access is subscription |
 | Orchestration steps (`script`, `agent`, `tool`)          | Server side, **snapshot** of context at step start | No — one-shot per step             |
 
