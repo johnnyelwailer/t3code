@@ -4,7 +4,6 @@
  * Drives a launched run to a terminal state: answer each `askUser` the registry surfaces, in spec
  * order, and watch the durable run row for the completion the reactor path produces.
  */
-import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -12,26 +11,6 @@ import * as Option from "effect/Option";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { answerT3workRecipeHarnessAsk } from "./t3work-recipeWorkflowHarnessStub.ts";
 import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
-
-/**
- * Bounded predicate wait, kept alongside the polling loop it belongs to.
- *
- * Clock, not Date.now: Effect code reads time through the Clock service, and the
- * repo's effect diagnostics enforce it.
- */
-export const waitUntilT3workRecipeHarness = (
-  predicate: () => boolean,
-  label: string,
-  timeoutMs: number,
-) =>
-  Effect.gen(function* () {
-    const start = yield* Clock.currentTimeMillis;
-    while ((yield* Clock.currentTimeMillis) - start < timeoutMs) {
-      if (predicate()) return true;
-      yield* Effect.sleep(Duration.millis(10));
-    }
-    return yield* Effect.die(new Error(`harness timed out waiting for: ${label}`));
-  });
 
 export function driveT3workRecipeHarnessAsks(input: {
   readonly runId: string;
