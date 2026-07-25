@@ -1,4 +1,11 @@
-import { type ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  MessageId,
+  type ModelSelection,
+  type ProviderInteractionMode,
+  type RuntimeMode,
+  type ThreadId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
@@ -80,4 +87,40 @@ export function appendStartChildHandoffActivities(input: {
     Effect.asVoid,
     Effect.catch(() => Effect.void),
   );
+}
+
+/**
+ * The child-kickoff turn command. Built here so the caller stays inside the
+ * 200-line budget and so the automated-start marker lives next to the kickoff
+ * text it belongs to — see `t3team-deciderTurnAdmission` for why the marker
+ * matters (an unmarked automated start bypasses per-thread turn admission).
+ */
+export function buildChildKickoffTurnCommand(input: {
+  readonly childThreadId: ThreadId;
+  readonly commandId: string;
+  readonly messageId: string;
+  readonly text: string;
+  readonly modelSelection: ModelSelection;
+  readonly titleSeed: string;
+  readonly runtimeMode: RuntimeMode;
+  readonly interactionMode: ProviderInteractionMode;
+  readonly createdAt: string;
+}) {
+  return {
+    type: "thread.turn.start",
+    commandId: CommandId.make(input.commandId),
+    threadId: input.childThreadId,
+    message: {
+      messageId: MessageId.make(input.messageId),
+      role: "user",
+      text: input.text,
+      attachments: [],
+      t3teamExt: { author: { kind: "system" } },
+    },
+    modelSelection: input.modelSelection,
+    titleSeed: input.titleSeed,
+    runtimeMode: input.runtimeMode,
+    interactionMode: input.interactionMode,
+    createdAt: input.createdAt,
+  } as const;
 }
