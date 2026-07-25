@@ -9,10 +9,13 @@ import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
  * `t3team-TicketAttachments.tsx` used.
  */
 export function WorkItemAttachments({
+  anchorId,
   attachments,
   resolveAssetUrl,
   nowMs,
 }: {
+  /** Section nav target. */
+  readonly anchorId?: string | undefined;
   readonly attachments: ReadonlyArray<JiraAttachment>;
   readonly resolveAssetUrl?: (url: string) => string;
   readonly nowMs: number;
@@ -20,7 +23,11 @@ export function WorkItemAttachments({
   if (attachments.length === 0) return null;
 
   return (
-    <WorkItemSection title="Attachments" count={attachments.length}>
+    <WorkItemSection
+      title="Attachments"
+      {...(anchorId ? { anchorId } : {})}
+      count={attachments.length}
+    >
       <div className="grid grid-cols-2 gap-2.5 @lg/workitem:grid-cols-3 @3xl/workitem:grid-cols-4">
         {attachments.map((attachment, index) => {
           const rawHref = attachment.content ?? attachment.thumbnail ?? "";

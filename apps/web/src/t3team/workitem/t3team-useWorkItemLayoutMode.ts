@@ -4,11 +4,15 @@ export type WorkItemLayoutMode = "narrow" | "regular" | "wide" | "ultra";
 
 /**
  * Breakpoints in pixels, matching the container-query steps used for styling in
- * `t3team-WorkItemDetailLayout.tsx` (`@2xl` = 42rem, `@4xl` = 56rem, 90rem for the split).
+ * `t3team-WorkItemDetailLayout.tsx` (`@2xl` = 42rem, `@4xl` = 56rem, 72rem for the split).
+ *
+ * The split threshold is where a second content column becomes viable rather than merely possible:
+ * at 72rem, subtracting the rail and gutters leaves two ~420px columns, which is enough for issue
+ * rows and comment bodies. Splitting earlier would produce two columns too narrow to read.
  */
 const WIDE_PX = 56 * 16;
 const REGULAR_PX = 42 * 16;
-const ULTRA_PX = 90 * 16;
+const ULTRA_PX = 72 * 16;
 
 function modeForWidth(width: number): WorkItemLayoutMode {
   if (width >= ULTRA_PX) return "ultra";

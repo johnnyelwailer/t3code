@@ -16,6 +16,7 @@ import { cn } from "~/t3team/lib/t3team-utils";
  */
 export function WorkItemSection({
   title,
+  anchorId,
   count,
   action,
   collapsible = false,
@@ -24,6 +25,8 @@ export function WorkItemSection({
   className,
 }: {
   readonly title?: string;
+  /** Target for the section nav. `scroll-mt` keeps the heading clear of the sticky nav. */
+  readonly anchorId?: string;
   readonly count?: number;
   readonly action?: ReactNode;
   readonly collapsible?: boolean;
@@ -34,13 +37,18 @@ export function WorkItemSection({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const contentId = useId();
   const isCollapsed = collapsible && collapsed;
+  const anchorProps = anchorId ? { id: anchorId } : {};
 
   if (!title) {
-    return <section className={cn("min-w-0", className)}>{children}</section>;
+    return (
+      <section className={cn("min-w-0 scroll-mt-16", className)} {...anchorProps}>
+        {children}
+      </section>
+    );
   }
 
   return (
-    <section className={cn("min-w-0", className)}>
+    <section className={cn("min-w-0 scroll-mt-16", className)} {...anchorProps}>
       <div className="mb-2.5 flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <HeadingControl
           collapsible={collapsible}

@@ -12,36 +12,33 @@ import { useWorkItemLayoutMode } from "~/t3team/workitem/t3team-useWorkItemLayou
  * resizable pane (`t3team-ResizableRightSidebarLayout.tsx`) — a viewport media query would claim
  * "desktop" while the content actually has 400px because the agent panel is open.
  *
- * Progression:
- * - `narrow`/`regular` — one column. Properties collapse into a "Details" section placed *after*
- *   the description: the description is what the reader came for, and sixteen property rows above
- *   it would push it off a phone screen entirely. Status stays visible in the title band, so
- *   nothing essential is hidden by the collapse.
- * - `wide` — content plus a properties rail, expanded.
- * - `ultra` — description and discussion read side by side, so a wide display shows the item and
- *   its conversation at once instead of stretching one column across it.
+ * The description is the only block with unbounded length: some projects write thousands of words,
+ * which would push child items, links and the whole conversation off the bottom of the page. So
+ * from 72rem those sit in their own column *beside* the description rather than after it — nothing
+ * important can be buried by prose. Below that width two columns would be too narrow to read, and
+ * the sticky section nav is what keeps everything one click away instead.
  */
 export function WorkItemDetailLayout({
   titleBand,
+  sectionNav,
   properties,
   primary,
-  discussion,
+  secondary,
   className,
 }: {
   readonly titleBand: ReactNode;
+  readonly sectionNav: ReactNode;
   readonly properties: ReactNode;
+  /** The description. Unbounded length, so it never precedes anything that matters. */
   readonly primary: ReactNode;
-  readonly discussion: ReactNode;
+  /** Children, links, attachments, conversation — bounded, and never buried by the description. */
+  readonly secondary: ReactNode;
   readonly className?: string;
 }) {
   const { mode, containerRef } = useWorkItemLayoutMode();
   const hasRail = mode === "wide" || mode === "ultra";
+  const isSplit = mode === "ultra";
 
-  /*
-    The container is this element, not the window and not the page: the detail header sits above
-    both this column and the agent panel, so only the column's own width tells us how much room the
-    content has.
-  */
   return (
     <div
       ref={containerRef}
@@ -50,12 +47,13 @@ export function WorkItemDetailLayout({
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto flex w-full max-w-[120rem] flex-col gap-5 px-4 py-5 @2xl/workitem:px-6 @2xl/workitem:py-6">
           {titleBand}
+          {isSplit ? null : sectionNav}
 
           {hasRail ? (
             <div className="grid min-w-0 items-start gap-5 @4xl/workitem:grid-cols-[minmax(0,1fr)_17rem] @6xl/workitem:grid-cols-[minmax(0,1fr)_19rem] @6xl/workitem:gap-6">
-              <div className={cn("grid min-w-0 gap-5", mode === "ultra" && "grid-cols-2 gap-6")}>
+              <div className={cn("grid min-w-0 gap-5", isSplit && "grid-cols-2 gap-6")}>
                 <div className="flex min-w-0 flex-col gap-5">{primary}</div>
-                <div className="flex min-w-0 flex-col gap-5">{discussion}</div>
+                <div className="flex min-w-0 flex-col gap-5">{secondary}</div>
               </div>
 
               <aside className="min-w-0 border-t border-border/60 pt-4 @4xl/workitem:border-t-0 @4xl/workitem:pt-0">
@@ -70,7 +68,7 @@ export function WorkItemDetailLayout({
                   {properties}
                 </div>
               </WorkItemSection>
-              {discussion}
+              {secondary}
             </div>
           )}
         </div>

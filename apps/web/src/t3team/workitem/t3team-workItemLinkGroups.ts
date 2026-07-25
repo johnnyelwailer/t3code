@@ -71,3 +71,16 @@ export function groupWorkItemIssueLinks(
 
   return order.map((label) => ({ label, issues: groups.get(label)! }));
 }
+
+/**
+ * How many linked issues an item has, without resolving any of them.
+ *
+ * The section nav needs a count before the rows are built, and it needs one even when none of the
+ * linked keys are in the loaded project tickets — an unresolvable link still exists.
+ */
+export function countWorkItemIssueLinks(snapshotRaw: unknown): number {
+  return groupWorkItemIssueLinks(snapshotRaw, () => undefined).reduce(
+    (total, group) => total + group.issues.length,
+    0,
+  );
+}

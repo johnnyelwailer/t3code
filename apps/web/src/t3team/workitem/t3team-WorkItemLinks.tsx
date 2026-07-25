@@ -21,11 +21,14 @@ function findProjectTicket(
  * `WorkItemIssueRow` already renders it for children.
  */
 export function WorkItemLinks({
+  anchorId,
   snapshotRaw,
   projectTickets,
   projectId,
   onOpenTicket,
 }: {
+  /** Section nav target. */
+  readonly anchorId?: string | undefined;
   readonly snapshotRaw: unknown;
   readonly projectTickets: ReadonlyArray<ProjectTicket>;
   readonly projectId: string;
@@ -38,7 +41,7 @@ export function WorkItemLinks({
   if (total === 0) return null;
 
   return (
-    <WorkItemSection title="Linked issues" count={total}>
+    <WorkItemSection title="Linked issues" {...(anchorId ? { anchorId } : {})} count={total}>
       <div className="space-y-3">
         {groups.map((group) => (
           <WorkItemIssueList key={group.label}>

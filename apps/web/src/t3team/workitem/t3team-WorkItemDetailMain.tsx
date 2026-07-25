@@ -18,6 +18,11 @@ import { WorkItemDetailLayout } from "~/t3team/workitem/t3team-WorkItemDetailLay
 import { WorkItemLinks } from "~/t3team/workitem/t3team-WorkItemLinks";
 import { WorkItemProperties } from "~/t3team/workitem/t3team-WorkItemProperties";
 import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
+import {
+  WorkItemSectionNav,
+  type WorkItemSectionNavEntry,
+} from "~/t3team/workitem/t3team-WorkItemSectionNav";
+import { countWorkItemIssueLinks } from "~/t3team/workitem/t3team-workItemLinkGroups";
 import { WorkItemSkeleton } from "~/t3team/workitem/t3team-WorkItemSkeleton";
 import { WorkItemTitleBand } from "~/t3team/workitem/t3team-WorkItemTitleBand";
 
@@ -46,9 +51,11 @@ export type WorkItemDetailMainProps = {
 /**
  * The work item's content column.
  *
- * Replaces the previous stack of bordered cards. The description leads because it is what the
- * reader came for; everything else is a section under it, and the discussion column is separated so
- * a wide display can show the item and its conversation together.
+ * Replaces the previous stack of bordered cards. The description leads because it is what the reader
+ * came for, but it is also the one block with no length limit — so it gets a column to itself, and
+ * the bounded sections that used to sit after it (children, links, files, conversation) sit beside
+ * it instead. Nothing important can be pushed off the page by a long description, and the
+ * description itself is never truncated to achieve that.
  */
 export function WorkItemDetailMain({
   model,
@@ -83,6 +90,30 @@ export function WorkItemDetailMain({
     [accountId, attachments, htmlBaseUrl, httpBaseUrl, model.key, projectId, workspaceRoot],
   );
 
+  /** Anchors are derived from the item key so two items open side by side cannot collide. */
+  const anchors = {
+    description: `wi-${model.key}-description`,
+    children: `wi-${model.key}-children`,
+    links: `wi-${model.key}-links`,
+    attachments: `wi-${model.key}-attachments`,
+    comments: `wi-${model.key}-comments`,
+  };
+
+  const linkCount = countWorkItemIssueLinks(snapshotRaw);
+  const navEntries: ReadonlyArray<WorkItemSectionNavEntry> = [
+    { anchorId: anchors.description, label: "Description" },
+    ...(childItems.length > 0
+      ? [{ anchorId: anchors.children, label: "Children", count: childItems.length }]
+      : []),
+    ...(linkCount > 0 ? [{ anchorId: anchors.links, label: "Links", count: linkCount }] : []),
+    ...(attachments.length > 0
+      ? [{ anchorId: anchors.attachments, label: "Files", count: attachments.length }]
+      : []),
+    ...(comments.length > 0
+      ? [{ anchorId: anchors.comments, label: "Comments", count: comments.length }]
+      : []),
+  ];
+
   /**
    * Comment bodies render from ADF for the same reason descriptions do — it is the format Jira
    * stores, so nothing is lost on the way in or, later, on the way back out.
@@ -102,6 +133,7 @@ export function WorkItemDetailMain({
   return (
     <WorkItemDetailLayout
       titleBand={<WorkItemTitleBand model={model} />}
+      sectionNav={<WorkItemSectionNav entries={navEntries} />}
       properties={<WorkItemProperties model={model} nowMs={nowMs} />}
       primary={
         <>
@@ -109,46 +141,55 @@ export function WorkItemDetailMain({
             <T3TeamErrorState error={error} action="load this work item" onRetry={onReload} />
           ) : null}
 
-          <WorkItemSection title="Description">
+          <WorkItemSection title="Description" anchorId={anchors.description}>
             {/* Only the first load shows a skeleton; a refresh keeps the current content visible. */}
             {loading && !model.descriptionAdf && !model.descriptionText ? (
               <WorkItemSkeleton lines={4} />
             ) : (
               <WorkItemDescription
                 model={model}
-                resolveAssetUrl={resolveAssetUrl}
+                {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
                 onOpenIssue={onOpenTicket}
                 {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
               />
             )}
           </WorkItemSection>
-
-          <WorkItemChildren items={childItems} onOpenTicket={onOpenTicket} />
+        </>
+      }
+      secondary={
+        <>
+          <WorkItemChildren
+            items={childItems}
+            anchorId={anchors.children}
+            onOpenTicket={onOpenTicket}
+          />
 
           <WorkItemLinks
             snapshotRaw={snapshotRaw}
             projectTickets={projectTickets}
             projectId={projectId}
+            anchorId={anchors.links}
             onOpenTicket={onOpenTicket}
           />
 
           <WorkItemAttachments
             attachments={attachments}
+            anchorId={anchors.attachments}
             {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
             nowMs={nowMs}
           />
 
+          <WorkItemComments
+            comments={comments}
+            anchorId={anchors.comments}
+            nowMs={nowMs}
+            {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
+            renderBody={renderCommentBody}
+            {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
+          />
+
           {supplementalSections}
         </>
-      }
-      discussion={
-        <WorkItemComments
-          comments={comments}
-          nowMs={nowMs}
-          {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
-          renderBody={renderCommentBody}
-          {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
-        />
       }
     />
   );
