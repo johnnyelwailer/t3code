@@ -96,3 +96,39 @@ export function summarizeT3workHarnessCommands(commands: ReadonlyArray<Orchestra
   }
   return { widgets, notifications, phases, steps };
 }
+
+/** Shape the harness's terminal state into the report the CLI runner prints. */
+export function assembleT3workRecipeHarnessReport(input: {
+  readonly recipeId: string;
+  readonly scriptCalls: ReadonlyArray<string>;
+  readonly commands: ReadonlyArray<OrchestrationCommand>;
+  /** Outputs collected by the launch-time `onComplete` sink; non-empty means it fired. */
+  readonly completed: ReadonlyArray<unknown>;
+  readonly launchStatus: string;
+  readonly asksAnswered: number;
+  readonly workflowRun: T3workRecipeHarnessReport["workflowRun"];
+  readonly seededWorkItemCount: number;
+}) {
+  const summary = summarizeT3workHarnessCommands(input.commands);
+  return {
+    recipeId: input.recipeId,
+    status: input.completed.length > 0 ? "completed" : input.launchStatus,
+    result: input.completed[0] ?? null,
+    phases: summary.phases,
+    steps: summary.steps,
+    launchStatus: input.launchStatus,
+    widgets: summary.widgets,
+    notifications: summary.notifications,
+    agentPromptCount: input.commands.filter(
+      (command) => (command as { type?: string }).type === "thread.turn.start",
+    ).length,
+    asksAnswered: input.asksAnswered,
+    scriptCalls: input.scriptCalls,
+    workflowRun: input.workflowRun,
+    commandTypes: [...new Set(input.commands.map((command) => command.type))],
+    seededWorkItemCount: input.seededWorkItemCount,
+  } satisfies T3workRecipeHarnessReport & {
+    readonly seededWorkItemCount: number;
+    readonly launchStatus: string;
+  };
+}

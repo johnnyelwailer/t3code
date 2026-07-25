@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - the harness materializes temp run roots on disk.
 /**
  * Recipe/orchestration E2E harness (Epic 25 §Host wiring).
  *
@@ -6,45 +5,26 @@
  * resume reactor, with the model stubbed at the provider seam, and reports what actually
  * happened: phases, `scripts.*` calls, emitted widgets, asks answered, the durable
  * `workflow_runs` row and the run's return value. Browser-free, network-free, so it runs in CI.
+ *
+ * This module is the entry point only; the phases live in focused siblings:
+ * `…HarnessSetup` (fixture + project), `…HarnessLaunch` (durable row + launch),
+ * `…HarnessLoop` (ask/answer + completion polling), `…HarnessReport` (report shaping).
  */
-import {
-  CommandId,
-  type OrchestrationCommand,
-  ProjectId,
-  ProviderInstanceId,
-  ThreadId,
-} from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
-import * as NodeFS from "node:fs";
-import * as NodeOS from "node:os";
-import * as NodePath from "node:path";
-import * as Clock from "effect/Clock";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { seedT3workFixtureProject } from "./t3work-fixtureProjectSeed.ts";
+import { launchT3workRecipeHarnessRun } from "./t3work-recipeWorkflowHarnessLaunch.ts";
+import { driveT3workRecipeHarnessAsks } from "./t3work-recipeWorkflowHarnessLoop.ts";
+import { assembleT3workRecipeHarnessReport } from "./t3work-recipeWorkflowHarnessReport.ts";
 import {
-  summarizeT3workHarnessCommands,
-  type T3workRecipeHarnessReport,
-} from "./t3work-recipeWorkflowHarnessReport.ts";
+  cleanupT3workRecipeHarnessRoots,
+  prepareT3workRecipeHarnessProject,
+} from "./t3work-recipeWorkflowHarnessSetup.ts";
 import {
-  answerT3workRecipeHarnessAsk,
   makeT3workRecipeHarnessStubProvider,
   type T3workRecipeHarnessCapture,
 } from "./t3work-recipeWorkflowHarnessStub.ts";
-import { loadT3workRecipeHarnessRecipe } from "./t3work-recipeWorkflowHarnessRecipe.ts";
-import {
-  buildRunningWorkflowRunRow,
-  makeWorkflowRunLifecycle,
-} from "./t3work-workflowEngineDurability.ts";
-import { launchWorkflowRecipe } from "./t3work-workflowEngineLaunch.ts";
-import { T3workWorkflowEngineRegistry } from "./t3work-workflowEngineRegistry.ts";
-
-const ISO = "2026-07-20T08:00:00.000Z";
 
 export type T3workRecipeHarnessSpec = {
   /** Directory holding the recipe module (`recipe.ts`) and its `workflow.ts`. */
@@ -61,201 +41,51 @@ export type T3workRecipeHarnessSpec = {
   readonly capture?: T3workRecipeHarnessCapture;
 };
 
-const waitUntil = (predicate: () => boolean, label: string, timeoutMs: number) =>
-  Effect.gen(function* () {
-    // Clock, not Date.now: Effect code reads time through the Clock service, and the
-    // repo's effect diagnostics enforce it.
-    const start = yield* Clock.currentTimeMillis;
-    while ((yield* Clock.currentTimeMillis) - start < timeoutMs) {
-      if (predicate()) return true;
-      yield* Effect.sleep(Duration.millis(10));
-    }
-    return yield* Effect.die(new Error(`harness timed out waiting for: ${label}`));
-  });
-
 export function runT3workRecipeWorkflowHarness(spec: T3workRecipeHarnessSpec) {
   return Effect.gen(function* () {
     const timeoutMs = spec.timeoutMs ?? 20_000;
-    const orchestration = yield* OrchestrationEngineService;
-    const registry = yield* T3workWorkflowEngineRegistry;
     const runRepository = yield* WorkflowRunRepository;
-    const recipe = yield* Effect.promise(() => loadT3workRecipeHarnessRecipe(spec.recipeDir));
 
-    const workspaceRoot = NodeFS.mkdtempSync(
-      NodePath.join(NodeOS.tmpdir(), "t3work-recipe-e2e-ws-"),
-    );
-    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3work-recipe-e2e-runs-"));
-    const seeded = yield* seedT3workFixtureProject({
+    const prepared = yield* prepareT3workRecipeHarnessProject({
+      recipeDir: spec.recipeDir,
       fixtureRoot: spec.fixtureRoot,
-      workspaceRoot,
     });
-
-    const projectId = ProjectId.make(`harness-${recipe.id}`);
-    const modelSelection = createModelSelection(
-      ProviderInstanceId.make("harness-instance"),
-      "harness-model",
-    );
-    const launchThreadId = `harness-launch-${recipe.id}`;
-    // Unique per invocation: a deterministic runId let a later run REPLAY the previous
-    // run's journal, so the second spawnThread resolved to the earlier run's thread and the
-    // engine rejected a second turn on it. The run identity is the harness's to own.
-    const runId = `harness-run-${recipe.id}-${(yield* Clock.currentTimeMillis).toString(36)}`;
-
-    // Let the reactor + stub subscribe to the hot domain-event stream before anything dispatches.
-    yield* Effect.sleep(Duration.millis(100));
-    yield* orchestration.dispatch({
-      type: "project.create",
-      commandId: CommandId.make(`${runId}-project`),
-      projectId,
-      title: `Harness ${recipe.id}`,
-      workspaceRoot,
-      defaultModelSelection: modelSelection,
-      createdAt: ISO,
-    });
-    yield* orchestration.dispatch({
-      type: "thread.create",
-      commandId: CommandId.make(`${runId}-thread`),
-      threadId: ThreadId.make(launchThreadId),
-      projectId,
-      title: "Harness launch thread",
-      modelSelection,
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      branch: null,
-      worktreePath: null,
-      createdAt: ISO,
-    });
-
     const capture: T3workRecipeHarnessCapture = spec.capture ?? {
       commands: [],
       agentPrompts: [],
     };
-    const completed: unknown[] = [];
-    let seq = 0;
-    // runPromiseWith(context), not runPromise: a bare runPromise starts a SEPARATE services
-    // invocation, so dispatched commands never reached the engine instance the stub provider
-    // subscribed to and the body hung forever on its first agent() ask.
-    const context = yield* Effect.context<never>();
-    const runDetached = Effect.runPromiseWith(context);
-    const dispatch = (command: OrchestrationCommand): Promise<void> => {
-      capture.commands.push(command);
-      return runDetached(orchestration.dispatch(command)).then(() => undefined);
-    };
 
-    // Durable run record + journal, exactly as the server wires them, so the harness can assert
-    // a real `workflow_runs` row rather than only in-memory registry state.
-    const journalStore = yield* WorkflowJournalStore;
-    const runRow = buildRunningWorkflowRunRow({
-      runId,
-      workflowPath: recipe.workflowPath,
+    const { launched, liveRow, completed } = yield* launchT3workRecipeHarnessRun({
+      recipe: prepared.recipe,
       args: spec.args ?? {},
-      launchThreadId,
-      projectId,
-      modelSelection,
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      nowIso: ISO,
-    });
-    const lifecycle = makeWorkflowRunLifecycle({
-      repo: runRepository,
-      row: runRow,
-      nowIso: () => ISO,
+      runId: prepared.runId,
+      launchThreadId: prepared.launchThreadId,
+      projectId: prepared.projectId,
+      modelSelection: prepared.modelSelection,
+      runsRoot: prepared.runsRoot,
+      capture,
     });
 
-    const launched = yield* Effect.promise(() =>
-      launchWorkflowRecipe({
-        runId,
-        workflowPath: recipe.workflowPath,
-        args: spec.args ?? {},
-        scripts: recipe.scripts,
-        store: journalStore,
-        lifecycle,
-        runsRoot,
-        launchThreadId,
-        projectId,
-        modelSelection,
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        registry,
-        dispatch,
-        newId: () => `harness-id-${(seq += 1)}`,
-        nowIso: () => ISO,
-        onComplete: async (output) => {
-          completed.push(output);
-        },
-      }),
-    );
-
-    // The durable run row exists while the run is live; completion removes it, so read it here.
-    const liveRow = yield* runRepository.getById({ runId });
-
-    const answers = spec.answers ?? [];
-    let asksAnswered = 0;
-    const answeredCorrelations = new Set<string>();
-    // Completion is read from the DURABLE ROW, not from the launch-time `onComplete`
-    // callback: when the reactor resumes a suspended run and finishes it, that callback
-    // belongs to the original launch invocation and never fires. The row is deleted on
-    // completion, so `getById` returning None IS the terminal signal.
-    const runGone = Effect.gen(function* () {
-      const row = yield* runRepository.getById({ runId });
-      return Option.isNone(row);
-    });
-    let finished = launched.status === "completed" || completed.length > 0;
-    while (!finished) {
-      const nextAsk = (): string | undefined => {
-        const pending = registry.peekPending(launchThreadId);
-        return pending?.kind === "user.input" && !answeredCorrelations.has(pending.correlationId)
-          ? pending.correlationId
-          : undefined;
-      };
-      // Poll the row alongside the in-memory signals; a run that completed through the
-      // reactor shows up here and nowhere else.
-      const deadline = timeoutMs;
-      let waited = 0;
-      while (waited < deadline) {
-        if (completed.length > 0 || nextAsk() !== undefined || (yield* runGone)) break;
-        yield* Effect.sleep(Duration.millis(10));
-        waited += 10;
-      }
-      if (yield* runGone) {
-        finished = true;
-        break;
-      }
-      const correlationId = nextAsk();
-      if (completed.length > 0 || correlationId === undefined) {
-        finished = true;
-        break;
-      }
-      answeredCorrelations.add(correlationId);
-      yield* answerT3workRecipeHarnessAsk({
-        launchThreadId,
-        answer: answers[asksAnswered] ?? "{}",
-        nonce: `${runId}-${asksAnswered}`,
-      });
-      asksAnswered += 1;
-      if (asksAnswered > answers.length + 2) {
-        return yield* Effect.die(new Error("harness answered more asks than the spec provides"));
-      }
-    }
-
-    const summary = summarizeT3workHarnessCommands(capture.commands);
-    const row = Option.isSome(liveRow) ? liveRow : yield* runRepository.getById({ runId });
-    NodeFS.rmSync(workspaceRoot, { recursive: true, force: true });
-    NodeFS.rmSync(runsRoot, { recursive: true, force: true });
-    return {
-      recipeId: recipe.id,
-      status: completed.length > 0 ? "completed" : launched.status,
-      result: completed[0] ?? null,
-      phases: summary.phases,
-      steps: summary.steps,
+    const asksAnswered = yield* driveT3workRecipeHarnessAsks({
+      runId: prepared.runId,
+      launchThreadId: prepared.launchThreadId,
+      answers: spec.answers ?? [],
+      completed,
       launchStatus: launched.status,
-      widgets: summary.widgets,
-      notifications: summary.notifications,
-      agentPromptCount: capture.commands.filter(
-        (command) => (command as { type?: string }).type === "thread.turn.start",
-      ).length,
+      timeoutMs,
+    });
+
+    const row = Option.isSome(liveRow)
+      ? liveRow
+      : yield* runRepository.getById({ runId: prepared.runId });
+    cleanupT3workRecipeHarnessRoots(prepared);
+    return assembleT3workRecipeHarnessReport({
+      recipeId: prepared.recipe.id,
+      scriptCalls: prepared.recipe.scriptNames,
+      commands: capture.commands,
+      completed,
+      launchStatus: launched.status,
       asksAnswered,
-      scriptCalls: recipe.scriptNames,
       workflowRun: Option.isSome(row)
         ? {
             runId: row.value.runId,
@@ -263,12 +93,8 @@ export function runT3workRecipeWorkflowHarness(spec: T3workRecipeHarnessSpec) {
             workflowPath: row.value.workflowPath,
           }
         : null,
-      commandTypes: [...new Set(capture.commands.map((command) => command.type))],
-      seededWorkItemCount: seeded.workItemCount,
-    } satisfies T3workRecipeHarnessReport & {
-      readonly seededWorkItemCount: number;
-      readonly launchStatus: string;
-    };
+      seededWorkItemCount: prepared.seeded.workItemCount,
+    });
   });
 }
 
