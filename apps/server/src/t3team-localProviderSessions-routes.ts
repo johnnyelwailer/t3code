@@ -11,12 +11,8 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import { HttpRouter } from "effect/unstable/http";
 
-import {
-  listLocalProviderSessions,
-  type LocalProviderSession,
-  normalizeWorkspacePath,
-  workspacePathsMatch,
-} from "./t3team-localProviderSessions.ts";
+import { listLocalProviderSessions, type LocalProviderSession, normalizeWorkspacePath, workspacePathsMatch } from "./t3team-localProviderSessions.ts";
+import { findLocalProviderProject } from "./t3team-localProviderSessions-project.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDirectory.ts";
@@ -70,14 +66,26 @@ function syncSession(session: LocalProviderSession) {
         thread.worktreePath !== null && workspacePathsMatch(thread.worktreePath, session.cwd),
     );
     const project =
-      snapshot.projects.find((entry) => workspacePathsMatch(entry.workspaceRoot, session.cwd)) ??
-      snapshot.projects.find((entry) => entry.id === existingThread?.projectId);
+      snapshot.projects.find((entry) => entry.id === existingThread?.projectId) ??
+      (yield* findLocalProviderProject(session.cwd, snapshot.projects));
     if (!project) return { status: "skipped" as const, reason: "no matching worktree" };
 
     const directory = yield* ProviderSessionDirectory;
     const existing = yield* directory.listBindings();
     const alreadyBound = existing.find((binding) => isSameNativeSession(binding, session));
-    if (alreadyBound) return { status: "existing" as const, threadId: alreadyBound.threadId };
+    if (alreadyBound) {
+      const thread = snapshot.threads.find((entry) => entry.id === alreadyBound.threadId);
+      if (session.branch && !thread?.branch) {
+        const orchestration = yield* OrchestrationEngineService;
+        yield* orchestration.dispatch({
+          type: "thread.meta.update",
+          commandId: CommandId.make(yield* crypto.randomUUIDv4),
+          threadId: alreadyBound.threadId,
+          branch: session.branch,
+        });
+      }
+      return { status: "existing" as const, threadId: alreadyBound.threadId };
+    }
 
     const orchestration = yield* OrchestrationEngineService;
     const threadId = ThreadId.make(yield* crypto.randomUUIDv4);
@@ -91,7 +99,7 @@ function syncSession(session: LocalProviderSession) {
       modelSelection: modelFor(session),
       runtimeMode: "full-access",
       interactionMode: "default",
-      branch: null,
+      branch: session.branch,
       worktreePath: session.cwd,
       createdAt,
     });

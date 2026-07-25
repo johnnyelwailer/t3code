@@ -21,6 +21,7 @@ const MAX_FILES = 500;
 // Keep each provider independently bounded. A global newest-only cap hides
 // one provider when its matching session is older than another provider's.
 const MAX_SESSIONS_PER_PROVIDER = 100;
+const parsedSessionCache = new Map<string, { modifiedAt: number; session: LocalProviderSession | null }>();
 
 export const normalizeWorkspacePath = (
   value: string,
@@ -102,10 +103,15 @@ export const listLocalProviderSessions = Effect.fn("listLocalProviderSessions")(
   );
   const sessions = yield* Effect.forEach(
     recentSessions,
-    ({ provider, filePath }) =>
+    ({ provider, filePath, modifiedAt }) =>
       Effect.gen(function* () {
+        const cached = parsedSessionCache.get(filePath);
+        if (cached?.modifiedAt === modifiedAt) return cached.session;
         const raw = yield* fileSystem.readFileString(filePath).pipe(Effect.orElseSucceed(() => ""));
-        return provider === "codex" ? parseCodexLocalSession(raw) : parseClaudeLocalSession(raw);
+        const session = provider === "codex" ? parseCodexLocalSession(raw) : parseClaudeLocalSession(raw);
+        if (parsedSessionCache.size >= MAX_FILES * 2) parsedSessionCache.clear();
+        parsedSessionCache.set(filePath, { modifiedAt, session });
+        return session;
       }),
   );
   return sessions

@@ -11,7 +11,7 @@ describe("local provider session parsing", () => {
   it("reads a resumable Codex profile session", () => {
     const session = parseCodexLocalSession(
       [
-        '{"timestamp":"2026-07-25T12:00:00.000Z","type":"session_meta","payload":{"id":"codex-native-id","cwd":"/repo"}}',
+        '{"timestamp":"2026-07-25T12:00:00.000Z","type":"session_meta","payload":{"id":"codex-native-id","cwd":"/repo","gitBranch":"feature/session-import"}}',
         '{"timestamp":"2026-07-25T12:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"text":"Fix the thing"}]}}',
       ].join("\n"),
     );
@@ -20,19 +20,21 @@ describe("local provider session parsing", () => {
       provider: "codex",
       nativeId: "codex-native-id",
       cwd: "/repo",
+      branch: "feature/session-import",
       title: "Fix the thing",
     });
   });
 
   it("reads a resumable Claude profile session", () => {
     const session = parseClaudeLocalSession(
-      '{"sessionId":"claude-native-id","cwd":"/repo","timestamp":"2026-07-25T12:00:00.000Z","message":{"role":"assistant","content":[{"text":"Done"}]}}',
+      '{"sessionId":"claude-native-id","cwd":"/repo","gitBranch":"feature/session-import","timestamp":"2026-07-25T12:00:00.000Z","message":{"role":"assistant","content":[{"text":"Done"}]}}',
     );
 
     expect(session).toMatchObject({
       provider: "claudeAgent",
       nativeId: "claude-native-id",
       cwd: "/repo",
+      branch: "feature/session-import",
       messages: [{ role: "assistant", text: "Done" }],
     });
   });
