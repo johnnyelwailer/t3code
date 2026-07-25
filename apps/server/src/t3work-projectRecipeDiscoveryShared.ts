@@ -1,6 +1,7 @@
 /* oxlint-disable t3code/no-inline-schema-compile -- Existing merged lint debt; keep green while preserving behavior. */
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import { isWithinCanonicalRoot } from "@t3work/packs";
 import {
   ProjectRecipeKickoffProgram,
   RecipeSurface,
@@ -42,18 +43,22 @@ export function isRelativePath(value: string): boolean {
   return value.startsWith("./") || value.startsWith("../");
 }
 
+/**
+ * Resolve `requestedPath` against `rootPath` and prove it stays inside it.
+ *
+ * Containment is checked on CANONICAL (realpath-resolved) forms, because lexical `resolve` +
+ * `relative` only proves the string sits under the root: a recipe directory that IS a symlink, or
+ * a symlink nested under a valid root, would otherwise pass and then be read/executed from
+ * outside. The returned path is the LEXICALLY resolved one — callers surface it to users and
+ * compare it with discovery output, so it must not be silently rewritten to its realpath.
+ */
 export function resolveWithinRoot(
   pathService: Path.Path,
   rootPath: string,
   requestedPath: string,
 ): string {
   const resolvedPath = pathService.resolve(rootPath, requestedPath);
-  const relativePath = pathService.relative(rootPath, resolvedPath);
-  if (
-    relativePath.startsWith("..") ||
-    relativePath === ".." ||
-    pathService.isAbsolute(relativePath)
-  ) {
+  if (!isWithinCanonicalRoot(rootPath, resolvedPath)) {
     throw new Error(`Path '${requestedPath}' resolves outside '${rootPath}'.`);
   }
   return resolvedPath;

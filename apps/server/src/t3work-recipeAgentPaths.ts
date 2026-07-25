@@ -9,7 +9,14 @@
  * Containment is still mandatory — it is what keeps `../../etc/passwd` out — so the allowed roots
  * are the project workspace plus the recipe roots of currently-active packs, and nothing else. Pack
  * recipe roots come from the same registry discovery uses, so a path is accepted only if some pack
- * actually contributes that recipe directory right now.
+ * actually contributes that recipe directory right now. `resolveWithinRoot` compares CANONICAL
+ * paths, so a symlinked recipe directory cannot smuggle a target out of its root.
+ *
+ * READ-ONLY SURFACES ONLY. Directory containment is deliberately NOT execution authorization:
+ * being somewhere under a pack's recipe root would make every `.ts` the pack ships runnable. The
+ * run path therefore binds to recipe IDENTITY instead — see
+ * {@link ./t3work-workflowRunPathAuthorize.ts}. The asymmetry is intentional: listing and
+ * statically validating a file inside an installed pack is not a privilege; executing it is.
  */
 import type * as Path from "effect/Path";
 
