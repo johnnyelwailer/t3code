@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { cn } from "~/t3team/lib/t3team-utils";
 import {
+  formatWorkItemDuration,
   isWorkItemOverdue,
   type WorkItemFieldModel,
 } from "~/t3team/workitem/t3team-workItemFieldModel";
@@ -36,6 +37,20 @@ export function WorkItemTitleBand({
   readonly titleControl?: ReactNode;
   readonly className?: string;
 }) {
+  /**
+   * How big is this? Teams answer that in points or in time, rarely both, and some only ever record
+   * what they have already spent. Show whichever this item actually carries, labelled so an estimate
+   * is never mistaken for time already burned — and show nothing at all rather than an empty
+   * placeholder for the teams that track none of it.
+   */
+  const estimateLabel = (() => {
+    if (model.storyPoints !== undefined) return `${model.storyPoints} pts`;
+    const estimate = formatWorkItemDuration(model.timeTracking?.originalEstimateSeconds);
+    if (estimate) return `${estimate} est`;
+    const logged = formatWorkItemDuration(model.timeTracking?.timeSpentSeconds);
+    return logged ? `${logged} logged` : undefined;
+  })();
+
   const isAssignedToCurrentUser =
     currentUserName !== undefined &&
     model.assignee !== undefined &&
@@ -79,10 +94,20 @@ export function WorkItemTitleBand({
         <WorkItemPersonChip person={model.assignee} isCurrentUser={isAssignedToCurrentUser} />
         <WorkItemPriorityChip priority={model.priority} />
 
-        {model.storyPoints !== undefined ? (
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {model.storyPoints} pts
+        {/*
+          Reporter sits behind a "by" so two adjacent avatars cannot be mistaken for each other —
+          without it, assignee and reporter read as one ambiguous pair of faces.
+        */}
+        {model.reporter ? (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">by</span>
+            <WorkItemPersonChip person={model.reporter} size="sm" />
           </span>
+        ) : null}
+
+        {/* Points where a team estimates in points, the original estimate where it estimates in time. */}
+        {estimateLabel ? (
+          <span className="text-xs tabular-nums text-muted-foreground">{estimateLabel}</span>
         ) : null}
 
         {model.dueDateMs !== undefined ? (
