@@ -1,5 +1,5 @@
 export function renderRecipeAuthoringGuide(): string {
-  return `# Authoring T3work Workflows
+  return `# Authoring T3work Agent Orchestrations
 
 A t3work workflow is a typed TypeScript module (\`<id>.workflow.ts\`) executed durably by t3work: every primitive call is journaled, so a run can suspend (waiting on a person or the clock), survive restarts, and resume by replaying the journal. A recipe (\`recipe.ts\` with \`defineRecipe\`) is the saved, launchable wrapper around a workflow. This is NOT a Claude Code skill/subagent or a Codex/CI workflow -- see AGENTS.md.
 
@@ -35,6 +35,6 @@ Declare capabilities honestly: \`user\` for askUser/notifyUser, \`schedule\` for
 
 ## Scale and scope
 
-Match the orchestration to what was asked: a one-off task gets a small linear body; "audit thoroughly" justifies fan-out plus a verification phase. An orchestration doesn't need to be a saved recipe -- for a one-off multi-step task, write a temp orchestration and run it directly with \`t3work.orchestration.run\` (or whatever the run tool is named), no permission-seeking. Save it as a recipe in the background, and only once it's proven reusable.
+Match the orchestration to what was asked: a one-off task gets a small linear body; "audit thoroughly" justifies fan-out plus a verification phase. An orchestration doesn't need to be a saved recipe -- for a one-off multi-step task, write a temp orchestration and run it directly with \`t3work_orchestration_run\`, no permission-seeking. Save it as a recipe in the background, and only once it's proven reusable.
 `;
 }

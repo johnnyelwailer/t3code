@@ -133,7 +133,9 @@ describe("renderT3WorkProjectSetupFiles", () => {
     );
     expect(recipesAuthoringGuide?.contents).toContain("Make the run visible");
     expect(recipesAuthoringGuide?.contents).toContain("## Patterns");
-    expect(recipesAuthoringGuide?.contents).toContain("workflow doesn't need to be a saved recipe");
+    expect(recipesAuthoringGuide?.contents).toContain(
+      "orchestration doesn't need to be a saved recipe",
+    );
   });
 
   it("includes managed file hashes in the profile manifest when provided", () => {
