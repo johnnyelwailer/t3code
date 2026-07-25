@@ -76,10 +76,7 @@ export function WorkItemTitleBand({
           Always rendered, unassigned included. Who owns an item is a primary question, and an empty
           space is not an answer — "nobody" is, and it is the one that prompts someone to pick it up.
         */}
-        <WorkItemPersonChip
-          person={model.assignee}
-          isCurrentUser={isAssignedToCurrentUser}
-        />
+        <WorkItemPersonChip person={model.assignee} isCurrentUser={isAssignedToCurrentUser} />
         <WorkItemPriorityChip priority={model.priority} />
 
         {model.storyPoints !== undefined ? (

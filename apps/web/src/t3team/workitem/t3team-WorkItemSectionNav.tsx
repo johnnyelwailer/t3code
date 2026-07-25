@@ -40,8 +40,15 @@ export function WorkItemSectionNav({
     <nav
       aria-label="Sections"
       className={cn(
-        "sticky top-0 z-10 -mx-1 flex gap-1 overflow-x-auto px-1 py-1.5",
-        "bg-background/85 backdrop-blur-sm",
+        "sticky top-0 z-10 flex gap-1 overflow-x-auto py-2",
+        /*
+          Full-bleed: the negative margins cancel the scroll container's own padding and the padding
+          is added back inside, so the backdrop spans the full width. Previously it stopped short of
+          both edges and content scrolled past in the gap, which read as a floating black band.
+        */
+        "-mx-4 px-4 @2xl/workitem:-mx-6 @2xl/workitem:px-6",
+        // Opaque enough to hide content passing underneath, with a border so it reads as chrome.
+        "border-b border-border/60 bg-background/95 backdrop-blur",
         // The row scrolls sideways on a phone rather than wrapping into a second line of chrome.
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,

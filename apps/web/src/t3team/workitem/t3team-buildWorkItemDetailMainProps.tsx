@@ -64,6 +64,9 @@ export function buildWorkItemDetailMainProps({
     showAgentContextMenu,
   });
 
+  const hasGitHubActivity =
+    view.matchedGitHubActivityItems.length > 0 || Boolean(view.githubActivity.warning);
+
   return {
     model: view.fieldModel,
     ...(view.currentUserName ? { currentUserName: view.currentUserName } : {}),
@@ -86,21 +89,28 @@ export function buildWorkItemDetailMainProps({
     onOpenTicket,
     supplementalSections: (
       <>
-        <TicketDetailGitHubSection
-          {...(view.backend ? { backend: view.backend } : {})}
-          project={project}
-          {...(view.ticket ? { ticket: view.ticket } : {})}
-          projectTickets={view.ticketsWithRelated}
-          displayId={view.displayId}
-          githubActivityItems={view.matchedGitHubActivityItems}
-          {...(view.githubActivity.lastCheckedAt !== undefined
-            ? { githubActivityLastCheckedAt: view.githubActivity.lastCheckedAt }
-            : {})}
-          {...(view.githubActivity.loading ? { githubActivityLoading: true } : {})}
-          {...(view.githubActivity.warning
-            ? { githubActivityWarning: view.githubActivity.warning }
-            : {})}
-        />
+        {/*
+          Only rendered when there is activity or a warning explaining its absence. An empty panel
+          saying "No GitHub activity matched yet" is a section whose entire content is the news that
+          it has no content — on most items that is permanent, so it was pure furniture.
+        */}
+        {hasGitHubActivity ? (
+          <TicketDetailGitHubSection
+            {...(view.backend ? { backend: view.backend } : {})}
+            project={project}
+            {...(view.ticket ? { ticket: view.ticket } : {})}
+            projectTickets={view.ticketsWithRelated}
+            displayId={view.displayId}
+            githubActivityItems={view.matchedGitHubActivityItems}
+            {...(view.githubActivity.lastCheckedAt !== undefined
+              ? { githubActivityLastCheckedAt: view.githubActivity.lastCheckedAt }
+              : {})}
+            {...(view.githubActivity.loading ? { githubActivityLoading: true } : {})}
+            {...(view.githubActivity.warning
+              ? { githubActivityWarning: view.githubActivity.warning }
+              : {})}
+          />
+        ) : null}
 
         <TicketDetailDraftDocumentReview
           projectId={project.id}
