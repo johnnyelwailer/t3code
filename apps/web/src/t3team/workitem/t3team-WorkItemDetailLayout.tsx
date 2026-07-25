@@ -63,7 +63,12 @@ export function WorkItemDetailLayout({
           ) : (
             <div className="flex min-w-0 flex-col gap-5">
               {primary}
-              <WorkItemSection title="Details" collapsible defaultCollapsed>
+              {/*
+                Open by default. Collapsing it hid fields people came to read and made the answer to
+                a simple question a click away; the section nav already exists for anyone who wants
+                to skip past it, and it stays collapsible for anyone who does.
+              */}
+              <WorkItemSection title="Details" collapsible>
                 <div className="rounded-lg border border-border/70 bg-card/40 p-3.5">
                   {properties}
                 </div>
