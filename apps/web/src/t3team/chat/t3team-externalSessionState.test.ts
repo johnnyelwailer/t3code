@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  EXTERNAL_SESSION_ACTIVE_WINDOW_MS,
+  CLAUDE_EXTERNAL_SESSION_FALLBACK_WINDOW_MS,
   isExternalSessionActive,
   readExternalSession,
 } from "./t3team-externalSessionState";
@@ -13,18 +13,18 @@ describe("external session state", () => {
         { id: "local:codex:abc:0", createdAt: "2026-07-25T12:00:00.000Z" },
         { id: "local:codex:abc:1", createdAt: "2026-07-25T12:01:00.000Z" },
       ],
-      updatedAt: "2026-07-25T11:00:00.000Z",
+      updatedAt: "2026-07-25T12:02:00.000Z",
       createdAt: "2026-07-25T10:00:00.000Z",
     } as never);
 
-    expect(session).toEqual({ provider: "codex", updatedAt: "2026-07-25T12:01:00.000Z" });
+    expect(session).toEqual({ provider: "codex", nativeId: "abc", updatedAt: "2026-07-25T12:02:00.000Z" });
   });
 
   it("locks only recently updated external sessions", () => {
     const now = Date.parse("2026-07-25T12:01:30.000Z");
-    const session = { provider: "claudeAgent" as const, updatedAt: "2026-07-25T12:01:00.000Z" };
+    const session = { provider: "claudeAgent" as const, nativeId: "abc", updatedAt: "2026-07-25T12:01:00.000Z" };
 
     expect(isExternalSessionActive(session, now)).toBe(true);
-    expect(isExternalSessionActive(session, now + EXTERNAL_SESSION_ACTIVE_WINDOW_MS)).toBe(false);
+    expect(isExternalSessionActive(session, now + CLAUDE_EXTERNAL_SESSION_FALLBACK_WINDOW_MS)).toBe(false);
   });
 });

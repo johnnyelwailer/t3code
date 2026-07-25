@@ -7,7 +7,14 @@ import * as Path from "effect/Path";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 
-import { syncLocalProviderSessions } from "./t3team-localProviderSessions-routes.ts";
+import {
+  readLocalProviderSessionFile,
+  type LocalProviderKind,
+} from "./t3team-localProviderSessions.ts";
+import {
+  syncLocalProviderSession,
+  syncLocalProviderSessions,
+} from "./t3team-localProviderSessions-sync.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 
 const WATCH_DEBOUNCE = Duration.seconds(1);
@@ -31,15 +38,24 @@ export const LocalProviderSessionsWatcherLive = Layer.effectDiscard(
       ),
     );
 
-    const roots = [
-      path.join(homedir(), ".codex", "sessions"),
-      path.join(homedir(), ".claude", "projects"),
+    const roots: ReadonlyArray<{ readonly provider: LocalProviderKind; readonly root: string }> = [
+      { provider: "codex", root: path.join(homedir(), ".codex", "sessions") },
+      { provider: "claudeAgent", root: path.join(homedir(), ".claude", "projects") },
     ];
-    for (const root of roots) {
+    for (const { provider, root } of roots) {
       if (!(yield* fileSystem.exists(root).pipe(Effect.orElseSucceed(() => false)))) continue;
       yield* Stream.runForEach(
         fileSystem.watch(root).pipe(Stream.debounce(WATCH_DEBOUNCE)),
-        () => syncWhenEnabled,
+        (event) =>
+          Effect.gen(function* () {
+            if (!(yield* settings.getSettings).showLocalProviderSessions) return;
+            const eventPath = path.isAbsolute(event.path)
+              ? event.path
+              : path.join(root, event.path);
+            if (!eventPath.endsWith(".jsonl")) return;
+            const session = yield* readLocalProviderSessionFile(provider, eventPath);
+            if (session) yield* syncLocalProviderSession(session);
+          }),
       ).pipe(
         Effect.catch((error: unknown) =>
           Effect.logWarning("local-provider-sessions.watch-failed", { root, error }),

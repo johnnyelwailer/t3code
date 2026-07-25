@@ -17,7 +17,7 @@ export {
   type LocalProviderSession,
 } from "./t3team-localProviderSessionParsing.ts";
 
-const MAX_FILES = 500;
+const MAX_CACHED_SESSIONS = 500;
 // Keep each provider independently bounded. A global newest-only cap hides
 // one provider when its matching session is older than another provider's.
 const MAX_SESSIONS_PER_PROVIDER = 100;
@@ -53,7 +53,6 @@ const filesBelow: (
     .pipe(Effect.orElseSucceed(() => []));
   const paths: string[] = [];
   for (const entry of entries) {
-    if (paths.length >= MAX_FILES) break;
     const entryPath = path.join(root, entry);
     const entryStat = yield* fileSystem.stat(entryPath).pipe(Effect.orElseSucceed(() => null));
     if (!entryStat) continue;
@@ -63,7 +62,26 @@ const filesBelow: (
       paths.push(...(yield* filesBelow(entryPath, depth - 1)));
     }
   }
-  return paths.slice(0, MAX_FILES);
+  return paths;
+});
+
+export const readLocalProviderSessionFile = Effect.fn(
+  "readLocalProviderSessionFile",
+)(function* (provider: LocalProviderSession["provider"], filePath: string) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const info = yield* fileSystem.stat(filePath).pipe(Effect.orElseSucceed(() => null));
+  if (!info) return null;
+  const modifiedAt = Option.match(info.mtime, {
+    onNone: () => 0,
+    onSome: (value) => value.getTime(),
+  });
+  const cached = parsedSessionCache.get(filePath);
+  if (cached?.modifiedAt === modifiedAt) return cached.session;
+  const raw = yield* fileSystem.readFileString(filePath).pipe(Effect.orElseSucceed(() => ""));
+  const session = provider === "codex" ? parseCodexLocalSession(raw) : parseClaudeLocalSession(raw);
+  if (parsedSessionCache.size >= MAX_CACHED_SESSIONS * 2) parsedSessionCache.clear();
+  parsedSessionCache.set(filePath, { modifiedAt, session });
+  return session;
 });
 
 export const listLocalProviderSessions = Effect.fn("listLocalProviderSessions")(function* () {
@@ -103,16 +121,7 @@ export const listLocalProviderSessions = Effect.fn("listLocalProviderSessions")(
   );
   const sessions = yield* Effect.forEach(
     recentSessions,
-    ({ provider, filePath, modifiedAt }) =>
-      Effect.gen(function* () {
-        const cached = parsedSessionCache.get(filePath);
-        if (cached?.modifiedAt === modifiedAt) return cached.session;
-        const raw = yield* fileSystem.readFileString(filePath).pipe(Effect.orElseSucceed(() => ""));
-        const session = provider === "codex" ? parseCodexLocalSession(raw) : parseClaudeLocalSession(raw);
-        if (parsedSessionCache.size >= MAX_FILES * 2) parsedSessionCache.clear();
-        parsedSessionCache.set(filePath, { modifiedAt, session });
-        return session;
-      }),
+    ({ provider, filePath }) => readLocalProviderSessionFile(provider, filePath),
   );
   return sessions
     .filter((value): value is LocalProviderSession => value !== null)

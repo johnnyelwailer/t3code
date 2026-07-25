@@ -97,6 +97,7 @@ import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import { buildThreadRouteParams, resolveThreadRouteTarget } from "../threadRoutes";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat";
+import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 import type { SidebarThreadSummary } from "../types";
 import { cn } from "~/lib/utils";
 import {
@@ -273,6 +274,13 @@ function SidebarV2ThreadTooltip({
             <div className="flex min-w-0 items-center gap-2">
               <GitBranchIcon className="size-4 shrink-0 stroke-muted-foreground" />
               <div className="min-w-0 wrap-break-word text-foreground/90">{thread.branch}</div>
+            </div>
+          ) : thread.worktreePath ? (
+            <div className="flex min-w-0 items-center gap-2">
+              <FolderIcon className="size-4 shrink-0 stroke-muted-foreground" />
+              <div className="min-w-0 wrap-break-word text-foreground/90">
+                {formatWorktreePathForDisplay(thread.worktreePath)}
+              </div>
             </div>
           ) : null}
           {branchMismatch ? (
@@ -954,6 +962,10 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground/75">
               {thread.branch ? (
                 <span className="min-w-0 flex-1 truncate whitespace-nowrap">{thread.branch}</span>
+              ) : thread.worktreePath ? (
+                <span className="min-w-0 flex-1 truncate whitespace-nowrap">
+                  {formatWorktreePathForDisplay(thread.worktreePath)}
+                </span>
               ) : (
                 <span className="flex-1" />
               )}
