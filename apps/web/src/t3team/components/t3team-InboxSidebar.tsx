@@ -11,5 +11,13 @@ import ThreadSidebarV2 from "~/components/SidebarV2";
  * fork diff and stays cheap to re-merge.
  */
 export function InboxSidebar() {
-  return <ThreadSidebarV2 />;
+  // Upstream mounts SidebarV2's fragment directly inside a column layout, but the
+  // Team shell wraps the lens in a row flex (the Code lens supplies its own
+  // column). Without this the header collapses to zero width and overlaps the
+  // rows beneath it.
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <ThreadSidebarV2 />
+    </div>
+  );
 }

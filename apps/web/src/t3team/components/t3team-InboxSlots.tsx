@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 
+import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
+import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import { useT3TeamInboxAttribution, useT3TeamInboxWorkItems } from "~/t3team/t3team-useInboxWorkItems";
 import { InboxWorkItemRows } from "~/t3team/components/t3team-InboxWorkItemRows";
+import { ProjectSidebarHeader } from "~/t3team/components/t3team-ProjectSidebarHeader";
 
 /**
  * The only two places T3 Team reaches into upstream's Inbox sidebar.
@@ -11,6 +14,22 @@ import { InboxWorkItemRows } from "~/t3team/components/t3team-InboxWorkItemRows"
  * the fork diff there stays at two one-line calls — cheap to re-apply on every
  * upstream sync.
  */
+
+/**
+ * The Team header, so the Work lens keeps the pack brand and configurable
+ * header background instead of dropping to upstream's T3 wordmark. Both lenses
+ * therefore render the same chrome — the Team sidebar stays a superset of
+ * upstream's rather than losing branding when the lens changes.
+ */
+export function InboxHeader(): ReactNode {
+  const appearance = useT3TeamPackAppearance();
+  return (
+    <ProjectSidebarHeader
+      appearance={appearance}
+      appName={appearance?.labels?.appName ?? APP_DISPLAY_NAME}
+    />
+  );
+}
 
 /** Compact work-item attribution on a thread row. Doc 40: attribution, not hierarchy. */
 export function InboxThreadAttribution({ threadId }: { threadId: string }): ReactNode {
