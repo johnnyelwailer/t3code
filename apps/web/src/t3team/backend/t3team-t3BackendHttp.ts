@@ -47,18 +47,26 @@ function buildBackendFetchErrorMessage(input: { url: URL; error: unknown }): str
   return parts.join(" ");
 }
 
+/**
+ * `timeoutMs` overrides the default for routes that legitimately take longer than one request. The
+ * Atlassian OAuth completion, for instance, makes three sequential Atlassian calls server-side, each
+ * with its own 12s budget — giving up at 15s would abandon a request that was still going to succeed
+ * and report a failure for a sign-in that actually completed.
+ */
 export async function postJson<TInput extends object, TResponse>(
   httpBaseUrl: string,
   routePath: string,
   body: TInput,
+  options?: { readonly timeoutMs?: number },
 ): Promise<TResponse> {
   const url = new URL(routePath, httpBaseUrl);
   const abortController = new AbortController();
   let didTimeout = false;
+  const timeoutMs = options?.timeoutMs ?? BACKEND_POST_TIMEOUT_MS;
   const timeoutHandle = globalThis.setTimeout(() => {
     didTimeout = true;
     abortController.abort();
-  }, BACKEND_POST_TIMEOUT_MS);
+  }, timeoutMs);
 
   const response = await fetch(url, {
     method: "POST",
@@ -73,9 +81,7 @@ export async function postJson<TInput extends object, TResponse>(
       throw new Error(
         buildBackendFetchErrorMessage({
           url,
-          error: didTimeout
-            ? new Error(`Backend request timed out after ${BACKEND_POST_TIMEOUT_MS}ms`)
-            : error,
+          error: didTimeout ? new Error(`Backend request timed out after ${timeoutMs}ms`) : error,
         }),
       );
     })

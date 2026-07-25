@@ -54,8 +54,8 @@ export function CreateProjectDialog({
   const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
   const [customProfile, setCustomProfile] = useState<T3TeamProfile | undefined>(undefined);
   const oauthError = oauth.state.kind === "error" ? oauth.state.message : null;
-  const blockedAuthorizeUrl =
-    oauth.state.kind === "popup_blocked" ? oauth.state.authorizeUrl : null;
+  // Covers a blocked popup and one the user closed: both leave sign-in waiting on a manual open.
+  const manualSigninUrl = oauth.state.kind === "needs_manual_open" ? oauth.state.signinUrl : null;
   const oauthConfigured = Boolean(__ATLASSIAN_CLIENT_ID__);
 
   useEffect(() => {
@@ -65,6 +65,19 @@ export function CreateProjectDialog({
     if (oauth.state.kind !== "done") return;
     void loadAccountsWithOAuth(oauth.state.sites, oauth.state.token);
   }, [oauth.state, loadAccountsWithOAuth]);
+
+  /**
+   * The server-owned flow persists the account itself, so there is no token or site list to hand
+   * over — the account simply exists now and has to be read back.
+   *
+   * This is the path a sign-in completed in another browser takes. Without it the wizard would sit
+   * on the connect step after a successful sign-in, which is exactly how it looked before: connected
+   * on the server, oblivious in the UI.
+   */
+  useEffect(() => {
+    if (oauth.state.kind !== "connected") return;
+    void loadPersistedAccounts();
+  }, [oauth.state, loadPersistedAccounts]);
 
   const filteredProjects = useMemo(() => {
     const query = projectQuery.trim().toLowerCase();
@@ -116,8 +129,8 @@ export function CreateProjectDialog({
       }
     >
       <div className="relative flex min-h-full flex-col gap-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
-        {blockedAuthorizeUrl ? (
-          <OAuthPopupBlockedNotice authorizeUrl={blockedAuthorizeUrl} onCancel={oauth.reset} />
+        {manualSigninUrl ? (
+          <OAuthPopupBlockedNotice signinUrl={manualSigninUrl} onCancel={oauth.reset} />
         ) : null}
 
         {setup.error || oauthError ? (

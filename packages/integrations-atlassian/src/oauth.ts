@@ -9,6 +9,21 @@ const AUTH_BASE = "https://auth.atlassian.com";
 export const ATLASSIAN_API_BASE = "https://api.atlassian.com";
 const OAUTH_SCOPES = ["read:jira-work", "read:jira-user", "write:jira-work", "offline_access"];
 
+/**
+ * How long one sign-in attempt stays completable, shared by both ends of the flow.
+ *
+ * The server holds a PKCE verifier under a `state` for this long, and the client waits for a callback
+ * for the same long. Two literals would drift, and drift here produces a specific, confusing bug: a
+ * client still waiting patiently for a `state` the server has already forgotten, or a server holding
+ * a verifier nobody is listening for any more. One constant makes "expired" mean the same moment on
+ * both sides.
+ *
+ * Fifteen minutes rather than the two the popup used to allow: the flow now supports copying a link
+ * into another browser or a phone and signing in there through SSO, MFA and a password manager, and
+ * two minutes was mean even in front of a popup.
+ */
+export const ATLASSIAN_OAUTH_FLOW_TTL_MS = 15 * 60 * 1000;
+
 export type PkcePair = {
   readonly codeVerifier: string;
   readonly codeChallenge: string;

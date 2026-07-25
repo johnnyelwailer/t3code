@@ -8,21 +8,30 @@ import {
 } from "@t3tools/integrations-atlassian";
 import { randomUUID } from "~/lib/utils";
 import { useBackend } from "~/t3team/backend/t3team-index";
-import { openOAuthPopup, waitForOAuthCallback } from "~/t3team/hooks/t3team-atlassianOAuthPopup";
+import { runAtlassianOAuthAttempt } from "~/t3team/hooks/t3team-atlassianOAuthAttempt";
+import { openOAuthPopup } from "~/t3team/hooks/t3team-atlassianOAuthPopup";
 import { readAtlassianOAuthRedirectUri } from "~/t3team/hooks/t3team-atlassianOAuthRedirect";
+import { beginAtlassianOAuthServerFlow } from "~/t3team/hooks/t3team-atlassianOAuthServerFlow";
 
 export type OAuthState =
   | { kind: "idle" }
   | { kind: "opening" }
   | { kind: "waiting" }
   /**
-   * The popup was blocked, so the sign-in window has to be opened by the user. `authorizeUrl` is
-   * live and still being waited on — this is a prompt, not a failure.
+   * Sign-in has to be opened by the user rather than by us. Two causes, one situation: the browser
+   * refused the popup, or the user closed it before finishing. Neither is a failure — they simply
+   * have not signed in yet — so this carries a live `signinUrl` and the attempt keeps waiting.
    */
-  | { kind: "popup_blocked"; authorizeUrl: string }
+  | { kind: "needs_manual_open"; signinUrl: string }
   | { kind: "exchanging" }
   | { kind: "listing_sites" }
   | { kind: "done"; token: TokenExchangeResult; sites: ReadonlyArray<AtlassianAccessibleResource> }
+  /**
+   * The server completed the flow itself, because sign-in finished somewhere this tab cannot see —
+   * another browser, another profile, a phone. No token comes back here: the account is already
+   * persisted, so the consumer's job is to reload the account list rather than to connect anything.
+   */
+  | { kind: "connected" }
   | { kind: "error"; message: string };
 
 export type UseAtlassianOAuthResult = {
@@ -30,6 +39,18 @@ export type UseAtlassianOAuthResult = {
   startOAuth: (clientId?: string) => Promise<void>;
   reset: () => void;
 };
+
+/** Empty rather than throwing: a baseline we could not read must not abort a sign-in. */
+async function listAccountIds(
+  backend: ReturnType<typeof useBackend>,
+): Promise<ReadonlyArray<string>> {
+  if (!backend) return [];
+  try {
+    return (await backend.atlassian.listAccounts()).map((account) => account.id);
+  } catch {
+    return [];
+  }
+}
 
 export function useAtlassianOAuth(): UseAtlassianOAuthResult {
   const backend = useBackend();
@@ -64,19 +85,27 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
         return;
       }
 
-      const config: AtlassianOAuthConfig = {
-        clientId: resolvedClientId,
-        redirectUri,
-      };
-
+      const config: AtlassianOAuthConfig = { clientId: resolvedClientId, redirectUri };
       setState({ kind: "opening" });
 
       try {
         const pkce = await generatePkce();
-        const stateParam = randomUUID();
-        const authUrl = buildAuthorizeUrl(config, pkce, stateParam);
+        const tabState = randomUUID();
+        const authUrl = buildAuthorizeUrl(config, pkce, tabState);
 
         const popup = openOAuthPopup(authUrl);
+        // Read before anything can change it, so "a new account appeared" stays a usable signal even
+        // when the user is reconnecting and accounts already exist.
+        const baselineAccountIds = listAccountIds(backend);
+
+        /*
+          Started alongside the popup, not instead of it. If the user finishes in the popup the
+          tab-owned flow wins and this one is left to expire; if they end up opening sign-in
+          themselves, this is the link worth handing them — short, needing no prior session, and
+          completable by the server from a browser that shares nothing with this tab.
+        */
+        const serverFlow = await beginAtlassianOAuthServerFlow({ redirectUri }).catch(() => null);
+        const signinUrl = serverFlow?.shareUrl ?? authUrl;
 
         /*
           A blocked popup is not an error worth stopping for. Opening a window needs a user gesture
@@ -84,23 +113,21 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
           webview, a click we arrived at indirectly. So keep waiting and hand the URL to the UI for
           the user to open themselves; the callback comes back over the broadcast channel either way.
         */
-        setState(popup ? { kind: "waiting" } : { kind: "popup_blocked", authorizeUrl: authUrl });
+        setState(popup ? { kind: "waiting" } : { kind: "needs_manual_open", signinUrl });
 
-        const callbackUrl = await waitForOAuthCallback(popup, redirectUri);
-        const callback = new URL(callbackUrl);
-        const code = callback.searchParams.get("code");
-        const returnedState = callback.searchParams.get("state");
-        const error = callback.searchParams.get("error");
-        const errorDescription = callback.searchParams.get("error_description");
+        const outcome = await runAtlassianOAuthAttempt({
+          popup,
+          redirectUri,
+          tabState,
+          serverState: serverFlow?.state ?? null,
+          listAccountIds: () => listAccountIds(backend),
+          baselineAccountIds,
+          onNeedsManualOpen: () => setState({ kind: "needs_manual_open", signinUrl }),
+        });
 
-        if (error) {
-          throw new Error(`OAuth error: ${error} ${errorDescription ?? ""}`.trim());
-        }
-        if (returnedState !== stateParam) {
-          throw new Error("OAuth state mismatch. Possible CSRF attack.");
-        }
-        if (!code) {
-          throw new Error("No authorization code in callback.");
+        if (outcome.kind === "server_connected") {
+          setState({ kind: "connected" });
+          return;
         }
         if (!backend) {
           throw new Error("Backend not available");
@@ -108,7 +135,7 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
 
         setState({ kind: "exchanging" });
         const { token, sites } = await backend.atlassian.exchangeOAuthCode({
-          code,
+          code: outcome.code,
           codeVerifier: pkce.codeVerifier,
           redirectUri,
         });

@@ -5,48 +5,50 @@ import { CopyLinkButton } from "~/t3team/components/t3team-CopyLinkButton";
 import { T3SurfaceCard, T3SurfaceCardContent } from "~/t3team/components/ui/t3team-surface";
 
 /**
- * Shown when the browser refused to open the sign-in window.
+ * Shown when sign-in has to be opened by the user rather than by us.
  *
- * Opening a window requires a user gesture the browser trusts, and several setups withhold one — a
- * strict popup blocker, an embedded webview, a click that arrived through a nested handler. The
- * previous behaviour was to fail with "Check your popup blocker settings", which left the user with
- * no way forward except changing browser settings. The authorize URL is perfectly usable as an
- * ordinary link, so offer it: a real click on an anchor is a gesture every browser honours.
+ * Two causes reach here and the copy must be true of both: the browser refused the popup, or the user
+ * closed it before finishing. It used to say "Your browser blocked the sign-in window", which asserts
+ * a cause that is simply wrong in the second case — and the second case is the common one. Neither is
+ * a failure: the user has not signed in yet, and the useful response is a link, not a red card.
  *
- * The sign-in is still being waited on while this is visible, and the result comes back over a
- * same-origin broadcast channel rather than through `window.opener` — which is why the link can carry
- * `rel="noreferrer"` (implying `noopener`) without breaking the flow. The opened page never gets a
- * handle on this one, and the result still arrives.
+ * `signinUrl` is preferably the server-owned begin link, which is short and needs no prior session, so
+ * it works in the browser the user is actually signed in to — including on their phone. It falls back
+ * to the raw authorize URL, which can only be completed in this browser.
+ *
+ * The sign-in is still being waited on while this is visible. The result arrives over a same-origin
+ * broadcast channel, or — when it finished somewhere this tab cannot see — by the server reporting a
+ * new account. That is why the link can carry `rel="noreferrer"` (implying `noopener`) without
+ * breaking anything: the opened page never needs a handle on this one.
  */
 export function OAuthPopupBlockedNotice({
-  authorizeUrl,
+  signinUrl,
   onCancel,
 }: {
-  readonly authorizeUrl: string;
+  readonly signinUrl: string;
   readonly onCancel?: (() => void) | undefined;
 }) {
   return (
     <T3SurfaceCard tone="muted" role="status">
       <T3SurfaceCardContent className="flex flex-col gap-3">
         <div>
-          <p className="text-sm font-medium text-foreground">
-            Your browser blocked the sign-in window
-          </p>
+          <p className="text-sm font-medium text-foreground">Finish signing in to Atlassian</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Open it here, or copy the link into the browser you&apos;re signed in to.
+            Open the sign-in window again, or copy the link into the browser you&apos;re already
+            signed in to.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="xs"
-            render={<a href={authorizeUrl} target="_blank" rel="noreferrer external" />}
+            render={<a href={signinUrl} target="_blank" rel="noreferrer external" />}
           >
             <ExternalLink className="size-3.5" />
             Sign in to Atlassian
           </Button>
 
-          <CopyLinkButton value={authorizeUrl} label="Copy sign-in link" />
+          <CopyLinkButton value={signinUrl} label="Copy sign-in link" />
 
           {onCancel ? (
             <Button size="xs" variant="ghost" onClick={onCancel}>
@@ -54,7 +56,6 @@ export function OAuthPopupBlockedNotice({
             </Button>
           ) : null}
         </div>
-
       </T3SurfaceCardContent>
     </T3SurfaceCard>
   );

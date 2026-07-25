@@ -16,6 +16,7 @@ const NOT_FOUND_PATTERN = /\b404\b|not found/i;
 const RATE_LIMIT_PATTERN = /\b429\b|rate limit/i;
 const SERVER_ERROR_PATTERN = /\b5\d{2}\b|internal server error|internal error/i;
 const ATLASSIAN_OAUTH_UNCONFIGURED_PATTERN = /atlassian oauth is not configured/i;
+const SIGNIN_LINK_EXPIRED_PATTERN = /sign-?in link expired/i;
 
 /**
  * Synthetic error passed to `T3TeamErrorState` when no Atlassian OAuth client is configured,
@@ -31,6 +32,16 @@ const ATLASSIAN_OAUTH_UNCONFIGURED_RESULT: T3TeamErrorClassification = {
   detail:
     "Set T3TEAM_ATLASSIAN_CLIENT_ID and T3TEAM_ATLASSIAN_CLIENT_SECRET on the server, then restart it. Until then, connect with an API token below.",
   canRetry: false,
+};
+
+/**
+ * An expired sign-in wait is not "that took too long" — the server has forgotten the pending flow at
+ * the same moment, so the only thing that helps is starting again for a fresh link.
+ */
+const SIGNIN_LINK_EXPIRED_RESULT: T3TeamErrorClassification = {
+  headline: "The sign-in link expired.",
+  detail: "Start the Atlassian connection again to get a fresh link.",
+  canRetry: true,
 };
 
 const NETWORK_RESULT: T3TeamErrorClassification = {
@@ -73,6 +84,7 @@ export function classifyMessage(message: string): T3TeamErrorClassification | nu
   if (ATLASSIAN_OAUTH_UNCONFIGURED_PATTERN.test(message)) {
     return ATLASSIAN_OAUTH_UNCONFIGURED_RESULT;
   }
+  if (SIGNIN_LINK_EXPIRED_PATTERN.test(message)) return SIGNIN_LINK_EXPIRED_RESULT;
   if (NETWORK_PATTERN.test(message)) return NETWORK_RESULT;
   if (TIMEOUT_PATTERN.test(message)) return TIMEOUT_RESULT;
   if (AUTH_PATTERN.test(message)) return AUTH_RESULT;
