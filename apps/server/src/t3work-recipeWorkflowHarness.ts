@@ -96,7 +96,10 @@ export function runT3workRecipeWorkflowHarness(spec: T3workRecipeHarnessSpec) {
       "harness-model",
     );
     const launchThreadId = `harness-launch-${recipe.id}`;
-    const runId = `harness-run-${recipe.id}`;
+    // Unique per invocation: a deterministic runId let a later run REPLAY the previous
+    // run's journal, so the second spawnThread resolved to the earlier run's thread and the
+    // engine rejected a second turn on it. The run identity is the harness's to own.
+    const runId = `harness-run-${recipe.id}-${(yield* Clock.currentTimeMillis).toString(36)}`;
 
     // Let the reactor + stub subscribe to the hot domain-event stream before anything dispatches.
     yield* Effect.sleep(Duration.millis(100));
