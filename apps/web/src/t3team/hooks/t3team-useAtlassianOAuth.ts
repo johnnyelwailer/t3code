@@ -15,6 +15,11 @@ export type OAuthState =
   | { kind: "idle" }
   | { kind: "opening" }
   | { kind: "waiting" }
+  /**
+   * The popup was blocked, so the sign-in window has to be opened by the user. `authorizeUrl` is
+   * live and still being waited on — this is a prompt, not a failure.
+   */
+  | { kind: "popup_blocked"; authorizeUrl: string }
   | { kind: "exchanging" }
   | { kind: "listing_sites" }
   | { kind: "done"; token: TokenExchangeResult; sites: ReadonlyArray<AtlassianAccessibleResource> }
@@ -71,11 +76,15 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
         const stateParam = randomUUID();
         const authUrl = buildAuthorizeUrl(config, pkce, stateParam);
 
-        setState({ kind: "waiting" });
         const popup = openOAuthPopup(authUrl);
-        if (!popup) {
-          throw new Error("Failed to open OAuth popup. Check your popup blocker settings.");
-        }
+
+        /*
+          A blocked popup is not an error worth stopping for. Opening a window needs a user gesture
+          the browser trusts, and plenty of setups withhold it — a strict blocker, an embedded
+          webview, a click we arrived at indirectly. So keep waiting and hand the URL to the UI for
+          the user to open themselves; the callback comes back over the broadcast channel either way.
+        */
+        setState(popup ? { kind: "waiting" } : { kind: "popup_blocked", authorizeUrl: authUrl });
 
         const callbackUrl = await waitForOAuthCallback(popup, redirectUri);
         const callback = new URL(callbackUrl);

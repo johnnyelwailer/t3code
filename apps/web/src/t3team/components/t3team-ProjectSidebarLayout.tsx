@@ -88,11 +88,7 @@ export function ProjectSidebarLayout({
       <SidebarHeader className={sidebarHeaderClassName}>
         <div className="flex w-full min-w-0 items-center gap-2">
           <SidebarTrigger className="shrink-0 md:hidden" />
-          <T3TeamPackBrandImage
-            brand={appearance?.brand}
-            kind="mark"
-            className="size-5 shrink-0"
-          />
+          <T3TeamPackBrandImage brand={appearance?.brand} kind="mark" className="size-5 shrink-0" />
           <span className="truncate text-sm font-semibold">{appName}</span>
         </div>
       </SidebarHeader>

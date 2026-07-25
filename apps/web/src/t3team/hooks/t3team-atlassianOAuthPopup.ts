@@ -1,4 +1,7 @@
-import { isAtlassianOAuthCallbackMessage } from "~/t3team/components/t3team-atlassianOAuthCallbackMessage";
+import {
+  ATLASSIAN_OAUTH_CALLBACK_CHANNEL,
+  isAtlassianOAuthCallbackMessage,
+} from "~/t3team/components/t3team-atlassianOAuthCallbackMessage";
 import {
   ATLASSIAN_OAUTH_POPUP_FRAME_NAME,
   ATLASSIAN_OAUTH_POPUP_HEIGHT,
@@ -28,8 +31,15 @@ function acceptOAuthCallbackMessage(event: MessageEvent, redirectUri: string): s
   return event.data.href;
 }
 
+/**
+ * Waits for the sign-in window to come back with an authorization code.
+ *
+ * `popup` is optional: when the browser blocks the popup, the user opens the authorize URL in an
+ * ordinary tab and there is no window handle to poll or to detect closing. In that case the result
+ * arrives over the same-origin broadcast channel instead, and the only limit is the timeout.
+ */
 export function waitForOAuthCallback(
-  popup: WindowProxy,
+  popup: WindowProxy | null,
   redirectUri: string,
   timeoutMs = 120000,
 ): Promise<string> {
@@ -38,12 +48,20 @@ export function waitForOAuthCallback(
     let resolved = false;
     let popupClosedPolls = 0;
     const closedGracePolls = Math.ceil(POPUP_CLOSED_GRACE_MS / POLL_INTERVAL_MS);
+    const channel =
+      typeof BroadcastChannel === "undefined"
+        ? null
+        : new BroadcastChannel(ATLASSIAN_OAUTH_CALLBACK_CHANNEL);
 
     const cleanup = () => {
       resolved = true;
       window.removeEventListener("message", onMessage);
+      if (channel) {
+        channel.removeEventListener("message", onMessage);
+        channel.close();
+      }
       clearInterval(timer);
-      if (!popup.closed) popup.close();
+      if (popup && !popup.closed) popup.close();
     };
 
     const onMessage = (event: MessageEvent) => {
@@ -56,29 +74,33 @@ export function waitForOAuthCallback(
     };
 
     window.addEventListener("message", onMessage);
+    channel?.addEventListener("message", onMessage);
 
     const timer = setInterval(() => {
       if (resolved) return;
 
-      if (popup.closed) {
-        popupClosedPolls += 1;
-        if (popupClosedPolls >= closedGracePolls) {
-          cleanup();
-          reject(new Error("OAuth popup was closed before completing sign in."));
+      // Without a window handle there is nothing to poll; the broadcast channel delivers instead.
+      if (popup) {
+        if (popup.closed) {
+          popupClosedPolls += 1;
+          if (popupClosedPolls >= closedGracePolls) {
+            cleanup();
+            reject(new Error("OAuth popup was closed before completing sign in."));
+          }
+          return;
         }
-        return;
-      }
 
-      popupClosedPolls = 0;
+        popupClosedPolls = 0;
 
-      try {
-        const href = popup.location.href;
-        if (href && href.startsWith(redirectUri)) {
-          cleanup();
-          resolve(href);
+        try {
+          const href = popup.location.href;
+          if (href && href.startsWith(redirectUri)) {
+            cleanup();
+            resolve(href);
+          }
+        } catch {
+          // Cross-origin while on auth domain or callback host; ignore.
         }
-      } catch {
-        // Cross-origin while on auth domain or callback host; ignore.
       }
 
       if (Date.now() - start > timeoutMs) {

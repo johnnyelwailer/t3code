@@ -38,9 +38,7 @@ describe("T3TeamErrorState", () => {
   });
 
   it("hides the retry button entirely when no onRetry is given", () => {
-    const markup = render(
-      <T3TeamErrorState error={new Error("Request failed with 500")} />,
-    );
+    const markup = render(<T3TeamErrorState error={new Error("Request failed with 500")} />);
 
     expect(markup).not.toContain("Try again");
   });

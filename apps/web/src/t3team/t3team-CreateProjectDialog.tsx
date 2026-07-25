@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
+import { OAuthPopupBlockedNotice } from "~/t3team/components/t3team-OAuthPopupBlockedNotice";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
 import { useAtlassianOAuth } from "~/t3team/hooks/t3team-useAtlassianOAuth";
@@ -55,7 +56,10 @@ export function CreateProjectDialog({
   const oauthBusy =
     oauth.state.kind === "opening" ||
     oauth.state.kind === "waiting" ||
+    oauth.state.kind === "popup_blocked" ||
     oauth.state.kind === "exchanging";
+  const blockedAuthorizeUrl =
+    oauth.state.kind === "popup_blocked" ? oauth.state.authorizeUrl : null;
 
   useEffect(() => {
     void loadPersistedAccounts();
@@ -120,6 +124,10 @@ export function CreateProjectDialog({
       }
     >
       <div className="relative space-y-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
+        {blockedAuthorizeUrl ? (
+          <OAuthPopupBlockedNotice authorizeUrl={blockedAuthorizeUrl} onCancel={oauth.reset} />
+        ) : null}
+
         {setup.error || oauthError ? (
           <T3TeamErrorState error={setup.error ?? oauthError} action="setting up the project" />
         ) : null}

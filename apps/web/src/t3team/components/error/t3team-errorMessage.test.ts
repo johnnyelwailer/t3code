@@ -131,7 +131,8 @@ describe("toUserFacingError", () => {
   it("handles Effect-style tagged errors shaped like T3TeamAtlassianError", () => {
     const tagged = {
       _tag: "T3TeamAtlassianError",
-      message: "Atlassian request timed out after 12000ms. Check Jira auth and network connectivity.",
+      message:
+        "Atlassian request timed out after 12000ms. Check Jira auth and network connectivity.",
     };
     expect(toUserFacingError(tagged)).toMatchObject({
       headline: "That took too long.",

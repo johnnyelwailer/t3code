@@ -2,7 +2,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  ATLASSIAN_OAUTH_CALLBACK_CHANNEL,
   ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE,
+  broadcastAtlassianOAuthCallback,
   isAtlassianOAuthCallbackMessage,
   postAtlassianOAuthCallbackToOpener,
 } from "./t3team-atlassianOAuthCallbackMessage";
@@ -56,5 +58,38 @@ describe("isAtlassianOAuthCallbackMessage", () => {
       href: "https://evil.example/oauth/callback?code=abc",
     };
     expect(isAtlassianOAuthCallbackMessage(message, redirectUri)).toBe(false);
+  });
+});
+
+describe("broadcastAtlassianOAuthCallback", () => {
+  /**
+   * The broadcast is what carries the result home when the popup was blocked and the user opened the
+   * authorize URL in an ordinary tab — there is no opener to post to in that case.
+   */
+  it("broadcasts the callback href on the shared channel", async () => {
+    const href = "http://127.0.0.1:5733/oauth/callback?code=abc&state=xyz";
+    const listener = new BroadcastChannel(ATLASSIAN_OAUTH_CALLBACK_CHANNEL);
+    const received = new Promise<unknown>((resolve) => {
+      listener.addEventListener("message", (event) => resolve(event.data));
+    });
+
+    expect(broadcastAtlassianOAuthCallback(href)).toBe(true);
+
+    expect(await received).toEqual({
+      type: ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE,
+      href,
+    });
+    listener.close();
+  });
+
+  it("broadcasts even with no opener, which is the whole point of the channel", () => {
+    const originalOpener = window.opener;
+    Object.defineProperty(window, "opener", { value: null, configurable: true });
+
+    const href = "http://127.0.0.1:5733/oauth/callback?code=abc&state=xyz";
+    expect(postAtlassianOAuthCallbackToOpener(href)).toBe(false);
+    expect(broadcastAtlassianOAuthCallback(href)).toBe(true);
+
+    Object.defineProperty(window, "opener", { value: originalOpener, configurable: true });
   });
 });
