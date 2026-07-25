@@ -18,11 +18,11 @@ import { WorkItemDetailLayout } from "~/t3team/workitem/t3team-WorkItemDetailLay
 import { WorkItemLinks } from "~/t3team/workitem/t3team-WorkItemLinks";
 import { WorkItemProperties } from "~/t3team/workitem/t3team-WorkItemProperties";
 import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
+import { WorkItemSectionNav } from "~/t3team/workitem/t3team-WorkItemSectionNav";
 import {
-  WorkItemSectionNav,
-  type WorkItemSectionNavEntry,
-} from "~/t3team/workitem/t3team-WorkItemSectionNav";
-import { countWorkItemIssueLinks } from "~/t3team/workitem/t3team-workItemLinkGroups";
+  buildWorkItemSectionAnchors,
+  buildWorkItemSectionNavEntries,
+} from "~/t3team/workitem/t3team-workItemSectionAnchors";
 import { WorkItemSkeleton } from "~/t3team/workitem/t3team-WorkItemSkeleton";
 import { WorkItemTitleBand } from "~/t3team/workitem/t3team-WorkItemTitleBand";
 
@@ -90,29 +90,14 @@ export function WorkItemDetailMain({
     [accountId, attachments, htmlBaseUrl, httpBaseUrl, model.key, projectId, workspaceRoot],
   );
 
-  /** Anchors are derived from the item key so two items open side by side cannot collide. */
-  const anchors = {
-    description: `wi-${model.key}-description`,
-    children: `wi-${model.key}-children`,
-    links: `wi-${model.key}-links`,
-    attachments: `wi-${model.key}-attachments`,
-    comments: `wi-${model.key}-comments`,
-  };
-
-  const linkCount = countWorkItemIssueLinks(snapshotRaw);
-  const navEntries: ReadonlyArray<WorkItemSectionNavEntry> = [
-    { anchorId: anchors.description, label: "Description" },
-    ...(childItems.length > 0
-      ? [{ anchorId: anchors.children, label: "Children", count: childItems.length }]
-      : []),
-    ...(linkCount > 0 ? [{ anchorId: anchors.links, label: "Links", count: linkCount }] : []),
-    ...(attachments.length > 0
-      ? [{ anchorId: anchors.attachments, label: "Files", count: attachments.length }]
-      : []),
-    ...(comments.length > 0
-      ? [{ anchorId: anchors.comments, label: "Comments", count: comments.length }]
-      : []),
-  ];
+  const anchors = buildWorkItemSectionAnchors(model.key);
+  const navEntries = buildWorkItemSectionNavEntries({
+    anchors,
+    childCount: childItems.length,
+    snapshotRaw,
+    attachmentCount: attachments.length,
+    commentCount: comments.length,
+  });
 
   /**
    * Comment bodies render from ADF for the same reason descriptions do — it is the format Jira

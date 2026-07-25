@@ -35,6 +35,8 @@ const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() |
 const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
 const configuredAtlassianClientId =
   process.env.T3TEAM_ATLASSIAN_CLIENT_ID?.trim() ||
+  // Pre-rename name: a user's .env lives outside the repo and was not migrated by the rename.
+  process.env.T3WORK_ATLASSIAN_CLIENT_ID?.trim() ||
   process.env.VITE_ATLASSIAN_CLIENT_ID?.trim() ||
   process.env.ATLASSIAN_CLIENT_ID?.trim() ||
   "";
