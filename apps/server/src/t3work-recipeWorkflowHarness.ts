@@ -189,20 +189,38 @@ export function runT3workRecipeWorkflowHarness(spec: T3workRecipeHarnessSpec) {
     const answers = spec.answers ?? [];
     let asksAnswered = 0;
     const answeredCorrelations = new Set<string>();
-    while (launched.status !== "completed" && completed.length === 0) {
+    // Completion is read from the DURABLE ROW, not from the launch-time `onComplete`
+    // callback: when the reactor resumes a suspended run and finishes it, that callback
+    // belongs to the original launch invocation and never fires. The row is deleted on
+    // completion, so `getById` returning None IS the terminal signal.
+    const runGone = Effect.gen(function* () {
+      const row = yield* runRepository.getById({ runId });
+      return Option.isNone(row);
+    });
+    let finished = launched.status === "completed" || completed.length > 0;
+    while (!finished) {
       const nextAsk = (): string | undefined => {
         const pending = registry.peekPending(launchThreadId);
         return pending?.kind === "user.input" && !answeredCorrelations.has(pending.correlationId)
           ? pending.correlationId
           : undefined;
       };
-      yield* waitUntil(
-        () => completed.length > 0 || nextAsk() !== undefined,
-        "the run to complete or suspend on askUser",
-        timeoutMs,
-      );
+      // Poll the row alongside the in-memory signals; a run that completed through the
+      // reactor shows up here and nowhere else.
+      const deadline = timeoutMs;
+      let waited = 0;
+      while (waited < deadline) {
+        if (completed.length > 0 || nextAsk() !== undefined || (yield* runGone)) break;
+        yield* Effect.sleep(Duration.millis(10));
+        waited += 10;
+      }
+      if (yield* runGone) {
+        finished = true;
+        break;
+      }
       const correlationId = nextAsk();
       if (completed.length > 0 || correlationId === undefined) {
+        finished = true;
         break;
       }
       answeredCorrelations.add(correlationId);
