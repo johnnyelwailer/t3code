@@ -7,19 +7,14 @@ import type {
 import type {
   DiscoverProjectRecipesRequest,
   DiscoverProjectRecipesResponse,
-  DeleteManagedProjectRecipeRequest,
-  DeleteManagedProjectRecipeResponse,
   LaunchProjectRecipeWorkflowRequest,
   LaunchProjectRecipeWorkflowResponse,
-  ListManagedProjectRecipesRequest,
-  ListManagedProjectRecipesResponse,
   SubmitProjectRecipeCardActionRequest,
   SubmitProjectRecipeCardActionResponse,
-  UpdateManagedProjectRecipeRequest,
-  UpdateManagedProjectRecipeResponse,
 } from "@t3tools/project-recipes";
 import type { AtlassianBackendApi } from "./t3team-atlassianBackendTypes";
 import type { GitHubBackendApi } from "./t3team-githubBackendTypes";
+import type { RecipeManagementBackendApi } from "./t3team-recipeManagementBackendTypes";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
@@ -140,7 +135,7 @@ export type ProjectWorkspaceRefreshWorkItemSliceContextResult = {
   readonly backgroundQueued?: number;
 };
 
-export interface ProjectWorkspaceBackendApi {
+export interface ProjectWorkspaceBackendApi extends RecipeManagementBackendApi {
   readonly bootstrapWorkspace: (input: {
     readonly workspaceRoot: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
@@ -150,15 +145,6 @@ export interface ProjectWorkspaceBackendApi {
   readonly discoverRecipes: (
     input: DiscoverProjectRecipesRequest,
   ) => Promise<DiscoverProjectRecipesResponse>;
-  readonly listManagedRecipes: (
-    input: ListManagedProjectRecipesRequest,
-  ) => Promise<ListManagedProjectRecipesResponse>;
-  readonly updateManagedRecipe: (
-    input: UpdateManagedProjectRecipeRequest,
-  ) => Promise<UpdateManagedProjectRecipeResponse>;
-  readonly deleteManagedRecipe: (
-    input: DeleteManagedProjectRecipeRequest,
-  ) => Promise<DeleteManagedProjectRecipeResponse>;
   readonly writeContextFiles: (input: {
     readonly workspaceRoot: string;
     readonly files: ReadonlyArray<ProjectWorkspaceContextFile>;
