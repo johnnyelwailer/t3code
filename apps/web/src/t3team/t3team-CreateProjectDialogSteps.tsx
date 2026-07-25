@@ -3,61 +3,6 @@ import { Input } from "~/t3team/components/ui/t3team-input";
 import { ProjectAvatar } from "~/t3team/components/t3team-ProjectAvatar";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 
-export function SourceStep({
-  loading,
-  siteUrl,
-  email,
-  apiToken,
-  setSiteUrl,
-  setEmail,
-  setApiToken,
-}: {
-  loading: boolean;
-  siteUrl: string;
-  email: string;
-  apiToken: string;
-  setSiteUrl: (value: string) => void;
-  setEmail: (value: string) => void;
-  setApiToken: (value: string) => void;
-}) {
-  if (loading) {
-    return (
-      <section className="space-y-3">
-        <div>
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="mt-2 h-4 w-72" />
-        </div>
-        <Skeleton className="h-10 w-full rounded-md" />
-        <Skeleton className="h-10 w-full rounded-md" />
-        <Skeleton className="h-10 w-full rounded-md" />
-      </section>
-    );
-  }
-
-  return (
-    <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">Connect Atlassian Jira</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Authenticate to your Jira workspace to import projects and issues.
-        </p>
-      </div>
-      <Input
-        value={siteUrl}
-        onChange={(event) => setSiteUrl(event.target.value)}
-        placeholder="https://your-company.atlassian.net"
-      />
-      <Input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
-      <Input
-        type="password"
-        value={apiToken}
-        onChange={(event) => setApiToken(event.target.value)}
-        placeholder="API token"
-      />
-    </section>
-  );
-}
-
 export function AccountStep({
   accounts,
   selectedAccount,

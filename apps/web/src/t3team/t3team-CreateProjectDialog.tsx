@@ -15,9 +15,10 @@ import {
   useT3TeamProjectSetupProfile,
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
-import { AccountStep, ProjectStep, SourceStep } from "~/t3team/t3team-CreateProjectDialogSteps";
+import { AccountStep, ProjectStep } from "~/t3team/t3team-CreateProjectDialogSteps";
 import { ConfirmStep, CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
 import { CreateProjectDialogFooter } from "~/t3team/t3team-CreateProjectDialogFooter";
+import { ConnectAtlassianStep } from "~/t3team/t3team-ConnectAtlassianStep";
 import { defaultAtlassianSiteUrlInput } from "~/t3team/hooks/t3team-createProjectUtils";
 
 export function CreateProjectDialog({
@@ -53,13 +54,9 @@ export function CreateProjectDialog({
   const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
   const [customProfile, setCustomProfile] = useState<T3TeamProfile | undefined>(undefined);
   const oauthError = oauth.state.kind === "error" ? oauth.state.message : null;
-  const oauthBusy =
-    oauth.state.kind === "opening" ||
-    oauth.state.kind === "waiting" ||
-    oauth.state.kind === "popup_blocked" ||
-    oauth.state.kind === "exchanging";
   const blockedAuthorizeUrl =
     oauth.state.kind === "popup_blocked" ? oauth.state.authorizeUrl : null;
+  const oauthConfigured = Boolean(__ATLASSIAN_CLIENT_ID__);
 
   useEffect(() => {
     void loadPersistedAccounts();
@@ -111,19 +108,14 @@ export function CreateProjectDialog({
       footer={
         <CreateProjectDialogFooter
           setup={setup}
-          oauth={oauth}
-          siteUrl={siteUrl}
-          email={email}
-          apiToken={apiToken}
           selectedAccount={selectedAccount}
           selectedProject={selectedProject}
-          bootstrapping={bootstrapping || oauthBusy}
           loadingProjects={loadingProjects}
           onCreateProject={createSelectedProject}
         />
       }
     >
-      <div className="relative space-y-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
+      <div className="relative flex min-h-full flex-col gap-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
         {blockedAuthorizeUrl ? (
           <OAuthPopupBlockedNotice authorizeUrl={blockedAuthorizeUrl} onCancel={oauth.reset} />
         ) : null}
@@ -133,14 +125,19 @@ export function CreateProjectDialog({
         ) : null}
         <CreateProjectWizardStepTransition step={setup.step}>
           {setup.step === "source" ? (
-            <SourceStep
+            <ConnectAtlassianStep
               loading={bootstrapping}
+              oauthConfigured={oauthConfigured}
+              oauth={oauth}
               siteUrl={siteUrl}
               email={email}
               apiToken={apiToken}
               setSiteUrl={setSiteUrl}
               setEmail={setEmail}
               setApiToken={setApiToken}
+              canConnectBasic={setup.isValidUrl(siteUrl)}
+              connectingBasic={loadingAccounts}
+              onConnectBasic={() => void setup.loadAccountsWithBasic({ siteUrl, email, apiToken })}
             />
           ) : null}
           {setup.step === "account" ? (

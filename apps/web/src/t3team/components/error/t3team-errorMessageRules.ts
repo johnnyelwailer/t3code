@@ -15,6 +15,23 @@ const AUTH_PATTERN = /\b401\b|\b403\b|unauthorized|forbidden|permission/i;
 const NOT_FOUND_PATTERN = /\b404\b|not found/i;
 const RATE_LIMIT_PATTERN = /\b429\b|rate limit/i;
 const SERVER_ERROR_PATTERN = /\b5\d{2}\b|internal server error|internal error/i;
+const ATLASSIAN_OAUTH_UNCONFIGURED_PATTERN = /atlassian oauth is not configured/i;
+
+/**
+ * Synthetic error passed to `T3TeamErrorState` when no Atlassian OAuth client is configured,
+ * so the wizard's unconfigured-state UI can reuse the shared error surface (and this rule's
+ * copy) instead of inventing its own layout.
+ */
+export const ATLASSIAN_OAUTH_UNCONFIGURED_ERROR = new Error(
+  "Atlassian OAuth is not configured for this environment.",
+);
+
+const ATLASSIAN_OAUTH_UNCONFIGURED_RESULT: T3TeamErrorClassification = {
+  headline: "Atlassian OAuth isn't configured yet.",
+  detail:
+    "Set T3TEAM_ATLASSIAN_CLIENT_ID and T3TEAM_ATLASSIAN_CLIENT_SECRET on the server, then restart it. Until then, connect with an API token below.",
+  canRetry: false,
+};
 
 const NETWORK_RESULT: T3TeamErrorClassification = {
   headline: "You appear to be offline.",
@@ -53,6 +70,9 @@ export function classifyStatus(status: number | undefined): T3TeamErrorClassific
 
 /** Free-text classification for messages that don't carry a structured status. */
 export function classifyMessage(message: string): T3TeamErrorClassification | null {
+  if (ATLASSIAN_OAUTH_UNCONFIGURED_PATTERN.test(message)) {
+    return ATLASSIAN_OAUTH_UNCONFIGURED_RESULT;
+  }
   if (NETWORK_PATTERN.test(message)) return NETWORK_RESULT;
   if (TIMEOUT_PATTERN.test(message)) return TIMEOUT_RESULT;
   if (AUTH_PATTERN.test(message)) return AUTH_RESULT;

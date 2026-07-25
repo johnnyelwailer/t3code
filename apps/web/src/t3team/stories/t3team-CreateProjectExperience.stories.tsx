@@ -3,7 +3,9 @@ import type { Meta, StoryObj } from "@storybook/react";
 import type { ExternalProject, IntegrationAccount } from "@t3tools/integrations-core";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { LinkedRepositoryListEditor } from "~/t3team/components/t3team-LinkedRepositoryListEditor";
-import { AccountStep, ProjectStep, SourceStep } from "~/t3team/t3team-CreateProjectDialogSteps";
+import { OAuthPopupBlockedNotice } from "~/t3team/components/t3team-OAuthPopupBlockedNotice";
+import { AccountStep, ProjectStep } from "~/t3team/t3team-CreateProjectDialogSteps";
+import { ConnectAtlassianStep } from "~/t3team/t3team-ConnectAtlassianStep";
 import { CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
 import {
   CreateProjectWizardFooter,
@@ -18,6 +20,10 @@ import {
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
 import type { CreateProjectStep } from "~/t3team/hooks/t3team-useCreateProject";
+import type {
+  OAuthState,
+  UseAtlassianOAuthResult,
+} from "~/t3team/hooks/t3team-useAtlassianOAuth";
 
 const accounts: ReadonlyArray<IntegrationAccount> = [
   {
@@ -107,6 +113,10 @@ function CreateProjectExperienceStory({ autoAdvance = false }: { autoAdvance?: b
       else if (step === "project") setStep("confirm");
       else if (step === "confirm") setStep("creating");
     }, "forward");
+  const demoOauth: UseAtlassianOAuthResult = useMemo(
+    () => ({ state: { kind: "idle" }, startOAuth: async () => goForward(), reset: () => {} }),
+    [step],
+  );
 
   useEffect(() => {
     if (!autoAdvance) return;
@@ -157,14 +167,10 @@ function CreateProjectExperienceStory({ autoAdvance = false }: { autoAdvance?: b
               footer={
                 <CreateProjectWizardFooter
                   step={step}
-                  canConnectBasic={siteUrl.startsWith("https://")}
                   canContinueAccount={Boolean(selectedAccount)}
                   canContinueProject={Boolean(selectedProject)}
                   canCreateProject={Boolean(selectedProject)}
-                  loadingSource={false}
                   loadingProjects={false}
-                  onConnectBasic={goForward}
-                  onConnectOAuth={goForward}
                   onBack={goBack}
                   onContinueAccount={goForward}
                   onContinueProject={goForward}
@@ -172,17 +178,22 @@ function CreateProjectExperienceStory({ autoAdvance = false }: { autoAdvance?: b
                 />
               }
             >
-              <div className="relative space-y-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
+              <div className="relative flex min-h-full flex-col gap-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
                 <CreateProjectWizardStepTransition step={step}>
                   {step === "source" ? (
-                    <SourceStep
+                    <ConnectAtlassianStep
                       loading={false}
+                      oauthConfigured
+                      oauth={demoOauth}
                       siteUrl={siteUrl}
                       email={email}
                       apiToken={apiToken}
                       setSiteUrl={setSiteUrl}
                       setEmail={setEmail}
                       setApiToken={setApiToken}
+                      canConnectBasic={siteUrl.startsWith("https://")}
+                      connectingBasic={false}
+                      onConnectBasic={goForward}
                     />
                   ) : null}
                   {step === "account" ? (
@@ -286,4 +297,82 @@ export const Mobile: Story = {
       defaultViewport: "phone",
     },
   },
+};
+
+const IDLE_OAUTH_STATE: OAuthState = { kind: "idle" };
+
+/**
+ * Isolated harness for the "source" step's connect UI, independent of the multi-step
+ * transition demo above. Lets each Atlassian-connect state (default, revealed fallback,
+ * in-flight, popup-blocked, unconfigured) be screenshotted on its own.
+ */
+function ConnectAtlassianStepHarness({
+  oauthState = IDLE_OAUTH_STATE,
+  oauthConfigured = true,
+  initialShowTokenForm = false,
+}: {
+  oauthState?: OAuthState;
+  oauthConfigured?: boolean;
+  initialShowTokenForm?: boolean;
+}) {
+  const [siteUrl, setSiteUrl] = useState("https://acme.atlassian.net");
+  const [email, setEmail] = useState("owner@acme.test");
+  const [apiToken, setApiToken] = useState("");
+  const oauth: UseAtlassianOAuthResult = {
+    state: oauthState,
+    startOAuth: async () => {},
+    reset: () => {},
+  };
+
+  return (
+    // Height approximates the real dialog's body (~40rem card minus header chrome), so the
+    // step's internal vertical centering renders the same way it does in the live wizard.
+    <div className="mx-auto flex h-[36rem] max-w-md flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6">
+      {oauthState.kind === "popup_blocked" ? (
+        <OAuthPopupBlockedNotice authorizeUrl={oauthState.authorizeUrl} onCancel={() => {}} />
+      ) : null}
+      <ConnectAtlassianStep
+        loading={false}
+        oauthConfigured={oauthConfigured}
+        oauth={oauth}
+        siteUrl={siteUrl}
+        email={email}
+        apiToken={apiToken}
+        setSiteUrl={setSiteUrl}
+        setEmail={setEmail}
+        setApiToken={setApiToken}
+        canConnectBasic={siteUrl.startsWith("https://")}
+        connectingBasic={false}
+        onConnectBasic={() => {}}
+        initialShowTokenForm={initialShowTokenForm}
+      />
+    </div>
+  );
+}
+
+export const ConnectAtlassianDefault: Story = {
+  render: () => <ConnectAtlassianStepHarness />,
+};
+
+export const ConnectAtlassianTokenFallbackRevealed: Story = {
+  render: () => <ConnectAtlassianStepHarness initialShowTokenForm />,
+};
+
+export const ConnectAtlassianInFlight: Story = {
+  render: () => <ConnectAtlassianStepHarness oauthState={{ kind: "opening" }} />,
+};
+
+export const ConnectAtlassianPopupBlocked: Story = {
+  render: () => (
+    <ConnectAtlassianStepHarness
+      oauthState={{
+        kind: "popup_blocked",
+        authorizeUrl: "https://auth.atlassian.com/authorize?client_id=demo",
+      }}
+    />
+  ),
+};
+
+export const ConnectAtlassianUnconfigured: Story = {
+  render: () => <ConnectAtlassianStepHarness oauthConfigured={false} />,
 };
