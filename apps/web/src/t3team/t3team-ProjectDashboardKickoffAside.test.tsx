@@ -84,6 +84,8 @@ vi.mock("~/t3team/hooks/t3team-useSidecarComposition", () => ({
 
 vi.mock("~/t3team/t3team-sidecarRecipes", () => ({
   useT3TeamSidecarRecipeQuickStarts: () => [],
+  // The registry's resolveIsEmpty for `recipe-list` sections calls this directly.
+  buildT3TeamSidecarRecipeQuickStarts: () => [],
 }));
 
 vi.mock("~/t3team/t3team-TicketKickoffComposer", () => ({
@@ -118,8 +120,8 @@ describe("ProjectDashboardKickoffAside", () => {
     mockUseSidecarComposition.mockReturnValue({
       composition: {
         sections: [
-          { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
+          { sectionId: "quick-actions", visible: true, collapsed: false },
+          { sectionId: "recent", visible: true, collapsed: false },
         ],
       },
       setCollapsed: () => undefined,
@@ -168,8 +170,10 @@ describe("ProjectDashboardKickoffAside", () => {
     );
 
     expect(markup).toContain("<ul");
-    expect(markup).toContain("Quick starts");
-    expect(markup).toContain("Recent conversations");
+    expect(markup).toContain("Recent");
+    // The quick-actions section is intentionally absent: topic sections auto-hide when
+    // they have no matched action, and this fixture supplies no recipes.
+    expect(markup).not.toContain("Quick actions");
     expect(markup).toContain("IES-17877 thread 2");
     expect(markup).toContain("relative:2026-05-27T10:00:00.000Z");
     expect(markup).not.toContain("Kick off a project thread");
