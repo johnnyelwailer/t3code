@@ -2,8 +2,8 @@ import { useCallback, useMemo } from "react";
 import type { ProviderInteractionMode, ServerProvider } from "@t3tools/contracts";
 
 import type { ComposerTrigger } from "~/composer-logic";
-import { usePrimaryEnvironmentId } from "~/state/environments";
 import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
+import { useT3workKickoffPathSearchScope } from "~/t3work/composer/t3work-kickoffPathSearchScope";
 import { T3WORK_COMPOSER_BUILT_IN_SLASH_COMMANDS } from "~/t3work/composer/t3work-composerMenuItems";
 import { buildT3workRecipeSlashItems } from "~/t3work/composer/t3work-composerRecipeSlashItems";
 import { useT3workComposerCommandMenu } from "~/t3work/composer/t3work-useComposerCommandMenu";
@@ -32,7 +32,7 @@ export type T3workKickoffComposerMenuInput = {
 };
 
 export function useT3workKickoffComposerMenu(input: T3workKickoffComposerMenuInput) {
-  const environmentId = usePrimaryEnvironmentId();
+  const pathSearch = useT3workKickoffPathSearchScope(input.workspaceRoot);
   const provider = input.selectedProvider;
   const sources = useMemo(
     () => ({
@@ -64,7 +64,7 @@ export function useT3workKickoffComposerMenu(input: T3workKickoffComposerMenuInp
 
   return useT3workComposerCommandMenu({
     sources,
-    pathSearch: { environmentId: environmentId ?? null, cwd: input.workspaceRoot },
+    pathSearch,
     buildExtraItems,
     readSnapshot: () => {
       const snapshot = input.editorRef.current?.readSnapshot();

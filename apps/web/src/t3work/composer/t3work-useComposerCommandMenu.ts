@@ -1,8 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { EnvironmentId } from "@t3tools/contracts";
 
 import { type ComposerTrigger, detectComposerTrigger } from "~/composer-logic";
 import { useComposerPathSearch } from "~/lib/composerPathSearchState";
+import {
+  resolveT3workComposerPathSearchTarget,
+  type T3workComposerPathSearchScope,
+} from "~/t3work/composer/t3work-composerPathSearchTarget";
 import { useT3workComposerMenuHighlight } from "~/t3work/composer/t3work-composerMenuHighlightState";
 import {
   buildT3workComposerMenuItems,
@@ -18,10 +21,7 @@ import {
 } from "~/t3work/composer/t3work-composerMenuSelection";
 import type { T3workComposerMenuItem } from "~/t3work/composer/t3work-composerRecipeSlashItems";
 
-export type T3workComposerPathSearchScope = {
-  readonly environmentId: EnvironmentId | null;
-  readonly cwd: string | null;
-};
+export type { T3workComposerPathSearchScope };
 
 export type T3workComposerCommandMenuInput = {
   readonly sources: Omit<T3workComposerMenuSources, "pathEntries">;
@@ -50,11 +50,8 @@ export function useT3workComposerCommandMenu(input: T3workComposerCommandMenuInp
   const selectLockRef = useRef(false);
 
   const isPathTrigger = trigger?.kind === "path";
-  const pathEntries = useComposerPathSearch({
-    environmentId: input.pathSearch?.environmentId ?? null,
-    cwd: isPathTrigger ? (input.pathSearch?.cwd ?? null) : null,
-    query: isPathTrigger ? trigger.query : null,
-  });
+  const pathSearchTarget = resolveT3workComposerPathSearchTarget(trigger, input.pathSearch);
+  const pathEntries = useComposerPathSearch(pathSearchTarget);
 
   const sharedItems = useMemo(
     () =>
