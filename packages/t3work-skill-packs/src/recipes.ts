@@ -1,6 +1,8 @@
 import type { Recipe } from "@t3tools/project-recipes";
 import { recipeSignalPredicates } from "@t3tools/project-recipes";
+import type { ActionDefinition } from "@t3work/sdk/placements";
 
+import { buildBundledActionPlacement } from "./actionPlacements.ts";
 import {
   CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
   EXPLAIN_SELECTED_WORK_ACTION_VIEW,
@@ -20,7 +22,14 @@ export type BundledT3WorkRecipe = Recipe & {
   readonly version: string;
   readonly manifestDisplayName: string;
   readonly allowedToolGroups: ReadonlyArray<string>;
+  /** The launcher view source, taken from the gated {@link actionPlacement} when present. */
   readonly actionViewTemplate?: string;
+  /**
+   * The `action`-placement contribution for this recipe's launcher (Epic 19 §Plugin SDK
+   * Surface), produced by the SDK's `defineAction` gate — present exactly when the recipe
+   * declares an action view.
+   */
+  readonly actionPlacement?: ActionDefinition;
   readonly composerGuidance?: {
     readonly helperText?: string;
     readonly placeholder?: string;
@@ -36,16 +45,32 @@ const DASHBOARD_AND_WORKITEM_SURFACES = [
 const BACKLOG_DASHBOARD_SURFACE = ["project.dashboard.backlog"] as const;
 const MY_WORK_DASHBOARD_SURFACE = ["project.dashboard.myWork"] as const;
 
+const BUNDLED_RECIPE_VERSION = "0.1.0";
+
 function createBundledRecipe(
-  recipe: Omit<BundledT3WorkRecipe, "version" | "allowedToolGroups"> & {
+  recipe: Omit<BundledT3WorkRecipe, "version" | "allowedToolGroups" | "actionPlacement"> & {
     readonly allowedToolGroups?: ReadonlyArray<string>;
   },
 ): BundledT3WorkRecipe {
-  return {
-    version: "0.1.0",
+  const base = {
+    version: BUNDLED_RECIPE_VERSION,
     allowedToolGroups: recipe.allowedToolGroups ?? DEFAULT_ALLOWED_TOOL_GROUPS,
     ...recipe,
   };
+  if (base.actionViewTemplate === undefined) {
+    return base;
+  }
+  // Gate the launcher view through the SDK `action` placement; `view` is the single source for
+  // the template the web layer compiles.
+  const actionPlacement = buildBundledActionPlacement({
+    id: base.id,
+    version: base.version,
+    surfaces: base.surfaces,
+    view: base.actionViewTemplate,
+    ...(base.shortDescription === undefined ? {} : { shortDescription: base.shortDescription }),
+    ...(base.rankHint === undefined ? {} : { rankHint: base.rankHint }),
+  });
+  return { ...base, actionPlacement, actionViewTemplate: actionPlacement.view };
 }
 
 const BUNDLED_RECIPES: ReadonlyArray<BundledT3WorkRecipe> = [

@@ -14,7 +14,8 @@
     "test": "vp test run --passWithNoTests"
   },
   "dependencies": {
-    "@t3tools/project-recipes": "workspace:*"
+    "@t3tools/project-recipes": "workspace:*",
+    "@t3work/sdk": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:"

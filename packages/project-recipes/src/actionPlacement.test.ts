@@ -1,4 +1,5 @@
 /* oxlint-disable t3code/no-inline-schema-compile -- Mirrors sibling sidecarSection.test.ts. */
+import { defineAction as defineActionFromSdk } from "@t3work/sdk/placements";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -41,6 +42,12 @@ describe("defineAction", () => {
 
   it("is re-exported from the placements subpath the SDK surfaces", () => {
     expect(defineActionFromPlacements).toBe(defineAction);
+  });
+
+  // Direction check: the implementation is the SDK's (the public authoring surface); this package
+  // only re-exports it, so the two must be the very same function.
+  it("re-exports the SDK implementation rather than owning a second copy", () => {
+    expect(defineAction).toBe(defineActionFromSdk);
   });
 
   it("rejects an unknown surface literal", () => {
