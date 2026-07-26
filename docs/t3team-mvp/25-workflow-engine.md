@@ -283,15 +283,28 @@ An orchestration body is a **normal TypeScript module**. Engine APIs are ordinar
 from `@t3team/sdk`:
 
 ```ts
-import { agent, getArgs, getThread, parallel, phase, pipeline, scripts } from "@t3team/sdk";
+import { agent, getArgs, getThread, phase } from "@t3team/sdk";
 
-const { prTitle } = getArgs<Inputs>();
-const thread = getThread();
+export const meta = { name: "pr.review", inputs: Inputs, outputs: Outputs } as const;
 
-phase("Review");
-const summary = await agent(`Summarize ${prTitle}`, { label: "Summarize PR", schema: Summary });
-await thread?.notifyUser(summary.text);
+export default async function run() {
+  const { prTitle } = getArgs<Inputs>();
+  const thread = getThread();
+
+  phase("Review");
+  const summary = await agent(`Summarize ${prTitle}`, { label: "Summarize PR", schema: Summary });
+  await thread?.notifyUser(summary.text);
+
+  return { reviewed: true };
+}
 ```
+
+The body is a **default-exported async function**, not top-level statements. That is forced by ESM and
+is not cosmetic: the current design wraps the body in `(async () => { … })()` precisely so top-level
+`await` AND the body's top-level `return` are legal (`t3team-sdk.loader.ts`). A real module cannot have
+a top-level `return`, so the outputs have to come from somewhere — a returned value from an exported
+function is the plainest option, keeps `await` legal inside, and gives the outputs an inferable type
+instead of one recovered from the last expression of a script.
 
 **There are no injected globals.** An earlier revision of this epic specified the opposite — the
 engine injecting `agent` / `phase` / `thread` / `args` into the body scope, with typing supplied by
@@ -337,8 +350,14 @@ is the point.
 > exists today: `withWorkflowRuntime` + `runtimeStorage` (the lookup an imported verb needs) and
 > `defineTool` handlers already using it. What has to change:
 >
-> - `t3team-sdk.loader.ts` — load the body as an ESM module instead of `transpile(ts, "(async () => { … })()")`
->   with imports blanked.
+> - `t3team-sdk.loader.ts` — load the body as an ESM module instead of
+>   `transpile(ts, "(async () => { … })()")` with imports blanked, and take the result from the
+>   default export rather than from a top-level `return`.
+> - **Every existing body changes shape** — top-level statements become
+>   `export default async function run() { … }`. This is the breaking part of the migration: nine
+>   recipes in the Nexplore distribution, plus the engine fixtures and the bodies embedded in the
+>   engine test suites. A body that is not converted fails to parse, so the loader needs to either
+>   accept both shapes during the transition or the conversion lands atomically with it.
 > - `@t3team/sdk` — export `agent`, `phase`, `parallel`, `pipeline`, `workflow`, `log`, `scripts`,
 >   `tools`, `models`, plus `getArgs`/`getThread`/`getBudget`, each resolving the run from
 >   `runtimeStorage` and throwing the same "outside a workflow runtime" error as tool handlers do.
