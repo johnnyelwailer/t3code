@@ -118,7 +118,8 @@ export default defineRecipe({
 > reached from `t3team-projectRecipeDiscoveryRecipe.ts`, `t3team-recipeAgentValidate.ts` and
 > `t3team-recipeAgentListEntry.ts`.
 >
-> Phase 1 is not complete until that path is removed. Two things block it, in order:
+> Phase 1 is not complete until that path is removed. Three things blocked it; two are resolved and
+> the third is now a settled design awaiting host support:
 >
 > 1. ~~**The scaffolder is a live producer.**~~ RESOLVED: `renderBundledRecipeSetupFiles` now emits
 >    a typed `recipe.ts` per starter (`t3team-projectSetupRecipeModule.ts`), using `definePrompt`
@@ -141,12 +142,25 @@ export default defineRecipe({
 >    module form's `visible` is a pure `(ctx) => boolean` over the render context, with no workspace
 >    or tool access. Removing the manifest path therefore removes a capability rather than a
 >    duplicate, and `t3team-packRecipeDiscovery.test.ts` covers it for pack recipes specifically
->    (visibility evaluated against the USER's workspace, not the pack's). Closing this properly means
->    deciding whether the module form grows a workspace-aware visibility hook — a product decision,
->    not a migration detail.
+>    (visibility evaluated against the USER's workspace, not the pack's).
 >
-> This also makes `renderTypedRecipeModuleStarter` misleading today: it tells users to author
-> `import { defineRecipe } from "@t3team/sdk"`, which would not load in their project.
+>    **DECIDED: the module form does NOT grow a workspace-probing hook.** `visible` stays pure and
+>    synchronous. Workspace facts reach a recipe the same way every other reactive dimension does —
+>    the recipe DECLARES what it needs and the host supplies it:
+>
+>    ```ts
+>    requiredContext: [
+>      { key: "workspace.hasPath:k8s/", description: "Repo has a k8s/ directory." },
+>    ],
+>    // `availableContextKeys` is a Queryable<string>, so the read is a traced query, not a scan.
+>    visible: (ctx) => ctx.availableContextKeys.some((key) => key === "workspace.hasPath:k8s/"),
+>    ```
+>
+>    This is the Reactivity rule, not an exception to it: a per-recipe probe inside discovery cannot
+>    survive 1000 recipes × a keystroke, while a host-computed context key is read once and shared by
+>    every recipe that asked for it. So what remains before the manifest path can go is HOST support
+>    for workspace-derived context keys (compute + cache + invalidate on file change) — ordinary
+>    implementation work against a settled design, no longer an open product question.
 
 ### One recipe, several actions
 

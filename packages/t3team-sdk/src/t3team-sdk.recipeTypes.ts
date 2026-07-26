@@ -7,7 +7,23 @@ import type { AnyScriptRef, WorkflowRef } from "./t3team-sdk.types.ts";
  * not depend on it — the SDK is the public authoring surface everything else points at.
  * Consumers bind the concrete `ProjectRecipeRenderContext` where they evaluate these.
  */
-export type RecipeRenderContextLike = Readonly<Record<string, unknown>>;
+/**
+ * The minimum an author can COUNT on in a `visible`/derived-metadata callback.
+ *
+ * It stays structural (an index signature) so the real, surface-specific render context from
+ * `@t3tools/project-recipes` satisfies it without the SDK depending on that package — the layering
+ * runs SDK ← project-recipes, not the reverse. But an index signature alone types every field as
+ * `unknown`, which made the specced `requiredContext` + `visible` pairing unwritable: the author
+ * declares a context key and then cannot read whether it arrived. `availableContextKeys` is therefore
+ * pinned to the query surface the host actually supplies, so
+ * `ctx.availableContextKeys.some((key) => key === …)` typechecks — that read is a traced query, which
+ * is what keeps discovery cheap (Reactivity rule: declare what you need, never probe).
+ */
+export type RecipeRenderContextLike = Readonly<Record<string, unknown>> & {
+  readonly availableContextKeys: {
+    readonly some: (predicate: (key: string) => boolean) => boolean;
+  };
+};
 
 /** Any action's workflow, regardless of its own `Inputs`/`Outputs`. */
 export type AnyWorkflowRef = WorkflowRef<unknown, unknown>;

@@ -35,47 +35,12 @@ import {
 } from "./t3team-sdk.loader.ts";
 import { withWorkflowRuntime } from "./t3team-sdk.ts";
 import type * as T from "./t3team-sdk.types.ts";
+import { buildScriptTree, buildToolTree, defaultBroker } from "./t3team-sdk.bodyTrees.ts";
 import { withBodyApi } from "./t3team-sdk.engineApi.ts";
 import { buildWorkflowGlobals } from "./t3team-sdk.workflowGlobals.ts";
 
 const nodeRequire = NodeModule.createRequire(import.meta.url);
 const fs = nodeRequire("node:fs") as { readonly readFileSync: (p: string, e: "utf8") => string };
-
-const defaultBroker: MessageBroker = {
-  send: () => {
-    throw new WorkflowError(
-      "This workflow fired a thread verb (spawnThread/agent/thread.askAgent/askUser/notify) but the run was started without a `broker`. Provide one via the run options.",
-    );
-  },
-};
-
-function buildToolTree(
-  refs: ReadonlyArray<T.AnyToolRef>,
-  runtime: T.WorkflowRuntime,
-  declaredCapabilities: ReadonlySet<string>,
-): Record<string, unknown> {
-  const root: Record<string, unknown> = {};
-  for (const ref of refs) {
-    // The spec's call-site gate (§Tools): the ref's group is checked against
-    // meta.capabilities when the body CALLS the tool, mirroring the "user"/"script" gates.
-    setNestedValue(root, ref.id, (args: unknown) => {
-      assertToolGroupDeclared(ref, declaredCapabilities);
-      return runtime.callTool(ref as T.ToolRef<unknown, unknown>, args);
-    });
-  }
-  return root;
-}
-
-function buildScriptTree(
-  scripts: Readonly<Record<string, T.AnyScriptRef>>,
-  runtime: T.WorkflowRuntime,
-): Record<string, unknown> {
-  const root: Record<string, unknown> = {};
-  for (const [name, ref] of Object.entries(scripts)) {
-    root[name] = (args: unknown) => runtime.callScript(ref as T.ScriptRef<unknown, unknown>, args);
-  }
-  return root;
-}
 
 /** Load + run a workflow body against `runtime`, decoding inputs/outputs against its `meta`. */
 export async function runPreparedBody(opts: {
