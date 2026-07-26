@@ -287,6 +287,50 @@ describe("validateProjectRecipeWorkflowForAgent", () => {
       ),
     );
   });
+
+  // A prompt-only recipe (definePrompt) has no workflow, so validate must say that plainly rather
+  // than report a missing file for a path that was never supposed to exist.
+  it("reports that a prompt-only recipe directory has no workflow to validate", async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const workspaceRoot = yield* makeTempWorkspace();
+          yield* writeWorkspaceFile({
+            workspaceRoot,
+            relativePath: ".t3team/recipes/prompt-dir/prompt.md",
+            content: "Do the thing.",
+          });
+          yield* writeWorkspaceFile({
+            workspaceRoot,
+            relativePath: ".t3team/recipes/prompt-dir/recipe.ts",
+            content: [
+              `import { definePrompt, defineRecipe } from "@t3team/sdk";`,
+              `export default defineRecipe({`,
+              `  id: "prompt-dir",`,
+              `  version: "0.1.0",`,
+              `  scope: "project",`,
+              `  title: "Prompt dir recipe",`,
+              `  shortDescription: "A prompt-only recipe directory.",`,
+              `  surfaces: ["project.dashboard.backlog"],`,
+              `  defaultAction: definePrompt("./prompt.md"),`,
+              `});`,
+            ].join("\n"),
+          });
+
+          const result = yield* validateProjectRecipeWorkflowForAgent({
+            workspaceRoot,
+            path: ".t3team/recipes/prompt-dir",
+          });
+
+          expect(result.ok).toBe(false);
+          expect(result.errors[0]).toMatchObject({
+            phase: "discover",
+            message: expect.stringContaining("prompt action"),
+          });
+        }).pipe(Effect.provide(NodeServices.layer)),
+      ),
+    );
+  });
 });
 
 describe("validateInlineWorkflowSourceForAgent", () => {

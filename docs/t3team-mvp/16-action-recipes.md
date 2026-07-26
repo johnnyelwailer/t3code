@@ -120,12 +120,12 @@ export default defineRecipe({
 >
 > Phase 1 is not complete until that path is removed. Two things block it, in order:
 >
-> 1. **The scaffolder is a live producer.** `renderBundledRecipeSetupFiles`
->    (`t3team-projectSetupRecipes.ts`, reached from `t3team-projectSetup.ts`) writes 23 bundled
->    starter recipes as `recipe.json` + `prompt.md` into every newly set-up project. Most are
->    prompt-only, which is why [An action is a workflow or a prompt](#an-action-is-a-workflow-or-a-prompt)
->    exists — `definePrompt` is what lets them become typed modules at all.
-> 2. **Project-local modules cannot resolve `@t3team/sdk`.** A `recipe.ts` in a real workspace
+> 1. ~~**The scaffolder is a live producer.**~~ RESOLVED: `renderBundledRecipeSetupFiles` now emits
+>    a typed `recipe.ts` per starter (`t3team-projectSetupRecipeModule.ts`), using `definePrompt`
+>    for the prompt-only ones — which is why
+>    [An action is a workflow or a prompt](#an-action-is-a-workflow-or-a-prompt) exists.
+> 2. ~~**Project-local modules cannot resolve `@t3team/sdk`.**~~ RESOLVED by the fallback resolver
+>    in `t3team-projectRecipeModuleResolution.ts`. Original problem: A `recipe.ts` in a real workspace
 >    fails at import with `ERR_MODULE_NOT_FOUND`: there is no resolver hook, no `NODE_PATH`, and
 >    setup writes no `package.json`. The distribution solves this for its own pack directory only
 >    (`scripts/link-vendor-sdk.mjs`). Converting the starters before this seam exists would ship
@@ -134,6 +134,16 @@ export default defineRecipe({
 >    Note for anyone verifying this: server test fixtures live under `apps/server/__fixtures__`,
 >    INSIDE this repo, so Node walks up and finds `@t3team/sdk`. Such a test proves module loading,
 >    not real-world resolution.
+>
+> 3. **`visible.ts` can probe the user's workspace; module `visible` cannot.** The legacy predicate
+>    is invoked with `{ tools, workspace: { rootPath, readText, exists } }`, so a recipe can gate
+>    visibility on workspace CONTENT — "show this only when the repo has a `k8s/` directory". The
+>    module form's `visible` is a pure `(ctx) => boolean` over the render context, with no workspace
+>    or tool access. Removing the manifest path therefore removes a capability rather than a
+>    duplicate, and `t3team-packRecipeDiscovery.test.ts` covers it for pack recipes specifically
+>    (visibility evaluated against the USER's workspace, not the pack's). Closing this properly means
+>    deciding whether the module form grows a workspace-aware visibility hook — a product decision,
+>    not a migration detail.
 >
 > This also makes `renderTypedRecipeModuleStarter` misleading today: it tells users to author
 > `import { defineRecipe } from "@t3team/sdk"`, which would not load in their project.
