@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Bot, Check, ChevronRight, X } from "lucide-react";
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { Button } from "~/t3team/components/ui/t3team-button";
+import { cn } from "~/t3team/lib/t3team-utils";
 import { WorkItemPersonChip } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 import { WorkItemPriorityChip } from "~/t3team/workitem/t3team-WorkItemPriorityIcon";
 
@@ -162,6 +164,140 @@ function VariantBatch() {
   );
 }
 
+const PROPOSALS = [
+  {
+    id: "status",
+    field: "Status",
+    from: "To Do",
+    to: "In Review",
+    why: "The linked PR was approved and merged this morning.",
+  },
+  {
+    id: "assignee",
+    field: "Assignee",
+    from: "Unassigned",
+    to: "Ada Lovelace",
+    why: "She authored the fix in PR #412.",
+  },
+] as const;
+
+/**
+ * Marks a field that has a proposal against it without moving it or changing its size — a ring and a
+ * dot, no extra layout. Clicking it opens the one shared panel rather than a flyout of its own.
+ */
+function Marked({
+  active,
+  onOpen,
+  children,
+}: {
+  readonly active: boolean;
+  readonly onOpen: () => void;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "relative inline-flex cursor-pointer items-center rounded-md ring-1 ring-primary/40 transition-colors",
+        active ? "bg-primary/10 ring-primary/70" : "hover:bg-primary/5",
+      )}
+    >
+      {children}
+      <span
+        aria-hidden="true"
+        className="absolute -right-1 -top-1 size-2 rounded-full bg-primary ring-2 ring-background"
+      />
+    </button>
+  );
+}
+
+/** D — markers everywhere, exactly one panel. */
+function VariantSinglePanel() {
+  const [open, setOpen] = useState<string | undefined>(undefined);
+  const isOpen = open !== undefined;
+
+  return (
+    <div className="relative flex flex-col gap-2">
+      <Row>
+        <Marked active={open === "status"} onOpen={() => setOpen("status")}>
+          <Badge variant="secondary" className="gap-1.5">
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground/50" />
+            To Do
+          </Badge>
+        </Marked>
+
+        <Marked active={open === "assignee"} onOpen={() => setOpen("assignee")}>
+          <WorkItemPersonChip person={undefined} />
+        </Marked>
+
+        <span className="text-xs tabular-nums text-muted-foreground">8 pts</span>
+        <WorkItemPriorityChip priority="2 - major" />
+
+        {/* The one entry point that does not require knowing which field was touched. */}
+        <button
+          type="button"
+          onClick={() => setOpen(isOpen ? undefined : "all")}
+          className={cn(
+            "ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium transition-colors",
+            isOpen ? "bg-primary/10 text-foreground" : "text-primary hover:bg-primary/5",
+          )}
+        >
+          <Bot className="size-3.5" aria-hidden="true" />
+          {PROPOSALS.length} proposed
+        </button>
+      </Row>
+
+      {isOpen ? (
+        <div className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
+          <div className="border-b border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground">
+            Proposed by the agent
+          </div>
+
+          <div className="divide-y divide-border/50">
+            {PROPOSALS.map((proposal) => (
+              <div
+                key={proposal.id}
+                className={cn(
+                  "px-3 py-2.5 transition-colors",
+                  open === proposal.id ? "bg-primary/5" : undefined,
+                )}
+              >
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-16 shrink-0 text-muted-foreground">{proposal.field}</span>
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <span className="truncate text-muted-foreground line-through">
+                      {proposal.from}
+                    </span>
+                    <ChevronRight
+                      className="size-3 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span className="truncate font-medium text-foreground">{proposal.to}</span>
+                  </span>
+                  <AcceptDismiss />
+                </div>
+                <p className="mt-0.5 pl-[4.5rem] text-[11px] leading-4 text-muted-foreground">
+                  {proposal.why}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-end gap-1.5 border-t border-border/60 bg-muted/30 px-3 py-2">
+            <Button size="xs" variant="ghost" onClick={() => setOpen(undefined)}>
+              Dismiss all
+            </Button>
+            <Button size="xs" onClick={() => setOpen(undefined)}>
+              Accept all
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Frame({
   label,
   note,
@@ -194,6 +330,13 @@ type Story = StoryObj<typeof meta>;
 export const Variants: Story = {
   render: () => (
     <div className="flex flex-col gap-8">
+      <Frame
+        label="D · Markers on the fields, one shared panel"
+        note="Two fields are proposed here — the case that made A and B fall apart. Each marked field opens the same panel rather than a flyout of its own, so two proposals can never produce two overlapping popovers. Click either chip, or the counter, and compare with A and B below."
+      >
+        <VariantSinglePanel />
+      </Frame>
+
       <Frame
         label="A · Inline, in the row"
         note="The proposal sits where the value lives, old struck through, new beside it. Impossible to miss and obviously not yet applied — but it widens the row, cannot carry a reason, and gets crowded once two fields are proposed at once."
