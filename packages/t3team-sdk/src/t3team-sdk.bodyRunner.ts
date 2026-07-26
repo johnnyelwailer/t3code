@@ -35,6 +35,7 @@ import {
 } from "./t3team-sdk.loader.ts";
 import { withWorkflowRuntime } from "./t3team-sdk.ts";
 import type * as T from "./t3team-sdk.types.ts";
+import { withBodyApi } from "./t3team-sdk.engineApi.ts";
 import { buildWorkflowGlobals } from "./t3team-sdk.workflowGlobals.ts";
 
 const nodeRequire = NodeModule.createRequire(import.meta.url);
@@ -144,8 +145,11 @@ export async function runPreparedBody(opts: {
     threads,
     schedule,
   });
+  // Bind the SAME surface the body-scope injection uses, so an IMPORTED `agent`/`phase`/… resolves
+  // too (Epic 25 §The engine API — imported, not injected). Both paths are live during the
+  // migration: existing bodies keep working, new ones can import.
   const output = await withWorkflowRuntime(opts.runtime, () =>
-    runWorkflowBody(prepared, source, globals),
+    withBodyApi(globals, () => runWorkflowBody(prepared, source, globals)),
   );
   if (meta.outputs === undefined) return output;
   return await decodeWithSchema(

@@ -69,6 +69,25 @@ export {
   RecipeSurface,
   SidecarSectionDefinition,
 } from "./t3team-sdk.placements.ts";
+// The engine API as ordinary imports for orchestration bodies (Epic 25).
+export {
+  agent,
+  getArgs,
+  getBudget,
+  getScripts,
+  getThread,
+  getTools,
+  log,
+  now,
+  parallel,
+  phase,
+  pipeline,
+  spawnThread,
+  wait,
+  waitUntil,
+  withBodyApi,
+  workflow,
+} from "./t3team-sdk.engineApi.ts";
 export { renameThreadTool } from "./tools/t3team-sdk.t3team.ts";
 export { listRecipesTool, validateRecipeTool } from "./tools/t3team-sdk.t3teamRecipes.ts";
 export type {
