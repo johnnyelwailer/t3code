@@ -9,8 +9,7 @@
  * prepend: the wording, icon, ordering and the wizard hand-off stay fork-owned.
  */
 
-import { KanbanIcon } from "lucide-react";
-
+import { JiraIcon } from "~/t3team/components/brand/t3team-AtlassianLogos";
 import { requestT3TeamCreateProject } from "~/t3team/t3team-createProjectRequest";
 
 export type T3TeamAddProjectPaletteItem = {
@@ -38,8 +37,12 @@ export function buildT3TeamAddProjectJiraSource(input: {
     value: `action:add-project:${input.environmentId}:t3team-jira`,
     searchTerms: ["jira", "atlassian", "ticket", "issue", "board", "backlog", "work"],
     title: "Jira project",
-    description: "Connect an Atlassian site and pick a Jira project",
-    icon: <KanbanIcon className={input.iconClassName} />,
+    // Same shape as its neighbours ("Browse a folder on disk", "Clone from a remote URL"):
+    // one short verb phrase. The wizard explains the site/auth steps; the row must not.
+    description: "Pick a project from Jira",
+    // The real Jira mark, from the fork's brand set — the neighbouring rows all show their
+    // provider's own logo, so a generic board glyph read as a different kind of thing.
+    icon: <JiraIcon className={input.iconClassName} />,
     run: async () => {
       input.closePalette();
       requestT3TeamCreateProject();
