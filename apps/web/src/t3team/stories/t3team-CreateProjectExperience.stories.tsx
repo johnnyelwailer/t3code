@@ -20,10 +20,7 @@ import {
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
 import type { CreateProjectStep } from "~/t3team/hooks/t3team-useCreateProject";
-import type {
-  OAuthState,
-  UseAtlassianOAuthResult,
-} from "~/t3team/hooks/t3team-useAtlassianOAuth";
+import type { OAuthState, UseAtlassianOAuthResult } from "~/t3team/hooks/t3team-useAtlassianOAuth";
 
 const accounts: ReadonlyArray<IntegrationAccount> = [
   {
@@ -328,8 +325,8 @@ function ConnectAtlassianStepHarness({
     // Height approximates the real dialog's body (~40rem card minus header chrome), so the
     // step's internal vertical centering renders the same way it does in the live wizard.
     <div className="mx-auto flex h-[36rem] max-w-md flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6">
-      {oauthState.kind === "popup_blocked" ? (
-        <OAuthPopupBlockedNotice authorizeUrl={oauthState.authorizeUrl} onCancel={() => {}} />
+      {oauthState.kind === "needs_manual_open" ? (
+        <OAuthPopupBlockedNotice signinUrl={oauthState.signinUrl} onCancel={() => {}} />
       ) : null}
       <ConnectAtlassianStep
         loading={false}
@@ -366,8 +363,9 @@ export const ConnectAtlassianPopupBlocked: Story = {
   render: () => (
     <ConnectAtlassianStepHarness
       oauthState={{
-        kind: "popup_blocked",
-        authorizeUrl: "https://auth.atlassian.com/authorize?client_id=demo",
+        kind: "needs_manual_open",
+        // The shareable server-flow link, which is what the notice offers in practice.
+        signinUrl: "http://localhost:5736/api/t3team/atlassian/oauth/begin/8f14e45fceea167a",
       }}
     />
   ),

@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react";
 
 import type { JiraCommentItem } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
+import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
+import type { T3TeamDraftMutation } from "~/t3team/t3team-draftMutationTypes";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { WorkItemDetailHeader } from "~/t3team/workitem/t3team-WorkItemDetailHeader";
 import { WorkItemDetailMain } from "~/t3team/workitem/t3team-WorkItemDetailMain";
@@ -284,6 +286,48 @@ function EditableWorkItemDetailPreview() {
 }
 
 /**
+ * A pending status and assignee draft for `MODEL.key`, shaped like what
+ * `t3team-toolBrokerDraftMutations.ts` actually produces — same field names in `patch`.
+ */
+function agentDraftFixtures(status: "draft" | "applying"): readonly T3TeamDraftMutation[] {
+  const target = { provider: "jira" as const, issueIdOrKey: MODEL.key };
+  return [
+    {
+      id: "story-status-draft",
+      createdAt: new Date(NOW_MS - 5 * 60 * 1000).toISOString(),
+      target,
+      field: "status",
+      status,
+      patch: { targetStatus: "Done" },
+      summary: "The linked PR merged this morning.",
+    },
+    {
+      id: "story-assignee-draft",
+      createdAt: new Date(NOW_MS - 2 * 60 * 1000).toISOString(),
+      target,
+      field: "assignee",
+      status,
+      patch: { assigneeAccountId: "acc-alan", assigneeDisplayName: "Alan Turing" },
+      summary: "Alan opened the fix PR.",
+    },
+  ];
+}
+
+/** Same editable preview, seeded with the two drafts above so the review affordance is visible. */
+function EditableWorkItemDetailPreviewWithDrafts({
+  draftStatus,
+}: {
+  readonly draftStatus: "draft" | "applying";
+}) {
+  useEffect(() => {
+    useT3TeamDraftMutationStore.setState({ drafts: agentDraftFixtures(draftStatus) });
+    return () => useT3TeamDraftMutationStore.setState({ drafts: [] });
+  }, [draftStatus]);
+
+  return <EditableWorkItemDetailPreview />;
+}
+
+/**
  * Each story fixes the *container* width rather than the viewport. The layout keys off the element's
  * own width, so a wrapper of a given width reproduces exactly what the real pane looks like at that
  * width — including a narrow pane on a large display, which a viewport-based story cannot show.
@@ -374,6 +418,38 @@ export const Editable: Story = {
       </p>
       <div className="h-[min(44rem,80vh)] w-[1100px] overflow-hidden rounded-xl border border-border bg-background">
         <EditableWorkItemDetailPreview />
+      </div>
+    </div>
+  ),
+};
+
+/**
+ * An agent proposed a status change and an assignee change. Both review in place — the marker on
+ * the status badge and assignee chip, Accept/Dismiss underneath — rather than in a separate queue.
+ * Click Accept to see it commit through the same mock-backend mutation a direct edit would use.
+ */
+export const WithAgentDrafts: Story = {
+  render: () => (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-muted-foreground">
+        1100px — a pending status draft and a pending assignee draft, at rest
+      </p>
+      <div className="h-[min(44rem,80vh)] w-[1100px] overflow-hidden rounded-xl border border-border bg-background">
+        <EditableWorkItemDetailPreviewWithDrafts draftStatus="draft" />
+      </div>
+    </div>
+  ),
+};
+
+/** Same two drafts, frozen mid-accept: Accept/Dismiss disabled while the commit is in flight. */
+export const WithAgentDraftsAccepting: Story = {
+  render: () => (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-muted-foreground">
+        1100px — the same drafts mid-accept (Accept/Dismiss disabled while applying)
+      </p>
+      <div className="h-[min(44rem,80vh)] w-[1100px] overflow-hidden rounded-xl border border-border bg-background">
+        <EditableWorkItemDetailPreviewWithDrafts draftStatus="applying" />
       </div>
     </div>
   ),
