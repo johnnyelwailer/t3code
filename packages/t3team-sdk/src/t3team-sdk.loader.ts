@@ -41,6 +41,7 @@ import {
   transpile,
 } from "./t3team-sdk.transpile.ts";
 import { deterministicGlobals, hostSource } from "./t3team-sdk.workflowGlobals.ts";
+import { isEsmWorkflowBody, runEsmWorkflowBody } from "./t3team-sdk.esmBody.ts";
 
 const nodeRequire = NodeModule.createRequire(import.meta.url);
 
@@ -166,12 +167,23 @@ export function extractMeta(
  * Run the compiled body in a constrained `node:vm` context. `globals` carries the engine
  * surface the loader binds (args, Schema, tools, scripts, log, phase, error classes).
  * The body's `return` value resolves the returned promise.
+ *
+ * Both shapes are accepted during the migration (Epic 25 §Implementation status): a default-exported
+ * async function goes through the ESM path, and legacy top-level-statement bodies keep the vm wrapper.
  */
+export { isEsmWorkflowBody };
+
 export async function runWorkflowBody(
   prepared: PreparedWorkflow,
   source: WorkflowSource,
   globals: Record<string, unknown>,
 ): Promise<unknown> {
+  // Both shapes run during the migration (Epic 25 §Implementation status): a default-exported async
+  // function goes through a real ESM import ({@link ./t3team-sdk.esmBody.ts}), legacy
+  // top-level-statement bodies keep the vm wrapper below.
+  if (isEsmWorkflowBody(source.sourceText)) {
+    return await runEsmWorkflowBody(source);
+  }
   const context: Record<string, unknown> = { ...globals };
   context["globalThis"] = context;
   NodeVM.createContext(context);
