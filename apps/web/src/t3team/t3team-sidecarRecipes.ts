@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { buildRecipeMatchSignalsFromRenderContext, matchRecipes } from "@t3tools/project-recipes";
+import { matchRecipes } from "@t3tools/project-recipes";
 import {
   getBundledT3TeamRecipe,
   getT3TeamProfile,
@@ -54,7 +54,10 @@ export function buildT3TeamSidecarRecipeQuickStarts(
   const availableContextKeys = buildAvailableContextKeys(input);
   const templateValues = buildBundledRecipeTemplateValues(input);
   const launchContext = buildT3TeamActionRecipeLaunchContext(renderContext);
-  const signals = buildRecipeMatchSignalsFromRenderContext(renderContext);
+  // Tri-state on purpose: `undefined` = relationships not enriched yet (see RecipeApplicability).
+  const workitemHasChildren = renderContext.workitem?.relationships
+    ? renderContext.workitem.relationships.childKeys.length > 0
+    : undefined;
   const matches = matchRecipes(listBundledT3TeamRecipes(), {
     activeProject: input.project,
     selectedResource: null,
@@ -67,7 +70,7 @@ export function buildT3TeamSidecarRecipeQuickStarts(
     enabledSkillPacks,
     profile: toRecipeProfileContext(profile),
     availableContextKeys,
-    signals,
+    workitemHasChildren,
   }).filter((result) => result.missingContext.length === 0);
 
   return buildPinnedQuickStartSelection(matches, input.limit ?? 5).map((result) => {

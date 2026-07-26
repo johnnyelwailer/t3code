@@ -2,8 +2,6 @@ import * as Schema from "effect/Schema";
 
 import type { ExternalResourceRef } from "@t3tools/project-context";
 import { ProjectRecipeKickoffProgram } from "./kickoff.ts";
-import { isRecipeSignalPredicateSatisfied, RecipeSignalPredicate } from "./recipePredicates.ts";
-import type { RecipeMatchSignals } from "./recipeSignals.ts";
 import { RecipeSurface } from "./surface.ts";
 
 export { RecipeSurface };
@@ -30,8 +28,15 @@ export const RecipeApplicability = Schema.Struct({
   brevities: Schema.optional(Schema.Array(RecipeBrevity)),
   guidanceStyles: Schema.optional(Schema.Array(RecipeGuidanceStyle)),
   detailDensities: Schema.optional(Schema.Array(RecipeDetailDensity)),
-  // Typed signal predicates for bundled-recipe visibility. Missing signals are not satisfied.
-  visiblePredicates: Schema.optional(RecipeSignalPredicate),
+  /**
+   * Show only when the selected work item's "has children" state equals this. Unknown (the host has
+   * not enriched relationships yet) counts as NOT satisfied, so a recipe that wants childless work
+   * waits for enrichment rather than flashing in and out.
+   *
+   * Replaced `visiblePredicates` + the `RecipeSignal*` comparison DSL, which was never in the MVP
+   * spec (see AGENTS.md §The spec is the source of truth for recipe/workflow MECHANISMS).
+   */
+  workitemHasChildren: Schema.optional(Schema.Boolean),
 });
 export type RecipeApplicability = typeof RecipeApplicability.Type;
 
@@ -101,8 +106,8 @@ export type RecipeMatchInput = {
   readonly enabledSkillPacks: ReadonlyArray<string>;
   readonly profile: RecipeProfileContext;
   readonly availableContextKeys?: ReadonlyArray<string>;
-  // Precomputed render-context signals (catalog in recipeSignals.ts).
-  readonly signals?: RecipeMatchSignals;
+  /** Whether the selected work item has children; `undefined` when not yet known. */
+  readonly workitemHasChildren?: boolean | undefined;
 };
 
 export type RecipeMatchResult = {
@@ -286,7 +291,10 @@ export function isRecipeApplicable(recipe: Recipe, input: RecipeMatchInput): boo
     return false;
   }
 
-  if (!isRecipeSignalPredicateSatisfied(recipe.appliesTo.visiblePredicates, input.signals)) {
+  if (
+    recipe.appliesTo.workitemHasChildren !== undefined &&
+    input.workitemHasChildren !== recipe.appliesTo.workitemHasChildren
+  ) {
     return false;
   }
 

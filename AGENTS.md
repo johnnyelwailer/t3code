@@ -67,11 +67,12 @@ in this area: it ships, authors copy it, and unwinding it later touches a dozen 
 Two mechanisms already drifted in this way because agents skipped that step:
 
 - **`appliesTo.visiblePredicates` + the `RecipeSignal*` comparison DSL** (`{ signal: "some.key", gt:
-  3 }` with `all`/`any`/`not`). Appears NOWHERE in the MVP docs. It is a string-keyed mini
-  expression language — the exact shape Phase 1 retired when it replaced `recipe.json`'s `{{ }}`
-  expression strings with typed functions. **Not wanted**; it is scheduled for removal, so do not
-  extend it or author new recipes against it. The typed forms are `visible: (ctx) => …` (Epic 16)
-  and `appliesTo: (item, ctx) => …` (Epic 19).
+  3 }` with `all`/`any`/`not`). Appeared NOWHERE in the MVP docs: a string-keyed mini expression
+  language, the exact shape Phase 1 retired when it replaced `recipe.json`'s `{{ }}` expression
+  strings with typed functions. **REMOVED** — do not reintroduce a predicate DSL. Conditional
+  visibility is a typed field on `appliesTo` (its one real use became
+  `workitemHasChildren: false`), or `visible: (ctx) => …` (Epic 16) / `appliesTo: (item, ctx) => …`
+  (Epic 19) for the module form.
 - **Async / workspace-reading visibility.** `visible` must stay pure and SYNCHRONOUS on high-churn
   surfaces (a Promise there is an authoring error). Data a recipe needs arrives in the render
   context: declare `requiredContext: [{ key }]` and let the host supply it. Never a per-recipe

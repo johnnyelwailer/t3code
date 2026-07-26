@@ -1,5 +1,4 @@
 import type { Recipe } from "@t3tools/project-recipes";
-import { recipeSignalPredicates } from "@t3tools/project-recipes";
 import type { ActionDefinition } from "@t3team/sdk/placements";
 
 import { buildBundledActionPlacement } from "./actionPlacements.ts";
@@ -793,8 +792,8 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
     icon: "ruler",
     appliesTo: {
       jiraIssueTypes: ["Epic"],
-      // Prefer epics with no child stories yet; unknown child signals wait for enrichment.
-      visiblePredicates: recipeSignalPredicates.workitemHasNoChildren,
+      // Prefer epics with no child stories yet; unknown relationships wait for enrichment.
+      workitemHasChildren: false,
     },
     requiredContext: [
       { key: "ticket.summary", description: "Epic summary" },

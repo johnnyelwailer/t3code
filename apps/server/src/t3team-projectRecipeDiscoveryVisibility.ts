@@ -7,7 +7,6 @@ import * as Path from "effect/Path";
 import * as NodeURL from "node:url";
 import { queryableToReadonlyArray } from "@t3tools/project-context";
 import {
-  buildRecipeMatchSignalsFromRenderContext,
   matchRecipes,
   type ProjectRecipeManifest,
   type ProjectRecipeRenderContext,
@@ -48,7 +47,11 @@ function buildBundledCompatibilityResult(
     enabledSkillPacks: context.enabledSkillPacks,
     profile: context.profile,
     availableContextKeys: queryableToReadonlyArray(context.availableContextKeys),
-    signals: buildRecipeMatchSignalsFromRenderContext(context),
+    // Relationship enrichment is optional, so this stays tri-state: `undefined` means "not known
+    // yet", which a recipe declaring `workitemHasChildren` treats as not satisfied.
+    workitemHasChildren: context.workitem?.relationships
+      ? context.workitem.relationships.childKeys.length > 0
+      : undefined,
   })[0];
 
   return match ? { visible: true, rank: match.score, reason: match.reason } : { visible: false };

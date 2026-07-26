@@ -1,5 +1,4 @@
 import { isRecipeApplicable, matchRecipes, type RecipeMatchInput } from "@t3tools/project-recipes";
-import { recipeSignalPredicates } from "@t3tools/project-recipes";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildBundledActionPlacement } from "./actionPlacements.js";
@@ -60,18 +59,17 @@ describe("tshirt-size-epic bundled recipe", () => {
   it("is applicable for an Epic on workitem.detail.sidepanel when the epic has no children", () => {
     const recipe = getBundledT3TeamRecipe("tshirt-size-epic")!;
     expect(
-      isRecipeApplicable(recipe, buildMatchInput({ signals: { "workitem.hasChildren": false } })),
+      isRecipeApplicable(recipe, buildMatchInput({ workitemHasChildren: false })),
     ).toBe(true);
   });
 
-  it("waits for known child signals before applying the no-children predicate", () => {
+  it("waits for known relationships before applying the no-children rule", () => {
     const recipe = getBundledT3TeamRecipe("tshirt-size-epic")!;
+    // `workitemHasChildren` left undefined = not enriched yet, which must NOT satisfy the rule.
     expect(
       isRecipeApplicable(recipe, buildMatchInput({ surface: "project.dashboard.backlog" })),
     ).toBe(false);
-    expect(recipe.appliesTo.visiblePredicates).toEqual(
-      recipeSignalPredicates.workitemHasNoChildren,
-    );
+    expect(recipe.appliesTo.workitemHasChildren).toBe(false);
   });
 
   it("is NOT applicable for non-epic issue types", () => {
@@ -84,7 +82,7 @@ describe("tshirt-size-epic bundled recipe", () => {
   it("is hidden via matchRecipes when the epic already has children", () => {
     const results = matchRecipes(
       listBundledT3TeamRecipes(),
-      buildMatchInput({ signals: { "workitem.hasChildren": true } }),
+      buildMatchInput({ workitemHasChildren: true }),
     );
     expect(results.map((result) => result.recipe.id)).not.toContain("tshirt-size-epic");
   });
@@ -92,7 +90,7 @@ describe("tshirt-size-epic bundled recipe", () => {
   it("surfaces via matchRecipes for an un-sized epic and links the shape-next-backlog-slice follow-up", () => {
     const results = matchRecipes(
       listBundledT3TeamRecipes(),
-      buildMatchInput({ signals: { "workitem.hasChildren": false } }),
+      buildMatchInput({ workitemHasChildren: false }),
     );
     const match = results.find((result) => result.recipe.id === "tshirt-size-epic");
     expect(match).toBeDefined();

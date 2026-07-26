@@ -368,15 +368,14 @@ workspace-reading visibility belongs here rather than in a per-recipe async gate
 wants to gate on a workspace fact declares the key for that fact; making the fact available is the
 host's job, done once per project rather than once per recipe.
 
-> **Undocumented drift to resolve.** `RecipeApplicabilitySpec.visiblePredicates` and the
-> `RecipeSignal*` comparison DSL (`{ signal: "some.key", gt: 3 }` with `all`/`any`/`not`) appear
-> nowhere in this spec. They arrived with `5ea22f5c2` ("wire signals into recipe matching") and are a
-> string-keyed mini expression language — the same shape Phase 1 retired when it replaced
-> `recipe.json`'s `{{ }}` expression strings with typed functions. The typed equivalents are
-> `visible: (ctx) => …` here and `appliesTo: (item, ctx) => …` in
-> [Epic 19](./19-workspace-miniapps.md). Either document the signals DSL as intended or fold it into
-> the typed predicates; leaving it undocumented invites authors into the form this epic moved away
-> from.
+> **Resolved drift.** `visiblePredicates` and the `RecipeSignal*` comparison DSL
+> (`{ signal: "some.key", gt: 3 }` with `all`/`any`/`not`) arrived with `5ea22f5c2` and appeared
+> nowhere in this spec — a string-keyed mini expression language, the same shape Phase 1 retired
+> along with `recipe.json`'s `{{ }}` strings. **Removed.** Its one real use (hide T-shirt sizing once
+> an epic has children) is now the typed field `appliesTo.workitemHasChildren`, and the render-context
+> derivation replaced the whole `RecipeMatchSignals` bag. Conditional visibility is a typed
+> applicability field, `visible: (ctx) => …` here, or `appliesTo: (item, ctx) => …` in
+> [Epic 19](./19-workspace-miniapps.md) — never a predicate DSL.
 
 ### Reactivity rule
 
