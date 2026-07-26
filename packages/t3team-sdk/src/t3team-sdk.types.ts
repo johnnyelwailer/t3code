@@ -133,46 +133,36 @@ export interface ToolRef<
   readonly handler: (args: I, ctx: ToolHandlerCtx) => Promise<R>;
 }
 
-export interface ScriptRef<I, O> {
-  (args: I): Promise<O>;
+/**
+ * Bivariance for a standalone call signature: `strictFunctionTypes` exempts METHOD declarations from
+ * contravariant parameter checks, so declaring the signature as a method and reading it back out
+ * yields a call signature that is bivariant in its argument. (The same trick the TS lib itself uses
+ * for callback parameters.)
+ *
+ * `ScriptRef` needs it because it is CALLABLE. With a plain `(args: I): Promise<O>` signature,
+ * `ScriptRef<ConcreteInput, …>` is not assignable to `AnyScriptRef` (= `ScriptRef<unknown, unknown>`),
+ * so every recipe declaring `scripts` was type-invalid — while `AnyScriptRef` has to keep `unknown`
+ * as its input, because the engine internals that hold these refs must still be able to CALL them
+ * with args decoded at runtime. Bivariance is the honest variance here: a holder of `AnyScriptRef`
+ * only ever passes back args that came out of the same ref's own `inputs` schema.
+ */
+type BivariantCall<I, O> = { call(args: I): Promise<O> }["call"];
+
+export type ScriptRef<I, O> = BivariantCall<I, O> & {
   readonly kind: "script";
   readonly replay: "default" | "never";
   readonly inputs: Schema.Schema<I>;
   readonly outputs: Schema.Schema<O>;
-  readonly handler: (args: I, ctx: ScriptHandlerCtx) => Promise<O>;
-}
+  // Method syntax for the same reason as the call signature above.
+  handler(args: I, ctx: ScriptHandlerCtx): Promise<O>;
+};
 
 export interface RegisteredWorkflowToolsTree {}
 export interface RegisteredWorkflowScriptsTree {}
 
-type Simplify<T> = { [K in keyof T]: T[K] } & {};
-type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
-  value: infer I,
-) => void
-  ? I
-  : never;
-type SnakeToCamelCase<Value extends string> = Value extends `${infer Head}_${infer Tail}`
-  ? `${Head}${Capitalize<SnakeToCamelCase<Tail>>}`
-  : Value;
-type DotPathTree<Path extends string, Value> = Path extends `${infer Head}.${infer Tail}`
-  ? { [K in SnakeToCamelCase<Head>]: DotPathTree<Tail, Value> }
-  : { [K in SnakeToCamelCase<Path>]: Value };
-
-export type ToolTreeFromRefs<TRefs extends readonly unknown[]> = [TRefs[number]] extends [never]
-  ? {}
-  : Simplify<
-      UnionToIntersection<
-        TRefs[number] extends infer TRef
-          ? TRef extends { readonly id: infer Id extends string }
-            ? DotPathTree<Id, TRef>
-            : never
-          : never
-      >
-    >;
-
-export type ScriptTreeFromRecord<TScripts extends Record<string, AnyScriptRef>> = {
-  readonly [K in keyof TScripts]: TScripts[K];
-};
+// The dotted-id → nested-tree derivation lives in its own module; re-exported so importers of this
+// file (which is the namespace `T.` everywhere in the SDK) keep seeing both names.
+export type { ScriptTreeFromRecord, ToolTreeFromRefs } from "./t3team-sdk.typeTrees.ts";
 
 export type WorkflowInputs<TModule> = TModule extends { Inputs: Schema.Schema<infer V> }
   ? V
