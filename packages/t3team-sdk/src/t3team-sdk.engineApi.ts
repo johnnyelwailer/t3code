@@ -18,6 +18,8 @@
  * module-level import cannot be a per-run binding, and an accessor keeps the run boundary explicit.
  */
 
+import type * as Schema from "effect/Schema";
+
 import { bodyApiStorage } from "./t3team-sdk.internal.ts";
 
 /** Reads one member of the active body surface, or explains precisely why it is unavailable. */
@@ -43,9 +45,36 @@ const call =
     fromRun<(...a: A) => R>(name)(...args);
 
 // --- Orchestration -----------------------------------------------------------
-export const agent = call<[string, Record<string, unknown>?], Promise<unknown>>("agent");
+/**
+ * Signatures carry the schema through, which is the whole point of imports over globals: with
+ * `{ schema }` the result is the decoded `T`, without it a string. A body that reads
+ * `result.someField` now fails to compile when the schema has no such field, instead of surfacing as
+ * `unknown` at every use site.
+ */
+export function agent<T>(
+  prompt: string,
+  opts: { readonly schema: Schema.Schema<T> } & Record<string, unknown>,
+): Promise<T>;
+export function agent(prompt: string, opts?: Record<string, unknown>): Promise<string>;
+export function agent(prompt: string, opts?: Record<string, unknown>): Promise<unknown> {
+  return fromRun<(p: string, o?: Record<string, unknown>) => Promise<unknown>>("agent")(prompt, opts);
+}
+
 export const spawnThread = call<[Record<string, unknown>?], unknown>("spawnThread");
-export const parallel = call<[ReadonlyArray<() => unknown>], Promise<unknown[]>>("parallel");
+
+/**
+ * Tuple-preserving, so `const [a, b] = await parallel([…])` keeps each thunk's own type instead of
+ * collapsing to a union. `null` is in the element type because a failing thunk resolves to null
+ * rather than rejecting the whole fanout.
+ */
+export function parallel<const T extends ReadonlyArray<() => unknown>>(
+  thunks: T,
+): Promise<{ -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> | null }> {
+  return fromRun<(t: T) => Promise<{ -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> | null }>>(
+    "parallel",
+  )(thunks);
+}
+
 export const pipeline = call<ReadonlyArray<unknown>, Promise<unknown[]>>("pipeline");
 export const workflow = call<[unknown, unknown?], Promise<unknown>>("workflow");
 
