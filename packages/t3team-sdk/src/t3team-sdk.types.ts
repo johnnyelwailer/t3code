@@ -7,6 +7,7 @@ import type { WorkflowRunIntent } from "./tools/t3team-sdk.workflow.ts";
 export type {
   AnyActionRef,
   AnyRecipeRef,
+  RecipeContextRequirementSpec,
   AnyWorkflowRef,
   RecipeApplicabilitySpec,
   RecipeBrevity,

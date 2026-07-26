@@ -342,6 +342,42 @@ For 1000 recipes × a search-box keystroke that touches one field, ~5-20 recipes
 re-evaluate, not 1000. Same mechanism Solid/MobX/Vue reactivity use, applied at the
 recipe-and-View boundary.
 
+### Declaring what you need: `requiredContext`
+
+A recipe says what context it needs; the host supplies what it can. This is the mechanism the
+Reactivity rule below implies, and it is the ONLY conditional-visibility path that costs nothing per
+recipe:
+
+```ts
+export default defineRecipe({
+  // ...
+  requiredContext: [{ key: "deploy.topology", description: "Deployment topology" }],
+  visible: (ctx) => ctx.workitem?.provider === "jira", // still pure, still synchronous
+});
+```
+
+The locked matcher compares the declared keys against `ctx.availableContextKeys`. A missing
+non-optional key costs the recipe 5 rank and appears in `RecipeMatchResult.missingContext`; it does
+NOT exclude the recipe, deliberately — the bundled recipes declare
+`requiredContext: [{ key: "project.summary" }]`, so excluding would silently hide shipped recipes.
+An `optional: true` requirement costs nothing.
+
+This is a set-membership test per recipe: no module import, no tool call, no I/O. That is what keeps
+discovery affordable on the high-churn surfaces where `visible` must stay synchronous, and it is why
+workspace-reading visibility belongs here rather than in a per-recipe async gate. A recipe that
+wants to gate on a workspace fact declares the key for that fact; making the fact available is the
+host's job, done once per project rather than once per recipe.
+
+> **Undocumented drift to resolve.** `RecipeApplicabilitySpec.visiblePredicates` and the
+> `RecipeSignal*` comparison DSL (`{ signal: "some.key", gt: 3 }` with `all`/`any`/`not`) appear
+> nowhere in this spec. They arrived with `5ea22f5c2` ("wire signals into recipe matching") and are a
+> string-keyed mini expression language — the same shape Phase 1 retired when it replaced
+> `recipe.json`'s `{{ }}` expression strings with typed functions. The typed equivalents are
+> `visible: (ctx) => …` here and `appliesTo: (item, ctx) => …` in
+> [Epic 19](./19-workspace-miniapps.md). Either document the signals DSL as intended or fold it into
+> the typed predicates; leaving it undocumented invites authors into the form this epic moved away
+> from.
+
 ### Reactivity rule
 
 > If a recipe needs to react to some piece of state, that state must be in the render

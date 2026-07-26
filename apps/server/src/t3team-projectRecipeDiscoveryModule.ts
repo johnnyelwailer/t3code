@@ -68,7 +68,9 @@ function toRecipe(ref: AnyRecipeRef, metadata: RenderedRecipeMetadata): Recipe {
     shortDescription: metadata.shortDescription,
     surfaces: ref.surfaces as ReadonlyArray<RecipeSurface>,
     appliesTo: (ref.appliesTo ?? {}) as RecipeApplicability,
-    requiredContext: [],
+    // Declared needs reach the locked matcher, which hides the recipe when a non-optional key is
+    // absent from `availableContextKeys` — the specced "say what you need" path, no I/O per recipe.
+    requiredContext: (ref.requiredContext ?? []) as Recipe["requiredContext"],
     outputPreference: "markdown",
     ...(metadata.icon !== undefined ? { icon: metadata.icon } : {}),
     ...(ref.slashAlias !== undefined ? { slashAlias: ref.slashAlias } : {}),

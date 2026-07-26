@@ -45,6 +45,12 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
   readonly appliesTo?: T.RecipeApplicabilitySpec;
   /** Extra visibility gate, evaluated together with `appliesTo` (narrowing only). */
   readonly visible?: T.RecipeVisiblePredicate;
+  /**
+   * Context keys this recipe needs in order to be shown. Declaring a key is how a recipe gets data
+   * without fetching it: the host supplies what it can, and the matcher hides the recipe when a
+   * non-optional key is absent. Cheap by construction — a set test per recipe, no I/O.
+   */
+  readonly requiredContext?: ReadonlyArray<T.RecipeContextRequirementSpec>;
   readonly allowedToolGroups?: ReadonlyArray<string>;
   readonly slashAlias?: string;
   /** Recipe-private scripts (Epic 25 §Scripts): `scripts: { fetchPr }` makes `scripts.fetchPr`
@@ -67,6 +73,11 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
   }
   if (opts.version.trim().length === 0) {
     throw new Error(`Recipe '${opts.id}' must include a non-empty version.`);
+  }
+  for (const requirement of opts.requiredContext ?? []) {
+    if (requirement.key.trim().length === 0) {
+      throw new Error(`Recipe '${opts.id}': requiredContext keys must be non-empty.`);
+    }
   }
   for (const [name, script] of Object.entries(opts.scripts ?? {})) {
     if (name.trim().length === 0) {
@@ -92,6 +103,9 @@ export function defineRecipe<RInputs, ROutputs>(opts: {
     ...(opts.rank === undefined ? {} : { rank: opts.rank }),
     ...(opts.appliesTo === undefined ? {} : { appliesTo: opts.appliesTo }),
     ...(opts.visible === undefined ? {} : { visible: opts.visible }),
+    ...(opts.requiredContext === undefined
+      ? {}
+      : { requiredContext: Object.freeze([...opts.requiredContext]) }),
     ...(opts.allowedToolGroups === undefined ? {} : { allowedToolGroups: opts.allowedToolGroups }),
     ...(opts.slashAlias === undefined ? {} : { slashAlias: opts.slashAlias }),
     ...(opts.scripts === undefined ? {} : { scripts: Object.freeze({ ...opts.scripts }) }),
