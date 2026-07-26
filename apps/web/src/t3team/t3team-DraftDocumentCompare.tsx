@@ -4,9 +4,14 @@ import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { buildDraftTextDiff, type T3TeamDraftDiffRow } from "~/t3team/t3team-draftMutationDiff";
 import type { T3TeamDocumentDraftMutation } from "~/t3team/t3team-draftMutationTypes";
 
+/**
+ * Semantic tokens throughout. The added row was `emerald-500`/`emerald-700`/`emerald-300`, a palette
+ * colour a workspace theme cannot rebind — and it sat next to a `destructive` removed row that could,
+ * so the pair drifted apart under any custom theme.
+ */
 const rowClasses: Record<T3TeamDraftDiffRow["type"], string> = {
   unchanged: "text-muted-foreground",
-  added: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  added: "bg-success/10 text-success-foreground",
   removed: "bg-destructive/10 text-destructive",
 };
 

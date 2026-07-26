@@ -142,3 +142,35 @@ Per slice:
 - Mutations verified against a real Jira issue, then re-read to confirm persistence.
 - `node t3team-additive-guard.mjs` green before reporting completion.
 - Cross-provider review (Codex + copilot-peer) on Slices B and C before finalizing.
+
+## Agent-proposed mutations
+
+Every mutation the UI can perform must also be reachable by an agent — not by the agent driving the
+UI, but by proposing a change the user reviews in place. The machinery for this already exists and
+predates the redesign; the redesign has to finish wiring it rather than invent it.
+
+**What exists.** `t3team-draftMutationTypes.ts` defines a draft with a lifecycle
+(`draft → applying → applied | discarded | error`), split into document drafts (`description`,
+`comment`, carrying proposed *and* current content so a diff can be shown) and scalar drafts
+(`assignee`, `estimate`, `status`, `subtask`, carrying a patch). `t3teamToolCatalogImplementedDrafts.ts`
+already exposes eight `draft-mutation` tools, and `jiraWrite` is a declared SDK tool group.
+
+**The gap.** Only `TicketDetailDraftDocumentReview` reads the draft store, and it handles description
+and comment drafts only. An agent can propose a status or assignee change today and nothing renders
+it — the draft is created and silently invisible. Scalar drafts need to surface.
+
+**The rule going forward.** A mutation is not complete until it has all three of:
+
+1. a direct control in the UI,
+2. an agent tool that produces a draft rather than writing,
+3. a review affordance rendered *where the change would land* — a proposed status on the status chip,
+   a proposed comment in the comment list — not in a separate queue the reader has to go find.
+
+Applying a draft goes through the same mutation path as the equivalent direct edit, so optimistic
+apply, rollback and undo behave identically whichever way the change was initiated. Nothing an agent
+proposes reaches Jira without a person accepting it.
+
+**Consequence for Slice C.** Issue links and child creation need draft fields of their own; comment
+create/edit/delete map onto the existing `comment` document draft. Attachment upload is deliberately
+excluded — an agent proposing a binary upload has no reviewable representation, and the file has to
+come from the user anyway.
