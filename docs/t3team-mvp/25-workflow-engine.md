@@ -346,27 +346,35 @@ Existing bodies gain an import line and two accessor calls; nothing else about t
 with no import of an engine verb it uses now fails typecheck instead of failing at run time, which
 is the point.
 
-> **Implementation status.** The spec above is the target; the engine still injects globals. What
-> exists today: `withWorkflowRuntime` + `runtimeStorage` (the lookup an imported verb needs) and
-> `defineTool` handlers already using it. What has to change:
+> **Implementation status — LANDED.** Bodies reach the engine through imports. `bodyApiStorage`
+> (AsyncLocalStorage) + `withBodyApi` bind the run's surface; `t3team-sdk.engineApi.ts` exports the
+> verbs and reads it — the same mechanism `defineTool` handlers already used. Per-run VALUES are
+> accessors (`getArgs`/`getThread`/`getBudget`/`getScripts`/`getTools`), because a module-level import
+> cannot be a per-run binding. `t3team-sdk.esmBody.ts` imports the module for real and takes the
+> default export; `deriveWorkflowShape` and the determinism/capability audits resolve verbs by
+> imported binding (`t3team-sdk.workflowShapeBindings.ts`), so `import { agent as ask }` is seen and a
+> local named `agent` is not. All nine Nexplore recipes are converted, and
+> `npm run typecheck:recipes` gates the distribution's `npm test`: bodies typecheck, which was the
+> whole point.
 >
-> - `t3team-sdk.loader.ts` — load the body as an ESM module instead of
->   `transpile(ts, "(async () => { … })()")` with imports blanked, and take the result from the
->   default export rather than from a top-level `return`.
-> - **Every existing body changes shape** — top-level statements become
->   `export default async function run() { … }`. This is the breaking part of the migration: nine
->   recipes in the Nexplore distribution, plus the engine fixtures and the bodies embedded in the
->   engine test suites. A body that is not converted fails to parse, so the loader needs to either
->   accept both shapes during the transition or the conversion lands atomically with it.
-> - `@t3team/sdk` — export `agent`, `phase`, `parallel`, `pipeline`, `workflow`, `log`, `scripts`,
->   `tools`, `models`, plus `getArgs`/`getThread`/`getBudget`, each resolving the run from
->   `runtimeStorage` and throwing the same "outside a workflow runtime" error as tool handlers do.
-> - `deriveWorkflowShape` and the determinism/capability audits — resolve verbs by imported binding
->   rather than bare identifier.
-> - The nine shipped recipes in the Nexplore distribution — one import line each.
+> **Two body shapes are the END STATE, not a transition.** The loader branches on
+> `isEsmWorkflowBody`, and both paths stay:
 >
-> Until that lands, `.workflow.ts` bodies do not typecheck under a normal `tsconfig`, which is the
-> concrete cost of the retired design and the reason it is retired.
+> - **Repo-authored** bodies (pack recipes, project recipes in a workspace where `@t3team/sdk`
+>   resolves) use imports and are typechecked.
+> - **Ephemeral, agent-authored** bodies keep the injected globals. Their source is written under
+>   `.t3team-runs/<runId>/workflow.ts` inside an arbitrary user workspace, which has no `node_modules`
+>   to resolve a bare `@t3team/sdk` specifier from — an import there is unresolvable, so injection is
+>   what makes agent-authored orchestration work at all. The agent manual says so explicitly.
+>
+> Dropping the vm path would therefore break both agent-authored runs and the resume of any run
+> suspended with a legacy-shaped source (the engine re-reads that file on every resume) — the same
+> replay-stability argument that keeps journal `refId` strings frozen across renames.
+>
+> One real difference to know about: the vm path injects journaled `Date`/`Math`/`crypto`, and a real
+> ESM import cannot. For ESM bodies the determinism SCAN is the enforcement instead of the binding.
+> The scan's import rule is body-shape aware for the same reason — `@t3team/sdk` is the sanctioned
+> import in an ESM body, and the identical line in a legacy body would leave the binding `undefined`.
 
 ### LLM and orchestration
 

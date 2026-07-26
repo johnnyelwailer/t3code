@@ -147,3 +147,60 @@ describe("deriveWorkflowShape", () => {
     expect(shape.capabilities).toEqual([]);
   });
 });
+
+/**
+ * With bodies importing their verbs (Epic 25 §The engine API — imported, not injected), the scan
+ * resolves by BINDING rather than by bare identifier. These two cases are exactly what the bare-name
+ * scan got wrong, in both directions — and the third pins that legacy bodies are unaffected.
+ */
+describe("verb resolution by imported binding", () => {
+  const META = `export const meta = { name: "x.binding", description: "d" } as const;`;
+  const shapeOf = (lines: ReadonlyArray<string>) =>
+    deriveWorkflowShape({
+      absolutePath: "/virtual/binding.workflow.ts",
+      sourceText: lines.join("\n"),
+    });
+
+  it("follows a renamed import and ignores a local that shadows a verb name", () => {
+    const shape = shapeOf([
+      `import { agent as ask, phase as step } from "@t3team/sdk";`,
+      META,
+      `export default async function run() {`,
+      `  step("Review");`,
+      `  await ask("Summarize the PR", { label: "Summarize" });`,
+      `  const parallel = pickHelper();`,
+      `  parallel("not an engine call");`,
+      `}`,
+    ]);
+
+    expect(shape.phases).toEqual([{ title: "Review" }]);
+    expect(shape.steps).toEqual([{ phase: "Review", kind: "agent", label: "Summarize" }]);
+  });
+
+  it("resolves a namespace import and an author-named scripts accessor", () => {
+    const shape = shapeOf([
+      `import * as sdk from "@t3team/sdk";`,
+      META,
+      `export default async function run() {`,
+      `  sdk.phase("Compute");`,
+      `  const s = sdk.getScripts();`,
+      `  await s.computeStats({});`,
+      `}`,
+    ]);
+
+    expect(shape.phases).toEqual([{ title: "Compute" }]);
+    expect(shape.steps).toEqual([{ phase: "Compute", kind: "act", label: "computeStats" }]);
+  });
+
+  // A body with no SDK import has ambient verbs, so bare names must still be read as verbs.
+  it("keeps reading bare identifiers in a legacy injected-globals body", () => {
+    const shape = shapeOf([
+      META,
+      `phase("Legacy");`,
+      `await agent("Do the thing", { label: "Do it" });`,
+    ]);
+
+    expect(shape.phases).toEqual([{ title: "Legacy" }]);
+    expect(shape.steps).toEqual([{ phase: "Legacy", kind: "agent", label: "Do it" }]);
+  });
+});

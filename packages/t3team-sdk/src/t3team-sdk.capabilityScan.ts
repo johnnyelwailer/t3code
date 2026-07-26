@@ -26,6 +26,11 @@
 import type * as TsApi from "typescript";
 
 import { finding, memberChain, type WorkflowAuditFinding } from "./t3team-sdk.staticAuditTypes.ts";
+import {
+  collectWorkflowBodyBindings,
+  resolveVerb,
+  type WorkflowBodyBindings,
+} from "./t3team-sdk.workflowShapeBindings.ts";
 
 /** Thread verbs gated by the `"user"` capability, per createThreadPrimitives. */
 const USER_VERBS = new Set(["askUser", "notifyUser", "showWidget"]);
@@ -59,13 +64,17 @@ function scanScriptRefs(
   ts: typeof TsApi,
   sf: TsApi.SourceFile,
   declared: ReadonlySet<string>,
+  bindings: WorkflowBodyBindings,
   into: WorkflowAuditFinding[],
 ): void {
   if (declared.has("script")) return;
   const visit = (node: TsApi.Node): void => {
     if (ts.isPropertyAccessExpression(node)) {
       const chain = memberChain(ts, node);
-      if (chain !== null && chain.root === "scripts" && chain.path.length > 0) {
+      // The root is `scripts` by convention OR whatever the author named `getScripts()`'s result.
+      const isScriptTree =
+        chain !== null && (chain.root === "scripts" || bindings.roots.get(chain.root) === "scripts");
+      if (chain !== null && isScriptTree && chain.path.length > 0) {
         into.push(missing(ts, sf, node, "script", `\`scripts.${chain.path.join(".")}\``));
         return;
       }
@@ -80,13 +89,16 @@ function scanCallSites(
   ts: typeof TsApi,
   sf: TsApi.SourceFile,
   options: CapabilityScanOptions,
+  bindings: WorkflowBodyBindings,
   into: WorkflowAuditFinding[],
 ): void {
   const { declared } = options;
   const visit = (node: TsApi.Node): void => {
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
-      if (ts.isIdentifier(callee) && callee.text === "waitUntil" && !declared.has("schedule")) {
+      // Resolved by binding so `import { waitUntil as at }` is still gated (bare-name matching
+      // missed it, and the runtime gate would then be the only thing left).
+      if (resolveVerb(ts, callee, bindings) === "waitUntil" && !declared.has("schedule")) {
         into.push(missing(ts, sf, node, "schedule", "`waitUntil(…)`"));
       } else if (ts.isPropertyAccessExpression(callee)) {
         const verb = callee.name.text;
@@ -94,7 +106,9 @@ function scanCallSites(
           into.push(missing(ts, sf, callee, "user", `\`${verb}(…)\``));
         } else {
           const chain = memberChain(ts, callee);
-          if (chain !== null && chain.root === "tools" && chain.path.length > 0) {
+          const isToolTree =
+            chain !== null && (chain.root === "tools" || bindings.roots.get(chain.root) === "tools");
+          if (chain !== null && isToolTree && chain.path.length > 0) {
             const toolId = chain.path.join(".");
             const groupId = options.resolveToolGroupId?.(toolId);
             // Unknown tool → the group is unknowable statically; stay silent (miss > false alarm).
@@ -117,7 +131,8 @@ export function scanCapabilities(
   options: CapabilityScanOptions,
 ): ReadonlyArray<WorkflowAuditFinding> {
   const findings: WorkflowAuditFinding[] = [];
-  scanScriptRefs(ts, sf, options.declared, findings);
-  scanCallSites(ts, sf, options, findings);
+  const bindings = collectWorkflowBodyBindings(ts, sf);
+  scanScriptRefs(ts, sf, options.declared, bindings, findings);
+  scanCallSites(ts, sf, options, bindings, findings);
   return findings;
 }

@@ -142,3 +142,98 @@ describe("static capability check", () => {
     expect(auditWorkflowSourceStatic(source)).toEqual([]);
   });
 });
+
+/**
+ * Now that bodies import their verbs, the capability scan resolves by BINDING. A bare-name scan let
+ * an aliased import walk straight past the static gate — the runtime gate would still have caught it,
+ * but the point of the static check is to tell the author BEFORE the run.
+ */
+describe("capability check resolves imported bindings", () => {
+  const audit = (lines: ReadonlyArray<string>) =>
+    auditWorkflowSourceStatic(
+      { absolutePath: "/virtual/binding.workflow.ts", sourceText: lines.join("\n") },
+      { declared: new Set<string>() },
+    );
+
+  it("gates an aliased waitUntil import", () => {
+    const findings = audit([
+      `import { waitUntil as at } from "@t3team/sdk";`,
+      `export const meta = { name: "x.alias", description: "d" } as const;`,
+      `export default async function run() {`,
+      `  await at(1000);`,
+      `}`,
+    ]);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.rule).toBe("missing-capability");
+    expect(findings[0]?.message).toContain("'schedule'");
+  });
+
+  it("gates an author-named scripts tree", () => {
+    const findings = audit([
+      `import { getScripts } from "@t3team/sdk";`,
+      `export const meta = { name: "x.scripts", description: "d" } as const;`,
+      `export default async function run() {`,
+      `  const s = getScripts();`,
+      `  await s.computeStats({});`,
+      `}`,
+    ]);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("'script'");
+  });
+
+  // The mirror case: a local that merely shares a verb's name is not a capability use.
+  it("does not gate a local that shadows a verb name", () => {
+    const findings = audit([
+      `import { agent } from "@t3team/sdk";`,
+      `export const meta = { name: "x.shadow", description: "d" } as const;`,
+      `export default async function run() {`,
+      `  const waitUntil = makeTimer();`,
+      `  await waitUntil(5);`,
+      `  await agent("go");`,
+      `}`,
+    ]);
+
+    expect(findings).toEqual([]);
+  });
+});
+
+/**
+ * The import rule reads opposite verdicts for the two body shapes, so both directions are pinned:
+ * an ESM body is imported for real (engine API allowed), a legacy vm body has every import blanked
+ * (the same line leaves the binding `undefined` at run time).
+ */
+describe("runtime-import rule is body-shape aware", () => {
+  const audit = (lines: ReadonlyArray<string>) =>
+    auditWorkflowSourceStatic(
+      { absolutePath: "/virtual/shape.workflow.ts", sourceText: lines.join("\n") },
+      { declared: new Set(["user"]) },
+    );
+
+  it("allows the engine API in an ESM body but still flags any other runtime import", () => {
+    const findings = audit([
+      `import { agent, phase } from "@t3team/sdk";`,
+      `import * as NodeFS from "node:fs";`,
+      `export const meta = { name: "x.esm", description: "d" } as const;`,
+      `export default async function run() {`,
+      `  phase("Go");`,
+      `  await agent("go");`,
+      `}`,
+    ]);
+
+    expect(findings.map((entry) => entry.rule)).toEqual(["runtime-import"]);
+    expect(findings[0]?.message).toContain("`script` module");
+  });
+
+  it("still flags an engine-API import in a legacy vm-shaped body", () => {
+    const findings = audit([
+      `import { agent } from "@t3team/sdk";`,
+      `export const meta = { name: "x.legacy", description: "d" } as const;`,
+      `await agent("go");`,
+    ]);
+
+    expect(findings.map((entry) => entry.rule)).toEqual(["runtime-import"]);
+    expect(findings[0]?.message).toContain("blanks every import");
+  });
+});

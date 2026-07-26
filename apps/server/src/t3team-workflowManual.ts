@@ -100,6 +100,10 @@ the orchestration globals.
 Import only { Schema } from "effect" when you need typed agent results or a structured
 user decision. Do not import Node APIs. The meta export must precede executable code;
 after that, the body runs top-to-bottom.
+Use the injected globals here, NOT imports from "@t3team/sdk". Your source is written into
+the run directory inside the user's workspace, which has no node_modules to resolve that
+package from — an import would be unresolvable. (Repo-authored recipe bodies DO import it:
+they sit in a workspace where it resolves, and are typechecked. Same engine, two shapes.)
 
   export const meta = {
     name: 'review-change',

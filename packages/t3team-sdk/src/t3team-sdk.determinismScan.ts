@@ -55,13 +55,38 @@ function isAllowlistedSchemaImport(ts: typeof TsApi, node: TsApi.ImportDeclarati
   return bindings.elements.every((element) => element.name.text === "Schema");
 }
 
+/**
+ * An ESM-shaped body (Epic 25 §The engine API — imported, not injected) default-exports the function
+ * the engine calls. This matters to the import rule: an ESM body is imported for REAL, so its imports
+ * are not blanked and importing the engine API is the sanctioned way to reach it — while a legacy
+ * vm-wrapped body has every import blanked, so the SAME line would leave `agent` undefined at run
+ * time. One rule, two body shapes, opposite verdicts; hence the branch rather than a blanket exemption.
+ */
+function isEsmShapedBody(ts: typeof TsApi, sf: TsApi.SourceFile): boolean {
+  return sf.statements.some(
+    (statement) =>
+      (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ===
+        true,
+  ) || sf.statements.some((statement) => ts.isExportAssignment(statement));
+}
+
+/** The engine API itself — the one value import an ESM body is MEANT to have. */
+function isEngineApiImport(ts: typeof TsApi, node: TsApi.ImportDeclaration): boolean {
+  const specifier = node.moduleSpecifier;
+  if (!ts.isStringLiteralLike(specifier)) return false;
+  return specifier.text === "@t3team/sdk" || specifier.text.startsWith("@t3team/sdk/");
+}
+
 function scanImports(ts: typeof TsApi, sf: TsApi.SourceFile, into: WorkflowAuditFinding[]): void {
+  const isEsmBody = isEsmShapedBody(ts, sf);
   for (const statement of sf.statements) {
     if (!ts.isImportDeclaration(statement)) continue;
     // A bare `import "./side-effect.ts"` has no clause: nothing is bound, so nothing diverges.
     if (statement.importClause === undefined) continue;
     if (statement.importClause.isTypeOnly) continue;
     if (isAllowlistedSchemaImport(ts, statement)) continue;
+    if (isEsmBody && isEngineApiImport(ts, statement)) continue;
     const bindings = statement.importClause.namedBindings;
     const allSpecifiersTypeOnly =
       statement.importClause.name === undefined &&
@@ -74,10 +99,14 @@ function scanImports(ts: typeof TsApi, sf: TsApi.SourceFile, into: WorkflowAudit
       finding(ts, sf, statement, {
         facet: "determinism",
         rule: "runtime-import",
-        message:
-          "Workflow imports are types-only (Epic 25 determinism rule 2): the loader blanks every " +
-          "import, so this binding is `undefined` in the body. Use `import type { … }`, or move the " +
-          "runtime dependency into a `script` module. Only `Schema` from `effect` is injected.",
+        message: isEsmBody
+          ? "A workflow body may import the engine API (`@t3team/sdk`) and types, nothing else " +
+            "(Epic 25 determinism rule 2): any other runtime dependency can read host state that a " +
+            "replay cannot reproduce. Use `import type { … }`, or move the dependency into a " +
+            "`script` module, whose calls the engine journals."
+          : "Workflow imports are types-only (Epic 25 determinism rule 2): the loader blanks every " +
+            "import, so this binding is `undefined` in the body. Use `import type { … }`, or move " +
+            "the runtime dependency into a `script` module. Only `Schema` from `effect` is injected.",
       }),
     );
   }
