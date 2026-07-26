@@ -17,7 +17,15 @@ describe("isT3TeamShellPath", () => {
 
 describe("translateUpstreamPath", () => {
   it("leaves shell, settings and pairing routes alone", () => {
-    for (const pathname of ["/t3team", "/t3team/projects/p1", "/settings", "/settings/beta", "/pair"]) {
+    for (const pathname of [
+      "/t3team",
+      "/t3team/projects/p1",
+      "/settings",
+      "/settings/beta",
+      "/pair",
+      "/connect",
+      "/connect_/callback",
+    ]) {
       expect(translateUpstreamPath(pathname, deps("p1"))).toEqual({ kind: "ignore" });
     }
   });
