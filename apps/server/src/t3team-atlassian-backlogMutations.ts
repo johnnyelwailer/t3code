@@ -15,6 +15,7 @@ import type {
   T3TeamAtlassianBacklogAssigneeUpdateInput,
   T3TeamAtlassianBacklogCreateSubtaskInput,
   T3TeamAtlassianBacklogEstimateUpdateInput,
+  T3TeamAtlassianChildIssueTypesInput,
   T3TeamAtlassianIssueStatusUpdateInput,
 } from "./t3team-atlassian-backlogTypes.ts";
 
@@ -158,5 +159,18 @@ export function createT3TeamAtlassianBacklogSubtask(
     }
 
     return { ...created, ...(item ? { item } : {}) };
+  });
+}
+
+export function listT3TeamAtlassianChildIssueTypes(input: T3TeamAtlassianChildIssueTypesInput) {
+  return Effect.gen(function* () {
+    const provider = yield* providerForAccount(input.accountId);
+    if (!(provider instanceof AtlassianIntegrationProvider)) {
+      return [];
+    }
+    return yield* tryAtlassianPromise(
+      () => provider.getChildIssueTypes(input),
+      "Failed to load Jira child issue types.",
+    );
   });
 }

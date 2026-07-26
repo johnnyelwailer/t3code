@@ -6,7 +6,7 @@
 
 import type { MouseEvent } from "react";
 
-import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
+import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import type {
   ProjectBacklogOwnershipGroup,
@@ -53,6 +53,9 @@ export interface ProjectDashboardBacklogContentProps {
     ticket: ProjectTicket,
     query?: string,
   ) => Promise<ReadonlyArray<AtlassianAssignableUser>>;
+  /** Undefined only where a caller hasn't wired it yet — the child-create form then shows its
+   * issue-type field disabled with the resolved default instead of a picker. */
+  onListChildIssueTypes?: () => Promise<ReadonlyArray<AtlassianChildIssueType>>;
   onUpdateAssignee: (
     ticket: ProjectTicket,
     assignee: AtlassianAssignableUser | null,

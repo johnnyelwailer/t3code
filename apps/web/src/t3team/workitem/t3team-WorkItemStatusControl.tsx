@@ -4,14 +4,18 @@ import { ChevronDown } from "lucide-react";
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import type { AtlassianBacklogBoardColumnStatus } from "~/t3team/backend/t3team-types";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
+import { T3TeamErrorStateInline } from "~/t3team/components/error/t3team-ErrorStateInline";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "~/t3team/components/ui/t3team-menu";
 import { Spinner } from "~/t3team/components/ui/t3team-spinner";
 import { cn } from "~/t3team/lib/t3team-utils";
 import type { T3TeamScalarDraftMutation } from "~/t3team/t3team-draftMutationTypes";
-import { WorkItemFieldOverlay } from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
-import { useWorkItemFieldDraftOverlay } from "~/t3team/workitem/t3team-useWorkItemFieldDraftOverlay";
-import { useWorkItemFieldMutation } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
+import {
+  WorkItemFieldOverlay,
+  WorkItemFieldUndoBanner,
+} from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
+import { useWorkItemFieldDraftMarker } from "~/t3team/workitem/t3team-WorkItemFieldDraftReview";
+import type { WorkItemFieldMutationResult } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
 import type { WorkItemStatus } from "~/t3team/workitem/t3team-workItemFieldModel";
 import {
   resolveWorkItemStatusTone,
@@ -34,7 +38,7 @@ export function WorkItemStatusControl({
   issueIdOrKey,
   status,
   draft,
-  onReload,
+  mutation,
   className,
 }: {
   readonly backend: AtlassianBackendApi;
@@ -44,7 +48,8 @@ export function WorkItemStatusControl({
   readonly status: WorkItemStatus | undefined;
   /** A pending agent-proposed status change for this issue, if any. */
   readonly draft?: T3TeamScalarDraftMutation | undefined;
-  readonly onReload: () => void;
+  /** Shared with the draft strip's Accept action — see `t3team-useWorkItemFieldMutations.ts`. */
+  readonly mutation: WorkItemFieldMutationResult<string>;
   readonly className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -53,15 +58,6 @@ export function WorkItemStatusControl({
   >([]);
   const [columnsLoading, setColumnsLoading] = useState(false);
   const [columnsError, setColumnsError] = useState<unknown>(null);
-
-  const mutation = useWorkItemFieldMutation<string>({
-    value: status?.name ?? "",
-    action: "changing the status",
-    mutate: async (targetStatus) => {
-      await backend.updateIssueStatus({ accountId, issueIdOrKey, targetStatus });
-      onReload();
-    },
-  });
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -84,14 +80,17 @@ export function WorkItemStatusControl({
   const displayName = mutation.value || "No status";
 
   const proposedStatus = draft ? readStatusDraftPatch(draft) : undefined;
-  const { marker, overlay } = useWorkItemFieldDraftOverlay({
-    mutation,
+  const marker = useWorkItemFieldDraftMarker({
+    issueIdOrKey,
+    field: "status",
     draft,
-    proposedValue: proposedStatus,
     proposedLabel: proposedStatus,
-    fieldLabel: "status",
-    undoLabel: mutation.lastChange ? `Status → ${mutation.lastChange.to}` : undefined,
   });
+  const overlay = mutation.error ? (
+    <T3TeamErrorStateInline userFacing={mutation.error} showRetry={false} />
+  ) : mutation.lastChange ? (
+    <WorkItemFieldUndoBanner label={`Status → ${mutation.lastChange.to}`} onUndo={mutation.undo} />
+  ) : null;
 
   return (
     <WorkItemFieldOverlay overlay={overlay} className={className}>

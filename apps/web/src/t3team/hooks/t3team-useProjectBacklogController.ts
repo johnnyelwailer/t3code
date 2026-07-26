@@ -1,6 +1,10 @@
 import type { Dispatch, SetStateAction } from "react";
 
-import type { AtlassianAssignableUser, BackendApi } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+  BackendApi,
+} from "~/t3team/backend/t3team-types";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 import { type BacklogSelectionInput } from "./t3team-projectBacklogCache";
@@ -47,6 +51,14 @@ export function useProjectBacklogController(input: {
     });
   }
 
+  async function listChildIssueTypes(): Promise<ReadonlyArray<AtlassianChildIssueType>> {
+    if (!input.backend || !input.connectedSource) return [];
+    return input.backend.atlassian.listChildIssueTypes({
+      accountId: input.connectedSource.accountId,
+      projectId: input.projectId,
+    });
+  }
+
   function selectBacklog(selection: BacklogSelectionInput): Promise<void> {
     const nextSelection = {
       ...input.currentSelection,
@@ -61,6 +73,7 @@ export function useProjectBacklogController(input: {
     error,
     hasLoaded,
     searchAssignableUsers,
+    listChildIssueTypes,
     updateAssignee,
     updateEstimate,
     createSubtask,

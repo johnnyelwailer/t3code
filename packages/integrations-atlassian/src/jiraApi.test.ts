@@ -205,4 +205,117 @@ describe("JiraApiClient", () => {
     expect(defaultUrl).toContain("expand=renderedFields");
     expect(defaultUrl).not.toContain("changelog");
   });
+
+  it("edits a comment with a PUT to the comment resource", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ id: "10001" }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await client.editIssueComment("TEST-1", "10001", { type: "doc", version: 1, content: [] });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://test.atlassian.net/rest/api/3/issue/TEST-1/comment/10001",
+      expect.objectContaining({ method: "PUT" }),
+    );
+  });
+
+  it("deletes a comment with a DELETE to the comment resource", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await client.deleteIssueComment("TEST-1", "10001");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://test.atlassian.net/rest/api/3/issue/TEST-1/comment/10001",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("creates an issue link with the type and both issue sides", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 201 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await client.createIssueLink({
+      type: { name: "Blocks" },
+      inwardIssue: { key: "TEST-2" },
+      outwardIssue: { key: "TEST-1" },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://test.atlassian.net/rest/api/3/issueLink",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          type: { name: "Blocks" },
+          inwardIssue: { key: "TEST-2" },
+          outwardIssue: { key: "TEST-1" },
+        }),
+      }),
+    );
+  });
+
+  it("deletes an issue link by id", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await client.deleteIssueLink("10050");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://test.atlassian.net/rest/api/3/issueLink/10050",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("lists issue link types", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        issueLinkTypes: [{ id: "1", name: "Blocks", inward: "is blocked by", outward: "blocks" }],
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    const result = await client.getIssueLinkTypes();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://test.atlassian.net/rest/api/3/issueLinkType",
+      expect.any(Object),
+    );
+    expect(result.issueLinkTypes).toEqual([
+      { id: "1", name: "Blocks", inward: "is blocked by", outward: "blocks" },
+    ]);
+  });
 });

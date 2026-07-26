@@ -86,6 +86,8 @@ function useEditableSectionsDemo() {
     | "deleteIssueLink"
     | "listIssueLinkTypes"
     | "createSubtask"
+    | "listChildIssueTypes"
+    | "searchAssignableUsers"
   > = {
     addIssueComment: async ({ body }) => {
       const id = `c${Math.random().toString(36).slice(2, 8)}`;
@@ -134,6 +136,14 @@ function useEditableSectionsDemo() {
       setChildren((current) => [...current, ticket(id, summary, "To Do")]);
       return { id, key: id };
     },
+    listChildIssueTypes: async () => [
+      { id: "10001", name: "Subtask" },
+      { id: "10002", name: "Technical task" },
+    ],
+    searchAssignableUsers: async () => [
+      { accountId: "acc-ada", displayName: "Ada Lovelace", emailAddress: "ada@example.test" },
+      { accountId: "acc-alan", displayName: "Alan Turing", emailAddress: "alan@example.test" },
+    ],
   };
 
   return {

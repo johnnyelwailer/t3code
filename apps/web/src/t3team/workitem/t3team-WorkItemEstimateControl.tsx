@@ -1,14 +1,17 @@
 import { useState } from "react";
 
-import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
+import { T3TeamErrorStateInline } from "~/t3team/components/error/t3team-ErrorStateInline";
 import { Input } from "~/t3team/components/ui/t3team-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/t3team/components/ui/t3team-popover";
 import { Spinner } from "~/t3team/components/ui/t3team-spinner";
 import { cn } from "~/t3team/lib/t3team-utils";
 import type { T3TeamScalarDraftMutation } from "~/t3team/t3team-draftMutationTypes";
-import { useWorkItemFieldDraftOverlay } from "~/t3team/workitem/t3team-useWorkItemFieldDraftOverlay";
-import { useWorkItemFieldMutation } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
-import { WorkItemFieldOverlay } from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
+import type { WorkItemFieldMutationResult } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
+import {
+  WorkItemFieldOverlay,
+  WorkItemFieldUndoBanner,
+} from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
+import { useWorkItemFieldDraftMarker } from "~/t3team/workitem/t3team-WorkItemFieldDraftReview";
 import { readEstimatePointsDraftPatch } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
 import { parseWorkItemEstimateDraft } from "~/t3team/workitem/t3team-workItemEstimateParsing";
 
@@ -22,38 +25,19 @@ import { parseWorkItemEstimateDraft } from "~/t3team/workitem/t3team-workItemEst
  * hour-tracked original estimate, which stays read-only.
  */
 export function WorkItemEstimateControl({
-  backend,
-  accountId,
   issueIdOrKey,
-  storyPoints,
   agentDraft,
-  onReload,
+  mutation,
   className,
 }: {
-  readonly backend: AtlassianBackendApi;
-  readonly accountId: string;
   readonly issueIdOrKey: string;
-  readonly storyPoints: number | undefined;
   /** A pending agent-proposed points update for this issue, if any. Named to avoid colliding with
    *  the popover's own local `draft` (the not-yet-committed input text) below. */
   readonly agentDraft?: T3TeamScalarDraftMutation | undefined;
-  readonly onReload: () => void;
+  /** Shared with the draft strip's Accept action — see `t3team-useWorkItemFieldMutations.ts`. */
+  readonly mutation: WorkItemFieldMutationResult<number | null>;
   readonly className?: string;
 }) {
-  const mutation = useWorkItemFieldMutation<number | null>({
-    value: storyPoints ?? null,
-    action: "updating story points",
-    mutate: async (nextValue) => {
-      await backend.updateIssueEstimate({
-        accountId,
-        issueIdOrKey,
-        estimateValue: nextValue,
-        estimateMode: "points",
-      });
-      onReload();
-    },
-  });
-
   const committedText = mutation.value !== null ? String(mutation.value) : "";
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(committedText);
@@ -84,14 +68,21 @@ export function WorkItemEstimateControl({
   }
 
   const proposedPoints = agentDraft ? readEstimatePointsDraftPatch(agentDraft) : undefined;
-  const { marker, overlay } = useWorkItemFieldDraftOverlay({
-    mutation,
+  const proposedLabel = proposedPoints === undefined ? undefined : String(proposedPoints ?? "—");
+  const marker = useWorkItemFieldDraftMarker({
+    issueIdOrKey,
+    field: "estimate",
     draft: agentDraft,
-    proposedValue: proposedPoints,
-    proposedLabel: proposedPoints !== undefined ? String(proposedPoints ?? "—") : undefined,
-    fieldLabel: "story points",
-    undoLabel: mutation.lastChange ? `Points → ${mutation.lastChange.to ?? "—"}` : undefined,
+    proposedLabel,
   });
+  const overlay = mutation.error ? (
+    <T3TeamErrorStateInline userFacing={mutation.error} showRetry={false} />
+  ) : mutation.lastChange ? (
+    <WorkItemFieldUndoBanner
+      label={`Points → ${mutation.lastChange.to ?? "—"}`}
+      onUndo={mutation.undo}
+    />
+  ) : null;
 
   return (
     <WorkItemFieldOverlay overlay={overlay} className={className}>

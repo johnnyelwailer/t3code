@@ -115,6 +115,7 @@ export function useProjectBacklog(
       controllerRef.current.searchAssignableUsers(ticket, query),
     [],
   );
+  const listChildIssueTypes = useCallback(() => controllerRef.current.listChildIssueTypes(), []);
   const updateAssignee = useCallback(
     (
       ticket: Parameters<typeof controller.updateAssignee>[0],
@@ -159,6 +160,7 @@ export function useProjectBacklog(
     selectSprint,
     selectFilter,
     searchAssignableUsers,
+    listChildIssueTypes,
     updateAssignee,
     updateEstimate,
     createSubtask,

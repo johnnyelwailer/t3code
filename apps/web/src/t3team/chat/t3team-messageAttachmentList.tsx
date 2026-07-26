@@ -1,5 +1,12 @@
 /* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
-import { BoxIcon, FileImageIcon, FileTextIcon, LinkIcon, PanelsTopLeftIcon } from "lucide-react";
+import {
+  BoxIcon,
+  FileImageIcon,
+  FileTextIcon,
+  LinkIcon,
+  PanelsTopLeftIcon,
+  SquarePenIcon,
+} from "lucide-react";
 import type { T3TeamMessageAttachment } from "@t3tools/contracts";
 
 function AttachmentLink(props: { label: string; url: string | undefined }) {
@@ -104,6 +111,17 @@ function renderAttachmentBody(attachment: T3TeamMessageAttachment) {
           {renderAttachmentMeta(["Widget", attachment.widget.format])}
         </>
       );
+    case "draft-mutation":
+      // Draft carriers ride hidden messages and are consumed by the work item's review surface;
+      // this is the metadata fallback if one ever lands in the generic list.
+      return (
+        <>
+          <span className="font-medium text-foreground">
+            {attachment.draft.summary ?? `Proposed ${attachment.draft.field} change`}
+          </span>
+          {renderAttachmentMeta(["Pending review", attachment.draft.target.issueIdOrKey])}
+        </>
+      );
   }
 }
 
@@ -120,6 +138,8 @@ function attachmentIcon(attachment: T3TeamMessageAttachment) {
     case "view":
     case "widget":
       return PanelsTopLeftIcon;
+    case "draft-mutation":
+      return SquarePenIcon;
   }
 }
 

@@ -3,13 +3,17 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
+import { T3TeamErrorStateInline } from "~/t3team/components/error/t3team-ErrorStateInline";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/t3team/components/ui/t3team-popover";
 import { Spinner } from "~/t3team/components/ui/t3team-spinner";
 import type { T3TeamScalarDraftMutation } from "~/t3team/t3team-draftMutationTypes";
 import { useDebouncedValue } from "~/t3team/workitem/t3team-useDebouncedValue";
-import { useWorkItemFieldDraftOverlay } from "~/t3team/workitem/t3team-useWorkItemFieldDraftOverlay";
-import { useWorkItemFieldMutation } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
-import { WorkItemFieldOverlay } from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
+import type { WorkItemFieldMutationResult } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
+import {
+  WorkItemFieldOverlay,
+  WorkItemFieldUndoBanner,
+} from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
+import { useWorkItemFieldDraftMarker } from "~/t3team/workitem/t3team-WorkItemFieldDraftReview";
 import {
   WorkItemAssigneeActionRows,
   WorkItemAssigneeResultsList,
@@ -33,20 +37,19 @@ export function WorkItemAssigneeControl({
   backend,
   accountId,
   issueIdOrKey,
-  assignee,
   draft,
   currentUserName,
-  onReload,
+  mutation,
   className,
 }: {
   readonly backend: AtlassianBackendApi;
   readonly accountId: string;
   readonly issueIdOrKey: string;
-  readonly assignee: WorkItemPerson | undefined;
   /** A pending agent-proposed assignee change for this issue, if any. */
   readonly draft?: T3TeamScalarDraftMutation | undefined;
   readonly currentUserName?: string | undefined;
-  readonly onReload: () => void;
+  /** Shared with the draft strip's Accept action — see `t3team-useWorkItemFieldMutations.ts`. */
+  readonly mutation: WorkItemFieldMutationResult<Assignee>;
   readonly className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -57,21 +60,6 @@ export function WorkItemAssigneeControl({
   const [searchError, setSearchError] = useState<unknown>(null);
   const [assignToMeError, setAssignToMeError] = useState<unknown>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-
-  const mutation = useWorkItemFieldMutation<Assignee>({
-    value: assignee ?? null,
-    action: "updating the assignee",
-    isEqual: (a, b) => assigneeIdentity(a) === assigneeIdentity(b),
-    mutate: async (next) => {
-      await backend.updateIssueAssignee({
-        accountId,
-        issueIdOrKey,
-        assigneeAccountId: next?.accountId ?? null,
-        assigneeDisplayName: next?.displayName ?? null,
-      });
-      onReload();
-    },
-  });
 
   useEffect(() => {
     if (!open) return;
@@ -112,13 +100,11 @@ export function WorkItemAssigneeControl({
     if (!currentUserName) return;
     setAssignToMeError(null);
     try {
-      const matches =
-        results.length > 0
-          ? results
-          : await backend.searchAssignableUsers({ accountId, issueIdOrKey, query: currentUserName });
+      const matches = results.length > 0
+        ? results
+        : await backend.searchAssignableUsers({ accountId, issueIdOrKey, query: currentUserName });
       const normalized = currentUserName.trim().toLowerCase();
-      const match =
-        matches.find((user) => user.displayName.trim().toLowerCase() === normalized) ?? matches[0];
+      const match = matches.find((u) => u.displayName.trim().toLowerCase() === normalized) ?? matches[0];
       if (!match) {
         setAssignToMeError(new Error(`No assignable Jira user matched "${currentUserName}".`));
         return;
@@ -150,17 +136,17 @@ export function WorkItemAssigneeControl({
 
   const currentIdentity = assigneeIdentity(mutation.value);
   const proposedAssignee = draft ? readAssigneeDraftPatch(draft) : undefined;
-  const { marker, overlay } = useWorkItemFieldDraftOverlay({
-    mutation,
-    draft,
-    proposedValue: proposedAssignee,
-    proposedLabel:
-      proposedAssignee !== undefined ? (proposedAssignee?.displayName ?? "Unassigned") : undefined,
-    fieldLabel: "assignee",
-    undoLabel: mutation.lastChange
-      ? `Assignee → ${mutation.lastChange.to?.displayName ?? "Unassigned"}`
-      : undefined,
-  });
+  const proposedLabel =
+    proposedAssignee === undefined ? undefined : (proposedAssignee?.displayName ?? "Unassigned");
+  const marker = useWorkItemFieldDraftMarker({ issueIdOrKey, field: "assignee", draft, proposedLabel });
+  const overlay = mutation.error ? (
+    <T3TeamErrorStateInline userFacing={mutation.error} showRetry={false} />
+  ) : mutation.lastChange ? (
+    <WorkItemFieldUndoBanner
+      label={`Assignee → ${mutation.lastChange.to?.displayName ?? "Unassigned"}`}
+      onUndo={mutation.undo}
+    />
+  ) : null;
 
   return (
     <WorkItemFieldOverlay overlay={overlay} className={className}>

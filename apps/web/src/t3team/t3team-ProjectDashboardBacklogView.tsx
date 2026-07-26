@@ -52,6 +52,7 @@ export function ProjectDashboardBacklogView({
     error,
     hasLoaded,
     searchAssignableUsers,
+    listChildIssueTypes,
     updateAssignee,
     updateEstimate,
     createSubtask,
@@ -179,6 +180,7 @@ export function ProjectDashboardBacklogView({
       getTicketAgentContext={getTicketAgentContext}
       onOpenTicket={handleOpenTicket}
       onSearchAssignableUsers={searchAssignableUsers}
+      onListChildIssueTypes={listChildIssueTypes}
       onUpdateAssignee={updateAssignee}
       onUpdateEstimate={updateEstimate}
       onCreateSubtask={createSubtask}

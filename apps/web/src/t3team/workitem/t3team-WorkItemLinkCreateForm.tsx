@@ -95,7 +95,7 @@ export function WorkItemLinkCreateForm({
           onValueChange={(value) => value && setLinkTypeId(value)}
         >
           <SelectTrigger size="sm" aria-label="Link type" disabled={pending}>
-            <SelectValue placeholder="Link type" />
+            <SelectValue placeholder="Link type">{selectedType?.name}</SelectValue>
           </SelectTrigger>
           <SelectPopup>
             {linkTypes.map((type) => (

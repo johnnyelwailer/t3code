@@ -2193,6 +2193,145 @@ describe("AtlassianIntegrationProvider", () => {
     ).resolves.toEqual({ id: "10010", key: "PROJ-10" });
   });
 
+  it("creates a subtask with a caller-picked issue type and assignee, when both are allowed", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.endsWith("/rest/api/3/issue/createmeta?projectIds=10000&expand=projects.issuetypes.fields")) {
+        return Response.json({
+          projects: [
+            {
+              issuetypes: [
+                { id: "5", name: "Sub-task", subtask: true, fields: {} },
+                { id: "9", name: "Technical task", subtask: true, fields: { assignee: {} } },
+              ],
+            },
+          ],
+        });
+      }
+
+      if (url.endsWith("/rest/api/3/issue")) {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          fields: {
+            project: { id: "10000" },
+            parent: { key: "PROJ-9" },
+            summary: "Wire up retry telemetry",
+            issuetype: { id: "9" },
+            assignee: { accountId: "acc-ada" },
+          },
+        });
+        return Response.json({
+          id: "10011",
+          key: "PROJ-11",
+          self: "https://test.atlassian.net/rest/api/3/issue/10011",
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.createSubtask({
+        accountId: "https://test.atlassian.net",
+        projectId: "10000",
+        parentIssueIdOrKey: "PROJ-9",
+        summary: "Wire up retry telemetry",
+        issueTypeId: "9",
+        assigneeAccountId: "acc-ada",
+      }),
+    ).resolves.toEqual({ id: "10011", key: "PROJ-11" });
+  });
+
+  it("omits the assignee field when the picked issue type's createmeta doesn't allow it", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.endsWith("/rest/api/3/issue/createmeta?projectIds=10000&expand=projects.issuetypes.fields")) {
+        return Response.json({
+          projects: [{ issuetypes: [{ id: "5", name: "Sub-task", subtask: true, fields: {} }] }],
+        });
+      }
+
+      if (url.endsWith("/rest/api/3/issue")) {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          fields: {
+            project: { id: "10000" },
+            parent: { key: "PROJ-9" },
+            summary: "No assignee field here",
+            issuetype: { id: "5" },
+          },
+        });
+        return Response.json({
+          id: "10012",
+          key: "PROJ-12",
+          self: "https://test.atlassian.net/rest/api/3/issue/10012",
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.createSubtask({
+        accountId: "https://test.atlassian.net",
+        projectId: "10000",
+        parentIssueIdOrKey: "PROJ-9",
+        summary: "No assignee field here",
+        assigneeAccountId: "acc-ada",
+      }),
+    ).resolves.toEqual({ id: "10012", key: "PROJ-12" });
+  });
+
+  it("lists every subtask-shaped child issue type from createmeta, not just the first match", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/rest/api/3/issue/createmeta?projectIds=10000&expand=projects.issuetypes.fields")) {
+        return Response.json({
+          projects: [
+            {
+              issuetypes: [
+                { id: "5", name: "Sub-task", subtask: true },
+                { id: "9", name: "Technical task", subtask: true },
+                { id: "3", name: "Story", subtask: false },
+              ],
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.getChildIssueTypes({ accountId: "https://test.atlassian.net", projectId: "10000" }),
+    ).resolves.toEqual([
+      { id: "5", name: "Sub-task" },
+      { id: "9", name: "Technical task" },
+    ]);
+  });
+
   it("downloads Jira attachment assets with the authenticated client", async () => {
     const bytes = Uint8Array.from([137, 80, 78, 71]);
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -2234,6 +2373,149 @@ describe("AtlassianIntegrationProvider", () => {
         }),
       }),
     );
+  });
+
+  it("adds a comment as ADF built from markdown, through the same create path", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/rest/api/3/issue/PROJ-9/comment") && init?.method === "POST") {
+        const body = JSON.parse(init.body as string) as { body: unknown };
+        expect(body.body).toMatchObject({ type: "doc", version: 1 });
+        return Response.json({ id: "10099" });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.addIssueComment("https://test.atlassian.net", "PROJ-9", "Looks good."),
+    ).resolves.toEqual({ id: "10099" });
+  });
+
+  it("updates a comment with a PUT to the same comment id", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/rest/api/3/issue/PROJ-9/comment/10099")) {
+        expect(init?.method).toBe("PUT");
+        return Response.json({ id: "10099" });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.updateIssueComment("https://test.atlassian.net", "PROJ-9", "10099", "Edited."),
+    ).resolves.toBeUndefined();
+  });
+
+  it("deletes a comment", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/rest/api/3/issue/PROJ-9/comment/10099")) {
+        expect(init?.method).toBe("DELETE");
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.deleteIssueComment("https://test.atlassian.net", "PROJ-9", "10099"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("creates an issue link, placing the current issue on the requested side", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/rest/api/3/issueLink")) {
+        expect(JSON.parse(init?.body as string)).toEqual({
+          type: { name: "Blocks" },
+          inwardIssue: { key: "PROJ-2" },
+          outwardIssue: { key: "PROJ-9" },
+        });
+        return new Response(null, { status: 201 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.createIssueLink("https://test.atlassian.net", {
+        issueIdOrKey: "PROJ-9",
+        otherIssueIdOrKey: "PROJ-2",
+        linkTypeName: "Blocks",
+        direction: "outward",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("deletes an issue link", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/rest/api/3/issueLink/10050")) {
+        expect(init?.method).toBe("DELETE");
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.deleteIssueLink("https://test.atlassian.net", "10050"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("lists issue link types", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/rest/api/3/issueLinkType")) {
+        return Response.json({
+          issueLinkTypes: [{ id: "1", name: "Blocks", inward: "is blocked by", outward: "blocks" }],
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.getIssueLinkTypes("https://test.atlassian.net"),
+    ).resolves.toEqual([{ id: "1", name: "Blocks", inward: "is blocked by", outward: "blocks" }]);
   });
 
   describe("backlog quick filter GraphQL fallback", () => {

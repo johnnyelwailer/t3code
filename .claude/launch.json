@@ -27,6 +27,15 @@
         "cd /Users/pj/Dev/github/t3code/apps/web && export PATH=\"$HOME/.bun/bin:$PWD/../../node_modules/.bin:$PATH\" && exec node scripts/t3team-storybook.mjs dev --no-open"
       ],
       "port": 6006
+    },
+    {
+      "name": "t3storybook-workitem",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code/.claude/worktrees/quirky-thompson-6aafce/apps/web && export PATH=\"$HOME/.bun/bin:$PWD/../../node_modules/.bin:$PATH\" && exec node scripts/t3team-storybook.mjs dev --no-open -p 6017"
+      ],
+      "port": 6017
     }
   ]
 }

@@ -4,11 +4,12 @@ import { useState } from "react";
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { cn } from "~/t3team/lib/t3team-utils";
+import { ChildIssueCreatePanel } from "~/t3team/t3team-ChildIssueCreatePanel";
 import type { ProjectTicket } from "~/t3team/t3team-types";
-import { WorkItemChildCreateForm } from "~/t3team/workitem/t3team-WorkItemChildCreateForm";
 import { WorkItemIssueList, WorkItemIssueRow } from "~/t3team/workitem/t3team-WorkItemIssueRow";
 import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
 import { resolveWorkItemStatusTone } from "~/t3team/workitem/t3team-workItemFieldTokens";
+import { useWorkItemChildCreate } from "~/t3team/workitem/t3team-useWorkItemChildCreate";
 
 /** Done/total arithmetic behind the "N of M done" affordance, kept pure so it is directly testable. */
 export function countWorkItemChildrenDone(children: ReadonlyArray<ProjectTicket>): {
@@ -76,6 +77,13 @@ export function WorkItemChildren({
 }) {
   const [creating, setCreating] = useState(false);
   const canWrite = Boolean(backend && accountId && projectId && issueIdOrKey && onReload);
+  const childCreate = useWorkItemChildCreate({
+    backend: backend!,
+    accountId: accountId!,
+    projectId: projectId!,
+    parentIssueIdOrKey: issueIdOrKey!,
+    onReload: onReload ?? (() => {}),
+  });
   if (items.length === 0 && !canWrite) return null;
 
   const { done, total } = countWorkItemChildrenDone(items);
@@ -100,13 +108,33 @@ export function WorkItemChildren({
     >
       {creating ? (
         <div className="mb-3">
-          <WorkItemChildCreateForm
-            backend={backend!}
-            accountId={accountId!}
-            projectId={projectId!}
-            parentIssueIdOrKey={issueIdOrKey!}
-            onReload={onReload!}
-            onDone={() => setCreating(false)}
+          <ChildIssueCreatePanel
+            parentDisplayId={issueIdOrKey ?? ""}
+            draft={childCreate.draft}
+            saving={childCreate.saving}
+            error={childCreate.error}
+            className="rounded-md border border-border/70 bg-muted/10 p-2.5"
+            {...(currentUserName ? { currentUserName } : {})}
+            searchAssignableUsers={(query) =>
+              backend!.searchAssignableUsers({
+                accountId: accountId!,
+                issueIdOrKey: issueIdOrKey!,
+                ...(query ? { query } : {}),
+              })
+            }
+            listChildIssueTypes={() =>
+              backend!.listChildIssueTypes({ accountId: accountId!, projectId: projectId! })
+            }
+            onDraftChange={childCreate.setDraft}
+            onCancel={() => {
+              childCreate.reset();
+              setCreating(false);
+            }}
+            onSubmit={() => {
+              void childCreate.submit().then((ok) => {
+                if (ok) setCreating(false);
+              });
+            }}
           />
         </div>
       ) : null}

@@ -3,6 +3,7 @@ import type { ResourcePage } from "@t3tools/project-context";
 import type {
   AtlassianAssignableUser,
   AtlassianBackendApi,
+  AtlassianChildIssueType,
   AtlassianDownloadedAsset,
 } from "./t3team-atlassianBackendTypes";
 
@@ -18,6 +19,7 @@ type AtlassianIssueOpsApi = Pick<
   | "updateIssueEstimate"
   | "updateIssueStatus"
   | "createSubtask"
+  | "listChildIssueTypes"
   | "downloadAsset"
 >;
 
@@ -79,12 +81,25 @@ export function createAtlassianIssueOpsApi(post: PostJson): AtlassianIssueOpsApi
       readonly summary: string;
       readonly description?: string;
       readonly estimateHours?: number;
+      readonly issueTypeId?: string;
+      readonly assigneeAccountId?: string | null;
     }): Promise<{ id: string; key: string; item?: ResourcePage["items"][number] }> {
       const response = await post<
         typeof input,
         { created: { id: string; key: string; item?: ResourcePage["items"][number] } }
       >("/api/t3team/atlassian/backlog/create-subtask", input);
       return response.created;
+    },
+
+    async listChildIssueTypes(input: {
+      readonly accountId: string;
+      readonly projectId: string;
+    }): Promise<ReadonlyArray<AtlassianChildIssueType>> {
+      const response = await post<
+        typeof input,
+        { issueTypes: ReadonlyArray<AtlassianChildIssueType> }
+      >("/api/t3team/atlassian/backlog/child-issue-types", input);
+      return response.issueTypes;
     },
 
     async downloadAsset(input: {

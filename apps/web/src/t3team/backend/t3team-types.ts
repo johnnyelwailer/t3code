@@ -187,6 +187,7 @@ export type {
   AtlassianOAuthConnectInput,
   AtlassianOAuthExchangeInput,
   AtlassianOAuthExchangeResult,
+  AtlassianChildIssueType, AtlassianIssueLinkType,
 } from "./t3team-atlassianBackendTypes";
 
 export interface T3TeamEnvironmentConnection {

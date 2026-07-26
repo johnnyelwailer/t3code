@@ -7,14 +7,12 @@ import {
 } from "~/t3team/components/error/t3team-errorMessage";
 import { T3TeamErrorStateInline } from "~/t3team/components/error/t3team-ErrorStateInline";
 import { Button } from "~/t3team/components/ui/t3team-button";
-import { Textarea } from "~/t3team/components/ui/t3team-textarea";
+import { CommentBodyEditor } from "~/t3team/workitem/t3team-CommentBodyEditor";
 
 /**
  * "Add a comment" — a creation form, not a field edit, so it keeps its own small pending/error
  * state (matching `ProjectBacklogSubtaskCreateForm`) rather than forcing an append onto
  * `useWorkItemFieldMutation`, which models replacing one field's value, not growing a list.
- * Clicking the button (or Cmd/Ctrl+Enter) is the only thing that submits — plain Enter still
- * inserts a newline, and blur never saves.
  */
 export function WorkItemCommentComposer({
   backend,
@@ -28,6 +26,7 @@ export function WorkItemCommentComposer({
   readonly onReload: () => void;
 }) {
   const [body, setBody] = useState("");
+  const [cursor, setCursor] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<T3TeamUserFacingError | null>(null);
 
@@ -39,6 +38,7 @@ export function WorkItemCommentComposer({
     try {
       await backend.addIssueComment({ accountId, issueIdOrKey, body: trimmed });
       setBody("");
+      setCursor(0);
       onReload();
     } catch (cause) {
       setError(toUserFacingError(cause, { action: "adding the comment" }));
@@ -49,18 +49,16 @@ export function WorkItemCommentComposer({
 
   return (
     <div className="space-y-1.5">
-      <Textarea
+      <CommentBodyEditor
         value={body}
-        disabled={pending}
-        rows={2}
-        placeholder="Add a comment…"
-        onChange={(event) => setBody(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
-            void submit();
-          }
+        cursor={cursor}
+        onChange={(nextValue, nextCursor) => {
+          setBody(nextValue);
+          setCursor(nextCursor);
         }}
+        onSubmit={() => void submit()}
+        disabled={pending}
+        placeholder="Add a comment… (⌘/Ctrl + Enter to send)"
       />
       <div className="flex items-center justify-end gap-2">
         {error ? <T3TeamErrorStateInline userFacing={error} showRetry={false} /> : null}

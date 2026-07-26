@@ -30,6 +30,7 @@ export function ProjectDashboardBacklogContent({
   getTicketAgentContext,
   onOpenTicket,
   onSearchAssignableUsers,
+  onListChildIssueTypes,
   onUpdateAssignee,
   onUpdateEstimate,
   onCreateSubtask,
@@ -52,6 +53,7 @@ export function ProjectDashboardBacklogContent({
     onUpdateAssignee,
     onUpdateEstimate,
     onCreateSubtask,
+    ...(onListChildIssueTypes ? { onListChildIssueTypes } : {}),
     ...(estimateFieldLabel ? { estimateFieldLabel } : {}),
   };
 

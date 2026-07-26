@@ -1,9 +1,13 @@
 import { useMemo } from "react";
 
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
+import { useBackend } from "~/t3team/backend/t3team-BackendContext";
 import { draftContentToComparableText } from "~/t3team/t3team-draftMutationDiff";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
-import { isT3TeamDocumentDraftMutation } from "~/t3team/t3team-draftMutationTypes";
+import {
+  isT3TeamDocumentDraftMutation,
+  type T3TeamDraftMutation,
+} from "~/t3team/t3team-draftMutationTypes";
 import { deliverDraftFeedbackToSourceThread } from "~/t3team/workitem/t3team-deliverDraftFeedbackToSourceThread";
 import {
   buildDraftDiffParagraphs,
@@ -40,6 +44,8 @@ export function useWorkItemDraftStrip(input: {
 }) {
   const { issueIdOrKey, projectId, model, mutations, backend, accountId, onReload } = input;
   const draftsByField = useWorkItemDrafts({ projectId, issueIdOrKey });
+  /** Distinct from `input.backend` (Jira only): the app backend is what can address a thread. */
+  const appBackend = useBackend();
   const discardDraft = useT3TeamDraftMutationStore((state) => state.discardDraft);
   const returnDraftWithFeedback = useT3TeamDraftMutationStore((state) => state.returnDraftWithFeedback);
   const highlightField = useWorkItemDraftReviewUiStore((state) => state.highlightField);
@@ -58,7 +64,7 @@ export function useWorkItemDraftStrip(input: {
     returnDraftWithFeedback(draft.id, feedback);
     void deliverDraftFeedbackToSourceThread({
       backend: appBackend,
-      ...(draft.sourceThreadId ? { sourceThreadId: draft.sourceThreadId } : {}),
+      sourceThreadId: draft.sourceThreadId,
       draftId: draft.id,
       issueIdOrKey: draft.target.issueIdOrKey,
       field: draft.field,
@@ -73,7 +79,7 @@ export function useWorkItemDraftStrip(input: {
       id: draft.id,
       pending,
       highlighted,
-      onComment: (feedback: string) => onComment(draft.id, draft.sourceThreadId, feedback),
+      onComment: (feedback: string) => onComment(draft, feedback),
       onDismiss: () => discardDraft(draft.id),
     };
 

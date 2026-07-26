@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 
+import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { ProjectBacklogRowSubtaskCell } from "~/t3team/t3team-ProjectBacklogRowPlanningCells";
 import type { ProjectBacklogSubtaskCreateInput, ProjectTicket } from "~/t3team/t3team-types";
@@ -12,6 +13,8 @@ export function ProjectBacklogTableRowActionCell({
   ticket,
   canCreateSubtasks,
   onCreateSubtask,
+  onSearchAssignableUsers,
+  onListChildIssueTypes,
   onCommitRow,
 }: {
   contextOnly: boolean;
@@ -24,6 +27,11 @@ export function ProjectBacklogTableRowActionCell({
     ticket: ProjectTicket,
     subtask: ProjectBacklogSubtaskCreateInput,
   ) => Promise<void>;
+  onSearchAssignableUsers: (
+    ticket: ProjectTicket,
+    query?: string,
+  ) => Promise<ReadonlyArray<AtlassianAssignableUser>>;
+  onListChildIssueTypes?: () => Promise<ReadonlyArray<AtlassianChildIssueType>>;
   onCommitRow: () => void;
 }) {
   const stickyActionCellClass = contextOnly
@@ -52,6 +60,8 @@ export function ProjectBacklogTableRowActionCell({
             ticket={ticket}
             canCreateSubtasks={canCreateSubtasks}
             onCreateSubtask={onCreateSubtask}
+            onSearchAssignableUsers={onSearchAssignableUsers}
+            {...(onListChildIssueTypes ? { onListChildIssueTypes } : {})}
           />
         )}
       </div>

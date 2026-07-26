@@ -287,3 +287,14 @@ export type JiraCommentsResponse = {
   readonly comments: ReadonlyArray<JiraComment>;
   readonly total: number;
 };
+
+export type JiraIssueLinkType = {
+  readonly id: string;
+  readonly name: string;
+  readonly inward: string;
+  readonly outward: string;
+};
+
+export type JiraIssueLinkTypesResponse = {
+  readonly issueLinkTypes: ReadonlyArray<JiraIssueLinkType>;
+};

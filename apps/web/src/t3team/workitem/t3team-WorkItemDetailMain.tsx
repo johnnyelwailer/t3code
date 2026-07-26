@@ -5,12 +5,13 @@ import type { JiraAttachment, JiraCommentItem } from "~/t3team/components/ticket
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import { useWorkItemDetailMainControls } from "~/t3team/workitem/t3team-useWorkItemDetailMainControls";
+import { useWorkItemDraftReviewUiStore } from "~/t3team/workitem/t3team-workItemDraftReviewUiStore";
 import { WorkItemDescription } from "~/t3team/workitem/t3team-WorkItemDescription";
+import { WorkItemDescriptionDraftDiff } from "~/t3team/workitem/t3team-WorkItemDescriptionDraftDiff";
 import { WorkItemDetailLayout } from "~/t3team/workitem/t3team-WorkItemDetailLayout";
 import { WorkItemProperties } from "~/t3team/workitem/t3team-WorkItemProperties";
 import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
 import { WorkItemSecondaryColumn } from "~/t3team/workitem/t3team-WorkItemSecondaryColumn";
-import { WorkItemSectionNav } from "~/t3team/workitem/t3team-WorkItemSectionNav";
 import { WorkItemSkeleton } from "~/t3team/workitem/t3team-WorkItemSkeleton";
 import { WorkItemTitleBand } from "~/t3team/workitem/t3team-WorkItemTitleBand";
 import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
@@ -88,11 +89,24 @@ export function WorkItemDetailMain({
   onSectionContextMenu,
   supplementalSections,
 }: WorkItemDetailMainProps) {
-  const { resolveAssetUrl, anchors, navEntries, sectionMenu, renderCommentBody, draftCount } =
+  // Built first: `mutations` is the one shared instance per field the chip and the strip both
+  // commit through, so the content hook below can hand it to the strip.
+  const { statusControl, assigneeControl, estimateControl, mutations } = useWorkItemDetailMainControls({
+    model,
+    ...(accountId ? { accountId } : {}),
+    ...(backend ? { backend } : {}),
+    ...(externalProjectId ? { externalProjectId } : {}),
+    ...(currentUserName ? { currentUserName } : {}),
+    onReload,
+  });
+
+  const { resolveAssetUrl, anchors, sectionNav, sectionMenu, renderCommentBody } =
     useWorkItemDetailMainContent({
       model,
       projectId,
+      mutations,
       ...(accountId ? { accountId } : {}),
+      ...(backend ? { backend } : {}),
       ...(httpBaseUrl ? { httpBaseUrl } : {}),
       ...(workspaceRoot ? { workspaceRoot } : {}),
       ...(htmlBaseUrl ? { htmlBaseUrl } : {}),
@@ -101,19 +115,13 @@ export function WorkItemDetailMain({
       snapshotRaw,
       commentCount: comments.length,
       onOpenTicket,
+      onReload,
       ...(onSectionContextMenu ? { onSectionContextMenu } : {}),
     });
 
-  // Editable controls need a live backend and a connected account; without either the view stays
-  // read-only, same as before Slice B.
-  const { statusControl, assigneeControl, estimateControl } = useWorkItemDetailMainControls({
-    model,
-    ...(accountId ? { accountId } : {}),
-    ...(backend ? { backend } : {}),
-    ...(externalProjectId ? { externalProjectId } : {}),
-    ...(currentUserName ? { currentUserName } : {}),
-    onReload,
-  });
+  const isReviewingDescription = useWorkItemDraftReviewUiStore(
+    (state) => state.reviewingDescriptionForIssue === model.key,
+  );
 
   return (
     <WorkItemDetailLayout
@@ -126,7 +134,7 @@ export function WorkItemDetailMain({
           {...(assigneeControl ? { assigneeControl } : {})}
         />
       }
-      sectionNav={<WorkItemSectionNav entries={navEntries} draftCount={draftCount} />}
+      sectionNav={sectionNav}
       properties={
         <WorkItemProperties
           model={model}
@@ -152,6 +160,17 @@ export function WorkItemDetailMain({
             ) : (
               <WorkItemDescription
                 model={model}
+                {...(isReviewingDescription
+                  ? {
+                      adfBody: (
+                        <WorkItemDescriptionDraftDiff
+                          issueIdOrKey={model.key}
+                          projectId={projectId}
+                          {...(model.descriptionText ? { currentText: model.descriptionText } : {})}
+                        />
+                      ),
+                    }
+                  : {})}
                 {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
                 onOpenIssue={onOpenTicket}
                 {...(htmlBaseUrl ? { htmlBaseUrl } : {})}

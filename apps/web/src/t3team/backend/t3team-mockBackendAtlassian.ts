@@ -145,6 +145,7 @@ export function createMockAtlassianBackendApi(input: {
       id: `mock-subtask-${randomUUID()}`,
       key: `MOCK-${Math.floor(Math.random() * 1000)}`,
     }),
+    listChildIssueTypes: async () => [{ id: "mock-subtask-type", name: "Subtask" }],
     addIssueComment: async () => ({ id: `mock-comment-${randomUUID()}` }),
     updateIssueComment: async () => {},
     deleteIssueComment: async () => {},

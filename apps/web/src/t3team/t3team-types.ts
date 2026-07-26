@@ -124,6 +124,8 @@ export type ProjectBacklogSubtaskCreateInput = {
   readonly summary: string;
   readonly description?: string;
   readonly estimateHours?: number;
+  readonly issueTypeId?: string;
+  readonly assigneeAccountId?: string | null;
 };
 
 export type ViewState =

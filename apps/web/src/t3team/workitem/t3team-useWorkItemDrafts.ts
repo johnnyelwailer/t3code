@@ -63,3 +63,8 @@ export function countWorkItemScalarDrafts(byField: WorkItemDraftsByField): numbe
     (draft): draft is T3TeamScalarDraftMutation => draft !== undefined && !isT3TeamDocumentDraftMutation(draft),
   ).length;
 }
+
+/** All pending drafts, scalar and document — what the nav pill counts now the strip resolves both. */
+export function countWorkItemDraftsPending(byField: WorkItemDraftsByField): number {
+  return Object.keys(byField).length;
+}

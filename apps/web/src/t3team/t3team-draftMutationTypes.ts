@@ -1,4 +1,16 @@
-export type T3TeamDraftMutationStatus = "draft" | "applying" | "applied" | "discarded" | "error";
+export type T3TeamDraftMutationStatus =
+  | "draft"
+  | "applying"
+  | "applied"
+  /** Declined with no reason given — the "Dismiss" verb. */
+  | "discarded"
+  /**
+   * Declined WITH a reason (`feedback`) — the "Comment" verb. Distinct from `discarded` because the
+   * agent can act on the difference: silence means drop it, `returned` means read `feedback` and
+   * propose again.
+   */
+  | "returned"
+  | "error";
 
 export type T3TeamDraftMutationField =
   | "assignee"
@@ -35,6 +47,8 @@ export type T3TeamDraftMutationBase = {
   readonly status: T3TeamDraftMutationStatus;
   readonly summary?: string;
   readonly error?: string;
+  /** The reviewer's note when `status` is `returned` — what to fix before proposing again. */
+  readonly feedback?: string;
 };
 
 export type T3TeamDocumentDraftMutation = T3TeamDraftMutationBase & {

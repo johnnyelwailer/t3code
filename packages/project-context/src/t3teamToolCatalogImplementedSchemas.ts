@@ -110,3 +110,66 @@ export const SUBTASK_DRAFT_INPUT_SCHEMA = {
   },
   required: ["parent_issue_id", "summary"],
 } as const;
+
+export const WORK_ITEM_SUBTASK_DRAFT_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    issue_id: ISSUE_ID_PROPERTY,
+    summary: {
+      type: "string",
+      description: "Child issue summary.",
+      minLength: 1,
+    },
+    description: {
+      type: "string",
+      description: "Optional plain-text description.",
+      minLength: 1,
+    },
+    estimate_hours: {
+      type: "number",
+      description: "Optional original estimate in hours.",
+      minimum: 0,
+    },
+  },
+  required: ["summary"],
+} as const;
+
+export const LINK_DRAFT_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    issue_id: ISSUE_ID_PROPERTY,
+    other_issue_id: {
+      type: "string",
+      description: "The other Jira issue id or key to link to.",
+      minLength: 1,
+    },
+    link_type_name: {
+      type: "string",
+      description: 'Jira link type name, e.g. "Blocks" or "Relates".',
+      minLength: 1,
+    },
+    direction: {
+      type: "string",
+      description:
+        "Whether the current issue is the inward or outward side of the link type.",
+      enum: ["inward", "outward"],
+    },
+  },
+  required: ["other_issue_id", "link_type_name", "direction"],
+} as const;
+
+export const LINK_REMOVE_DRAFT_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    issue_id: ISSUE_ID_PROPERTY,
+    link_id: {
+      type: "string",
+      description: "Jira issue link id to remove.",
+      minLength: 1,
+    },
+  },
+  required: ["link_id"],
+} as const;

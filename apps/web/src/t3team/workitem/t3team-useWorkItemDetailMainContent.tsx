@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 
+import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import { createJiraTicketAssetUrlResolver } from "~/t3team/components/ticket/t3team-ticketAssetUrls";
 import type {
   JiraAttachment,
@@ -7,7 +8,9 @@ import type {
 } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
 import { T3TeamAdfRenderer } from "~/t3team/workitem/adf/t3team-AdfRenderer";
 import type { AdfDocument } from "~/t3team/workitem/adf/t3team-adfRendererTypes";
-import { countWorkItemScalarDrafts, useWorkItemDrafts } from "~/t3team/workitem/t3team-useWorkItemDrafts";
+import { useWorkItemDraftReviewUiStore } from "~/t3team/workitem/t3team-workItemDraftReviewUiStore";
+import type { WorkItemFieldMutations } from "~/t3team/workitem/t3team-useWorkItemFieldMutations";
+import { WorkItemSectionNav } from "~/t3team/workitem/t3team-WorkItemSectionNav";
 import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
 import {
   buildWorkItemSectionAnchors,
@@ -16,6 +19,10 @@ import {
 
 /** The sections a reader can hand to the agent, mirroring the targets the previous view exposed. */
 export type WorkItemSectionTarget = "description" | "relationships" | "attachments" | "comments";
+
+function scrollToAnchor(anchorId: string) {
+  document.getElementById(anchorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 /**
  * Everything `WorkItemDetailMain` needs to prepare before it can render, pulled out so the component
@@ -26,6 +33,8 @@ export function useWorkItemDetailMainContent({
   model,
   projectId,
   accountId,
+  backend,
+  mutations,
   httpBaseUrl,
   workspaceRoot,
   htmlBaseUrl,
@@ -34,11 +43,14 @@ export function useWorkItemDetailMainContent({
   snapshotRaw,
   commentCount,
   onOpenTicket,
+  onReload,
   onSectionContextMenu,
 }: {
   readonly model: WorkItemFieldModel;
   readonly projectId: string;
   readonly accountId?: string | undefined;
+  readonly backend?: AtlassianBackendApi | undefined;
+  readonly mutations: WorkItemFieldMutations;
   readonly httpBaseUrl?: string | undefined;
   readonly workspaceRoot?: string | undefined;
   readonly htmlBaseUrl?: string | undefined;
@@ -47,6 +59,7 @@ export function useWorkItemDetailMainContent({
   readonly snapshotRaw: unknown;
   readonly commentCount: number;
   readonly onOpenTicket: (ticketId: string) => void;
+  readonly onReload: () => void;
   readonly onSectionContextMenu?:
     | ((event: React.MouseEvent, section: WorkItemSectionTarget, label: string) => void)
     | undefined;
@@ -74,10 +87,33 @@ export function useWorkItemDetailMainContent({
     commentCount,
   });
 
-  // Scalar drafts only: description/comment drafts already have their own visible review panel, so
-  // counting them here too would double-announce the same proposed change.
-  const draftsByField = useWorkItemDrafts({ projectId, issueIdOrKey: model.key });
-  const draftCount = countWorkItemScalarDrafts(draftsByField);
+  const closeStrip = useWorkItemDraftReviewUiStore((state) => state.closeStrip);
+  const openDescriptionReview = useWorkItemDraftReviewUiStore((state) => state.openDescriptionReview);
+
+  const sectionNav = (
+    <WorkItemSectionNav
+      entries={navEntries}
+      draftStrip={{
+        issueIdOrKey: model.key,
+        projectId,
+        model,
+        mutations,
+        ...(backend ? { backend } : {}),
+        ...(accountId ? { accountId } : {}),
+        onReload,
+        ...(model.descriptionText ? { descriptionCurrentText: model.descriptionText } : {}),
+        onReviewDescription: () => {
+          closeStrip();
+          openDescriptionReview(model.key);
+          scrollToAnchor(anchors.description);
+        },
+        onReviewComments: () => {
+          closeStrip();
+          scrollToAnchor(anchors.comments);
+        },
+      }}
+    />
+  );
 
   const sectionMenu = (section: WorkItemSectionTarget, label: string) =>
     onSectionContextMenu
@@ -100,5 +136,5 @@ export function useWorkItemDetailMainContent({
       />
     ) : null;
 
-  return { resolveAssetUrl, anchors, navEntries, sectionMenu, renderCommentBody, draftCount };
+  return { resolveAssetUrl, anchors, sectionNav, sectionMenu, renderCommentBody };
 }

@@ -39,6 +39,7 @@ import {
 } from "./t3team-toolBrokerBindingWorkflowStatus.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
+import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 
 export function dispatchT3TeamToolCall(input: {
   state: BindingState;
@@ -58,6 +59,7 @@ export function dispatchT3TeamToolCall(input: {
   workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  publishDraft?: T3TeamDraftMutationPublisher;
 }): ReturnType<T3TeamToolBinding["callTool"]> {
   const { server, tool, toolArgs, state } = input;
   if (server !== T3TEAM_MCP_SERVER_NAME) {
@@ -129,7 +131,12 @@ export function dispatchT3TeamToolCall(input: {
     return input.showWidget(toolArgs);
   }
   if (isT3TeamDraftMutationTool(tool)) {
-    return callT3TeamDraftMutationToolEffect({ tool, toolArgs, readView: input.readView });
+    return callT3TeamDraftMutationToolEffect({
+      tool,
+      toolArgs,
+      readView: input.readView,
+      ...(input.publishDraft ? { publishDraft: input.publishDraft } : {}),
+    });
   }
   if (tool === "t3team.project.refresh_context_bundle") {
     if (!input.threadId || !input.toolContext || !input.refreshContextBundle) {

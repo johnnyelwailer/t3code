@@ -16,6 +16,8 @@ type T3TeamDraftMutationState = {
     status: T3TeamDraftMutationStatus,
     error?: string,
   ) => void;
+  /** The "Comment" verb: declines with a reason, distinct from the silent `discardDraft`. */
+  readonly returnDraftWithFeedback: (draftId: string, feedback: string) => void;
 };
 
 function mergeDrafts(
@@ -54,6 +56,15 @@ export const useT3TeamDraftMutationStore = create<T3TeamDraftMutationState>((set
       ),
     }));
   },
+  returnDraftWithFeedback: (draftId, feedback) => {
+    set((state) => ({
+      drafts: state.drafts.map((draft) =>
+        draft.id === draftId
+          ? { ...setDraftStatusFields(draft, "returned", undefined), feedback }
+          : draft,
+      ),
+    }));
+  },
 }));
 
 function setDraftStatusFields(
@@ -70,7 +81,9 @@ function matchesPendingDraftTarget(
   draft: T3TeamDraftMutation,
   input: { readonly projectId?: string; readonly issueIdOrKey?: string },
 ): boolean {
-  if (draft.status === "discarded" || draft.status === "applied") return false;
+  if (draft.status === "discarded" || draft.status === "applied" || draft.status === "returned") {
+    return false;
+  }
   if (input.projectId && draft.projectId && draft.projectId !== input.projectId) return false;
   if (input.issueIdOrKey && draft.target.issueIdOrKey !== input.issueIdOrKey) return false;
   return true;

@@ -10,6 +10,7 @@ import {
   type JiraCreateMetaResponse,
   type JiraCommentsResponse,
   type JiraField,
+  type JiraIssueLinkTypesResponse,
   type JiraFilter,
   type JiraFilterSearchResponse,
   type JiraIssue,
@@ -486,11 +487,55 @@ export class JiraApiClient {
     return this.fetchJson<JiraCommentsResponse>(`/rest/api/3/issue/${issueIdOrKey}/comment`);
   }
 
-  async addIssueComment(issueIdOrKey: string, body: string): Promise<unknown> {
+  async addIssueComment(issueIdOrKey: string, body: unknown): Promise<unknown> {
     return this.fetchJson<unknown>(`/rest/api/3/issue/${issueIdOrKey}/comment`, {
       method: "POST",
       body: JSON.stringify({ body }),
     });
+  }
+
+  async editIssueComment(issueIdOrKey: string, commentId: string, body: unknown): Promise<unknown> {
+    return this.fetchJson<unknown>(
+      `/rest/api/3/issue/${issueIdOrKey}/comment/${commentId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ body }),
+      },
+    );
+  }
+
+  async deleteIssueComment(issueIdOrKey: string, commentId: string): Promise<void> {
+    await this.fetchResponse(`/rest/api/3/issue/${issueIdOrKey}/comment/${commentId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async createIssueLink(input: {
+    readonly type: { readonly name: string };
+    readonly inwardIssue: { readonly key: string };
+    readonly outwardIssue: { readonly key: string };
+  }): Promise<void> {
+    await this.fetchResponse(
+      "/rest/api/3/issueLink",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+      {
+        accept: "application/json",
+        contentType: "application/json",
+      },
+    );
+  }
+
+  async deleteIssueLink(linkId: string): Promise<void> {
+    await this.fetchResponse(`/rest/api/3/issueLink/${linkId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getIssueLinkTypes(): Promise<JiraIssueLinkTypesResponse> {
+    return this.fetchJson<JiraIssueLinkTypesResponse>("/rest/api/3/issueLinkType");
   }
 }
 
