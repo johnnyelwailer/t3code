@@ -6,7 +6,7 @@ import { LinkedRepositoryListEditor } from "~/t3team/components/t3team-LinkedRep
 import { OAuthPopupBlockedNotice } from "~/t3team/components/t3team-OAuthPopupBlockedNotice";
 import { AccountStep, ProjectStep } from "~/t3team/t3team-CreateProjectDialogSteps";
 import { ConnectAtlassianStep } from "~/t3team/t3team-ConnectAtlassianStep";
-import { CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
+import { ConfirmStep, CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
 import {
   CreateProjectWizardFooter,
   CreateProjectWizardFrame,
@@ -19,6 +19,10 @@ import {
   useT3TeamProjectSetupProfile,
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
+import {
+  DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID,
+  type T3TeamProjectSetupProfileId,
+} from "~/t3team/t3team-projectSetup";
 import type { CreateProjectStep } from "~/t3team/hooks/t3team-useCreateProject";
 import type { OAuthState, UseAtlassianOAuthResult } from "~/t3team/hooks/t3team-useAtlassianOAuth";
 
@@ -294,6 +298,63 @@ export const Mobile: Story = {
       defaultViewport: "phone",
     },
   },
+};
+
+/**
+ * The profile step on its own, inside a real dialog-height frame.
+ *
+ * It reached the user overloaded — six cards, an expanded setup preview and a permanently expanded
+ * repository section, in a dialog capped at 40rem — because no story rendered it at the height it
+ * actually gets. Driving the full wizard to step four by hand is exactly the friction that stops a
+ * step from being looked at.
+ */
+function ConfirmStepStory() {
+  const [setupProfileId, setSetupProfileId] = useState<T3TeamProjectSetupProfileId>(
+    DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID,
+  );
+  const [linkedRepositoryUrls, setLinkedRepositoryUrls] = useState<ReadonlyArray<string>>([]);
+  const [discovered, setDiscovered] = useState<ReadonlyArray<string>>([]);
+  const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
+
+  return (
+    <div className="flex h-dvh items-center justify-center bg-background p-6">
+      <div className="flex h-[min(40rem,calc(100dvh-3rem))] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="border-b border-border px-5 py-3 text-sm font-semibold">Create project</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <ConfirmStep
+            selectedProject={projects[0] ?? null}
+            setupProfileId={setupProfileId}
+            linkedRepositoryUrls={linkedRepositoryUrls}
+            discoveredRepositoryUrls={discovered}
+            newRepositoryUrl={newRepositoryUrl}
+            setNewRepositoryUrl={setNewRepositoryUrl}
+            onSetupProfileChange={setSetupProfileId}
+            onAddRepository={() => {
+              if (newRepositoryUrl.trim() === "") return;
+              setLinkedRepositoryUrls((current) => [...current, newRepositoryUrl.trim()]);
+              setNewRepositoryUrl("");
+            }}
+            onRemoveRepository={(url) =>
+              setLinkedRepositoryUrls((current) => current.filter((entry) => entry !== url))
+            }
+            onAddRepositories={(urls) =>
+              setLinkedRepositoryUrls((current) => [...new Set([...current, ...urls])])
+            }
+            onDiscoveredRepositoryUrlsChange={setDiscovered}
+            onCustomProfileChange={() => undefined}
+          />
+        </div>
+        <div className="border-t border-border px-5 py-3 text-right text-xs text-muted-foreground">
+          Footer sits here — the step above must fit without pushing it off screen.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const ConfirmStepInDialog: StoryObj = {
+  render: () => <ConfirmStepStory />,
+  parameters: { layout: "fullscreen" },
 };
 
 const IDLE_OAUTH_STATE: OAuthState = { kind: "idle" };

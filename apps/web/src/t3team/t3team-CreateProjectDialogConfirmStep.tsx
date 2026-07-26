@@ -1,7 +1,6 @@
 import { Loader2 } from "lucide-react";
 import type { ExternalProject } from "@t3tools/integrations-core";
-import { GitHubRepositoryDiscoverySection } from "~/t3team/components/t3team-GitHubRepositoryDiscoverySection";
-import { LinkedRepositoryListEditor } from "~/t3team/components/t3team-LinkedRepositoryListEditor";
+import { T3TeamCreateProjectRepositorySection } from "~/t3team/t3team-CreateProjectRepositorySection";
 import {
   listT3TeamProjectSetupCardOptions,
   T3TeamProjectSetupProfileCards,
@@ -42,66 +41,52 @@ export function ConfirmStep({
   onCustomProfileChange: (profile: T3TeamProfile | undefined) => void;
 }) {
   const packProfiles = useT3TeamPackSetupProfiles();
+
+  /*
+    One decision, stated once. The heading used to carry a subtitle explaining that it set "the
+    default tone" — the cards below say that better than a sentence above them can. What follows the
+    cards is consequence and optional extras, both collapsed, so the choice itself fits the dialog
+    without scrolling.
+  */
   return (
-    <section className="space-y-6">
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-semibold">How should t3team work with you?</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Choose the default tone for this project workspace.
-            </p>
-          </div>
-          <T3TeamCloneProjectSetupProfileDialog
-            sourceProfileId={setupProfileId}
-            onClone={(profile) => {
-              onCustomProfileChange(profile);
-              onSetupProfileChange(profile.id);
-            }}
-          />
-        </div>
-        <T3TeamProjectSetupProfileCards
-          compact
-          selectedProfileId={setupProfileId}
-          onSelectProfile={(profileId) => {
-            onCustomProfileChange(undefined);
-            onSetupProfileChange(profileId);
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">How should t3team work with you?</h3>
+        <T3TeamCloneProjectSetupProfileDialog
+          sourceProfileId={setupProfileId}
+          onClone={(profile) => {
+            onCustomProfileChange(profile);
+            onSetupProfileChange(profile.id);
           }}
-          profiles={packProfiles}
-        />
-        <T3TeamProjectSetupConfirmPreviewView
-          profileId={setupProfileId}
-          {...(customProfile ? { customProfile } : {})}
         />
       </div>
 
-      <div className="space-y-3 rounded-2xl border border-border/65 bg-muted/20 p-4">
-        <div>
-          <h3 className="text-sm font-semibold">Optional code context</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Link repositories now if you want code-aware suggestions right away. You can add them
-            later too.
-          </p>
-        </div>
-        <GitHubRepositoryDiscoverySection
-          enabled={Boolean(selectedProject)}
-          projectKey={selectedProject?.key ?? undefined}
-          projectTitle={selectedProject?.title ?? undefined}
-          linkedRepositoryUrls={linkedRepositoryUrls}
-          onAddSuggestedUrls={onAddRepositories}
-          onVisibleSuggestionsChange={onDiscoveredRepositoryUrlsChange}
-        />
-        <LinkedRepositoryListEditor
-          repositoryUrls={linkedRepositoryUrls}
-          newRepositoryUrl={newRepositoryUrl}
-          setNewRepositoryUrl={setNewRepositoryUrl}
-          onAddRepository={onAddRepository}
-          onRemoveRepository={onRemoveRepository}
-          onAddSearchableOption={(url) => onAddRepositories([url])}
-          searchableRepositoryOptions={discoveredRepositoryUrls}
-          emptyMessage="No linked repositories yet. Add GitHub or GHE repositories if you want agent context from code."
-        />
-      </div>
+      <T3TeamProjectSetupProfileCards
+        compact
+        selectedProfileId={setupProfileId}
+        onSelectProfile={(profileId) => {
+          onCustomProfileChange(undefined);
+          onSetupProfileChange(profileId);
+        }}
+        profiles={packProfiles}
+      />
+
+      <T3TeamProjectSetupConfirmPreviewView
+        profileId={setupProfileId}
+        {...(customProfile ? { customProfile } : {})}
+      />
+
+      <T3TeamCreateProjectRepositorySection
+        selectedProject={selectedProject}
+        linkedRepositoryUrls={linkedRepositoryUrls}
+        discoveredRepositoryUrls={discoveredRepositoryUrls}
+        newRepositoryUrl={newRepositoryUrl}
+        setNewRepositoryUrl={setNewRepositoryUrl}
+        onAddRepository={onAddRepository}
+        onRemoveRepository={onRemoveRepository}
+        onAddRepositories={onAddRepositories}
+        onDiscoveredRepositoryUrlsChange={onDiscoveredRepositoryUrlsChange}
+      />
     </section>
   );
 }
