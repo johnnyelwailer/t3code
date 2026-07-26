@@ -34,7 +34,7 @@ Treat this doc as authoritative for:
 
 - orchestration file shape (`.workflow.ts`),
 - the `meta` block contract,
-- the globals injected into the orchestration body,
+- the engine API the orchestration body imports,
 - the durable-execution / replay model,
 - the determinism contract authors must follow (and how the engine enforces it),
 - the `Handle<R>` pattern for primitives that fire something into the system,
@@ -131,7 +131,7 @@ Three things make this file shape work under replay:
    applicability matching.
 2. **The body is implicit async with top-level await.** No `async function` wrapper; the
    engine wraps the module's top-level statements.
-3. **`args` is a global**, validated against `meta.inputs` _before_ the body runs. The
+3. **`args` is read with `getArgs<T>()`**, validated against `meta.inputs` _before_ the body runs. The
    `Schema.decodeSync(Inputs)(args)` line gives the body a typed handle without a build
    step.
 
@@ -200,7 +200,7 @@ What's allowed in `meta`:
 
 What's forbidden in `meta`:
 
-- Function calls that touch engine globals (`agent`, `scripts.*`, `tools.*`, `thread.*`,
+- Function calls that touch imported engine verbs (`agent`, `scripts.*`, `tools.*`, `thread.*`,
   `child.*`, `user.*`, `ui.*`, `wait`, …) — these aren't bound during meta extraction
   and will throw.
 - Any expression with side effects (reads from `fs`, `process`, `globalThis`, …).
@@ -227,7 +227,7 @@ export const meta = {
 } as const;
 ```
 
-`models.*` is a typed ambient tree mirroring the providers and model slugs the SDK knows
+`models.*` is a typed tree (imported from `@t3team/sdk`) mirroring the providers and model slugs the SDK knows
 about (`models.anthropic.claudeOpus47`, `models.openai.gpt5_4`, etc.). Each leaf is a
 `ModelRef` whose `id` is the canonical provider-scoped slug. The engine still passes the
 string slug to the provider adapter; the type is what authors interact with.
@@ -277,11 +277,77 @@ Rules:
   that choice for every later ask on the thread. The `thread.create` itself carries no resolved
   model (it is fired one-way, before any await); the turn's selection is what runs.
 
-## Globals — the surface
+## The engine API — imported, not injected
 
-The engine injects globals into the orchestration body. There are no `import` statements for
-engine APIs. Authors get full IntelliSense via a `.workflow.ts`-specific ambient `.d.ts`
-that ships with `@t3team/workflow-sdk`.
+An orchestration body is a **normal TypeScript module**. Engine APIs are ordinary named imports
+from `@t3team/sdk`:
+
+```ts
+import { agent, getArgs, getThread, parallel, phase, pipeline, scripts } from "@t3team/sdk";
+
+const { prTitle } = getArgs<Inputs>();
+const thread = getThread();
+
+phase("Review");
+const summary = await agent(`Summarize ${prTitle}`, { label: "Summarize PR", schema: Summary });
+await thread?.notifyUser(summary.text);
+```
+
+**There are no injected globals.** An earlier revision of this epic specified the opposite — the
+engine injecting `agent` / `phase` / `thread` / `args` into the body scope, with typing supplied by
+a `.workflow.ts`-specific ambient `.d.ts` shipped from `@t3team/workflow-sdk`. That is retired, for
+two reasons:
+
+1. **The compensating mechanism was never built.** No `@t3team/workflow-sdk` package and no ambient
+   `.d.ts` exist, so bodies do not typecheck at all: `Cannot find name 'thread'`, `'phase'`,
+   `'agent'`, plus top-level-`await` errors under a normal `tsconfig`. The globals design was only
+   ever type-safe on paper.
+2. **Nothing required it.** `recipe.ts` and `scripts/<name>.ts` already import from `@t3team/sdk`
+   and typecheck today; only the body was special.
+
+### How an imported verb finds its run
+
+The same way an imported tool handler already does. `withWorkflowRuntime(runtime, run)` binds the
+active run into the SDK's `AsyncLocalStorage` (`runtimeStorage`), and each exported verb reads it
+with `runtimeStorage.getStore()`. `defineTool` handlers have worked this way since Epic 25 landed —
+calling one outside a run throws *"was called outside a workflow runtime"* — so an imported `agent()`
+needs no new machinery, just the same lookup.
+
+Consequences the engine must honour:
+
+- The body is loaded as an ESM module, not wrapped in `(async () => { … })()` with its imports
+  blanked. Top-level `await` is legal because the module is ESM.
+- Per-run values are **accessors**, not bindings: `getArgs<T>()` (validated against `meta.inputs`
+  before the body runs), `getThread()` (`Thread | undefined` — `undefined` when headless), and
+  `getBudget()`. A module-level `import` cannot be a per-run value, and an accessor keeps the run
+  boundary explicit rather than hiding it in a magic binding.
+- Static analysis (`deriveWorkflowShape`, the determinism and capability audits) resolves verbs by
+  their **imported binding** rather than by bare identifier. That is strictly more precise: a local
+  variable named `agent` can no longer be mistaken for the engine verb.
+- Determinism rules are unchanged. What is banned is banned because it is non-deterministic
+  (`Date.now()` outside the journal, `Math.random()`, ambient `fs`), not because it was un-injected.
+
+### Migration
+
+Existing bodies gain an import line and two accessor calls; nothing else about them changes. A body
+with no import of an engine verb it uses now fails typecheck instead of failing at run time, which
+is the point.
+
+> **Implementation status.** The spec above is the target; the engine still injects globals. What
+> exists today: `withWorkflowRuntime` + `runtimeStorage` (the lookup an imported verb needs) and
+> `defineTool` handlers already using it. What has to change:
+>
+> - `t3team-sdk.loader.ts` — load the body as an ESM module instead of `transpile(ts, "(async () => { … })()")`
+>   with imports blanked.
+> - `@t3team/sdk` — export `agent`, `phase`, `parallel`, `pipeline`, `workflow`, `log`, `scripts`,
+>   `tools`, `models`, plus `getArgs`/`getThread`/`getBudget`, each resolving the run from
+>   `runtimeStorage` and throwing the same "outside a workflow runtime" error as tool handlers do.
+> - `deriveWorkflowShape` and the determinism/capability audits — resolve verbs by imported binding
+>   rather than bare identifier.
+> - The nine shipped recipes in the Nexplore distribution — one import line each.
+>
+> Until that lands, `.workflow.ts` bodies do not typecheck under a normal `tsconfig`, which is the
+> concrete cost of the retired design and the reason it is retired.
 
 ### LLM and orchestration
 
@@ -290,9 +356,9 @@ The author's LLM surface is the **Thread model** (see [§The thread model](#the-
 there is **no** separate `agent.task` (deleted — "structured compute, no chat" is just
 `await agent("…", { schema })`). The composition primitives below are unchanged.
 
-| Global                   | Returns                       | Notes                                                                                                                                                                                                             |
+| Import                   | Returns                       | Notes                                                                                                                                                                                                             |
 | ------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `thread`                 | `Thread \| undefined`         | The chat the user launched from; `undefined` when headless (cron/automation). See [§The thread model](#the-thread-model).                                                                                         |
+| `getThread()`            | `Thread \| undefined`         | The chat the user launched from; `undefined` when headless (cron/automation). An accessor, not a binding — see [§How an imported verb finds its run](#how-an-imported-verb-finds-its-run). |                                                                                         |
 | `spawnThread(opts?)`     | `Thread`                      | Create a new isolated thread; returns a `Thread` bound to it.                                                                                                                                                     |
 | `agent(prompt, opts?)`   | `Promise<string \| T>`        | One-shot shortcut for `spawnThread(opts).askAgent(prompt, opts)`. With `schema: Schema<T>`, returns a validated `T`; the thread is not retained.                                                                  |
 | `parallel(thunks)`       | `Promise<R[]>`                | Concurrent fanout with a barrier. Failing thunks resolve to `null`.                                                                                                                                               |
@@ -335,7 +401,7 @@ interface Thread {
 
 The globals bound into the body:
 
-| Global               | Returns               | Purpose                                                                                                |
+| Import               | Returns               | Purpose                                                                                                |
 | -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | `thread`             | `Thread \| undefined` | The thread the orchestration runs in (the launching chat); `undefined` if headless.                         |
 | `spawnThread(opts?)` | `Thread`              | A new isolated thread (`{ name?, model? }`).                                                           |
@@ -367,7 +433,7 @@ on the user's reply). See [§Agents vs. orchestrations](#agents-vs-orchestration
 
 ### Other primitives — durable timers and journaled side effects
 
-| Global                       | Returns         | Notes                                                                                                                                  |
+| Import                       | Returns         | Notes                                                                                                                                  |
 | ---------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `scripts.<name>(args)`       | `Promise<T>`    | Call a recipe-registered script (typed). Result is journaled. See [§Scripts](#scripts). Gated by the `"script"` engine capability.     |
 | `tools.<group>.<name>(args)` | `Promise<T>`    | Call a broker tool. ToolRefs are typed; the ref's group is checked against `meta.capabilities` at the call site. See [§Tools](#tools). |
@@ -382,7 +448,7 @@ only non-Handle primitive that can suspend the orchestration durably across a se
 
 ### Read-only ambient
 
-| Global         | What it is                                                                         |
+| Import         | What it is                                                                         |
 | -------------- | ---------------------------------------------------------------------------------- |
 | `context`      | The reactive Queryable surface from Epic 16 — `context.activeWorkItem`, etc.       |
 | `views`        | View component refs imported from the owning recipe, addressable by id.            |
