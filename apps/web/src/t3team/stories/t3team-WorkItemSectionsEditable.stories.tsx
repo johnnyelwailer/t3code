@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import type { JiraCommentItem } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
@@ -31,40 +31,51 @@ function ticket(id: string, title: string, status: string): ProjectTicket {
   };
 }
 
+type DemoIssueLink = {
+  id: string;
+  type: { name: string; inward: string; outward: string };
+  inwardIssue?: { key: string };
+  outwardIssue?: { key: string };
+};
+
+const INITIAL_COMMENTS: JiraCommentItem[] = [
+  {
+    id: "c1",
+    author: "Ada Lovelace",
+    created: new Date(NOW_MS - 86_400_000).toISOString(),
+    bodyMarkdown: "First pass looks good — retrying the mid-gesture repro now.",
+  },
+];
+
+const INITIAL_LINKS: ReadonlyArray<DemoIssueLink> = [
+  {
+    id: "link-1",
+    type: { name: "Blocks", inward: "is blocked by", outward: "blocks" },
+    inwardIssue: { key: "KOOR-1201" },
+  },
+];
+
 /**
- * A believable-enough in-memory Atlassian backend for the comment/link/child mutation stories:
- * only the write ops these sections call are implemented, cast past the rest of
- * `AtlassianBackendApi` the same way `t3team-workItemDetailMockBackend.ts` already does.
+ * A believable-enough in-memory Atlassian backend for the comment/link/child mutation stories.
+ *
+ * Deletes deliberately do NOT trigger a re-render by themselves — only `reload()` does, mirroring
+ * the real backend (an HTTP DELETE returns void; the client's list only changes once `onReload()`
+ * re-fetches). Mutating the rendered state directly on delete would unmount the row — and its
+ * "Comment deleted / Link removed · Undo" banner — before the 10s undo window ever showed.
  */
 function useEditableSectionsDemo() {
-  const [comments, setComments] = useState<JiraCommentItem[]>([
-    {
-      id: "c1",
-      author: "Ada Lovelace",
-      created: new Date(NOW_MS - 86_400_000).toISOString(),
-      bodyMarkdown: "First pass looks good — retrying the mid-gesture repro now.",
-    },
-  ]);
-  type DemoIssueLink = {
-    id: string;
-    type: { name: string; inward: string; outward: string };
-    inwardIssue?: { key: string };
-    outwardIssue?: { key: string };
-  };
-  const [links, setLinks] = useState<{ fields: { issuelinks: DemoIssueLink[] } }>(() => ({
-    fields: {
-      issuelinks: [
-        {
-          id: "link-1",
-          type: { name: "Blocks", inward: "is blocked by", outward: "blocks" },
-          inwardIssue: { key: "KOOR-1201" },
-        },
-      ],
-    },
-  }));
+  const serverComments = useRef<JiraCommentItem[]>([...INITIAL_COMMENTS]);
+  const serverLinks = useRef<DemoIssueLink[]>([...INITIAL_LINKS]);
+  const [comments, setComments] = useState(serverComments.current);
+  const [links, setLinks] = useState(serverLinks.current);
   const [children, setChildren] = useState<ProjectTicket[]>([
     ticket("KOOR-1483", "Restore camera from the session snapshot", "Done"),
   ]);
+
+  const reload = () => {
+    setComments([...serverComments.current]);
+    setLinks([...serverLinks.current]);
+  };
 
   const backend: Pick<
     AtlassianBackendApi,
@@ -78,40 +89,41 @@ function useEditableSectionsDemo() {
   > = {
     addIssueComment: async ({ body }) => {
       const id = `c${Math.random().toString(36).slice(2, 8)}`;
-      setComments((current) => [
-        ...current,
+      serverComments.current = [
+        ...serverComments.current,
         { id, author: "You", created: new Date().toISOString(), bodyMarkdown: body },
-      ]);
+      ];
+      setComments(serverComments.current);
       return { id };
     },
     updateIssueComment: async ({ commentId, body }) => {
-      setComments((current) =>
-        current.map((c) => (c.id === commentId ? { ...c, bodyMarkdown: body } : c)),
+      serverComments.current = serverComments.current.map((c) =>
+        c.id === commentId ? { ...c, bodyMarkdown: body } : c,
       );
+      setComments(serverComments.current);
     },
     deleteIssueComment: async ({ commentId }) => {
-      setComments((current) => current.filter((c) => c.id !== commentId));
+      serverComments.current = serverComments.current.filter((c) => c.id !== commentId);
     },
     createIssueLink: async ({ otherIssueIdOrKey, linkTypeName, direction }) => {
-      setLinks((current) => ({
-        fields: {
-          issuelinks: [
-            ...current.fields.issuelinks,
-            {
-              id: `link-${Math.random().toString(36).slice(2, 8)}`,
-              type: { name: linkTypeName, inward: `is ${linkTypeName.toLowerCase()}ed by`, outward: linkTypeName.toLowerCase() },
-              ...(direction === "inward"
-                ? { inwardIssue: { key: otherIssueIdOrKey } }
-                : { outwardIssue: { key: otherIssueIdOrKey } }),
-            },
-          ],
+      serverLinks.current = [
+        ...serverLinks.current,
+        {
+          id: `link-${Math.random().toString(36).slice(2, 8)}`,
+          type: {
+            name: linkTypeName,
+            inward: `is ${linkTypeName.toLowerCase()}ed by`,
+            outward: linkTypeName.toLowerCase(),
+          },
+          ...(direction === "inward"
+            ? { inwardIssue: { key: otherIssueIdOrKey } }
+            : { outwardIssue: { key: otherIssueIdOrKey } }),
         },
-      }));
+      ];
+      setLinks(serverLinks.current);
     },
     deleteIssueLink: async ({ linkId }) => {
-      setLinks((current) => ({
-        fields: { issuelinks: current.fields.issuelinks.filter((link) => link.id !== linkId) },
-      }));
+      serverLinks.current = serverLinks.current.filter((link) => link.id !== linkId);
     },
     listIssueLinkTypes: async () => [
       { id: "1", name: "Blocks", inward: "is blocked by", outward: "blocks" },
@@ -124,13 +136,17 @@ function useEditableSectionsDemo() {
     },
   };
 
-  return { comments, links, children, backend: backend as unknown as AtlassianBackendApi };
+  return {
+    comments,
+    links: { fields: { issuelinks: links } },
+    children,
+    backend: backend as unknown as AtlassianBackendApi,
+    reload,
+  };
 }
 
 function EditableSections() {
-  const { comments, links, children, backend } = useEditableSectionsDemo();
-  const [, forceRender] = useState(0);
-  const onReload = () => forceRender((n) => n + 1);
+  const { comments, links, children, backend, reload } = useEditableSectionsDemo();
 
   return (
     <div className="@container/workitem flex max-w-2xl flex-col gap-5">
@@ -140,7 +156,7 @@ function EditableSections() {
         accountId={ACCOUNT_ID}
         projectId="EXT-1"
         issueIdOrKey="KOOR-1"
-        onReload={onReload}
+        onReload={reload}
       />
       <WorkItemLinks
         snapshotRaw={links}
@@ -149,7 +165,7 @@ function EditableSections() {
         backend={backend}
         accountId={ACCOUNT_ID}
         issueIdOrKey="KOOR-1"
-        onReload={onReload}
+        onReload={reload}
       />
       <WorkItemComments
         comments={comments}
@@ -157,7 +173,7 @@ function EditableSections() {
         backend={backend}
         accountId={ACCOUNT_ID}
         issueIdOrKey="KOOR-1"
-        onReload={onReload}
+        onReload={reload}
       />
     </div>
   );

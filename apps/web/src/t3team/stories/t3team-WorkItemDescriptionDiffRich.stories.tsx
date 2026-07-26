@@ -1,369 +1,301 @@
-import { useEffect, useRef, useState } from "react";
-import { Film, Image as ImageIcon, MessageSquarePlus } from "lucide-react";
+import { useRef, useState } from "react";
+import { Bot, Check, Film, Image as ImageIcon, MessageSquare, X } from "lucide-react";
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { Button } from "~/t3team/components/ui/t3team-button";
-import { Textarea } from "~/t3team/components/ui/t3team-textarea";
 import { cn } from "~/t3team/lib/t3team-utils";
 import {
-  T3TeamDiffBlock,
-  T3TeamDiffTag,
+  T3TeamDiffGutter,
+  T3TeamDiffRibbon,
   T3TeamDiffText,
 } from "~/t3team/workitem/t3team-WorkItemDiffPrimitives";
+import {
+  DIFF_BLOCK_ATTRIBUTE,
+  T3TeamDiffCommentThread,
+  T3TeamDiffSelectionComposer,
+} from "~/t3team/workitem/t3team-WorkItemDiffCommentUi";
+import { applyCommentQuotes } from "~/t3team/workitem/t3team-workItemDiffModel";
+import { useWorkItemDiffComments } from "~/t3team/workitem/t3team-useWorkItemDiffComments";
+import {
+  DIFF_SAMPLE_BLOCKS,
+  DIFF_SAMPLE_HIDDEN,
+  type DiffSampleBlock,
+} from "~/t3team/stories/t3team-workItemDiffSampleContent";
 
 /**
- * The same review, on content that is not prose.
+ * A proposed description, reviewed in place, on content that is not just prose.
  *
- * Every node type gets diffed at the granularity it actually has:
- *
- * - **Media** — no granularity at all. An image is the same image or a different one; there is no
- *   half-struck-through picture. Removed media dims and gets a tag, added media gets a tag.
- * - **Tables** — by cell. One changed figure must not redline the whole table, so only that cell
- *   carries word-level marks and only the new row carries a gutter.
- * - **Code** — by line, monospace, with a `+`/`-` gutter. This is the one place a patch view is
- *   correct, which is also why using it for the whole document is wrong.
- * - **Containers** (panels, quotes, expands) — recurse. The panel survived; its sentence changed.
- * - **Inline atoms** (mentions, status lozenges, dates) — one token each. `@Ada → @Bob` is a
- *   deletion and an insertion of two chips, not an eleven-character text edit.
- * - **Opaque nodes** we cannot introspect — compare the serialized JSON and say only "changed".
- *   Claiming more detail than we have would be a lie in a place where trust is the whole point.
- *
- * Unchanged regions collapse: a 40-paragraph spec with one edited table is otherwise a scroll hunt.
+ * Two layers sit over the same document and must never be confused with each other: what the agent
+ * changed, and what a reader said about it. The separation is structural — **every mark the review
+ * makes lives in the left rail or as an overlay; the content column holds content and inline text
+ * marks only.** Earlier this used pill-shaped tags under each image, which read as captions and sat
+ * inches from real Jira status lozenges that genuinely are part of the document.
  */
 
-/** Stand-in for a real media node — the point here is the framing, not the picture. */
 function MediaThumb({
   label,
   kind,
-  muted,
+  state,
 }: {
   readonly label: string;
   readonly kind: "image" | "video";
-  readonly muted?: boolean;
+  readonly state?: "add" | "del" | "edit";
 }) {
   const Icon = kind === "image" ? ImageIcon : Film;
+
   return (
-    <figure className={cn("w-52 shrink-0", muted && "opacity-55 grayscale")}>
-      <div className="flex h-28 items-center justify-center rounded-md border border-border bg-muted/40">
-        <Icon className="size-6 text-muted-foreground" aria-hidden="true" />
+    <figure className="w-48 shrink-0">
+      <div className="relative overflow-hidden rounded-md border border-border bg-muted/40">
+        {state ? (
+          <T3TeamDiffRibbon kind={state}>
+            {state === "add" ? "Added" : state === "del" ? "Removed" : "Replaced"}
+          </T3TeamDiffRibbon>
+        ) : null}
+        {/* Dim the media, never the ribbon — chrome that fades reads as disabled, not as a label. */}
+        <div
+          className={cn(
+            "flex h-24 items-center justify-center",
+            state === "del" && "opacity-50 grayscale",
+          )}
+        >
+          <Icon className="size-6 text-muted-foreground" aria-hidden="true" />
+        </div>
       </div>
       <figcaption className="mt-1 truncate text-[11px] text-muted-foreground">{label}</figcaption>
     </figure>
   );
 }
 
-function CollapsedRegion({ count }: { readonly count: number }) {
-  return (
-    <button
-      type="button"
-      className="flex w-full cursor-pointer items-center gap-2 rounded-md border border-dashed border-border/70 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent/40"
-    >
-      <span className="h-px flex-1 bg-border" />
-      {count} unchanged paragraphs
-      <span className="h-px flex-1 bg-border" />
-    </button>
-  );
-}
+function BlockBody({
+  block,
+  quotes,
+}: {
+  readonly block: DiffSampleBlock;
+  readonly quotes: ReadonlyArray<string>;
+}) {
+  switch (block.type) {
+    case "heading":
+      return <h3 className="text-sm font-semibold text-foreground">{block.text}</h3>;
 
-const CODE_LINES: ReadonlyArray<{ readonly text: string; readonly kind?: "add" | "del" }> = [
-  { text: "const rows = await parseCatalogue(file);" },
-  { text: "if (rows.length > MAX_ROWS) throw new TooLarge();", kind: "del" },
-  { text: "if (rows.length > MAX_ROWS) return chunk(rows, MAX_ROWS);", kind: "add" },
-  { text: "return stage(rows);" },
-];
+    case "paragraph":
+      return (
+        <p>
+          <T3TeamDiffText segments={applyCommentQuotes(block.segments, quotes)} />
+        </p>
+      );
 
-function CodeBlockDiff() {
-  return (
-    <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 py-1.5 text-xs leading-5">
-      {CODE_LINES.map((line) => (
-        <div
-          key={`${line.kind ?? "same"}:${line.text}`}
-          className={cn(
-            "flex gap-1.5 px-2",
-            line.kind === "add" && "bg-success/10",
-            line.kind === "del" && "bg-destructive/10",
-          )}
-        >
+    case "bullet":
+      return (
+        <div className="flex gap-2.5">
           <span
-            className={cn(
-              "w-3 shrink-0 select-none text-right font-mono",
-              line.kind === "add" && "text-success-foreground",
-              line.kind === "del" && "text-destructive",
-              !line.kind && "text-muted-foreground/50",
-            )}
-          >
-            {line.kind === "add" ? "+" : line.kind === "del" ? "−" : ""}
-          </span>
-          <code className="whitespace-pre font-mono text-foreground">{line.text}</code>
-        </div>
-      ))}
-    </pre>
-  );
-}
-
-function TableDiff() {
-  return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full text-left text-xs">
-        <thead className="bg-muted/50 text-muted-foreground">
-          <tr>
-            <th className="px-2.5 py-1.5 font-medium">Stage</th>
-            <th className="px-2.5 py-1.5 font-medium">Budget</th>
-            <th className="px-2.5 py-1.5 font-medium">Owner</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border/60">
-          <tr>
-            <td className="px-2.5 py-1.5">Parse</td>
-            <td className="px-2.5 py-1.5">
-              {/* Only the cell that moved carries marks. */}
-              <T3TeamDiffText
-                segments={[
-                  { text: "400", kind: "del" },
-                  { text: "150", kind: "add" },
-                  { text: " ms" },
-                ]}
-              />
-            </td>
-            <td className="px-2.5 py-1.5">Platform</td>
-          </tr>
-          <tr>
-            <td className="px-2.5 py-1.5">Stage write</td>
-            <td className="px-2.5 py-1.5">900 ms</td>
-            <td className="px-2.5 py-1.5">Platform</td>
-          </tr>
-          <tr className="bg-success/5">
-            <td className="px-2.5 py-1.5">
-              <span className="-ml-1.5 mr-1 select-none text-success-foreground">+</span>
-              Dedupe
-            </td>
-            <td className="px-2.5 py-1.5">120 ms</td>
-            <td className="px-2.5 py-1.5">Data</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function MentionChip({ name, kind }: { readonly name: string; readonly kind?: "add" | "del" }) {
-  return (
-    <span
-      className={cn(
-        "mx-px inline-flex items-center rounded-[3px] px-1 text-[0.8125rem]",
-        kind === "del" && "bg-destructive/10 text-muted-foreground line-through",
-        kind === "add" && "bg-success/15 text-foreground",
-        !kind && "bg-accent text-foreground",
-      )}
-    >
-      @{name}
-    </span>
-  );
-}
-
-/**
- * The gutter affordance that turns any block into a place to leave targeted feedback.
- *
- * It lives in a reserved gutter rather than floating over the text — an affordance that appears on
- * hover *on top of* the first word makes the content harder to read at the moment you lean in.
- */
-function CommentAffordance() {
-  return (
-    <span className="pointer-events-none absolute -left-8 top-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
-      <button
-        type="button"
-        aria-label="Comment on this block"
-        className="flex size-6 cursor-pointer items-center justify-center rounded-md border border-border bg-popover text-muted-foreground shadow-sm hover:text-foreground"
-      >
-        <MessageSquarePlus className="size-3.5" />
-      </button>
-    </span>
-  );
-}
-
-/**
- * Comment on an arbitrary selection.
- *
- * Block-level feedback is not fine-grained enough — "this clause is wrong" needs to point at the
- * clause. The anchor is the selected range; on a revision it either still matches or the comment is
- * marked stale, which is honest and is what a reviewer expects from quoted text.
- */
-const COMPOSER_WIDTH_PX = 288;
-
-function SelectionCommentLayer({
-  containerRef,
-}: {
-  readonly containerRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  const [anchor, setAnchor] = useState<
-    { readonly top: number; readonly left: number; readonly quote: string } | undefined
-  >(undefined);
-  const [composing, setComposing] = useState(false);
-
-  useEffect(() => {
-    const onMouseUp = () => {
-      const selection = window.getSelection();
-      const container = containerRef.current;
-      if (!container) return;
-      if (!selection || selection.isCollapsed || selection.toString().trim() === "") {
-        /* Keep an open composer alive — clicking into the textarea collapses the selection. */
-        setAnchor((current) => (composing ? current : undefined));
-        return;
-      }
-      const range = selection.getRangeAt(0);
-      if (!container.contains(range.commonAncestorContainer)) return;
-
-      const rect = range.getBoundingClientRect();
-      const base = container.getBoundingClientRect();
-      /* Clamp, or a selection near the right margin opens a composer half outside the panel. */
-      const left = Math.max(0, Math.min(rect.left - base.left, base.width - COMPOSER_WIDTH_PX));
-      setAnchor({
-        top: rect.bottom - base.top + 6,
-        left,
-        quote: selection.toString().trim(),
-      });
-      setComposing(false);
-    };
-
-    document.addEventListener("mouseup", onMouseUp);
-    return () => document.removeEventListener("mouseup", onMouseUp);
-  }, [containerRef, composing]);
-
-  if (!anchor) return null;
-
-  return (
-    <div
-      className="absolute z-20 w-72 max-w-[calc(100%-1rem)]"
-      style={{ top: anchor.top, left: anchor.left }}
-    >
-      {composing ? (
-        <div className="rounded-lg border border-border bg-popover p-2 shadow-lg">
-          <p className="mb-1.5 line-clamp-2 border-l-2 border-primary/50 pl-2 text-[11px] italic text-muted-foreground">
-            {anchor.quote}
-          </p>
-          <Textarea
-            autoFocus
-            rows={2}
-            placeholder="What should change here?"
-            className="text-xs"
-            aria-label="Comment on the selected text"
+            aria-hidden="true"
+            className="mt-[0.6875rem] size-1.5 shrink-0 rounded-full bg-muted-foreground/70"
           />
-          <div className="mt-1.5 flex justify-end gap-1.5">
-            <Button size="xs" variant="ghost" onClick={() => setAnchor(undefined)}>
-              Cancel
-            </Button>
-            <Button size="xs" onClick={() => setAnchor(undefined)}>
-              Send
-            </Button>
-          </div>
+          <span>
+            <T3TeamDiffText segments={applyCommentQuotes(block.segments, quotes)} />
+          </span>
         </div>
-      ) : (
-        <Button size="xs" onClick={() => setComposing(true)}>
-          <MessageSquarePlus className="size-3.5" />
-          Comment on selection
-        </Button>
-      )}
-    </div>
-  );
+      );
+
+    case "panel":
+      return (
+        <div className="rounded-md border-l-2 border-info bg-info/8 px-3 py-2">
+          <p className="text-[0.8125rem] leading-6">
+            <T3TeamDiffText segments={applyCommentQuotes(block.segments, quotes)} />
+          </p>
+        </div>
+      );
+
+    case "lozenges":
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{block.label}</span>
+          <Badge variant="secondary" className="line-through opacity-70">
+            {block.from}
+          </Badge>
+          <Badge variant="success">{block.to}</Badge>
+        </div>
+      );
+
+    case "media":
+      return (
+        <div className="flex flex-wrap items-start gap-3">
+          {block.items.map((item) => (
+            <MediaThumb
+              key={item.label}
+              label={item.label}
+              kind={item.kind}
+              {...(item.state ? { state: item.state } : {})}
+            />
+          ))}
+        </div>
+      );
+
+    case "code":
+      return (
+        <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 py-1.5 text-xs leading-5">
+          {block.lines.map((line) => (
+            <div
+              key={`${line.state ?? "same"}:${line.text}`}
+              className={cn(
+                "flex gap-1.5 px-2",
+                line.state === "add" && "bg-success/10",
+                line.state === "del" && "bg-destructive/10",
+              )}
+            >
+              <span
+                className={cn(
+                  "w-3 shrink-0 select-none text-right font-mono",
+                  line.state === "add" && "text-success-foreground",
+                  line.state === "del" && "text-destructive",
+                  !line.state && "text-muted-foreground/50",
+                )}
+              >
+                {line.state === "add" ? "+" : line.state === "del" ? "−" : ""}
+              </span>
+              <code className="whitespace-pre font-mono text-foreground">{line.text}</code>
+            </div>
+          ))}
+        </pre>
+      );
+
+    case "table":
+      return (
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-muted/50 text-muted-foreground">
+              <tr>
+                {block.columns.map((column) => (
+                  <th key={column} className="px-2.5 py-1.5 font-medium">
+                    {column}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {block.rows.map((row) => (
+                <tr
+                  key={row.cells[0]?.[0]?.text ?? ""}
+                  className={cn(row.state === "add" && "bg-success/5")}
+                >
+                  {row.cells.map((cell, cellIndex) => (
+                    <td
+                      key={`${block.columns[cellIndex] ?? cellIndex}`}
+                      className="px-2.5 py-1.5"
+                    >
+                      {cellIndex === 0 && row.state === "add" ? (
+                        <span className="-ml-1.5 mr-1 select-none font-mono text-success-foreground">
+                          +
+                        </span>
+                      ) : null}
+                      <T3TeamDiffText segments={cell} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+
+    case "embed":
+      return (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+          {block.label}
+          <span className="text-[11px] italic">
+            changed — this node type cannot be compared field by field
+          </span>
+        </div>
+      );
+  }
 }
 
-function Block({
-  kind,
-  children,
-}: {
-  readonly kind?: "add" | "del" | "edit";
-  readonly children: React.ReactNode;
-}) {
+function ReviewBar({ commentCount }: { readonly commentCount: number }) {
   return (
-    <div className="group relative">
-      <CommentAffordance />
-      <T3TeamDiffBlock {...(kind ? { kind } : {})}>{children}</T3TeamDiffBlock>
+    <div className="sticky top-0 z-30 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+        <Bot className="size-3.5 text-primary" aria-hidden="true" />
+        Proposed rewrite
+      </span>
+      <span className="flex items-center gap-2 text-xs tabular-nums">
+        <span className="text-success-foreground">+18</span>
+        <span className="text-destructive">−6</span>
+      </span>
+      <span className="ml-auto flex items-center gap-1.5">
+        <Button size="xs" variant="ghost">
+          <MessageSquare className="size-3.5" />
+          {commentCount > 0 ? `Send ${commentCount} back` : "Comment"}
+        </Button>
+        <Button size="xs" variant="ghost">
+          <X className="size-3.5" />
+          Dismiss
+        </Button>
+        <Button size="xs" disabled={commentCount > 0}>
+          <Check className="size-3.5" />
+          Accept
+        </Button>
+      </span>
     </div>
   );
 }
 
 function RichDiff() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const comments = useWorkItemDiffComments();
+  const [expanded, setExpanded] = useState(false);
 
-  return (
-    <div
-      ref={containerRef}
-      className="relative space-y-3 py-2 pl-14 pr-3 text-sm leading-6 text-foreground"
-    >
-      <SelectionCommentLayer containerRef={containerRef} />
-      <Block kind="edit">
-        <p>
-          Owner for the rollout is <MentionChip name="Ada Lovelace" kind="del" />
-          <MentionChip name="Bo Meyer" kind="add" />, with sign-off from{" "}
-          <MentionChip name="Platform" />.
-        </p>
-      </Block>
+  const renderBlock = (block: DiffSampleBlock) => {
+    const blockComments = comments.forBlock(block.id);
 
-      <CollapsedRegion count={14} />
-
-      <Block kind="edit">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Rollout state</span>
-          <Badge variant="secondary" className="line-through opacity-70">
-            BLOCKED
-          </Badge>
-          <Badge variant="success">READY</Badge>
-        </div>
-      </Block>
-
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">Screenshots</p>
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="space-y-1">
-            <MediaThumb label="importer-old.png" kind="image" muted />
-            <T3TeamDiffTag kind="del">Removed</T3TeamDiffTag>
+    return (
+      <div key={block.id} className="group flex">
+        <T3TeamDiffGutter
+          {...(block.state ? { state: block.state } : {})}
+          commentCount={blockComments.length}
+        />
+        <div className="min-w-0 flex-1" {...{ [DIFF_BLOCK_ATTRIBUTE]: block.id }}>
+          <div
+            className={cn(
+              "-ml-2 border-l-2 py-0.5 pl-2",
+              block.state === "add" && "border-success/60 bg-success/5",
+              block.state === "del" && "border-destructive/60 bg-destructive/5",
+              block.state === "edit" && "border-primary/50",
+              !block.state && "border-transparent",
+            )}
+          >
+            <BlockBody block={block} quotes={comments.quotesForBlock(block.id)} />
           </div>
-          <div className="space-y-1">
-            <MediaThumb label="importer-progress.png" kind="image" />
-            <T3TeamDiffTag kind="add">Added</T3TeamDiffTag>
-          </div>
-          <div className="space-y-1">
-            <MediaThumb label="walkthrough.mp4" kind="video" />
-            <T3TeamDiffTag kind="edit">Caption changed</T3TeamDiffTag>
-          </div>
+          <T3TeamDiffCommentThread comments={blockComments} onRemove={comments.remove} />
         </div>
       </div>
+    );
+  };
 
-      <Block>
-        <p className="text-xs font-medium text-muted-foreground">Performance budget</p>
-      </Block>
-      <Block>
-        <TableDiff />
-      </Block>
+  return (
+    <div ref={containerRef} className="relative">
+      <ReviewBar commentCount={comments.total} />
+      <T3TeamDiffSelectionComposer containerRef={containerRef} onSubmit={comments.add} />
 
-      <Block>
-        <CodeBlockDiff />
-      </Block>
+      <div className="space-y-2.5 px-3 py-3 text-sm leading-6 text-foreground">
+        {DIFF_SAMPLE_BLOCKS.slice(0, 2).map(renderBlock)}
 
-      {/* A container that survived a change to its contents. */}
-      <Block kind="edit">
-        <div className="rounded-md border-l-2 border-info bg-info/8 px-3 py-2">
-          <p className="text-[0.8125rem] leading-6">
-            <T3TeamDiffText
-              segments={[
-                { text: "Do not run this against production before " },
-                { text: "the platform team has signed off", kind: "del" },
-                { text: "the dedupe stage has a rollback", kind: "add" },
-                { text: "." },
-              ]}
-            />
-          </p>
-        </div>
-      </Block>
+        {expanded ? (
+          DIFF_SAMPLE_HIDDEN.map(renderBlock)
+        ) : (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="ml-9 flex w-[calc(100%-2.25rem)] cursor-pointer items-center gap-2 rounded-md border border-dashed border-border/70 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent/40"
+          >
+            <span className="h-px flex-1 bg-border" />
+            Show {DIFF_SAMPLE_HIDDEN.length} unchanged paragraphs
+            <span className="h-px flex-1 bg-border" />
+          </button>
+        )}
 
-      <Block kind="edit">
-        <div className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-          Roadmap planner embed
-          <T3TeamDiffTag kind="edit">Changed</T3TeamDiffTag>
-          <span className="text-[11px]">contents not comparable</span>
-        </div>
-      </Block>
+        {DIFF_SAMPLE_BLOCKS.slice(2).map(renderBlock)}
+      </div>
     </div>
   );
 }
@@ -381,8 +313,9 @@ export const RichContent: Story = {
   render: () => (
     <div className="mx-auto max-w-3xl">
       <p className="mb-3 text-xs leading-5 text-muted-foreground">
-        Media, tables, code, panels, mentions, lozenges and an opaque embed — each diffed at its own
-        granularity. Hover any block to reveal the comment affordance in the left gutter.
+        Everything the review says sits in the left rail or as an overlay ribbon; the content column
+        is the document. Select any text to comment — the comment underlines what it points at, and
+        while comments are open Accept is disabled. The collapsed region expands.
       </p>
       <div className="overflow-hidden rounded-xl border border-border bg-background">
         <RichDiff />

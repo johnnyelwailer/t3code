@@ -145,6 +145,15 @@ export function createMockAtlassianBackendApi(input: {
       id: `mock-subtask-${randomUUID()}`,
       key: `MOCK-${Math.floor(Math.random() * 1000)}`,
     }),
+    addIssueComment: async () => ({ id: `mock-comment-${randomUUID()}` }),
+    updateIssueComment: async () => {},
+    deleteIssueComment: async () => {},
+    createIssueLink: async () => {},
+    deleteIssueLink: async () => {},
+    listIssueLinkTypes: async () => [
+      { id: "mock-link-type-1", name: "Blocks", inward: "is blocked by", outward: "blocks" },
+      { id: "mock-link-type-2", name: "Relates", inward: "relates to", outward: "relates to" },
+    ],
     downloadAsset: async (request) => {
       const asset = await input.mockIntegrationProvider.downloadAsset(request.url);
       return {

@@ -1,12 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
+import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import type { JiraCommentItem } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
 import {
   WorkItemComments,
   selectVisibleWorkItemComments,
   sortWorkItemCommentsNewestFirst,
 } from "./t3team-WorkItemComments";
+
+const NOOP_BACKEND = {
+  addIssueComment: async () => ({ id: "new" }),
+  updateIssueComment: async () => undefined,
+  deleteIssueComment: async () => undefined,
+} as unknown as AtlassianBackendApi;
 
 function comment(id: string, createdIsoOffset: number): JiraCommentItem {
   return {
@@ -70,5 +77,20 @@ describe("WorkItemComments", () => {
 
     expect(short).not.toContain("Show");
     expect(long).toContain("Show 3 earlier");
+  });
+
+  it("renders the composer (not nothing) for an empty thread once a backend is connected", () => {
+    const markup = renderToStaticMarkup(
+      <WorkItemComments
+        comments={[]}
+        nowMs={Date.now()}
+        backend={NOOP_BACKEND}
+        accountId="acc-1"
+        issueIdOrKey="T3T-1"
+        onReload={() => {}}
+      />,
+    );
+    expect(markup).not.toBe("");
+    expect(markup).toContain("Add a comment");
   });
 });

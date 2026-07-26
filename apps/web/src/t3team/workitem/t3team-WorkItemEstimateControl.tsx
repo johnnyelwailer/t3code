@@ -5,8 +5,11 @@ import { Input } from "~/t3team/components/ui/t3team-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/t3team/components/ui/t3team-popover";
 import { Spinner } from "~/t3team/components/ui/t3team-spinner";
 import { cn } from "~/t3team/lib/t3team-utils";
-import { WorkItemFieldOverlay, WorkItemFieldUndoBanner } from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
+import type { T3TeamScalarDraftMutation } from "~/t3team/t3team-draftMutationTypes";
+import { useWorkItemFieldDraftOverlay } from "~/t3team/workitem/t3team-useWorkItemFieldDraftOverlay";
 import { useWorkItemFieldMutation } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
+import { WorkItemFieldOverlay } from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
+import { readEstimatePointsDraftPatch } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
 import { parseWorkItemEstimateDraft } from "~/t3team/workitem/t3team-workItemEstimateParsing";
 
 /**
@@ -23,6 +26,7 @@ export function WorkItemEstimateControl({
   accountId,
   issueIdOrKey,
   storyPoints,
+  agentDraft,
   onReload,
   className,
 }: {
@@ -30,6 +34,9 @@ export function WorkItemEstimateControl({
   readonly accountId: string;
   readonly issueIdOrKey: string;
   readonly storyPoints: number | undefined;
+  /** A pending agent-proposed points update for this issue, if any. Named to avoid colliding with
+   *  the popover's own local `draft` (the not-yet-committed input text) below. */
+  readonly agentDraft?: T3TeamScalarDraftMutation | undefined;
   readonly onReload: () => void;
   readonly className?: string;
 }) {
@@ -76,14 +83,15 @@ export function WorkItemEstimateControl({
     setOpen(false);
   }
 
-  const overlay = mutation.error ? (
-    <p className="text-xs text-destructive">{mutation.error.headline}</p>
-  ) : mutation.lastChange ? (
-    <WorkItemFieldUndoBanner
-      label={`Points → ${mutation.lastChange.to ?? "—"}`}
-      onUndo={mutation.undo}
-    />
-  ) : null;
+  const proposedPoints = agentDraft ? readEstimatePointsDraftPatch(agentDraft) : undefined;
+  const { marker, overlay } = useWorkItemFieldDraftOverlay({
+    mutation,
+    draft: agentDraft,
+    proposedValue: proposedPoints,
+    proposedLabel: proposedPoints !== undefined ? String(proposedPoints ?? "—") : undefined,
+    fieldLabel: "story points",
+    undoLabel: mutation.lastChange ? `Points → ${mutation.lastChange.to ?? "—"}` : undefined,
+  });
 
   return (
     <WorkItemFieldOverlay overlay={overlay} className={className}>
@@ -97,6 +105,7 @@ export function WorkItemEstimateControl({
           <span className={cn(!committedText && "text-muted-foreground")}>
             {committedText || "—"}
           </span>
+          {marker}
           {mutation.pending ? <Spinner className="size-3" /> : null}
         </PopoverTrigger>
         <PopoverPopup align="start" side="bottom" className="w-48 p-3">

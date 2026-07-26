@@ -81,4 +81,37 @@ describe("groupWorkItemIssueLinks", () => {
     const groups = groupWorkItemIssueLinks(raw, () => undefined);
     expect(groups).toHaveLength(2);
   });
+
+  it("carries the link id, type name and this issue's direction for delete/undo", () => {
+    const raw = {
+      fields: {
+        issuelinks: [
+          {
+            id: "10050",
+            type: { name: "Blocks", inward: "is blocked by", outward: "blocks" },
+            outwardIssue: { key: "T3T-2" },
+          },
+        ],
+      },
+    };
+
+    const groups = groupWorkItemIssueLinks(raw, () => undefined);
+
+    expect(groups[0]?.issues[0]).toEqual({
+      key: "T3T-2",
+      linkId: "10050",
+      linkTypeName: "Blocks",
+      direction: "outward",
+    });
+  });
+
+  it("omits linkId/linkTypeName/direction when the raw link carries no id or type name", () => {
+    const raw = {
+      fields: { issuelinks: [issueLink({ inwardLabel: "relates to", inwardKey: "T3T-3" })] },
+    };
+
+    const groups = groupWorkItemIssueLinks(raw, () => undefined);
+
+    expect(groups[0]?.issues).toEqual([{ key: "T3T-3" }]);
+  });
 });

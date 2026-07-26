@@ -1,3 +1,5 @@
+import { MessageSquarePlus } from "lucide-react";
+
 import { cn } from "~/t3team/lib/t3team-utils";
 
 /**
@@ -14,6 +16,8 @@ export type T3TeamDiffSegmentKind = "add" | "del";
 export type T3TeamDiffSegment = {
   readonly text: string;
   readonly kind?: T3TeamDiffSegmentKind;
+  /** Carries a reader's anchored comment. Composes with `kind` — you comment on inserted text. */
+  readonly commented?: boolean;
 };
 
 export type T3TeamDiffBlockKind = "add" | "del" | "edit";
@@ -33,12 +37,23 @@ export function T3TeamDiffText({
     <>
       {segments.map((segment, index) => {
         const key = `${segment.kind ?? "same"}:${index}:${segment.text}`;
+        /*
+          A comment mark has to read differently from a diff mark or the reader cannot tell what the
+          agent changed from what a colleague questioned. Diff marks are fills; a comment is a dotted
+          underline, so the two stack legibly on the same words.
+        */
+        const commented = segment.commented
+          ? "underline decoration-primary decoration-dotted decoration-2 underline-offset-[3px]"
+          : undefined;
 
         if (segment.kind === "del") {
           return (
             <del
               key={key}
-              className="mx-px rounded-[3px] bg-destructive/10 px-1 text-muted-foreground decoration-destructive/60"
+              className={cn(
+                "mx-px rounded-[3px] bg-destructive/10 px-1 text-muted-foreground decoration-destructive/60",
+                commented,
+              )}
             >
               {segment.text}
             </del>
@@ -48,13 +63,20 @@ export function T3TeamDiffText({
         if (segment.kind === "add") {
           /* Tint, not coloured text — body copy has to stay as readable as the rest. */
           return (
-            <mark key={key} className="mx-px rounded-[3px] bg-success/15 px-1 text-foreground">
+            <mark
+              key={key}
+              className={cn("mx-px rounded-[3px] bg-success/15 px-1 text-foreground", commented)}
+            >
               {segment.text}
             </mark>
           );
         }
 
-        return <span key={key}>{segment.text}</span>;
+        return (
+          <span key={key} className={commented}>
+            {segment.text}
+          </span>
+        );
       })}
     </>
   );
@@ -89,8 +111,15 @@ export function T3TeamDiffBlock({
   );
 }
 
-/** A short label naming what happened to a node the reader cannot diff by eye. */
-export function T3TeamDiffTag({
+/**
+ * Overlay chrome for a node that cannot be diffed by eye — media, mostly.
+ *
+ * Deliberately not an inline pill. A pill sitting under an image reads as a caption, and this
+ * document also contains real Jira status lozenges, which *are* content: two pill-shaped things
+ * next to each other, one describing the document and one part of it. An overlay corner ribbon
+ * cannot be mistaken for either.
+ */
+export function T3TeamDiffRibbon({
   kind,
   children,
 }: {
@@ -100,13 +129,62 @@ export function T3TeamDiffTag({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[11px] font-medium",
-        kind === "add" && "bg-success/15 text-success-foreground",
-        kind === "del" && "bg-destructive/10 text-destructive",
-        kind === "edit" && "bg-primary/10 text-primary",
+        "absolute left-0 top-0 z-10 rounded-br-md rounded-tl-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-background",
+        kind === "add" && "bg-success",
+        kind === "del" && "bg-destructive",
+        kind === "edit" && "bg-primary",
       )}
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * The rail everything the *review* says lives in — change markers and the comment affordance.
+ *
+ * Keeping it in a reserved column, outside the text, is what lets a reader tell the document from
+ * the commentary on it at a glance. Nothing here is content.
+ */
+export function T3TeamDiffGutter({
+  state,
+  commentCount = 0,
+  onComment,
+}: {
+  readonly state?: T3TeamDiffBlockKind | undefined;
+  readonly commentCount?: number;
+  readonly onComment?: () => void;
+}) {
+  const marker = state === "add" ? "+" : state === "del" ? "−" : state === "edit" ? "~" : "";
+
+  return (
+    <div className="flex w-9 shrink-0 select-none items-start justify-end gap-1 pt-0.5 pr-1.5">
+      {commentCount > 0 ? (
+        <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+          {commentCount}
+        </span>
+      ) : onComment ? (
+        <button
+          type="button"
+          aria-label="Comment on this block"
+          onClick={onComment}
+          className="flex size-4 cursor-pointer items-center justify-center rounded-[3px] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+        >
+          <MessageSquarePlus className="size-3.5" />
+        </button>
+      ) : null}
+
+      <span
+        aria-hidden={marker === ""}
+        className={cn(
+          "w-2 text-right font-mono text-xs leading-6",
+          state === "add" && "text-success-foreground",
+          state === "del" && "text-destructive",
+          state === "edit" && "text-primary",
+        )}
+      >
+        {marker}
+      </span>
+    </div>
   );
 }

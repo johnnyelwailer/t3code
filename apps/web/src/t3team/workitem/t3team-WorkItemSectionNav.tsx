@@ -21,9 +21,16 @@ export type WorkItemSectionNavEntry = {
  */
 export function WorkItemSectionNav({
   entries,
+  draftCount,
   className,
 }: {
   readonly entries: ReadonlyArray<WorkItemSectionNavEntry>;
+  /**
+   * Pending agent-proposed changes (status/assignee/estimate/...) for this issue. The title band
+   * and rail that actually hold those fields scroll out of view on a long description, but this bar
+   * is sticky — the one place a reader is guaranteed to see "something is proposed" without hunting.
+   */
+  readonly draftCount?: number | undefined;
   readonly className?: string;
 }) {
   const jumpTo = useCallback((anchorId: string) => {
@@ -33,8 +40,10 @@ export function WorkItemSectionNav({
     target.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  // A single section is the description itself; there is nothing to navigate between.
-  if (entries.length < 2) return null;
+  const hasDrafts = draftCount !== undefined && draftCount > 0;
+  // A single section is the description itself; there is nothing to navigate between — unless a
+  // draft pill still needs somewhere to show.
+  if (entries.length < 2 && !hasDrafts) return null;
 
   return (
     <nav
@@ -67,6 +76,14 @@ export function WorkItemSectionNav({
           ) : null}
         </button>
       ))}
+      {hasDrafts ? (
+        <span
+          role="status"
+          className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-dashed border-primary/60 bg-primary/5 px-2 py-1 text-xs font-medium text-primary"
+        >
+          {draftCount} proposed
+        </span>
+      ) : null}
     </nav>
   );
 }

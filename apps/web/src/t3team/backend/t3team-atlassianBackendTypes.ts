@@ -13,6 +13,7 @@ import type {
   AtlassianOAuthExchangeInput,
   AtlassianOAuthExchangeResult,
 } from "./t3team-atlassianBackendAuthTypes";
+import type { AtlassianIssueContentBackendApi } from "./t3team-atlassianBackendIssueContentTypes";
 
 export type {
   AtlassianBasicConnectInput,
@@ -20,6 +21,7 @@ export type {
   AtlassianOAuthExchangeInput,
   AtlassianOAuthExchangeResult,
 };
+export type { AtlassianIssueLinkType } from "./t3team-atlassianBackendIssueContentTypes";
 
 export type AtlassianDownloadedAsset = {
   readonly base64Contents: string;
@@ -125,7 +127,7 @@ export type AtlassianIssueStatusLane = "todo" | "inProgress" | "review" | "done"
 
 export type { TempoCapacityResponse, TempoUserCapacity } from "./t3team-atlassianTempoTypes";
 
-export interface AtlassianBackendApi {
+export interface AtlassianBackendApi extends AtlassianIssueContentBackendApi {
   readonly getTempoCapacity: (input: {
     readonly accountIds: ReadonlyArray<string>;
     readonly from: string;

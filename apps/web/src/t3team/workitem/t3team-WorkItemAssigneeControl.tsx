@@ -3,19 +3,18 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
-import { T3TeamErrorStateInline } from "~/t3team/components/error/t3team-ErrorStateInline";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/t3team/components/ui/t3team-popover";
 import { Spinner } from "~/t3team/components/ui/t3team-spinner";
+import type { T3TeamScalarDraftMutation } from "~/t3team/t3team-draftMutationTypes";
 import { useDebouncedValue } from "~/t3team/workitem/t3team-useDebouncedValue";
+import { useWorkItemFieldDraftOverlay } from "~/t3team/workitem/t3team-useWorkItemFieldDraftOverlay";
 import { useWorkItemFieldMutation } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
-import {
-  WorkItemFieldOverlay,
-  WorkItemFieldUndoBanner,
-} from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
+import { WorkItemFieldOverlay } from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
 import {
   WorkItemAssigneeActionRows,
   WorkItemAssigneeResultsList,
 } from "~/t3team/workitem/t3team-WorkItemAssigneeResultsList";
+import { readAssigneeDraftPatch } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
 import { WorkItemPersonChip } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 import type { WorkItemPerson } from "~/t3team/workitem/t3team-workItemFieldReaders";
 
@@ -35,6 +34,7 @@ export function WorkItemAssigneeControl({
   accountId,
   issueIdOrKey,
   assignee,
+  draft,
   currentUserName,
   onReload,
   className,
@@ -43,6 +43,8 @@ export function WorkItemAssigneeControl({
   readonly accountId: string;
   readonly issueIdOrKey: string;
   readonly assignee: WorkItemPerson | undefined;
+  /** A pending agent-proposed assignee change for this issue, if any. */
+  readonly draft?: T3TeamScalarDraftMutation | undefined;
   readonly currentUserName?: string | undefined;
   readonly onReload: () => void;
   readonly className?: string;
@@ -147,14 +149,18 @@ export function WorkItemAssigneeControl({
   }
 
   const currentIdentity = assigneeIdentity(mutation.value);
-  const overlay = mutation.error ? (
-    <T3TeamErrorStateInline userFacing={mutation.error} showRetry={false} />
-  ) : mutation.lastChange ? (
-    <WorkItemFieldUndoBanner
-      label={`Assignee → ${mutation.lastChange.to?.displayName ?? "Unassigned"}`}
-      onUndo={mutation.undo}
-    />
-  ) : null;
+  const proposedAssignee = draft ? readAssigneeDraftPatch(draft) : undefined;
+  const { marker, overlay } = useWorkItemFieldDraftOverlay({
+    mutation,
+    draft,
+    proposedValue: proposedAssignee,
+    proposedLabel:
+      proposedAssignee !== undefined ? (proposedAssignee?.displayName ?? "Unassigned") : undefined,
+    fieldLabel: "assignee",
+    undoLabel: mutation.lastChange
+      ? `Assignee → ${mutation.lastChange.to?.displayName ?? "Unassigned"}`
+      : undefined,
+  });
 
   return (
     <WorkItemFieldOverlay overlay={overlay} className={className}>
@@ -167,6 +173,7 @@ export function WorkItemAssigneeControl({
         >
           <span className="flex min-w-0 items-center gap-1.5">
             <WorkItemPersonChip person={mutation.value ?? undefined} />
+            {marker}
             {mutation.pending ? <Spinner className="size-3 shrink-0" /> : null}
           </span>
         </PopoverTrigger>

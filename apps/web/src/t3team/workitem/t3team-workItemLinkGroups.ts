@@ -3,6 +3,13 @@ import type { ProjectTicket } from "~/t3team/t3team-types";
 export type WorkItemLinkedIssue = {
   readonly key: string;
   readonly ticket?: ProjectTicket;
+  /** The Jira issue link's own id (`issuelinks[].id`), needed to delete this specific link. */
+  readonly linkId?: string;
+  /** The link type's neutral name (e.g. "Blocks"), as `createIssueLink` needs it — distinct from
+   * `label`, which is the directional phrase ("blocks" / "is blocked by") shown to the reader. */
+  readonly linkTypeName?: string;
+  /** Which side of the link type the *current* issue is on, for re-creating this exact link. */
+  readonly direction?: "inward" | "outward";
 };
 
 export type WorkItemLinkGroup = {
@@ -47,7 +54,13 @@ export function groupWorkItemIssueLinks(
   const groups = new Map<string, WorkItemLinkedIssue[]>();
   const seen = new Set<string>();
 
-  const addIssue = (label: string | undefined, key: string | undefined) => {
+  const addIssue = (
+    label: string | undefined,
+    key: string | undefined,
+    linkId: string | undefined,
+    linkTypeName: string | undefined,
+    direction: "inward" | "outward",
+  ) => {
     if (!label || !key) return;
     const dedupeKey = `${label}:${key}`;
     if (seen.has(dedupeKey)) return;
@@ -58,15 +71,22 @@ export function groupWorkItemIssueLinks(
       order.push(label);
     }
     const ticket = findTicket(key);
-    groups.get(label)!.push({ key, ...(ticket ? { ticket } : {}) });
+    groups.get(label)!.push({
+      key,
+      ...(ticket ? { ticket } : {}),
+      ...(linkId ? { linkId } : {}),
+      ...(linkTypeName ? { linkTypeName, direction } : {}),
+    });
   };
 
   for (const link of issueLinks) {
     const record = readRecord(link);
     if (!record) continue;
     const type = readRecord(record.type);
-    addIssue(readLabel(type?.inward), readKey(record.inwardIssue));
-    addIssue(readLabel(type?.outward), readKey(record.outwardIssue));
+    const linkId = readLabel(record.id);
+    const linkTypeName = readLabel(type?.name);
+    addIssue(readLabel(type?.inward), readKey(record.inwardIssue), linkId, linkTypeName, "inward");
+    addIssue(readLabel(type?.outward), readKey(record.outwardIssue), linkId, linkTypeName, "outward");
   }
 
   return order.map((label) => ({ label, issues: groups.get(label)! }));

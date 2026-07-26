@@ -65,16 +65,33 @@ function setDraftStatusFields(
   return error ? { ...rest, status, error } : { ...rest, status };
 }
 
+/** Shared by every "drafts for this issue" selector below, document or scalar. */
+function matchesPendingDraftTarget(
+  draft: T3TeamDraftMutation,
+  input: { readonly projectId?: string; readonly issueIdOrKey?: string },
+): boolean {
+  if (draft.status === "discarded" || draft.status === "applied") return false;
+  if (input.projectId && draft.projectId && draft.projectId !== input.projectId) return false;
+  if (input.issueIdOrKey && draft.target.issueIdOrKey !== input.issueIdOrKey) return false;
+  return true;
+}
+
 export function selectJiraDocumentDrafts(input: {
   readonly projectId?: string;
   readonly issueIdOrKey?: string;
 }) {
   return (state: T3TeamDraftMutationState): readonly T3TeamDocumentDraftMutation[] =>
-    state.drafts.filter((draft): draft is T3TeamDocumentDraftMutation => {
-      if (!isT3TeamDocumentDraftMutation(draft)) return false;
-      if (draft.status === "discarded" || draft.status === "applied") return false;
-      if (input.projectId && draft.projectId && draft.projectId !== input.projectId) return false;
-      if (input.issueIdOrKey && draft.target.issueIdOrKey !== input.issueIdOrKey) return false;
-      return true;
-    });
+    state.drafts.filter(
+      (draft): draft is T3TeamDocumentDraftMutation =>
+        isT3TeamDocumentDraftMutation(draft) && matchesPendingDraftTarget(draft, input),
+    );
+}
+
+/** All pending drafts (document and scalar) targeting one issue — see `t3team-useWorkItemDrafts.ts`. */
+export function selectWorkItemDrafts(input: {
+  readonly projectId?: string;
+  readonly issueIdOrKey: string;
+}) {
+  return (state: T3TeamDraftMutationState): readonly T3TeamDraftMutation[] =>
+    state.drafts.filter((draft) => matchesPendingDraftTarget(draft, input));
 }

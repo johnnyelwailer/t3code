@@ -29,10 +29,10 @@ export function DraftDocumentReviewPanel({
 }: DraftDocumentReviewPanelProps) {
   const [mode, setMode] = useState<"rendered" | "compare">("rendered");
   const isBusy = draft.status === "applying";
-  const canApply = Boolean(onApply) && !isBusy && draft.status !== "error";
   const unavailableReason =
     draft.applyUnavailableReason ??
     (!onApply ? "No Jira description/comment write route is wired yet." : undefined);
+  const canApply = Boolean(onApply) && !isBusy && draft.status !== "error" && !unavailableReason;
 
   return (
     <T3SurfaceCard className="overflow-hidden border-primary/25 bg-primary/4">

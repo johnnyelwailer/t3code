@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import type { JiraCommentItem } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
+import { WorkItemCommentComposer } from "~/t3team/workitem/t3team-WorkItemCommentComposer";
 import { WorkItemCommentItem } from "~/t3team/workitem/t3team-WorkItemCommentItem";
+import { WorkItemCommentRow } from "~/t3team/workitem/t3team-WorkItemCommentRow";
 import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
 import { readTimestampMs } from "~/t3team/workitem/t3team-workItemFieldReaders";
 
@@ -49,6 +52,10 @@ export function WorkItemComments({
   htmlBaseUrl,
   resolveAssetUrl,
   renderBody,
+  backend,
+  accountId,
+  issueIdOrKey,
+  onReload,
 }: {
   readonly onContextMenu?: ((event: React.MouseEvent) => void) | undefined;
   /** Section nav target. */
@@ -58,9 +65,15 @@ export function WorkItemComments({
   readonly htmlBaseUrl?: string;
   readonly resolveAssetUrl?: (url: string) => string;
   readonly renderBody?: (comment: JiraCommentItem) => ReactNode;
+  /** Present only with a live Atlassian connection — absent, the section stays read-only. */
+  readonly backend?: AtlassianBackendApi | undefined;
+  readonly accountId?: string | undefined;
+  readonly issueIdOrKey?: string | undefined;
+  readonly onReload?: (() => void) | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
-  if (comments.length === 0) return null;
+  const canWrite = Boolean(backend && accountId && issueIdOrKey && onReload);
+  if (comments.length === 0 && !canWrite) return null;
 
   const sorted = sortWorkItemCommentsNewestFirst(comments);
   const { visible, hiddenCount } = selectVisibleWorkItemComments(sorted, expanded);
@@ -72,17 +85,40 @@ export function WorkItemComments({
       {...(onContextMenu ? { onContextMenu } : {})}
       count={comments.length}
     >
+      {canWrite ? (
+        <WorkItemCommentComposer
+          backend={backend!}
+          accountId={accountId!}
+          issueIdOrKey={issueIdOrKey!}
+          onReload={onReload!}
+        />
+      ) : null}
       <div className="divide-y divide-border/50">
-        {visible.map((comment, index) => (
-          <WorkItemCommentItem
-            key={comment.id ?? `comment-${index}`}
-            comment={comment}
-            nowMs={nowMs}
-            {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
-            {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
-            {...(renderBody ? { renderBody } : {})}
-          />
-        ))}
+        {visible.map((comment, index) =>
+          canWrite ? (
+            <WorkItemCommentRow
+              key={comment.id ?? `comment-${index}`}
+              backend={backend!}
+              accountId={accountId!}
+              issueIdOrKey={issueIdOrKey!}
+              comment={comment}
+              nowMs={nowMs}
+              onReload={onReload!}
+              {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
+              {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
+              {...(renderBody ? { renderBody } : {})}
+            />
+          ) : (
+            <WorkItemCommentItem
+              key={comment.id ?? `comment-${index}`}
+              comment={comment}
+              nowMs={nowMs}
+              {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
+              {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
+              {...(renderBody ? { renderBody } : {})}
+            />
+          ),
+        )}
       </div>
       {hiddenCount > 0 ? (
         <Button

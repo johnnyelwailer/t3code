@@ -7,6 +7,7 @@ import type {
 } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
 import { T3TeamAdfRenderer } from "~/t3team/workitem/adf/t3team-AdfRenderer";
 import type { AdfDocument } from "~/t3team/workitem/adf/t3team-adfRendererTypes";
+import { countWorkItemScalarDrafts, useWorkItemDrafts } from "~/t3team/workitem/t3team-useWorkItemDrafts";
 import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
 import {
   buildWorkItemSectionAnchors,
@@ -73,6 +74,11 @@ export function useWorkItemDetailMainContent({
     commentCount,
   });
 
+  // Scalar drafts only: description/comment drafts already have their own visible review panel, so
+  // counting them here too would double-announce the same proposed change.
+  const draftsByField = useWorkItemDrafts({ projectId, issueIdOrKey: model.key });
+  const draftCount = countWorkItemScalarDrafts(draftsByField);
+
   const sectionMenu = (section: WorkItemSectionTarget, label: string) =>
     onSectionContextMenu
       ? { onContextMenu: (event: React.MouseEvent) => onSectionContextMenu(event, section, label) }
@@ -94,5 +100,5 @@ export function useWorkItemDetailMainContent({
       />
     ) : null;
 
-  return { resolveAssetUrl, anchors, navEntries, sectionMenu, renderCommentBody };
+  return { resolveAssetUrl, anchors, navEntries, sectionMenu, renderCommentBody, draftCount };
 }

@@ -6,7 +6,8 @@ export type T3TeamDraftMutationField =
   | "status"
   | "description"
   | "comment"
-  | "subtask";
+  | "subtask"
+  | "link";
 
 export type T3TeamDraftRichContentFormat = "html" | "markdown" | "plain";
 
@@ -44,7 +45,7 @@ export type T3TeamDocumentDraftMutation = T3TeamDraftMutationBase & {
 };
 
 export type T3TeamScalarDraftMutation = T3TeamDraftMutationBase & {
-  readonly field: "assignee" | "estimate" | "status" | "subtask";
+  readonly field: "assignee" | "estimate" | "status" | "subtask" | "link";
   readonly patch: Record<string, unknown>;
 };
 

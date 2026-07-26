@@ -122,6 +122,9 @@ export function buildWorkItemDetailMainProps({
           {...(view.descriptionMarkdown ? { descriptionMarkdown: view.descriptionMarkdown } : {})}
           {...(view.descriptionHtml ? { descriptionHtml: view.descriptionHtml } : {})}
           {...(view.htmlBaseUrl ? { htmlBaseUrl: view.htmlBaseUrl } : {})}
+          {...(view.backend?.atlassian ? { backend: view.backend.atlassian } : {})}
+          {...(project.source.accountId ? { accountId: project.source.accountId } : {})}
+          onReload={() => void view.reload()}
         />
       </>
     ),

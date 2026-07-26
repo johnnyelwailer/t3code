@@ -4,15 +4,12 @@ import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import type { JiraAttachment, JiraCommentItem } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
-import { buildWorkItemDetailMainControls } from "~/t3team/workitem/t3team-buildWorkItemDetailMainControls";
-import { WorkItemAttachments } from "~/t3team/workitem/t3team-WorkItemAttachments";
-import { WorkItemChildren } from "~/t3team/workitem/t3team-WorkItemChildren";
-import { WorkItemComments } from "~/t3team/workitem/t3team-WorkItemComments";
+import { useWorkItemDetailMainControls } from "~/t3team/workitem/t3team-useWorkItemDetailMainControls";
 import { WorkItemDescription } from "~/t3team/workitem/t3team-WorkItemDescription";
 import { WorkItemDetailLayout } from "~/t3team/workitem/t3team-WorkItemDetailLayout";
-import { WorkItemLinks } from "~/t3team/workitem/t3team-WorkItemLinks";
 import { WorkItemProperties } from "~/t3team/workitem/t3team-WorkItemProperties";
 import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
+import { WorkItemSecondaryColumn } from "~/t3team/workitem/t3team-WorkItemSecondaryColumn";
 import { WorkItemSectionNav } from "~/t3team/workitem/t3team-WorkItemSectionNav";
 import { WorkItemSkeleton } from "~/t3team/workitem/t3team-WorkItemSkeleton";
 import { WorkItemTitleBand } from "~/t3team/workitem/t3team-WorkItemTitleBand";
@@ -91,7 +88,7 @@ export function WorkItemDetailMain({
   onSectionContextMenu,
   supplementalSections,
 }: WorkItemDetailMainProps) {
-  const { resolveAssetUrl, anchors, navEntries, sectionMenu, renderCommentBody } =
+  const { resolveAssetUrl, anchors, navEntries, sectionMenu, renderCommentBody, draftCount } =
     useWorkItemDetailMainContent({
       model,
       projectId,
@@ -109,7 +106,7 @@ export function WorkItemDetailMain({
 
   // Editable controls need a live backend and a connected account; without either the view stays
   // read-only, same as before Slice B.
-  const { statusControl, assigneeControl, estimateControl } = buildWorkItemDetailMainControls({
+  const { statusControl, assigneeControl, estimateControl } = useWorkItemDetailMainControls({
     model,
     ...(accountId ? { accountId } : {}),
     ...(backend ? { backend } : {}),
@@ -129,7 +126,7 @@ export function WorkItemDetailMain({
           {...(assigneeControl ? { assigneeControl } : {})}
         />
       }
-      sectionNav={<WorkItemSectionNav entries={navEntries} />}
+      sectionNav={<WorkItemSectionNav entries={navEntries} draftCount={draftCount} />}
       properties={
         <WorkItemProperties
           model={model}
@@ -164,45 +161,27 @@ export function WorkItemDetailMain({
         </>
       }
       secondary={
-        <>
-          <WorkItemChildren
-            items={childItems}
-            anchorId={anchors.children}
-            onOpenTicket={onOpenTicket}
-            {...(currentUserName ? { currentUserName } : {})}
-            {...sectionMenu("relationships", `${model.key} child items`)}
-          />
-
-          <WorkItemLinks
-            snapshotRaw={snapshotRaw}
-            projectTickets={projectTickets}
-            projectId={projectId}
-            anchorId={anchors.links}
-            onOpenTicket={onOpenTicket}
-            {...(currentUserName ? { currentUserName } : {})}
-            {...sectionMenu("relationships", `${model.key} linked issues`)}
-          />
-
-          <WorkItemAttachments
-            attachments={attachments}
-            anchorId={anchors.attachments}
-            {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
-            nowMs={nowMs}
-            {...sectionMenu("attachments", `${model.key} attachments`)}
-          />
-
-          <WorkItemComments
-            comments={comments}
-            anchorId={anchors.comments}
-            nowMs={nowMs}
-            {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
-            renderBody={renderCommentBody}
-            {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
-            {...sectionMenu("comments", `${model.key} comments`)}
-          />
-
-          {supplementalSections}
-        </>
+        <WorkItemSecondaryColumn
+          issueKey={model.key}
+          projectId={projectId}
+          anchors={anchors}
+          sectionMenu={sectionMenu}
+          childItems={childItems}
+          projectTickets={projectTickets}
+          snapshotRaw={snapshotRaw}
+          attachments={attachments}
+          comments={comments}
+          nowMs={nowMs}
+          onOpenTicket={onOpenTicket}
+          onReload={onReload}
+          renderCommentBody={renderCommentBody}
+          {...(accountId ? { accountId } : {})}
+          {...(backend ? { backend } : {})}
+          {...(currentUserName ? { currentUserName } : {})}
+          {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
+          {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
+          supplementalSections={supplementalSections}
+        />
       }
     />
   );

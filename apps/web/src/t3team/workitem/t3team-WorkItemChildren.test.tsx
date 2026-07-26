@@ -56,4 +56,18 @@ describe("WorkItemChildren", () => {
     );
     expect(markup).toContain("1 of 2 done");
   });
+
+  it("shows an 'Add child' action once a backend is connected, even with no children yet", () => {
+    const markup = renderToStaticMarkup(
+      <WorkItemChildren
+        items={[]}
+        backend={{} as never}
+        accountId="acc-1"
+        projectId="EXT-1"
+        issueIdOrKey="T3T-1"
+        onReload={() => {}}
+      />,
+    );
+    expect(markup).toContain("Add child");
+  });
 });
