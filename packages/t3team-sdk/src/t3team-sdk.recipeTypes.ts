@@ -69,11 +69,6 @@ export interface RecipeApplicabilitySpec {
   readonly brevities?: ReadonlyArray<RecipeBrevity>;
   readonly guidanceStyles?: ReadonlyArray<RecipeGuidanceStyle>;
   readonly detailDensities?: ReadonlyArray<RecipeDetailDensity>;
-  /**
-   * Show only when the selected work item's "has children" state equals this; unknown counts as not
-   * satisfied. Replaced the `RecipeSignal*` comparison DSL, which was never in the MVP spec.
-   */
-  readonly workitemHasChildren?: boolean;
 }
 
 export interface RecipeRef<Inputs = unknown, Outputs = unknown> {

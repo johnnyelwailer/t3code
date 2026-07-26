@@ -80,9 +80,12 @@ function toRecipe(ref: AnyRecipeRef, metadata: RenderedRecipeMetadata): Recipe {
 /** Build a {@link RecipeMatchInput} from the render context (mirrors the bundled-compat matcher). */
 function buildMatchInput(context: ProjectRecipeRenderContext): RecipeMatchInput {
   const provider = context.project.provider;
-  const linkedProviders = queryableToReadonlyArray(context.linkedResources)
-    .map((resource) => resource.provider)
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  // Filter through the Queryable so the access stays observable and only matches materialise —
+  // `toReadonlyArray().filter(...)` would pull the whole collection and defeat the tracking.
+  const linkedProviders = context.linkedResources
+    .where((resource) => typeof resource.provider === "string" && resource.provider.length > 0)
+    .toReadonlyArray()
+    .map((resource) => resource.provider as string);
   return {
     activeProject: provider ? { source: { provider } } : {},
     selectedResource: null,
@@ -93,11 +96,8 @@ function buildMatchInput(context: ProjectRecipeRenderContext): RecipeMatchInput 
     enabledSkillPacks: context.enabledSkillPacks,
     profile: context.profile,
     availableContextKeys: queryableToReadonlyArray(context.availableContextKeys),
-    // Relationship enrichment is optional, so this stays tri-state: `undefined` means "not known
-    // yet", which a recipe declaring `workitemHasChildren` treats as not satisfied.
-    workitemHasChildren: context.workitem?.relationships
-      ? context.workitem.relationships.childKeys.length > 0
-      : undefined,
+    // Handed through so a recipe's `visible` filter has something to read.
+    renderContext: context,
   };
 }
 

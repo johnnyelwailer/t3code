@@ -790,10 +790,12 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
     promptTemplate:
       "T-shirt-size the epic {{selectedWorkLabel}} as a multi-source estimate. First confirm the selected epic/story details (key, title, status, owner, acceptance criteria, and any existing children). Then inspect all available evidence before sizing: child stories/subtasks, linked or precedent stories and epics, attached Jira context, related GitHub/PR activity, and the current codebase implementation state where the workspace or linked repositories are available. Produce one size (XS, S, M, L, or XL) with confidence (low/medium/high), an evidence table grouped by Jira scope, code/implementation status, precedent comparisons, and unknowns, plus the main risk drivers that could move the size up. Call out missing acceptance criteria or data you could not inspect. If the epic has no stories or subtasks yet, recommend running the shape-next-backlog-slice recipe to decompose it before implementation. Persist the estimate as a durable estimation-notes artifact.",
     icon: "ruler",
-    appliesTo: {
-      jiraIssueTypes: ["Epic"],
-      // Prefer epics with no child stories yet; unknown relationships wait for enrichment.
-      workitemHasChildren: false,
+    appliesTo: { jiraIssueTypes: ["Epic"] },
+    // A real filter function, not a data DSL: sizing only helps before the epic is decomposed.
+    // Unknown relationships (host has not enriched yet) hide it, so it waits instead of flashing.
+    visible: (context) => {
+      const relationships = context.workitem?.relationships;
+      return relationships ? relationships.childKeys.length === 0 : false;
     },
     requiredContext: [
       { key: "ticket.summary", description: "Epic summary" },

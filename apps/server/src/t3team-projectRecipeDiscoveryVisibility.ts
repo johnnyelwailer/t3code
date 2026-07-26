@@ -34,9 +34,12 @@ function buildBundledCompatibilityResult(
     return null;
   }
   const provider = context.project.provider;
-  const linkedProviders = queryableToReadonlyArray(context.linkedResources)
-    .map((resource) => resource.provider)
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  // Filter through the Queryable so the access stays observable and only matches materialise —
+  // `toReadonlyArray().filter(...)` would pull the whole collection and defeat the tracking.
+  const linkedProviders = context.linkedResources
+    .where((resource) => typeof resource.provider === "string" && resource.provider.length > 0)
+    .toReadonlyArray()
+    .map((resource) => resource.provider as string);
   const match = matchRecipes([bundledRecipe], {
     activeProject: provider ? { source: { provider } } : {},
     selectedResource: null,
@@ -47,11 +50,8 @@ function buildBundledCompatibilityResult(
     enabledSkillPacks: context.enabledSkillPacks,
     profile: context.profile,
     availableContextKeys: queryableToReadonlyArray(context.availableContextKeys),
-    // Relationship enrichment is optional, so this stays tri-state: `undefined` means "not known
-    // yet", which a recipe declaring `workitemHasChildren` treats as not satisfied.
-    workitemHasChildren: context.workitem?.relationships
-      ? context.workitem.relationships.childKeys.length > 0
-      : undefined,
+    // Handed through so a recipe's `visible` filter has something to read.
+    renderContext: context,
   })[0];
 
   return match ? { visible: true, rank: match.score, reason: match.reason } : { visible: false };

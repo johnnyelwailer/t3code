@@ -1,5 +1,7 @@
 import * as Schema from "effect/Schema";
 
+import type { ProjectRecipeRenderContext } from "./discovery.ts";
+
 import type { ExternalResourceRef } from "@t3tools/project-context";
 import { ProjectRecipeKickoffProgram } from "./kickoff.ts";
 import { RecipeSurface } from "./surface.ts";
@@ -28,15 +30,6 @@ export const RecipeApplicability = Schema.Struct({
   brevities: Schema.optional(Schema.Array(RecipeBrevity)),
   guidanceStyles: Schema.optional(Schema.Array(RecipeGuidanceStyle)),
   detailDensities: Schema.optional(Schema.Array(RecipeDetailDensity)),
-  /**
-   * Show only when the selected work item's "has children" state equals this. Unknown (the host has
-   * not enriched relationships yet) counts as NOT satisfied, so a recipe that wants childless work
-   * waits for enrichment rather than flashing in and out.
-   *
-   * Replaced `visiblePredicates` + the `RecipeSignal*` comparison DSL, which was never in the MVP
-   * spec (see AGENTS.md §The spec is the source of truth for recipe/workflow MECHANISMS).
-   */
-  workitemHasChildren: Schema.optional(Schema.Boolean),
 });
 export type RecipeApplicability = typeof RecipeApplicability.Type;
 
@@ -84,7 +77,19 @@ export const Recipe = Schema.Struct({
   rankHint: Schema.optional(Schema.Number),
   suggestedActions: Schema.optional(Schema.Array(RecipeFollowup)),
 });
-export type Recipe = typeof Recipe.Type;
+/**
+ * A recipe's own filter. Bundled recipes are CODE, so they carry a real predicate instead of a data
+ * DSL; project-local recipes get the same field through `defineRecipe`. Pure and synchronous by
+ * contract (Epic 16 §Pure functions) — read data off the render context, and filter collections
+ * through `Queryable.where/some/count` so the access stays observable rather than materialised.
+ */
+export type RecipeVisibleFilter = (context: ProjectRecipeRenderContext) => boolean;
+
+/**
+ * The schema cannot hold a function, and nothing decodes `Recipe` at runtime, so the filter is part
+ * of the TS type rather than the struct.
+ */
+export type Recipe = typeof Recipe.Type & { readonly visible?: RecipeVisibleFilter };
 
 export type RecipeProfileContext = {
   readonly technicalDepth: RecipeTechnicalDepth;
@@ -106,8 +111,11 @@ export type RecipeMatchInput = {
   readonly enabledSkillPacks: ReadonlyArray<string>;
   readonly profile: RecipeProfileContext;
   readonly availableContextKeys?: ReadonlyArray<string>;
-  /** Whether the selected work item has children; `undefined` when not yet known. */
-  readonly workitemHasChildren?: boolean | undefined;
+  /**
+   * The live render context, when the caller has one. Required for a recipe's `visible` filter to be
+   * evaluated at all; callers that only match on declarative fields may omit it.
+   */
+  readonly renderContext?: ProjectRecipeRenderContext | undefined;
 };
 
 export type RecipeMatchResult = {
@@ -291,11 +299,21 @@ export function isRecipeApplicable(recipe: Recipe, input: RecipeMatchInput): boo
     return false;
   }
 
-  if (
-    recipe.appliesTo.workitemHasChildren !== undefined &&
-    input.workitemHasChildren !== recipe.appliesTo.workitemHasChildren
-  ) {
-    return false;
+  // A recipe's own filter function, ANDed with the declarative gates so it can only narrow (Epic 16
+  // §Pure functions). Bundled recipes are code, so they carry a real predicate rather than a data
+  // DSL. Pure and synchronous by contract; a throwing filter hides only THIS recipe, never the
+  // catalog, and a filter with no render context to read cannot claim applicability.
+  if (recipe.visible !== undefined) {
+    if (!input.renderContext) {
+      return false;
+    }
+    try {
+      if (!recipe.visible(input.renderContext)) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
   }
 
   if (!hasLiteralMatch(recipe.appliesTo.technicalDepths, input.profile.technicalDepth)) {

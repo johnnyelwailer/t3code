@@ -1,8 +1,37 @@
-import { isRecipeApplicable, matchRecipes, type RecipeMatchInput } from "@t3tools/project-recipes";
+import {
+  isRecipeApplicable,
+  matchRecipes,
+  type ProjectRecipeRenderContext,
+  type RecipeMatchInput,
+} from "@t3tools/project-recipes";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildBundledActionPlacement } from "./actionPlacements.js";
 import { getBundledT3TeamRecipe, listBundledT3TeamRecipes } from "./recipes.js";
+
+
+/** Minimal render context carrying relationship data a recipe's `visible` filter can read. */
+function contextWithChildren(childKeys: ReadonlyArray<string>) {
+  return {
+    surface: "workitem.detail.sidepanel",
+    project: { title: "Alpha", provider: "atlassian" },
+    workitem: {
+      kind: "ticket",
+      type: "Epic",
+      relationships: { childKeys: [...childKeys], referenceKeys: [], blockedByKeys: [], blockingKeys: [] },
+    },
+    // The filter under test reads only `workitem.relationships`; the rest is structural filler.
+    profile: { technicalDepth: "medium", brevity: "balanced", guidanceStyle: "balanced" },
+    enabledSkillPacks: [],
+    schema: {},
+  } as unknown as ProjectRecipeRenderContext;
+}
+
+/** Relationships absent entirely = host has not enriched them yet. */
+function contextWithoutRelationships() {
+  const base = contextWithChildren([]) as { workitem?: Record<string, unknown> };
+  return { ...base, workitem: { kind: "ticket", type: "Epic" } } as unknown as ProjectRecipeRenderContext;
+}
 
 function buildMatchInput(overrides: Partial<RecipeMatchInput> = {}): RecipeMatchInput {
   return {
@@ -59,17 +88,19 @@ describe("tshirt-size-epic bundled recipe", () => {
   it("is applicable for an Epic on workitem.detail.sidepanel when the epic has no children", () => {
     const recipe = getBundledT3TeamRecipe("tshirt-size-epic")!;
     expect(
-      isRecipeApplicable(recipe, buildMatchInput({ workitemHasChildren: false })),
+      isRecipeApplicable(recipe, buildMatchInput({ renderContext: contextWithChildren([]) })),
     ).toBe(true);
   });
 
   it("waits for known relationships before applying the no-children rule", () => {
     const recipe = getBundledT3TeamRecipe("tshirt-size-epic")!;
     // `workitemHasChildren` left undefined = not enriched yet, which must NOT satisfy the rule.
+    // No render context at all, and relationships absent: both must hide it rather than assume.
+    expect(isRecipeApplicable(recipe, buildMatchInput({}))).toBe(false);
     expect(
-      isRecipeApplicable(recipe, buildMatchInput({ surface: "project.dashboard.backlog" })),
+      isRecipeApplicable(recipe, buildMatchInput({ renderContext: contextWithoutRelationships() })),
     ).toBe(false);
-    expect(recipe.appliesTo.workitemHasChildren).toBe(false);
+    expect(typeof recipe.visible).toBe("function");
   });
 
   it("is NOT applicable for non-epic issue types", () => {
@@ -82,7 +113,7 @@ describe("tshirt-size-epic bundled recipe", () => {
   it("is hidden via matchRecipes when the epic already has children", () => {
     const results = matchRecipes(
       listBundledT3TeamRecipes(),
-      buildMatchInput({ workitemHasChildren: true }),
+      buildMatchInput({ renderContext: contextWithChildren(["ALPHA-2"]) }),
     );
     expect(results.map((result) => result.recipe.id)).not.toContain("tshirt-size-epic");
   });
@@ -90,7 +121,7 @@ describe("tshirt-size-epic bundled recipe", () => {
   it("surfaces via matchRecipes for an un-sized epic and links the shape-next-backlog-slice follow-up", () => {
     const results = matchRecipes(
       listBundledT3TeamRecipes(),
-      buildMatchInput({ workitemHasChildren: false }),
+      buildMatchInput({ renderContext: contextWithChildren([]) }),
     );
     const match = results.find((result) => result.recipe.id === "tshirt-size-epic");
     expect(match).toBeDefined();
