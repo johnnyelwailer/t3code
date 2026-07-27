@@ -1,6 +1,7 @@
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { cn } from "~/t3team/lib/t3team-utils";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+import { formatWorkItemDuration } from "~/t3team/workitem/t3team-workItemFieldModel";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 import { WorkItemStatusBadge } from "~/t3team/workitem/t3team-WorkItemStatusBadge";
 
@@ -15,6 +16,7 @@ export function WorkItemIssueRow({
   ticket,
   relationLabel,
   currentUserName,
+  assigneeControl,
   onOpen,
   className,
 }: {
@@ -23,6 +25,8 @@ export function WorkItemIssueRow({
   readonly relationLabel?: string | undefined;
   /** Display name of the signed-in user, so their own rows stand out. */
   readonly currentUserName?: string | undefined;
+  /** An interactive assignee picker for this row. Falls back to a read-only avatar when absent. */
+  readonly assigneeControl?: React.ReactNode;
   readonly onOpen?: ((ticketId: string) => void) | undefined;
   readonly className?: string;
 }) {
@@ -32,6 +36,21 @@ export function WorkItemIssueRow({
     ticket.assignee !== undefined &&
     ticket.assignee.trim().toLowerCase() === currentUserName.trim().toLowerCase();
   const isPlaceholder = summary === ticket.ref.displayId;
+
+  /*
+    A child row without an owner or a size is not much of a plan. Both were already on the ticket —
+    the row simply never rendered them, so a list of children read as titles and nothing else.
+  */
+  const estimateSeconds =
+    ticket.timeOriginalEstimateSeconds ?? ticket.aggregateTimeOriginalEstimateSeconds;
+  const estimateLabel =
+    ticket.estimateValue !== undefined
+      ? `${ticket.estimateValue} pts`
+      : formatWorkItemDuration(estimateSeconds);
+  const estimateTitle =
+    ticket.estimateValue !== undefined
+      ? `${ticket.estimateValue} story points`
+      : `Estimated ${estimateLabel}`;
 
   const content = (
     <>
@@ -60,23 +79,39 @@ export function WorkItemIssueRow({
         </span>
       )}
 
+      {/*
+        Estimate before status, matching the title band's order. Story points win over a time
+        estimate when both exist — a team that sizes in points does not want hours quoted back.
+      */}
+      {estimateLabel ? (
+        <span
+          className="shrink-0 tabular-nums text-muted-foreground"
+          title={estimateTitle}
+          aria-label={estimateTitle}
+        >
+          {estimateLabel}
+        </span>
+      ) : null}
+
       <WorkItemStatusBadge
         status={{ name: ticket.status }}
         className="ml-auto shrink-0 @xs/workitem:ml-0"
       />
 
       {/*
-        Only shown when someone is actually assigned. An empty placeholder circle in every row is
-        noise, and next to a status pill it reads as an unchecked control rather than an absence.
+        Always rendered, assigned or not: an unassigned child is the one most likely to need an
+        owner, and hiding the affordance exactly then meant the only way to assign was to open the
+        issue. `assigneeControl` replaces the avatar with a real picker where the caller can write.
       */}
-      {ticket.assignee ? (
-        <WorkItemPersonAvatar
-          person={{ displayName: ticket.assignee }}
-          size="md"
-          isCurrentUser={isAssignedToCurrentUser}
-          className="hidden @md/workitem:inline-flex"
-        />
-      ) : null}
+      <span className="relative z-10 shrink-0">
+        {assigneeControl ?? (
+          <WorkItemPersonAvatar
+            person={ticket.assignee ? { displayName: ticket.assignee } : undefined}
+            size="md"
+            isCurrentUser={isAssignedToCurrentUser}
+          />
+        )}
+      </span>
     </>
   );
 
@@ -89,17 +124,26 @@ export function WorkItemIssueRow({
     return <div className={shared}>{content}</div>;
   }
 
+  /*
+    The open affordance is an overlay rather than a wrapping <button>. Wrapping put the row's own
+    controls inside a button — invalid HTML, and it breaks keyboard and screen-reader use of
+    anything interactive in the row. The overlay sits beneath the controls, which lift above it.
+  */
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(ticket.id)}
+    <div
       className={cn(
         shared,
-        "text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60",
+        "group/issue-row relative transition-colors hover:bg-accent/40 focus-within:bg-accent/20",
       )}
     >
+      <button
+        type="button"
+        onClick={() => onOpen(ticket.id)}
+        aria-label={`Open ${ticket.ref.displayId}${isPlaceholder ? "" : `: ${summary}`}`}
+        className="absolute inset-0 z-0 cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
+      />
       {content}
-    </button>
+    </div>
   );
 }
 
