@@ -292,6 +292,29 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
     rankHint: 16,
   }),
   createBundledRecipe({
+    // Backs the description section-header "Rewrite" control. Workflow-backed (not prompt-backed):
+    // the body owns the draft-tool call so the agent can only ever supply prose — see
+    // apps/server/src/t3team-projectSetupDescriptionRewriteRecipe.ts.
+    id: "describe-rewrite",
+    title: "Rewrite description",
+    manifestDisplayName: "Rewrite description",
+    shortDescription:
+      "Rewrite this work item's description and propose it as a draft you review before anything is saved.",
+    surfaces: ["workitem.detail.sidepanel"],
+    promptTemplate:
+      "Rewrite the description of {{selectedWorkLabel}} and propose it as a reviewable draft.",
+    icon: "pencil",
+    appliesTo: { resourceKinds: ["ticket"] },
+    requiredContext: [{ key: "ticket.summary", description: "Ticket summary" }],
+    // Only the draft family: the workflow proposes, a human commits.
+    allowedToolGroups: ["integration.read", "mutation.draft"],
+    skillRef: { id: "description.rewrite" },
+    outputPreference: "markdown",
+    artifactKinds: ["summary"],
+    actionFamilies: ["product", "delivery"],
+    rankHint: 21,
+  }),
+  createBundledRecipe({
     id: "review-acceptance-criteria",
     title: "Review acceptance criteria",
     manifestDisplayName: "Review acceptance criteria",

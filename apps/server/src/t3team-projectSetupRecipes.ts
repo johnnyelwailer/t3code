@@ -16,6 +16,10 @@ import {
   renderTypedWorkflowModuleStarter,
 } from "./t3team-projectSetupRecipeScaffolding.ts";
 import { renderBundledRecipeModule } from "./t3team-projectSetupRecipeModule.ts";
+import {
+  DESCRIPTION_REWRITE_RECIPE_ID,
+  descriptionRewriteSetupFiles,
+} from "./t3team-projectSetupDescriptionRewriteRecipe.ts";
 
 function renderBundledRecipePrompt(
   recipe: ReturnType<typeof listBundledT3TeamRecipes>[number],
@@ -101,7 +105,9 @@ export function renderBundledRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetu
         relativePath: `${T3TEAM_PROJECT_RECIPES_ROOT}/${recipe.id}/recipe.ts`,
         contents: renderBundledRecipeModule(
           recipe,
-          recipe.id === "create-recipe" || recipe.id === EDIT_PLUGIN_MODULE_RECIPE_ID
+          recipe.id === "create-recipe" ||
+            recipe.id === EDIT_PLUGIN_MODULE_RECIPE_ID ||
+            recipe.id === DESCRIPTION_REWRITE_RECIPE_ID
             ? "./workflow.ts"
             : undefined,
         ),
@@ -143,6 +149,8 @@ export function renderBundledRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetu
         },
       );
     }
+
+    files.push(...descriptionRewriteSetupFiles(recipe.id));
 
     return files;
   });
