@@ -183,6 +183,7 @@ export function WorkItemDetailMain({
         <WorkItemSecondaryColumn
           issueKey={model.key}
           projectId={projectId}
+          {...(externalProjectId ? { externalProjectId } : {})}
           anchors={anchors}
           sectionMenu={sectionMenu}
           childItems={childItems}

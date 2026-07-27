@@ -57,7 +57,7 @@ export function WorkItemChildren({
   onOpenTicket,
   backend,
   accountId,
-  projectId,
+  externalProjectId,
   issueIdOrKey,
   onReload,
 }: {
@@ -71,16 +71,24 @@ export function WorkItemChildren({
   /** Present only with a live Atlassian connection — absent, the section stays read-only. */
   readonly backend?: AtlassianBackendApi | undefined;
   readonly accountId?: string | undefined;
-  readonly projectId?: string | undefined;
+  /**
+   * Jira's own project id — `project.source.externalProjectId`, NOT the t3team project id.
+   *
+   * These are different id spaces and passing the wrong one fails silently: Jira answers 404 for an
+   * unknown project, the child-issue-type lookup comes back empty, and the user is told their
+   * project has no subtask type. The backlog's create path always used the external id; this view
+   * was passing `project.id`, which is why creating a child here never worked.
+   */
+  readonly externalProjectId?: string | undefined;
   readonly issueIdOrKey?: string | undefined;
   readonly onReload?: (() => void) | undefined;
 }) {
   const [creating, setCreating] = useState(false);
-  const canWrite = Boolean(backend && accountId && projectId && issueIdOrKey && onReload);
+  const canWrite = Boolean(backend && accountId && externalProjectId && issueIdOrKey && onReload);
   const childCreate = useWorkItemChildCreate({
     backend: backend!,
     accountId: accountId!,
-    projectId: projectId!,
+    projectId: externalProjectId!,
     parentIssueIdOrKey: issueIdOrKey!,
     onReload: onReload ?? (() => {}),
   });
@@ -123,7 +131,10 @@ export function WorkItemChildren({
               })
             }
             listChildIssueTypes={() =>
-              backend!.listChildIssueTypes({ accountId: accountId!, projectId: projectId! })
+              backend!.listChildIssueTypes({
+                accountId: accountId!,
+                projectId: externalProjectId!,
+              })
             }
             onDraftChange={childCreate.setDraft}
             onCancel={() => {

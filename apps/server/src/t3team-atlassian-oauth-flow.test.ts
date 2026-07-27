@@ -12,6 +12,7 @@ import {
   beginAtlassianOAuthFlow,
   completeAtlassianOAuthFlow,
   resolveAtlassianOAuthAuthorizeUrl,
+  resolveAtlassianOAuthFlowStatus,
 } from "./t3team-atlassian-oauth-flow.ts";
 import {
   ATLASSIAN_OAUTH_FLOW_TTL_MS,
@@ -197,4 +198,52 @@ it.effect("spends the state on success and persists the account through the shar
       status: "unknown_state",
     });
   }).pipe(Effect.provide(testLayer("t3team-atlassian-oauth-flow-complete-"))),
+);
+
+it.effect("reports pending, unknown, and completed for the status a poller watches", () =>
+  Effect.gen(function* () {
+    const begun = yield* beginAtlassianOAuthFlow({ redirectUri: REDIRECT_URI });
+
+    // A tab with no opener and no broadcast — sign-in finished somewhere else entirely — has only
+    // this to go on, and it has to say "still waiting" for as long as that stays true.
+    assert.equal(yield* resolveAtlassianOAuthFlowStatus(begun.state), "pending");
+    assert.equal(yield* resolveAtlassianOAuthFlowStatus("never-issued"), "unknown");
+
+    globalThis.fetch = vi.fn(async (input: string | URL) => {
+      const url = input.toString();
+      if (url === "https://auth.atlassian.com/oauth/token") {
+        return Response.json({
+          access_token: "access-1",
+          refresh_token: "refresh-1",
+          expires_in: 3600,
+        });
+      }
+      if (url === "https://api.atlassian.com/oauth/token/accessible-resources") {
+        return Response.json([
+          { id: "cloud-1", url: "https://example.atlassian.net", name: "Example", scopes: [] },
+        ]);
+      }
+      return Response.json({ accountId: "user-1", displayName: "Test User" });
+    }) as unknown as typeof fetch;
+
+    const result = yield* completeAtlassianOAuthFlow({ state: begun.state, code: "code-1" });
+    assert.equal(result.status, "completed");
+
+    // The poller's whole reason to exist: the flow is gone from `pendingFlows`, but the terminal
+    // marker still says "completed" rather than "unknown" for a bounded stretch after the fact.
+    assert.equal(yield* resolveAtlassianOAuthFlowStatus(begun.state), "completed");
+  }).pipe(Effect.provide(testLayer("t3team-atlassian-oauth-flow-status-completed-"))),
+);
+
+it.effect("reports unknown for a state once it expires, distinct from never having existed", () =>
+  Effect.gen(function* () {
+    const begun = yield* beginAtlassianOAuthFlow({ redirectUri: REDIRECT_URI });
+    assert.equal(yield* resolveAtlassianOAuthFlowStatus(begun.state), "pending");
+
+    yield* TestClock.adjust(Duration.millis(ATLASSIAN_OAUTH_FLOW_TTL_MS));
+
+    // Same outcome as a state that was never issued: a poller cannot and should not tell the two
+    // apart, only that this link can no longer finish and a fresh one is the way forward.
+    assert.equal(yield* resolveAtlassianOAuthFlowStatus(begun.state), "unknown");
+  }),
 );

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   generatePkce,
   buildAuthorizeUrl,
@@ -11,7 +11,10 @@ import { useBackend } from "~/t3team/backend/t3team-index";
 import { runAtlassianOAuthAttempt } from "~/t3team/hooks/t3team-atlassianOAuthAttempt";
 import { openOAuthPopup } from "~/t3team/hooks/t3team-atlassianOAuthPopup";
 import { readAtlassianOAuthRedirectUri } from "~/t3team/hooks/t3team-atlassianOAuthRedirect";
-import { beginAtlassianOAuthServerFlow } from "~/t3team/hooks/t3team-atlassianOAuthServerFlow";
+import {
+  beginAtlassianOAuthServerFlow,
+  getAtlassianOAuthFlowStatus,
+} from "~/t3team/hooks/t3team-atlassianOAuthServerFlow";
 
 export type OAuthState =
   | { kind: "idle" }
@@ -21,8 +24,13 @@ export type OAuthState =
    * Sign-in has to be opened by the user rather than by us. Two causes, one situation: the browser
    * refused the popup, or the user closed it before finishing. Neither is a failure — they simply
    * have not signed in yet — so this carries a live `signinUrl` and the attempt keeps waiting.
+   *
+   * `expired` is set once the server reports that this exact link can no longer finish (seen
+   * `pending`, then `unknown` — evicted or past its TTL). The wait itself does not stop: the caller
+   * should say the link expired and let `mintFreshSigninLink` replace it, not imply this one might
+   * still come through.
    */
-  | { kind: "needs_manual_open"; signinUrl: string }
+  | { kind: "needs_manual_open"; signinUrl: string; expired?: boolean }
   | { kind: "exchanging" }
   | { kind: "listing_sites" }
   | { kind: "done"; token: TokenExchangeResult; sites: ReadonlyArray<AtlassianAccessibleResource> }
@@ -37,6 +45,13 @@ export type OAuthState =
 export type UseAtlassianOAuthResult = {
   state: OAuthState;
   startOAuth: (clientId?: string) => Promise<void>;
+  /**
+   * Begins a brand new server-owned flow and swaps it in as the one being waited on, replacing
+   * `signinUrl` and clearing any `expired` flag. The link just displayed stays valid — minting a
+   * successor never consumes it — so this is safe to call opportunistically (see
+   * `t3team-OAuthPopupBlockedNotice.tsx`) rather than only when a link is already known to be dead.
+   */
+  mintFreshSigninLink: () => Promise<string>;
   reset: () => void;
 };
 
@@ -55,19 +70,49 @@ async function listAccountIds(
 export function useAtlassianOAuth(): UseAtlassianOAuthResult {
   const backend = useBackend();
   const [state, setState] = useState<OAuthState>({ kind: "idle" });
-  const abortRef = useRef<(() => void) | null>(null);
+
+  /**
+   * Bumped by `reset` and on unmount, and captured by each `startOAuth` call at its own start. Every
+   * state update from that attempt checks its captured id against this before touching state, so a
+   * cancelled or superseded attempt cannot clobber whatever came after it — one guard covering both
+   * "Cancel" and "the component went away" without threading a real abort signal through three layers
+   * of already-in-flight `Promise`s.
+   */
+  const attemptIdRef = useRef(0);
+  /** The server-owned flow's `state` this attempt is currently waiting on; read fresh every poll. */
+  const serverStateRef = useRef<string | null>(null);
+
+  useEffect(
+    () => () => {
+      attemptIdRef.current += 1;
+    },
+    [],
+  );
 
   const reset = useCallback(() => {
-    abortRef.current?.();
-    abortRef.current = null;
+    attemptIdRef.current += 1;
     setState({ kind: "idle" });
+  }, []);
+
+  const mintFreshSigninLink = useCallback(async (): Promise<string> => {
+    const redirectUri = readAtlassianOAuthRedirectUri();
+    const serverFlow = await beginAtlassianOAuthServerFlow({ redirectUri });
+    serverStateRef.current = serverFlow.state;
+    setState({ kind: "needs_manual_open", signinUrl: serverFlow.shareUrl });
+    return serverFlow.shareUrl;
   }, []);
 
   const startOAuth = useCallback(
     async (clientId?: string) => {
+      const attemptId = ++attemptIdRef.current;
+      const isCurrent = () => attemptIdRef.current === attemptId;
+      const applyState = (next: OAuthState) => {
+        if (isCurrent()) setState(next);
+      };
+
       const resolvedClientId = clientId ?? __ATLASSIAN_CLIENT_ID__;
       if (!resolvedClientId) {
-        setState({
+        applyState({
           kind: "error",
           message:
             "Atlassian OAuth is not configured. Set VITE_ATLASSIAN_CLIENT_ID or provide a client ID.",
@@ -81,12 +126,12 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "OAuth redirect URI is not configured.";
-        setState({ kind: "error", message });
+        applyState({ kind: "error", message });
         return;
       }
 
       const config: AtlassianOAuthConfig = { clientId: resolvedClientId, redirectUri };
-      setState({ kind: "opening" });
+      applyState({ kind: "opening" });
 
       try {
         const pkce = await generatePkce();
@@ -105,6 +150,7 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
           completable by the server from a browser that shares nothing with this tab.
         */
         const serverFlow = await beginAtlassianOAuthServerFlow({ redirectUri }).catch(() => null);
+        serverStateRef.current = serverFlow?.state ?? null;
         const signinUrl = serverFlow?.shareUrl ?? authUrl;
 
         /*
@@ -113,41 +159,49 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
           webview, a click we arrived at indirectly. So keep waiting and hand the URL to the UI for
           the user to open themselves; the callback comes back over the broadcast channel either way.
         */
-        setState(popup ? { kind: "waiting" } : { kind: "needs_manual_open", signinUrl });
+        applyState(popup ? { kind: "waiting" } : { kind: "needs_manual_open", signinUrl });
 
         const outcome = await runAtlassianOAuthAttempt({
           popup,
           redirectUri,
           tabState,
-          serverState: serverFlow?.state ?? null,
+          getServerState: () => serverStateRef.current,
+          getStatus: (flowState) => getAtlassianOAuthFlowStatus({ state: flowState }),
           listAccountIds: () => listAccountIds(backend),
           baselineAccountIds,
-          onNeedsManualOpen: () => setState({ kind: "needs_manual_open", signinUrl }),
+          isCancelled: () => !isCurrent(),
+          onNeedsManualOpen: () => applyState({ kind: "needs_manual_open", signinUrl }),
+          onLinkExpired: () => {
+            if (!isCurrent()) return;
+            setState((current) =>
+              current.kind === "needs_manual_open" ? { ...current, expired: true } : current,
+            );
+          },
         });
 
         if (outcome.kind === "server_connected") {
-          setState({ kind: "connected" });
+          applyState({ kind: "connected" });
           return;
         }
         if (!backend) {
           throw new Error("Backend not available");
         }
 
-        setState({ kind: "exchanging" });
+        applyState({ kind: "exchanging" });
         const { token, sites } = await backend.atlassian.exchangeOAuthCode({
           code: outcome.code,
           codeVerifier: pkce.codeVerifier,
           redirectUri,
         });
 
-        setState({ kind: "done", token, sites });
+        applyState({ kind: "done", token, sites });
       } catch (error) {
         const message = error instanceof Error ? error.message : "OAuth failed";
-        setState({ kind: "error", message });
+        applyState({ kind: "error", message });
       }
     },
     [backend],
   );
 
-  return { state, startOAuth, reset };
+  return { state, startOAuth, mintFreshSigninLink, reset };
 }

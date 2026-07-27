@@ -8,6 +8,7 @@ import {
   beginAtlassianOAuthFlow,
   completeAtlassianOAuthFlow,
   resolveAtlassianOAuthAuthorizeUrl,
+  resolveAtlassianOAuthFlowStatus,
 } from "./t3team-atlassian-oauth-flow.ts";
 
 type BeginInput = { readonly redirectUri?: string };
@@ -87,8 +88,25 @@ const t3teamAtlassianOAuthCompleteRouteLayer = HttpRouter.add(
   }).pipe(Effect.catch(errorResponse)),
 );
 
+/**
+ * Lets a tab that has no way to hear a `postMessage` — sign-in finished in a different browser
+ * entirely, so there was never a shared opener or same-origin broadcast — ask directly instead of
+ * waiting forever. Unauthenticated for the same reason `complete` is: `state` is already the whole
+ * capability, and this returns strictly less than that route does.
+ */
+const t3teamAtlassianOAuthStatusRouteLayer = HttpRouter.add(
+  "GET",
+  "/api/t3team/atlassian/oauth/status/:state",
+  Effect.gen(function* () {
+    const params = yield* HttpRouter.params;
+    const status = yield* resolveAtlassianOAuthFlowStatus(params.state ?? "");
+    return okJson({ status });
+  }),
+);
+
 export const t3teamAtlassianOAuthFlowRouteLayer = Layer.mergeAll(
   t3teamAtlassianOAuthBeginRouteLayer,
   t3teamAtlassianOAuthBeginRedirectRouteLayer,
   t3teamAtlassianOAuthCompleteRouteLayer,
+  t3teamAtlassianOAuthStatusRouteLayer,
 );

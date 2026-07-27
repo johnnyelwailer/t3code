@@ -7,7 +7,7 @@ import {
   type JiraBoard,
   type JiraBoardConfigurationResponse,
   type JiraBoardSearchResponse,
-  type JiraCreateMetaResponse,
+  type JiraCreateMetaIssueTypesResponse,
   type JiraCommentsResponse,
   type JiraField,
   type JiraIssueLinkTypesResponse,
@@ -476,10 +476,22 @@ export class JiraApiClient {
     });
   }
 
-  async getCreateMeta(projectId: string): Promise<JiraCreateMetaResponse> {
-    const encodedProjectId = encodeURIComponent(projectId);
-    return this.fetchJson<JiraCreateMetaResponse>(
-      `/rest/api/3/issue/createmeta?projectIds=${encodedProjectId}&expand=projects.issuetypes.fields`,
+  /**
+   * Issue types creatable in a project.
+   *
+   * Uses the per-project endpoint. The older
+   * `createmeta?projectIds=…&expand=projects.issuetypes.fields` form this replaced was removed from
+   * Jira Cloud, and its failure was invisible: the caller read `projects[].issuetypes`, got nothing,
+   * and reported it as "this project has no subtask type" rather than as a broken request.
+   *
+   * Takes `projectIdOrKey`, so a caller holding either a numeric id or a project key works.
+   */
+  async getCreateMetaIssueTypes(
+    projectIdOrKey: string,
+  ): Promise<JiraCreateMetaIssueTypesResponse> {
+    const encoded = encodeURIComponent(projectIdOrKey);
+    return this.fetchJson<JiraCreateMetaIssueTypesResponse>(
+      `/rest/api/3/issue/createmeta/${encoded}/issuetypes`,
     );
   }
 

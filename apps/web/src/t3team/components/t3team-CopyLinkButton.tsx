@@ -16,10 +16,13 @@ export function CopyLinkButton({
   value,
   label = "Copy link",
   className,
+  onCopied,
 }: {
   readonly value: string;
   readonly label?: string;
   readonly className?: string;
+  /** Fires only after a successful copy — never on a refused clipboard write. */
+  readonly onCopied?: (() => void) | undefined;
 }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -37,12 +40,13 @@ export function CopyLinkButton({
       setCopied(true);
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => setCopied(false), CONFIRM_MS);
+      onCopied?.();
     } catch {
       // Clipboard access can be refused outright; leaving the label unchanged is the honest signal,
       // and the URL is selectable in the field beside this button.
       setCopied(false);
     }
-  }, [value]);
+  }, [value, onCopied]);
 
   return (
     <Button

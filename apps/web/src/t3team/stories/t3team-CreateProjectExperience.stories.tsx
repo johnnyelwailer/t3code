@@ -115,7 +115,12 @@ function CreateProjectExperienceStory({ autoAdvance = false }: { autoAdvance?: b
       else if (step === "confirm") setStep("creating");
     }, "forward");
   const demoOauth: UseAtlassianOAuthResult = useMemo(
-    () => ({ state: { kind: "idle" }, startOAuth: async () => goForward(), reset: () => {} }),
+    () => ({
+      state: { kind: "idle" },
+      startOAuth: async () => goForward(),
+      mintFreshSigninLink: async () => "",
+      reset: () => {},
+    }),
     [step],
   );
 
@@ -379,6 +384,7 @@ function ConnectAtlassianStepHarness({
   const oauth: UseAtlassianOAuthResult = {
     state: oauthState,
     startOAuth: async () => {},
+    mintFreshSigninLink: async () => "",
     reset: () => {},
   };
 
@@ -387,7 +393,12 @@ function ConnectAtlassianStepHarness({
     // step's internal vertical centering renders the same way it does in the live wizard.
     <div className="mx-auto flex h-[36rem] max-w-md flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6">
       {oauthState.kind === "needs_manual_open" ? (
-        <OAuthPopupBlockedNotice signinUrl={oauthState.signinUrl} onCancel={() => {}} />
+        <OAuthPopupBlockedNotice
+          signinUrl={oauthState.signinUrl}
+          expired={oauthState.expired ?? false}
+          onLinkUsed={() => {}}
+          onCancel={() => {}}
+        />
       ) : null}
       <ConnectAtlassianStep
         loading={false}
@@ -427,6 +438,19 @@ export const ConnectAtlassianPopupBlocked: Story = {
         kind: "needs_manual_open",
         // The shareable server-flow link, which is what the notice offers in practice.
         signinUrl: "http://localhost:5736/api/t3team/atlassian/oauth/begin/8f14e45fceea167a",
+      }}
+    />
+  ),
+};
+
+export const ConnectAtlassianLinkExpired: Story = {
+  render: () => (
+    <ConnectAtlassianStepHarness
+      oauthState={{
+        kind: "needs_manual_open",
+        signinUrl: "http://localhost:5736/api/t3team/atlassian/oauth/begin/8f14e45fceea167a",
+        // Seen pending, then unknown: the status poll reported this exact link can no longer finish.
+        expired: true,
       }}
     />
   ),

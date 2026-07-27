@@ -97,7 +97,51 @@ export function pendingAtlassianOAuthFlowCount(): number {
   return pendingFlows.size;
 }
 
-/** Test hook: the map is module state shared by every route in the process. */
+export type AtlassianOAuthFlowStatus = "pending" | "completed" | "unknown";
+
+/**
+ * How long a completed flow stays observable after `consumePendingAtlassianOAuthFlow` removes it from
+ * `pendingFlows`. Long enough that a ~2s poller from the tab that could not see the popup succeed is
+ * certain to observe the terminal state at least once; short enough that it does not become a second
+ * unbounded map. Bounded the same way `pendingFlows` is: swept on access, not on a timer.
+ */
+export const ATLASSIAN_OAUTH_FLOW_COMPLETED_RETENTION_MS = 2 * 60 * 1000;
+
+/** state -> the time it completed. Disjoint from `pendingFlows`: a state lives in exactly one map. */
+const completedFlows = new Map<string, number>();
+
+function sweepExpiredCompletedFlows(nowMs: number): void {
+  for (const [state, completedAtMs] of completedFlows) {
+    if (nowMs - completedAtMs >= ATLASSIAN_OAUTH_FLOW_COMPLETED_RETENTION_MS) {
+      completedFlows.delete(state);
+    }
+  }
+}
+
+/**
+ * Records that `state` finished successfully. Called once, right after the flow is consumed and its
+ * accounts persisted — never on a failed exchange, which puts the flow back as pending instead so the
+ * same link can be retried.
+ */
+export function markAtlassianOAuthFlowCompleted(state: string, nowMs: number): void {
+  sweepExpiredCompletedFlows(nowMs);
+  completedFlows.set(state, nowMs);
+}
+
+/**
+ * What a poller watching one `state` should be told: still pending, finished, or nothing this server
+ * remembers — a state it never issued, one that expired, or one whose completed marker aged out.
+ * Distinguishing `unknown` from `pending` is the whole point: it lets a waiting tab stop and say the
+ * link expired instead of polling forever.
+ */
+export function readAtlassianOAuthFlowStatus(state: string, nowMs: number): AtlassianOAuthFlowStatus {
+  sweepExpiredCompletedFlows(nowMs);
+  if (completedFlows.has(state)) return "completed";
+  return readPendingAtlassianOAuthFlow(state, nowMs) ? "pending" : "unknown";
+}
+
+/** Test hook: the maps are module state shared by every route in the process. */
 export function resetPendingAtlassianOAuthFlows(): void {
   pendingFlows.clear();
+  completedFlows.clear();
 }

@@ -6,6 +6,7 @@ import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-ht
 import { persistAtlassianOAuthAccounts } from "./t3team-atlassian-oauth-accountPersist.ts";
 import {
   consumePendingAtlassianOAuthFlow,
+  markAtlassianOAuthFlowCompleted,
   putPendingAtlassianOAuthFlow,
 } from "./t3team-atlassian-oauth-flowStore.ts";
 import {
@@ -70,6 +71,10 @@ export function completeAtlassianOAuthFlow(input: {
     // Not restored if persistence fails: the code has already been redeemed at Atlassian and is
     // single use there too, so a retry with the same state could never succeed anyway.
     const accounts = yield* persistAtlassianOAuthAccounts(grant);
+    // Marked only now, past every point that can still fail. A poller that saw "pending" right up to
+    // this instant and then "unknown" (persistence failing without this call) is told the truth: this
+    // link is dead and a fresh one is the only way forward, matching the code's single-use reality.
+    markAtlassianOAuthFlowCompleted(input.state.trim(), nowMs);
     return { status: "completed", accounts } as const;
   });
 }

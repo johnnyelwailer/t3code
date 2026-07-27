@@ -98,7 +98,7 @@ describeLive("JiraApiClient live verification", () => {
     const assignableUsers = await client.searchAssignableUsers(sample.issueIdOrKey);
     expect(assignableUsers).toBeInstanceOf(Array);
 
-    const createMeta = await client.getCreateMeta(sample.projectId);
-    expect(createMeta.projects?.length ?? 0).toBeGreaterThan(0);
+    const createMeta = await client.getCreateMetaIssueTypes(sample.projectId);
+    expect(createMeta.issueTypes?.length ?? 0).toBeGreaterThan(0);
   });
 });

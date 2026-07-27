@@ -269,6 +269,19 @@ export type JiraCreateMetaResponse = {
   }>;
 };
 
+/**
+ * Response of `/issue/createmeta/{projectIdOrKey}/issuetypes`.
+ *
+ * The flat replacement for the `createmeta?projectIds=…&expand=…` form, which Jira Cloud removed —
+ * it answers without a `projects` array, so nothing can be read out of the old shape.
+ */
+export type JiraCreateMetaIssueTypesResponse = {
+  readonly issueTypes?: ReadonlyArray<JiraCreateMetaIssueType>;
+  readonly startAt?: number;
+  readonly maxResults?: number;
+  readonly total?: number;
+};
+
 export type JiraComment = {
   readonly id: string;
   readonly body?: unknown;

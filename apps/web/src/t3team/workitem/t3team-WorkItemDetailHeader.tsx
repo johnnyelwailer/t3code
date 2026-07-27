@@ -1,6 +1,7 @@
 import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { readLocalApi } from "~/localApi";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { Spinner } from "~/t3team/components/ui/t3team-spinner";
@@ -68,10 +69,33 @@ export function WorkItemDetailHeader({
         </Button>
 
         {externalUrl ? (
+          /*
+            `target="_blank"` alone is not enough in the desktop shell, where a bare anchor has no
+            window to open into and the click goes nowhere. `shell.openExternal` is how the rest of
+            the app leaves the application (ThreadTerminalDrawer, GitActionsControl).
+
+            The href stays real so middle-click, copy-link-address and keyboard activation keep
+            working, and modified clicks are left alone. When there is no local API — the plain web
+            build — the browser's own `target="_blank"` is already correct, so the handler steps
+            aside rather than swallowing the click.
+          */
           <Button
             size="icon-xs"
             variant="ghost"
-            render={<a href={externalUrl} target="_blank" rel="noreferrer" />}
+            render={
+              <a
+                href={externalUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                  const shell = readLocalApi()?.shell;
+                  if (!shell) return;
+                  event.preventDefault();
+                  void shell.openExternal(externalUrl);
+                }}
+              />
+            }
             aria-label="Open in Jira"
             title="Open in Jira"
           >

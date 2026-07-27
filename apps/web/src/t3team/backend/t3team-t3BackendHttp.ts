@@ -48,33 +48,27 @@ function buildBackendFetchErrorMessage(input: { url: URL; error: unknown }): str
 }
 
 /**
- * `timeoutMs` overrides the default for routes that legitimately take longer than one request. The
- * Atlassian OAuth completion, for instance, makes three sequential Atlassian calls server-side, each
- * with its own 12s budget — giving up at 15s would abandon a request that was still going to succeed
- * and report a failure for a sign-in that actually completed.
+ * Shared by `postJson` and `getJson`: same timeout, abort, and error-shaping behaviour regardless of
+ * method, so the two only differ in the request they send in.
  */
-export async function postJson<TInput extends object, TResponse>(
-  httpBaseUrl: string,
-  routePath: string,
-  body: TInput,
-  options?: { readonly timeoutMs?: number },
+async function requestJson<TResponse>(
+  url: URL,
+  init: { readonly method: "GET" | "POST"; readonly body?: string },
+  timeoutMs: number,
 ): Promise<TResponse> {
-  const url = new URL(routePath, httpBaseUrl);
   const abortController = new AbortController();
   let didTimeout = false;
-  const timeoutMs = options?.timeoutMs ?? BACKEND_POST_TIMEOUT_MS;
   const timeoutHandle = globalThis.setTimeout(() => {
     didTimeout = true;
     abortController.abort();
   }, timeoutMs);
 
   const response = await fetch(url, {
-    method: "POST",
+    method: init.method,
     credentials: "same-origin",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
+    ...(init.body === undefined
+      ? {}
+      : { headers: { "content-type": "application/json" }, body: init.body }),
     signal: abortController.signal,
   })
     .catch((error) => {
@@ -110,4 +104,36 @@ export async function postJson<TInput extends object, TResponse>(
   }
 
   return payload as TResponse;
+}
+
+/**
+ * `timeoutMs` overrides the default for routes that legitimately take longer than one request. The
+ * Atlassian OAuth completion, for instance, makes three sequential Atlassian calls server-side, each
+ * with its own 12s budget — giving up at 15s would abandon a request that was still going to succeed
+ * and report a failure for a sign-in that actually completed.
+ */
+export async function postJson<TInput extends object, TResponse>(
+  httpBaseUrl: string,
+  routePath: string,
+  body: TInput,
+  options?: { readonly timeoutMs?: number },
+): Promise<TResponse> {
+  return requestJson<TResponse>(
+    new URL(routePath, httpBaseUrl),
+    { method: "POST", body: JSON.stringify(body) },
+    options?.timeoutMs ?? BACKEND_POST_TIMEOUT_MS,
+  );
+}
+
+/** Read-only counterpart to `postJson`, for routes with nothing to send but a path — a status poll. */
+export async function getJson<TResponse>(
+  httpBaseUrl: string,
+  routePath: string,
+  options?: { readonly timeoutMs?: number },
+): Promise<TResponse> {
+  return requestJson<TResponse>(
+    new URL(routePath, httpBaseUrl),
+    { method: "GET" },
+    options?.timeoutMs ?? BACKEND_POST_TIMEOUT_MS,
+  );
 }

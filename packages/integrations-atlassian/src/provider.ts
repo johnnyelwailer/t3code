@@ -2037,19 +2037,21 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     projectId: string,
     client: JiraApiClient,
   ): Promise<ReadonlyArray<{ id: string; name: string; fields?: Record<string, unknown> }>> {
-    try {
-      const createMeta = await client.getCreateMeta(projectId);
-      const issueTypes = createMeta.projects?.flatMap((project) => project.issuetypes ?? []) ?? [];
-      return issueTypes
-        .filter((issueType) => issueType.subtask === true || /sub-task|subtask/i.test(issueType.name))
-        .map((issueType) => ({
-          id: issueType.id,
-          name: issueType.name,
-          ...(issueType.fields ? { fields: issueType.fields } : {}),
-        }));
-    } catch {
-      return [];
-    }
+    /*
+      Deliberately not wrapped in a catch. Swallowing the failure here turned every cause — a removed
+      endpoint, a 403, an unexpected shape — into an empty list, which the caller then reported to the
+      user as "No Jira subtask issue type was detected for this project.". That blamed the project for
+      what was usually a broken request, and hid the one piece of information needed to fix it.
+    */
+    const createMeta = await client.getCreateMetaIssueTypes(projectId);
+    const issueTypes = createMeta.issueTypes ?? [];
+    return issueTypes
+      .filter((issueType) => issueType.subtask === true || /sub-task|subtask/i.test(issueType.name))
+      .map((issueType) => ({
+        id: issueType.id,
+        name: issueType.name,
+        ...(issueType.fields ? { fields: issueType.fields } : {}),
+      }));
   }
 
   private async resolveSubtaskIssueType(

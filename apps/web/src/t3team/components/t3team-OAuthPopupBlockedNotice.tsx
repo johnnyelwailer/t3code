@@ -17,15 +17,28 @@ import { T3SurfaceCard, T3SurfaceCardContent } from "~/t3team/components/ui/t3te
  * to the raw authorize URL, which can only be completed in this browser.
  *
  * The sign-in is still being waited on while this is visible. The result arrives over a same-origin
- * broadcast channel, or — when it finished somewhere this tab cannot see — by the server reporting a
- * new account. That is why the link can carry `rel="noreferrer"` (implying `noopener`) without
- * breaking anything: the opened page never needs a handle on this one.
+ * broadcast channel, by a poll of the server-owned flow's own status, or — when it finished somewhere
+ * neither of those can see — by the server reporting a new account. That is why the link can carry
+ * `rel="noreferrer"` (implying `noopener`) without breaking anything: the opened page never needs a
+ * handle on this one.
+ *
+ * `onLinkUsed` fires right after the current link is handed out — opened or copied — and mints its
+ * successor in the background. It never invalidates the link just used: this server's flows stay live
+ * until they either complete or expire on their own. The point is that the *next* time the user reaches
+ * for a link, whether because the first attempt seemed to do nothing or they are pasting it into a
+ * second browser, they get one nobody has used yet, closing off the "copied an already-consumed link"
+ * trap without ever making the button wait on a network round trip before it can open a tab.
  */
 export function OAuthPopupBlockedNotice({
   signinUrl,
+  expired = false,
+  onLinkUsed,
   onCancel,
 }: {
   readonly signinUrl: string;
+  /** The link currently on screen was seen pending, then reported unknown: it cannot finish. */
+  readonly expired?: boolean;
+  readonly onLinkUsed: () => void;
   readonly onCancel?: (() => void) | undefined;
 }) {
   return (
@@ -34,8 +47,10 @@ export function OAuthPopupBlockedNotice({
         <div>
           <p className="text-sm font-medium text-foreground">Finish signing in to Atlassian</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Open the sign-in window again, or copy the link into the browser you&apos;re already
-            signed in to.
+            {expired
+              ? "That link expired. Use one of the buttons below to get a fresh one."
+              : "Open the sign-in window again, or copy the link into the browser you're already " +
+                "signed in to."}
           </p>
         </div>
 
@@ -43,12 +58,13 @@ export function OAuthPopupBlockedNotice({
           <Button
             size="xs"
             render={<a href={signinUrl} target="_blank" rel="noreferrer external" />}
+            onClick={onLinkUsed}
           >
             <ExternalLink className="size-3.5" />
             Sign in to Atlassian
           </Button>
 
-          <CopyLinkButton value={signinUrl} label="Copy sign-in link" />
+          <CopyLinkButton value={signinUrl} label="Copy sign-in link" onCopied={onLinkUsed} />
 
           {onCancel ? (
             <Button size="xs" variant="ghost" onClick={onCancel}>

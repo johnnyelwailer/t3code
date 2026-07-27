@@ -29,9 +29,13 @@ describe("ChildIssueCreateForm", () => {
     expect(markup).toContain('value="2.5"');
     expect(markup).toContain("Ada Lovelace");
     expect(markup).toContain("Add a description");
-    // No `onListChildIssueTypes` supplied — the issue-type field shows the resolved default,
-    // disabled, rather than inventing options.
-    expect(markup).toContain("Subtask");
+    /*
+      No `onListChildIssueTypes` supplied, so Jira has named no type. This used to assert the field
+      said "Subtask" — a word the code invented, which is exactly how a project whose types could not
+      be read came to look identical to one with a subtask type, right up until Create failed.
+    */
+    expect(markup).toContain("No child type");
+    expect(markup).not.toContain(">Subtask<");
   });
 
   it("shows a validation error inline", () => {

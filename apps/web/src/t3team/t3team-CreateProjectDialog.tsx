@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
-import { OAuthPopupBlockedNotice } from "~/t3team/components/t3team-OAuthPopupBlockedNotice";
+import { CreateProjectDialogOAuthNotice } from "~/t3team/t3team-CreateProjectDialogOAuthNotice";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
 import { useAtlassianOAuth } from "~/t3team/hooks/t3team-useAtlassianOAuth";
@@ -54,8 +54,6 @@ export function CreateProjectDialog({
   const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
   const [customProfile, setCustomProfile] = useState<T3TeamProfile | undefined>(undefined);
   const oauthError = oauth.state.kind === "error" ? oauth.state.message : null;
-  // Covers a blocked popup and one the user closed: both leave sign-in waiting on a manual open.
-  const manualSigninUrl = oauth.state.kind === "needs_manual_open" ? oauth.state.signinUrl : null;
   const oauthConfigured = Boolean(__ATLASSIAN_CLIENT_ID__);
 
   useEffect(() => {
@@ -129,9 +127,7 @@ export function CreateProjectDialog({
       }
     >
       <div className="relative flex min-h-full flex-col gap-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
-        {manualSigninUrl ? (
-          <OAuthPopupBlockedNotice signinUrl={manualSigninUrl} onCancel={oauth.reset} />
-        ) : null}
+        <CreateProjectDialogOAuthNotice oauth={oauth} />
 
         {setup.error || oauthError ? (
           <T3TeamErrorState error={setup.error ?? oauthError} action="setting up the project" />

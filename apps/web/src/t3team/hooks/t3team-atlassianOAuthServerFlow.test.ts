@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   beginAtlassianOAuthServerFlow,
   completeAtlassianOAuthServerFlow,
+  getAtlassianOAuthFlowStatus,
   readAtlassianOAuthCallbackParams,
 } from "./t3team-atlassianOAuthServerFlow";
 
@@ -43,6 +44,66 @@ describe("beginAtlassianOAuthServerFlow", () => {
     expect(started.state).toBe("abc");
     const [, init] = fetchMock.mock.calls[0] ?? [];
     expect(init).toMatchObject({ body: JSON.stringify({ redirectUri: CALLBACK }) });
+  });
+
+  it("mints a distinct state and link on every call, so a caller can always request a fresh one", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    let nextState = 0;
+    fetchMock.mockImplementation(async () => {
+      const state = `state-${nextState++}`;
+      return {
+        ok: true,
+        json: async () => ({
+          state,
+          authorizeUrl: `https://auth.atlassian.com/authorize?state=${state}`,
+          beginPath: `/api/t3team/atlassian/oauth/begin/${state}`,
+          beginUrl: `http://0.0.0.0:13776/api/t3team/atlassian/oauth/begin/${state}`,
+          expiresAtMs: 600_000,
+        }),
+      } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = await beginAtlassianOAuthServerFlow({
+      redirectUri: CALLBACK,
+      apiBaseUrl: "http://localhost:5736/",
+    });
+    const second = await beginAtlassianOAuthServerFlow({
+      redirectUri: CALLBACK,
+      apiBaseUrl: "http://localhost:5736/",
+    });
+
+    // Nothing here is cached client-side: every call is a real request, so every click of "Copy
+    // sign-in link" or "Sign in to Atlassian" (see t3team-OAuthPopupBlockedNotice.tsx) hands out a
+    // link nobody could have already consumed.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(first.state).not.toBe(second.state);
+    expect(first.shareUrl).not.toBe(second.shareUrl);
+  });
+});
+
+describe("getAtlassianOAuthFlowStatus", () => {
+  it("reads the status out of the route named by state", async () => {
+    const fetchMock = stubJsonResponse({ status: "pending" });
+
+    await expect(
+      getAtlassianOAuthFlowStatus({ state: "s1", apiBaseUrl: API_BASE }),
+    ).resolves.toBe("pending");
+
+    const [url] = fetchMock.mock.calls[0] ?? [];
+    expect((url as URL).toString()).toBe(`${API_BASE}api/t3team/atlassian/oauth/status/s1`);
+  });
+
+  it("passes completed and unknown through unchanged", async () => {
+    stubJsonResponse({ status: "completed" });
+    await expect(
+      getAtlassianOAuthFlowStatus({ state: "s1", apiBaseUrl: API_BASE }),
+    ).resolves.toBe("completed");
+
+    stubJsonResponse({ status: "unknown" });
+    await expect(
+      getAtlassianOAuthFlowStatus({ state: "s1", apiBaseUrl: API_BASE }),
+    ).resolves.toBe("unknown");
   });
 });
 

@@ -164,7 +164,7 @@ function EditableSections() {
         items={children}
         backend={backend}
         accountId={ACCOUNT_ID}
-        projectId="EXT-1"
+        externalProjectId="EXT-1"
         issueIdOrKey="KOOR-1"
         onReload={reload}
       />

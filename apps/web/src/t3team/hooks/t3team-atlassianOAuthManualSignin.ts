@@ -1,6 +1,8 @@
 import { ATLASSIAN_OAUTH_FLOW_TTL_MS } from "@t3tools/integrations-atlassian";
 
 import { waitForOAuthCallback } from "~/t3team/hooks/t3team-atlassianOAuthPopup";
+import type { AtlassianOAuthFlowStatus } from "~/t3team/hooks/t3team-atlassianOAuthServerFlow";
+import { pollAtlassianOAuthFlowStatus } from "~/t3team/hooks/t3team-atlassianOAuthStatusPoll";
 
 /**
  * Keeps a sign-in attempt alive after the popup stopped being the way it will finish.
@@ -66,12 +68,18 @@ export async function awaitManualAtlassianSignin(input: {
   readonly redirectUri: string;
   readonly listAccountIds: () => Promise<ReadonlyArray<string>>;
   readonly baselineAccountIds: ReadonlyArray<string>;
+  /** Read fresh by the status poll on every tick, so minting a fresh link mid-wait retargets it. */
+  readonly getServerState: () => string | null;
+  readonly getStatus: (state: string) => Promise<AtlassianOAuthFlowStatus>;
+  readonly isCancelled: () => boolean;
+  readonly onLinkExpired: () => void;
   readonly timeoutMs?: number;
 }): Promise<ManualAtlassianSigninOutcome> {
   // Same deadline the server's pending-flow store uses; see ATLASSIAN_OAUTH_FLOW_TTL_MS.
   const timeoutMs = input.timeoutMs ?? ATLASSIAN_OAUTH_FLOW_TTL_MS;
   const deadlineMs = Date.now() + timeoutMs;
   let settled = false;
+  const isCancelled = () => settled || input.isCancelled();
 
   // `null` popup: there is no window handle to poll, which is exactly the "user opens the link
   // themselves" shape `waitForOAuthCallback` already supports.
@@ -84,17 +92,28 @@ export async function awaitManualAtlassianSignin(input: {
     listAccountIds: input.listAccountIds,
     baselineAccountIds: input.baselineAccountIds,
     deadlineMs,
-    isCancelled: () => settled,
+    isCancelled,
   }).then(
     (found): ManualAtlassianSigninOutcome =>
       found ? { kind: "server_connected" } : { kind: "timed_out" },
   );
 
-  const outcome = await Promise.race([callback, accountAppeared]);
+  // The most direct signal: it asks the server about this exact flow instead of waiting for one to
+  // arrive by accident, which is what actually lets a sign-in finished in a different browser be
+  // noticed here at all.
+  const statusPoll = pollAtlassianOAuthFlowStatus({
+    getServerState: input.getServerState,
+    getStatus: input.getStatus,
+    deadlineMs,
+    isCancelled,
+    onLinkExpired: input.onLinkExpired,
+  });
+
+  const outcome = await Promise.race([callback, accountAppeared, statusPoll]);
   settled = true;
   if (outcome.kind !== "timed_out") return outcome;
 
-  // One branch timing out does not end the attempt; the other may still be live.
-  const remaining = await Promise.all([callback, accountAppeared]);
+  // One branch timing out does not end the attempt; the others may still be live.
+  const remaining = await Promise.all([callback, accountAppeared, statusPoll]);
   return remaining.find((candidate) => candidate.kind !== "timed_out") ?? { kind: "timed_out" };
 }

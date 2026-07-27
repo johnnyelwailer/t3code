@@ -23,6 +23,7 @@ type SectionMenu = (
 export function WorkItemSecondaryColumn({
   issueKey,
   projectId,
+  externalProjectId,
   accountId,
   backend,
   currentUserName,
@@ -42,7 +43,10 @@ export function WorkItemSecondaryColumn({
   supplementalSections,
 }: {
   readonly issueKey: string;
+  /** t3team's project id — used for local ticket refs and draft scoping. */
   readonly projectId: string;
+  /** Jira's project id, for calls that reach Atlassian. A different id space to `projectId`. */
+  readonly externalProjectId?: string | undefined;
   readonly accountId?: string | undefined;
   readonly backend?: AtlassianBackendApi | undefined;
   readonly currentUserName?: string | undefined;
@@ -69,7 +73,7 @@ export function WorkItemSecondaryColumn({
         items={childItems}
         anchorId={anchors.children}
         onOpenTicket={onOpenTicket}
-        projectId={projectId}
+        {...(externalProjectId ? { externalProjectId } : {})}
         {...writeProps}
         {...(currentUserName ? { currentUserName } : {})}
         {...sectionMenu("relationships", `${issueKey} child items`)}

@@ -3,11 +3,14 @@ import { assert, describe, expect, it } from "vite-plus/test";
 import { afterEach } from "vite-plus/test";
 
 import {
+  ATLASSIAN_OAUTH_FLOW_COMPLETED_RETENTION_MS,
   ATLASSIAN_OAUTH_FLOW_MAX_PENDING,
   ATLASSIAN_OAUTH_FLOW_TTL_MS,
   consumePendingAtlassianOAuthFlow,
+  markAtlassianOAuthFlowCompleted,
   pendingAtlassianOAuthFlowCount,
   putPendingAtlassianOAuthFlow,
+  readAtlassianOAuthFlowStatus,
   readPendingAtlassianOAuthFlow,
   resetPendingAtlassianOAuthFlows,
   type PendingAtlassianOAuthFlow,
@@ -100,5 +103,35 @@ describe("pending Atlassian OAuth flow store", () => {
     consumePendingAtlassianOAuthFlow("a", 0);
 
     expect(readPendingAtlassianOAuthFlow("a", 0)).toBeUndefined();
+  });
+});
+
+describe("Atlassian OAuth flow status", () => {
+  it("is pending while the flow is still in the store, unknown once it never existed", () => {
+    putPendingAtlassianOAuthFlow(flow("a", 0), 0);
+
+    assert.equal(readAtlassianOAuthFlowStatus("a", 0), "pending");
+    assert.equal(readAtlassianOAuthFlowStatus("never-issued", 0), "unknown");
+  });
+
+  it("is completed once marked, even though consuming already removed it from pendingFlows", () => {
+    putPendingAtlassianOAuthFlow(flow("a", 0), 0);
+    consumePendingAtlassianOAuthFlow("a", 0);
+    markAtlassianOAuthFlowCompleted("a", 0);
+
+    assert.equal(readAtlassianOAuthFlowStatus("a", 0), "completed");
+  });
+
+  it("forgets a completed marker after its retention window, reporting unknown again", () => {
+    markAtlassianOAuthFlowCompleted("a", 0);
+
+    assert.equal(
+      readAtlassianOAuthFlowStatus("a", ATLASSIAN_OAUTH_FLOW_COMPLETED_RETENTION_MS - 1),
+      "completed",
+    );
+    assert.equal(
+      readAtlassianOAuthFlowStatus("a", ATLASSIAN_OAUTH_FLOW_COMPLETED_RETENTION_MS),
+      "unknown",
+    );
   });
 });

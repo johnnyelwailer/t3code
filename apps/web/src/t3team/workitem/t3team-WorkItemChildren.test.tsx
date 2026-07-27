@@ -63,7 +63,7 @@ describe("WorkItemChildren", () => {
         items={[]}
         backend={{} as never}
         accountId="acc-1"
-        projectId="EXT-1"
+        externalProjectId="EXT-1"
         issueIdOrKey="T3T-1"
         onReload={() => {}}
       />,

@@ -2116,25 +2116,17 @@ describe("AtlassianIntegrationProvider", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
 
-      if (
-        url.endsWith(
-          "/rest/api/3/issue/createmeta?projectIds=10000&expand=projects.issuetypes.fields",
-        )
-      ) {
+      if (url.endsWith("/rest/api/3/issue/createmeta/10000/issuetypes")) {
         return Response.json({
-          projects: [
+          issueTypes: [
             {
-              issuetypes: [
-                {
-                  id: "5",
-                  name: "Sub-task",
-                  subtask: true,
-                  fields: {
-                    description: {},
-                    timetracking: {},
-                  },
-                },
-              ],
+              id: "5",
+              name: "Sub-task",
+              subtask: true,
+              fields: {
+                description: {},
+                timetracking: {},
+              },
             },
           ],
         });
@@ -2197,15 +2189,11 @@ describe("AtlassianIntegrationProvider", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
 
-      if (url.endsWith("/rest/api/3/issue/createmeta?projectIds=10000&expand=projects.issuetypes.fields")) {
+      if (url.endsWith("/rest/api/3/issue/createmeta/10000/issuetypes")) {
         return Response.json({
-          projects: [
-            {
-              issuetypes: [
-                { id: "5", name: "Sub-task", subtask: true, fields: {} },
-                { id: "9", name: "Technical task", subtask: true, fields: { assignee: {} } },
-              ],
-            },
+          issueTypes: [
+            { id: "5", name: "Sub-task", subtask: true, fields: {} },
+            { id: "9", name: "Technical task", subtask: true, fields: { assignee: {} } },
           ],
         });
       }
@@ -2254,9 +2242,9 @@ describe("AtlassianIntegrationProvider", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
 
-      if (url.endsWith("/rest/api/3/issue/createmeta?projectIds=10000&expand=projects.issuetypes.fields")) {
+      if (url.endsWith("/rest/api/3/issue/createmeta/10000/issuetypes")) {
         return Response.json({
-          projects: [{ issuetypes: [{ id: "5", name: "Sub-task", subtask: true, fields: {} }] }],
+          issueTypes: [{ id: "5", name: "Sub-task", subtask: true, fields: {} }],
         });
       }
 
@@ -2301,16 +2289,12 @@ describe("AtlassianIntegrationProvider", () => {
   it("lists every subtask-shaped child issue type from createmeta, not just the first match", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
-      if (url.endsWith("/rest/api/3/issue/createmeta?projectIds=10000&expand=projects.issuetypes.fields")) {
+      if (url.endsWith("/rest/api/3/issue/createmeta/10000/issuetypes")) {
         return Response.json({
-          projects: [
-            {
-              issuetypes: [
-                { id: "5", name: "Sub-task", subtask: true },
-                { id: "9", name: "Technical task", subtask: true },
-                { id: "3", name: "Story", subtask: false },
-              ],
-            },
+          issueTypes: [
+            { id: "5", name: "Sub-task", subtask: true },
+            { id: "9", name: "Technical task", subtask: true },
+            { id: "3", name: "Story", subtask: false },
           ],
         });
       }
@@ -2330,6 +2314,37 @@ describe("AtlassianIntegrationProvider", () => {
       { id: "5", name: "Sub-task" },
       { id: "9", name: "Technical task" },
     ]);
+  });
+
+  /*
+    Regression: a failing createmeta request used to be caught and turned into an empty list, which
+    surfaced to the user as "No Jira subtask issue type was detected for this project." — blaming the
+    project for a broken request and hiding the status code needed to diagnose it.
+  */
+  it("surfaces a failing createmeta request instead of reporting the project has no subtask type", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/rest/api/3/issue/createmeta/10000/issuetypes")) {
+        return new Response("Gone", { status: 410 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new AtlassianIntegrationProvider({
+      siteUrl: "https://test.atlassian.net",
+      email: "user@example.com",
+      apiToken: "token",
+    });
+
+    await expect(
+      provider.createSubtask({
+        accountId: "https://test.atlassian.net",
+        projectId: "10000",
+        parentIssueIdOrKey: "TEST-1",
+        summary: "Child",
+      }),
+    ).rejects.toThrow(/410|Gone/i);
   });
 
   it("downloads Jira attachment assets with the authenticated client", async () => {

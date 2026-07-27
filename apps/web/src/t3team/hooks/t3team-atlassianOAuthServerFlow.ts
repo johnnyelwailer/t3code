@@ -1,4 +1,4 @@
-import { postJson } from "~/t3team/backend/t3team-t3BackendHttp";
+import { getJson, postJson } from "~/t3team/backend/t3team-t3BackendHttp";
 
 /**
  * Client side of the server-owned Atlassian OAuth flow.
@@ -16,6 +16,7 @@ import { postJson } from "~/t3team/backend/t3team-t3BackendHttp";
  */
 export const ATLASSIAN_OAUTH_BEGIN_PATH = "/api/t3team/atlassian/oauth/begin";
 export const ATLASSIAN_OAUTH_COMPLETE_PATH = "/api/t3team/atlassian/oauth/complete";
+export const ATLASSIAN_OAUTH_STATUS_PATH = "/api/t3team/atlassian/oauth/status";
 
 function defaultApiBaseUrl(): string {
   return window.location.origin;
@@ -132,4 +133,25 @@ export async function completeAtlassianOAuthServerFlow(input: {
   } catch (error) {
     return { kind: "failed", error };
   }
+}
+
+export type AtlassianOAuthFlowStatus = "pending" | "completed" | "unknown";
+
+type StatusResponse = { readonly status: AtlassianOAuthFlowStatus };
+
+/**
+ * Asks directly whether one server-owned flow finished, for the tab that has no opener to
+ * `postMessage` it and no same-origin broadcast to hear — sign-in completed in a different browser
+ * entirely. A failed request is not distinguished from any particular status here; the caller already
+ * treats a poll it could not complete the same as one that came back `pending`, and keeps trying.
+ */
+export async function getAtlassianOAuthFlowStatus(input: {
+  readonly state: string;
+  readonly apiBaseUrl?: string;
+}): Promise<AtlassianOAuthFlowStatus> {
+  const response = await getJson<StatusResponse>(
+    input.apiBaseUrl ?? defaultApiBaseUrl(),
+    `${ATLASSIAN_OAUTH_STATUS_PATH}/${encodeURIComponent(input.state)}`,
+  );
+  return response.status;
 }

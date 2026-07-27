@@ -4,7 +4,10 @@ import {
   waitForOAuthCallback,
 } from "~/t3team/hooks/t3team-atlassianOAuthPopup";
 import { awaitManualAtlassianSignin } from "~/t3team/hooks/t3team-atlassianOAuthManualSignin";
-import { readAtlassianOAuthCallbackParams } from "~/t3team/hooks/t3team-atlassianOAuthServerFlow";
+import {
+  readAtlassianOAuthCallbackParams,
+  type AtlassianOAuthFlowStatus,
+} from "~/t3team/hooks/t3team-atlassianOAuthServerFlow";
 
 export type AtlassianOAuthAttemptOutcome =
   /** The tab-owned flow won: this code still has to be exchanged with the verifier in this tab. */
@@ -30,6 +33,8 @@ function readAttemptOutcome(input: {
   if (params.error) {
     throw new Error(`OAuth error: ${params.error} ${params.errorDescription}`.trim());
   }
+  // Reads whichever server-owned state is current, not just the one this attempt started with:
+  // minting a fresh sign-in link (see `mintFreshSigninLink`) replaces it without restarting the wait.
   if (input.serverState && params.state === input.serverState) {
     return { kind: "server_connected" };
   }
@@ -57,16 +62,20 @@ export async function runAtlassianOAuthAttempt(input: {
   readonly popup: WindowProxy | null;
   readonly redirectUri: string;
   readonly tabState: string;
-  readonly serverState: string | null;
+  /** The latest server-owned flow's `state`, or `null` if one could never be begun. */
+  readonly getServerState: () => string | null;
+  readonly getStatus: (state: string) => Promise<AtlassianOAuthFlowStatus>;
   readonly listAccountIds: () => Promise<ReadonlyArray<string>>;
   readonly baselineAccountIds: Promise<ReadonlyArray<string>>;
+  readonly isCancelled: () => boolean;
   readonly onNeedsManualOpen: () => void;
+  readonly onLinkExpired: () => void;
 }): Promise<AtlassianOAuthAttemptOutcome> {
   const readOutcome = (callbackUrl: string) =>
     readAttemptOutcome({
       callbackUrl,
       tabState: input.tabState,
-      serverState: input.serverState,
+      serverState: input.getServerState(),
     });
 
   try {
@@ -80,6 +89,10 @@ export async function runAtlassianOAuthAttempt(input: {
     redirectUri: input.redirectUri,
     listAccountIds: input.listAccountIds,
     baselineAccountIds: await input.baselineAccountIds,
+    getServerState: input.getServerState,
+    getStatus: input.getStatus,
+    isCancelled: input.isCancelled,
+    onLinkExpired: input.onLinkExpired,
   });
 
   if (outcome.kind === "server_connected") return { kind: "server_connected" };

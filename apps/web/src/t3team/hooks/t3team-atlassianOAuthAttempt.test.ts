@@ -7,6 +7,7 @@ import {
   ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE,
   type AtlassianOAuthCallbackMessage,
 } from "~/t3team/components/t3team-atlassianOAuthCallbackMessage";
+import type { AtlassianOAuthFlowStatus } from "~/t3team/hooks/t3team-atlassianOAuthServerFlow";
 
 const REDIRECT_URI = "http://localhost:5736/oauth/callback";
 const TAB_STATE = "tab-state";
@@ -39,15 +40,24 @@ function startAttempt(overrides: {
   readonly listAccountIds?: () => Promise<ReadonlyArray<string>>;
   readonly baselineAccountIds?: ReadonlyArray<string>;
   readonly onNeedsManualOpen?: () => void;
+  readonly getServerState?: () => string | null;
+  readonly getStatus?: (state: string) => Promise<AtlassianOAuthFlowStatus>;
+  readonly isCancelled?: () => boolean;
+  readonly onLinkExpired?: () => void;
 }) {
   return runAtlassianOAuthAttempt({
     popup: overrides.popup,
     redirectUri: REDIRECT_URI,
     tabState: TAB_STATE,
-    serverState: SERVER_STATE,
+    getServerState: overrides.getServerState ?? (() => SERVER_STATE),
+    // Never resolves "completed"/"unknown" by default, so the status poll stays a silent bystander
+    // and these tests keep exercising the callback and account-appearance races as before.
+    getStatus: overrides.getStatus ?? (async () => "pending"),
     listAccountIds: overrides.listAccountIds ?? (async () => []),
     baselineAccountIds: Promise.resolve(overrides.baselineAccountIds ?? []),
+    isCancelled: overrides.isCancelled ?? (() => false),
     onNeedsManualOpen: overrides.onNeedsManualOpen ?? (() => {}),
+    onLinkExpired: overrides.onLinkExpired ?? (() => {}),
   });
 }
 

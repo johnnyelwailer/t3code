@@ -1,3 +1,4 @@
+import { cn } from "~/t3team/lib/t3team-utils";
 import type { AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
 import {
   Select,
@@ -32,13 +33,30 @@ export function ChildIssueTypeField({
   const selected = options.find((option) => option.id === value) ?? options[0];
 
   if (!reachable || options.length <= 1) {
-    const label = loading ? "Loading…" : (selected?.name ?? "Subtask");
+    /*
+      Never label this "Subtask" on a guess. It previously fell back to that word whenever the list
+      was empty, so a project whose types could not be read looked identical to one with a single
+      type called Subtask — and Create then failed with "no subtask issue type was detected". The
+      field now shows only a name Jira actually returned, and says so plainly when it has none.
+    */
+    const resolved = loading ? "Loading…" : selected?.name;
     return (
       <span
-        className="inline-flex h-7 items-center rounded-md border border-border/60 bg-muted/20 px-2 text-[12px] text-muted-foreground"
-        title={reachable ? undefined : "Child issue type is fixed to this project's default."}
+        className={cn(
+          "inline-flex h-7 items-center rounded-md border px-2 text-[12px]",
+          resolved
+            ? "border-border/60 bg-muted/20 text-muted-foreground"
+            : "border-destructive/40 bg-destructive/10 text-destructive",
+        )}
+        title={
+          resolved
+            ? reachable
+              ? undefined
+              : "Child issue type is fixed to this project's default."
+            : "Jira returned no child issue type for this project, so a child cannot be created here."
+        }
       >
-        {label}
+        {resolved ?? "No child type"}
       </span>
     );
   }
