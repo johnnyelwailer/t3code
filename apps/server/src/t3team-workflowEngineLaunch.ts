@@ -14,6 +14,7 @@ import {
   type JournalStore,
   startWorkflow,
   type SuspendedResult,
+  type T3TeamToolHandlerClient,
   type WorkflowRef,
   type WorkflowRunOptions,
   type WorkflowRunResult,
@@ -32,6 +33,7 @@ import { settleWorkflowRunFailure } from "./t3team-workflowRunFailure.ts";
 import type { WorkflowRepairIntent } from "./t3team-workflowSelfHeal.ts";
 import { tryWorkflowRepair } from "./t3team-workflowEngineRepair.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
+import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostDraftTools.ts";
 
 export type WorkflowLaunchStatus = "completed" | "suspended" | "failed";
 
@@ -45,6 +47,9 @@ export interface LaunchWorkflowRecipeInput {
   readonly args: unknown;
   /** The launching recipe's private scripts; bodies see them as `scripts.*` (Epic 25 §Scripts). */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
+  /** Per-run bridge to the broker's work-item draft tools, built by the caller from the launch
+   * thread (t3team-workflowHostDraftTools.ts). Absent leaves those refs bound but uncallable. */
+  readonly hostToolClient?: T3TeamToolHandlerClient;
   readonly runsRoot: string;
   /** The chat the user launched from; `undefined` for a headless run (`thread` is undefined). */
   readonly launchThreadId: string | undefined;
@@ -169,7 +174,7 @@ export function createWorkflowRunController(
   const options: WorkflowRunOptions = {
     runsRoot: input.runsRoot,
     broker,
-    tools: [],
+    ...t3teamWorkflowHostToolRunOptions(input.hostToolClient),
     scripts: input.scripts ?? {},
     defaultModel: toWorkflowModelSelection(
       input.defaultAgentModelSelection ?? input.modelSelection,

@@ -56,7 +56,13 @@ function buildRunContexts(opts: {
   let toolCtxRef!: T.ToolHandlerCtx;
   const callTool = <I, R>(ref: T.ToolRef<I, R>, args: I) =>
     executeToolHandler(ref, args, toolCtxRef);
-  toolCtxRef = { ...shared, callTool };
+  // Host-backed tool refs are registered globally (the engine executes a tool by id), so their
+  // per-run wiring has to arrive through the ctx rather than a closure — this is that seat.
+  toolCtxRef = {
+    ...shared,
+    callTool,
+    ...(opts.options.t3team === undefined ? {} : { t3team: opts.options.t3team }),
+  };
   return { toolCtx: toolCtxRef, scriptCtx: { ...shared, callTool } };
 }
 

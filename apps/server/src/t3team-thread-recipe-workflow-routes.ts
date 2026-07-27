@@ -35,6 +35,8 @@ import {
 import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
+import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
+import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
 
 export { t3teamThreadWorkflowResolveInputRouteLayer } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 
@@ -53,6 +55,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     const runRepository = yield* WorkflowRunRepository;
     const journalStore = yield* WorkflowJournalStore;
     const scheduler = yield* T3TeamWorkflowScheduler;
+    const toolBroker = yield* T3TeamToolBroker;
     const input = yield* readJsonBody<LaunchProjectRecipeWorkflowRequest>();
 
     const threadIdInput = input.threadId?.trim() ?? "";
@@ -137,6 +140,13 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       workflowPath,
     });
 
+    // The body's `getTools()` bridge to the broker's work-item DRAFT tools. Bound to THIS thread,
+    // so a proposal lands on the thread the user launched from and shows up in its review UI.
+    const hostToolClient = makeT3TeamWorkflowHostDraftToolClient({
+      broker: toolBroker,
+      launchThreadId: threadIdInput,
+    });
+
     // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
     // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
     // `t3team.orchestration.run` tool drives through.
@@ -159,6 +169,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         ...(Object.keys(scripts).length === 0
           ? {}
           : { scripts, recipePath: input.launch.recipePath }),
+        ...(hostToolClient === undefined ? {} : { hostToolClient }),
         workspaceRoot: project.workspaceRoot,
         launchThreadId: threadIdInput,
         projectId: thread.projectId,

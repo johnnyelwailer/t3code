@@ -76,6 +76,8 @@ export interface PreparedWorkflowLaunchInput {
   readonly args: unknown;
   /** The launching recipe's private scripts (recipe launches only; Epic 25 §Scripts). */
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
+  /** Per-run bridge to the broker's work-item draft tools (t3team-workflowHostDraftTools.ts). */
+  readonly hostToolClient?: LaunchWorkflowRecipeInput["hostToolClient"];
   /** The launching recipe's directory — persisted on the run row so boot rehydration can
    * re-resolve `scripts` after a restart (see t3team-workflowRehydrateScripts.ts). */
   readonly recipePath?: string | undefined;
@@ -188,6 +190,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       workflowPath: input.workflowPath,
       args: input.args,
       ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
+      ...(input.hostToolClient === undefined ? {} : { hostToolClient: input.hostToolClient }),
       runsRoot: `${input.workspaceRoot}/.t3team-runs`,
       launchThreadId: input.launchThreadId,
       projectId: input.projectId,
