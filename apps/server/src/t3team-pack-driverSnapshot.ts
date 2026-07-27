@@ -67,6 +67,8 @@ export const packSnapshotToServerProvider = (input: {
     continuation: { groupKey: input.continuationKey },
     ...(input.accentColor ? { accentColor: input.accentColor } : {}),
     ...(input.iconDataUrl ? { iconDataUrl: input.iconDataUrl } : {}),
+    // Only forwarded when the pack opts out; absent means the host default (true).
+    ...(snapshot.showInteractionModeToggle === false ? { showInteractionModeToggle: false } : {}),
   };
 };
 
