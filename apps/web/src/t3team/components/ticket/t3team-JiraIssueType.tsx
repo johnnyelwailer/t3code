@@ -123,9 +123,31 @@ function IssueGlyph({ type }: { type: JiraIssueTypeKey }) {
         </svg>
       );
     default:
+      /*
+        Used when the issue's type is genuinely unknown — a linked key we have not resolved yet.
+        A filled dot read as an unfinished placeholder rather than "an issue", so this is an outlined
+        card instead: the same visual weight as the real glyphs, and honest about saying only
+        "an issue" without pretending to know which kind.
+      */
       return (
         <svg viewBox="0 0 12 12" className="size-3/4" aria-hidden="true">
-          <circle cx="6" cy="6" r="2" fill="currentColor" />
+          <rect
+            x="2.2"
+            y="2.6"
+            width="7.6"
+            height="6.8"
+            rx="1.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.2"
+          />
+          <path
+            d="M4.3 5.4h3.4M4.3 7.2h2.2"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+            strokeLinecap="round"
+          />
         </svg>
       );
   }

@@ -80,9 +80,14 @@ export function WorkItemLinkRow({
   }
 
   return (
-    <div className="group/link-row relative">
+    /*
+      `pr-9` reserves the delete control's own column. It is absolutely positioned, so without a
+      reserved gutter it landed exactly on top of the row's trailing content — the assignee avatar —
+      and hovering swapped one control for another in the same pixels.
+    */
+    <div className="group/link-row relative pr-9">
       <WorkItemIssueRow {...rowProps} />
-      <div className="absolute right-2 top-1/2 hidden -translate-y-1/2 group-hover/link-row:block">
+      <div className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 group-hover/link-row:block">
         <Button
           type="button"
           variant="ghost"
