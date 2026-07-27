@@ -140,6 +140,14 @@ export type ViewState =
       projectId: string;
       threadId: string;
       embeddedThreadId?: string;
+    }
+  // A draft thread is not a server thread yet, so it has no threadId and its
+  // project is derived from the composer draft store rather than the route.
+  | {
+      type: "draft";
+      draftId: string;
+      projectId?: string;
+      embeddedThreadId?: string;
     };
 
 export function readActiveThreadIdFromView(view: ViewState | null): string | null {

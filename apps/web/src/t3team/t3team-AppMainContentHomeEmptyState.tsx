@@ -4,6 +4,10 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { CreateProjectDialog } from "~/t3team/t3team-CreateProjectDialog";
 import type { ProjectDashboardKickoffAsideProps } from "~/t3team/t3team-ProjectDashboardKickoffAsideTypes";
+import {
+  T3TEAM_FIRST_PROJECT_SETUP_REASON,
+  type T3TeamSetupSurfaceReason,
+} from "~/t3team/t3team-setupSurfaceReason";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 
@@ -13,6 +17,7 @@ export function AppMainContentHomeEmptyState({
   onCreate,
   onInlineProjectCreated,
   showInitialSetup,
+  setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
   showAside,
   shouldInsetDesktopHeader = false,
   homeChatProject,
@@ -25,6 +30,7 @@ export function AppMainContentHomeEmptyState({
   onCreate: () => void;
   onInlineProjectCreated: (project: ProjectShellProject) => void;
   showInitialSetup: boolean;
+  setupSurfaceReason?: T3TeamSetupSurfaceReason;
   showAside: boolean;
   shouldInsetDesktopHeader?: boolean;
   homeChatProject: ProjectShellProject | null;
@@ -52,6 +58,7 @@ export function AppMainContentHomeEmptyState({
               })
           : onCreate
       }
+      setupSurfaceReason={setupSurfaceReason}
       showAside={showAside}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       emptyContent={

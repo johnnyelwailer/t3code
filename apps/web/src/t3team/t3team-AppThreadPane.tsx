@@ -6,6 +6,7 @@ import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { navigateBackWithFallback } from "~/t3team/t3team-historyBack";
+import { useFinalizePromotedDraft } from "~/t3team/t3team-useFinalizePromotedDraft";
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 
 export function AppThreadPane({
@@ -33,6 +34,9 @@ export function AppThreadPane({
 }) {
   const canGoBack = useCanGoBack();
   const canOpenEmbedded = Boolean(resolvedThread?.ticketId || resolvedThread?.dashboardMode);
+  // Upstream retires the draft behind a promoted thread on its own thread
+  // route; the Team shell owns this route instead, so it has to do it here.
+  useFinalizePromotedDraft(view.threadId);
 
   useEffect(() => {
     if (!resolvedThread) {
