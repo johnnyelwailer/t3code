@@ -113,11 +113,25 @@ export const SourceControlProviderAuthStatus = Schema.Literals([
 ]);
 export type SourceControlProviderAuthStatus = typeof SourceControlProviderAuthStatus.Type;
 
+export const SourceControlProviderAuthAccount = Schema.Struct({
+  host: TrimmedNonEmptyString,
+  account: Schema.Option(TrimmedNonEmptyString),
+  active: Schema.Boolean,
+});
+export type SourceControlProviderAuthAccount = typeof SourceControlProviderAuthAccount.Type;
+
 export const SourceControlProviderAuth = Schema.Struct({
   status: SourceControlProviderAuthStatus,
   account: Schema.Option(TrimmedNonEmptyString),
   host: Schema.Option(TrimmedNonEmptyString),
   detail: Schema.Option(TrimmedNonEmptyString),
+  /**
+   * Every authenticated host/account discovered for this provider (e.g. both `github.com` and a
+   * GitHub Enterprise host from `gh auth status`). Optional and additive — `host`/`account` above
+   * remain the single active-host selection for backwards compatibility; callers that only need
+   * one host can ignore this field entirely.
+   */
+  accounts: Schema.optional(Schema.Array(SourceControlProviderAuthAccount)),
 });
 export type SourceControlProviderAuth = typeof SourceControlProviderAuth.Type;
 

@@ -70,3 +70,15 @@ export function findAuthenticatedGitHubAccount(
     accounts.find((account) => account.authenticated)
   );
 }
+
+/**
+ * Every authenticated host from `gh auth status`, unlike {@link findAuthenticatedGitHubAccount}
+ * which collapses the list down to a single (active-preferred) account. Used to surface a host
+ * picker when a user is signed in to more than one host (e.g. `github.com` and a GitHub
+ * Enterprise host).
+ */
+export function findAuthenticatedGitHubAccounts(
+  accounts: ReadonlyArray<GitHubAuthStatusAccount>,
+): ReadonlyArray<GitHubAuthStatusAccount> {
+  return accounts.filter((account) => account.authenticated);
+}

@@ -72,8 +72,9 @@ export async function loadPersistedAccountsStep(input: {
       );
       // No unconditional `setSelectedProject(null)` here: a late bootstrap resolution must
       // never clear a selection the user already made while the cached list was showing.
-      // `advanceStepForward` also refuses to move the step backwards out of "confirm"/
-      // "creating" if the user finished picking before this network call landed.
+      // `advanceStepForward` also refuses to move the step backwards out of "profile"/
+      // "repositories"/"review"/"creating" if the user finished picking before this network
+      // call landed.
       runT3TeamViewTransition(
         () => {
           input.setAccounts(loadedAccounts);

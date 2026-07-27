@@ -167,8 +167,13 @@ function toBaseUrl(host: string): string {
   return `https://${host}`;
 }
 
+const GITHUB_ENTERPRISE_HOST_SUFFIXES: ReadonlyArray<string> = [".ghe.com", ".ghe.localhost"];
+
 function isGitHubHost(host: string): boolean {
-  return host === "github.com" || host.includes("github");
+  if (host === "github.com" || host.endsWith(".github.com")) {
+    return true;
+  }
+  return GITHUB_ENTERPRISE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
 }
 
 function isGitLabHost(host: string): boolean {

@@ -19,7 +19,8 @@ import { loadProjectsForAccount } from "./t3team-useCreateProjectAccountLoaders"
 import { applyLoadedAccounts, failWithStep } from "./t3team-useCreateProjectHelpers";
 import { loadPersistedAccountsStep } from "./t3team-useCreateProjectLoadPersisted";
 
-export type CreateProjectStep = "source" | "account" | "project" | "confirm" | "creating";
+export type CreateProjectStep =
+  | "source" | "account" | "project" | "profile" | "repositories" | "review" | "creating";
 export type AtlassianBasicCredentials = { siteUrl: string; email: string; apiToken: string };
 type CreateProjectOptions = {
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
@@ -171,7 +172,9 @@ export function useCreateProject() {
           ...(options?.customProfile ? { customProfile: options.customProfile } : {}),
         });
       } catch (e) {
-        fail(e, "Failed to create project", "project");
+        // Bounce back to "review" (not "project"): that is the step that owns the "Add project"
+        // action now, so retrying the same click is one tap away instead of re-walking the wizard.
+        fail(e, "Failed to create project", "review");
         throw e;
       }
     },

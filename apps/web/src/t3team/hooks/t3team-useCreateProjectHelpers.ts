@@ -19,7 +19,9 @@ const STEP_ORDER: ReadonlyArray<CreateProjectStep> = [
   "source",
   "account",
   "project",
-  "confirm",
+  "profile",
+  "repositories",
+  "review",
   "creating",
 ];
 

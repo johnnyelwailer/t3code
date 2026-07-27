@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
+import type { ExternalProject } from "@t3tools/integrations-core";
 import { CreateProjectDialogOAuthNotice } from "~/t3team/t3team-CreateProjectDialogOAuthNotice";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
@@ -8,18 +9,16 @@ import { useAtlassianOAuth } from "~/t3team/hooks/t3team-useAtlassianOAuth";
 import { useCreateProject } from "~/t3team/hooks/t3team-useCreateProject";
 import {
   CreateProjectWizardFrame,
-  CreateProjectWizardStepTransition,
   type CreateProjectWizardVariant,
 } from "~/t3team/t3team-CreateProjectWizardFrame";
 import {
   useT3TeamProjectSetupProfile,
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
-import { AccountStep, ProjectStep } from "~/t3team/t3team-CreateProjectDialogSteps";
 import { useCreateProjectAlreadyAdded } from "~/t3team/hooks/t3team-useCreateProjectAlreadyAdded";
-import { ConfirmStep, CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
+import { ConfirmStepHeading } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
 import { CreateProjectDialogFooter } from "~/t3team/t3team-CreateProjectDialogFooter";
-import { ConnectAtlassianStep } from "~/t3team/t3team-ConnectAtlassianStep";
+import { CreateProjectDialogStepBody } from "~/t3team/t3team-CreateProjectDialogStepBody";
 import { defaultAtlassianSiteUrlInput } from "~/t3team/hooks/t3team-createProjectUtils";
 
 export function CreateProjectDialog({
@@ -96,6 +95,19 @@ export function CreateProjectDialog({
     onCreated(project);
   };
 
+  // Switching to a DIFFERENT project must not carry the previous project's linked/discovered
+  // repositories forward — `linkedRepositoryUrls` is only ever appended to elsewhere (see
+  // t3team-createProjectBootstrap.ts), so without this a repo picked for project A would silently
+  // ship on project B if the user went back and picked a different project.
+  const handleSelectProject = (project: ExternalProject) => {
+    if (project.id !== selectedProject?.id) {
+      setLinkedRepositoryUrls([]);
+      setDiscoveredRepositoryUrls([]);
+      setNewRepositoryUrl("");
+    }
+    setup.setSelectedProject(project);
+  };
+
   const addRepository = () => {
     const normalized = splitRepositoryInput(newRepositoryUrl);
     if (normalized.length === 0) return;
@@ -117,12 +129,16 @@ export function CreateProjectDialog({
     <CreateProjectWizardFrame
       variant={variant}
       onClose={onClose}
+      heading={
+        setup.step === "review" ? <ConfirmStepHeading selectedProject={selectedProject} /> : undefined
+      }
       footer={
         <CreateProjectDialogFooter
           setup={setup}
           selectedAccount={selectedAccount}
           selectedProject={selectedProject}
           loadingProjects={loadingProjects}
+          linkedRepositoryCount={linkedRepositoryUrls.length}
           onCreateProject={createSelectedProject}
         />
       }
@@ -133,70 +149,40 @@ export function CreateProjectDialog({
         {setup.error || oauthError ? (
           <T3TeamErrorState error={setup.error ?? oauthError} action="setting up the project" />
         ) : null}
-        <CreateProjectWizardStepTransition step={setup.step}>
-          {setup.step === "source" ? (
-            <ConnectAtlassianStep
-              loading={bootstrapping}
-              oauthConfigured={oauthConfigured}
-              oauth={oauth}
-              siteUrl={siteUrl}
-              email={email}
-              apiToken={apiToken}
-              setSiteUrl={setSiteUrl}
-              setEmail={setEmail}
-              setApiToken={setApiToken}
-              canConnectBasic={setup.isValidUrl(siteUrl)}
-              connectingBasic={loadingAccounts}
-              onConnectBasic={() => void setup.loadAccountsWithBasic({ siteUrl, email, apiToken })}
-            />
-          ) : null}
-          {setup.step === "account" ? (
-            <AccountStep
-              accounts={setup.accounts}
-              selectedAccount={setup.selectedAccount}
-              onSelectAccount={setup.setSelectedAccount}
-              loading={loadingAccounts}
-            />
-          ) : null}
-          {setup.step === "project" ? (
-            <ProjectStep
-              filteredProjects={filteredProjects}
-              selectedProject={setup.selectedProject}
-              projectQuery={projectQuery}
-              setProjectQuery={setProjectQuery}
-              onSelectProject={setup.setSelectedProject}
-              loading={loadingProjects}
-              alreadyAdded={alreadyAdded}
-              onOpenExistingProject={handleOpenExisting}
-            />
-          ) : null}
-          {setup.step === "confirm" ? (
-            <ConfirmStep
-              selectedProject={selectedProject}
-              setupProfileId={setupProfileId}
-              linkedRepositoryUrls={linkedRepositoryUrls}
-              discoveredRepositoryUrls={discoveredRepositoryUrls}
-              newRepositoryUrl={newRepositoryUrl}
-              setNewRepositoryUrl={setNewRepositoryUrl}
-              onSetupProfileChange={writeT3TeamProjectSetupProfile}
-              onAddRepository={addRepository}
-              onRemoveRepository={removeRepository}
-              onAddRepositories={(urls: ReadonlyArray<string>) =>
-                setLinkedRepositoryUrls((current) => [...new Set([...current, ...urls])])
-              }
-              onDiscoveredRepositoryUrlsChange={handleDiscoveredRepositoryUrlsChange}
-              customProfile={customProfile}
-              onCustomProfileChange={setCustomProfile}
-            />
-          ) : null}
-          {setup.step === "creating" ? (
-            <CreatingStep
-              projectTitle={selectedProject?.title}
-              repositoryCount={linkedRepositoryUrls.length}
-              setupProfileId={setupProfileId}
-            />
-          ) : null}
-        </CreateProjectWizardStepTransition>
+        <CreateProjectDialogStepBody
+          setup={setup}
+          oauth={oauth}
+          oauthConfigured={oauthConfigured}
+          bootstrapping={bootstrapping}
+          siteUrl={siteUrl}
+          setSiteUrl={setSiteUrl}
+          email={email}
+          setEmail={setEmail}
+          apiToken={apiToken}
+          setApiToken={setApiToken}
+          loadingAccounts={loadingAccounts}
+          loadingProjects={loadingProjects}
+          filteredProjects={filteredProjects}
+          projectQuery={projectQuery}
+          setProjectQuery={setProjectQuery}
+          onSelectProject={handleSelectProject}
+          alreadyAdded={alreadyAdded}
+          onOpenExistingProject={handleOpenExisting}
+          setupProfileId={setupProfileId}
+          onSetupProfileChange={writeT3TeamProjectSetupProfile}
+          customProfile={customProfile}
+          onCustomProfileChange={setCustomProfile}
+          linkedRepositoryUrls={linkedRepositoryUrls}
+          discoveredRepositoryUrls={discoveredRepositoryUrls}
+          newRepositoryUrl={newRepositoryUrl}
+          setNewRepositoryUrl={setNewRepositoryUrl}
+          onAddRepository={addRepository}
+          onRemoveRepository={removeRepository}
+          onAddRepositories={(urls: ReadonlyArray<string>) =>
+            setLinkedRepositoryUrls((current) => [...new Set([...current, ...urls])])
+          }
+          onDiscoveredRepositoryUrlsChange={handleDiscoveredRepositoryUrlsChange}
+        />
       </div>
     </CreateProjectWizardFrame>
   );

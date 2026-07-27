@@ -46,8 +46,17 @@ vi.mock("~/t3team/t3team-projectSetupProfile", () => ({
 }));
 
 vi.mock("~/t3team/t3team-CreateProjectDialogConfirmStep", () => ({
-  ConfirmStep: () => <div>confirm-step</div>,
+  ConfirmStepHeading: () => <div>confirm-step-heading</div>,
   CreatingStep: () => <div>creating-step</div>,
+}));
+vi.mock("~/t3team/t3team-CreateProjectDialogProfileStep", () => ({
+  ProfileStep: () => <div>profile-step</div>,
+}));
+vi.mock("~/t3team/t3team-CreateProjectRepositorySection", () => ({
+  RepositoriesStep: () => <div>repositories-step</div>,
+}));
+vi.mock("~/t3team/t3team-CreateProjectDialogReviewStep", () => ({
+  ReviewStep: () => <div>review-step</div>,
 }));
 
 const backendRef: { current: BackendApi | null } = { current: null };
@@ -133,7 +142,7 @@ describe("CreateProjectDialog already-added detection", () => {
     expect(host.textContent).not.toContain("confirm-step");
   });
 
-  it("still advances a normal (not already-added) row through to confirm", async () => {
+  it("still advances a normal (not already-added) row through to profile", async () => {
     mockUseProjects.mockReturnValue([]);
     const onOpenExistingProject = vi.fn();
     const { host } = await mountWizard(onOpenExistingProject);
@@ -150,6 +159,6 @@ describe("CreateProjectDialog already-added detection", () => {
     await act(async () => {
       findButtonByText(host, "Continue").click();
     });
-    expect(host.textContent).toContain("confirm-step");
+    expect(host.textContent).toContain("profile-step");
   });
 });
