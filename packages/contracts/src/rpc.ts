@@ -158,7 +158,7 @@ import {
   ToolAuthState,
   ToolAuthStreamEvent,
   ToolAuthSubmitCodeInput,
-} from "./toolauth.ts";
+} from "./t3team-toolauth.ts";
 
 export const WS_METHODS = {
   // Project registry methods

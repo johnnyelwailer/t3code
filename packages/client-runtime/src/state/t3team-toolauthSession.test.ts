@@ -1,7 +1,7 @@
 import type { ToolAuthState } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyToolAuthStreamEvent, EMPTY_TOOLAUTH_STATES } from "./toolauthSession.ts";
+import { applyToolAuthStreamEvent, EMPTY_TOOLAUTH_STATES } from "./t3team-toolauthSession.ts";
 
 const claudeIdle: ToolAuthState = { tool: "claude", phase: "idle" };
 const codexIdle: ToolAuthState = { tool: "codex", phase: "idle" };

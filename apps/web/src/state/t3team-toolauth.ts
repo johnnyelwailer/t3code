@@ -8,7 +8,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import type * as Cause from "effect/Cause";
 import { useCallback } from "react";
 
-import type { ToolAuthToolMeta } from "../components/settings/toolAuthTools";
+import type { ToolAuthToolMeta } from "../components/settings/t3team-toolAuthTools";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { usePrimaryEnvironmentId } from "./environments";

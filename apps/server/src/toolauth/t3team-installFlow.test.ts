@@ -7,7 +7,7 @@ import {
   isTerminalPhase,
   MAX_INSTALL_LOG_CHARS,
   timedOutInstallState,
-} from "./installFlow.ts";
+} from "./t3team-installFlow.ts";
 
 describe("appendInstallLog", () => {
   it("starts from undefined", () => {

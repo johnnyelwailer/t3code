@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { CLAUDE, CODEX, FAKE } from "./adapters.ts";
-import { advance, stripAnsi } from "./advance.ts";
-import type { AuthState } from "./types.ts";
+import { CLAUDE, CODEX, FAKE } from "./t3team-adapters.ts";
+import { advance, stripAnsi } from "./t3team-advance.ts";
+import type { AuthState } from "./t3team-types.ts";
 
 const idle = (tool: string): AuthState => ({ tool, phase: "idle" });
 

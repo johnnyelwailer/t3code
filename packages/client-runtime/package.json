@@ -120,8 +120,8 @@
       "default": "./src/state/terminal.ts"
     },
     "./state/toolauth": {
-      "types": "./src/state/toolauth.ts",
-      "default": "./src/state/toolauth.ts"
+      "types": "./src/state/t3team-toolauth.ts",
+      "default": "./src/state/t3team-toolauth.ts"
     },
     "./state/threads": {
       "types": "./src/state/threads.ts",

@@ -8,7 +8,7 @@ import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { SearchIcon } from "lucide-react";
 import { ModelListRow } from "./ModelListRow";
-import { ModelPickerProviderConnectPanel } from "./ModelPickerProviderConnectPanel";
+import { ModelPickerProviderConnectPanel } from "./t3team-ModelPickerProviderConnectPanel";
 import { ModelPickerSidebar } from "./ModelPickerSidebar";
 import { isModelPickerNewModel } from "./modelPickerModelHighlights";
 import { buildModelPickerSearchText, scoreModelPickerSearch } from "./modelPickerSearch";
@@ -26,11 +26,11 @@ import { TooltipProvider } from "../ui/tooltip";
 import {
   isProviderInstancePickerReady,
   isProviderInstancePickerVisible,
-  resolveProviderInstanceReadiness,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
+import { resolveProviderInstanceReadiness } from "../../t3team-providerInstanceReadiness";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
-import { toolAuthToolForDriverKind } from "../settings/toolAuthTools";
+import { toolAuthToolForDriverKind } from "../settings/t3team-toolAuthTools";
 
 type ModelPickerItem = {
   slug: string;

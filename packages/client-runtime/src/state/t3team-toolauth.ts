@@ -9,7 +9,7 @@ import {
   createEnvironmentRpcCommand,
   createEnvironmentSubscriptionAtomFamily,
 } from "./runtime.ts";
-import { applyToolAuthStreamEvent, EMPTY_TOOLAUTH_STATES } from "./toolauthSession.ts";
+import { applyToolAuthStreamEvent, EMPTY_TOOLAUTH_STATES } from "./t3team-toolauthSession.ts";
 
 /**
  * "Connected tools" — signing `claude`/`codex` into a hosted sandbox from the
@@ -77,4 +77,4 @@ export function createToolAuthEnvironmentAtoms<R, E>(
   };
 }
 
-export * from "./toolauthSession.ts";
+export * from "./t3team-toolauthSession.ts";

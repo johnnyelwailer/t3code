@@ -28,5 +28,5 @@ export * from "./assets.ts";
 export * from "./review.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
-export * from "./toolauth.ts";
+export * from "./t3team-toolauth.ts";
 export * from "./rpc.ts";

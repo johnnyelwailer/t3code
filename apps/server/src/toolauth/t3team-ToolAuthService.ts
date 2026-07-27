@@ -27,17 +27,17 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as ProcessRunner from "../processRunner.ts";
 import * as PtyAdapter from "../terminal/PtyAdapter.ts";
-import { getAdapter, getInstallPackage, PRODUCTION_TOOLS } from "./adapters.ts";
-import { advance, stripAnsi } from "./advance.ts";
-import { buildNpmInstallArgv } from "./installCommand.ts";
+import { getAdapter, getInstallPackage, PRODUCTION_TOOLS } from "./t3team-adapters.ts";
+import { advance, stripAnsi } from "./t3team-advance.ts";
+import { buildNpmInstallArgv } from "./t3team-installCommand.ts";
 import {
   appendInstallLog,
   extractInstallErrorMessage,
   isTerminalPhase,
   timedOutInstallState,
-} from "./installFlow.ts";
-import { probeStatus } from "./status.ts";
-import type { AuthState, ToolAuthAdapter } from "./types.ts";
+} from "./t3team-installFlow.ts";
+import { probeStatus } from "./t3team-status.ts";
+import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
 /** Default cap on a single npm install — a hung installer must not pin the slot forever. */
 const DEFAULT_INSTALL_TIMEOUT: Duration.Input = Duration.minutes(5);
@@ -88,7 +88,7 @@ export class ToolAuthService extends Context.Service<
       listener: (event: ToolAuthServiceStreamEvent) => Effect.Effect<void>,
     ) => Effect.Effect<() => void>;
   }
->()("t3/toolauth/ToolAuthService") {}
+>()("t3/toolauth/t3team-ToolAuthService/ToolAuthService") {}
 
 export interface ToolAuthServiceOptions {
   readonly ptyAdapter: PtyAdapter.PtyAdapter["Service"];

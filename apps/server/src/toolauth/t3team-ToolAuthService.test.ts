@@ -14,9 +14,9 @@ import * as Schedule from "effect/Schedule";
 
 import * as ProcessRunner from "../processRunner.ts";
 import * as PtyAdapter from "../terminal/PtyAdapter.ts";
-import { FAKE, getInstallPackage } from "./adapters.ts";
-import { buildNpmInstallArgv } from "./installCommand.ts";
-import * as ToolAuthService from "./ToolAuthService.ts";
+import { FAKE, getInstallPackage } from "./t3team-adapters.ts";
+import { buildNpmInstallArgv } from "./t3team-installCommand.ts";
+import * as ToolAuthService from "./t3team-ToolAuthService.ts";
 
 // Drives the exact same pty path production code uses, but with a stubbed
 // `PtyAdapter` — no real process is ever spawned. Mirrors the

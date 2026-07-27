@@ -2,8 +2,8 @@ import type { ToolAuthState } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import { ToolAuthCard } from "./ToolAuthCard";
-import { TOOL_AUTH_TOOLS } from "./toolAuthTools";
+import { ToolAuthCard } from "./t3team-ToolAuthCard";
+import { TOOL_AUTH_TOOLS } from "./t3team-toolAuthTools";
 
 const CLAUDE_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "claude")!;
 const CODEX_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "codex")!;

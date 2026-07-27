@@ -27,7 +27,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import * as ProcessRunner from "../processRunner.ts";
-import type { AuthState, ToolAuthAdapter } from "./types.ts";
+import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
 export interface ToolAuthStatusOptions {
   /** Test seam: defaults to `os.homedir()` in production. */

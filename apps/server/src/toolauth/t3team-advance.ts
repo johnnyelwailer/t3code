@@ -8,7 +8,7 @@
  *
  * @module toolauth/advance
  */
-import type { AuthState, ToolAuthAdapter } from "./types.ts";
+import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
 /**
  * Fold one chunk of CLI output into the next state.

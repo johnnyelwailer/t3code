@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
-import { ToolAuthInstallInput, ToolAuthPhase, ToolAuthState, ToolAuthToolId } from "./toolauth.ts";
+import { ToolAuthInstallInput, ToolAuthPhase, ToolAuthState, ToolAuthToolId } from "./t3team-toolauth.ts";
 
 const decodeToolAuthToolId = Schema.decodeUnknownSync(ToolAuthToolId);
 const decodeToolAuthInstallInput = Schema.decodeUnknownSync(ToolAuthInstallInput);

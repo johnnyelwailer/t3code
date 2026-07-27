@@ -4,9 +4,9 @@ import type { ToolAuthToolId } from "@t3tools/contracts";
 
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { usePrimaryEnvironmentId } from "../../state/environments";
-import { useToolAuthActions, useToolAuthStates } from "../../state/toolauth";
-import { ToolAuthCard } from "../settings/ToolAuthCard";
-import { toolAuthMetaForTool } from "../settings/toolAuthTools";
+import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
+import { ToolAuthCard } from "../settings/t3team-ToolAuthCard";
+import { toolAuthMetaForTool } from "../settings/t3team-toolAuthTools";
 
 export interface ModelPickerProviderConnectPanelProps {
   /** The instance the user selected in the picker sidebar. */

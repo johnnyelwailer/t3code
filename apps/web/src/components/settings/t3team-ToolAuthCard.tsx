@@ -10,7 +10,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Spinner } from "../ui/spinner";
-import type { ToolAuthToolMeta } from "./toolAuthTools";
+import type { ToolAuthToolMeta } from "./t3team-toolAuthTools";
 
 /** Dot color per phase — same token classes `providerStatus.ts` uses. */
 const PHASE_DOT_CLASS: Record<ToolAuthState["phase"], string> = {

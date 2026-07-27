@@ -4,12 +4,11 @@ import { SparklesIcon, StarIcon } from "lucide-react";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
+import { isProviderInstancePickerReady, type ProviderInstanceEntry } from "../../providerInstances";
 import {
   isProviderInstanceConnectable,
-  isProviderInstancePickerReady,
   resolveProviderInstanceReadiness,
-  type ProviderInstanceEntry,
-} from "../../providerInstances";
+} from "../../t3team-providerInstanceReadiness";
 
 /**
  * Build the hover tooltip for an instance button. Mirrors the old

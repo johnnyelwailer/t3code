@@ -6,7 +6,7 @@
  *
  * @module toolauth/installFlow
  */
-import type { AuthState, ToolAuthPhase } from "./types.ts";
+import type { AuthState, ToolAuthPhase } from "./t3team-types.ts";
 
 /** Caps the rolling `installLog` so a chatty installer can't grow unbounded. */
 export const MAX_INSTALL_LOG_CHARS = 8_000;

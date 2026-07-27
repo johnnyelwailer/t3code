@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { getInstallPackage, TOOL_INSTALL_PACKAGES } from "./adapters.ts";
-import { buildNpmInstallArgv } from "./installCommand.ts";
+import { getInstallPackage, TOOL_INSTALL_PACKAGES } from "./t3team-adapters.ts";
+import { buildNpmInstallArgv } from "./t3team-installCommand.ts";
 
 describe("buildNpmInstallArgv", () => {
   it("is a plain npm global install argv, never a shell string", () => {

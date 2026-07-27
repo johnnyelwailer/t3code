@@ -22,7 +22,7 @@
  *
  * @module toolauth/adapters
  */
-import type { ToolAuthAdapter, ToolAuthPhase } from "./types.ts";
+import type { ToolAuthAdapter, ToolAuthPhase } from "./t3team-types.ts";
 
 export const CLAUDE: ToolAuthAdapter = {
   tool: "claude",
@@ -142,7 +142,7 @@ export const FAKE: ToolAuthAdapter = {
   tool: "fake",
   label: "Example tool",
   description: "Test fixture exercising the same three-beat flow.",
-  command: ["node", new URL("./fixtures/fake-cli.mjs", import.meta.url).pathname],
+  command: ["node", new URL("./fixtures/t3team-fake-cli.mjs", import.meta.url).pathname],
   needsTty: false,
   match: {
     url: /(https:\/\/example\.invalid\/device\/[A-Za-z0-9]+)/,

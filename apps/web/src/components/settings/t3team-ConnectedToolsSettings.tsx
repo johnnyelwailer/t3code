@@ -1,10 +1,10 @@
 "use client";
 
 import { usePrimaryEnvironmentId } from "../../state/environments";
-import { useToolAuthActions, useToolAuthStates } from "../../state/toolauth";
+import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
-import { ToolAuthCard } from "./ToolAuthCard";
-import { TOOL_AUTH_TOOLS, type ToolAuthToolMeta } from "./toolAuthTools";
+import { ToolAuthCard } from "./t3team-ToolAuthCard";
+import { TOOL_AUTH_TOOLS, type ToolAuthToolMeta } from "./t3team-toolAuthTools";
 
 function ConnectedToolCard({ meta }: { readonly meta: ToolAuthToolMeta }) {
   const environmentId = usePrimaryEnvironmentId();

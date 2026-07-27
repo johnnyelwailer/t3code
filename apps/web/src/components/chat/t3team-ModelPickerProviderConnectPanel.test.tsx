@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
-import { ModelPickerProviderConnectPanel } from "./ModelPickerProviderConnectPanel";
+import { ModelPickerProviderConnectPanel } from "./t3team-ModelPickerProviderConnectPanel";
 
 function provider(input: {
   driverKind: ProviderDriverKind;

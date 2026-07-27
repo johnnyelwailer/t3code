@@ -10,8 +10,8 @@ import * as Effect from "effect/Effect";
 import { TestClock } from "effect/testing";
 
 import * as ProcessRunner from "../processRunner.ts";
-import { CLAUDE, CODEX, FAKE } from "./adapters.ts";
-import { probeStatus } from "./status.ts";
+import { CLAUDE, CODEX, FAKE } from "./t3team-adapters.ts";
+import { probeStatus } from "./t3team-status.ts";
 
 /** Every test gets its own scratch `$HOME` — never the real `~/.claude` or `~/.codex`. */
 function makeTempHome(): string {

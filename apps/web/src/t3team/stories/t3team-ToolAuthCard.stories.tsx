@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import type { ToolAuthState } from "@t3tools/contracts";
 import type * as React from "react";
 
-import { ToolAuthCard } from "~/components/settings/ToolAuthCard";
-import { TOOL_AUTH_TOOLS } from "~/components/settings/toolAuthTools";
+import { ToolAuthCard } from "~/components/settings/t3team-ToolAuthCard";
+import { TOOL_AUTH_TOOLS } from "~/components/settings/t3team-toolAuthTools";
 
 const CLAUDE_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "claude")!;
 const CODEX_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "codex")!;

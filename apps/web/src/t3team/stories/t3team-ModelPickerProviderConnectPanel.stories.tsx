@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
 import type * as React from "react";
 
-import { ModelPickerProviderConnectPanel } from "~/components/chat/ModelPickerProviderConnectPanel";
+import { ModelPickerProviderConnectPanel } from "~/components/chat/t3team-ModelPickerProviderConnectPanel";
 import { deriveProviderInstanceEntries } from "~/providerInstances";
 
 function provider(input: {
