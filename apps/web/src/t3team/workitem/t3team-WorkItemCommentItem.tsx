@@ -6,6 +6,7 @@ import {
 } from "~/t3team/components/ticket/t3team-ticketRichContentBlocks";
 import type { JiraCommentItem } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
 import { cn } from "~/t3team/lib/t3team-utils";
+import { proxyAtlassianAssetUrl } from "~/t3team/t3team-atlassianAssetUrls";
 import { WorkItemDate } from "~/t3team/workitem/t3team-WorkItemDate";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 import { readTimestampMs } from "~/t3team/workitem/t3team-workItemFieldReaders";
@@ -35,6 +36,7 @@ export function WorkItemCommentItem({
   htmlBaseUrl,
   resolveAssetUrl,
   renderBody,
+  accountId,
   className,
 }: {
   readonly comment: JiraCommentItem;
@@ -42,17 +44,20 @@ export function WorkItemCommentItem({
   readonly htmlBaseUrl?: string;
   readonly resolveAssetUrl?: (url: string) => string;
   readonly renderBody?: (comment: JiraCommentItem) => ReactNode;
+  /** The Atlassian connection's account id — routes the author avatar through the asset proxy. */
+  readonly accountId?: string | undefined;
   readonly className?: string;
 }) {
   const timestampMs = readTimestampMs(comment.updated ?? comment.created);
   const edited = isWorkItemCommentEdited(comment);
   const commentHtml = comment.bodyHtml?.trim() ?? "";
   const commentMarkdown = comment.bodyMarkdown?.trim() ?? "";
+  const authorAvatarUrl = proxyAtlassianAssetUrl({ url: comment.authorAvatarUrl, accountId });
   const author = comment.author
     ? {
         displayName: comment.author,
         ...(comment.authorAccountId ? { accountId: comment.authorAccountId } : {}),
-        ...(comment.authorAvatarUrl ? { avatarUrl: comment.authorAvatarUrl } : {}),
+        ...(authorAvatarUrl ? { avatarUrl: authorAvatarUrl } : {}),
       }
     : undefined;
 

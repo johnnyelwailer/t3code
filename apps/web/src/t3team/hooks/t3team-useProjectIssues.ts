@@ -148,8 +148,10 @@ export function useProjectIssues(project: ProjectShellProject) {
 
   const tickets = useMemo(
     () =>
-      state.page ? state.page.items.map((ref) => resourceRefToProjectTicket(project.id, ref)) : [],
-    [state.page, project.id],
+      state.page
+        ? state.page.items.map((ref) => resourceRefToProjectTicket(project.id, ref, accountId))
+        : [],
+    [state.page, project.id, accountId],
   );
 
   return {

@@ -126,12 +126,16 @@ export function WorkItemPersonChip({
 
   return (
     /*
-      The chip decides for itself whether it has room for a name: below ~5rem of its OWN container it
-      shows the avatar alone. Callers just give it a column and it adapts, rather than each call site
-      repeating breakpoint classes or reaching in to hide the name.
+      The name is always rendered here. Hiding it is the container's business, not the chip's: this
+      element shrinks to fit its content, so a container query on it is self-referential — hide the
+      name, the chip narrows, the query stays unmatched and the name can never come back. It
+      collapsed the avatar to a sliver in the details panel.
+
+      A caller with a definite width (a fixed grid column) hides the name by styling
+      `[data-slot=person-name]` on its own container, where the width does not depend on the answer.
     */
     <span
-      className={cn("@container/person-chip flex min-w-0 items-center gap-1.5", className)}
+      className={cn("flex min-w-0 items-center gap-1.5", className)}
       title={
         person
           ? marksCurrentUser
@@ -143,10 +147,7 @@ export function WorkItemPersonChip({
       <WorkItemPersonAvatar person={person} size={size} isCurrentUser={marksCurrentUser} />
       <span
         data-slot="person-name"
-        className={cn(
-          "hidden truncate text-xs @[5rem]/person-chip:block",
-          person ? "text-foreground" : "text-muted-foreground",
-        )}
+        className={cn("truncate text-xs", person ? "text-foreground" : "text-muted-foreground")}
       >
         {person?.displayName ?? emptyLabel}
       </span>

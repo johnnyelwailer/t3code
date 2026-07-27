@@ -1,5 +1,6 @@
 import type { ResourceSnapshot } from "@t3tools/project-context";
 
+import { proxyAtlassianAssetUrl } from "~/t3team/t3team-atlassianAssetUrls";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
 import {
@@ -9,6 +10,7 @@ import {
   readString,
   readStringList,
   readTimestampMs,
+  type WorkItemPerson,
 } from "~/t3team/workitem/t3team-workItemFieldReaders";
 import { readStoryPoints } from "~/t3team/workitem/t3team-workItemPlanningReaders";
 import {
@@ -40,8 +42,10 @@ export function readWorkItemFieldModel(input: {
   readonly snapshot: ResourceSnapshot | null;
   readonly ticket?: ProjectTicket | undefined;
   readonly fallbackKey: string;
+  /** The Atlassian connection's account id — routes avatar/icon URLs through the asset proxy. */
+  readonly accountId?: string | undefined;
 }): WorkItemFieldModel {
-  const { snapshot, ticket, fallbackKey } = input;
+  const { snapshot, ticket, fallbackKey, accountId } = input;
   const fields = (snapshot?.fields ?? {}) as Record<string, unknown>;
   const raw = readRecord(readRecord(snapshot?.raw)?.fields) ?? {};
 
@@ -49,6 +53,11 @@ export function readWorkItemFieldModel(input: {
   const watch = readWatchState(raw.watches);
   const vote = readVoteState(raw.votes);
   const normalizedLabels = readStringList(fields.labels);
+  const proxyPerson = (person: WorkItemPerson | undefined): WorkItemPerson | undefined => {
+    if (!person?.avatarUrl) return person;
+    const avatarUrl = proxyAtlassianAssetUrl({ url: person.avatarUrl, accountId });
+    return avatarUrl === person.avatarUrl ? person : { ...person, ...(avatarUrl ? { avatarUrl } : {}) };
+  };
 
   const draft = {
     key: ticket?.ref.displayId ?? snapshot?.ref.displayId ?? fallbackKey,
@@ -61,10 +70,16 @@ export function readWorkItemFieldModel(input: {
     url: ticket?.ref.url ?? snapshot?.ref.url,
 
     issueType: ticket?.issueType ?? readString(fields.type) ?? readString(issueTypeRecord?.name),
-    issueTypeIconUrl:
-      ticket?.issueTypeIconUrl ??
-      readString(fields.typeIconUrl) ??
-      readString(issueTypeRecord?.iconUrl),
+    // `ticket?.issueTypeIconUrl` may already be proxied (it comes from `t3team-ticketMappers.ts`,
+    // resolved with the same `accountId`); `proxyAtlassianAssetUrl` no-ops on an already-proxied
+    // URL, so re-running it here for the raw-snapshot fallbacks is safe either way.
+    issueTypeIconUrl: proxyAtlassianAssetUrl({
+      url:
+        ticket?.issueTypeIconUrl ??
+        readString(fields.typeIconUrl) ??
+        readString(issueTypeRecord?.iconUrl),
+      accountId,
+    }),
     isSubtask:
       ticket?.issueTypeIsSubtask ??
       (typeof issueTypeRecord?.subtask === "boolean" ? issueTypeRecord.subtask : undefined),
@@ -77,12 +92,13 @@ export function readWorkItemFieldModel(input: {
     priority: readString(fields.priority) ?? ticket?.priority,
     priorityIconUrl: readString(readRecord(raw.priority)?.iconUrl),
 
-    assignee:
+    assignee: proxyPerson(
       readPerson(raw.assignee) ??
-      readPerson(fields.assignee) ??
-      (ticket?.assignee ? { displayName: ticket.assignee } : undefined),
-    reporter: readPerson(raw.reporter) ?? readPerson(fields.reporter),
-    creator: readPerson(raw.creator),
+        readPerson(fields.assignee) ??
+        (ticket?.assignee ? { displayName: ticket.assignee } : undefined),
+    ),
+    reporter: proxyPerson(readPerson(raw.reporter) ?? readPerson(fields.reporter)),
+    creator: proxyPerson(readPerson(raw.creator)),
 
     labels: normalizedLabels.length > 0 ? normalizedLabels : readStringList(raw.labels),
     components: readNamedRefList(raw.components ?? fields.components),

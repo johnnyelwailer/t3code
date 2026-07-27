@@ -53,7 +53,7 @@ export function useProjectBacklogRemoteSearch(input: {
         return;
       }
       for (const item of result.items) {
-        ticketsById.set(item.id, resourceRefToProjectTicket(projectId, item));
+        ticketsById.set(item.id, resourceRefToProjectTicket(projectId, item, accountId));
       }
       setSearchTickets([...ticketsById.values()]);
     };

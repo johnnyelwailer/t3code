@@ -1,4 +1,5 @@
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
+import { updateProjectBacklogEstimateRemote } from "~/t3team/hooks/t3team-projectBacklogRemote";
 import { ProjectBacklogRowEstimateCell } from "~/t3team/t3team-ProjectBacklogRowPlanningCells";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { WorkItemChildAssigneeControl } from "~/t3team/workitem/t3team-WorkItemChildAssigneeControl";
@@ -56,10 +57,17 @@ export function WorkItemChildRow({
                 compact
                 quiet
                 {...(estimateFieldLabel ? { estimateFieldLabel } : {})}
+                /*
+                  The backlog's own write, not a hand-rolled `updateIssueEstimate` call. It derives
+                  `estimateMode` from the ticket — hours for time-tracked issues, points otherwise —
+                  and omitting that wrote an hours estimate into the story-points field, which Jira
+                  rejected. The mode is not something a call site should re-derive.
+                */
                 onUpdateEstimate={async (target, estimateValue) => {
-                  await backend!.updateIssueEstimate({
+                  await updateProjectBacklogEstimateRemote({
+                    backend: backend!,
                     accountId: accountId!,
-                    issueIdOrKey: target.ref.displayId ?? target.id,
+                    ticket: target,
                     estimateValue,
                   });
                   onReload!();

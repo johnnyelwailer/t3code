@@ -98,7 +98,7 @@ export function useRelatedTickets({
           unresolvedKeys.push(key);
           continue;
         }
-        fromCache.push(snapshotToProjectTicket(project.id, cachedSnapshot));
+        fromCache.push(snapshotToProjectTicket(project.id, cachedSnapshot, project.source.accountId));
       }
 
       if (!cancelled) {
@@ -113,7 +113,7 @@ export function useRelatedTickets({
               project,
               key,
             });
-            return snapshotToProjectTicket(project.id, result);
+            return snapshotToProjectTicket(project.id, result, project.source.accountId);
           } catch {
             // Ignore unavailable keys; unresolved entries are still rendered by key.
             return null;

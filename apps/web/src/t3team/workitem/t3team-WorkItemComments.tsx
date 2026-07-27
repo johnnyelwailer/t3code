@@ -113,6 +113,7 @@ export function WorkItemComments({
               key={comment.id ?? `comment-${index}`}
               comment={comment}
               nowMs={nowMs}
+              {...(accountId ? { accountId } : {})}
               {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
               {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
               {...(renderBody ? { renderBody } : {})}

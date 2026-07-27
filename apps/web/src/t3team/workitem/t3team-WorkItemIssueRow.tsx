@@ -96,6 +96,13 @@ export function WorkItemIssueRow({
         className={cn(
           /* `pl-4` keeps a truncated title from running straight into the estimate field. */
           "relative z-10 grid shrink-0 items-center gap-x-3 pl-4",
+          /*
+            The name is dropped here, not by the chip. These columns have definite widths set by the
+            row's own container, so the query is answerable; on the chip itself it was not — the chip
+            shrinks to its content, so hiding the name shrank the container and the name could never
+            reappear. Elsewhere, such as the details panel, the name simply always shows.
+          */
+          "[&_[data-slot=person-name]]:hidden @2xl/workitem:[&_[data-slot=person-name]]:block",
           "grid-cols-[2rem_5.5rem_1.75rem]",
           "@md/workitem:grid-cols-[2.5rem_7rem_2rem]",
           "@2xl/workitem:grid-cols-[2.5rem_7rem_9.5rem]",

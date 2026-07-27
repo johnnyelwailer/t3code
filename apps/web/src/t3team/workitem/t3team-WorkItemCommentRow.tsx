@@ -76,6 +76,7 @@ export function WorkItemCommentRow({
   const commentProps = {
     comment: { ...comment, bodyMarkdown: editMutation.value },
     nowMs,
+    accountId,
     ...(htmlBaseUrl ? { htmlBaseUrl } : {}),
     ...(resolveAssetUrl ? { resolveAssetUrl } : {}),
     ...(renderBody ? { renderBody } : {}),

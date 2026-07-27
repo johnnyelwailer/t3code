@@ -14,6 +14,7 @@ import { useProjectIssues } from "~/t3team/hooks/t3team-useProjectIssues";
 import { useRelatedTickets } from "~/t3team/hooks/t3team-useRelatedTickets";
 import { useTicketDetail } from "~/t3team/hooks/t3team-useTicketDetail";
 import { drainQueuedWorkItemContextSyncRequests } from "~/t3team/hooks/t3team-useWorkItemContextSyncQueue";
+import { proxyAtlassianAssetUrl } from "~/t3team/t3team-atlassianAssetUrls";
 import {
   asRecordArray,
   resolveHtmlBaseUrl,
@@ -59,6 +60,7 @@ export function useWorkItemDetailViewModel({
     lastCheckedAt: jiraLastCheckedAt,
   } = useProjectIssues(project);
   const currentUserName = useAtlassianCurrentUserDisplayName(project.source.accountId);
+  const accountId = project.source.accountId;
 
   const ticketLookup = useMemo(() => buildProjectTicketLookup(projectTickets), [projectTickets]);
   const canonicalTicketId = resolveCanonicalProjectTicketId(ticketId, ticketLookup) ?? ticketId;
@@ -79,8 +81,9 @@ export function useWorkItemDetailViewModel({
         snapshot,
         ...(ticket ? { ticket } : {}),
         fallbackKey: displayId,
+        accountId,
       }),
-    [displayId, snapshot, ticket],
+    [accountId, displayId, snapshot, ticket],
   );
 
   const { relatedTickets, ticketsWithRelated } = useRelatedTickets({
@@ -148,10 +151,13 @@ export function useWorkItemDetailViewModel({
     htmlBaseUrl: resolveHtmlBaseUrl(ticketUrl),
     issueType:
       ticket?.issueType ?? ticket?.ref.type ?? readIssueTypeFromSnapshotFields(snapshot?.fields),
-    issueTypeIconUrl:
-      ticket?.issueTypeIconUrl ??
-      ticket?.ref.issueTypeIconUrl ??
-      readIssueTypeIconUrlFromSnapshotFields(snapshot?.fields),
+    issueTypeIconUrl: proxyAtlassianAssetUrl({
+      url:
+        ticket?.issueTypeIconUrl ??
+        ticket?.ref.issueTypeIconUrl ??
+        readIssueTypeIconUrlFromSnapshotFields(snapshot?.fields),
+      accountId,
+    }),
     descriptionMarkdown: (snapshot?.fields.description as string | undefined) ?? snapshot?.text,
     descriptionHtml: snapshot?.fields.descriptionHtml as string | undefined,
     attachments: asRecordArray(snapshot?.fields.attachments),

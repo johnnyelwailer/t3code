@@ -125,8 +125,8 @@ export function useProjectMyWork(project: ProjectShellProject) {
 
   const tickets = useMemo(() => {
     if (!resources) return [];
-    return resources.items.map((ref) => resourceRefToProjectTicket(project.id, ref));
-  }, [resources, project.id]);
+    return resources.items.map((ref) => resourceRefToProjectTicket(project.id, ref, accountId));
+  }, [resources, project.id, accountId]);
 
   return { resources, tickets, loading, error, reload: load, lastCheckedAt };
 }
