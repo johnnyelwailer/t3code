@@ -111,7 +111,14 @@ export function readWorkItemFieldModel(input: {
     parent: readParentRef(raw.parent ?? fields.parentSummary),
 
     descriptionAdf: readAdfDocument(raw.description) ?? readAdfDocument(fields.descriptionAdf),
-    descriptionText: readString(fields.description) ?? readString(snapshot?.text),
+    /*
+      No fallback to `snapshot.text`. That field is built by `normalize.ts` as
+      `description + "Comments:" + every comment` for search and agent context — rendering it as the
+      description put the whole comment thread inside the Description section, above the Comments
+      section that already showed the same text. An issue with no description has no description;
+      the renderer already says so.
+    */
+    descriptionText: readString(fields.description),
     descriptionHtml: readString(fields.descriptionHtml),
   };
 
