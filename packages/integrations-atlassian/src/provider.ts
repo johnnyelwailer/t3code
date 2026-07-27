@@ -19,7 +19,9 @@ import {
   AtlassianMirrorSourceUnavailableError,
   AtlassianNetworkError,
   type JiraIssue,
+  type JiraIssueLinkType,
 } from "./client.ts";
+import { markdownToAdf } from "./adf/index.ts";
 import { JiraApiClient, jiraCloudApiBaseUrl, type JiraApiAuth } from "./jiraApi.ts";
 import {
   normalizeAccount,
@@ -1404,13 +1406,19 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     summary: string;
     description?: string;
     estimateHours?: number;
+    /** One of `getChildIssueTypes`'s ids; falls back to the project's first subtask-shaped type. */
+    issueTypeId?: string;
+    assigneeAccountId?: string | null;
   }): Promise<{ id: string; key: string }> {
     const entry = this.getClientForAccount(input.accountId) ?? this.getDefaultClient();
     if (!entry) {
       throw new Error("No Jira client available");
     }
 
-    const subtaskIssueType = await this.resolveSubtaskIssueType(input.projectId, entry.client);
+    const subtaskIssueTypes = await this.resolveSubtaskIssueTypes(input.projectId, entry.client);
+    const subtaskIssueType =
+      (input.issueTypeId ? subtaskIssueTypes.find((type) => type.id === input.issueTypeId) : undefined) ??
+      subtaskIssueTypes[0];
     if (!subtaskIssueType) {
       throw new Error("No Jira subtask issue type was detected for this project.");
     }
@@ -1438,9 +1446,92 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       };
     }
 
+    if (input.assigneeAccountId && hasCreateMetaField(subtaskIssueType, "assignee")) {
+      fields.assignee = { accountId: input.assigneeAccountId };
+    }
+
     const created = await entry.client.createIssue(fields);
 
     return { id: created.id, key: created.key };
+  }
+
+  async addIssueComment(
+    accountId: string,
+    issueIdOrKey: string,
+    bodyMarkdown: string,
+  ): Promise<{ id: string }> {
+    const entry = this.getClientForAccount(accountId) ?? this.getDefaultClient();
+    if (!entry) {
+      throw new Error("No Jira client available");
+    }
+    const created = (await entry.client.addIssueComment(
+      issueIdOrKey,
+      markdownToAdf(bodyMarkdown),
+    )) as { id?: string };
+    return { id: created.id ?? "" };
+  }
+
+  async updateIssueComment(
+    accountId: string,
+    issueIdOrKey: string,
+    commentId: string,
+    bodyMarkdown: string,
+  ): Promise<void> {
+    const entry = this.getClientForAccount(accountId) ?? this.getDefaultClient();
+    if (!entry) {
+      throw new Error("No Jira client available");
+    }
+    await entry.client.editIssueComment(issueIdOrKey, commentId, markdownToAdf(bodyMarkdown));
+  }
+
+  async deleteIssueComment(
+    accountId: string,
+    issueIdOrKey: string,
+    commentId: string,
+  ): Promise<void> {
+    const entry = this.getClientForAccount(accountId) ?? this.getDefaultClient();
+    if (!entry) {
+      throw new Error("No Jira client available");
+    }
+    await entry.client.deleteIssueComment(issueIdOrKey, commentId);
+  }
+
+  async createIssueLink(
+    accountId: string,
+    input: {
+      issueIdOrKey: string;
+      otherIssueIdOrKey: string;
+      linkTypeName: string;
+      direction: "inward" | "outward";
+    },
+  ): Promise<void> {
+    const entry = this.getClientForAccount(accountId) ?? this.getDefaultClient();
+    if (!entry) {
+      throw new Error("No Jira client available");
+    }
+    const linkType = { name: input.linkTypeName };
+    const thisIssue = { key: input.issueIdOrKey };
+    const otherIssue = { key: input.otherIssueIdOrKey };
+    await entry.client.createIssueLink({
+      type: linkType,
+      inwardIssue: input.direction === "inward" ? thisIssue : otherIssue,
+      outwardIssue: input.direction === "outward" ? thisIssue : otherIssue,
+    });
+  }
+
+  async deleteIssueLink(accountId: string, linkId: string): Promise<void> {
+    const entry = this.getClientForAccount(accountId) ?? this.getDefaultClient();
+    if (!entry) {
+      throw new Error("No Jira client available");
+    }
+    await entry.client.deleteIssueLink(linkId);
+  }
+
+  async getIssueLinkTypes(accountId: string): Promise<ReadonlyArray<JiraIssueLinkType>> {
+    const entry = this.getClientForAccount(accountId) ?? this.getDefaultClient();
+    if (!entry) return [];
+    const response = await entry.client.getIssueLinkTypes();
+    return response.issueLinkTypes;
   }
 
   async getResource(ref: unknown): Promise<ResourceSnapshot> {
@@ -1453,8 +1544,15 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     };
     const entry = this.getDefaultClient();
     if (!entry) throw new Error("No Jira client available");
-    const issue = await entry.client.getIssue(typedRef.id);
-    return normalizeIssue(issue, entry.siteUrl);
+    const [estimateField, sprintField] = await Promise.all([
+      this.resolveEstimateField(entry.client),
+      this.resolveSprintField(entry.client),
+    ]);
+    const issue = await entry.client.getIssue(typedRef.id, [
+      ...(estimateField ? [estimateField.id] : []),
+      ...(sprintField ? [sprintField.id] : []),
+    ]);
+    return normalizeIssue(issue, entry.siteUrl, { estimateField, sprintField });
   }
 
   async downloadAsset(url: string): Promise<{ bytes: Uint8Array; mimeType?: string }> {
@@ -1930,26 +2028,48 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     );
   }
 
+  /**
+   * All Jira issue types createmeta marks as subtask-shaped for this project (usually just one,
+   * "Subtask", but some projects configure more than one subtask-like type) — the full set a child
+   * issue type picker needs, never just the first match.
+   */
+  private async resolveSubtaskIssueTypes(
+    projectId: string,
+    client: JiraApiClient,
+  ): Promise<ReadonlyArray<{ id: string; name: string; fields?: Record<string, unknown> }>> {
+    /*
+      Deliberately not wrapped in a catch. Swallowing the failure here turned every cause — a removed
+      endpoint, a 403, an unexpected shape — into an empty list, which the caller then reported to the
+      user as "No Jira subtask issue type was detected for this project.". That blamed the project for
+      what was usually a broken request, and hid the one piece of information needed to fix it.
+    */
+    const createMeta = await client.getCreateMetaIssueTypes(projectId);
+    const issueTypes = createMeta.issueTypes ?? [];
+    return issueTypes
+      .filter((issueType) => issueType.subtask === true || /sub-task|subtask/i.test(issueType.name))
+      .map((issueType) => ({
+        id: issueType.id,
+        name: issueType.name,
+        ...(issueType.fields ? { fields: issueType.fields } : {}),
+      }));
+  }
+
   private async resolveSubtaskIssueType(
     projectId: string,
     client: JiraApiClient,
   ): Promise<{ id: string; name: string; fields?: Record<string, unknown> } | null> {
-    try {
-      const createMeta = await client.getCreateMeta(projectId);
-      const issueTypes = createMeta.projects?.flatMap((project) => project.issuetypes ?? []) ?? [];
-      const match = issueTypes.find(
-        (issueType) => issueType.subtask === true || /sub-task|subtask/i.test(issueType.name),
-      );
+    const types = await this.resolveSubtaskIssueTypes(projectId, client);
+    return types[0] ?? null;
+  }
 
-      return match
-        ? {
-            id: match.id,
-            name: match.name,
-            ...(match.fields ? { fields: match.fields } : {}),
-          }
-        : null;
-    } catch {
-      return null;
-    }
+  /** The child-issue-type picker's data source — never a hardcoded list. */
+  async getChildIssueTypes(input: {
+    accountId: string;
+    projectId: string;
+  }): Promise<ReadonlyArray<{ id: string; name: string }>> {
+    const entry = this.getClientForAccount(input.accountId) ?? this.getDefaultClient();
+    if (!entry) return [];
+    const types = await this.resolveSubtaskIssueTypes(input.projectId, entry.client);
+    return types.map((type) => ({ id: type.id, name: type.name }));
   }
 }

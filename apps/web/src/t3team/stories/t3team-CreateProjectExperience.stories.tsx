@@ -3,8 +3,10 @@ import type { Meta, StoryObj } from "@storybook/react";
 import type { ExternalProject, IntegrationAccount } from "@t3tools/integrations-core";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { LinkedRepositoryListEditor } from "~/t3team/components/t3team-LinkedRepositoryListEditor";
-import { AccountStep, ProjectStep, SourceStep } from "~/t3team/t3team-CreateProjectDialogSteps";
-import { CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
+import { OAuthPopupBlockedNotice } from "~/t3team/components/t3team-OAuthPopupBlockedNotice";
+import { AccountStep, ProjectStep } from "~/t3team/t3team-CreateProjectDialogSteps";
+import { ConnectAtlassianStep } from "~/t3team/t3team-ConnectAtlassianStep";
+import { ConfirmStep, CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
 import {
   CreateProjectWizardFooter,
   CreateProjectWizardFrame,
@@ -17,7 +19,12 @@ import {
   useT3TeamProjectSetupProfile,
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
+import {
+  DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID,
+  type T3TeamProjectSetupProfileId,
+} from "~/t3team/t3team-projectSetup";
 import type { CreateProjectStep } from "~/t3team/hooks/t3team-useCreateProject";
+import type { OAuthState, UseAtlassianOAuthResult } from "~/t3team/hooks/t3team-useAtlassianOAuth";
 
 const accounts: ReadonlyArray<IntegrationAccount> = [
   {
@@ -107,6 +114,15 @@ function CreateProjectExperienceStory({ autoAdvance = false }: { autoAdvance?: b
       else if (step === "project") setStep("confirm");
       else if (step === "confirm") setStep("creating");
     }, "forward");
+  const demoOauth: UseAtlassianOAuthResult = useMemo(
+    () => ({
+      state: { kind: "idle" },
+      startOAuth: async () => goForward(),
+      mintFreshSigninLink: async () => "",
+      reset: () => {},
+    }),
+    [step],
+  );
 
   useEffect(() => {
     if (!autoAdvance) return;
@@ -157,14 +173,10 @@ function CreateProjectExperienceStory({ autoAdvance = false }: { autoAdvance?: b
               footer={
                 <CreateProjectWizardFooter
                   step={step}
-                  canConnectBasic={siteUrl.startsWith("https://")}
                   canContinueAccount={Boolean(selectedAccount)}
                   canContinueProject={Boolean(selectedProject)}
                   canCreateProject={Boolean(selectedProject)}
-                  loadingSource={false}
                   loadingProjects={false}
-                  onConnectBasic={goForward}
-                  onConnectOAuth={goForward}
                   onBack={goBack}
                   onContinueAccount={goForward}
                   onContinueProject={goForward}
@@ -172,17 +184,22 @@ function CreateProjectExperienceStory({ autoAdvance = false }: { autoAdvance?: b
                 />
               }
             >
-              <div className="relative space-y-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
+              <div className="relative flex min-h-full flex-col gap-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
                 <CreateProjectWizardStepTransition step={step}>
                   {step === "source" ? (
-                    <SourceStep
+                    <ConnectAtlassianStep
                       loading={false}
+                      oauthConfigured
+                      oauth={demoOauth}
                       siteUrl={siteUrl}
                       email={email}
                       apiToken={apiToken}
                       setSiteUrl={setSiteUrl}
                       setEmail={setEmail}
                       setApiToken={setApiToken}
+                      canConnectBasic={siteUrl.startsWith("https://")}
+                      connectingBasic={false}
+                      onConnectBasic={goForward}
                     />
                   ) : null}
                   {step === "account" ? (
@@ -286,4 +303,159 @@ export const Mobile: Story = {
       defaultViewport: "phone",
     },
   },
+};
+
+/**
+ * The profile step on its own, inside a real dialog-height frame.
+ *
+ * It reached the user overloaded — six cards, an expanded setup preview and a permanently expanded
+ * repository section, in a dialog capped at 40rem — because no story rendered it at the height it
+ * actually gets. Driving the full wizard to step four by hand is exactly the friction that stops a
+ * step from being looked at.
+ */
+function ConfirmStepStory() {
+  const [setupProfileId, setSetupProfileId] = useState<T3TeamProjectSetupProfileId>(
+    DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID,
+  );
+  const [linkedRepositoryUrls, setLinkedRepositoryUrls] = useState<ReadonlyArray<string>>([]);
+  const [discovered, setDiscovered] = useState<ReadonlyArray<string>>([]);
+  const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
+
+  return (
+    <div className="flex h-dvh items-center justify-center bg-background p-6">
+      <div className="flex h-[min(40rem,calc(100dvh-3rem))] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="border-b border-border px-5 py-3 text-sm font-semibold">Create project</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <ConfirmStep
+            selectedProject={projects[0] ?? null}
+            setupProfileId={setupProfileId}
+            linkedRepositoryUrls={linkedRepositoryUrls}
+            discoveredRepositoryUrls={discovered}
+            newRepositoryUrl={newRepositoryUrl}
+            setNewRepositoryUrl={setNewRepositoryUrl}
+            onSetupProfileChange={setSetupProfileId}
+            onAddRepository={() => {
+              if (newRepositoryUrl.trim() === "") return;
+              setLinkedRepositoryUrls((current) => [...current, newRepositoryUrl.trim()]);
+              setNewRepositoryUrl("");
+            }}
+            onRemoveRepository={(url) =>
+              setLinkedRepositoryUrls((current) => current.filter((entry) => entry !== url))
+            }
+            onAddRepositories={(urls) =>
+              setLinkedRepositoryUrls((current) => [...new Set([...current, ...urls])])
+            }
+            onDiscoveredRepositoryUrlsChange={setDiscovered}
+            onCustomProfileChange={() => undefined}
+          />
+        </div>
+        <div className="border-t border-border px-5 py-3 text-right text-xs text-muted-foreground">
+          Footer sits here — the step above must fit without pushing it off screen.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const ConfirmStepInDialog: StoryObj = {
+  render: () => <ConfirmStepStory />,
+  parameters: { layout: "fullscreen" },
+};
+
+const IDLE_OAUTH_STATE: OAuthState = { kind: "idle" };
+
+/**
+ * Isolated harness for the "source" step's connect UI, independent of the multi-step
+ * transition demo above. Lets each Atlassian-connect state (default, revealed fallback,
+ * in-flight, popup-blocked, unconfigured) be screenshotted on its own.
+ */
+function ConnectAtlassianStepHarness({
+  oauthState = IDLE_OAUTH_STATE,
+  oauthConfigured = true,
+  initialShowTokenForm = false,
+}: {
+  oauthState?: OAuthState;
+  oauthConfigured?: boolean;
+  initialShowTokenForm?: boolean;
+}) {
+  const [siteUrl, setSiteUrl] = useState("https://acme.atlassian.net");
+  const [email, setEmail] = useState("owner@acme.test");
+  const [apiToken, setApiToken] = useState("");
+  const oauth: UseAtlassianOAuthResult = {
+    state: oauthState,
+    startOAuth: async () => {},
+    mintFreshSigninLink: async () => "",
+    reset: () => {},
+  };
+
+  return (
+    // Height approximates the real dialog's body (~40rem card minus header chrome), so the
+    // step's internal vertical centering renders the same way it does in the live wizard.
+    <div className="mx-auto flex h-[36rem] max-w-md flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6">
+      {oauthState.kind === "needs_manual_open" ? (
+        <OAuthPopupBlockedNotice
+          signinUrl={oauthState.signinUrl}
+          expired={oauthState.expired ?? false}
+          onLinkUsed={() => {}}
+          onCancel={() => {}}
+        />
+      ) : null}
+      <ConnectAtlassianStep
+        loading={false}
+        oauthConfigured={oauthConfigured}
+        oauth={oauth}
+        siteUrl={siteUrl}
+        email={email}
+        apiToken={apiToken}
+        setSiteUrl={setSiteUrl}
+        setEmail={setEmail}
+        setApiToken={setApiToken}
+        canConnectBasic={siteUrl.startsWith("https://")}
+        connectingBasic={false}
+        onConnectBasic={() => {}}
+        initialShowTokenForm={initialShowTokenForm}
+      />
+    </div>
+  );
+}
+
+export const ConnectAtlassianDefault: Story = {
+  render: () => <ConnectAtlassianStepHarness />,
+};
+
+export const ConnectAtlassianTokenFallbackRevealed: Story = {
+  render: () => <ConnectAtlassianStepHarness initialShowTokenForm />,
+};
+
+export const ConnectAtlassianInFlight: Story = {
+  render: () => <ConnectAtlassianStepHarness oauthState={{ kind: "opening" }} />,
+};
+
+export const ConnectAtlassianPopupBlocked: Story = {
+  render: () => (
+    <ConnectAtlassianStepHarness
+      oauthState={{
+        kind: "needs_manual_open",
+        // The shareable server-flow link, which is what the notice offers in practice.
+        signinUrl: "http://localhost:5736/api/t3team/atlassian/oauth/begin/8f14e45fceea167a",
+      }}
+    />
+  ),
+};
+
+export const ConnectAtlassianLinkExpired: Story = {
+  render: () => (
+    <ConnectAtlassianStepHarness
+      oauthState={{
+        kind: "needs_manual_open",
+        signinUrl: "http://localhost:5736/api/t3team/atlassian/oauth/begin/8f14e45fceea167a",
+        // Seen pending, then unknown: the status poll reported this exact link can no longer finish.
+        expired: true,
+      }}
+    />
+  ),
+};
+
+export const ConnectAtlassianUnconfigured: Story = {
+  render: () => <ConnectAtlassianStepHarness oauthConfigured={false} />,
 };

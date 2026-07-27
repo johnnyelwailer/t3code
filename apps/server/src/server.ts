@@ -102,11 +102,14 @@ import {
   t3teamAtlassianConnectBasicRouteLayer,
   t3teamAtlassianConnectOAuthRouteLayer,
   t3teamAtlassianMyWorkRouteLayer,
+  t3teamAtlassianProjectIssuesRouteLayer,
   t3teamAtlassianProjectsRouteLayer,
   t3teamAtlassianResourceRouteLayer,
   t3teamAtlassianResourcesRouteLayer,
 } from "./t3team-atlassian-routes.ts";
+import { t3teamAtlassianIssueContentRouteLayer } from "./t3team-atlassian-issue-content-routes.ts";
 import { t3teamAtlassianOAuthExchangeRouteLayer } from "./t3team-atlassian-oauth-routes.ts";
+import { t3teamAtlassianOAuthFlowRouteLayer } from "./t3team-atlassian-oauth-flowRoutes.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
@@ -457,8 +460,11 @@ export const makeRoutesLayer = Layer.mergeAll(
   t3teamAtlassianBacklogRouteLayer,
   t3teamAtlassianConnectBasicRouteLayer,
   t3teamAtlassianConnectOAuthRouteLayer,
+  t3teamAtlassianIssueContentRouteLayer,
   t3teamAtlassianMyWorkRouteLayer,
   t3teamAtlassianOAuthExchangeRouteLayer,
+  t3teamAtlassianOAuthFlowRouteLayer,
+  t3teamAtlassianProjectIssuesRouteLayer,
   t3teamAtlassianProjectsRouteLayer,
   t3teamAtlassianResourceRouteLayer,
   t3teamAtlassianResourcesRouteLayer,

@@ -1,0 +1,287 @@
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- The launch/resume API is promise-shaped; the broker layer is bridged once, like its siblings. */
+// @effect-diagnostics nodeBuiltinImport:off - writes the scaffolded workflow to a temp runs root.
+/**
+ * Executes the SCAFFOLDED `describe-rewrite` body — the exact string
+ * `renderDescriptionRewriteWorkflow()` writes into a user's workspace — through the real engine.
+ *
+ * A rendered workflow is not typechecked, so running it is the only thing that keeps it honest.
+ * Everything under the fixture is production wiring: the real `T3TeamToolBrokerLive` (hence the
+ * real `publishDraft`), the real `launchWorkflowRecipe`, the real suspend/resume machinery. Only
+ * the orchestration engine is a recording stub, and the two human/agent replies are supplied the
+ * way the reactor supplies them.
+ */
+
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+
+import { afterAll, describe, expect, it } from "vite-plus/test";
+import {
+  type OrchestrationCommand,
+  ProjectId,
+  ProviderInstanceId,
+  type T3TeamMessageExt,
+} from "@t3tools/contracts";
+import { createModelSelection } from "@t3tools/shared/model";
+import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
+
+import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+import { T3TeamToolBroker, type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
+import {
+  createThreadToolContext,
+  makeBrokerLayer,
+  threadId,
+} from "./t3team-toolBrokerTestUtils.ts";
+import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
+import {
+  makeWorkflowEngineRegistry,
+  type T3TeamWorkflowEngineRegistryShape,
+} from "./t3team-workflowEngineRegistry.ts";
+import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import {
+  DESCRIPTION_REWRITE_RECIPE_ID,
+  renderDescriptionRewriteWorkflow,
+} from "./t3team-projectSetupDescriptionRewriteRecipe.ts";
+import { renderBundledRecipeSetupFiles } from "./t3team-projectSetupRecipes.ts";
+
+const DRAFT_TOOL = "t3team.work_item.description.draft_update";
+const WRITTEN = "## Goal\nCheckout must round to two decimals.\n\n## Acceptance criteria\n- Totals match the invoice.";
+
+const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-rewrite-"));
+const workflowPath = NodePath.join(runsRoot, "workflow.ts");
+// The scaffolded artifact itself is the unit under test.
+NodeFS.writeFileSync(workflowPath, renderDescriptionRewriteWorkflow(), "utf8");
+afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
+
+const projectId = ProjectId.make("project-1");
+const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
+const ISO = "2026-07-27T00:00:00.000Z";
+
+async function makeBrokerWithSeededThread(): Promise<{
+  readonly broker: T3TeamToolBrokerShape;
+  readonly brokerDispatched: ReadonlyArray<OrchestrationCommand>;
+}> {
+  const brokerDispatched: OrchestrationCommand[] = [];
+  const orchestrationMock: OrchestrationEngineShape = {
+    readEvents: () => Stream.empty,
+    dispatch: (command) => {
+      brokerDispatched.push(command);
+      return Effect.succeed({ sequence: brokerDispatched.length });
+    },
+    streamDomainEvents: Stream.empty,
+    latestSequence: Effect.succeed(0),
+  };
+  const broker = await Effect.runPromise(
+    Effect.gen(function* () {
+      const resolved = yield* T3TeamToolBroker;
+      yield* resolved.bindSession({
+        threadId,
+        toolContext: createThreadToolContext({
+          tools: [{ id: DRAFT_TOOL, label: "Draft description", capabilities: ["write"] }],
+        }),
+      });
+      return resolved;
+    }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+  );
+  return { broker, brokerDispatched };
+}
+
+/** Answer whatever the run is currently parked on, the way the reactor does. */
+async function reply(registry: T3TeamWorkflowEngineRegistryShape, runId: string, value: string) {
+  const pending = registry.peekPending(threadId);
+  if (pending === undefined) throw new Error("expected the run to be parked on an ask");
+  await registry.getRun(runId)?.resume(pending.correlationId, value);
+  return pending;
+}
+
+function turnPrompts(commands: ReadonlyArray<OrchestrationCommand>): ReadonlyArray<string> {
+  return commands.flatMap((command) =>
+    command.type === "thread.turn.start" ? [command.message.text] : [],
+  );
+}
+
+function userQuestions(commands: ReadonlyArray<OrchestrationCommand>): ReadonlyArray<string> {
+  return commands.flatMap((command) =>
+    command.type === "thread.message.upsert" &&
+    command.message.t3teamExt?.status === "waiting-for-input"
+      ? [command.message.text]
+      : [],
+  );
+}
+
+function draftCarrier(commands: ReadonlyArray<OrchestrationCommand>) {
+  for (const command of commands) {
+    if (command.type !== "thread.message.upsert") continue;
+    const ext: T3TeamMessageExt | undefined = command.message.t3teamExt;
+    const attachment = ext?.attachments?.find((entry) => entry.kind === "draft-mutation");
+    if (attachment !== undefined) return { command, attachment };
+  }
+  return undefined;
+}
+
+async function runRewrite(input: {
+  readonly runId: string;
+  readonly args: unknown;
+  readonly userAnswer: string;
+}) {
+  const { broker, brokerDispatched } = await makeBrokerWithSeededThread();
+  const runDispatched: OrchestrationCommand[] = [];
+  const registry = makeWorkflowEngineRegistry();
+  const completed: unknown[] = [];
+  const errors: unknown[] = [];
+  let seq = 0;
+
+  const launched = await launchWorkflowRecipe({
+    runId: input.runId,
+    workflowPath,
+    args: input.args,
+    runsRoot,
+    launchThreadId: threadId,
+    projectId,
+    modelSelection,
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    registry,
+    dispatch: async (command) => {
+      runDispatched.push(command);
+    },
+    newId: () => `${input.runId}-id-${(seq += 1)}`,
+    nowIso: () => ISO,
+    hostToolClient: makeT3TeamWorkflowHostDraftToolClient({ broker, launchThreadId: threadId })!,
+    onComplete: async (output) => {
+      completed.push(output);
+    },
+    onError: async (error) => {
+      errors.push(error);
+    },
+  });
+
+  // 1. parked on the deterministic askUser gate — no model has run yet.
+  const gate = await reply(registry, input.runId, input.userAnswer);
+  // 2. parked on the writer turn, on the LAUNCH thread.
+  const writer = await reply(registry, input.runId, WRITTEN);
+
+  return {
+    launched,
+    gate,
+    writer,
+    completed,
+    errors,
+    runDispatched,
+    brokerDispatched,
+  };
+}
+
+describe("describe-rewrite bundled workflow", () => {
+  it("gates on askUser, writes on the launch thread, then proposes the writer's text as a draft", async () => {
+    const run = await runRewrite({
+      runId: "rewrite-basic",
+      args: {
+        issueIdOrKey: "T3-42",
+        summary: "Checkout rounding",
+        currentBody: "Rounding is wrong.",
+        instructions: "Add acceptance criteria.",
+      },
+      userAnswer: "yes",
+    });
+
+    expect(run.launched.status).toBe("suspended");
+    // The gate is deterministic: a user.input ask, not an agent turn.
+    expect(run.gate.kind).toBe("user.input");
+    // The writer runs on the LAUNCH thread — never a spawned child. `thread.create` would be the
+    // fingerprint of `agent()`/`spawnThread()`, whose draft would land where nobody can see it.
+    expect(run.writer.kind).toBe("thread.turn");
+    const turns = run.runDispatched.filter((command) => command.type === "thread.turn.start");
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.threadId).toBe(threadId);
+    expect(run.runDispatched.some((command) => command.type === "thread.create")).toBe(false);
+    expect(run.errors).toHaveLength(0);
+    expect(run.completed[0]).toMatchObject({ issueIdOrKey: "T3-42", proposed: true });
+
+    // The writer is told to return prose and touch nothing.
+    const prompt = turnPrompts(run.runDispatched)[0] ?? "";
+    expect(prompt).toContain("T3-42");
+    expect(prompt).toContain("Rounding is wrong.");
+    expect(prompt).toContain("Add acceptance criteria.");
+    expect(prompt).toContain("Do not call any tool");
+
+    // The BODY proposed the draft, carrying the writer's text verbatim.
+    const carrier = draftCarrier(run.brokerDispatched);
+    expect(carrier?.command.threadId).toBe(threadId);
+    expect(carrier?.attachment).toMatchObject({
+      kind: "draft-mutation",
+      draft: {
+        tool: DRAFT_TOOL,
+        field: "description",
+        target: { issueIdOrKey: "T3-42" },
+        patch: { description: WRITTEN },
+      },
+    });
+  });
+
+  it("carries anchored comments into the confirmation card and the writer prompt", async () => {
+    const run = await runRewrite({
+      runId: "rewrite-anchored",
+      args: {
+        issueIdOrKey: "T3-77",
+        summary: "Login flow",
+        currentBody: "Users log in.",
+        comments: [
+          { blockId: "b1", quote: "Users log in.", body: "Say which identity provider." },
+          { blockId: "b2", quote: "log in", body: "Cover the SSO failure path too." },
+        ],
+      },
+      userAnswer: "yes",
+    });
+
+    // Pre-filled confirmation, not a blank ask: the card quotes what was annotated.
+    const question = userQuestions(run.runDispatched)[0] ?? "";
+    expect(question).toContain("with these changes?");
+    expect(question).toContain('On "Users log in.": Say which identity provider.');
+    expect(question).toContain('On "log in": Cover the SSO failure path too.');
+
+    // And the same anchored notes reach the writer as targeted instructions.
+    const prompt = turnPrompts(run.runDispatched)[0] ?? "";
+    expect(prompt).toContain('On "Users log in.": Say which identity provider.');
+    expect(prompt).toContain('On "log in": Cover the SSO failure path too.');
+
+    expect(run.errors).toHaveLength(0);
+    expect(draftCarrier(run.brokerDispatched)?.attachment).toMatchObject({
+      draft: { target: { issueIdOrKey: "T3-77" }, patch: { description: WRITTEN } },
+    });
+  });
+
+  it("ships to a workspace as a workflow-backed bundled recipe, with no authoring by the user", () => {
+    const files = renderBundledRecipeSetupFiles();
+    const paths = files.map((file) => file.relativePath);
+    expect(paths).toContain(`.t3team/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/workflow.ts`);
+    expect(paths).toContain(`.t3team/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`);
+
+    // The recipe module must point its default action at that workflow, or discovery would treat
+    // the recipe as prompt-backed and the body would never run.
+    const module = files.find(
+      (file) => file.relativePath === `.t3team/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
+    );
+    expect(module?.contents).toContain('defineWorkflow<typeof Workflow>("./workflow.ts")');
+    expect(module?.contents).toContain('"mutation.draft"');
+  });
+
+  it("a non-confirming reply replaces the pre-filled intent", async () => {
+    const run = await runRewrite({
+      runId: "rewrite-override",
+      args: {
+        issueIdOrKey: "T3-9",
+        instructions: "Add acceptance criteria.",
+        comments: [{ blockId: "b1", quote: "old", body: "drop this" }],
+      },
+      userAnswer: "Actually just tighten the wording.",
+    });
+
+    const prompt = turnPrompts(run.runDispatched)[0] ?? "";
+    expect(prompt).toContain("Actually just tighten the wording.");
+    expect(prompt).not.toContain("Add acceptance criteria.");
+    expect(prompt).not.toContain("drop this");
+    expect(run.errors).toHaveLength(0);
+  });
+});

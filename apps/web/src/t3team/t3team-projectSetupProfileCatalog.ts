@@ -65,12 +65,40 @@ const BUILT_IN_VISUALS: Record<
   BundledT3TeamProfileId,
   Omit<T3TeamProjectSetupCardOption, "id" | "title" | "description">
 > = {
-  "qa-assistant": { eyebrow: "Verify", chips: ["Test matrices", "Repro steps"], ...CATEGORY_VISUALS.product, icon: Bug },
-  "product-partner": { eyebrow: "Friendly", chips: ["Plain language", "Fast summaries"], ...CATEGORY_VISUALS.product },
-  "support-triage": { eyebrow: "Triage", chips: ["Escalations", "Customer impact"], ...CATEGORY_VISUALS.operations, icon: MessageCircleMore },
-  "delivery-coordinator": { eyebrow: "Coordinate", chips: ["Status", "Dependencies"], ...CATEGORY_VISUALS.delivery },
-  "verification-guide": { eyebrow: "Guide", chips: ["Checklists", "Release cues"], ...CATEGORY_VISUALS.engineering, icon: ClipboardCheck },
-  "engineering-copilot": { eyebrow: "Build", chips: ["Technical depth", "Verification bias"], ...CATEGORY_VISUALS.engineering, icon: UserCog },
+  "qa-assistant": {
+    eyebrow: "Verify",
+    chips: ["Test matrices", "Repro steps"],
+    ...CATEGORY_VISUALS.product,
+    icon: Bug,
+  },
+  "product-partner": {
+    eyebrow: "Friendly",
+    chips: ["Plain language", "Fast summaries"],
+    ...CATEGORY_VISUALS.product,
+  },
+  "support-triage": {
+    eyebrow: "Triage",
+    chips: ["Escalations", "Customer impact"],
+    ...CATEGORY_VISUALS.operations,
+    icon: MessageCircleMore,
+  },
+  "delivery-coordinator": {
+    eyebrow: "Coordinate",
+    chips: ["Status", "Dependencies"],
+    ...CATEGORY_VISUALS.delivery,
+  },
+  "verification-guide": {
+    eyebrow: "Guide",
+    chips: ["Checklists", "Release cues"],
+    ...CATEGORY_VISUALS.engineering,
+    icon: ClipboardCheck,
+  },
+  "engineering-copilot": {
+    eyebrow: "Build",
+    chips: ["Technical depth", "Verification bias"],
+    ...CATEGORY_VISUALS.engineering,
+    icon: UserCog,
+  },
 };
 
 function fromPackProfile(profile: EnvironmentSetupProfile): T3TeamProjectSetupCardOption {

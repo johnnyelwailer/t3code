@@ -29,11 +29,12 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import { ServerConfig } from "./config.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { type WorkflowRun, WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { makeWorkflowRunLifecycle } from "./t3team-workflowEngineDurability.ts";
@@ -46,6 +47,8 @@ import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts
 import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScripts.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
+import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
+import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
@@ -59,6 +62,22 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     const orchestration = yield* OrchestrationEngineService;
     const serverConfig = yield* ServerConfig;
     const scheduler = yield* T3TeamWorkflowScheduler;
+    // Restored runs must keep the same `getTools()` tree they launched with — no more and no less.
+    // A body replaying a journaled host-tool call evaluates `getTools().t3team…` before the journal
+    // is read, so dropping the bridge breaks a run that HAD it; conversely, handing it to a run
+    // that never had it (every ephemeral run has a launch thread, none is granted the bridge) would
+    // let a restart quietly upgrade a parked run's powers. So the GRANT decides, never the shape of
+    // the row: `host_tool_grant` is NULL exactly when the launch wired no bridge (migration 047).
+    const toolBroker = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamToolBroker));
+    const hostToolClientFor = (run: WorkflowRun) => {
+      const grant = run.hostToolGrant;
+      if (toolBroker === undefined || grant === undefined || grant === null) return undefined;
+      return makeT3TeamWorkflowHostDraftToolClient({
+        broker: toolBroker,
+        launchThreadId: run.launchThreadId ?? undefined,
+        ...(grant.toolGroups === null ? {} : { allowedToolGroups: grant.toolGroups }),
+      });
+    };
 
     const suspended = yield* repo.listByStatus({ status: "suspended" });
     const sleeping = yield* repo.listByStatus({ status: "sleeping" });
@@ -115,11 +134,13 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         dispatch,
         newId: () => t3teamRandomUUID(),
       });
+      const hostToolClient = hostToolClientFor(run);
       createWorkflowRunController({
         runId: run.runId,
         workflowPath: run.workflowPath,
         args: run.args,
         ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
+        ...(hostToolClient === undefined ? {} : { hostToolClient }),
         runsRoot,
         launchThreadId: run.launchThreadId ?? undefined,
         projectId: run.projectId,
@@ -161,6 +182,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         ),
       );
       const scripts = yield* resolveRehydratedWorkflowScripts(run);
+      const hostToolClient = hostToolClientFor(run);
       yield* Effect.promise(async () => {
         if (!(await lifecycle.recordActive())) return;
         await launchWorkflowRecipe({
@@ -168,6 +190,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
           workflowPath: run.workflowPath,
           args: run.args,
           ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
+          ...(hostToolClient === undefined ? {} : { hostToolClient }),
           runsRoot,
           launchThreadId: run.launchThreadId ?? undefined,
           projectId: run.projectId,

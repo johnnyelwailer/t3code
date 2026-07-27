@@ -129,5 +129,9 @@ export function createProjectBacklogSubtaskRemote(input: {
     ...(input.subtask.estimateHours !== undefined
       ? { estimateHours: input.subtask.estimateHours }
       : {}),
+    ...(input.subtask.issueTypeId ? { issueTypeId: input.subtask.issueTypeId } : {}),
+    ...(input.subtask.assigneeAccountId !== undefined
+      ? { assigneeAccountId: input.subtask.assigneeAccountId }
+      : {}),
   });
 }

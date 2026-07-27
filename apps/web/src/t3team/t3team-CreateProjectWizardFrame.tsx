@@ -16,11 +16,11 @@ export function CreateProjectWizardStepTransition({
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-x-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden">
       <div
         key={step}
         data-step={step}
-        className="[view-transition-name:t3team-create-project-step-panel]"
+        className="flex min-h-0 flex-1 flex-col [view-transition-name:t3team-create-project-step-panel]"
       >
         {children}
       </div>
@@ -101,95 +101,67 @@ export function CreateProjectWizardFrame({
 
 export function CreateProjectWizardFooter({
   step,
-  canConnectBasic,
   canContinueAccount,
   canContinueProject,
   canCreateProject,
-  loadingSource,
   loadingProjects,
-  oauthLoading,
-  onConnectBasic,
-  onConnectOAuth,
   onBack,
   onContinueAccount,
   onContinueProject,
   onCreateProject,
 }: {
   step: CreateProjectStep;
-  canConnectBasic?: boolean;
   canContinueAccount: boolean;
   canContinueProject: boolean;
   canCreateProject: boolean;
-  loadingSource?: boolean;
   loadingProjects: boolean;
-  oauthLoading?: boolean;
-  onConnectBasic?: () => void;
-  onConnectOAuth?: () => void;
   onBack: () => void;
   onContinueAccount: () => void;
   onContinueProject: () => void;
   onCreateProject: () => void;
 }) {
-  if (step === "creating") {
+  // The "source" step's connect actions (OAuth primary button, API-token fallback) live in
+  // the step body now — see `t3team-ConnectAtlassianStep.tsx` — so the footer has no
+  // navigation to offer there, same as the terminal "creating" step.
+  if (step === "creating" || step === "source") {
     return null;
   }
 
   return (
     <footer className="shrink-0 border-t border-border bg-card px-4 py-3">
-      {step === "source" ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Button className="w-full sm:w-auto" variant="outline" onClick={onBack}>
+          Back
+        </Button>
+        {step === "account" ? (
           <Button
-            className="w-full justify-center gap-2 sm:w-auto"
-            variant="outline"
-            onClick={onConnectOAuth}
-            disabled={loadingSource || oauthLoading || !onConnectOAuth}
+            className="w-full justify-center gap-2 sm:min-w-[11rem] sm:w-auto"
+            onClick={onContinueAccount}
+            disabled={!canContinueAccount || loadingProjects}
           >
-            {oauthLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-            Connect with OAuth
+            {loadingProjects ? <Loader2 className="size-4 animate-spin" /> : null}
+            Continue
           </Button>
+        ) : null}
+        {step === "project" ? (
           <Button
             className="w-full sm:w-auto"
-            onClick={onConnectBasic}
-            disabled={loadingSource || !canConnectBasic || !onConnectBasic}
+            onClick={onContinueProject}
+            disabled={!canContinueProject}
           >
-            Connect with API token
+            Continue
           </Button>
-        </div>
-      ) : (
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Button className="w-full sm:w-auto" variant="outline" onClick={onBack}>
-            Back
+        ) : null}
+        {step === "confirm" ? (
+          <Button
+            className="w-full sm:w-auto"
+            onClick={onCreateProject}
+            disabled={!canCreateProject}
+          >
+            Add project
           </Button>
-          {step === "account" ? (
-            <Button
-              className="w-full justify-center gap-2 sm:min-w-[11rem] sm:w-auto"
-              onClick={onContinueAccount}
-              disabled={!canContinueAccount || loadingProjects}
-            >
-              {loadingProjects ? <Loader2 className="size-4 animate-spin" /> : null}
-              Continue
-            </Button>
-          ) : null}
-          {step === "project" ? (
-            <Button
-              className="w-full sm:w-auto"
-              onClick={onContinueProject}
-              disabled={!canContinueProject}
-            >
-              Continue
-            </Button>
-          ) : null}
-          {step === "confirm" ? (
-            <Button
-              className="w-full sm:w-auto"
-              onClick={onCreateProject}
-              disabled={!canCreateProject}
-            >
-              Add project
-            </Button>
-          ) : null}
-        </div>
-      )}
+        ) : null}
+      </div>
     </footer>
   );
 }

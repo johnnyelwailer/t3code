@@ -44,6 +44,7 @@ import {
 } from "./t3team-toolBrokerBindingWorkflowResume.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
+import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import { resolveT3TeamCanonicalToolId } from "./t3team-toolBrokerLegacyToolIds.ts";
 
 export function dispatchT3TeamToolCall(input: {
@@ -65,6 +66,7 @@ export function dispatchT3TeamToolCall(input: {
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  publishDraft?: T3TeamDraftMutationPublisher;
 }): ReturnType<T3TeamToolBinding["callTool"]> {
   const { server, toolArgs, state } = input;
   // Deprecated `t3team.workflow.*` ids resolve to the current
@@ -146,7 +148,12 @@ export function dispatchT3TeamToolCall(input: {
     return input.showWidget(toolArgs);
   }
   if (isT3TeamDraftMutationTool(tool)) {
-    return callT3TeamDraftMutationToolEffect({ tool, toolArgs, readView: input.readView });
+    return callT3TeamDraftMutationToolEffect({
+      tool,
+      toolArgs,
+      readView: input.readView,
+      ...(input.publishDraft ? { publishDraft: input.publishDraft } : {}),
+    });
   }
   if (tool === "t3team.project.refresh_context_bundle") {
     if (!input.threadId || !input.toolContext || !input.refreshContextBundle) {

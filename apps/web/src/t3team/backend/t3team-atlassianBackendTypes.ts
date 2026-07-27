@@ -13,6 +13,8 @@ import type {
   AtlassianOAuthExchangeInput,
   AtlassianOAuthExchangeResult,
 } from "./t3team-atlassianBackendAuthTypes";
+import type { AtlassianChildIssueBackendApi } from "./t3team-atlassianBackendChildIssueTypes";
+import type { AtlassianIssueContentBackendApi } from "./t3team-atlassianBackendIssueContentTypes";
 
 export type {
   AtlassianBasicConnectInput,
@@ -20,6 +22,8 @@ export type {
   AtlassianOAuthExchangeInput,
   AtlassianOAuthExchangeResult,
 };
+export type { AtlassianIssueLinkType } from "./t3team-atlassianBackendIssueContentTypes";
+export type { AtlassianChildIssueType } from "./t3team-atlassianBackendChildIssueTypes";
 
 export type AtlassianDownloadedAsset = {
   readonly base64Contents: string;
@@ -125,7 +129,9 @@ export type AtlassianIssueStatusLane = "todo" | "inProgress" | "review" | "done"
 
 export type { TempoCapacityResponse, TempoUserCapacity } from "./t3team-atlassianTempoTypes";
 
-export interface AtlassianBackendApi {
+export interface AtlassianBackendApi
+  extends AtlassianIssueContentBackendApi,
+    AtlassianChildIssueBackendApi {
   readonly getTempoCapacity: (input: {
     readonly accountIds: ReadonlyArray<string>;
     readonly from: string;
@@ -204,6 +210,8 @@ export interface AtlassianBackendApi {
     readonly summary: string;
     readonly description?: string;
     readonly estimateHours?: number;
+    readonly issueTypeId?: string;
+    readonly assigneeAccountId?: string | null;
   }) => Promise<{ id: string; key: string; item?: ResourcePage["items"][number] }>;
   readonly downloadAsset: (input: {
     readonly accountId: string;

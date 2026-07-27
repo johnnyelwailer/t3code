@@ -1,0 +1,23 @@
+/*
+ * Lets the Storybook canvas scroll.
+ *
+ * `layout: "fullscreen"` (set globally in t3team-storybook-preview.ts) pins the preview body to the
+ * viewport height with `overflow: hidden`. Any story taller than the window is then silently clipped
+ * with no scrollbar and no way to reach the bottom — which is wrong for every story that documents a
+ * tall surface or stacks several variants.
+ *
+ * `min-height` preserves what fullscreen is actually for: a story that wants to fill the viewport
+ * still does. It just may also exceed it.
+ *
+ * Storybook-only. Do not move these rules into the app stylesheet.
+ */
+body {
+  height: auto;
+  min-height: 100%;
+  overflow-y: auto;
+}
+
+#storybook-root {
+  height: auto;
+  min-height: 100%;
+}

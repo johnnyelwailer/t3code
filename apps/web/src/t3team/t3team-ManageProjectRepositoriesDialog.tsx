@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link2, X } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { GitHubRepositoryDiscoverySection } from "~/t3team/components/t3team-GitHubRepositoryDiscoverySection";
 import { LinkedRepositoryListEditor } from "~/t3team/components/t3team-LinkedRepositoryListEditor";
 import { Button } from "~/t3team/components/ui/t3team-button";
@@ -31,7 +32,7 @@ export function ManageProjectRepositoriesDialog({
     [],
   );
   const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
 
   const addRepository = () => {
@@ -69,9 +70,7 @@ export function ManageProjectRepositoriesDialog({
       onProjectUpdated(nextProject);
       onClose();
     } catch (error) {
-      setSaveError(
-        error instanceof Error ? error.message : "Failed to update linked repositories.",
-      );
+      setSaveError(error);
     } finally {
       setSaving(false);
     }
@@ -127,9 +126,11 @@ export function ManageProjectRepositoriesDialog({
             </Card>
 
             {saveError ? (
-              <Card>
-                <CardContent className="p-3 text-sm text-destructive">{saveError}</CardContent>
-              </Card>
+              <T3TeamErrorState
+                error={saveError}
+                action="updating linked repositories"
+                onRetry={() => void saveLinkedRepositories()}
+              />
             ) : null}
           </div>
         </ScrollArea>

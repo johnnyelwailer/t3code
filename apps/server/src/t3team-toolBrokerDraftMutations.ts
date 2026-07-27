@@ -1,5 +1,6 @@
-import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
+import { errorResult } from "./t3team-toolBrokerHelpers.ts";
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
+import { makeDraft } from "./t3team-toolBrokerDraftMutationMake.ts";
 import {
   type DraftToolContext,
   readIssueId,
@@ -9,6 +10,7 @@ import {
   readRecord,
   readTrimmedString,
 } from "./t3team-toolBrokerDraftMutationInputs.ts";
+import { linkDraft, linkRemoveDraft } from "./t3team-toolBrokerDraftMutationsLinks.ts";
 
 const draftToolIds = new Set([
   "t3team.backlog.item.assignee.draft_update",
@@ -19,37 +21,10 @@ const draftToolIds = new Set([
   "t3team.work_item.status.draft_update",
   "t3team.work_item.description.draft_update",
   "t3team.work_item.comment.draft_create",
+  "t3team.work_item.subtask.draft_create",
+  "t3team.work_item.link.draft_create",
+  "t3team.work_item.link.draft_remove",
 ]);
-
-type DraftField = "assignee" | "estimate" | "status" | "description" | "comment" | "subtask";
-
-function makeDraft(input: {
-  readonly tool: string;
-  readonly issueIdOrKey: string;
-  readonly field: DraftField;
-  readonly patch: Record<string, unknown>;
-  readonly summary: string;
-}): T3TeamToolCallResult {
-  return okResult({
-    ok: true,
-    promptText: input.summary,
-    draftMutation: {
-      kind: "jira-work-item-draft",
-      tool: input.tool,
-      target: {
-        provider: "jira",
-        issueIdOrKey: input.issueIdOrKey,
-      },
-      field: input.field,
-      patch: input.patch,
-      status: "draft",
-      commitPolicy: {
-        requiresUserApproval: true,
-        commitSurface: "t3team-ui",
-      },
-    },
-  });
-}
 
 function assigneeDraft(tool: string, args: Record<string, unknown>, context: DraftToolContext) {
   const issueIdOrKey = readIssueId(args, context);
@@ -178,6 +153,12 @@ export function callT3TeamDraftMutationTool(input: {
   }
   if (input.tool.endsWith(".subtask.draft_create")) {
     return subtaskDraft(input.tool, args, input.context);
+  }
+  if (input.tool.endsWith(".link.draft_create")) {
+    return linkDraft(input.tool, args, input.context);
+  }
+  if (input.tool.endsWith(".link.draft_remove")) {
+    return linkRemoveDraft(input.tool, args, input.context);
   }
   return errorResult(`Tool '${input.tool}' is not implemented in this runtime.`);
 }

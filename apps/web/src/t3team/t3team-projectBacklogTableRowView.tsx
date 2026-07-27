@@ -1,7 +1,7 @@
 import { memo } from "react";
 import type { MouseEvent } from "react";
 
-import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
+import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import { ProjectBacklogTableRowActionCell } from "~/t3team/t3team-ProjectBacklogTableRowActionCell";
 import { ProjectBacklogTableRowDataCell } from "~/t3team/t3team-ProjectBacklogTableRowDataCell";
@@ -31,6 +31,7 @@ type ProjectBacklogTableRowViewProps = {
     ticket: ProjectTicket,
     query?: string,
   ) => Promise<ReadonlyArray<AtlassianAssignableUser>>;
+  onListChildIssueTypes?: () => Promise<ReadonlyArray<AtlassianChildIssueType>>;
   onUpdateAssignee: (
     ticket: ProjectTicket,
     assignee: AtlassianAssignableUser | null,
@@ -56,6 +57,7 @@ export const ProjectBacklogTableRowView = memo(function ProjectBacklogTableRowVi
   onToggleTicket,
   onOpenTicket,
   onSearchAssignableUsers,
+  onListChildIssueTypes,
   onUpdateAssignee,
   onUpdateEstimate,
   onCreateSubtask,
@@ -119,6 +121,8 @@ export const ProjectBacklogTableRowView = memo(function ProjectBacklogTableRowVi
         ticket={ticket}
         canCreateSubtasks={canCreateSubtasks}
         onCreateSubtask={onCreateSubtask}
+        onSearchAssignableUsers={onSearchAssignableUsers}
+        {...(onListChildIssueTypes ? { onListChildIssueTypes } : {})}
         onCommitRow={handleCommitRow}
       />
     </tr>
@@ -143,6 +147,7 @@ function areProjectBacklogTableRowViewPropsEqual(
     previous.onToggleTicket === next.onToggleTicket &&
     previous.onOpenTicket === next.onOpenTicket &&
     previous.onSearchAssignableUsers === next.onSearchAssignableUsers &&
+    previous.onListChildIssueTypes === next.onListChildIssueTypes &&
     previous.onUpdateAssignee === next.onUpdateAssignee &&
     previous.onUpdateEstimate === next.onUpdateEstimate &&
     previous.onCreateSubtask === next.onCreateSubtask &&

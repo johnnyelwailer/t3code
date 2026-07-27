@@ -181,11 +181,38 @@ export type JiraIssueSearchResponse = {
   readonly isLast?: boolean;
 };
 
+export type JiraChangelogHistoryItem = {
+  readonly field?: string;
+  readonly fieldtype?: string;
+  readonly from?: string | null;
+  readonly fromString?: string | null;
+  readonly to?: string | null;
+  readonly toString?: string | null;
+};
+
+export type JiraChangelogHistory = {
+  readonly id: string;
+  readonly author?: {
+    readonly accountId?: string;
+    readonly displayName?: string;
+  };
+  readonly created?: string;
+  readonly items?: ReadonlyArray<JiraChangelogHistoryItem>;
+};
+
+export type JiraChangelog = {
+  readonly startAt?: number;
+  readonly maxResults?: number;
+  readonly total?: number;
+  readonly histories?: ReadonlyArray<JiraChangelogHistory>;
+};
+
 export type JiraIssue = {
   readonly id: string;
   readonly key: string;
   readonly self: string;
   readonly fields: Record<string, unknown>;
+  readonly changelog?: JiraChangelog;
 };
 
 export type JiraStatusCategory = {
@@ -242,17 +269,45 @@ export type JiraCreateMetaResponse = {
   }>;
 };
 
+/**
+ * Response of `/issue/createmeta/{projectIdOrKey}/issuetypes`.
+ *
+ * The flat replacement for the `createmeta?projectIds=…&expand=…` form, which Jira Cloud removed —
+ * it answers without a `projects` array, so nothing can be read out of the old shape.
+ */
+export type JiraCreateMetaIssueTypesResponse = {
+  readonly issueTypes?: ReadonlyArray<JiraCreateMetaIssueType>;
+  readonly startAt?: number;
+  readonly maxResults?: number;
+  readonly total?: number;
+};
+
 export type JiraComment = {
   readonly id: string;
   readonly body?: unknown;
   readonly author?: {
+    readonly accountId?: string;
     readonly displayName?: string;
+    readonly avatarUrls?: Record<string, string>;
   };
   readonly created?: string;
   readonly updated?: string;
+  /** Jira Service Management only: whether the comment is visible to customers. Absent on plain Jira Software comments. */
+  readonly jsdPublic?: boolean;
 };
 
 export type JiraCommentsResponse = {
   readonly comments: ReadonlyArray<JiraComment>;
   readonly total: number;
+};
+
+export type JiraIssueLinkType = {
+  readonly id: string;
+  readonly name: string;
+  readonly inward: string;
+  readonly outward: string;
+};
+
+export type JiraIssueLinkTypesResponse = {
+  readonly issueLinkTypes: ReadonlyArray<JiraIssueLinkType>;
 };

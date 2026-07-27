@@ -4,6 +4,7 @@ import { HttpRouter } from "effect/unstable/http";
 
 import {
   createT3TeamAtlassianBacklogSubtask,
+  listT3TeamAtlassianChildIssueTypes,
   loadT3TeamAtlassianBoardColumns,
   loadT3TeamAtlassianBacklog,
   searchT3TeamAtlassianAssignableUsers,
@@ -13,6 +14,7 @@ import {
   type T3TeamAtlassianBacklogCreateSubtaskInput,
   type T3TeamAtlassianBacklogEstimateUpdateInput,
   type T3TeamAtlassianBacklogInput,
+  type T3TeamAtlassianChildIssueTypesInput,
   type T3TeamAtlassianIssueStatusUpdateInput,
   updateT3TeamAtlassianBacklogAssignee,
   updateT3TeamAtlassianBacklogEstimate,
@@ -142,6 +144,16 @@ const t3teamAtlassianBacklogCreateSubtaskRouteLayer = HttpRouter.add(
   }).pipe(Effect.catch(errorResponse)),
 );
 
+const t3teamAtlassianChildIssueTypesRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/t3team/atlassian/backlog/child-issue-types",
+  Effect.gen(function* () {
+    const input = yield* readJsonBody<T3TeamAtlassianChildIssueTypesInput>();
+    const issueTypes = yield* listT3TeamAtlassianChildIssueTypes(input);
+    return okJson({ issueTypes });
+  }).pipe(Effect.catch(errorResponse)),
+);
+
 export const t3teamAtlassianBacklogRouteLayer = Layer.mergeAll(
   t3teamAtlassianBacklogReadRouteLayer,
   t3teamAtlassianBacklogPollRouteLayer,
@@ -152,4 +164,5 @@ export const t3teamAtlassianBacklogRouteLayer = Layer.mergeAll(
   t3teamAtlassianBacklogEstimateRouteLayer,
   t3teamAtlassianIssueStatusRouteLayer,
   t3teamAtlassianBacklogCreateSubtaskRouteLayer,
+  t3teamAtlassianChildIssueTypesRouteLayer,
 );

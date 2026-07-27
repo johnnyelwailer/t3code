@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
+import { CreateProjectDialogOAuthNotice } from "~/t3team/t3team-CreateProjectDialogOAuthNotice";
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
 import { useAtlassianOAuth } from "~/t3team/hooks/t3team-useAtlassianOAuth";
 import { useCreateProject } from "~/t3team/hooks/t3team-useCreateProject";
@@ -13,9 +15,10 @@ import {
   useT3TeamProjectSetupProfile,
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
-import { AccountStep, ProjectStep, SourceStep } from "~/t3team/t3team-CreateProjectDialogSteps";
+import { AccountStep, ProjectStep } from "~/t3team/t3team-CreateProjectDialogSteps";
 import { ConfirmStep, CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
 import { CreateProjectDialogFooter } from "~/t3team/t3team-CreateProjectDialogFooter";
+import { ConnectAtlassianStep } from "~/t3team/t3team-ConnectAtlassianStep";
 import { defaultAtlassianSiteUrlInput } from "~/t3team/hooks/t3team-createProjectUtils";
 
 export function CreateProjectDialog({
@@ -51,10 +54,7 @@ export function CreateProjectDialog({
   const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
   const [customProfile, setCustomProfile] = useState<T3TeamProfile | undefined>(undefined);
   const oauthError = oauth.state.kind === "error" ? oauth.state.message : null;
-  const oauthBusy =
-    oauth.state.kind === "opening" ||
-    oauth.state.kind === "waiting" ||
-    oauth.state.kind === "exchanging";
+  const oauthConfigured = Boolean(__ATLASSIAN_CLIENT_ID__);
 
   useEffect(() => {
     void loadPersistedAccounts();
@@ -63,6 +63,19 @@ export function CreateProjectDialog({
     if (oauth.state.kind !== "done") return;
     void loadAccountsWithOAuth(oauth.state.sites, oauth.state.token);
   }, [oauth.state, loadAccountsWithOAuth]);
+
+  /**
+   * The server-owned flow persists the account itself, so there is no token or site list to hand
+   * over — the account simply exists now and has to be read back.
+   *
+   * This is the path a sign-in completed in another browser takes. Without it the wizard would sit
+   * on the connect step after a successful sign-in, which is exactly how it looked before: connected
+   * on the server, oblivious in the UI.
+   */
+  useEffect(() => {
+    if (oauth.state.kind !== "connected") return;
+    void loadPersistedAccounts();
+  }, [oauth.state, loadPersistedAccounts]);
 
   const filteredProjects = useMemo(() => {
     const query = projectQuery.trim().toLowerCase();
@@ -106,34 +119,34 @@ export function CreateProjectDialog({
       footer={
         <CreateProjectDialogFooter
           setup={setup}
-          oauth={oauth}
-          siteUrl={siteUrl}
-          email={email}
-          apiToken={apiToken}
           selectedAccount={selectedAccount}
           selectedProject={selectedProject}
-          bootstrapping={bootstrapping || oauthBusy}
           loadingProjects={loadingProjects}
           onCreateProject={createSelectedProject}
         />
       }
     >
-      <div className="relative space-y-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
+      <div className="relative flex min-h-full flex-col gap-5 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
+        <CreateProjectDialogOAuthNotice oauth={oauth} />
+
         {setup.error || oauthError ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            {setup.error ?? oauthError}
-          </div>
+          <T3TeamErrorState error={setup.error ?? oauthError} action="setting up the project" />
         ) : null}
         <CreateProjectWizardStepTransition step={setup.step}>
           {setup.step === "source" ? (
-            <SourceStep
+            <ConnectAtlassianStep
               loading={bootstrapping}
+              oauthConfigured={oauthConfigured}
+              oauth={oauth}
               siteUrl={siteUrl}
               email={email}
               apiToken={apiToken}
               setSiteUrl={setSiteUrl}
               setEmail={setEmail}
               setApiToken={setApiToken}
+              canConnectBasic={setup.isValidUrl(siteUrl)}
+              connectingBasic={loadingAccounts}
+              onConnectBasic={() => void setup.loadAccountsWithBasic({ siteUrl, email, apiToken })}
             />
           ) : null}
           {setup.step === "account" ? (

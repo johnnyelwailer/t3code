@@ -54,6 +54,17 @@ export function okJson(body: unknown) {
   return HttpServerResponse.jsonUnsafe(body, { status: 200, headers: browserApiCorsHeaders });
 }
 
+/**
+ * For input the caller got wrong, as opposed to Atlassian failing us. Kept distinct from
+ * `errorResponse` (502) so a malformed request is not reported to the user as an outage.
+ */
+export function badRequestJson(message: string) {
+  return HttpServerResponse.jsonUnsafe(
+    { error: message },
+    { status: 400, headers: browserApiCorsHeaders },
+  );
+}
+
 export function errorResponse(error: unknown) {
   const message =
     error instanceof T3TeamAtlassianError

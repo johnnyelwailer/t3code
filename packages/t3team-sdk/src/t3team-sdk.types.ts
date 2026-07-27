@@ -63,6 +63,12 @@ export interface T3TeamToolHandlerClient {
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
   }) => Promise<unknown>;
+  /** Dispatch a broker-owned host tool by id. Present only on a thread-bound run; the HOST decides
+   * which ids it will accept, so this is a transport, not a widening of the tool surface. */
+  readonly callHostTool?: (input: {
+    readonly tool: string;
+    readonly args: unknown;
+  }) => Promise<unknown>;
 }
 
 export interface ToolGroupRef<Id extends string = string> {
@@ -202,6 +208,9 @@ export interface WorkflowRunOptions {
   readonly broker?: MessageBroker;
   readonly launchThreadId?: string;
   readonly defaultModel?: ModelSelection;
+  /** Host client handed to tool handlers as `ToolHandlerCtx.t3team` — the per-run half of a
+   * host-tool ref, whose handler is registered globally and so cannot close over the run. */
+  readonly t3team?: T3TeamToolHandlerClient;
   /** Host fairness hooks around live tool/script primitives. Replayed entries do not call them. */
   readonly beforePrimitive?: () => Promise<boolean>;
   readonly afterPrimitive?: () => void;

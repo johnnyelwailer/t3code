@@ -18,6 +18,7 @@ import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowR
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
+import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 
 type CreateBindingInput<
   TRenameError = never,
@@ -44,6 +45,8 @@ type CreateBindingInput<
   readonly workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   readonly workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  /** Delivers a produced draft to the review surface; only thread-bound bindings have one. */
+  readonly publishDraft?: T3TeamDraftMutationPublisher;
 };
 
 function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogAssigneeFilterError>(
@@ -92,6 +95,7 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
       ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
       ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
       ...(input.showWidget ? { showWidget: input.showWidget } : {}),
+      ...(input.publishDraft ? { publishDraft: input.publishDraft } : {}),
     });
 
   const readResource: T3TeamToolBinding["readResource"] = ({ server, uri }) => {

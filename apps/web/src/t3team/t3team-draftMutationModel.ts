@@ -21,7 +21,8 @@ function isDraftField(value: unknown): value is T3TeamDraftMutationField {
     value === "status" ||
     value === "description" ||
     value === "comment" ||
-    value === "subtask"
+    value === "subtask" ||
+    value === "link"
   );
 }
 

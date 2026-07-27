@@ -1,3 +1,4 @@
+export * from "./adf/index.ts";
 export * from "./client.ts";
 export * from "./jiraApi.ts";
 export * from "./normalize.ts";

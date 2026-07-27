@@ -1,5 +1,6 @@
 import { DndContext } from "@dnd-kit/core";
 
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { projectDashboardKanbanLaneCollisionDetection } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";
 import { ProjectDashboardKanbanMatrixBoard } from "~/t3team/t3team-ProjectDashboardKanbanMatrixBoard";
@@ -65,15 +66,7 @@ export function ProjectDashboardKanbanBoard({
 
   return (
     <>
-      {moveError ? (
-        <div
-          role="alert"
-          className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-        >
-          <div className="font-medium">{moveError.title}</div>
-          <p className="mt-1 text-xs leading-5 text-destructive/90">{moveError.description}</p>
-        </div>
-      ) : null}
+      {moveError ? <T3TeamErrorState error={moveError} className="mb-3" /> : null}
       <DndContext
         collisionDetection={projectDashboardKanbanLaneCollisionDetection}
         sensors={sensors}

@@ -57,6 +57,13 @@ export type T3TeamAtlassianBacklogCreateSubtaskInput = {
   readonly summary: string;
   readonly description?: string;
   readonly estimateHours?: number;
+  readonly issueTypeId?: string;
+  readonly assigneeAccountId?: string | null;
+};
+
+export type T3TeamAtlassianChildIssueTypesInput = {
+  readonly accountId: string;
+  readonly projectId: string;
 };
 
 export type T3TeamAtlassianBacklogCacheMetadata = {

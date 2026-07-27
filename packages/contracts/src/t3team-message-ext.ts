@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { T3TeamMessageDraftMutationAttachment } from "./t3team-draft-mutation.ts";
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
 const T3TeamMessageResourceKind = Schema.Literals([
@@ -125,6 +126,7 @@ export const T3TeamMessageAttachment = Schema.Union([
   T3TeamMessageArtifactAttachment,
   T3TeamMessageViewAttachment,
   T3TeamMessageWidgetAttachment,
+  T3TeamMessageDraftMutationAttachment,
 ]);
 export type T3TeamMessageAttachment = typeof T3TeamMessageAttachment.Type;
 

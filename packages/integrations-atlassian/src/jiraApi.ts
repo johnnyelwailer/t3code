@@ -7,9 +7,10 @@ import {
   type JiraBoard,
   type JiraBoardConfigurationResponse,
   type JiraBoardSearchResponse,
-  type JiraCreateMetaResponse,
+  type JiraCreateMetaIssueTypesResponse,
   type JiraCommentsResponse,
   type JiraField,
+  type JiraIssueLinkTypesResponse,
   type JiraFilter,
   type JiraFilterSearchResponse,
   type JiraIssue,
@@ -224,6 +225,18 @@ export class JiraApiClient {
       "comment",
       "project",
       "attachment",
+      "duedate",
+      "resolution",
+      "resolutiondate",
+      "timetracking",
+      "worklog",
+      "watches",
+      "votes",
+      "components",
+      "fixVersions",
+      "versions",
+      "environment",
+      "security",
     ];
 
     const merged = [...new Set([...baseFields, ...extraFields])];
@@ -380,10 +393,12 @@ export class JiraApiClient {
   async getIssue(
     issueIdOrKey: string,
     extraFields: ReadonlyArray<string> = [],
+    options?: { expandChangelog?: boolean },
   ): Promise<JiraIssue> {
     const fields = this.buildIssueFields(extraFields);
+    const expand = options?.expandChangelog ? "renderedFields,changelog" : "renderedFields";
     return this.fetchJson<JiraIssue>(
-      `/rest/api/3/issue/${issueIdOrKey}?fields=${fields}&expand=renderedFields`,
+      `/rest/api/3/issue/${issueIdOrKey}?fields=${fields}&expand=${expand}`,
     );
   }
 
@@ -461,10 +476,22 @@ export class JiraApiClient {
     });
   }
 
-  async getCreateMeta(projectId: string): Promise<JiraCreateMetaResponse> {
-    const encodedProjectId = encodeURIComponent(projectId);
-    return this.fetchJson<JiraCreateMetaResponse>(
-      `/rest/api/3/issue/createmeta?projectIds=${encodedProjectId}&expand=projects.issuetypes.fields`,
+  /**
+   * Issue types creatable in a project.
+   *
+   * Uses the per-project endpoint. The older
+   * `createmeta?projectIds=…&expand=projects.issuetypes.fields` form this replaced was removed from
+   * Jira Cloud, and its failure was invisible: the caller read `projects[].issuetypes`, got nothing,
+   * and reported it as "this project has no subtask type" rather than as a broken request.
+   *
+   * Takes `projectIdOrKey`, so a caller holding either a numeric id or a project key works.
+   */
+  async getCreateMetaIssueTypes(
+    projectIdOrKey: string,
+  ): Promise<JiraCreateMetaIssueTypesResponse> {
+    const encoded = encodeURIComponent(projectIdOrKey);
+    return this.fetchJson<JiraCreateMetaIssueTypesResponse>(
+      `/rest/api/3/issue/createmeta/${encoded}/issuetypes`,
     );
   }
 
@@ -472,11 +499,55 @@ export class JiraApiClient {
     return this.fetchJson<JiraCommentsResponse>(`/rest/api/3/issue/${issueIdOrKey}/comment`);
   }
 
-  async addIssueComment(issueIdOrKey: string, body: string): Promise<unknown> {
+  async addIssueComment(issueIdOrKey: string, body: unknown): Promise<unknown> {
     return this.fetchJson<unknown>(`/rest/api/3/issue/${issueIdOrKey}/comment`, {
       method: "POST",
       body: JSON.stringify({ body }),
     });
+  }
+
+  async editIssueComment(issueIdOrKey: string, commentId: string, body: unknown): Promise<unknown> {
+    return this.fetchJson<unknown>(
+      `/rest/api/3/issue/${issueIdOrKey}/comment/${commentId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ body }),
+      },
+    );
+  }
+
+  async deleteIssueComment(issueIdOrKey: string, commentId: string): Promise<void> {
+    await this.fetchResponse(`/rest/api/3/issue/${issueIdOrKey}/comment/${commentId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async createIssueLink(input: {
+    readonly type: { readonly name: string };
+    readonly inwardIssue: { readonly key: string };
+    readonly outwardIssue: { readonly key: string };
+  }): Promise<void> {
+    await this.fetchResponse(
+      "/rest/api/3/issueLink",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+      {
+        accept: "application/json",
+        contentType: "application/json",
+      },
+    );
+  }
+
+  async deleteIssueLink(linkId: string): Promise<void> {
+    await this.fetchResponse(`/rest/api/3/issueLink/${linkId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getIssueLinkTypes(): Promise<JiraIssueLinkTypesResponse> {
+    return this.fetchJson<JiraIssueLinkTypesResponse>("/rest/api/3/issueLinkType");
   }
 }
 

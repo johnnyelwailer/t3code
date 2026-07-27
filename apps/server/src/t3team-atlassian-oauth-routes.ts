@@ -7,6 +7,11 @@ import {
   readJsonBody,
   tryAtlassianPromise,
 } from "./t3team-atlassian-http.ts";
+import {
+  ATLASSIAN_OAUTH_ENV_HINT,
+  readAtlassianOAuthClientId,
+  readAtlassianOAuthClientSecret,
+} from "./t3team-atlassian-oauthEnv.ts";
 
 type OAuthExchangeInput = {
   readonly code: string;
@@ -15,14 +20,11 @@ type OAuthExchangeInput = {
 };
 
 function requiredAtlassianOAuthEnv(): { clientId: string; clientSecret: string } {
-  const clientId =
-    process.env.T3TEAM_ATLASSIAN_CLIENT_ID?.trim() ??
-    process.env.VITE_ATLASSIAN_CLIENT_ID?.trim() ??
-    "";
-  const clientSecret = process.env.T3TEAM_ATLASSIAN_CLIENT_SECRET?.trim() ?? "";
+  const clientId = readAtlassianOAuthClientId();
+  const clientSecret = readAtlassianOAuthClientSecret();
   if (!clientId || !clientSecret) {
     throw new Error(
-      "Atlassian OAuth is not configured. Set T3TEAM_ATLASSIAN_CLIENT_ID and T3TEAM_ATLASSIAN_CLIENT_SECRET on the server.",
+      `Atlassian OAuth is not configured. Set ${ATLASSIAN_OAUTH_ENV_HINT} on the server.`,
     );
   }
   return { clientId, clientSecret };

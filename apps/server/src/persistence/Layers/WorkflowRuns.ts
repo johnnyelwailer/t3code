@@ -8,6 +8,7 @@ import * as Struct from "effect/Struct";
 import { ModelSelection } from "@t3tools/contracts";
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
+  WorkflowRunHostToolGrant,
   ClearWorkflowRunPendingInput,
   CountLiveWorkflowRunsByOriginInput,
   GetWorkflowRunInput,
@@ -27,6 +28,9 @@ const WorkflowRunDbRow = WorkflowRun.mapFields(
   Struct.assign({
     args: Schema.fromJsonString(Schema.Unknown),
     modelSelection: Schema.fromJsonString(ModelSelection),
+    hostToolGrant: Schema.optional(
+      Schema.NullOr(Schema.fromJsonString(WorkflowRunHostToolGrant)),
+    ),
   }),
 );
 
@@ -55,6 +59,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           pending_kind,
           failure_reason,
           failure_step,
+          host_tool_grant,
           wake_at,
           created_at,
           updated_at
@@ -77,6 +82,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           ${row.pendingKind},
           ${row.failureReason ?? null},
           ${row.failureStep ?? null},
+          ${row.hostToolGrant ? JSON.stringify(row.hostToolGrant) : null},
           ${row.wakeAt},
           ${row.createdAt},
           ${row.updatedAt}
@@ -99,6 +105,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           pending_kind = excluded.pending_kind,
           failure_reason = excluded.failure_reason,
           failure_step = excluded.failure_step,
+          host_tool_grant = excluded.host_tool_grant,
           wake_at = excluded.wake_at,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
@@ -128,6 +135,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           pending_kind AS "pendingKind",
           failure_reason AS "failureReason",
           failure_step AS "failureStep",
+          host_tool_grant AS "hostToolGrant",
           wake_at AS "wakeAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -159,6 +167,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           pending_kind AS "pendingKind",
           failure_reason AS "failureReason",
           failure_step AS "failureStep",
+          host_tool_grant AS "hostToolGrant",
           wake_at AS "wakeAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -193,6 +202,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           pending_kind AS "pendingKind",
           failure_reason AS "failureReason",
           failure_step AS "failureStep",
+          host_tool_grant AS "hostToolGrant",
           wake_at AS "wakeAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"

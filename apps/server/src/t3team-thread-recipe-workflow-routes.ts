@@ -35,6 +35,9 @@ import {
 import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
+import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
+import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
 
 export { t3teamThreadWorkflowResolveInputRouteLayer } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 
@@ -53,6 +56,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     const runRepository = yield* WorkflowRunRepository;
     const journalStore = yield* WorkflowJournalStore;
     const scheduler = yield* T3TeamWorkflowScheduler;
+    const toolBroker = yield* T3TeamToolBroker;
     const input = yield* readJsonBody<LaunchProjectRecipeWorkflowRequest>();
 
     const threadIdInput = input.threadId?.trim() ?? "";
@@ -137,6 +141,32 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       workflowPath,
     });
 
+    // The body's `getTools()` bridge to the broker's work-item DRAFT tools, bound to THIS thread so
+    // a proposal lands where the user launched it. Scope comes from the RECIPE MODULE, never from
+    // the client-supplied `input.launch.allowedToolGroups` (a caller that omitted it would be
+    // handed unrestricted scope); unresolvable ⇒ no bridge at all, and the resolved scope is what
+    // is persisted as the grant, so a restart restores this rather than the request.
+    const hostToolScope = yield* resolveRecipeHostToolScope({
+      recipePath: input.launch.recipePath,
+      workflowPath,
+    });
+    if (hostToolScope.kind === "denied") {
+      yield* Effect.logDebug("workflow launch runs without host tools", {
+        runId,
+        reason: hostToolScope.reason,
+      });
+    }
+    const hostToolGrant =
+      hostToolScope.kind === "granted" ? { toolGroups: hostToolScope.toolGroups } : undefined;
+    const hostToolClient =
+      hostToolScope.kind === "granted"
+        ? makeT3TeamWorkflowHostDraftToolClient({
+            broker: toolBroker,
+            launchThreadId: threadIdInput,
+            allowedToolGroups: hostToolScope.toolGroups,
+          })
+        : undefined;
+
     // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
     // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
     // `t3team.orchestration.run` tool drives through.
@@ -159,6 +189,9 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         ...(Object.keys(scripts).length === 0
           ? {}
           : { scripts, recipePath: input.launch.recipePath }),
+        ...(hostToolClient === undefined || hostToolGrant === undefined
+          ? {}
+          : { hostToolClient, hostToolGrant }),
         workspaceRoot: project.workspaceRoot,
         launchThreadId: threadIdInput,
         projectId: thread.projectId,

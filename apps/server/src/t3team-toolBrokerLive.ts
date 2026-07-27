@@ -29,6 +29,7 @@ import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
 import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiring.ts";
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
+import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
   // Host tools every provider may call without an explicit `surface:"t3team"`
@@ -81,6 +82,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   // Extracted to t3team-toolBrokerViewWorkspace.ts (additive LOC budget) — behavior unchanged.
   const loadThreadView = makeLoadThreadView(loadThreadProject);
 
+  const dispatchCommand: typeof orchestration.dispatch = (command) =>
+    orchestration.dispatch(command);
   const renameThread = (threadId: ThreadIdType, title: string) =>
     orchestration.dispatch({
       type: "thread.meta.update",
@@ -145,8 +148,9 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
         showWidget: bindShowWidget({
           threadId,
           loadThreadProject: () => loadThreadProject(threadId),
-          dispatch: (command) => orchestration.dispatch(command),
+          dispatch: dispatchCommand,
         }),
+        publishDraft: makeT3TeamDraftMutationPublisher({ threadId, dispatch: dispatchCommand }),
         threadId,
         toolContext: resolvedToolContext,
         availableToolIds: toolIds,
