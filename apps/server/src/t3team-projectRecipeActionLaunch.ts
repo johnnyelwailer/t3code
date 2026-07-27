@@ -14,6 +14,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
+import { expandHomePath } from "./pathExpansion.ts";
 import {
   DEFAULT_RECIPE_ACTION_NAME,
   resolveRecipeActionPath,
@@ -38,10 +39,15 @@ export const resolveLaunchWorkflowPath = Effect.fn("resolveLaunchWorkflowPath")(
 }) {
   const actionName = input.actionName?.trim() ?? "";
   if (actionName.length === 0 || actionName === DEFAULT_RECIPE_ACTION_NAME) {
-    return input.workflowPath;
+    // The one path this resolver does NOT re-derive from the recipe module — it's the launch
+    // descriptor's own `workflowPath`, taken as-is. A workspace-root-derived path may carry a
+    // literal `~` (see pathExpansion.ts), so expand it here: this is the single point every
+    // downstream consumer (source reads, the persisted run row, the engine launch) is fed from,
+    // and it must return the SAME absolute-path shape the named-action branch below produces.
+    return expandHomePath(input.workflowPath);
   }
 
-  const recipePath = input.recipePath?.trim() ?? "";
+  const recipePath = expandHomePath(input.recipePath?.trim() ?? "");
   if (recipePath.length === 0) {
     return yield* new T3TeamRecipeActionResolutionError({
       message: `launch.actionName '${actionName}' requires launch.recipePath: actions are resolved from the recipe's own module.`,

@@ -17,6 +17,7 @@
  */
 
 import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
@@ -239,6 +240,26 @@ it.effect("a recipe declaring no groups grants an EMPTY scope, which admits noth
     // Empty, never undefined: `normalizeProjectRecipeToolGroups([])` admits no tool, whereas
     // `undefined` would mean unrestricted.
     assert.deepStrictEqual(scope, { kind: "granted", toolGroups: [] });
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("resolves a literal `~`-prefixed recipePath/workflowPath", () =>
+  Effect.gen(function* () {
+    // Workspace entries may legitimately persist a home-relative `~` root (see
+    // apps/server/src/workspace/WorkspacePaths.ts); the launch route passes it through
+    // faithfully, so this resolver must expand it itself rather than fail closed on a path
+    // fs.exists can never find. `path.relative` + `path.join` round-trips exactly back to the
+    // real fixture path regardless of whether it happens to sit under the real home directory,
+    // so this never touches the real `$HOME`. Plain string concatenation (not `path.join`) is
+    // load-bearing: joining "~" with a relative path that starts with ".." would normalize the
+    // two away into a `~`-less path, defeating the whole point of this fixture.
+    const toTildePath = (absolutePath: string) =>
+      `~/${NodePath.relative(NodeOS.homedir(), absolutePath)}`;
+    const scope = yield* resolveRecipeHostToolScope({
+      recipePath: toTildePath(narrow.recipePath),
+      workflowPath: toTildePath(narrow.workflowPath),
+    });
+    assert.deepStrictEqual(scope, { kind: "granted", toolGroups: ["integration.read"] });
   }).pipe(Effect.provide(TestLayer)),
 );
 

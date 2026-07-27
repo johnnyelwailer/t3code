@@ -235,6 +235,24 @@ describe("recipe workflow scripts (Epic 25 §Scripts)", () => {
     expect(completed).toEqual({ median: 1.0, p75: 1.4 });
   });
 
+  it("resolves a literal `~`-prefixed recipePath/workflowPath", async () => {
+    // Workspace entries may legitimately persist a home-relative `~` root (see
+    // apps/server/src/workspace/WorkspacePaths.ts); the launch route passes it through
+    // faithfully, so this resolver must expand it itself rather than silently return
+    // NO_RECIPE_SCRIPTS on a path fs.exists can never find. `path.relative` + `path.join`
+    // round-trips exactly back to the real fixture path regardless of whether it happens to
+    // sit under the real home directory, so this never touches the real `$HOME`. Plain string
+    // concatenation (not `path.join`) is load-bearing: joining "~" with a relative path that
+    // starts with ".." would normalize the two away into a `~`-less path, defeating the fixture.
+    const toTildePath = (absolutePath: string) =>
+      `~/${NodePath.relative(NodeOS.homedir(), absolutePath)}`;
+    const scripts = await resolveScripts({
+      recipePath: toTildePath(recipeRoot),
+      workflowPath: toTildePath(workflowPath),
+    });
+    expect(Object.keys(scripts)).toEqual(["computeStats"]);
+  });
+
   it("resolves to an empty record when the recipe dir has no recipe.ts or no recipePath is given", async () => {
     const jsonOnlyRecipeRoot = NodePath.join(workspaceRoot, ".t3team", "recipes", "json-only");
     NodeFS.mkdirSync(jsonOnlyRecipeRoot, { recursive: true });
