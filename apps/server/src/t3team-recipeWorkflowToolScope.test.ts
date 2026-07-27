@@ -44,6 +44,9 @@ const runsRoot = NodePath.join(
   NodeURL.fileURLToPath(new URL("..", import.meta.url)),
   ".t3team-runs",
 );
+// Created here, not assumed: the directory is gitignored, so a fresh clone or worktree does not
+// have it and `mkdtemp` would fail with ENOENT before a single test ran.
+NodeFS.mkdirSync(runsRoot, { recursive: true });
 const root = NodeFS.mkdtempSync(NodePath.join(runsRoot, "scope-fixtures-"));
 afterAll(() => NodeFS.rmSync(root, { recursive: true, force: true }));
 
