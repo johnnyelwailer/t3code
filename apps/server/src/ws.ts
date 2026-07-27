@@ -57,6 +57,8 @@ import {
   type TerminalError,
   type TerminalEvent,
   type TerminalMetadataStreamEvent,
+  type ToolAuthState,
+  type ToolAuthStreamEvent,
   WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
@@ -83,6 +85,8 @@ import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
+import * as ToolAuthService from "./toolauth/ToolAuthService.ts";
+import type { AuthState as ToolAuthInternalState } from "./toolauth/types.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import { issueAssetUrl } from "./assets/AssetAccess.ts";
@@ -356,7 +360,35 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.subscribeServerConfig, AuthOrchestrationReadScope],
   [WS_METHODS.subscribeServerLifecycle, AuthOrchestrationReadScope],
   [WS_METHODS.subscribeAuthAccess, AuthAccessReadScope],
+  // Reuses terminal:operate rather than introducing a new scope: signing a
+  // tool in spawns a pty process exactly like the terminal does, and every
+  // standard client session already carries this scope (see
+  // AuthStandardClientScopes in packages/contracts/src/auth.ts).
+  [WS_METHODS.toolAuthList, AuthTerminalOperateScope],
+  [WS_METHODS.toolAuthStart, AuthTerminalOperateScope],
+  [WS_METHODS.toolAuthInstall, AuthTerminalOperateScope],
+  [WS_METHODS.toolAuthSubmitCode, AuthTerminalOperateScope],
+  [WS_METHODS.toolAuthCancel, AuthTerminalOperateScope],
+  [WS_METHODS.subscribeToolAuth, AuthTerminalOperateScope],
 ]);
+
+/**
+ * Narrows the service's internal (fake-inclusive) tool state to the wire
+ * schema. Safe because every call site here only ever produces `claude` /
+ * `codex` states: `toolAuthList`/`subscribeToolAuth` enumerate
+ * `PRODUCTION_TOOLS`, and `toolAuthStart`/`toolAuthInstall`/`submitCode`/
+ * `cancel` take `tool` from a payload already validated by the
+ * `ToolAuthToolId` RPC schema.
+ */
+function toToolAuthWireState(state: ToolAuthInternalState): ToolAuthState {
+  return state as ToolAuthState;
+}
+
+function toToolAuthWireStreamEvent(event: ToolAuthService.ToolAuthServiceStreamEvent): ToolAuthStreamEvent {
+  return event.type === "snapshot"
+    ? { type: "snapshot", tools: event.tools.map(toToolAuthWireState) }
+    : { type: "update", state: toToolAuthWireState(event.state) };
+}
 
 function toAuthAccessStreamEvent(
   change: PairingGrantStore.BootstrapCredentialChange | SessionStore.SessionCredentialChange,
@@ -416,6 +448,7 @@ const makeWsRpcLayer = (
       const vcsProvisioning = yield* VcsProvisioningService.VcsProvisioningService;
       const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
       const terminalManager = yield* TerminalManager.TerminalManager;
+      const toolAuth = yield* ToolAuthService.ToolAuthService;
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
@@ -1927,6 +1960,54 @@ const makeWsRpcLayer = (
               ),
             ),
             { "rpc.aggregate": "terminal" },
+          ),
+        [WS_METHODS.toolAuthList]: (_input) =>
+          observeRpcEffect(
+            WS_METHODS.toolAuthList,
+            toolAuth.list.pipe(Effect.map((tools) => ({ tools: tools.map(toToolAuthWireState) }))),
+            { "rpc.aggregate": "toolauth" },
+          ),
+        [WS_METHODS.toolAuthStart]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.toolAuthStart,
+            toolAuth.start(input.tool).pipe(Effect.map(toToolAuthWireState)),
+            { "rpc.aggregate": "toolauth" },
+          ),
+        // One-click "install this CLI", chained into the real sign-in flow
+        // server-side (see `ToolAuthService.install`). The immediate
+        // response is just the `installing` snapshot; every later beat
+        // arrives over the client's existing `subscribeToolAuth`
+        // subscription — there is no separate progress stream to wire up.
+        [WS_METHODS.toolAuthInstall]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.toolAuthInstall,
+            toolAuth.install(input.tool).pipe(Effect.map(toToolAuthWireState)),
+            { "rpc.aggregate": "toolauth" },
+          ),
+        [WS_METHODS.toolAuthSubmitCode]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.toolAuthSubmitCode,
+            toolAuth.submitCode(input.tool, input.code).pipe(Effect.map(toToolAuthWireState)),
+            { "rpc.aggregate": "toolauth" },
+          ),
+        [WS_METHODS.toolAuthCancel]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.toolAuthCancel,
+            toolAuth.cancel(input.tool).pipe(Effect.map(toToolAuthWireState)),
+            { "rpc.aggregate": "toolauth" },
+          ),
+        [WS_METHODS.subscribeToolAuth]: (_input) =>
+          observeRpcStream(
+            WS_METHODS.subscribeToolAuth,
+            Stream.callback<ToolAuthStreamEvent>((queue) =>
+              Effect.acquireRelease(
+                toolAuth.attachStream((event) =>
+                  Queue.offer(queue, toToolAuthWireStreamEvent(event)).pipe(Effect.asVoid),
+                ),
+                (unsubscribe) => Effect.sync(unsubscribe),
+              ),
+            ),
+            { "rpc.aggregate": "toolauth" },
           ),
         [WS_METHODS.previewOpen]: (input) =>
           observeRpcEffect(WS_METHODS.previewOpen, previewManager.open(input), {

@@ -146,6 +146,19 @@ import {
   SourceControlRepositoryLookupInput,
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
+import {
+  ToolAuthCancelInput,
+  ToolAuthInstallInput,
+  ToolAuthListInput,
+  ToolAuthListResult,
+  ToolAuthNoActiveSessionError,
+  ToolAuthNotAwaitingCodeError,
+  ToolAuthSpawnError,
+  ToolAuthStartInput,
+  ToolAuthState,
+  ToolAuthStreamEvent,
+  ToolAuthSubmitCodeInput,
+} from "./toolauth.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -228,6 +241,14 @@ export const WS_METHODS = {
   sourceControlCloneRepository: "sourceControl.cloneRepository",
   sourceControlPublishRepository: "sourceControl.publishRepository",
 
+  // Tool auth methods (Connected tools: signing `claude`/`codex` into a
+  // hosted sandbox from the UI)
+  toolAuthList: "toolAuth.list",
+  toolAuthStart: "toolAuth.start",
+  toolAuthSubmitCode: "toolAuth.submitCode",
+  toolAuthCancel: "toolAuth.cancel",
+  toolAuthInstall: "toolAuth.install",
+
   // Streaming subscriptions
   subscribeVcsStatus: "subscribeVcsStatus",
   subscribeTerminalEvents: "subscribeTerminalEvents",
@@ -237,6 +258,7 @@ export const WS_METHODS = {
   subscribeServerConfig: "subscribeServerConfig",
   subscribeServerLifecycle: "subscribeServerLifecycle",
   subscribeAuthAccess: "subscribeAuthAccess",
+  subscribeToolAuth: "subscribeToolAuth",
 } as const;
 
 export const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -677,6 +699,55 @@ export const WsSubscribeTerminalMetadataRpc = Rpc.make(WS_METHODS.subscribeTermi
   stream: true,
 });
 
+export const WsToolAuthListRpc = Rpc.make(WS_METHODS.toolAuthList, {
+  payload: ToolAuthListInput,
+  success: ToolAuthListResult,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsToolAuthStartRpc = Rpc.make(WS_METHODS.toolAuthStart, {
+  payload: ToolAuthStartInput,
+  success: ToolAuthState,
+  error: Schema.Union([ToolAuthSpawnError, EnvironmentAuthorizationError]),
+});
+
+export const WsToolAuthSubmitCodeRpc = Rpc.make(WS_METHODS.toolAuthSubmitCode, {
+  payload: ToolAuthSubmitCodeInput,
+  success: ToolAuthState,
+  error: Schema.Union([
+    ToolAuthNotAwaitingCodeError,
+    ToolAuthNoActiveSessionError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const WsToolAuthCancelRpc = Rpc.make(WS_METHODS.toolAuthCancel, {
+  payload: ToolAuthCancelInput,
+  success: ToolAuthState,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsSubscribeToolAuthRpc = Rpc.make(WS_METHODS.subscribeToolAuth, {
+  payload: Schema.Struct({}),
+  success: ToolAuthStreamEvent,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
+/**
+ * One-click "install this CLI", chained straight into the real sign-in flow
+ * server-side. Mirrors `WsToolAuthStartRpc` exactly (same payload/success/
+ * error shape) rather than introducing a parallel stream: the immediate
+ * response is just the `installing` snapshot, and every later beat —
+ * `installing` → `starting` → ... → `connected`/`failed` — arrives over the
+ * client's existing `subscribeToolAuth` subscription.
+ */
+export const WsToolAuthInstallRpc = Rpc.make(WS_METHODS.toolAuthInstall, {
+  payload: ToolAuthInstallInput,
+  success: ToolAuthState,
+  error: Schema.Union([ToolAuthSpawnError, EnvironmentAuthorizationError]),
+});
+
 export const WsSubscribeServerConfigRpc = Rpc.make(WS_METHODS.subscribeServerConfig, {
   payload: Schema.Struct({}),
   success: ServerConfigStreamEvent,
@@ -747,6 +818,12 @@ export const WsRpcGroup = RpcGroup.make(
   WsTerminalCloseRpc,
   WsSubscribeTerminalEventsRpc,
   WsSubscribeTerminalMetadataRpc,
+  WsToolAuthListRpc,
+  WsToolAuthStartRpc,
+  WsToolAuthSubmitCodeRpc,
+  WsToolAuthCancelRpc,
+  WsSubscribeToolAuthRpc,
+  WsToolAuthInstallRpc,
   WsPreviewOpenRpc,
   WsPreviewNavigateRpc,
   WsPreviewResizeRpc,

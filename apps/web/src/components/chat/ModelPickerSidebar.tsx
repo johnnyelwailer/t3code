@@ -4,7 +4,12 @@ import { SparklesIcon, StarIcon } from "lucide-react";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
-import { isProviderInstancePickerReady, type ProviderInstanceEntry } from "../../providerInstances";
+import {
+  isProviderInstanceConnectable,
+  isProviderInstancePickerReady,
+  resolveProviderInstanceReadiness,
+  type ProviderInstanceEntry,
+} from "../../providerInstances";
 
 /**
  * Build the hover tooltip for an instance button. Mirrors the old
@@ -151,7 +156,14 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
 
           {/* Instance buttons (one per configured instance — built-in + custom) */}
           {props.instanceEntries.map((entry) => {
-            const isUnavailable = !isProviderInstancePickerReady(entry);
+            // An instance that only needs a sign-in or an install is NOT the
+            // same as a genuine probe error: the user must be able to click
+            // through to it (that's the whole point of the connect panel the
+            // model list area renders instead of the model list). Only a
+            // real "otherError" (or the instance being disabled/unavailable,
+            // which also resolves to "otherError") keeps the tab disabled.
+            const isUnavailable =
+              !isProviderInstancePickerReady(entry) && !isProviderInstanceConnectable(entry);
             const isContextDisabled = props.disabledInstanceIds?.has(entry.instanceId) ?? false;
             const isDisabled = isUnavailable || isContextDisabled;
             const isSelected = props.selectedInstanceId === entry.instanceId;
@@ -160,14 +172,19 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
             const showInstanceBadge =
               Boolean(entry.accentColor && !entry.iconDataUrl) ||
               (duplicateDriverCounts.get(entry.driverKind) ?? 0) > 1;
+            const readiness = resolveProviderInstanceReadiness(entry);
 
             const tooltip = isUnavailable
               ? describeUnavailableInstance(entry)
               : isContextDisabled
                 ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
-                : showNewBadge
-                  ? `${entry.displayName} — New`
-                  : entry.displayName;
+                : readiness === "needsInstall"
+                  ? `${entry.displayName} — Not installed.`
+                  : readiness === "needsAuth"
+                    ? `${entry.displayName} — Sign-in required.`
+                    : showNewBadge
+                      ? `${entry.displayName} — New`
+                      : entry.displayName;
 
             const button = (
               <button
