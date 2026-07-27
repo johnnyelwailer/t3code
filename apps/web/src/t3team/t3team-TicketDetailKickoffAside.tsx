@@ -169,6 +169,7 @@ export function TicketDetailKickoffAside({
             {...(onClearSelectedRecipe ? { onClearSelectedRecipe } : {})}
             providers={providers}
             isConnected={isConnected}
+            {...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {})}
             onSubmit={onSubmit}
           />
         )}

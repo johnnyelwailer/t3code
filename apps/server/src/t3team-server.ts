@@ -356,7 +356,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
       Layer.provideMerge(T3TeamWidgetRegistryLive),
       Layer.provideMerge(T3TeamContextRefreshServiceLive),
       Layer.provide(OrchestrationLayerLive),
-      // t3team.workflow.run (ephemeral workflows) drives the same durable-engine singletons;
+      // t3team.orchestration.run (ephemeral workflows) drives the same durable-engine singletons;
       // memoized by reference, so this shares the registry/repo/store/scheduler instances.
       Layer.provide(WorkflowEngineDurabilityLive),
       // ProviderRegistryLive appears EARLIER in the outer pipe below, but `provideMerge`

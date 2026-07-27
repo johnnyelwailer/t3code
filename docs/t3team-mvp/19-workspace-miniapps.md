@@ -131,7 +131,7 @@ Known placements:
   (e.g., a filter chip on the backlog page). Used by deterministic recipes whose workflow
   contains no `agent` step — clicking executes a `tool`/`script` workflow synchronously
   without opening a chat. See
-  [Epic 16 — Deterministic Workflows](./16-action-recipes.md#deterministic-workflows-no-chat).
+  [Epic 16 — Deterministic orchestrations](./16-action-recipes.md#deterministic-orchestrations-no-chat).
 - `conversation.inlineCard`: compact renderer inside an agent conversation.
 - `conversation.sidecar`: interactive side panel beside a conversation.
 - `artifact.detail`: custom artifact detail renderer.
@@ -278,7 +278,7 @@ The Quick Starts list is just one section implemented via `defineSidecarSection`
 come from a distribution pack, user pack, project pack, or remote-managed pack. It is
 removable when policy allows it and replaceable when a higher-precedence pack or project
 module overrides it. The launch-UX-by-workflow-shape rules from
-[Epic 16 — Launcher UX by workflow shape](./16-action-recipes.md#deterministic-workflows-no-chat)
+[Epic 16 — Launcher UX by orchestration shape](./16-action-recipes.md#launcher-ux-by-orchestration-shape)
 are rules of _that_ section, not of the side panel.
 
 ### Example sections
@@ -478,8 +478,8 @@ exist to prevent.
 | `defineArtifactRenderer`          | `artifact.detail`                                                                                                   | Custom viewer for a specific `artifact.kind`                                                                                                                                                                                                                                           | Planned             |
 | `defineConversationCard`          | (embedded as view attachment on a system message — see [Epic 16 — Attachments](./16-action-recipes.md#attachments)) | Declarative card spec (checklist / form / approval / etc.); replaces inline card literals                                                                                                                                                                                              | Planned (Phase 5)   |
 | `defineConversationSidecar`       | `conversation.sidecar`                                                                                              | Interactive side panel beside a conversation                                                                                                                                                                                                                                           | Planned (Phase 5+)  |
-| `defineAction`                    | `action`                                                                                                            | Recipe launcher in a dedicated action list (usually wrapped by a Quick Starts `defineSidecarSection`)                                                                                                                                                                                  | Planned (Phase 5)   |
-| `defineInlineAction`              | `action.inline`                                                                                                     | Inline action chip in a host page's control chrome (deterministic workflows — see [Epic 16](./16-action-recipes.md#deterministic-workflows-no-chat))                                                                                                                                   | Planned (Phase 3-5) |
+| `defineAction`                    | `action`                                                                                                            | Recipe launcher in a dedicated action list (usually wrapped by a Quick Starts `defineSidecarSection`)                                                                                                                                                                                  | Built (bundled action views gated) |
+| `defineInlineAction`              | `action.inline`                                                                                                     | Inline action chip in a host page's control chrome (deterministic orchestrations — see [Epic 16](./16-action-recipes.md#deterministic-orchestrations-no-chat))                                                                                                                                   | Planned (Phase 3-5) |
 | `defineContextAction`             | (universal context menu — see [Context menus](#context-menus))                                                      | A cross-cutting action that targets items matching a predicate across any section — for cross-section verbs that shouldn't have to be re-declared per section                                                                                                                          | Planned (Phase 5+)  |
 
 **Data, capability, and config** (project- or pack-level contributions)
@@ -522,10 +522,11 @@ enumerate its placements — each placed contribution is its own atomic registra
 
 `@t3team/sdk` is the single SDK package and public import path for these helpers. The
 workflow/tool primitives (`defineWorkflow`, `defineTool`, `defineToolGroup`, `defineModel`,
-`defineScript`) ship there today (Epic 25). The recipe and placement helpers (`defineRecipe`,
-`defineSidecarSection`, `defineDashboardWidget`, etc.) currently live in
-`packages/project-recipes` and are surfaced through `@t3team/sdk` so authors have one
-import path.
+`defineScript`) ship there today (Epic 25). The placement helpers that exist
+(`defineSidecarSection`, `defineAction`) and the `RecipeSurface` union they type against now live
+there too — `packages/t3team-sdk/src/t3team-sdk.{placements,sidecarSection,actionPlacement,surface}.ts`
+— and `@t3tools/project-recipes` re-exports them for its existing importers, so the dependency runs
+one way only (project-recipes → SDK) and authors have one import path.
 
 ## Custom Views
 

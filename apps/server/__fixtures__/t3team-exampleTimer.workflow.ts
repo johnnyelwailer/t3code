@@ -3,6 +3,7 @@
 // `waitUntil` (the `"schedule"` capability gates that primitive), then completes — exercising
 // the timer→suspend→restart→wake→resume loop the scheduler drives.
 import { Schema } from "effect";
+import { getArgs, now, waitUntil } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ delayMs: Schema.Number });
 
@@ -21,11 +22,15 @@ export const meta = {
   capabilities: ["schedule"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
 
-// `now()` is the journaled clock — recorded on first execution, replayed on resume — so the
-// deadline is deterministic across the restart the scheduler resumes through.
-const deadline = now() + input.delayMs;
-await waitUntil(deadline);
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { slept: true, deadline };
+  // `now()` is the journaled clock — recorded on first execution, replayed on resume — so the
+  // deadline is deterministic across the restart the scheduler resumes through.
+  const deadline = now() + input.delayMs;
+  await waitUntil(deadline);
+
+  return { slept: true, deadline };
+}

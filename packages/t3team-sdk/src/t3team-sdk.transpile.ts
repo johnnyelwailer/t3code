@@ -47,6 +47,37 @@ export function findMetaStatement(
   return undefined;
 }
 
+/**
+ * The name of the body's default-exported function, if it has one.
+ *
+ * This is what makes the module-shaped body (`export default async function run() { … }`) runnable
+ * by the SAME vm path as a legacy top-level-statement body: `export`/`default` are blanked like any
+ * other modifier, which leaves a declared-but-never-called function, so the loader appends a call to
+ * this name. Keeping one execution path is what preserves journaled `Date`/`Math`/`crypto` for the
+ * new shape — a real ESM `import()` cannot intercept those.
+ *
+ * Returns undefined for a legacy body. A default export that is NOT a named function declaration
+ * (an arrow, a class, an identifier) is reported by the loader as an authoring error rather than
+ * silently doing nothing.
+ */
+export function findDefaultExportedFunctionName(
+  ts: typeof TsApi,
+  sourceFile: TsApi.SourceFile,
+): { readonly name?: string; readonly hasDefaultExport: boolean } {
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportAssignment(statement)) return { hasDefaultExport: true };
+    const modifiers = ts.canHaveModifiers(statement) ? ts.getModifiers(statement) : undefined;
+    const isDefaultExport =
+      modifiers?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword) === true;
+    if (!isDefaultExport) continue;
+    if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
+      return { name: statement.name.text, hasDefaultExport: true };
+    }
+    return { hasDefaultExport: true };
+  }
+  return { hasDefaultExport: false };
+}
+
 export function collectBlankSpans(
   ts: typeof TsApi,
   sourceFile: TsApi.SourceFile,

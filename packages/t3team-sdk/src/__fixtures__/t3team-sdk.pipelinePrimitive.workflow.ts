@@ -2,6 +2,7 @@
 // stage 2 is a pure transform. The whole `pipeline` is ONE journal entry (kind "pipeline"),
 // so on resume the recorded array replays and the tool handler is not re-invoked.
 import { Schema } from "effect";
+import { getArgs, getTools, pipeline } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ labels: Schema.Array(Schema.String) });
 
@@ -12,17 +13,23 @@ export const meta = {
   description: "Two-stage pipeline: a tool-backed echo then a pure suffix transform.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["demo.read"], // tool-group gate: the demo tools' group (Epic 25 §Tools)
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const tools = getTools();
 
-const out = await pipeline(
-  [...input.labels],
-  async (item) => {
-    await tools.demo.noop({ note: String(item) });
-    return `e${String(item)}`;
-  },
-  async (prev) => `${String(prev)}!`,
-);
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { out };
+  const out = await pipeline(
+    [...input.labels],
+    async (item) => {
+      await tools.demo.noop({ note: String(item) });
+      return `e${String(item)}`;
+    },
+    async (prev) => `${String(prev)}!`,
+  );
+
+  return { out };
+}

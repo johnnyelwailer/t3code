@@ -41,6 +41,7 @@ import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
 import { isAtlassianOAuthCallbackPath } from "../t3team/hooks/t3team-atlassianOAuthRedirect";
 import { isT3TeamShellPath } from "../t3team/t3team-upstreamRouteBridge";
 import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge";
+import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 import { shellEnvironment } from "../state/shell";
@@ -160,6 +161,7 @@ function RootRouteView() {
         <DocumentTitleSync />
         <GlassAppearanceSync />
         <T3TeamPackAppearanceSync />
+        <T3TeamPackAppearanceDefaultsSync />
         {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
         <RelayClientInstallDialog />
         <ConnectOnboardingDialog />

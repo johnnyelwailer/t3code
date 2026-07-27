@@ -98,6 +98,7 @@ export function makeControllerResume(deps: {
         newId: input.newId,
         nowIso: input.nowIso,
         onError: input.onError,
+        phase: "resume",
       });
     } finally {
       resuming = false;

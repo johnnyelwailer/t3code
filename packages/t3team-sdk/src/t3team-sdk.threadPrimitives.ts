@@ -10,18 +10,19 @@
  * an isolated thread whose id is the `thread.create` correlationId (so it re-derives on
  * replay), and `agent(p, o)` = `spawnThread(o).askAgent(p, o)` (one-shot, thread not retained).
  *
- * Ask verbs with a `schema` enforce it via an internal corrective-retry loop: on a decode
- * mismatch the verb re-asks (fresh turn, fresh `seq`) up to {@link MAX_SCHEMA_ATTEMPTS} before
- * throwing {@link SchemaExhaustedError}. Each attempt is journaled, so the loop replays.
+ * The ask verbs' dispatch/schema-retry loop lives in `t3team-sdk.askVerb.ts`. A thread's `model`
+ * and `effort` are its per-call defaults: an ask inherits them unless it names its own.
  */
 
-import { planAskRender } from "./t3team-sdk.askRender.ts";
+import { createAskVerb, createFireEnvelope } from "./t3team-sdk.askVerb.ts";
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
-import { PermissionDeniedError, SchemaExhaustedError } from "./t3team-sdk.errors.ts";
-import type { HandleDispatch, ReplyResolver } from "./t3team-sdk.handles.ts";
-import { decodeWithSchema } from "./t3team-sdk.internal.ts";
+import { PermissionDeniedError } from "./t3team-sdk.errors.ts";
+import type { HandleDispatch } from "./t3team-sdk.handles.ts";
+import { createModelCascadeResolver, createThreadCascadeAsk } from "./t3team-sdk.modelCascade.ts";
 import type {
+  AgentEffort,
   AskOpts,
+  ModelCascade,
   AskUserOpts,
   ShowWidgetInput,
   SpawnThreadOpts,
@@ -31,9 +32,12 @@ import type {
 import type { ModelSelection } from "./t3team-sdk.types.ts";
 
 export type {
+  AgentEffort,
   AskOpts,
   AskUserAttachment,
   AskUserOpts,
+  ModelCascade,
+  ModelCascadeEntry,
   ShowWidgetInput,
   SpawnThreadOpts,
   Thread,
@@ -41,8 +45,6 @@ export type {
   WorkflowThreadPrimitives,
 } from "./t3team-sdk.threadTypes.ts";
 
-/** One attempt + two corrective retries. */
-const MAX_SCHEMA_ATTEMPTS = 3;
 const CHILD_TITLE_MAX_LENGTH = 80;
 
 /** Human-readable compatibility title for older agent calls that supplied no label. */
@@ -53,74 +55,31 @@ export const workflowChildTitleFromPrompt = (prompt: string): string => {
   return `${normalized.slice(0, CHILD_TITLE_MAX_LENGTH - 1).trimEnd()}…`;
 };
 
+/** A thread's per-call defaults, applied to every ask that omits them. */
+interface ThreadDefaults {
+  readonly model: ModelSelection | undefined;
+  readonly models: ModelCascade | undefined;
+  readonly effort: AgentEffort | undefined;
+}
+
 export function createThreadPrimitives(deps: {
   readonly dispatch: HandleDispatch;
   readonly broker: MessageBroker;
   readonly capabilities: ReadonlySet<string>;
   readonly launchThreadId: string | undefined;
   readonly defaultModel: ModelSelection | undefined;
+  /** The body's `log` narrator, so a cascade can report which provider it landed on. */
+  readonly log?: (message: string) => void;
 }): WorkflowThreadPrimitives {
   const { dispatch, broker } = deps;
   const has = (cap: string): boolean => deps.capabilities.has(cap);
-
-  const fireEnvelope =
-    (kind: "thread.turn" | "thread.message" | "user.input", payload: unknown) =>
-    (correlationId: string, resolver: ReplyResolver): Promise<void> =>
-      broker.send({ correlationId, kind, payload }, resolver);
-
-  /** Drive an ask verb (`thread.turn` / `user.input`) with the schema corrective-retry loop. */
-  const askVerb = async <R>(
-    kind: "thread.turn" | "user.input",
-    threadId: string,
-    basePrompt: string,
-    opts: AskUserOpts<R> | undefined,
-  ): Promise<R> => {
-    const schema = opts?.schema;
-    const model = opts?.model ?? deps.defaultModel;
-    const promptField = kind === "thread.turn" ? "prompt" : "question";
-    // A `user.input` carries everything the host needs to render the decision card: the affordance
-    // descriptor derived from the schema (the live schema object stays inside the runtime), the
-    // attachment refs, and the prompt/coercion the affordance implies. The plan is a pure function
-    // of the (replay-stable) schema + opts, so the payload — and its argsHash — re-derives
-    // identically on replay.
-    const plan = planAskRender({
-      kind,
-      schema,
-      attachments: kind === "user.input" ? opts?.attachments : undefined,
-      labels: opts?.labels,
-    });
-    let prompt = `${basePrompt}${plan.promptSuffix}`;
-    let attempt = 0;
-    for (;;) {
-      attempt += 1;
-      const payload = {
-        threadId,
-        [promptField]: prompt,
-        ...(opts?.label === undefined ? {} : { label: opts.label }),
-        ...plan.renderFields,
-        ...(model === undefined ? {} : { model }),
-      };
-      const correlationId = await dispatch.send({
-        kind,
-        refId: kind,
-        args: payload,
-        fire: fireEnvelope(kind, payload),
-      });
-      const reply = await dispatch.awaitResolution<unknown>(correlationId, undefined);
-      if (schema === undefined) return String(reply) as R;
-      try {
-        return await decodeWithSchema(schema, plan.coerceReply(reply), "Invalid thread reply");
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        if (attempt >= MAX_SCHEMA_ATTEMPTS) {
-          throw new SchemaExhaustedError(
-            `${kind} on thread '${threadId}' did not satisfy the response schema after ${attempt} attempts: ${detail}`,
-          );
-        }
-        prompt = `${basePrompt}\n\nYour previous reply did not match the required schema (${detail}). ${plan.correctiveInstruction}`;
-      }
-    }
-  };
+  const fireEnvelope = createFireEnvelope(broker);
+  const askVerb = createAskVerb({ dispatch, broker, defaultModel: deps.defaultModel });
+  const resolveCascade = createModelCascadeResolver({
+    dispatch,
+    broker,
+    log: deps.log ?? (() => {}),
+  });
 
   const notify = (threadId: string, recipient: "agent" | "user", text: string): void => {
     const payload = { threadId, recipient, text };
@@ -150,30 +109,46 @@ export function createThreadPrimitives(deps: {
       );
     };
 
-  const withThreadModel = <R>(
+  const withThreadDefaults = <R>(
     o: AskOpts<R> | undefined,
-    threadModel: ModelSelection | undefined,
+    defaults: ThreadDefaults,
   ): AskOpts<R> => {
-    const model = o?.model ?? threadModel;
-    return { ...o, ...(model === undefined ? {} : { model }) };
+    const model = o?.model ?? defaults.model;
+    const models = o?.models ?? defaults.models;
+    const effort = o?.effort ?? defaults.effort;
+    return {
+      ...o,
+      ...(model === undefined ? {} : { model }),
+      ...(models === undefined ? {} : { models }),
+      ...(effort === undefined ? {} : { effort }),
+    };
   };
 
-  const makeThread = (threadId: string, threadModel: ModelSelection | undefined): Thread => ({
-    id: { kind: "thread-ref", id: threadId },
-    askAgent: <R>(p: string, o?: AskOpts<R>) =>
-      askVerb<R>("thread.turn", threadId, p, withThreadModel(o, threadModel)),
-    notifyAgent: (msg: string) => notify(threadId, "agent", msg),
-    askUser: has("user")
-      ? <R>(q: string, o?: AskUserOpts<R>) =>
-          askVerb<R>("user.input", deps.launchThreadId ?? threadId, q, o)
-      : (denied("user", "askUser") as Thread["askUser"]),
-    notifyUser: has("user")
-      ? (msg: string) => notify(threadId, "user", msg)
-      : (denied("user", "notifyUser") as Thread["notifyUser"]),
-    showWidget: has("user")
-      ? (input: ShowWidgetInput) => showWidget(threadId, input)
-      : (denied("user", "showWidget") as Thread["showWidget"]),
-  });
+  const makeThread = (threadId: string, defaults: ThreadDefaults): Thread => {
+    // Cascade resolution + its per-thread memo live in t3team-sdk.modelCascade.ts; here we only
+    // merge the thread's defaults in and hand the ask over.
+    const cascadeAsk = createThreadCascadeAsk({
+      askVerb,
+      resolve: resolveCascade,
+      threadId,
+      threadLadder: defaults.models,
+    });
+    return {
+      id: { kind: "thread-ref", id: threadId },
+      askAgent: <R>(p: string, o?: AskOpts<R>) => cascadeAsk<R>(p, withThreadDefaults(o, defaults)),
+      notifyAgent: (msg: string) => notify(threadId, "agent", msg),
+      askUser: has("user")
+        ? <R>(q: string, o?: AskUserOpts<R>) =>
+            askVerb<R>("user.input", deps.launchThreadId ?? threadId, q, o)
+        : (denied("user", "askUser") as Thread["askUser"]),
+      notifyUser: has("user")
+        ? (msg: string) => notify(threadId, "user", msg)
+        : (denied("user", "notifyUser") as Thread["notifyUser"]),
+      showWidget: has("user")
+        ? (input: ShowWidgetInput) => showWidget(threadId, input)
+        : (denied("user", "showWidget") as Thread["showWidget"]),
+    };
+  };
 
   const spawnThread = (opts?: SpawnThreadOpts): Thread => {
     const model = opts?.model ?? deps.defaultModel;
@@ -196,26 +171,35 @@ export function createThreadPrimitives(deps: {
               ...(opts?.name === undefined ? {} : { name: opts.name }),
               ...(opts?.retention === undefined ? {} : { retention: opts.retention }),
               ...(model === undefined ? {} : { model }),
+              ...(opts?.effort === undefined ? {} : { effort: opts.effort }),
               retention,
             },
           },
           resolver,
         ),
     });
-    return makeThread(threadId, model);
+    return makeThread(threadId, { model, models: opts?.models, effort: opts?.effort });
   };
 
+  // `models` rides through to the spawned thread so `agent()`'s create + turn share ONE
+  // journaled cascade resolution (the ladder array identity is the same object).
   const agent = <R = string>(prompt: string, opts?: AskOpts<R>): Promise<R> =>
     spawnThread({
       name: opts?.label?.trim() || workflowChildTitleFromPrompt(prompt),
       ...(opts?.model === undefined ? {} : { model: opts.model }),
+      ...(opts?.models === undefined ? {} : { models: opts.models }),
+      ...(opts?.effort === undefined ? {} : { effort: opts.effort }),
     }).askAgent(prompt, opts);
 
   return {
     thread:
       deps.launchThreadId === undefined
         ? undefined
-        : makeThread(deps.launchThreadId, deps.defaultModel),
+        : makeThread(deps.launchThreadId, {
+            model: deps.defaultModel,
+            models: undefined,
+            effort: undefined,
+          }),
     spawnThread,
     agent,
   };

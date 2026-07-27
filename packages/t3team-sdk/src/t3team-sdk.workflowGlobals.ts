@@ -150,6 +150,15 @@ export function buildWorkflowGlobals(opts: {
     // `waitUntil` (Epic 27) suspends until a wall-clock instant; gated by the `"schedule"`
     // capability (calling it without that capability throws PermissionDeniedError).
     waitUntil: opts.schedule.waitUntil,
+    // The accessor form of the per-run VALUES above (Epic 25 §The engine API). A body that does
+    // `import { getArgs } from "@t3team/sdk"` has that import blanked by the loader, so the call
+    // has to resolve to something in this surface — these five are it. They read the same values
+    // bound above, so the accessor and the bare identifier can never disagree.
+    getArgs: () => opts.args,
+    getThread: () => t.thread,
+    getBudget: () => p.budget,
+    getScripts: () => opts.scripts,
+    getTools: () => opts.tools,
     // `defineWorkflow` lets a body construct the typed sub-workflow ref `workflow()` needs;
     // it is a pure ref constructor (no capability concern), so it is unconditionally bound.
     defineWorkflow,

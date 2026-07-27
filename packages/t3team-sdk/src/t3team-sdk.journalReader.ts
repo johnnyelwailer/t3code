@@ -29,6 +29,7 @@ import * as NodeModule from "node:module";
 
 import * as Schema from "effect/Schema";
 
+import { PRIMITIVE_KINDS } from "./t3team-sdk.runtimeTypes.ts";
 import type { PrimitiveKind } from "./t3team-sdk.types.ts";
 
 const nodeRequire = NodeModule.createRequire(import.meta.url);
@@ -50,23 +51,7 @@ export const JournalEntrySchema = Schema.Struct({
   seq: Schema.Number,
   /** `"<seq>:<kind>:<refId>"` — stable identity of the call site for this run. */
   callId: Schema.String,
-  kind: Schema.Literals([
-    "tool",
-    "script",
-    "script-never",
-    "now",
-    "random",
-    "uuid",
-    "wait",
-    "parallel",
-    "pipeline",
-    "workflow",
-    "thread.create",
-    "thread.turn",
-    "thread.message",
-    "user.input",
-    "wait.until",
-  ]),
+  kind: Schema.Literals(PRIMITIVE_KINDS),
   /** Tool id (e.g. `github.pull_request.merge`) or script/primitive registration name. */
   refId: Schema.String,
   /** SHA-256 (hex) of canonical-JSON args. Compared on replay to detect drift. */

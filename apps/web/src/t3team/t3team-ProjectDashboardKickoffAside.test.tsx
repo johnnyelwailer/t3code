@@ -6,9 +6,13 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createLucideReactMock } from "./t3team-createLucideReactMock";
 import { ProjectDashboardKickoffAside } from "./t3team-ProjectDashboardKickoffAside";
 
-const { mockUseSidecarComposition } = vi.hoisted(() => ({
-  mockUseSidecarComposition: vi.fn(),
-}));
+const { mockUseSidecarComposition, mockUseQuickStarts, capturedComposerProps } = vi.hoisted(
+  () => ({
+    mockUseSidecarComposition: vi.fn(),
+    mockUseQuickStarts: vi.fn(),
+    capturedComposerProps: { current: null as Record<string, unknown> | null },
+  }),
+);
 
 vi.mock("lucide-react", (importOriginal) => createLucideReactMock(importOriginal));
 
@@ -67,7 +71,8 @@ vi.mock("~/t3team/t3team-dashboardRecipeActions", () => ({
 
 vi.mock("~/t3team/t3team-ProjectDashboardKickoffComposer", () => ({
   ProjectDashboardKickoffComposer: forwardRef(
-    function MockProjectDashboardKickoffComposer(_props, _ref) {
+    function MockProjectDashboardKickoffComposer(props, _ref) {
+      capturedComposerProps.current = props as Record<string, unknown>;
       return <div>composer</div>;
     },
   ),
@@ -82,7 +87,7 @@ vi.mock("~/t3team/hooks/t3team-useSidecarComposition", () => ({
 }));
 
 vi.mock("~/t3team/t3team-sidecarRecipes", () => ({
-  useT3TeamSidecarRecipeQuickStarts: () => [],
+  useT3TeamSidecarRecipeQuickStarts: () => mockUseQuickStarts(),
 }));
 
 vi.mock("~/t3team/t3team-TicketKickoffComposer", () => ({
@@ -114,6 +119,8 @@ const project: ProjectShellProject = {
 
 describe("ProjectDashboardKickoffAside", () => {
   beforeEach(() => {
+    capturedComposerProps.current = null;
+    mockUseQuickStarts.mockReturnValue([]);
     mockUseSidecarComposition.mockReturnValue({
       composition: {
         sections: [
@@ -175,5 +182,36 @@ describe("ProjectDashboardKickoffAside", () => {
     expect(markup).not.toContain("Start a focused conversation for");
     expect(markup).not.toContain("0 messages");
     expect(markup).toContain("2 messages • relative:2026-05-27T11:00:00.000Z");
+  });
+
+  it("hands the surface recipe catalog and the shared staging callback to the composer", () => {
+    const qaPlan = {
+      id: "create-qa-test-plan",
+      title: "Create QA test plan",
+      description: "Build a test matrix.",
+      prompt: "prompt",
+      slashAlias: "qa-plan",
+    };
+    mockUseQuickStarts.mockReturnValue([qaPlan]);
+
+    renderToStaticMarkup(
+      <ProjectDashboardKickoffAside
+        project={project}
+        dashboardMode="backlog"
+        projectThreads={[]}
+        activeThread={null}
+        providers={[]}
+        isConnected
+        onOpenThread={() => {}}
+        onThreadKickoffConsumed={() => {}}
+        onKickoffThread={(() => {}) as never}
+      />,
+    );
+
+    expect(capturedComposerProps.current?.slashRecipes).toEqual([qaPlan]);
+    // Same staging entry point the Quick Starts card click uses, so `/qa-plan`
+    // and clicking the card both reach the one launch path.
+    expect(typeof capturedComposerProps.current?.onSelectSlashRecipe).toBe("function");
+    expect(capturedComposerProps.current?.workspaceRoot).toBe("/tmp/project-1");
   });
 });

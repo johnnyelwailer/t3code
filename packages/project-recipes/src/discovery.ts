@@ -156,6 +156,8 @@ export type ProjectRecipeManifest = {
   readonly displayName: string;
   readonly shortDescription: string;
   readonly icon?: string;
+  /** Composer `/` alias, stored without the leading slash. */
+  readonly slashAlias?: string;
   readonly surfaces: ReadonlyArray<RecipeSurface>;
   readonly rank?: number | string;
   readonly visibleWhen?: string;
@@ -168,13 +170,47 @@ export type ProjectRecipeManifest = {
   readonly allowedToolGroups?: ReadonlyArray<string>;
 };
 
+/**
+ * Where a discovered recipe came from (Epic 16 §Recipe Sources And Precedence): pack-provided
+ * and project-local recipes are the same concept with different sources, merged through the
+ * pack precedence model. `pack` covers every pack scope; `packId`/`packScope` name the origin.
+ */
+export type ProjectRecipeSource = "project-local" | "pack";
+
+/**
+ * Source label carried by a launch/kickoff descriptor. Adds `bundled` — the host's own built-in
+ * quick starts, which are not discovered from a recipe source at all.
+ */
+export type ProjectRecipeLaunchSource = "bundled" | ProjectRecipeSource;
+
+/**
+ * One named action of a multi-action recipe (Epic 16 §Plugin Modules). `defaultAction` is NOT
+ * listed here — it stays in `workflowPath`, so a launcher that knows nothing about actions keeps
+ * behaving exactly as before.
+ */
+export type ProjectRecipeDiscoveredAction = {
+  readonly name: string;
+  /** Resolved `.workflow.ts`. Absent for a prompt action, which declares no workflow. */
+  readonly workflowPath?: string;
+  /** Resolved prompt file, for a `definePrompt("./prompt.md")` action. */
+  readonly promptPath?: string;
+  /** Inline prompt text, for a `definePrompt({ text })` action. */
+  readonly promptText?: string;
+};
+
 export type ProjectRecipeDiscovered = {
   readonly id: string;
   readonly version: string;
-  readonly source: "project-local";
+  readonly source: ProjectRecipeSource;
+  /** Pack that contributed this recipe. Present only when `source === "pack"`. */
+  readonly packId?: string;
+  /** Pack scope the recipe inherits its precedence from. Present only when `source === "pack"`. */
+  readonly packScope?: string;
   readonly displayName: string;
   readonly shortDescription: string;
   readonly icon?: string;
+  /** Composer `/` alias, stored without the leading slash. */
+  readonly slashAlias?: string;
   readonly surfaces: ReadonlyArray<RecipeSurface>;
   readonly rank: number;
   readonly reason?: string;
@@ -186,7 +222,14 @@ export type ProjectRecipeDiscovered = {
   readonly actionViewPath?: string;
   readonly actionViewSource?: string;
   readonly workflowPath?: string;
+  /** Named actions besides `defaultAction`; a launch may name one instead of launching the
+   * default. Absent for single-action recipes and for `recipe.json` recipes. */
+  readonly actions?: ReadonlyArray<ProjectRecipeDiscoveredAction>;
   readonly allowedToolGroups: ReadonlyArray<string>;
+  /** Names of the recipe-private scripts a `recipe.ts` module registers (Epic 25 §Scripts).
+   * The live ScriptRefs are re-materialized server-side at launch by re-importing the module;
+   * this field only announces they exist. Absent for `recipe.json` recipes. */
+  readonly scriptNames?: ReadonlyArray<string>;
 };
 
 export type DiscoverProjectRecipesRequest = {
@@ -198,6 +241,9 @@ export type DiscoverProjectRecipesResponse = {
   readonly workspaceRoot: string;
   readonly hasProjectLocalRecipes: boolean;
   readonly recipes: ReadonlyArray<ProjectRecipeDiscovered>;
+  /** Non-fatal per-source notes (a pack recipe that failed to load, an id shadowed by a
+   * higher-precedence source). Surfaced in the advanced/debug surface, never inline. */
+  readonly diagnostics?: ReadonlyArray<string>;
 };
 
 export type ManagedProjectRecipeSourceKind = "recipe-json" | "recipe-module";

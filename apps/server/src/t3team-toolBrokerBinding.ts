@@ -16,6 +16,7 @@ import { dispatchT3TeamToolCall } from "./t3team-toolBrokerBindingDispatch.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
+import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 
 type CreateBindingInput<
@@ -41,6 +42,7 @@ type CreateBindingInput<
   readonly recipeTools?: T3TeamRecipeToolHandlers;
   readonly workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   readonly workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
+  readonly workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
 };
 
@@ -88,6 +90,7 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
       ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
       ...(input.workflowRunTools ? { workflowRunTools: input.workflowRunTools } : {}),
       ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
+      ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
       ...(input.showWidget ? { showWidget: input.showWidget } : {}),
     });
 

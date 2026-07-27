@@ -150,7 +150,7 @@ export function AppThreadPane({
           {...(threadProject?.workspace?.rootPath
             ? { projectWorkspaceRoot: threadProject.workspace.rootPath }
             : {})}
-          title={embeddedThread?.title ?? "Workflow thread"}
+          title={embeddedThread?.title ?? "Orchestration thread"}
           hideHeader
           embeddedMode
           {...(embeddedThread?.ticketId ? { ticketId: embeddedThread.ticketId } : {})}

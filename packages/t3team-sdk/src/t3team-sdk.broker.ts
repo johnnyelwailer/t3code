@@ -33,7 +33,8 @@ export type HandleKind =
   | "thread.turn"
   | "thread.message"
   | "user.input"
-  | "wait.until";
+  | "wait.until"
+  | "model.resolve";
 
 /** What the host is handed for one fired side effect. `payload` carries the verb's data —
  * always a `threadId`, plus `prompt`/`question`/`text`/`name`/`model` per kind. */
@@ -95,6 +96,9 @@ export interface HostBrokerHandlers {
   /** Record the run's wake deadline with the scheduler (Epic 27); no reply settled here —
    * the scheduler appends the resolved entry when the clock reaches the deadline. */
   readonly "wait.until"?: (envelope: MessageEnvelope) => Promise<void>;
+  /** Walk a model cascade against the live provider registry. UNLIKE the others this handler MUST
+   * settle the resolver itself — the choice IS the primitive's journaled reply. */
+  readonly "model.resolve"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
 }
 
 /**
@@ -104,7 +108,10 @@ export interface HostBrokerHandlers {
  */
 export function createHostBroker(handlers: HostBrokerHandlers): MessageBroker {
   return {
-    send: async (envelope) => {
+    send: async (envelope, resolver) => {
+      // `model.resolve` settles its own reply (the cascade choice IS the journaled reply), so it
+      // gets the resolver; an absent handler is netted by `createModelCascadeResolver`.
+      if (envelope.kind === "model.resolve") return handlers["model.resolve"]?.(envelope, resolver);
       await handlers[envelope.kind]?.(envelope);
     },
   };

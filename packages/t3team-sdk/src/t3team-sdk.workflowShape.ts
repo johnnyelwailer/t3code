@@ -34,11 +34,52 @@ export interface WorkflowShapeStep {
   readonly label: string;
 }
 
+/**
+ * A declared `meta.capabilities` entry, normalized for the pre-execution permission UI
+ * (spec 25 §Capability gating): engine feature strings become `kind: "feature"` (the UI
+ * renders them via the engine's own label table); `ToolGroupRef`s become `kind: "tool-group"`
+ * carrying their author-declared `label`/`description`. Unrecognized entries are dropped —
+ * the preview never invents a permission it cannot describe.
+ */
+export interface WorkflowShapeCapability {
+  readonly kind: "feature" | "tool-group";
+  readonly id: string;
+  readonly label?: string;
+  readonly description?: string;
+}
+
 export interface WorkflowShape {
   readonly name: string;
   readonly description?: string;
   readonly phases: ReadonlyArray<{ readonly title: string }>;
   readonly steps: ReadonlyArray<WorkflowShapeStep>;
+  /** Declared elevated capabilities; empty for a workflow that declares none. */
+  readonly capabilities: ReadonlyArray<WorkflowShapeCapability>;
+}
+
+/** Normalize the loosely-typed extracted `meta.capabilities` into shape capabilities. */
+function normalizeCapabilities(
+  entries: ReadonlyArray<unknown> | undefined,
+): ReadonlyArray<WorkflowShapeCapability> {
+  const normalized: WorkflowShapeCapability[] = [];
+  for (const entry of entries ?? []) {
+    if (typeof entry === "string" && entry.length > 0) {
+      normalized.push({ kind: "feature", id: entry });
+      continue;
+    }
+    if (entry !== null && typeof entry === "object") {
+      const ref = entry as { kind?: unknown; id?: unknown; label?: unknown; description?: unknown };
+      if (ref.kind === "tool-group" && typeof ref.id === "string" && ref.id.length > 0) {
+        normalized.push({
+          kind: "tool-group",
+          id: ref.id,
+          ...(typeof ref.label === "string" ? { label: ref.label } : {}),
+          ...(typeof ref.description === "string" ? { description: ref.description } : {}),
+        });
+      }
+    }
+  }
+  return normalized;
 }
 
 /**
@@ -60,16 +101,24 @@ export function deriveWorkflowShape(source: WorkflowSource): WorkflowShape {
   let name = "";
   let description: string | undefined;
   let metaPhases: ReadonlyArray<{ readonly title: string }> | undefined;
+  let capabilities: ReadonlyArray<WorkflowShapeCapability> = [];
   try {
     const meta = extractMeta(prepareWorkflow(source), source, Schema);
     name = meta.name;
     description = typeof meta.description === "string" ? meta.description : undefined;
     metaPhases = meta.phases?.map((phase) => ({ title: phase.title }));
+    capabilities = normalizeCapabilities(meta.capabilities);
   } catch {
     // Best-effort preview: keep the step list even when meta refuses to extract.
   }
 
   const phases =
     metaPhases && metaPhases.length > 0 ? metaPhases : phaseTitles.map((title) => ({ title }));
-  return { name, ...(description === undefined ? {} : { description }), phases, steps };
+  return {
+    name,
+    ...(description === undefined ? {} : { description }),
+    phases,
+    steps,
+    capabilities,
+  };
 }

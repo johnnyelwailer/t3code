@@ -2,6 +2,7 @@
 // engine must reject the journal write with JournalSerializeError BEFORE corrupting the
 // journal — the side effect already happened, so it must fail loud. Reviewer finding B1.
 import { Schema } from "effect";
+import { getTools } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({});
 
@@ -12,8 +13,13 @@ export const meta = {
   description: "Calls a tool that returns a bigint — must raise JournalSerializeError.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["demo.read"], // tool-group gate: the demo tools' group (Epic 25 §Tools)
 } as const;
 
-await tools.demo.bigintResult({});
+export default async function run() {
+  const tools = getTools();
 
-return { ok: true };
+  await tools.demo.bigintResult({});
+
+  return { ok: true };
+}

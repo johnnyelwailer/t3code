@@ -1,0 +1,12 @@
+{
+  "kind": "project-context-manifest",
+  "syncedAt": "2026-07-19T14:24:44.885Z",
+  "projectId": "d60dcfac-b8d6-45f9-9903-5d732591b5aa",
+  "entryPointRelativePath": ".t3work/context/entrypoint.json",
+  "contextAvailabilityGuide": {
+    "summary": "Lightweight work-item JSON under work-items/*.json; full bundles load on demand.",
+    "full": "Rich per-item trees under jira/<project>/items/<key>/ after refresh.",
+    "onDemandTool": "t3work.work_item.refresh_context_bundle"
+  },
+  "workItemCount": 0
+}

@@ -37,7 +37,10 @@ describe("agent-orchestration help contract", () => {
     expect(help).toContain("resource refs as attachments");
     expect(help).toContain("thread.notifyUser(...) with a concise evidence summary");
     expect(help).toContain("thread.showWidget({ title, widgetCode, format? })");
-    expect(help).toContain("workflow HTML passed to notifyUser or askUser");
+    // Wording followed the orchestration rename ("Legacy trusted orchestration HTML …"); the
+    // assertion did not, and had been failing since. Pinned to the substring that carries the
+    // actual contract — that legacy inline HTML is promoted, never rendered as raw system text.
+    expect(help).toContain("HTML passed to notifyUser or askUser");
     expect(help).toContain("Never make the user reconstruct context");
   });
 

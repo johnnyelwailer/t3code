@@ -2,6 +2,7 @@
 // sleeps until it; a resume reads the recorded deadline and sleeps only the remainder (or
 // returns immediately if the deadline has already passed).
 import { Schema } from "effect";
+import { getArgs, wait } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ ms: Schema.Number });
 
@@ -14,8 +15,12 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
 
-await wait(input.ms);
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { done: true };
+  await wait(input.ms);
+
+  return { done: true };
+}

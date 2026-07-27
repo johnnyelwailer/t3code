@@ -24,6 +24,14 @@ type NodeFsModule = {
 
 export const runtimeStorage = new NodeAsyncHooks.AsyncLocalStorage<WorkflowRuntime>();
 
+/**
+ * The active body's engine surface, so IMPORTED verbs can find their run (Epic 25 §The engine API —
+ * imported, not injected). Same mechanism `defineTool` handlers already use via `runtimeStorage`;
+ * this store carries the per-run record (`agent`, `phase`, `args`, `thread`, …) that used to be
+ * reachable only as injected globals.
+ */
+export const bodyApiStorage = new NodeAsyncHooks.AsyncLocalStorage<Record<string, unknown>>();
+
 export function getRegistry(): WorkflowSdkRegistry {
   const scope = globalThis as typeof globalThis & {
     [REGISTRY_SYMBOL]?: WorkflowSdkRegistry;

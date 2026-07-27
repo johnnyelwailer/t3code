@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./placements": {
+      "types": "./src/placements.ts",
+      "import": "./src/placements.ts"
     }
   },
   "scripts": {
@@ -15,6 +19,7 @@
   },
   "dependencies": {
     "@t3tools/project-context": "workspace:*",
+    "@t3team/sdk": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

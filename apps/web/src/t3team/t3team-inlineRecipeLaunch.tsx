@@ -8,7 +8,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { ProjectRecipeWorkflowDocument, RecipeSurface } from "@t3tools/project-recipes";
+import type {
+  ProjectRecipeLaunchSource,
+  ProjectRecipeWorkflowDocument,
+  RecipeSurface,
+} from "@t3tools/project-recipes";
 import { getBundledT3TeamRecipe } from "@t3tools/t3team-skill-packs";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
@@ -32,7 +36,7 @@ export type T3TeamDeterministicWorkflowLaunch = {
   readonly workflow: ProjectRecipeWorkflowDocument;
   readonly parameters?: Record<string, unknown>;
   readonly allowedToolGroups?: ReadonlyArray<string>;
-  readonly source?: "bundled" | "project-local";
+  readonly source?: ProjectRecipeLaunchSource;
 };
 
 type T3TeamInlineRecipeLaunchHandler = (

@@ -23,7 +23,9 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
+import { resolveLaunchWorkflowPath } from "./t3team-projectRecipeActionLaunch.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
+import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
 import {
   isProviderInteractionMode,
@@ -59,12 +61,20 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     if (!input.launch || typeof input.launch !== "object") {
       return yield* new T3TeamAtlassianError({ message: "launch is required." });
     }
-    const workflowPath = input.launch.workflowPath?.trim() ?? "";
-    if (workflowPath.length === 0) {
+    const defaultWorkflowPath = input.launch.workflowPath?.trim() ?? "";
+    const actionName = input.launch.actionName?.trim() ?? "";
+    if (defaultWorkflowPath.length === 0 && actionName.length === 0) {
       return yield* new T3TeamAtlassianError({
         message: "launch.workflowPath is required: this recipe has no .workflow.ts to run.",
       });
     }
+    // One recipe, several actions (Epic 16): a named action is resolved from the recipe's own
+    // module, so it can only select a workflow the recipe declares. No name ⇒ defaultAction.
+    const workflowPath = yield* resolveLaunchWorkflowPath({
+      recipePath: input.launch.recipePath,
+      workflowPath: defaultWorkflowPath,
+      actionName,
+    });
     if (threadIdInput.length === 0) {
       return yield* new T3TeamAtlassianError({
         message:
@@ -119,9 +129,17 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       }),
     );
 
+    // The launching recipe's private scripts (Epic 25 §Scripts): a `recipe.ts` recipe module's
+    // `scripts` registration becomes the body's `scripts.*` tree. recipe.json recipes (no
+    // module) resolve to an empty record and the engine keeps its `scripts: {}` default.
+    const scripts = yield* resolveRecipeWorkflowScripts({
+      recipePath: input.launch.recipePath,
+      workflowPath,
+    });
+
     // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
     // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
-    // `t3team.workflow.run` tool drives through.
+    // `t3team.orchestration.run` tool drives through.
     const fileSystem = yield* FileSystem.FileSystem;
     const result = yield* launchPreparedWorkflow(
       {
@@ -136,6 +154,11 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         runId,
         workflowPath,
         args,
+        // Persist the recipe dir alongside the resolved scripts so a restart can re-resolve
+        // them during rehydration (a scriptless launch needs neither).
+        ...(Object.keys(scripts).length === 0
+          ? {}
+          : { scripts, recipePath: input.launch.recipePath }),
         workspaceRoot: project.workspaceRoot,
         launchThreadId: threadIdInput,
         projectId: thread.projectId,

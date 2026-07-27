@@ -20,6 +20,7 @@ import {
   withWorkflowRuntime,
 } from "./t3team-sdk.index.ts";
 import { renameThreadTool } from "./tools/t3team-sdk.t3team.ts";
+import { validateRecipeTool } from "./tools/t3team-sdk.t3teamRecipes.ts";
 
 let idCounter = 0;
 
@@ -180,5 +181,75 @@ describe("workflow-sdk", () => {
     );
 
     expect(result).toEqual({ ok: true, title: "Updated title", threadId: "thread-1" });
+  });
+
+  it("t3team.recipe.validate rejects when neither 'path' nor 'source' is given", async () => {
+    await expect(
+      executeRegisteredTool(
+        validateRecipeTool.id,
+        {},
+        createToolCtx({
+          t3team: {
+            validateRecipe: async () => ({ ok: true, errors: [] }),
+          },
+        }),
+      ),
+    ).rejects.toThrow(
+      "t3team.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+    );
+  });
+
+  it("t3team.recipe.validate rejects when both 'path' and 'source' are given", async () => {
+    await expect(
+      executeRegisteredTool(
+        validateRecipeTool.id,
+        { path: "./foo.workflow.ts", source: "export const meta = {};" },
+        createToolCtx({
+          t3team: {
+            validateRecipe: async () => ({ ok: true, errors: [] }),
+          },
+        }),
+      ),
+    ).rejects.toThrow(
+      "t3team.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+    );
+  });
+
+  it("t3team.recipe.validate passes only 'source' through to the client when source-only", async () => {
+    const received: Array<{ readonly path?: string; readonly source?: string }> = [];
+    const result = await executeRegisteredTool(
+      validateRecipeTool.id,
+      { source: "export const meta = { name: 'x' };" },
+      createToolCtx({
+        t3team: {
+          validateRecipe: async (input) => {
+            received.push(input);
+            return { ok: true, errors: [] };
+          },
+        },
+      }),
+    );
+
+    expect(received).toEqual([{ source: "export const meta = { name: 'x' };" }]);
+    expect(result).toEqual({ ok: true, errors: [] });
+  });
+
+  it("t3team.recipe.validate passes only 'path' through to the client when path-only", async () => {
+    const received: Array<{ readonly path?: string; readonly source?: string }> = [];
+    const result = await executeRegisteredTool(
+      validateRecipeTool.id,
+      { path: "./foo.workflow.ts" },
+      createToolCtx({
+        t3team: {
+          validateRecipe: async (input) => {
+            received.push(input);
+            return { ok: true, errors: [] };
+          },
+        },
+      }),
+    );
+
+    expect(received).toEqual([{ path: "./foo.workflow.ts" }]);
+    expect(result).toEqual({ ok: true, errors: [] });
   });
 });

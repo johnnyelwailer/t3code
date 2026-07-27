@@ -265,7 +265,7 @@ describe("workflow decision card in the timeline", () => {
 
     expect(markup).toContain('data-workflow-decision-status="unavailable"');
     expect(markup).toContain(
-      "This question is no longer available because the workflow was stopped.",
+      "This question is no longer available because the orchestration was stopped.",
     );
     expect(markup).not.toContain("ship-now");
     expect(markup).not.toContain("…or reply in the composer below.");
@@ -301,7 +301,7 @@ describe("workflow decision card in the timeline", () => {
 
     expect(markup).toContain('data-workflow-decision-status="unavailable"');
     expect(markup).toContain(
-      "This question is no longer available because the workflow was stopped.",
+      "This question is no longer available because the orchestration was stopped.",
     );
     expect(markup).not.toContain("ship-now");
   }, 10000);

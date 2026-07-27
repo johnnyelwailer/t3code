@@ -79,7 +79,11 @@ export function fetchT3TeamContextSnapshot(input: {
   readonly key: string;
   readonly externalProjectId: string;
 }) {
-  return Effect.promise(() =>
+  // tryPromise, not promise: a provider that throws for an unreachable ref (a
+  // dangling parent, a permission-restricted issue) must surface a typed failure
+  // the graph walk can skip. Effect.promise would turn it into a defect that the
+  // caller's Effect.match cannot catch, killing the whole refresh.
+  return Effect.tryPromise(() =>
     input.provider.getResource({
       provider: "atlassian",
       kind: "issue",

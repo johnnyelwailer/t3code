@@ -1,5 +1,5 @@
 /**
- * Binding glue for `t3team.workflow.run` (ephemeral workflows, slice 1): routes the broker's
+ * Binding glue for `t3team.orchestration.run` (ephemeral orchestrations, slice 1): routes the broker's
  * tool call through the SDK registry bridge into the host handler bound to the calling thread.
  * Mirrors {@link ./t3team-toolBrokerBindingRecipes.ts} so the dispatch module stays small.
  */
@@ -13,7 +13,7 @@ import {
   WorkflowSdkBridgeError,
 } from "./t3team-workflowSdkToolBridge.ts";
 
-export const T3TEAM_WORKFLOW_RUN_TOOL_ID = "t3team.workflow.run";
+export const T3TEAM_WORKFLOW_RUN_TOOL_ID = "t3team.orchestration.run";
 
 export function callT3TeamWorkflowRunTool(input: {
   readonly scopeLabel: string;

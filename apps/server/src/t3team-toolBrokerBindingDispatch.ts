@@ -38,7 +38,13 @@ import {
   T3TEAM_WORKFLOW_STATUS_TOOL_ID,
 } from "./t3team-toolBrokerBindingWorkflowStatus.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
+import {
+  callT3TeamWorkflowResumeTool,
+  T3TEAM_WORKFLOW_RESUME_TOOL_ID,
+} from "./t3team-toolBrokerBindingWorkflowResume.ts";
+import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
+import { resolveT3TeamCanonicalToolId } from "./t3team-toolBrokerLegacyToolIds.ts";
 
 export function dispatchT3TeamToolCall(input: {
   state: BindingState;
@@ -57,9 +63,13 @@ export function dispatchT3TeamToolCall(input: {
   recipeTools?: T3TeamRecipeToolHandlers;
   workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
+  workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
 }): ReturnType<T3TeamToolBinding["callTool"]> {
-  const { server, tool, toolArgs, state } = input;
+  const { server, toolArgs, state } = input;
+  // Deprecated `t3team.workflow.*` ids resolve to the current
+  // `t3team.orchestration.*` ones before the availability/permission gate.
+  const tool = resolveT3TeamCanonicalToolId(input.tool);
   if (server !== T3TEAM_MCP_SERVER_NAME) {
     return Effect.succeed(errorResult(`Unknown MCP server '${server}'.`));
   }
@@ -98,6 +108,13 @@ export function dispatchT3TeamToolCall(input: {
       scopeLabel: input.scopeLabel,
       toolArgs,
       ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
+    });
+  }
+  if (tool === T3TEAM_WORKFLOW_RESUME_TOOL_ID) {
+    return callT3TeamWorkflowResumeTool({
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
     });
   }
   if (tool === "t3team.thread.start_child") {

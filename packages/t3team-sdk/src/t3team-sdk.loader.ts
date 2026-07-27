@@ -37,6 +37,7 @@ import { WorkflowLoadError } from "./t3team-sdk.errors.ts";
 import {
   blankSpans,
   collectBlankSpans,
+  findDefaultExportedFunctionName,
   findMetaStatement,
   transpile,
 } from "./t3team-sdk.transpile.ts";
@@ -114,7 +115,22 @@ export function prepareWorkflow(source: WorkflowSource): PreparedWorkflow {
   // wrapped in an async IIFE so top-level await + the body's `return` are legal.
   const bodySpans = collectBlankSpans(ts, sourceFile, { includeMeta: true, metaStatement });
   const bodyText = blankSpans(source.sourceText, bodySpans);
-  const bodyScript = transpile(ts, `(async () => {\n${bodyText}\n})()`, source.absolutePath);
+  // A module-shaped body declares its logic in a default-exported function; blanking `export
+  // default` leaves that function declared but never called, so call it. Legacy bodies return from
+  // the top level and need no call. Same wrapper, same injected surface, either way — which is how
+  // the module shape keeps journaled Date/Math/crypto.
+  const defaultExport = findDefaultExportedFunctionName(ts, sourceFile);
+  if (defaultExport.hasDefaultExport && defaultExport.name === undefined) {
+    throw new WorkflowLoadError(
+      `Workflow '${source.absolutePath}' default-exports something the engine cannot call. Export a NAMED async function — \`export default async function run() { … }\` — so the loader can invoke it.`,
+    );
+  }
+  const invocation = defaultExport.name === undefined ? "" : `\nreturn await ${defaultExport.name}();`;
+  const bodyScript = transpile(
+    ts,
+    `(async () => {\n${bodyText}${invocation}\n})()`,
+    source.absolutePath,
+  );
   return { metaScript, bodyScript };
 }
 
@@ -135,7 +151,13 @@ export function extractMeta(
   NodeVM.createContext(context);
   let result: unknown;
   try {
-    result = NodeVM.runInContext(prepared.metaScript, context, { filename: source.absolutePath });
+    // Bounded: the meta head is agent-supplied (e.g. t3team.recipe.validate on inline
+    // source), and runInContext without a timeout would let `while(true){}` before
+    // `meta` block the server thread. 2s is generous for a pure literal.
+    result = NodeVM.runInContext(prepared.metaScript, context, {
+      filename: source.absolutePath,
+      timeout: 2000,
+    });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new WorkflowLoadError(
@@ -159,7 +181,15 @@ export function extractMeta(
 /**
  * Run the compiled body in a constrained `node:vm` context. `globals` carries the engine
  * surface the loader binds (args, Schema, tools, scripts, log, phase, error classes).
- * The body's `return` value resolves the returned promise.
+ * The body's `return` value — or the return of its default-exported function — resolves the
+ * returned promise.
+ *
+ * ONE path, both shapes. An earlier revision ran module-shaped bodies through a real ESM `import()`,
+ * which cost the determinism guarantee: `import()` cannot intercept `Date`/`Math.random`/
+ * `crypto.randomUUID`, so a resumed run would have re-read the live clock instead of replaying the
+ * journal. Since the loader already blanks every import and injects the engine surface, the module
+ * shape needs nothing more than a call to its default export ({@link ./t3team-sdk.transpile.ts}),
+ * which is why that path is gone.
  */
 export async function runWorkflowBody(
   prepared: PreparedWorkflow,

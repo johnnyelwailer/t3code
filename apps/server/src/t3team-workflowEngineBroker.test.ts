@@ -286,4 +286,88 @@ describe("createWorkflowEngineBroker", () => {
 
     expect(resolved).toEqual([{ summary: "Looks good" }]);
   });
+
+  it("emits BOTH placement halves for a retained child so the sidebar nests it immediately", async () => {
+    const dispatched: OrchestrationCommand[] = [];
+    let id = 0;
+    const broker = createWorkflowEngineBroker({
+      runId: "run-nest",
+      launchThreadId: "parent-1",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry: makeWorkflowEngineRegistry(),
+      dispatch: async (command) => void dispatched.push(command),
+      newId: () => `id-${++id}`,
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+
+    await broker.send(
+      {
+        correlationId: "run-nest:1",
+        kind: "thread.create",
+        payload: { threadId: "child-1", name: "Risk analysis", retention: "retained" },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+
+    const placements = dispatched.filter(
+      (command) => command.type === "thread.activity.append",
+    ) as Array<Extract<OrchestrationCommand, { type: "thread.activity.append" }>>;
+    // handoff.created lands on the CHILD (placement route + child-side reads)...
+    const created = placements.find((c) => c.activity.kind === "t3team.handoff.created");
+    expect(created).toMatchObject({
+      threadId: "child-1",
+      activity: {
+        payload: {
+          parentThreadId: "parent-1",
+          childThreadId: "child-1",
+          workflowRunId: "run-nest",
+        },
+      },
+    });
+    // ...and handoff.started on the PARENT (what indexT3TeamChildParentThreads reads, so the
+    // child nests before its own thread detail is ever opened).
+    const started = placements.find((c) => c.activity.kind === "t3team.handoff.started");
+    expect(started).toMatchObject({
+      threadId: "parent-1",
+      activity: {
+        payload: {
+          parentThreadId: "parent-1",
+          childThreadId: "child-1",
+          childTitle: "Risk analysis",
+          workflowRunId: "run-nest",
+        },
+      },
+    });
+  });
+
+  it("emits NO placement for a default (ephemeral) child — one-shots never become navigation", async () => {
+    const dispatched: OrchestrationCommand[] = [];
+    let id = 0;
+    const broker = createWorkflowEngineBroker({
+      runId: "run-eph",
+      launchThreadId: "parent-1",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry: makeWorkflowEngineRegistry(),
+      dispatch: async (command) => void dispatched.push(command),
+      newId: () => `id-${++id}`,
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+
+    await broker.send(
+      {
+        correlationId: "run-eph:1",
+        kind: "thread.create",
+        payload: { threadId: "child-1", name: "One shot" },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+
+    expect(dispatched.some((command) => command.type === "thread.activity.append")).toBe(false);
+  });
 });

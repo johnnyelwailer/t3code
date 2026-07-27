@@ -3,6 +3,7 @@
 // approve result replays from the journal and only the merge re-executes (or, if the args
 // diverge, the engine raises ReplayDriftError). Run it via startWorkflow / resumeWorkflow.
 import { Schema } from "effect";
+import { getArgs, getTools, log, phase } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({
   prId: Schema.String,
@@ -19,16 +20,22 @@ export const meta = {
   inputs: Inputs,
   outputs: Outputs,
   phases: [{ title: "Approve" }, { title: "Merge" }],
+  capabilities: ["demo.read"], // tool-group gate: the demo tools' group (Epic 25 §Tools)
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const tools = getTools();
 
-phase("Approve");
-const approval = await tools.demo.approve({ prId: input.prId });
+  const input = Schema.decodeSync(Inputs)(args);
 
-phase("Merge");
-const merge = await tools.demo.merge({ prId: input.prId, approvalId: approval.approvalId });
+  phase("Approve");
+  const approval = await tools.demo.approve({ prId: input.prId });
 
-log(`merged ${input.prId} as ${merge.sha}`);
+  phase("Merge");
+  const merge = await tools.demo.merge({ prId: input.prId, approvalId: approval.approvalId });
 
-return { approved: approval.approved, mergedSha: merge.sha };
+  log(`merged ${input.prId} as ${merge.sha}`);
+
+  return { approved: approval.approved, mergedSha: merge.sha };
+}

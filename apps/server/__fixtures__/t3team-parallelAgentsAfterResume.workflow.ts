@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { agent, getThread, parallel } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({});
 export const Outputs = Schema.Struct({ count: Schema.Number });
@@ -9,15 +10,19 @@ export const meta = {
   capabilities: ["user"],
 } as const;
 
-const Seed = Schema.Struct({ summary: Schema.String });
-await agent("Create a seed summary", { schema: Seed, label: "Seed" });
+export default async function run() {
+  const thread = getThread();
 
-const replies = await parallel([
-  () => agent("Parallel child one", { label: "Child one" }),
-  () => agent("Parallel child two", { label: "Child two" }),
-  () => agent("Parallel child three", { label: "Child three" }),
-]);
+  const Seed = Schema.Struct({ summary: Schema.String });
+  await agent("Create a seed summary", { schema: Seed, label: "Seed" });
 
-if (thread === undefined) throw new Error("launch thread required");
-await thread.notifyUser("Parallel children complete");
-return { count: replies.length };
+  const replies = await parallel([
+    () => agent("Parallel child one", { label: "Child one" }),
+    () => agent("Parallel child two", { label: "Child two" }),
+    () => agent("Parallel child three", { label: "Child three" }),
+  ]);
+
+  if (thread === undefined) throw new Error("launch thread required");
+  await thread.notifyUser("Parallel children complete");
+  return { count: replies.length };
+}

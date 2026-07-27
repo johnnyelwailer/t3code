@@ -56,6 +56,33 @@ In short: t3team work must reuse the existing T3 Code shell and UI as the baseli
 
 After completing a repeatable t3team workflow, agents should mention that the workflow could be saved as a project-scoped action recipe and offer to create it. Do not create recipes silently.
 
+### The spec is the source of truth for recipe/workflow MECHANISMS — read it before inventing one
+
+Before adding or extending any mechanism in the recipe/orchestration surface — a visibility gate, a
+context/data path, an action kind, an authoring field, a matcher input — **find how the spec already
+says to do it** (`docs/t3team-mvp/16-action-recipes.md` first, then 19/25). Grep the spec for the
+concept, not just the identifier. Inventing a parallel mechanism is the most expensive failure mode
+in this area: it ships, authors copy it, and unwinding it later touches a dozen files.
+
+Two mechanisms already drifted in this way because agents skipped that step:
+
+- **`appliesTo.visiblePredicates` + the `RecipeSignal*` comparison DSL** (`{ signal: "some.key", gt:
+  3 }` with `all`/`any`/`not`). Appeared NOWHERE in the MVP docs: a string-keyed mini expression
+  language, the exact shape Phase 1 retired when it replaced `recipe.json`'s `{{ }}` expression
+  strings with typed functions. **REMOVED** — do not reintroduce a predicate DSL. Conditional
+  visibility is a typed field on `appliesTo` (its one real use became
+  `workitemHasChildren: false`), or `visible: (ctx) => …` (Epic 16) / `appliesTo: (item, ctx) => …`
+  (Epic 19) for the module form.
+- **Async / workspace-reading visibility.** `visible` must stay pure and SYNCHRONOUS on high-churn
+  surfaces (a Promise there is an authoring error). Data a recipe needs arrives in the render
+  context: declare `requiredContext: [{ key }]` and let the host supply it. Never a per-recipe
+  fetch, module import, or tool call inside discovery — that cost does not survive 1000 recipes ×
+  a keystroke.
+
+The general rule the spec states as the Reactivity rule: **if a recipe needs to react to some state,
+that state belongs in the render context** — adding a reactive dimension means adding a field there,
+never giving recipes a subscription or fetch API.
+
 ## Package Roles
 
 - `apps/server`: Node.js WebSocket server. Wraps Codex app-server (JSON-RPC over stdio), serves the React web app, and manages provider sessions.

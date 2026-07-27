@@ -1,6 +1,6 @@
 /**
- * `t3team.workflow.status` — read-only broker tool letting an agent observe a workflow run it
- * (or another thread) launched via `t3team.workflow.run`. With `runId`, returns that run's
+ * `t3team.orchestration.status` — read-only broker tool letting an agent observe a workflow run it
+ * (or another thread) launched via `t3team.orchestration.run`. With `runId`, returns that run's
  * observable state plus a one-sentence next-step hint. Without one, lists the most recent runs
  * (project-wide — the run row does not model a per-thread index, so this does not scope to the
  * calling thread; see WorkflowRunRepository.listRecent).
@@ -24,6 +24,11 @@ export interface WorkflowStatusToolResult {
   readonly wakeAt?: WorkflowRun["wakeAt"] | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** WHY a `failed` run failed — readable, no stack traces or internal ids (migration 044).
+   * Absent for a run that never failed, and for a pre-044 row. */
+  readonly failureReason?: string | undefined;
+  /** WHERE it failed — settle phase plus the primitive in flight (migration 044). */
+  readonly failureStep?: string | undefined;
   readonly hint: string;
 }
 
@@ -50,7 +55,9 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 const hintForStatus = (row: WorkflowRun): string => {
   switch (row.status) {
     case "failed":
-      return "The run failed — the failure reason was posted to the launching thread; fix the source and launch again.";
+      return row.failureReason
+        ? `The run failed in ${row.failureStep ?? "an unknown step"}: ${row.failureReason} — fix that cause, then resume (keeps the executed prefix) or launch again.`
+        : "The run failed — the failure reason was posted to the launching thread; fix the source and launch again.";
     case "suspended":
       return row.pendingKind
         ? `Parked waiting on ${row.pendingKind}; it resumes automatically when that resolves.`
@@ -82,17 +89,21 @@ const toStatusResult = (row: WorkflowRun): WorkflowStatusToolResult => ({
   wakeAt: row.wakeAt ?? undefined,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
+  // Strictly additive: the keys are absent (not `undefined`-valued) for a run that never
+  // failed, so an existing result shape is unchanged.
+  ...(row.failureReason ? { failureReason: row.failureReason } : {}),
+  ...(row.failureStep ? { failureStep: row.failureStep } : {}),
   hint: hintForStatus(row),
 });
 
 const notFoundHint = (runId: string) =>
-  `No workflow run found for runId '${runId}'. Omit runId to list the most recent runs, or ` +
-  "double-check the runId returned by t3team.workflow.run.";
+  `No orchestration run found for runId '${runId}'. Omit runId to list the most recent runs, or ` +
+  "double-check the runId returned by t3team.orchestration.run.";
 
 /** Over-fetch factor for list mode: rows are filtered to the calling thread after the query. */
 const RECENT_RUNS_SCAN_LIMIT = 50;
 
-/** Build the per-thread `t3team.workflow.status` handler factory. Both modes are scoped to the
+/** Build the per-thread `t3team.orchestration.status` handler factory. Both modes are scoped to the
  * CALLING thread via the run row's `launchThreadId` — a thread can observe only the runs it
  * launched, never other threads'/projects' run metadata. */
 export function makeWorkflowStatusToolHandlers(deps: {
