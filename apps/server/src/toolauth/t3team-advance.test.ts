@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import { CLAUDE, CODEX, FAKE } from "./t3team-adapters.ts";
-import { advance, stripAnsi } from "./t3team-advance.ts";
+import { advance, assemblePtyRead, foldPtyRead, stripAnsi } from "./t3team-advance.ts";
 import type { AuthState } from "./t3team-types.ts";
 
 const idle = (tool: string): AuthState => ({ tool, phase: "idle" });
@@ -129,6 +129,61 @@ describe("advance", () => {
 // file itself stays plain text.
 const ESC = String.fromCharCode(0x1b);
 const BEL = String.fromCharCode(0x07);
+
+describe("pty read assembly (chunk boundaries)", () => {
+  const AUTHORIZE_URL =
+    "https://claude.ai/oauth/authorize?code=true&client_id=abc123&scope=user%3Ainference";
+
+  /** Drives a sequence of pty reads the way the process layer does. */
+  function feed(chunks: ReadonlyArray<string>, opts?: { readonly exit?: boolean }): AuthState {
+    let state = idle("claude");
+    let pending = "";
+    for (const chunk of chunks) {
+      const read = assemblePtyRead(pending, chunk);
+      pending = read.pending;
+      state = foldPtyRead(state, read, CLAUDE);
+    }
+    if (opts?.exit) {
+      state = foldPtyRead(state, assemblePtyRead(pending, "", { flush: true }), CLAUDE);
+    }
+    return state;
+  }
+
+  it("captures the WHOLE url when a read splits it mid-string", () => {
+    const line = `Visit: ${AUTHORIZE_URL}\n`;
+    // A pty splits wherever it likes. Matching each raw chunk independently
+    // captured "https://claude.ai/oauth/authorize" — query string amputated —
+    // and still reported awaiting-open, sending the human to a broken page.
+    const split = feed([line.slice(0, 40), line.slice(40)]);
+    expect(split.phase).toBe("awaiting-open");
+    expect(split.url).toBe(AUTHORIZE_URL);
+    expect(feed([line]).url).toBe(AUTHORIZE_URL);
+  });
+
+  it("survives a url split one character at a time", () => {
+    const state = feed([...`Visit: ${AUTHORIZE_URL}\n`]);
+    expect(state.url).toBe(AUTHORIZE_URL);
+  });
+
+  it("never captures a value from an incomplete line", () => {
+    // No newline yet: the url is still arriving, so nothing may be captured.
+    const state = feed([`Visit: ${AUTHORIZE_URL.slice(0, 45)}`]);
+    expect(state.url).toBeUndefined();
+    expect(state.phase).toBe("idle");
+  });
+
+  it("still detects a blocking prompt that never sends a newline", () => {
+    // Real CLIs print "Paste code here:" and then block, so waiting for a
+    // newline here would stall the flow on a prompt already received.
+    const state = feed([`Visit: ${AUTHORIZE_URL}\n`, "Paste code here if prompted:"]);
+    expect(state.phase).toBe("awaiting-code");
+  });
+
+  it("folds a final line that carries no newline when the process exits", () => {
+    const state = feed([`Visit: ${AUTHORIZE_URL}\n`, "Login successful"], { exit: true });
+    expect(state.phase).toBe("connected");
+  });
+});
 
 describe("stripAnsi", () => {
   it("removes CSI sequences (color, cursor movement) without touching the text", () => {

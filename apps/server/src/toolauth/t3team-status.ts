@@ -165,7 +165,12 @@ export const probeStatus = Effect.fn("toolauth.probeStatus")(function* (
     return {
       tool: adapter.tool,
       phase: "connected",
-      message: `Using ${nonOAuthEnvVar} — no sign-in needed.`,
+      // Deliberately says "configured", not "verified". Presence of the env var
+      // is all we know: validating a gateway URL or API key would mean issuing a
+      // billable request, so a revoked or malformed key still reads as connected
+      // here. Wording it as configured-not-checked keeps the claim honest, and
+      // the first real call surfaces the truth either way.
+      message: `Configured via ${nonOAuthEnvVar} — no sign-in needed (not verified).`,
     };
   }
 

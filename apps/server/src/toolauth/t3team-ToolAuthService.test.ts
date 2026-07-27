@@ -1,147 +1,16 @@
 // @effect-diagnostics nodeBuiltinImport:off
-import * as NodeFS from "node:fs";
-import * as NodeOS from "node:os";
-import * as NodePath from "node:path";
-
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
-import * as Data from "effect/Data";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schedule from "effect/Schedule";
 
-import * as ProcessRunner from "../processRunner.ts";
-import * as PtyAdapter from "../terminal/PtyAdapter.ts";
 import { FAKE } from "./t3team-adapters.ts";
-import { buildNpmInstallArgv } from "./t3team-installCommand.ts";
-import { getInstallPackage } from "./t3team-installPackages.ts";
-import * as ToolAuthService from "./t3team-ToolAuthService.ts";
-
-// Drives the exact same pty path production code uses, but with a stubbed
-// `PtyAdapter` — no real process is ever spawned. Mirrors the
-// `FakePtyProcess`/`FakePtyAdapter` pattern already used by
-// `terminal/Manager.test.ts` for the same reason.
-class FakePtyProcess {
-  readonly pid = 4242;
-  readonly writes: string[] = [];
-  killed = false;
-  private readonly dataListeners = new Set<(data: string) => void>();
-  private readonly exitListeners = new Set<(event: PtyAdapter.PtyExitEvent) => void>();
-
-  write(data: string): void {
-    this.writes.push(data);
-  }
-  resize(): void {}
-  kill(): void {
-    this.killed = true;
-  }
-  onData(callback: (data: string) => void): () => void {
-    this.dataListeners.add(callback);
-    return () => this.dataListeners.delete(callback);
-  }
-  onExit(callback: (event: PtyAdapter.PtyExitEvent) => void): () => void {
-    this.exitListeners.add(callback);
-    return () => this.exitListeners.delete(callback);
-  }
-  emitData(data: string): void {
-    for (const listener of this.dataListeners) listener(data);
-  }
-  emitExit(event: PtyAdapter.PtyExitEvent): void {
-    for (const listener of this.exitListeners) listener(event);
-  }
-}
-
-class FakePtyAdapterService {
-  readonly processes: FakePtyProcess[] = [];
-  readonly spawnInputs: PtyAdapter.PtySpawnInput[] = [];
-
-  spawn(input: PtyAdapter.PtySpawnInput): Effect.Effect<PtyAdapter.PtyProcess, PtyAdapter.PtySpawnError> {
-    this.spawnInputs.push(input);
-    const process = new FakePtyProcess();
-    this.processes.push(process);
-    return Effect.succeed(process);
-  }
-}
-
-class WaitForConditionError extends Data.TaggedError("WaitForConditionError")<{
-  readonly message: string;
-}> {}
-
-const waitFor = <E, R>(
-  predicate: Effect.Effect<boolean, E, R>,
-  timeout: Duration.Input = 800,
-): Effect.Effect<void, WaitForConditionError | E, R> =>
-  predicate.pipe(
-    Effect.filterOrFail(
-      (done) => done,
-      () => new WaitForConditionError({ message: "Condition not met" }),
-    ),
-    Effect.retry(Schedule.spaced("15 millis")),
-    Effect.timeoutOption(timeout),
-    Effect.flatMap((result) =>
-      Option.match(result, {
-        onNone: () => Effect.fail(new WaitForConditionError({ message: "Timed out waiting for condition" })),
-        onSome: () => Effect.void,
-      }),
-    ),
-  );
-
-function makeTempHome(): string {
-  return NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-toolauth-service-"));
-}
-
-function removeTempHome(homeDir: string): void {
-  NodeFS.rmSync(homeDir, { recursive: true, force: true });
-}
-
-// FAKE declares no `status.probe`, so ProcessRunner is never actually
-// invoked by these tests — the real layer is provided anyway since it's
-// harmless and keeps the test setup simple.
-const testLayer = Layer.mergeAll(NodeServices.layer, ProcessRunner.layer.pipe(Layer.provide(NodeServices.layer)));
-
-function makeService(
-  homeDir: string,
-  overrides: Partial<ToolAuthService.ToolAuthServiceOptions> = {},
-) {
-  const ptyAdapter = new FakePtyAdapterService();
-  return ToolAuthService.makeWithOptions({
-    ptyAdapter,
-    homeDir,
-    env: {},
-    tools: ["fake"],
-    ...overrides,
-  }).pipe(
-    Effect.provide(testLayer),
-    Effect.map((service) => ({ service, ptyAdapter })),
-  );
-}
-
-/**
- * A controllable stand-in for "is this binary on PATH", so install() tests
- * never depend on what happens to be installed on the machine running them
- * (`fake`'s own command is `node`, which is always present) — see
- * `ToolAuthServiceOptions.checkBinaryAvailable`'s doc comment.
- */
-function makeControllableBinaryCheck(initiallyPresent: boolean) {
-  let present = initiallyPresent;
-  const calls: string[] = [];
-  const check = (binary: string): Effect.Effect<boolean> => {
-    calls.push(binary);
-    return Effect.succeed(present);
-  };
-  return {
-    check,
-    calls,
-    setPresent(value: boolean) {
-      present = value;
-    },
-  };
-}
-
-const firstFakeState = (service: ToolAuthService.ToolAuthService["Service"]) =>
-  service.list.pipe(Effect.map((states) => states[0]));
+import type * as ToolAuthService from "./t3team-ToolAuthService.ts";
+import {
+  firstFakeState,
+  makeService,
+  makeTempHome,
+  removeTempHome,
+  waitFor,
+} from "./t3team-toolauthTestHarness.ts";
 
 describe("ToolAuthService", () => {
   it.effect("start() spawns via the pty adapter with the adapter's command, in the starting phase", () =>
@@ -183,14 +52,14 @@ describe("ToolAuthService", () => {
         yield* service.start("fake");
         const process = ptyAdapter.processes[0]!;
 
-        process.emitData("If it does not open, visit: https://example.invalid/device/AbC123");
+        process.emitData("If it does not open, visit: https://example.invalid/device/AbC123\n");
         yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-open")));
         expect((yield* firstFakeState(service))?.url).toBe("https://example.invalid/device/AbC123");
 
         process.emitData("Paste code here if prompted:");
         yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-code")));
 
-        process.emitData("Login successful");
+        process.emitData("Login successful\n");
         yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "connected")));
       } finally {
         removeTempHome(homeDir);
@@ -205,7 +74,7 @@ describe("ToolAuthService", () => {
         const { service, ptyAdapter } = yield* makeService(homeDir);
         yield* service.start("fake");
         const process = ptyAdapter.processes[0]!;
-        process.emitData("If it does not open, visit: https://example.invalid/device/AbC123");
+        process.emitData("If it does not open, visit: https://example.invalid/device/AbC123\n");
         process.emitData("Paste code here if prompted:");
         yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-code")));
 
@@ -307,7 +176,7 @@ describe("ToolAuthService", () => {
 
         // The old process's callbacks must be inert now that the session
         // points at the new one.
-        firstProcess.emitData("Login successful");
+        firstProcess.emitData("Login successful\n");
         yield* Effect.yieldNow;
         expect((yield* firstFakeState(service))?.phase).toBe("starting");
       } finally {
@@ -351,7 +220,7 @@ describe("ToolAuthService", () => {
 
         yield* service.start("fake");
         const process = ptyAdapter.processes[0]!;
-        process.emitData("If it does not open, visit: https://example.invalid/device/AbC123");
+        process.emitData("If it does not open, visit: https://example.invalid/device/AbC123\n");
         yield* waitFor(
           Effect.sync(
             () =>
@@ -363,7 +232,7 @@ describe("ToolAuthService", () => {
 
         const eventCountAtUnsubscribe = events.length;
         yield* Effect.sync(unsubscribe);
-        process.emitData("Login successful");
+        process.emitData("Login successful\n");
 
         // Assert the negative: no further event arrives. The onData handler
         // forks a plain SynchronizedRef-based effect with no sleeps of its
@@ -376,268 +245,6 @@ describe("ToolAuthService", () => {
           yield* Effect.yieldNow;
         }
         expect(events.length).toBe(eventCountAtUnsubscribe);
-      } finally {
-        removeTempHome(homeDir);
-      }
-    }),
-  );
-});
-
-describe("ToolAuthService.install — one click installs AND signs in", () => {
-  it.effect("skips straight to the real login flow when the binary is already present", () =>
-    Effect.gen(function* () {
-      const homeDir = makeTempHome();
-      try {
-        const binaryCheck = makeControllableBinaryCheck(true);
-        const { service, ptyAdapter } = yield* makeService(homeDir, {
-          checkBinaryAvailable: binaryCheck.check,
-        });
-
-        const state = yield* service.install("fake");
-
-        expect(state.phase).toBe("starting");
-        expect(ptyAdapter.processes).toHaveLength(1);
-        expect(ptyAdapter.spawnInputs[0]?.shell).toBe(FAKE.command[0]);
-        expect(ptyAdapter.spawnInputs[0]?.args).toEqual(FAKE.command.slice(1));
-        expect(binaryCheck.calls).toEqual(["node"]);
-      } finally {
-        removeTempHome(homeDir);
-      }
-    }),
-  );
-
-  it.effect("spawns npm install with the exact argv the static package table derives", () =>
-    Effect.gen(function* () {
-      const homeDir = makeTempHome();
-      try {
-        const binaryCheck = makeControllableBinaryCheck(false);
-        const { service, ptyAdapter } = yield* makeService(homeDir, {
-          checkBinaryAvailable: binaryCheck.check,
-        });
-
-        const state = yield* service.install("fake");
-
-        expect(state.phase).toBe("installing");
-        expect(ptyAdapter.processes).toHaveLength(1);
-        // The client only ever sends the tool id ("fake" here stands in for
-        // "claude"/"codex" — see installCommand.test.ts for the real
-        // packages). This argv is entirely derived from
-        // `TOOL_INSTALL_PACKAGES`, never from anything client-supplied.
-        const expectedArgv = buildNpmInstallArgv(getInstallPackage("fake").npmPackageName);
-        expect(ptyAdapter.spawnInputs[0]?.shell).toBe(expectedArgv[0]);
-        expect(ptyAdapter.spawnInputs[0]?.args).toEqual(expectedArgv.slice(1));
-      } finally {
-        removeTempHome(homeDir);
-      }
-    }),
-  );
-
-  it.effect(
-    "chains straight into the real sign-in flow once the install succeeds and re-probes present",
-    () =>
-      Effect.gen(function* () {
-        const homeDir = makeTempHome();
-        try {
-          const binaryCheck = makeControllableBinaryCheck(false);
-          const { service, ptyAdapter } = yield* makeService(homeDir, {
-            checkBinaryAvailable: binaryCheck.check,
-          });
-
-          yield* service.install("fake");
-          const installProcess = ptyAdapter.processes[0]!;
-          installProcess.emitData("added 1 package in 2s\n");
-          yield* waitFor(
-            firstFakeState(service).pipe(
-              Effect.map((s) => s?.installLog?.includes("added 1 package") ?? false),
-            ),
-          );
-
-          // The package manager reports success AND the binary is now really
-          // there — never assume success from exit code alone, but here the
-          // re-probe agrees with it.
-          binaryCheck.setPresent(true);
-          installProcess.emitExit({ exitCode: 0, signal: null });
-
-          // Chained straight into the real login pty — a SECOND process, no
-          // separate client request, no "installed, now click connect".
-          yield* waitFor(Effect.sync(() => ptyAdapter.processes.length === 2));
-          const loginProcess = ptyAdapter.processes[1]!;
-          expect(ptyAdapter.spawnInputs[1]?.shell).toBe(FAKE.command[0]);
-          yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "starting")));
-
-          // The rest of the journey is the same three-beat flow proven above.
-          loginProcess.emitData("If it does not open, visit: https://example.invalid/device/AbC123");
-          yield* waitFor(
-            firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-open")),
-          );
-          loginProcess.emitData("Login successful");
-          yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "connected")));
-        } finally {
-          removeTempHome(homeDir);
-        }
-      }),
-  );
-
-  it.effect(
-    "reports failure with the package manager's own error text when the re-probe still finds nothing",
-    () =>
-      Effect.gen(function* () {
-        const homeDir = makeTempHome();
-        try {
-          const binaryCheck = makeControllableBinaryCheck(false);
-          const { service, ptyAdapter } = yield* makeService(homeDir, {
-            checkBinaryAvailable: binaryCheck.check,
-          });
-
-          yield* service.install("fake");
-          const installProcess = ptyAdapter.processes[0]!;
-          installProcess.emitData("npm warn deprecated something\n");
-          installProcess.emitData("npm ERR! code E403\n");
-          installProcess.emitData(
-            "npm ERR! 403 Forbidden - GET https://registry.npmjs.org/@t3code-toolauth-fixture/fake\n",
-          );
-          // Binary check stays false — the exit code alone must not decide this.
-          installProcess.emitExit({ exitCode: 0, signal: null });
-
-          yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "failed")));
-          const state = yield* firstFakeState(service);
-          expect(state?.message).toContain("npm ERR! 403 Forbidden");
-          expect(state?.message).not.toContain("npm warn deprecated");
-          // No login pty was ever spawned — only the one install attempt.
-          expect(ptyAdapter.processes).toHaveLength(1);
-        } finally {
-          removeTempHome(homeDir);
-        }
-      }),
-  );
-
-  it.effect("falls back to the exit code when there is no usable installer output at all", () =>
-    Effect.gen(function* () {
-      const homeDir = makeTempHome();
-      try {
-        const binaryCheck = makeControllableBinaryCheck(false);
-        const { service, ptyAdapter } = yield* makeService(homeDir, {
-          checkBinaryAvailable: binaryCheck.check,
-        });
-
-        yield* service.install("fake");
-        const installProcess = ptyAdapter.processes[0]!;
-        installProcess.emitExit({ exitCode: 1, signal: null });
-
-        yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "failed")));
-        const state = yield* firstFakeState(service);
-        expect(state?.message).toContain("code 1");
-      } finally {
-        removeTempHome(homeDir);
-      }
-    }),
-  );
-
-  it.effect("guards against a concurrent install — a second call joins the same one", () =>
-    Effect.gen(function* () {
-      const homeDir = makeTempHome();
-      try {
-        const binaryCheck = makeControllableBinaryCheck(false);
-        const { service, ptyAdapter } = yield* makeService(homeDir, {
-          checkBinaryAvailable: binaryCheck.check,
-        });
-
-        const first = yield* service.install("fake");
-        const second = yield* service.install("fake");
-
-        expect(first.phase).toBe("installing");
-        expect(second.phase).toBe("installing");
-        expect(ptyAdapter.processes).toHaveLength(1);
-      } finally {
-        removeTempHome(homeDir);
-      }
-    }),
-  );
-
-  it.effect("joins an already-active login flow instead of installing again", () =>
-    Effect.gen(function* () {
-      const homeDir = makeTempHome();
-      try {
-        // Present from the start, so a direct start() (not install()) is
-        // exactly what a client would have called for an already-installed
-        // tool — install() must recognize the in-progress login and not
-        // touch the pty adapter again.
-        const binaryCheck = makeControllableBinaryCheck(true);
-        const { service, ptyAdapter } = yield* makeService(homeDir, {
-          checkBinaryAvailable: binaryCheck.check,
-        });
-
-        yield* service.start("fake");
-        const joined = yield* service.install("fake");
-
-        expect(joined.phase).toBe("starting");
-        expect(ptyAdapter.processes).toHaveLength(1);
-      } finally {
-        removeTempHome(homeDir);
-      }
-    }),
-  );
-
-  // `it.live`, not `it.effect`, and deliberately so: this is the one test whose
-  // condition cannot be true on the first attempt — it requires real time to
-  // elapse for the install timeout to fire. `it.effect` supplies a virtual
-  // TestClock, under which `waitFor`'s `Schedule.spaced("15 millis")` retry
-  // never advances, so the test hangs until vitest kills it rather than failing.
-  // Every other test here passes under the test clock because its predicate is
-  // already satisfied when first evaluated.
-  it.live("a hung install times out, kills the process, and frees the slot for a retry", () =>
-    Effect.gen(function* () {
-      const homeDir = makeTempHome();
-      try {
-        const binaryCheck = makeControllableBinaryCheck(false);
-        const { service, ptyAdapter } = yield* makeService(homeDir, {
-          checkBinaryAvailable: binaryCheck.check,
-          installTimeout: Duration.millis(30),
-        });
-
-        yield* service.install("fake");
-        const installProcess = ptyAdapter.processes[0]!;
-        // Never emits exit — simulates a hung installer.
-
-        yield* waitFor(
-          firstFakeState(service).pipe(Effect.map((s) => s?.phase === "failed")),
-          Duration.millis(2000),
-        );
-        const state = yield* firstFakeState(service);
-        expect(state?.message).toContain("timed out");
-        expect(installProcess.killed).toBe(true);
-
-        // The slot is free: a retry spawns a fresh process rather than
-        // joining the timed-out one.
-        binaryCheck.setPresent(true);
-        const retried = yield* service.install("fake");
-        expect(retried.phase).toBe("starting");
-        expect(ptyAdapter.processes).toHaveLength(2);
-      } finally {
-        removeTempHome(homeDir);
-      }
-    }),
-  );
-
-  it.effect("retrying after a failed install re-checks presence rather than replaying history", () =>
-    Effect.gen(function* () {
-      const homeDir = makeTempHome();
-      try {
-        const binaryCheck = makeControllableBinaryCheck(false);
-        const { service, ptyAdapter } = yield* makeService(homeDir, {
-          checkBinaryAvailable: binaryCheck.check,
-        });
-
-        yield* service.install("fake");
-        ptyAdapter.processes[0]!.emitExit({ exitCode: 1, signal: null });
-        yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "failed")));
-
-        // Between attempts, imagine the human installed it by hand.
-        binaryCheck.setPresent(true);
-        const retried = yield* service.install("fake");
-
-        expect(retried.phase).toBe("starting");
-        expect(ptyAdapter.processes).toHaveLength(2);
       } finally {
         removeTempHome(homeDir);
       }

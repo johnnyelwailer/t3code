@@ -29,6 +29,7 @@ import * as PtyAdapter from "../terminal/PtyAdapter.ts";
 import { getAdapter, PRODUCTION_TOOLS } from "./t3team-adapters.ts";
 import { makeToolAuthInstallFlow } from "./t3team-installService.ts";
 import { makeToolAuthLoginFlow } from "./t3team-loginService.ts";
+import { makeToolSingleFlight } from "./t3team-singleFlight.ts";
 import { probeStatus } from "./t3team-status.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
@@ -173,6 +174,9 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
 
   // Login and install→login are each their own flow (t3team-loginService.ts,
   // t3team-installService.ts), sharing only the primitives above.
+  // ONE claim set shared by both flows — see t3team-singleFlight.ts.
+  const singleFlight = makeToolSingleFlight();
+
   const { spawnLoginProcess, start, submitCode, cancel } = makeToolAuthLoginFlow({
     ptyAdapter: options.ptyAdapter,
     sessionsRef,
@@ -181,6 +185,7 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
     stateForTool,
     homeDir,
     env,
+    singleFlight,
   });
 
   const { install } = makeToolAuthInstallFlow({
@@ -193,6 +198,7 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
     homeDir,
     env,
     installTimeout,
+    singleFlight,
   });
 
   const attachStream = (listener: (event: ToolAuthServiceStreamEvent) => Effect.Effect<void>) =>

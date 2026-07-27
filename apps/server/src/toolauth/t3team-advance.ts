@@ -82,3 +82,82 @@ const ANSI_PATTERN = new RegExp(
 export function stripAnsi(chunk: string): string {
   return chunk.replace(ANSI_PATTERN, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
+
+/**
+ * Folds one pty read into the next state, reassembling lines across reads.
+ *
+ * A pty never guarantees a read ends on a line boundary, and passing raw chunks
+ * to `advance()` is quietly wrong rather than obviously broken. The authorize
+ * URL is long and very likely to straddle two reads; `match.url` then matches
+ * the FIRST half happily — its `[^\s"']+` simply stops at the chunk boundary —
+ * so the session reaches `awaiting-open` holding a URL with its query string
+ * amputated:
+ *
+ *   whole:  https://claude.ai/oauth/authorize?code=true&client_id=…&scope=…
+ *   split:  https://claude.ai/oauth/authorize
+ *
+ * That is worse than missing it outright: the flow *looks* like it worked and
+ * sends the human to a broken sign-in page. Fixtures never catch it (they write
+ * whole lines in one go); a real CLI through a real pty does.
+ *
+ * So value-capturing matchers (`url`, `displayCode`) only ever see COMPLETE
+ * lines. The trailing partial line is still checked for the `awaitingCode`
+ * PROMPT, because that one is a boolean detector rather than a capture, and a
+ * CLI that prints "Paste code here:" and then blocks never sends the newline
+ * that would otherwise release it — waiting for one would stall the flow on a
+ * prompt we had already received.
+ *
+ * `flush` (call on process exit) folds whatever partial line remains, for a CLI
+ * whose final line has no newline.
+ */
+export interface AssembledPtyRead {
+  /** Complete lines, safe for value-capturing matchers. */
+  readonly lines: ReadonlyArray<string>;
+  /** The incomplete trailing line — prompt detection only, never a capture. */
+  readonly partial: string;
+  /** Carry into the next read. */
+  readonly pending: string;
+}
+
+/**
+ * Split half — deliberately synchronous and separate from the fold, so the
+ * process layer can advance its buffer in the `onData` callback itself. Doing
+ * the buffer arithmetic inside an async fiber instead would let two reads
+ * interleave at their suspension points and be folded out of order.
+ */
+export function assemblePtyRead(
+  pending: string,
+  chunk: string,
+  options?: { readonly flush?: boolean },
+): AssembledPtyRead {
+  const combined = `${pending}${chunk}`;
+  if (options?.flush) {
+    return { lines: combined.split("\n"), partial: "", pending: "" };
+  }
+  const parts = combined.split("\n");
+  const trailing = parts.pop() ?? "";
+  // Bound the carry-over by keeping the TAIL, never by flushing it as a line:
+  // flushing a half-URL would recreate the truncation this exists to prevent,
+  // while a tail still completes once the rest of the line arrives.
+  const carried =
+    trailing.length > MAX_PENDING_CHARS ? trailing.slice(-MAX_PENDING_CHARS) : trailing;
+  return { lines: parts, partial: carried, pending: carried };
+}
+
+/** Fold half: complete lines through `advance()`, plus the prompt-only check. */
+export function foldPtyRead(
+  prev: AuthState,
+  read: AssembledPtyRead,
+  adapter: ToolAuthAdapter,
+): AuthState {
+  let state = prev;
+  for (const line of read.lines) {
+    if (line.length > 0) state = advance(state, line, adapter);
+  }
+  if (read.partial.length > 0 && adapter.match.awaitingCode?.test(read.partial) && state.url) {
+    state = { ...state, phase: "awaiting-code" };
+  }
+  return state;
+}
+
+const MAX_PENDING_CHARS = 8_192;

@@ -19,8 +19,9 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as PtyAdapter from "../terminal/PtyAdapter.ts";
 import { getAdapter } from "./t3team-adapters.ts";
-import { advance, stripAnsi } from "./t3team-advance.ts";
+import { assemblePtyRead, foldPtyRead, stripAnsi } from "./t3team-advance.ts";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";
+import type { ToolSingleFlight } from "./t3team-singleFlight.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
 export interface ToolAuthLoginFlowDeps {
@@ -37,6 +38,8 @@ export interface ToolAuthLoginFlowDeps {
   readonly stateForTool: (tool: string) => Effect.Effect<AuthState>;
   readonly homeDir: string;
   readonly env: NodeJS.ProcessEnv;
+  /** Shared with the install flow so start() and install() cannot race each other. */
+  readonly singleFlight: ToolSingleFlight;
 }
 
 /**
@@ -46,8 +49,16 @@ export interface ToolAuthLoginFlowDeps {
  * kept private.
  */
 export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
-  const { ptyAdapter, sessionsRef, notifyUpdate, applySessionUpdate, stateForTool, homeDir, env } =
-    deps;
+  const {
+    ptyAdapter,
+    sessionsRef,
+    notifyUpdate,
+    applySessionUpdate,
+    stateForTool,
+    homeDir,
+    env,
+    singleFlight,
+  } = deps;
 
   const spawnLoginProcess = Effect.fn("toolauth.spawnLoginProcess")(function* (
     tool: string,
@@ -75,29 +86,46 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
       Effect.map((sessions) => sessions.get(tool)?.process === process),
     );
 
+    // Carries the trailing partial line between pty reads — see the truncation
+    // note on `assemblePtyRead`. Advanced SYNCHRONOUSLY here in the callback,
+    // not inside the fork: two forks can interleave at their suspension points,
+    // so doing the buffer arithmetic in there would fold reads out of order.
+    let pending = "";
+
     process.onData((chunk) => {
+      const read = assemblePtyRead(pending, stripAnsi(chunk));
+      pending = read.pending;
       Effect.runFork(
         Effect.gen(function* () {
           if (!(yield* isCurrentProcess)) return;
           const session = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
           if (!session) return;
-          const nextState = advance(session.state, stripAnsi(chunk), adapter);
-          yield* applySessionUpdate(tool, nextState, session.state);
+          yield* applySessionUpdate(tool, foldPtyRead(session.state, read, adapter), session.state);
         }),
       );
     });
 
     process.onExit((event) => {
+      // Flush whatever partial line is still buffered BEFORE deciding the
+      // terminal phase: a CLI whose final line carries no newline (common for
+      // "Login successful" written without one) would otherwise have that line
+      // discarded and be reported purely by exit code.
+      const flushed = assemblePtyRead(pending, "", { flush: true });
+      pending = "";
       Effect.runFork(
         Effect.gen(function* () {
           if (!(yield* isCurrentProcess)) return;
           const session = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
           if (!session) return;
-          if (session.state.phase === "connected" || session.state.phase === "failed") return;
+          const settled = foldPtyRead(session.state, flushed, adapter);
+          if (settled.phase === "connected" || settled.phase === "failed") {
+            yield* applySessionUpdate(tool, settled, session.state);
+            return;
+          }
           const nextState: AuthState = {
-            ...session.state,
+            ...settled,
             phase: event.exitCode === 0 ? "connected" : "failed",
-            message: session.state.message ?? `exited with code ${event.exitCode}`,
+            message: settled.message ?? `exited with code ${event.exitCode}`,
           };
           yield* applySessionUpdate(tool, nextState, session.state);
         }),
@@ -109,6 +137,33 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
 
   const start = Effect.fn("toolauth.start")(function* (tool: string) {
     const adapter = getAdapter(tool);
+
+    // Same single-flight claim the install flow takes, and for the same reason:
+    // `spawnLoginProcess` suspends at the pty spawn BEFORE it writes the session
+    // map, so two concurrent start() calls both read "no active flow" and both
+    // spawn a login pty, the second orphaning the first. See t3team-singleFlight.ts.
+    if (singleFlight.isClaimed(tool)) {
+      // ALWAYS join — never fall through to a spawn. The holder may still be
+      // between its claim and writing the session map (that is the whole window
+      // this guards), so "claimed but no session yet" is exactly the case that
+      // must not spawn a second process. Falling through would also release the
+      // other caller's claim on the way out.
+      const active = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
+      return active?.state ?? { tool, phase: "starting" as const };
+    }
+    singleFlight.claim(tool);
+    return yield* Effect.ensuring(
+      startClaimed(tool, adapter),
+      Effect.sync(() => {
+        singleFlight.release(tool);
+      }),
+    );
+  });
+
+  const startClaimed = Effect.fn("toolauth.startClaimed")(function* (
+    tool: string,
+    adapter: ToolAuthAdapter,
+  ) {
     const existing = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
     // A session sitting in a TERMINAL phase (connected/failed) is history, not
     // an active flow — Retry/Reconnect must be able to start a fresh one.

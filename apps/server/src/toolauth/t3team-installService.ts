@@ -24,6 +24,7 @@ import {
   timedOutInstallState,
 } from "./t3team-installFlow.ts";
 import { getInstallPackage } from "./t3team-installPackages.ts";
+import type { ToolSingleFlight } from "./t3team-singleFlight.ts";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
@@ -46,6 +47,8 @@ export interface ToolAuthInstallFlowDeps {
   readonly homeDir: string;
   readonly env: NodeJS.ProcessEnv;
   readonly installTimeout: Duration.Duration;
+  /** Shared with the login flow so start() and install() cannot race each other. */
+  readonly singleFlight: ToolSingleFlight;
 }
 
 /**
@@ -65,6 +68,9 @@ export function makeToolAuthInstallFlow(deps: ToolAuthInstallFlowDeps) {
     env,
     installTimeout,
   } = deps;
+
+  /** Shared with the login flow's own guard — see t3team-singleFlight.ts. */
+  const singleFlight = deps.singleFlight;
 
   // Runs once the install pty exits (normally or via the timeout below):
   // re-probes whether the binary is ACTUALLY present now — never assumes
@@ -108,9 +114,8 @@ export function makeToolAuthInstallFlow(deps: ToolAuthInstallFlowDeps) {
     });
     yield* notifyUpdate(initialState);
 
-    // Same stale-process guard as `spawnLoginProcess` — matters here too
-    // because `finishInstall` replaces this map entry with the login pty the
-    // instant the install completes.
+    // Stale-process guard, as in `spawnLoginProcess`; it matters more here since
+    // `finishInstall` swaps this entry for the login pty the moment install ends.
     const isCurrentInstallProcess = SynchronizedRef.get(sessionsRef).pipe(
       Effect.map((sessions) => sessions.get(tool)?.process === process),
     );
@@ -161,15 +166,8 @@ export function makeToolAuthInstallFlow(deps: ToolAuthInstallFlowDeps) {
             // best-effort — the process may already be gone
           }
         });
-        // Store the failure rather than deleting the session. Deleting it made
-        // the notified event and a subsequent read disagree: `stateForTool`
-        // falls back to `runProbe` when there is no session, so a client that
-        // polled after the timeout was told "idle"/not-connected instead of
-        // "failed" — the timeout was announced once and then forgotten.
-        //
-        // Storing it does NOT pin the slot: `failed` is terminal per
-        // `isTerminalPhase`, so `install()` and `spawnLoginProcess()` both
-        // treat this session as replaceable and a retry spawns fresh.
+        // Stored, not deleted — see `timedOutInstallState` for why deleting made
+        // the notified event and a later read disagree.
         yield* applySessionUpdate(
           tool,
           timedOutInstallState(tool, Duration.format(installTimeout)),
@@ -183,22 +181,40 @@ export function makeToolAuthInstallFlow(deps: ToolAuthInstallFlowDeps) {
 
   const install = Effect.fn("toolauth.install")(function* (tool: string) {
     const adapter = getAdapter(tool);
-    const existing = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
-    // Already installing, or already mid-login (from a previous install()
-    // or a direct start()) — join it rather than racing a second attempt.
-    if (existing && !isTerminalPhase(existing.state.phase)) {
-      return existing.state;
-    }
 
-    const binary = adapter.command[0]!;
-    const alreadyPresent = yield* checkBinaryAvailable(binary);
-    if (alreadyPresent) {
-      // Nothing to install — go straight to the real sign-in flow, same as a
-      // direct `start()` call.
-      return yield* spawnLoginProcess(tool, adapter);
+    // Single-flight claim BEFORE the suspension in `checkBinaryAvailable` below
+    // — see `t3team-singleFlight.ts` for why the check-and-claim must be
+    // synchronous. Without it, two concurrent install() calls each spawned a
+    // package manager against the same global prefix.
+    if (singleFlight.isClaimed(tool)) {
+      const active = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
+      return active?.state ?? { tool, phase: "installing" as const, installLog: "" };
     }
+    singleFlight.claim(tool);
 
-    return yield* spawnInstallProcess(tool, adapter);
+    return yield* Effect.ensuring(
+      Effect.gen(function* () {
+        const existing = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
+        // Already installing, or already mid-login (from a previous install()
+        // or a direct start()) — join it rather than racing a second attempt.
+        if (existing && !isTerminalPhase(existing.state.phase)) {
+          return existing.state;
+        }
+
+        const binary = adapter.command[0]!;
+        const alreadyPresent = yield* checkBinaryAvailable(binary);
+        if (alreadyPresent) {
+          // Nothing to install — go straight to the real sign-in flow, same as
+          // a direct `start()` call.
+          return yield* spawnLoginProcess(tool, adapter);
+        }
+
+        return yield* spawnInstallProcess(tool, adapter);
+      }),
+      Effect.sync(() => {
+        singleFlight.release(tool);
+      }),
+    );
   });
 
   return { install };
