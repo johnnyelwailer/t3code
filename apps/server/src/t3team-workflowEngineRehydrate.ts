@@ -34,7 +34,7 @@ import * as Option from "effect/Option";
 import { ServerConfig } from "./config.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { type WorkflowRun, WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { makeWorkflowRunLifecycle } from "./t3team-workflowEngineDurability.ts";
@@ -62,17 +62,22 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     const orchestration = yield* OrchestrationEngineService;
     const serverConfig = yield* ServerConfig;
     const scheduler = yield* T3TeamWorkflowScheduler;
-    // Restored runs must keep the same `getTools()` tree they launched with: a body replaying a
-    // journaled host-tool call still evaluates `getTools().t3team…` before the journal is read,
-    // so dropping the refs here would break every restored run at that expression.
+    // Restored runs must keep the same `getTools()` tree they launched with — no more and no less.
+    // A body replaying a journaled host-tool call evaluates `getTools().t3team…` before the journal
+    // is read, so dropping the bridge breaks a run that HAD it; conversely, handing it to a run
+    // that never had it (every ephemeral run has a launch thread, none is granted the bridge) would
+    // let a restart quietly upgrade a parked run's powers. So the GRANT decides, never the shape of
+    // the row: `host_tool_grant` is NULL exactly when the launch wired no bridge (migration 047).
     const toolBroker = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamToolBroker));
-    const hostToolClientFor = (launchThreadId: string | null) =>
-      toolBroker === undefined
-        ? undefined
-        : makeT3TeamWorkflowHostDraftToolClient({
-            broker: toolBroker,
-            launchThreadId: launchThreadId ?? undefined,
-          });
+    const hostToolClientFor = (run: WorkflowRun) => {
+      const grant = run.hostToolGrant;
+      if (toolBroker === undefined || grant === undefined || grant === null) return undefined;
+      return makeT3TeamWorkflowHostDraftToolClient({
+        broker: toolBroker,
+        launchThreadId: run.launchThreadId ?? undefined,
+        ...(grant.toolGroups === null ? {} : { allowedToolGroups: grant.toolGroups }),
+      });
+    };
 
     const suspended = yield* repo.listByStatus({ status: "suspended" });
     const sleeping = yield* repo.listByStatus({ status: "sleeping" });
@@ -129,7 +134,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         dispatch,
         newId: () => t3teamRandomUUID(),
       });
-      const hostToolClient = hostToolClientFor(run.launchThreadId);
+      const hostToolClient = hostToolClientFor(run);
       createWorkflowRunController({
         runId: run.runId,
         workflowPath: run.workflowPath,
@@ -177,7 +182,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         ),
       );
       const scripts = yield* resolveRehydratedWorkflowScripts(run);
-      const hostToolClient = hostToolClientFor(run.launchThreadId);
+      const hostToolClient = hostToolClientFor(run);
       yield* Effect.promise(async () => {
         if (!(await lifecycle.recordActive())) return;
         await launchWorkflowRecipe({

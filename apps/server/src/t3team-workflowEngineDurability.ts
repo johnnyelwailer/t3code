@@ -47,6 +47,9 @@ export interface BuildRunningRowInput {
   /** The launching recipe's directory (recipe launches with scripts); rehydration re-resolves
    * the recipe's private `scripts.*` tree from it. Absent → NULL. */
   readonly recipePath?: string | undefined;
+  /** The host-tool bridge this launch grants (migration 047). Absent → NULL, and rehydration
+   * will NOT hand the restored run one. */
+  readonly hostToolGrant?: WorkflowRun["hostToolGrant"];
   readonly nowIso: string;
 }
 
@@ -65,6 +68,7 @@ export function buildRunningWorkflowRunRow(input: BuildRunningRowInput): Workflo
     status: "running",
     origin: input.origin ?? "recipe",
     recipePath: input.recipePath ?? null,
+    hostToolGrant: input.hostToolGrant ?? null,
     pendingThreadId: null,
     pendingCorrelationId: null,
     pendingKind: null,

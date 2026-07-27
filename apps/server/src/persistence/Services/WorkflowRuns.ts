@@ -47,6 +47,16 @@ export type WorkflowRunPendingKind = typeof WorkflowRunPendingKind.Type;
 export const WorkflowRunOrigin = Schema.Literals(["recipe", "ephemeral"]);
 export type WorkflowRunOrigin = typeof WorkflowRunOrigin.Type;
 
+/**
+ * The host-tool bridge a run was LAUNCHED with (migration 047). Absent means the run never had
+ * one, so rehydration must not hand it one — the grant is launch-time policy, not something to
+ * infer from a run's shape after a restart. `toolGroups: null` is "granted, no group scoping".
+ */
+export const WorkflowRunHostToolGrant = Schema.Struct({
+  toolGroups: Schema.NullOr(Schema.Array(Schema.String)),
+});
+export type WorkflowRunHostToolGrant = typeof WorkflowRunHostToolGrant.Type;
+
 export const WorkflowRun = Schema.Struct({
   runId: Schema.String,
   /** Absolute path to the recipe's `.workflow.ts` — re-resolved to a WorkflowRef on boot. */
@@ -79,6 +89,9 @@ export const WorkflowRun = Schema.Struct({
   failureReason: Schema.optional(Schema.NullOr(Schema.String)),
   /** Where it failed — the settle phase plus the primitive in flight (migration 044). */
   failureStep: Schema.optional(Schema.NullOr(Schema.String)),
+  /** The host-tool bridge this run was launched with (migration 047), replayed verbatim by boot
+   * rehydration. NULL for a run launched without one, and for every pre-047 row. */
+  hostToolGrant: Schema.optional(Schema.NullOr(WorkflowRunHostToolGrant)),
   /** The wall-clock instant a `sleeping` run is due (Epic 27) — the scheduler's index. Null
    * for a run not parked on a timer. */
   wakeAt: Schema.NullOr(IsoDateTime),
