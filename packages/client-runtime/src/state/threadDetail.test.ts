@@ -24,6 +24,8 @@ const shell = {
   createdAt: "2026-07-19T08:00:00.000Z",
   updatedAt: "2026-07-19T08:00:00.000Z",
   archivedAt: null,
+  settledOverride: null,
+  settledAt: null,
   session: null,
   latestUserMessageAt: null,
   hasPendingApprovals: false,

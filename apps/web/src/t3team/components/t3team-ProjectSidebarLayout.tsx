@@ -2,20 +2,17 @@ import { SearchIcon, SettingsIcon } from "lucide-react";
 import {
   SidebarFooter,
   SidebarGroup,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
-  SidebarTrigger,
 } from "~/t3team/components/ui/t3team-sidebar";
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
 import { T3TeamLeftSidebarHeaderToggle } from "~/t3team/t3team-LeftSidebarHeaderToggle";
-import { T3TeamPackBrandImage } from "~/t3team/t3team-PackBrandImage";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { isElectron } from "~/env";
 import { LocalWorkspaceSidebarSection } from "./t3team-LocalWorkspaceSidebarSection";
+import { ProjectSidebarHeader } from "./t3team-ProjectSidebarHeader";
 import { ProjectSidebarProjectsSection } from "./t3team-ProjectSidebarProjectsSection";
 import type { TicketViewMode } from "./t3team-projectSidebarShared";
 import type { ProjectSidebarProps } from "./t3team-projectSidebarTypes";
@@ -79,19 +76,10 @@ export function ProjectSidebarLayout({
 }: ProjectSidebarLayoutProps) {
   const appearance = useT3TeamPackAppearance();
   const appName = appearance?.labels?.appName ?? APP_DISPLAY_NAME;
-  const sidebarHeaderClassName = isElectron
-    ? "drag-region h-[52px] flex-row items-center gap-2 px-4 py-0 pl-[90px] wco:h-[env(titlebar-area-height)] wco:pl-[calc(env(titlebar-area-x)+1em)]"
-    : "gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3";
 
   return (
     <>
-      <SidebarHeader className={sidebarHeaderClassName}>
-        <div className="flex w-full min-w-0 items-center gap-2">
-          <SidebarTrigger className="shrink-0 md:hidden" />
-          <T3TeamPackBrandImage brand={appearance?.brand} kind="mark" className="size-5 shrink-0" />
-          <span className="truncate text-sm font-semibold">{appName}</span>
-        </div>
-      </SidebarHeader>
+      <ProjectSidebarHeader appearance={appearance} appName={appName} />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -101,7 +89,7 @@ export function ProjectSidebarLayout({
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     size="sm"
-                    className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground focus-visible:ring-0"
+                    className="gap-2 px-2 py-1.5 text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-0"
                     onClick={onOpenSearch}
                   >
                     <SearchIcon className="size-3.5" />
@@ -173,7 +161,7 @@ export function ProjectSidebarLayout({
             <SidebarMenuItem className="flex items-center gap-1">
               <SidebarMenuButton
                 size="sm"
-                className="min-w-0 flex-1 gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                className="min-w-0 flex-1 gap-2 px-2 py-1.5 text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
                 onClick={onOpenSettings}
                 disabled={!onOpenSettings}
                 aria-disabled={!onOpenSettings}

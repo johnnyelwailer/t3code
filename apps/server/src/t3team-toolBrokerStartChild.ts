@@ -21,6 +21,7 @@ import {
 import {
   appendStartChildHandoffActivities,
   buildChildKickoffText,
+  buildChildKickoffTurnCommand,
   resolveStartChildHandoffPlacement,
 } from "./t3team-toolBrokerStartChildHandoff.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
@@ -162,22 +163,19 @@ export function makeStartChildThread(input: {
       if (args.kickoffPrompt) {
         const kickoffCreatedAt = DateTime.formatIso(yield* DateTime.now);
         const startResult = yield* input.orchestration
-          .dispatch({
-            type: "thread.turn.start",
-            commandId: CommandId.make(`server:t3team:start-child:kickoff:${t3teamRandomUUID()}`),
-            threadId: childThreadId,
-            message: {
-              messageId: MessageId.make(t3teamRandomUUID()),
-              role: "user",
+          .dispatch(
+            buildChildKickoffTurnCommand({
+              childThreadId,
+              commandId: `server:t3team:start-child:kickoff:${t3teamRandomUUID()}`,
+              messageId: t3teamRandomUUID(),
               text: buildChildKickoffText(thread, args.kickoffPrompt),
-              attachments: [],
-            },
-            modelSelection,
-            titleSeed: args.name,
-            runtimeMode: thread.runtimeMode,
-            interactionMode,
-            createdAt: kickoffCreatedAt,
-          })
+              modelSelection,
+              titleSeed: args.name,
+              runtimeMode: thread.runtimeMode,
+              interactionMode,
+              createdAt: kickoffCreatedAt,
+            }),
+          )
           .pipe(Effect.result);
 
         if (startResult._tag === "Success") {

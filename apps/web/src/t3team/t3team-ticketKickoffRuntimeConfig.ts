@@ -1,5 +1,5 @@
 import type { RuntimeMode } from "@t3tools/contracts";
-import { LockIcon, LockOpenIcon, PenLineIcon } from "lucide-react";
+import { LockIcon, LockOpenIcon, PenLineIcon, SparklesIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type RuntimeModeOption = {
@@ -20,6 +20,11 @@ export const runtimeModeConfig: RuntimeModeConfig = {
     label: "Auto-accept edits",
     description: "Auto-approve edits, ask before other actions.",
     icon: PenLineIcon,
+  },
+  auto: {
+    label: "Auto",
+    description: "An AI reviewer approves routine actions; risky ones still ask.",
+    icon: SparklesIcon,
   },
   "full-access": {
     label: "Full access",

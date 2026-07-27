@@ -55,6 +55,13 @@ import Migration0039 from "./Migrations/t3team-039_WorkflowOrigin.ts";
 import Migration0040 from "./Migrations/t3team-040_ProjectionThreadMessageSequence.ts";
 import Migration0041 from "./Migrations/t3team-041_ProjectionThreadRetention.ts";
 import Migration0042 from "./Migrations/t3team-042_ProjectionThreadChildStatus.ts";
+// Upstream added these as 033/034, but this fork already occupies 33-42. The runner only
+// applies migrations with an id greater than the last applied one, so re-using 33/34 would
+// silently skip them on every existing fork database. They keep their upstream filenames and
+// contents; only the registered id moves. Rule for future syncs: append upstream migrations
+// above the fork's current maximum id instead of renumbering fork migrations.
+import Migration0043 from "./Migrations/033_ProjectionThreadsSettled.ts";
+import Migration0044 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -109,6 +116,8 @@ export const migrationEntries = [
   [40, "ProjectionThreadMessageSequence", Migration0040],
   [41, "ProjectionThreadRetention", Migration0041],
   [42, "ProjectionThreadChildStatus", Migration0042],
+  [43, "ProjectionThreadsSettled", Migration0043],
+  [44, "ProjectionThreadsSnoozed", Migration0044],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

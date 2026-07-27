@@ -170,6 +170,8 @@ export async function tryWorkflowRepair(
                 role: "user",
                 text: prompt,
                 attachments: [],
+                // Marks this as an automated start for decider turn admission.
+                t3teamExt: { author: { kind: "system" } },
               },
               modelSelection: repairModelSelection,
               runtimeMode: input.runtimeMode,
