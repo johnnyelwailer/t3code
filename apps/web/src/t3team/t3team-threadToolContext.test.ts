@@ -116,6 +116,11 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["write"],
         },
         {
+          id: "t3team.widget.show",
+          label: "Show widget",
+          capabilities: ["write"],
+        },
+        {
           id: "t3team.view.read",
           label: "Read view",
           capabilities: ["read"],
