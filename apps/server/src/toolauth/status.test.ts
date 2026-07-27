@@ -65,8 +65,10 @@ const probe = (
   adapter: typeof CLAUDE,
   homeDir: string,
   run: ProcessRunner.ProcessRunner["Service"]["run"],
+  /** Empty by default so tests never inherit the machine's real gateway/API-key vars. */
+  env: NodeJS.ProcessEnv = {},
 ) =>
-  probeStatus(adapter, { homeDir, env: {} }).pipe(
+  probeStatus(adapter, { homeDir, env }).pipe(
     Effect.provideService(ProcessRunner.ProcessRunner, stubProcessRunner(run)),
   );
 
@@ -226,14 +228,58 @@ it.layer(NodeServices.layer)("toolauth status probe", (it) => {
     );
   });
 
+  describe("a non-OAuth path counts as usable — don't nag someone with nothing to fix", () => {
+    it.effect("ANTHROPIC_BASE_URL set: loggedIn:false is reported as connected, not idle", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          // The exact live situation: the CLI is pointed at a gateway, holds no
+          // OAuth credential, and the provider is healthy and serving models.
+          const state = yield* probe(
+            CLAUDE,
+            homeDir,
+            () => okTextResult('{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty"}'),
+            { ANTHROPIC_BASE_URL: "https://gateway.example.invalid" },
+          );
+          expect(state.phase).toBe("connected");
+          expect(state.message).toContain("ANTHROPIC_BASE_URL");
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+
+    it.effect("an empty env var does not count as a usable non-OAuth path", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          const state = yield* probe(
+            CLAUDE,
+            homeDir,
+            () => okTextResult('{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty"}'),
+            { ANTHROPIC_BASE_URL: "   " },
+          );
+          expect(state.phase).toBe("idle");
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+  });
+
   describe("Codex — verbatim probe output", () => {
-    it.effect('"Logged in using ChatGPT" reports connected with the account label', () =>
+    it.effect('"Logged in using ChatGPT" reports connected, and NOT "ChatGPT" as an account', () =>
       Effect.gen(function* () {
         const homeDir = makeTempHome();
         try {
           const state = yield* probe(CODEX, homeDir, () => okTextResult("Logged in using ChatGPT"));
           expect(state.phase).toBe("connected");
-          expect(state.account).toBe("ChatGPT");
+          // "ChatGPT" is the auth METHOD, not an account name. Capturing it
+          // rendered "Signed in as ChatGPT" in the UI — the same mislabeling
+          // already removed for Claude's authMethod/apiProvider. A plain
+          // "Connected" is the honest rendering.
+          expect(state.account).toBeUndefined();
+          expect(state.organization).toBeUndefined();
         } finally {
           removeTempHome(homeDir);
         }

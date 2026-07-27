@@ -93,6 +93,18 @@ export interface ToolAuthStatusConfig {
   /** Same idea as `account`, for an organization/workspace label. */
   organization?: RegExp;
   /**
+   * Environment variables that make this CLI usable WITHOUT an interactive
+   * sign-in — a gateway base URL, an API key, a pre-issued token.
+   *
+   * Without this, the UI nags users who have nothing to fix. Verified live:
+   * with `ANTHROPIC_BASE_URL` set, `claude auth status --json` reports
+   * `loggedIn:false` while the provider is perfectly healthy and serving
+   * models, because the CLI is pointed at a gateway and holds no OAuth
+   * credential. "No OAuth credential" and "not usable" are different facts,
+   * and only the second one is worth a "Connect" button.
+   */
+  nonOAuthEnvVars?: readonly string[];
+  /**
    * Dot-path into the parsed credential-file JSON where an expiry timestamp
    * lives (epoch seconds, epoch ms, or an ISO string — `status.ts` normalizes
    * all three), for tools that report one at all. Reads for expiry metadata

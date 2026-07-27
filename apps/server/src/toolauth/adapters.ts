@@ -84,6 +84,10 @@ export const CLAUDE: ToolAuthAdapter = {
     // UNVERIFIED guess at the credential file's own shape (irrelevant on this
     // macOS machine, where the credential lives in the Keychain instead).
     credentialExpiryPath: "expiresAt",
+    // VERIFIED live: with ANTHROPIC_BASE_URL set, `claude auth status --json`
+    // reports loggedIn:false while the Claude provider is healthy and serving
+    // models. Signing in would fix nothing, so don't ask.
+    nonOAuthEnvVars: ["ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
   },
   // ~/.claude holds the credential, settings and history. CLAUDE_CONFIG_DIR can
   // relocate it if home is not on the volume.
@@ -116,10 +120,14 @@ export const CODEX: ToolAuthAdapter = {
       if (/not logged in/i.test(out)) return "idle";
       return "idle";
     },
-    // VERIFIED shape ("Logged in using ChatGPT"); which providers besides
-    // "ChatGPT" it can print is UNVERIFIED.
-    account: /logged in using (.+)/i,
+    // Deliberately NO `account` mapping. `codex login status` prints "Logged in
+    // using ChatGPT" — verified live — and "ChatGPT" is the auth *method*, not
+    // an account name. Capturing it here rendered "Signed in as ChatGPT" in the
+    // UI, which is the same mislabeling we already removed once for Claude's
+    // authMethod/apiProvider. The card degrades to a plain "Connected", which
+    // is true; a real account would need output that actually names one.
     // Codex refreshes its own token silently; no expiry is surfaced here.
+    nonOAuthEnvVars: ["OPENAI_API_KEY", "CODEX_ACCESS_TOKEN"],
   },
   persistPaths: [".codex"],
 };

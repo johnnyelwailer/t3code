@@ -149,6 +149,26 @@ export const probeStatus = Effect.fn("toolauth.probeStatus")(function* (
     phase = Option.isSome(credentialFileText) ? "connected" : "idle";
   }
 
+  // "No OAuth credential" is not the same as "not usable". A gateway base URL,
+  // an API key or a pre-issued token makes the CLI work with no sign-in at all,
+  // and asking such a user to Connect offers them nothing to fix.
+  //
+  // Verified live: with ANTHROPIC_BASE_URL set, `claude auth status --json`
+  // reports loggedIn:false while the Claude provider is healthy and serving
+  // models. Only `idle` is reclaimed here — a genuinely `expired` or `failed`
+  // OAuth session still deserves to be surfaced as-is.
+  const nonOAuthEnvVar = adapter.status.nonOAuthEnvVars?.find((name) => {
+    const value = options.env[name];
+    return typeof value === "string" && value.trim().length > 0;
+  });
+  if (phase === "idle" && nonOAuthEnvVar !== undefined) {
+    return {
+      tool: adapter.tool,
+      phase: "connected",
+      message: `Using ${nonOAuthEnvVar} — no sign-in needed.`,
+    };
+  }
+
   // account/organization are kept SEPARATE (never joined into one string):
   // they are independent facts the CLI may or may not report, and mashing
   // them together is exactly how an unrelated field (authMethod, apiProvider,
