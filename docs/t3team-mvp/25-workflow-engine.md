@@ -350,31 +350,36 @@ is the point.
 > (AsyncLocalStorage) + `withBodyApi` bind the run's surface; `t3team-sdk.engineApi.ts` exports the
 > verbs and reads it — the same mechanism `defineTool` handlers already used. Per-run VALUES are
 > accessors (`getArgs`/`getThread`/`getBudget`/`getScripts`/`getTools`), because a module-level import
-> cannot be a per-run binding. `t3team-sdk.esmBody.ts` imports the module for real and takes the
-> default export; `deriveWorkflowShape` and the determinism/capability audits resolve verbs by
-> imported binding (`t3team-sdk.workflowShapeBindings.ts`), so `import { agent as ask }` is seen and a
-> local named `agent` is not. All nine Nexplore recipes are converted, and
+> cannot be a per-run binding. `deriveWorkflowShape` and the determinism/capability audits resolve
+> verbs by imported binding (`t3team-sdk.workflowShapeBindings.ts`), so `import { agent as ask }` is
+> seen and a local named `agent` is not. All nine Nexplore recipes are converted, and
 > `npm run typecheck:recipes` gates the distribution's `npm test`: bodies typecheck, which was the
 > whole point.
 >
-> **Two body shapes are the END STATE, not a transition.** The loader branches on
-> `isEsmWorkflowBody`, and both paths stay:
+> **ONE body shape and ONE execution path.** A body is a module: imports, `meta`, then a
+> default-exported async function. It runs in the vm, like every body always has.
 >
-> - **Repo-authored** bodies (pack recipes, project recipes in a workspace where `@t3team/sdk`
->   resolves) use imports and are typechecked.
-> - **Ephemeral, agent-authored** bodies keep the injected globals. Their source is written under
->   `.t3team-runs/<runId>/workflow.ts` inside an arbitrary user workspace, which has no `node_modules`
->   to resolve a bare `@t3team/sdk` specifier from — an import there is unresolvable, so injection is
->   what makes agent-authored orchestration work at all. The agent manual says so explicitly.
+> An earlier revision ran module-shaped bodies through a real `import()` and kept the vm for legacy
+> ones. That was wrong in the one place it matters: `import()` cannot intercept
+> `Date`/`Math.random`/`crypto.randomUUID`, so a resumed run re-read the live clock instead of
+> replaying the journal — the opposite of "ambient nondeterminism is journaled, not banned". The vm is
+> what makes that guarantee, so the vm is what stayed.
 >
-> Dropping the vm path would therefore break both agent-authored runs and the resume of any run
-> suspended with a legacy-shaped source (the engine re-reads that file on every resume) — the same
-> replay-stability argument that keeps journal `refId` strings frozen across renames.
+> The module shape needs nothing else from the loader, because the loader already blanks every import
+> and injects the engine surface. It needs only a call to the default export
+> (`findDefaultExportedFunctionName`; a default export that is not a named function is a load error
+> that names the fix) plus the five value accessors on that same injected surface.
 >
-> One real difference to know about: the vm path injects journaled `Date`/`Math`/`crypto`, and a real
-> ESM import cannot. For ESM bodies the determinism SCAN is the enforcement instead of the binding.
-> The scan's import rule is body-shape aware for the same reason — `@t3team/sdk` is the sanctioned
-> import in an ESM body, and the identical line in a legacy body would leave the binding `undefined`.
+> This also dissolves the shape split previously documented here. Ephemeral agent-authored source is
+> written under `.t3team-runs/<runId>/workflow.ts` in a workspace with no `node_modules`, so an import
+> there used to be called unresolvable — but a blanked import never resolves at all, so it costs
+> nothing, and the agent manual now teaches the same shape the repo uses.
+>
+> Legacy top-level-`return` bodies still EXECUTE unchanged: with no default export the loader appends
+> no call and the IIFE runs top-to-bottom as before. That keeps the resume of any run suspended with a
+> legacy-shaped source working (the engine re-reads that file on every resume) — the same
+> replay-stability argument that keeps journal `refId` strings frozen across renames. What is gone is
+> legacy AUTHORING, not legacy execution.
 
 ### LLM and orchestration
 
