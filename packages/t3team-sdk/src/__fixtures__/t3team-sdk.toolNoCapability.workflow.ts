@@ -2,6 +2,7 @@
 // demo tools' group in meta.capabilities, so the call site throws PermissionDeniedError —
 // even when the run options register the tool.
 import { Schema } from "effect";
+import { getArgs, getTools } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({
   prId: Schema.String,
@@ -18,8 +19,13 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const tools = getTools();
 
-const approval = await tools.demo.approve({ prId: input.prId });
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { approved: approval.approved };
+  const approval = await tools.demo.approve({ prId: input.prId });
+
+  return { approved: approval.approved };
+}

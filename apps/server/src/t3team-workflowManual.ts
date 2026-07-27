@@ -23,47 +23,16 @@
  * context every turn. The exact syntax is discovered on demand (it rides the
  * failure result via {@link T3TEAM_WORKFLOW_MANUAL}).
  */
+// The timers topic is its own help entry (`t3team_help("timers")`) and its own module, so this
+// file stays the single orchestration manual rather than two manuals sharing a file.
+export { T3TEAM_TIMERS_MANUAL } from "./t3team-workflowManualTimers.ts";
+
 export const T3TEAM_WORKFLOW_TAGLINE =
   "Agent orchestration: run a structure that fans work out to several agents (parallel " +
   "or in sequence), enforces result contracts, and offloads trivial/known/repeatable steps " +
   "to scripts and tools so agents don't burn tokens on them. Use for complex or long work; " +
   "for a simple single-agent task, just do it directly — do not write one of these. For the " +
   'authoring syntax, call t3team_help("agent-orchestration") first.';
-
-export const T3TEAM_TIMERS_MANUAL = `DURABLE TIMERS — t3team agent-orchestration scheduling.
-
-Use the injected waitUntil(epochMs) and now() globals. Add the schedule capability.
-Do not import timer libraries, poll, use setTimeout, run a shell sleep, or rely on external cron.
-
-One-shot wait (short waits of seconds show "Scheduled" / a due time in the orchestration UI):
-
-  export const meta = {
-    name: 'short-reminder',
-    capabilities: ['schedule', 'user'],
-  } as const
-  const SECOND = 1000
-  await waitUntil(now() + 30 * SECOND)
-  await thread.notifyUser('Thirty seconds passed.')
-  return { reminded: true }
-
-Recurring pattern (the orchestration loop is the schedule):
-
-  export const meta = {
-    name: 'daily-review',
-    capabilities: ['schedule', 'user'],
-  } as const
-  const DAY = 24 * 60 * 60 * 1000
-  while (true) {
-    await waitUntil(now() + DAY)
-    const result = await agent('Review current risks.', { label: 'Review daily risks' })
-    await thread.notifyUser(result)
-  }
-
-waitUntil persists the run as sleeping with its wake deadline. It releases active agent work,
-survives server restarts, and resumes immediately during restart recovery when the deadline is
-already overdue. now() is journaled, so replay derives the same deadline. Seconds, minutes,
-hours, and days use the same API. The UI may round very short remaining times to "Due now";
-that is display rounding, not polling or a lost timer.`;
 
 /**
  * The full manual. Kept compact but complete enough that a small model can
@@ -95,15 +64,19 @@ findings", "for each of these N modules spawn an agent to analyze it, then rank 
 results", "research X across several sub-questions, dedupe, verify".
 
 FORMAT (the 'source' you pass)
-It is an orchestration BODY in TypeScript (file format: .workflow.ts). The engine injects
-the orchestration globals.
-Import only { Schema } from "effect" when you need typed agent results or a structured
-user decision. Do not import Node APIs. The meta export must precede executable code;
-after that, the body runs top-to-bottom.
-Use the injected globals here, NOT imports from "@t3team/sdk". Your source is written into
-the run directory inside the user's workspace, which has no node_modules to resolve that
-package from — an import would be unresolvable. (Repo-authored recipe bodies DO import it:
-they sit in a workspace where it resolves, and are typechecked. Same engine, two shapes.)
+It is an orchestration MODULE in TypeScript (file format: .workflow.ts): imports, a 'meta'
+export, then the logic in a default-exported async function. Ordinary TypeScript — no injected
+identifiers to memorize.
+
+  import { agent, parallel, phase } from "@t3team/sdk"
+
+The loader erases every import and binds those names from the run itself, so an import costs
+nothing at runtime and needs no node_modules in the run directory — the same source shape works
+whether you pass it inline or it lives in a repo (where it also typechecks). Import { Schema }
+from "effect" for typed agent results or a structured user decision. No Node APIs.
+
+'meta' must precede the function. Per-run VALUES are accessors, because a module-level import
+cannot be a per-run binding: getArgs(), getThread(), getBudget(), getScripts(), getTools().
 
   export const meta = {
     name: 'review-change',
@@ -111,23 +84,24 @@ they sit in a workspace where it resolves, and are typechecked. Same engine, two
     phases: [{ title: 'Review' }, { title: 'Synthesize' }],
   }
 
-  phase('Review')
-  const dims = ['correctness', 'security', 'performance']
-  const findings = await parallel(
-    dims.map((d) => () => agent(
-      \`Review the change for \${d} issues. List concrete findings.\`,
-      { label: \`Review \${d}\` },
-    ))
-  )
+  export default async function run() {
+    phase('Review')
+    const dims = ['correctness', 'security', 'performance']
+    const findings = await parallel(
+      dims.map((d) => () => agent(
+        \`Review the change for \${d} issues. List concrete findings.\`,
+        { label: \`Review \${d}\` },
+      ))
+    )
 
-  phase('Synthesize')
-  const report = await agent(
-    \`Merge these reviews into one ranked report:\\n\${findings.filter(Boolean).join('\\n---\\n')}\`,
-    { label: 'Synthesize reviews' },
-  )
-  return report
+    phase('Synthesize')
+    return await agent(
+      \`Merge these reviews into one ranked report:\\n\${findings.filter(Boolean).join('\\n---\\n')}\`,
+      { label: 'Synthesize reviews' },
+    )
+  }
 
-INJECTED GLOBALS (no imports; call them directly)
+THE ENGINE API (import the ones you use from "@t3team/sdk")
 - agent(prompt, opts?)        one-shot agent on a fresh isolated thread; returns its text,
                               or a validated value with opts.schema. opts.model can pick a
                               different provider/model per call. Always pass a concise,
@@ -137,8 +111,8 @@ INJECTED GLOBALS (no imports; call them directly)
                               retention: 'retained' only when it must remain sidebar-visible.
                               Then t.askAgent(prompt,opts?), t.notifyAgent(msg),
                               t.askUser(question,opts?), t.notifyUser(msg).
-- thread                      the chat this orchestration was launched from (undefined if
-                              headless).
+- getThread()                 the chat this orchestration was launched from (undefined if
+                              headless). Below, 'thread' means its result.
 - thread.showWidget({ title, widgetCode, format? }) renders sandboxed inline HTML/SVG through
                               the typed widget attachment pipeline. Requires 'user'. Use this
                               for interactive/rich UI. Trusted notifyUser HTML is automatically
@@ -147,13 +121,13 @@ INJECTED GLOBALS (no imports; call them directly)
 - pipeline(items, ...stages)  per-item fan-out through stages, no barrier between them.
 - phase(title)                start a progress group (title should match a meta.phases title).
 - log(message)                emit a narrator line.
-- tools.<group>.<name>(args)  call a host tool (group must be listed in meta.capabilities).
+- getTools().<group>.<name>(args) call a host tool (group must be listed in meta.capabilities).
 - now()                      journaled epoch milliseconds; replay returns the same value.
 - waitUntil(epochMs)         durable scheduler wait. Requires capabilities: ['schedule'].
                               The run is persisted as sleeping with a wake time, survives
                               server restarts, and catches up immediately when an overdue
                               deadline is found after restart.
-- args                        the orchestration input (validated against meta.inputs if
+- getArgs()                   the orchestration input (validated against meta.inputs if
                               declared).
 
 DURABLE TIMERS AND ROUTINES
@@ -168,10 +142,12 @@ One-off reminder:
     name: 'review-reminder',
     capabilities: ['schedule', 'user'],
   } as const
-  const HOUR = 60 * 60 * 1000
-  await waitUntil(now() + 3 * HOUR)
-  await thread.notifyUser('The review window is due.')
-  return { reminded: true }
+  export default async function run() {
+    const HOUR = 60 * 60 * 1000
+    await waitUntil(now() + 3 * HOUR)
+    await getThread().notifyUser('The review window is due.')
+    return { reminded: true }
+  }
 
 Recurring interval pattern (the loop is the schedule):
 
@@ -179,14 +155,16 @@ Recurring interval pattern (the loop is the schedule):
     name: 'daily-check',
     capabilities: ['schedule', 'user'],
   } as const
-  const DAY = 24 * 60 * 60 * 1000
-  while (true) {
-    await waitUntil(now() + DAY)
-    const result = await agent(
-      'Check the current state and report only actionable changes.',
-      { label: 'Check daily changes' },
-    )
-    await thread.notifyUser(result)
+  export default async function run() {
+    const DAY = 24 * 60 * 60 * 1000
+    while (true) {
+      await waitUntil(now() + DAY)
+      const result = await agent(
+        'Check the current state and report only actionable changes.',
+        { label: 'Check daily changes' },
+      )
+      await getThread().notifyUser(result)
+    }
   }
 
 Each now() value and deadline is journaled, so replay is deterministic. A restart does not
@@ -196,8 +174,9 @@ calendar schedule, compute the next epoch deadline with replay-safe pure arithme
 then pass it to waitUntil.
 
 RULES
-- No Node APIs (no fs, path, process) and no require(). Use the globals above.
-- 'meta' must be the first exported declaration and a plain literal (no function calls in it).
+- No Node APIs (no fs, path, process) and no require(). Import the API above from "@t3team/sdk".
+- 'meta' must precede the default-exported function and be a plain literal (no calls in it).
+- Return the run's result from that function.
 - Prefer parallel()/pipeline() for fan-out; use phase()/log() so progress is visible.
 - For human input, add capabilities: ['user']. Prefer thread.askUser(...) so the decision
   appears in the launch thread. A spawned child's askUser is also routed to that launch thread.
@@ -212,7 +191,9 @@ RULES
     import { Schema } from "effect"
     export const meta = { name: 'approve', capabilities: ['user'] } as const
     const Choice = Schema.Literals(['approve', 'revise'])
-    const decision = await thread.askUser('Choose:', { schema: Choice, label: 'Choose action' })
+    export default async function run() {
+      return await getThread().askUser('Choose:', { schema: Choice, label: 'Choose action' })
+    }
   An arbitrary options array is not supported; use a Schema so the UI can render controls.
 - Return the final result at the end.
 

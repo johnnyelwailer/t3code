@@ -2,6 +2,7 @@
 // (returns a validated structured value). Both are journaled (kind "agent"); on resume the
 // recorded results replay and the LLM dispatcher is NOT re-invoked.
 import { Schema } from "effect";
+import { agent, getArgs } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ topic: Schema.String });
 
@@ -17,14 +18,18 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
 
-const summary = await agent(`summarize ${input.topic}`);
+  const input = Schema.decodeSync(Inputs)(args);
 
-const Sentiment = Schema.Struct({ sentiment: Schema.String });
-const classified = await agent(`classify ${input.topic}`, {
-  label: "Classify cat sentiment",
-  schema: Sentiment,
-});
+  const summary = await agent(`summarize ${input.topic}`);
 
-return { summary, sentiment: classified.sentiment };
+  const Sentiment = Schema.Struct({ sentiment: Schema.String });
+  const classified = await agent(`classify ${input.topic}`, {
+    label: "Classify cat sentiment",
+    schema: Sentiment,
+  });
+
+  return { summary, sentiment: classified.sentiment };
+}

@@ -18,7 +18,9 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const stamp = Date.now();
-const d = new Date();
+export default async function run() {
+  const stamp = Date.now();
+  const d = new Date();
 
-return { stamp, iso: d.toISOString(), viaNew: d.getTime() };
+  return { stamp, iso: d.toISOString(), viaNew: d.getTime() };
+}

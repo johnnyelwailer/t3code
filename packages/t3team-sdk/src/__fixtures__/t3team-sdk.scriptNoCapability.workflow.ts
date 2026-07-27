@@ -2,6 +2,7 @@
 // `"script"` engine capability, so the loader binds an EMPTY `scripts.*` tree and the call
 // fails — even when the run options register the script.
 import { Schema } from "effect";
+import { getArgs, getScripts } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({
   name: Schema.String,
@@ -18,8 +19,13 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const scripts = getScripts();
 
-const greeting = await scripts.greet({ name: input.name });
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { greeting: greeting.text };
+  const greeting = await scripts.greet({ name: input.name });
+
+  return { greeting: greeting.text };
+}

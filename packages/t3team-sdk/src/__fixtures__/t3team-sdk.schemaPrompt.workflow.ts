@@ -4,6 +4,7 @@
 // returns a decodable reply. The paired test resolves the turn by echoing the example the
 // runtime put in the prompt; if the description were missing, the ask could not be answered.
 import { Schema } from "effect";
+import { agent, getArgs } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ gate: Schema.String });
 
@@ -23,11 +24,15 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
 
-const judged = await agent(`Judge gate ${input.gate}`, {
-  label: "Judge gate",
-  schema: Verdict,
-});
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { verdict: judged.verdict, score: judged.score };
+  const judged = await agent(`Judge gate ${input.gate}`, {
+    label: "Judge gate",
+    schema: Verdict,
+  });
+
+  return { verdict: judged.verdict, score: judged.score };
+}

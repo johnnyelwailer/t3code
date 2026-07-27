@@ -13,8 +13,10 @@ export const meta = {
   description: "Fixture with every static determinism finding.",
 } as const;
 
-const deadline = setTimeout(() => helper(attempts), 1000);
-const secret = process.env.TOKEN;
-const page = await fetch("https://example.test/data");
+export default async function run() {
+  const deadline = setTimeout(() => helper(attempts), 1000);
+  const secret = process.env.TOKEN;
+  const page = await fetch("https://example.test/data");
 
-return { deadline, secret, page };
+  return { deadline, secret, page };
+}

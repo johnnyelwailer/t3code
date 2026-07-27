@@ -3,6 +3,7 @@
 // primitive (seq 1), then thread.create (seq 2) and thread.turn (seq 3) carry the winning
 // selection. On resume the recorded choice replays — the registry is never re-probed.
 import { Schema } from "effect";
+import { agent } from "@t3team/sdk";
 
 export const Outputs = Schema.Struct({ verdict: Schema.String });
 
@@ -12,9 +13,11 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const verdict = await agent("judge this gate", {
-  label: "Judge gate",
-  models: [{ instanceId: "nexplore", model: "minimax-m2.7" }, { instanceId: "claudeAgent" }],
-});
+export default async function run() {
+  const verdict = await agent("judge this gate", {
+    label: "Judge gate",
+    models: [{ instanceId: "nexplore", model: "minimax-m2.7" }, { instanceId: "claudeAgent" }],
+  });
 
-return { verdict };
+  return { verdict };
+}

@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { spawnThread } from "@t3team/sdk";
 
 export const Outputs = Schema.Struct({ answer: Schema.String });
 
@@ -9,6 +10,8 @@ export const meta = {
   capabilities: ["user"],
 } as const;
 
-const child = spawnThread({ name: "worker" });
-const answer = await child.askUser("Approve child work?", { schema: Schema.String });
-return { answer };
+export default async function run() {
+  const child = spawnThread({ name: "worker" });
+  const answer = await child.askUser("Approve child work?", { schema: Schema.String });
+  return { answer };
+}

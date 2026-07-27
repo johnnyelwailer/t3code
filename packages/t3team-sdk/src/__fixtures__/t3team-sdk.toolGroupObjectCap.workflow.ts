@@ -3,6 +3,7 @@
 // inline literal — or the plain group-id string — is how a group declaration survives static
 // meta extraction) and calls a tool of that group.
 import { Schema } from "effect";
+import { getArgs, getTools } from "@t3team/sdk";
 
 const demoRead = {
   kind: "tool-group",
@@ -27,8 +28,13 @@ export const meta = {
   capabilities: [demoRead],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const tools = getTools();
 
-const approval = await tools.demo.approve({ prId: input.prId });
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { approved: approval.approved };
+  const approval = await tools.demo.approve({ prId: input.prId });
+
+  return { approved: approval.approved };
+}
