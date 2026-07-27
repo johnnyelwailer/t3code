@@ -29,6 +29,7 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import { ServerConfig } from "./config.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
@@ -46,6 +47,8 @@ import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts
 import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScripts.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
+import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
+import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
@@ -59,6 +62,17 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     const orchestration = yield* OrchestrationEngineService;
     const serverConfig = yield* ServerConfig;
     const scheduler = yield* T3TeamWorkflowScheduler;
+    // Restored runs must keep the same `getTools()` tree they launched with: a body replaying a
+    // journaled host-tool call still evaluates `getTools().t3team…` before the journal is read,
+    // so dropping the refs here would break every restored run at that expression.
+    const toolBroker = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamToolBroker));
+    const hostToolClientFor = (launchThreadId: string | null) =>
+      toolBroker === undefined
+        ? undefined
+        : makeT3TeamWorkflowHostDraftToolClient({
+            broker: toolBroker,
+            launchThreadId: launchThreadId ?? undefined,
+          });
 
     const suspended = yield* repo.listByStatus({ status: "suspended" });
     const sleeping = yield* repo.listByStatus({ status: "sleeping" });
@@ -115,11 +129,13 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         dispatch,
         newId: () => t3teamRandomUUID(),
       });
+      const hostToolClient = hostToolClientFor(run.launchThreadId);
       createWorkflowRunController({
         runId: run.runId,
         workflowPath: run.workflowPath,
         args: run.args,
         ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
+        ...(hostToolClient === undefined ? {} : { hostToolClient }),
         runsRoot,
         launchThreadId: run.launchThreadId ?? undefined,
         projectId: run.projectId,
@@ -161,6 +177,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         ),
       );
       const scripts = yield* resolveRehydratedWorkflowScripts(run);
+      const hostToolClient = hostToolClientFor(run.launchThreadId);
       yield* Effect.promise(async () => {
         if (!(await lifecycle.recordActive())) return;
         await launchWorkflowRecipe({
@@ -168,6 +185,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
           workflowPath: run.workflowPath,
           args: run.args,
           ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
+          ...(hostToolClient === undefined ? {} : { hostToolClient }),
           runsRoot,
           launchThreadId: run.launchThreadId ?? undefined,
           projectId: run.projectId,
