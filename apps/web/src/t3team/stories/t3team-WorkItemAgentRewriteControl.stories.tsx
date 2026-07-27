@@ -18,6 +18,7 @@ const BASE_PROPS: UseWorkItemAgentRewriteInput = {
   summary: "Camera resets on reload",
   githubActivityItems: [],
   hasPendingDescriptionDraft: false,
+  hasLoadedWorkItem: true,
   // Idle story only demonstrates the at-rest button; kickoff navigation has nothing to show here.
   onKickoffThread: () => {},
 };
@@ -63,6 +64,12 @@ export const InFlight: Story = {
 
 export const DisabledDraftPending: Story = {
   render: () => <WorkItemAgentRewriteControl {...BASE_PROPS} hasPendingDescriptionDraft />,
+};
+
+/** The work item itself hasn't loaded (or failed to) — disabled rather than sending a prompt built
+ * from empty data. */
+export const DisabledNotLoaded: Story = {
+  render: () => <WorkItemAgentRewriteControl {...BASE_PROPS} hasLoadedWorkItem={false} />,
 };
 
 export const ErrorState: Story = {

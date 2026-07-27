@@ -63,6 +63,7 @@ function baseProps(overrides?: Partial<UseWorkItemAgentRewriteInput>): UseWorkIt
     descriptionText: "Current text.",
     githubActivityItems: [],
     hasPendingDescriptionDraft: false,
+    hasLoadedWorkItem: true,
     onKickoffThread: () => {},
     ...overrides,
   };
@@ -116,6 +117,37 @@ describe("useWorkItemAgentRewrite", () => {
     expect(input?.ticketDisplayId).toBe("PROJ-42");
     expect(input?.kickoffMessage).toContain("PROJ-42");
     expect(input?.kickoffMessage).toContain("t3team.work_item.description.draft_update");
+  });
+
+  it("does not fire a second kickoff when start() is called again right after a kickoff launch", async () => {
+    const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
+    harness = mount(baseProps({ onKickoffThread }));
+    await harness.rerender(baseProps({ onKickoffThread }));
+
+    act(() => {
+      harness!.latest.result?.start();
+    });
+    expect(onKickoffThread).toHaveBeenCalledTimes(1);
+    expect(harness!.latest.result?.isDisabled).toBe(true);
+
+    // A second click before navigation has unmounted the control — the latch must hold.
+    act(() => {
+      harness!.latest.result?.start();
+    });
+    expect(onKickoffThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start when the work item has not loaded", async () => {
+    const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
+    harness = mount(baseProps({ onKickoffThread, hasLoadedWorkItem: false }));
+    await harness.rerender(baseProps({ onKickoffThread, hasLoadedWorkItem: false }));
+
+    expect(harness!.latest.result?.isDisabled).toBe(true);
+
+    act(() => {
+      harness!.latest.result?.start();
+    });
+    expect(onKickoffThread).not.toHaveBeenCalled();
   });
 
   it("surfaces an error and clears isStarting when sendT3TeamThreadTurn rejects", async () => {

@@ -124,6 +124,10 @@ export function useWorkItemAgentRewrite(input: UseWorkItemAgentRewriteInput): {
       return;
     }
 
+    // Latched before calling out: `onKickoffThread` navigates synchronously but reports nothing back,
+    // so this is the only signal that stops a second click from creating a second kickoff thread for
+    // the same ticket.
+    setKickoffLaunched(true);
     const launchConfig = createDefaultT3TeamKickoffLaunchConfig();
     onKickoffThread({
       projectId,
@@ -143,7 +147,11 @@ export function useWorkItemAgentRewrite(input: UseWorkItemAgentRewriteInput): {
     backend,
     descriptionText,
     githubActivityItems,
+    hasLoadedWorkItem,
+    hasPendingDescriptionDraft,
     issueIdOrKey,
+    kickoffLaunched,
+    isStarting,
     onKickoffThread,
     projectId,
     summary,
@@ -151,5 +159,10 @@ export function useWorkItemAgentRewrite(input: UseWorkItemAgentRewriteInput): {
     ticketId,
   ]);
 
-  return { start, isStarting, error, isDisabled: isStarting || hasPendingDescriptionDraft };
+  return {
+    start,
+    isStarting,
+    error,
+    isDisabled: isStarting || hasPendingDescriptionDraft || kickoffLaunched || !hasLoadedWorkItem,
+  };
 }

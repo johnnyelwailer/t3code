@@ -71,6 +71,9 @@ export function TicketDetailView({
   // kept in sync rather than recomputed differently, since both target the same ticket.
   const resolvedTicketId = view.ticket?.id ?? view.canonicalTicketId;
   const descriptionDrafts = useWorkItemDrafts({ issueIdOrKey: view.fieldModel.key });
+  // `view.title` falls back to the literal string "Ticket" once nothing has loaded — real ticket/
+  // snapshot data or nothing, never that fallback, so the prompt never claims a title it doesn't have.
+  const realTicketTitle = view.ticket?.ref.title ?? view.snapshot?.ref.title;
   const descriptionAction = (
     <WorkItemAgentRewriteControl
       backend={view.backend}
@@ -81,11 +84,12 @@ export function TicketDetailView({
       {...(view.fieldModel.descriptionText
         ? { descriptionText: view.fieldModel.descriptionText }
         : {})}
-      summary={view.title}
+      {...(realTicketTitle ? { summary: realTicketTitle } : {})}
       githubActivityItems={view.matchedGitHubActivityItems}
       {...(view.activeThread ? { activeThreadId: view.activeThread.id } : {})}
       onKickoffThread={onKickoffThread}
       hasPendingDescriptionDraft={descriptionDrafts.description !== undefined}
+      hasLoadedWorkItem={Boolean(view.ticket) || Boolean(view.snapshot)}
     />
   );
 
