@@ -62,6 +62,12 @@ author had not thought of yet. Real examples from this codebase:
 and kanban surfaces already do. The backlog is the oldest and most complete surface — assume it has
 already solved your problem, especially for anything about tickets, estimates, assignees or rows.
 
+This applies to **write paths and helpers**, not just components. Calling `backend.updateIssueEstimate`
+directly when `updateProjectBacklogEstimateRemote` exists is the same mistake wearing different
+clothes: that helper derives `estimateMode` from the ticket, and skipping it wrote an hours estimate
+into the story-points field, which Jira rejected. If a `*Remote` / `*Api` wrapper exists for the call
+you are about to make, use it — the wrapper is where the decisions live.
+
 When you find prior art:
 - **Reuse it directly** if its props allow. This is the default.
 - **Extract and share it** if it is nearly right. Extraction is cheap; divergence is not.
