@@ -88,6 +88,7 @@ function useEditableSectionsDemo() {
     | "createSubtask"
     | "listChildIssueTypes"
     | "searchAssignableUsers"
+    | "updateIssueAssignee"
   > = {
     addIssueComment: async ({ body }) => {
       const id = `c${Math.random().toString(36).slice(2, 8)}`;
@@ -144,6 +145,19 @@ function useEditableSectionsDemo() {
       { accountId: "acc-ada", displayName: "Ada Lovelace", emailAddress: "ada@example.test" },
       { accountId: "acc-alan", displayName: "Alan Turing", emailAddress: "alan@example.test" },
     ],
+    // Assigning a child from its own row, not the parent's — resolved by the child's own key.
+    updateIssueAssignee: async ({ issueIdOrKey, assigneeAccountId, assigneeDisplayName }) => {
+      setChildren((current) =>
+        current.map((child) => {
+          if ((child.ref.displayId ?? child.id) !== issueIdOrKey) return child;
+          if (!assigneeAccountId) {
+            const { assignee: _assignee, assigneeAccountId: _accountId, ...rest } = child;
+            return rest;
+          }
+          return { ...child, assignee: assigneeDisplayName ?? "", assigneeAccountId };
+        }),
+      );
+    },
   };
 
   return {
@@ -198,8 +212,9 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** Comment create/edit/delete, issue link create/delete, and child creation — each going through
- * the same backend calls the direct controls and accepted agent drafts both use. */
+/** Comment create/edit/delete, issue link create/delete, child creation, and inline child assignee
+ * picking (click a child row's avatar) — each going through the same backend calls the direct
+ * controls and accepted agent drafts both use. */
 export const Editable: Story = {
   render: () => <EditableSections />,
 };

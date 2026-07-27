@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -69,5 +70,49 @@ describe("WorkItemChildren", () => {
       />,
     );
     expect(markup).toContain("Add child");
+  });
+
+  it("gives each child row an interactive assignee control once the section can write", () => {
+    const backend = {} as never;
+    const markup = renderToStaticMarkup(
+      <WorkItemChildren
+        items={[ticket("1", "To Do")]}
+        backend={backend}
+        accountId="acc-1"
+        externalProjectId="EXT-1"
+        issueIdOrKey="T3T-1"
+        onReload={() => {}}
+      />,
+    );
+    // The chip's own popover trigger, not the read-only avatar `WorkItemIssueRow` falls back to.
+    expect(markup).toContain("data-slot=\"popover-trigger\"");
+  });
+
+  it("leaves the read-only avatar in place when the section cannot write", () => {
+    const markup = renderToStaticMarkup(<WorkItemChildren items={[ticket("1", "To Do")]} />);
+    expect(markup).not.toContain("data-slot=\"popover-trigger\"");
+  });
+
+  it("never nests the assignee control's button inside the row's own open-issue overlay button", () => {
+    const backend = {} as never;
+    const markup = renderToStaticMarkup(
+      <WorkItemChildren
+        items={[ticket("1", "To Do")]}
+        backend={backend}
+        accountId="acc-1"
+        externalProjectId="EXT-1"
+        issueIdOrKey="T3T-1"
+        onReload={() => {}}
+        onOpenTicket={() => {}}
+      />,
+    );
+
+    const host = document.createElement("div");
+    host.innerHTML = markup;
+    const buttons = [...host.querySelectorAll("button")];
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) {
+      expect(button.querySelector("button")).toBeNull();
+    }
   });
 });

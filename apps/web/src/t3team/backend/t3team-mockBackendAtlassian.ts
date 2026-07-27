@@ -2,6 +2,7 @@ import type { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
 import { randomUUID } from "~/t3team/lib/t3team-utils";
 
 import type { T3TeamPollResult, T3TeamPollingBackend } from "./t3team-pollingBackend";
+import type { T3TeamProjectIssuesBackend } from "./t3team-projectIssuesBackend";
 import type {
   AtlassianAssignableUser,
   AtlassianBacklogResponse,
@@ -64,7 +65,7 @@ async function createMockBoardColumnsResponse(): Promise<AtlassianBoardColumnsRe
 export function createMockAtlassianBackendApi(input: {
   mockIntegrationProvider: MockIntegrationProvider;
   toMockPollResult: <T>(value: T) => T3TeamPollResult<T>;
-}): T3TeamPollingBackend["atlassian"] {
+}): T3TeamPollingBackend["atlassian"] & T3TeamProjectIssuesBackend["atlassian"] {
   return {
     getTempoCapacity: async (request) => ({
       configured: false,
@@ -86,6 +87,11 @@ export function createMockAtlassianBackendApi(input: {
     }),
     listProjects: async (account) => input.mockIntegrationProvider.listProjects(account),
     listResources: async (request) => input.mockIntegrationProvider.listResources(request),
+    listProjectIssues: async (request) =>
+      input.mockIntegrationProvider.listResources({
+        account: request.account,
+        externalProjectId: request.externalProjectId,
+      }),
     listBacklog: async (request) =>
       createMockBacklogResponse(input.mockIntegrationProvider, request),
     getBoardColumns: async () => createMockBoardColumnsResponse(),

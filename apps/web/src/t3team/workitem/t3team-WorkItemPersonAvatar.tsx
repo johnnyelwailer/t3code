@@ -104,15 +104,24 @@ export function WorkItemPersonChip({
   readonly className?: string;
 }) {
   return (
+    /*
+      The chip decides for itself whether it has room for a name: below ~5rem of its OWN container it
+      shows the avatar alone. Callers just give it a column and it adapts, rather than each call site
+      repeating breakpoint classes or reaching in to hide the name.
+    */
     <span
-      className={cn("flex min-w-0 items-center gap-1.5", className)}
+      className={cn("@container/person-chip flex min-w-0 items-center gap-1.5", className)}
       title={
         person ? (isCurrentUser ? `${person.displayName} (you)` : person.displayName) : emptyLabel
       }
     >
       <WorkItemPersonAvatar person={person} size={size} isCurrentUser={isCurrentUser} />
       <span
-        className={cn("truncate text-xs", person ? "text-foreground" : "text-muted-foreground")}
+        data-slot="person-name"
+        className={cn(
+          "hidden truncate text-xs @[5rem]/person-chip:block",
+          person ? "text-foreground" : "text-muted-foreground",
+        )}
       >
         {person?.displayName ?? emptyLabel}
       </span>

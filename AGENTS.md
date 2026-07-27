@@ -42,6 +42,34 @@ If a tradeoff is required, choose correctness and robustness over short-term con
 
 ## Maintainability
 
+### ALWAYS check whether the functionality already exists — before writing it
+
+This is the most-violated rule in this repo, and breaking it does not merely duplicate code: the new
+copy is usually **worse than the original**, because the original already absorbed edge cases the
+author had not thought of yet. Real examples from this codebase:
+
+- A child-create form was written collecting only a title, while `ProjectBacklogSubtaskCreateForm`
+  already collected summary + estimate — and the write path had always accepted description and
+  estimate as well. The newer one was the poorer of the two.
+- A comment box was written as a bare `<textarea>` while `TicketKickoffComposer` already reused the
+  Lexical composer with @-mentions.
+- A work item row formatted estimates as `"N pts"`, while `getProjectTicketEstimatePresentation`
+  already resolved hours-vs-story-points from the project's own Jira configuration. The hand-rolled
+  version showed story points to a team that estimates in hours.
+
+**Before adding any component, hook, formatter or helper, search for it.** Grep the concept
+(`estimate`, `assignee`, `create`, `composer`, `diff`), and look at what the backlog, planning space
+and kanban surfaces already do. The backlog is the oldest and most complete surface — assume it has
+already solved your problem, especially for anything about tickets, estimates, assignees or rows.
+
+When you find prior art:
+- **Reuse it directly** if its props allow. This is the default.
+- **Extract and share it** if it is nearly right. Extraction is cheap; divergence is not.
+- **Only then write something new** — and say in your report what you searched for and why nothing fit.
+
+Two implementations of one job is not "a bit of duplication". It is two behaviours that will drift,
+and a user will find the difference before you do.
+
 Long term maintainability is a core priority. If you add new functionality, first check if there is shared logic that can be extracted to a separate module. Duplicate logic across multiple files is a code smell and should be avoided. Don't be afraid to change existing code. Don't take shortcuts by just adding local logic to solve a problem.
 
 Keep files small and composable by default (see the 200-line cap under Task Completion Requirements). A large stateful component is a planning signal to decompose up front — a controller hook for state/effects plus presentational sub-components — not a monolith to split later.

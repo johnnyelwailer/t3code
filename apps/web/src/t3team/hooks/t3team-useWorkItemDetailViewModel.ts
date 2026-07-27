@@ -10,7 +10,7 @@ import { readLinkedRepositoryUrlsFromProject } from "~/t3team/hooks/t3team-creat
 import { useAddToChat } from "~/t3team/hooks/t3team-useAddToChat";
 import { useAtlassianCurrentUserDisplayName } from "~/t3team/hooks/t3team-useAtlassianCurrentUserDisplayName";
 import { useProjectGitHubActivity } from "~/t3team/hooks/t3team-useProjectGitHubActivity";
-import { useProjectResources } from "~/t3team/hooks/t3team-useProjectResources";
+import { useProjectIssues } from "~/t3team/hooks/t3team-useProjectIssues";
 import { useRelatedTickets } from "~/t3team/hooks/t3team-useRelatedTickets";
 import { useTicketDetail } from "~/t3team/hooks/t3team-useTicketDetail";
 import { drainQueuedWorkItemContextSyncRequests } from "~/t3team/hooks/t3team-useWorkItemContextSyncQueue";
@@ -51,8 +51,9 @@ export function useWorkItemDetailViewModel({
   const backend = useBackend();
   const backendState = useBackendState();
   const { addToChatFromRequest } = useAddToChat();
-  const { tickets: projectTickets, lastCheckedAt: jiraLastCheckedAt } =
-    useProjectResources(project);
+  // Whole project, not My Work: children/parents/links are routinely assigned
+  // to somebody else, so `assignee = currentUser()` can never resolve them.
+  const { tickets: projectTickets, lastCheckedAt: jiraLastCheckedAt } = useProjectIssues(project);
   const currentUserName = useAtlassianCurrentUserDisplayName(project.source.accountId);
 
   const ticketLookup = useMemo(() => buildProjectTicketLookup(projectTickets), [projectTickets]);

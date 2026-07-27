@@ -1,7 +1,7 @@
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { cn } from "~/t3team/lib/t3team-utils";
 import type { ProjectTicket } from "~/t3team/t3team-types";
-import { formatWorkItemDuration } from "~/t3team/workitem/t3team-workItemFieldModel";
+import { getProjectTicketEstimatePresentation } from "~/t3team/t3team-projectBacklogEstimate";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 import { WorkItemStatusBadge } from "~/t3team/workitem/t3team-WorkItemStatusBadge";
 
@@ -16,6 +16,7 @@ export function WorkItemIssueRow({
   ticket,
   relationLabel,
   currentUserName,
+  estimateControl,
   assigneeControl,
   onOpen,
   className,
@@ -25,6 +26,8 @@ export function WorkItemIssueRow({
   readonly relationLabel?: string | undefined;
   /** Display name of the signed-in user, so their own rows stand out. */
   readonly currentUserName?: string | undefined;
+  /** An interactive estimate picker for this row. Falls back to the read-only label when absent. */
+  readonly estimateControl?: React.ReactNode;
   /** An interactive assignee picker for this row. Falls back to a read-only avatar when absent. */
   readonly assigneeControl?: React.ReactNode;
   readonly onOpen?: ((ticketId: string) => void) | undefined;
@@ -38,19 +41,17 @@ export function WorkItemIssueRow({
   const isPlaceholder = summary === ticket.ref.displayId;
 
   /*
-    A child row without an owner or a size is not much of a plan. Both were already on the ticket —
-    the row simply never rendered them, so a list of children read as titles and nothing else.
+    Unit comes from `getProjectTicketEstimatePresentation`, the same resolver the backlog row uses.
+
+    This previously hardcoded "N pts" and preferred `estimateValue` over tracked time, which showed
+    story points to a project that estimates in hours. Whether a ticket is hour-tracked or
+    point-sized is a property of the project's Jira configuration, not something a row can infer —
+    and that question was already answered in one place.
   */
-  const estimateSeconds =
-    ticket.timeOriginalEstimateSeconds ?? ticket.aggregateTimeOriginalEstimateSeconds;
+  const estimate = getProjectTicketEstimatePresentation(ticket);
   const estimateLabel =
-    ticket.estimateValue !== undefined
-      ? `${ticket.estimateValue} pts`
-      : formatWorkItemDuration(estimateSeconds);
-  const estimateTitle =
-    ticket.estimateValue !== undefined
-      ? `${ticket.estimateValue} story points`
-      : `Estimated ${estimateLabel}`;
+    estimate.valueText === "" ? undefined : `${estimate.valueText} ${estimate.valueSuffix}`;
+  const estimateTitle = estimateLabel ? `${estimate.label}: ${estimateLabel}` : undefined;
 
   const content = (
     <>
@@ -82,41 +83,66 @@ export function WorkItemIssueRow({
       {/*
         Estimate before status, matching the title band's order. Story points win over a time
         estimate when both exist — a team that sizes in points does not want hours quoted back.
+
+        Always rendered, sized or not — same reasoning as `assigneeControl` below: an unestimated
+        child is exactly the one that most needs sizing, so hiding the affordance then would defeat
+        the point. `estimateControl` replaces the label with a real editor where the caller can write.
       */}
-      {estimateLabel ? (
-        <span
-          className="shrink-0 tabular-nums text-muted-foreground"
-          title={estimateTitle}
-          aria-label={estimateTitle}
-        >
-          {estimateLabel}
-        </span>
-      ) : null}
-
-      <WorkItemStatusBadge
-        status={{ name: ticket.status }}
-        className="ml-auto shrink-0 @xs/workitem:ml-0"
-      />
-
       {/*
-        Always rendered, assigned or not: an unassigned child is the one most likely to need an
-        owner, and hiding the affordance exactly then meant the only way to assign was to open the
-        issue. `assigneeControl` replaces the avatar with a real picker where the caller can write.
+        Fixed-width trailing columns, so estimate, status and assignee line up down the list instead
+        of drifting with each row's title and status-name length. Every row uses the same template,
+        which is what makes them align — a flex row cannot, because each row sizes independently.
+
+        The widths step up with the container, and at the narrowest the assignee keeps its avatar but
+        drops the name rather than truncating it to a couple of letters.
       */}
-      <span className="relative z-10 shrink-0">
-        {assigneeControl ?? (
-          <WorkItemPersonAvatar
-            person={ticket.assignee ? { displayName: ticket.assignee } : undefined}
-            size="md"
-            isCurrentUser={isAssignedToCurrentUser}
-          />
+      <span
+        className={cn(
+          "relative z-10 grid shrink-0 items-center gap-x-2.5",
+          "grid-cols-[2rem_5.5rem_1.75rem]",
+          "@md/workitem:grid-cols-[2.5rem_7rem_2rem]",
+          "@2xl/workitem:grid-cols-[2.5rem_7rem_9.5rem]",
         )}
+      >
+        <span className="justify-self-end">
+          {estimateControl ??
+            (estimateLabel ? (
+              <span
+                className="tabular-nums text-muted-foreground"
+                title={estimateTitle}
+                aria-label={estimateTitle}
+              >
+                {estimateLabel}
+              </span>
+            ) : (
+              <span className="tabular-nums text-muted-foreground/50" aria-label="No estimate set">
+                —
+              </span>
+            ))}
+        </span>
+
+        <WorkItemStatusBadge status={{ name: ticket.status }} className="justify-self-start" />
+
+        {/*
+          Always rendered, assigned or not: an unassigned child is the one most likely to need an
+          owner, and hiding the affordance exactly then meant the only way to assign was to open the
+          issue. `assigneeControl` replaces the avatar with a real picker where the caller can write.
+        */}
+        <span className="min-w-0 justify-self-start">
+          {assigneeControl ?? (
+            <WorkItemPersonAvatar
+              person={ticket.assignee ? { displayName: ticket.assignee } : undefined}
+              size="md"
+              isCurrentUser={isAssignedToCurrentUser}
+            />
+          )}
+        </span>
       </span>
     </>
   );
 
   const shared = cn(
-    "group/issue-row flex w-full flex-wrap items-center gap-x-2.5 gap-y-1 px-3 py-2 text-xs",
+    "group/issue-row flex w-full items-center gap-x-2.5 px-3 py-2 text-xs",
     className,
   );
 

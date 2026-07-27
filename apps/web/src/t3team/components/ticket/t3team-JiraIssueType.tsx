@@ -129,29 +129,23 @@ function IssueGlyph({ type }: { type: JiraIssueTypeKey }) {
       );
     default:
       /*
-        Used when the issue's type is genuinely unknown — a linked key we have not resolved yet.
-        A filled dot read as an unfinished placeholder rather than "an issue", so this is an outlined
-        card instead: the same visual weight as the real glyphs, and honest about saying only
-        "an issue" without pretending to know which kind.
+        The unknown type — a linked key whose issue we have not resolved.
+
+        Drawn at `size-full`, not `size-3/4` like the others: that inset exists to breathe inside a
+        filled tile, and this is the one glyph with no tile behind it, so the inset just made it look
+        shrunken. Kept to a single rounded outline — inner detail lines turn to mush at 14px.
       */
       return (
-        <svg viewBox="0 0 12 12" className="size-3/4" aria-hidden="true">
+        <svg viewBox="0 0 16 16" className="size-full" aria-hidden="true">
           <rect
-            x="2.2"
-            y="2.6"
-            width="7.6"
-            height="6.8"
-            rx="1.4"
+            x="2.4"
+            y="2.4"
+            width="11.2"
+            height="11.2"
+            rx="3"
             fill="none"
             stroke="currentColor"
-            strokeWidth="1.2"
-          />
-          <path
-            d="M4.3 5.4h3.4M4.3 7.2h2.2"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.1"
-            strokeLinecap="round"
+            strokeWidth="1.6"
           />
         </svg>
       );

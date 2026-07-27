@@ -6,7 +6,8 @@ import { Button } from "~/t3team/components/ui/t3team-button";
 import { cn } from "~/t3team/lib/t3team-utils";
 import { ChildIssueCreatePanel } from "~/t3team/t3team-ChildIssueCreatePanel";
 import type { ProjectTicket } from "~/t3team/t3team-types";
-import { WorkItemIssueList, WorkItemIssueRow } from "~/t3team/workitem/t3team-WorkItemIssueRow";
+import { WorkItemChildRow } from "~/t3team/workitem/t3team-WorkItemChildRow";
+import { WorkItemIssueList } from "~/t3team/workitem/t3team-WorkItemIssueRow";
 import { WorkItemSection } from "~/t3team/workitem/t3team-WorkItemSection";
 import { resolveWorkItemStatusTone } from "~/t3team/workitem/t3team-workItemFieldTokens";
 import { useWorkItemChildCreate } from "~/t3team/workitem/t3team-useWorkItemChildCreate";
@@ -152,11 +153,15 @@ export function WorkItemChildren({
       {items.length > 0 ? (
         <WorkItemIssueList>
           {items.map((child) => (
-            <WorkItemIssueRow
-              {...(currentUserName ? { currentUserName } : {})}
+            <WorkItemChildRow
               key={child.id}
-              ticket={child}
-              {...(onOpenTicket ? { onOpen: onOpenTicket } : {})}
+              child={child}
+              {...(currentUserName ? { currentUserName } : {})}
+              {...(onOpenTicket ? { onOpenTicket } : {})}
+              canWrite={canWrite}
+              {...(backend ? { backend } : {})}
+              {...(accountId ? { accountId } : {})}
+              {...(onReload ? { onReload } : {})}
             />
           ))}
         </WorkItemIssueList>

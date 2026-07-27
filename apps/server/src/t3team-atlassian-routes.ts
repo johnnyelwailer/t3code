@@ -22,6 +22,7 @@ import { persistAtlassianOAuthAccounts } from "./t3team-atlassian-oauth-accountP
 export { t3teamAtlassianAssetContentRouteLayer } from "./t3team-atlassian-asset-content-route.ts";
 export { t3teamAtlassianBacklogRouteLayer } from "./t3team-atlassian-backlog-routes.ts";
 export { t3teamAtlassianMyWorkRouteLayer } from "./t3team-atlassian-myWork-routes.ts";
+export { t3teamAtlassianProjectIssuesRouteLayer } from "./t3team-atlassian-projectIssues-routes.ts";
 export { t3teamAtlassianResourcesRouteLayer } from "./t3team-atlassian-resources-routes.ts";
 
 type ResourceGetInput = {
