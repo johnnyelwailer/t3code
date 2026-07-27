@@ -167,7 +167,7 @@ export type ToolAuthStreamEvent = typeof ToolAuthStreamEvent.Type;
  * straight from a successful install into the real login flow.
  *
  * The server maps `tool` to a STATIC package name (see
- * `apps/server/src/toolauth/adapters.ts`'s `TOOL_INSTALL_PACKAGES`) and
+ * `apps/server/src/toolauth/t3team-installPackages.ts`'s `TOOL_INSTALL_PACKAGES`) and
  * spawns a package manager through the same `PtyAdapter` the sign-in flow
  * uses. The client never sends a command, package name, or flag — only this
  * closed `ToolAuthToolId`.

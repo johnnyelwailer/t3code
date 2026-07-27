@@ -1,15 +1,13 @@
 "use client";
 
-import { CheckIcon, CopyIcon, ExternalLinkIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ToolAuthState } from "@t3tools/contracts";
 
 import { cn } from "../../lib/utils";
-import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Spinner } from "../ui/spinner";
+import { AwaitingCodePhase, AwaitingOpenPhase, InstallingPhase } from "./t3team-ToolAuthCardPhases";
 import type { ToolAuthToolMeta } from "./t3team-toolAuthTools";
 
 /** Dot color per phase — same token classes `providerStatus.ts` uses. */
@@ -48,21 +46,6 @@ function connectedSummary(state: ToolAuthState | undefined): string {
   if (account) return `Signed in as ${account}`;
   if (organization) return `Signed in · ${organization}`;
   return "Connected";
-}
-
-/**
- * The installer's most recent meaningful line, for a progress hint while
- * `installing`. npm is chatty and the log is a rolling buffer, so showing the
- * tail is both the cheapest and the most informative option — the alternative
- * (a bare spinner for a minute-long install) reads as a hang.
- */
-function installProgressLine(installLog: string | undefined): string | null {
-  if (!installLog) return null;
-  const lines = installLog
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  return lines.at(-1) ?? null;
 }
 
 export interface ToolAuthCardProps {
@@ -107,8 +90,6 @@ export function ToolAuthCard({
     if (phase !== "awaiting-code") setCode("");
   }, [phase]);
 
-  const { copyToClipboard, isCopied } = useCopyToClipboard({ target: `${meta.label} device code` });
-
   const Icon = meta.icon;
 
   const titleNode = (
@@ -145,20 +126,7 @@ export function ToolAuthCard({
         ) : null}
 
         {phase === "installing" ? (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Spinner className="size-3.5" />
-              Installing {meta.label}…
-            </div>
-            {installProgressLine(state?.installLog) ? (
-              <p className="truncate font-mono text-[11px] text-muted-foreground/70">
-                {installProgressLine(state?.installLog)}
-              </p>
-            ) : null}
-            <p className="text-[11px] text-muted-foreground/70">
-              Signing in starts automatically once the install finishes.
-            </p>
-          </div>
+          <InstallingPhase label={meta.label} installLog={state?.installLog} />
         ) : null}
 
         {phase === "starting" ? (
@@ -169,83 +137,22 @@ export function ToolAuthCard({
         ) : null}
 
         {phase === "awaiting-open" ? (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground/80">
-              Approve the sign-in in your browser to continue.
-            </p>
-            {state?.url ? (
-              <Button
-                size="sm"
-                variant="default"
-                className="w-full sm:w-auto"
-                render={<a href={state.url} target="_blank" rel="noopener noreferrer" />}
-              >
-                <ExternalLinkIcon className="size-3.5" />
-                Open sign-in page
-              </Button>
-            ) : null}
-            {/* Codex device flow: display the code — the human types it into
-                the browser page. No input field: nothing comes back to us. */}
-            {state?.displayCode ? (
-              <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2">
-                <code className="flex-1 select-all font-mono text-lg tracking-wider text-foreground">
-                  {state.displayCode}
-                </code>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Copy device code"
-                  onClick={() => copyToClipboard(state.displayCode!, undefined)}
-                >
-                  {isCopied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
-                </Button>
-              </div>
-            ) : null}
-            <Button size="xs" variant="ghost" className="w-fit text-muted-foreground" onClick={onCancel}>
-              Cancel
-            </Button>
-          </div>
+          <AwaitingOpenPhase
+            label={meta.label}
+            url={state?.url}
+            displayCode={state?.displayCode}
+            onCancel={onCancel}
+          />
         ) : null}
 
         {phase === "awaiting-code" ? (
-          <div className="flex flex-col gap-2">
-            {/* Secondary affordance, not a second field — a user who never
-                opened the page, or closed the tab, must still be able to get
-                back to it. */}
-            {state?.url ? (
-              <a
-                href={state.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex w-fit items-center gap-1 text-xs font-medium text-primary hover:underline"
-              >
-                <ExternalLinkIcon className="size-3" />
-                Open sign-in page again
-              </a>
-            ) : null}
-            <form
-              className="flex flex-col gap-2 sm:flex-row sm:items-center"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (code.trim().length > 0) onSubmitCode(code);
-              }}
-            >
-              <Input
-                autoFocus
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                placeholder="Paste the code from your browser"
-                spellCheck={false}
-                autoComplete="off"
-                aria-label={`${meta.label} sign-in code`}
-                className="sm:flex-1"
-              />
-              <Button type="submit" size="sm" disabled={code.trim().length === 0}>
-                Verify
-              </Button>
-            </form>
-          </div>
+          <AwaitingCodePhase
+            label={meta.label}
+            url={state?.url}
+            code={code}
+            onCodeChange={setCode}
+            onSubmit={onSubmitCode}
+          />
         ) : null}
 
         {phase === "verifying" ? (
