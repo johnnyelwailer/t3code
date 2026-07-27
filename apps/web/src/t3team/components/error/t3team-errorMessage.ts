@@ -17,7 +17,21 @@ export type T3TeamUserFacingError = {
   readonly canRetry: boolean;
 };
 
-const FALLBACK_HEADLINE = "Something went wrong.";
+/**
+ * The unclassified case.
+ *
+ * Callers say what they were doing, so the headline says it too — "Something went wrong." tells the
+ * reader nothing they had not already deduced from the empty page.
+ *
+ * `action` must be a gerund phrase ("loading assignees", "updating linked repositories"); it is
+ * capitalised and suffixed with "failed". Call sites used to mix gerunds with infinitives, which
+ * produced "Couldn't loading assignees" under the previous phrasing — one grammatical form is the
+ * price of composing the sentence here rather than at every call site.
+ */
+function fallbackHeadline(action: string | undefined): string {
+  if (!action) return "Something went wrong.";
+  return `${action.charAt(0).toUpperCase()}${action.slice(1)} failed.`;
+}
 
 function buildTechnical(error: unknown, action: string | undefined): string | undefined {
   const raw = extractTechnical(error);
@@ -54,5 +68,5 @@ export function toUserFacingError(
   const matched = classifyStatus(status) ?? (message ? classifyMessage(message) : null);
   if (matched) return withTechnical(matched);
 
-  return withTechnical({ headline: FALLBACK_HEADLINE, canRetry: true });
+  return withTechnical({ headline: fallbackHeadline(context?.action), canRetry: true });
 }

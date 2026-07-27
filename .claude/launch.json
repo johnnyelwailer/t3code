@@ -29,6 +29,15 @@
       "port": 6006
     },
     {
+      "name": "t3web-workitem",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code/.claude/worktrees/quirky-thompson-6aafce && export PATH=\"$PWD/node_modules/.bin:$HOME/.bun/bin:$PATH\" && T3CODE_PORT_OFFSET=4 exec node scripts/dev-runner.ts dev --home-dir \"$PWD/.t3/wave1\""
+      ],
+      "port": 5737
+    },
+    {
       "name": "t3storybook-workitem",
       "runtimeExecutable": "sh",
       "runtimeArgs": [

@@ -15,6 +15,13 @@
  * Starting a turn on a thread that already has one in progress is rejected by the server; that
  * rejection is surfaced here rather than swallowed; see `deliverDraftFeedbackToSourceThread` for the
  * sibling case (routing feedback back to a thread) that established this must never fail silently.
+ *
+ * The kickoff path is fire-and-forget (`onKickoffThread` returns void — it navigates synchronously,
+ * it doesn't report success/failure), so there is no promise to key `isStarting` off like the
+ * active-thread path has. Instead a one-way `kickoffLaunched` latch closes the double-click window:
+ * once a kickoff has been requested, the control stays disabled for the rest of this component's
+ * life. That's deliberately permanent, not reset-after-a-timeout — the click above it navigates to
+ * the new thread, which unmounts this component, so the latch never needs to un-latch.
  */
 
 import { useCallback, useState } from "react";
@@ -53,6 +60,10 @@ export type UseWorkItemAgentRewriteInput = {
   readonly onKickoffThread: (input: TicketKickoffThreadInput) => void;
   /** From `useWorkItemDrafts` — not re-derived here. */
   readonly hasPendingDescriptionDraft: boolean;
+  /** Whether the work item's own data (ticket or snapshot) has actually loaded. A prompt built from
+   * nothing — no description, no real summary — is worse than no control at all, so the caller gates
+   * this rather than the control silently sending an empty-data prompt. */
+  readonly hasLoadedWorkItem: boolean;
 };
 
 export function useWorkItemAgentRewrite(input: UseWorkItemAgentRewriteInput): {
@@ -73,11 +84,18 @@ export function useWorkItemAgentRewrite(input: UseWorkItemAgentRewriteInput): {
     activeThreadId,
     onKickoffThread,
     hasPendingDescriptionDraft,
+    hasLoadedWorkItem,
   } = input;
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<T3TeamUserFacingError | null>(null);
+  const [kickoffLaunched, setKickoffLaunched] = useState(false);
 
   const start = useCallback(() => {
+    // Re-entrancy guard: `isDisabled` already keeps the button from being clicked twice, but `start`
+    // is also called directly in tests/stories, and defending it here means the latch holds even if
+    // a future caller renders its own trigger without wiring `isDisabled` through.
+    if (isStarting || kickoffLaunched || hasPendingDescriptionDraft || !hasLoadedWorkItem) return;
+
     const prompt = buildWorkItemAgentRewritePrompt({ issueIdOrKey, descriptionText, summary });
 
     if (activeThreadId) {

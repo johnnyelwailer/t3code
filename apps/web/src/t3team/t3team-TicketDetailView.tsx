@@ -10,6 +10,8 @@ import { buildTicketDetailKickoffAsideProps } from "~/t3team/t3team-TicketDetail
 import { navigateBackWithFallback } from "~/t3team/t3team-historyBack";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { WorkItemDetailHeader } from "~/t3team/workitem/t3team-WorkItemDetailHeader";
+import { WorkItemAgentRewriteControl } from "~/t3team/workitem/t3team-WorkItemAgentRewriteControl";
+import { useWorkItemDrafts } from "~/t3team/workitem/t3team-useWorkItemDrafts";
 import { buildWorkItemDetailMainProps } from "~/t3team/workitem/t3team-buildWorkItemDetailMainProps";
 import { WorkItemDetailMain } from "~/t3team/workitem/t3team-WorkItemDetailMain";
 
@@ -65,6 +67,28 @@ export function TicketDetailView({
     [onOpenTicket, project.id],
   );
 
+  // Same resolution `buildTicketDetailKickoffAsideProps` below uses for its own `resolvedTicketId` —
+  // kept in sync rather than recomputed differently, since both target the same ticket.
+  const resolvedTicketId = view.ticket?.id ?? view.canonicalTicketId;
+  const descriptionDrafts = useWorkItemDrafts({ issueIdOrKey: view.fieldModel.key });
+  const descriptionAction = (
+    <WorkItemAgentRewriteControl
+      backend={view.backend}
+      projectId={project.id}
+      ticketId={resolvedTicketId}
+      issueIdOrKey={view.fieldModel.key}
+      ticketDisplayId={view.displayId}
+      {...(view.fieldModel.descriptionText
+        ? { descriptionText: view.fieldModel.descriptionText }
+        : {})}
+      summary={view.title}
+      githubActivityItems={view.matchedGitHubActivityItems}
+      {...(view.activeThread ? { activeThreadId: view.activeThread.id } : {})}
+      onKickoffThread={onKickoffThread}
+      hasPendingDescriptionDraft={descriptionDrafts.description !== undefined}
+    />
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <WorkItemDetailHeader
@@ -92,6 +116,7 @@ export function TicketDetailView({
               project,
               onOpenTicket: handleOpenTicket,
               showAgentContextMenu,
+              descriptionAction,
             })}
           />
         }
@@ -106,7 +131,7 @@ export function TicketDetailView({
           issueType: view.issueType,
           priority: view.priority,
           issueThreads: view.issueThreads,
-          resolvedTicketId: view.ticket?.id ?? view.canonicalTicketId,
+          resolvedTicketId,
           activeThread: view.activeThread,
           matchedGitHubActivityItems: view.matchedGitHubActivityItems,
           backendState: view.backendState,

@@ -29,4 +29,30 @@ describe("buildWorkItemAgentRewritePrompt", () => {
 
     expect(prompt).toContain("A human will review your proposal");
   });
+
+  it("tells the agent to call the tool directly, exactly once, and never author a workflow", () => {
+    const prompt = buildWorkItemAgentRewritePrompt({ issueIdOrKey: "PROJ-42" });
+
+    expect(prompt).toContain("Call the t3team.work_item.description.draft_update tool directly, exactly once");
+    expect(prompt).toContain("do not author, launch, or run a workflow or orchestration");
+  });
+
+  it("omits the parenthetical when there is no summary", () => {
+    const prompt = buildWorkItemAgentRewritePrompt({ issueIdOrKey: "PROJ-9" });
+
+    expect(prompt).toContain("Rewrite the description of PROJ-9.");
+  });
+
+  it("omits the parenthetical when the summary is blank", () => {
+    const prompt = buildWorkItemAgentRewritePrompt({ issueIdOrKey: "PROJ-9", summary: "   " });
+
+    expect(prompt).toContain("Rewrite the description of PROJ-9.");
+  });
+
+  it("omits the parenthetical when the summary is just the issue key (e.g. a generic loading fallback)", () => {
+    const prompt = buildWorkItemAgentRewritePrompt({ issueIdOrKey: "PROJ-9", summary: "PROJ-9" });
+
+    expect(prompt).toContain("Rewrite the description of PROJ-9.");
+    expect(prompt).not.toContain("(PROJ-9)");
+  });
 });

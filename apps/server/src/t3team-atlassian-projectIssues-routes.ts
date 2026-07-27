@@ -19,7 +19,6 @@ export const t3teamAtlassianProjectIssuesRouteLayer = HttpRouter.add(
   "/api/t3team/atlassian/project-issues",
   Effect.gen(function* () {
     const input = yield* readJsonBody<T3TeamAtlassianProjectIssuesInput>();
-    const page = yield* loadT3TeamAtlassianProjectIssuesPage(input);
-    return okJson({ page });
+    return okJson(yield* loadT3TeamAtlassianProjectIssuesPage(input));
   }).pipe(Effect.catch(errorResponse)),
 );

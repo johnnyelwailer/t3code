@@ -94,7 +94,8 @@ export function WorkItemIssueRow({
       */}
       <span
         className={cn(
-          "relative z-10 grid shrink-0 items-center gap-x-2.5",
+          /* `pl-4` keeps a truncated title from running straight into the estimate field. */
+          "relative z-10 grid shrink-0 items-center gap-x-3 pl-4",
           "grid-cols-[2rem_5.5rem_1.75rem]",
           "@md/workitem:grid-cols-[2.5rem_7rem_2rem]",
           "@2xl/workitem:grid-cols-[2.5rem_7rem_9.5rem]",

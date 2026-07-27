@@ -10,9 +10,29 @@ export type T3TeamProjectIssuesInput = {
   readonly externalProjectId: string;
 };
 
+/**
+ * `live-fallback` marks a provisional response served while the server's
+ * project mirror is still empty (typically the first minute after a server
+ * boot). It only contains the viewer's own issues, so callers should re-ask
+ * shortly instead of treating it as the project.
+ */
+export type T3TeamProjectIssuesCapabilities = {
+  readonly canCreateSubtasks: boolean;
+  /** Absent when nothing has resolved the project's estimate field yet — never guessed. */
+  readonly estimateFieldLabel?: string;
+};
+
+export type T3TeamProjectIssuesResult = {
+  readonly page: ResourcePage;
+  readonly source: "mirror" | "live-fallback";
+  readonly capabilities?: T3TeamProjectIssuesCapabilities;
+};
+
 export type T3TeamProjectIssuesBackend = BackendApi & {
   readonly atlassian: BackendApi["atlassian"] & {
-    readonly listProjectIssues: (input: T3TeamProjectIssuesInput) => Promise<ResourcePage>;
+    readonly listProjectIssues: (
+      input: T3TeamProjectIssuesInput,
+    ) => Promise<T3TeamProjectIssuesResult>;
   };
 };
 
@@ -26,13 +46,12 @@ export type T3TeamProjectIssuesBackend = BackendApi & {
  */
 export function createAtlassianProjectIssuesBackendApi(httpBaseUrl: string) {
   return {
-    async listProjectIssues(input: T3TeamProjectIssuesInput): Promise<ResourcePage> {
-      const response = await postJson<T3TeamProjectIssuesInput, { page: ResourcePage }>(
+    async listProjectIssues(input: T3TeamProjectIssuesInput): Promise<T3TeamProjectIssuesResult> {
+      return postJson<T3TeamProjectIssuesInput, T3TeamProjectIssuesResult>(
         httpBaseUrl,
         "/api/t3team/atlassian/project-issues",
         input,
       );
-      return response.page;
     },
   };
 }

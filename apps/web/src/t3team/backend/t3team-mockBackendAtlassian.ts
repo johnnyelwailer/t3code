@@ -87,11 +87,13 @@ export function createMockAtlassianBackendApi(input: {
     }),
     listProjects: async (account) => input.mockIntegrationProvider.listProjects(account),
     listResources: async (request) => input.mockIntegrationProvider.listResources(request),
-    listProjectIssues: async (request) =>
-      input.mockIntegrationProvider.listResources({
+    listProjectIssues: async (request) => ({
+      page: await input.mockIntegrationProvider.listResources({
         account: request.account,
         externalProjectId: request.externalProjectId,
       }),
+      source: "mirror",
+    }),
     listBacklog: async (request) =>
       createMockBacklogResponse(input.mockIntegrationProvider, request),
     getBoardColumns: async () => createMockBoardColumnsResponse(),

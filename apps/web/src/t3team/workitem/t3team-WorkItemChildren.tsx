@@ -60,6 +60,7 @@ export function WorkItemChildren({
   accountId,
   externalProjectId,
   issueIdOrKey,
+  estimateFieldLabel,
   onReload,
 }: {
   /** Section nav target. */
@@ -82,6 +83,8 @@ export function WorkItemChildren({
    */
   readonly externalProjectId?: string | undefined;
   readonly issueIdOrKey?: string | undefined;
+  /** The project's story-point field label, resolved server-side; absent means "not known". */
+  readonly estimateFieldLabel?: string | undefined;
   readonly onReload?: (() => void) | undefined;
 }) {
   const [creating, setCreating] = useState(false);
@@ -161,6 +164,7 @@ export function WorkItemChildren({
               canWrite={canWrite}
               {...(backend ? { backend } : {})}
               {...(accountId ? { accountId } : {})}
+              {...(estimateFieldLabel ? { estimateFieldLabel } : {})}
               {...(onReload ? { onReload } : {})}
             />
           ))}

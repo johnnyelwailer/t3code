@@ -118,6 +118,7 @@ function seedMirror(input: {
   readonly accountId: string;
   readonly externalProjectId: string;
   readonly items: ReadonlyArray<BacklogResourceRef>;
+  readonly estimateFieldLabel?: string;
 }) {
   return writeCachedT3TeamAtlassianBacklog({
     provider: "atlassian",
@@ -126,7 +127,10 @@ function seedMirror(input: {
     requestSelection: {},
     response: {
       page: { items: [...input.items], totalCount: input.items.length } satisfies ResourcePage,
-      capabilities: { canCreateSubtasks: true },
+      capabilities: {
+        canCreateSubtasks: true,
+        ...(input.estimateFieldLabel ? { estimateFieldLabel: input.estimateFieldLabel } : {}),
+      },
       boards: [],
       sprints: [],
       savedFilters: [],
@@ -164,11 +168,12 @@ projectIssuesLayer("t3team Atlassian project issues projection", (it) => {
         ],
       });
 
-      const page = yield* loadT3TeamAtlassianProjectIssuesPage({
+      const { page, source } = yield* loadT3TeamAtlassianProjectIssuesPage({
         account: { id: site, provider: "atlassian" },
         externalProjectId: "project-a",
       });
 
+      assert.strictEqual(source, "mirror");
       // Newest first.
       assert.deepStrictEqual(
         page.items.map((item) => item.displayId),
@@ -196,16 +201,50 @@ projectIssuesLayer("t3team Atlassian project issues projection", (it) => {
       });
       // No mirror rows seeded for this project.
 
-      const page = yield* loadT3TeamAtlassianProjectIssuesPage({
+      const { page, source, capabilities } = yield* loadT3TeamAtlassianProjectIssuesPage({
         account: { id: site, provider: "atlassian" },
         externalProjectId: "project-live",
       });
 
+      // The client keys its fast cold-mirror retry off this tag; if it ever
+      // came back as "mirror" the view would settle on a partial project.
+      assert.strictEqual(source, "live-fallback");
+      // Nothing has resolved this project's capabilities: omit them rather than
+      // invent an estimate unit. The estimate cell's "Unavailable" is correct here.
+      assert.strictEqual(capabilities, undefined);
       assert.deepStrictEqual(
         page.items.map((item) => item.displayId),
         ["PRL-1"],
       );
       assert.ok(urls.some((url) => url.includes(currentUserJqlMarker)));
+    }),
+  );
+
+  /**
+   * The detail view's child rows reuse the backlog's estimate cell, which can
+   * only offer a story-point estimate when it knows the project's field label.
+   * That label is resolved once for the backlog and persisted; this projection
+   * hands it over rather than re-deriving it (two extra Jira lookups per poll).
+   */
+  it.effect("passes through the estimate field label the backlog already resolved", () =>
+    Effect.gen(function* () {
+      const site = "https://project-issues-cap.atlassian.net";
+      connectBasicAuth(site);
+      installJiraFetchMock({ project: { id: "project-cap", key: "PCP" }, liveAssignedIssues: [] });
+      yield* seedMirror({
+        accountId: site,
+        externalProjectId: "project-cap",
+        items: [mirrorIssue("PCP-1")],
+        estimateFieldLabel: "Story Points",
+      });
+
+      const { capabilities } = yield* loadT3TeamAtlassianProjectIssuesPage({
+        account: { id: site, provider: "atlassian" },
+        externalProjectId: "project-cap",
+      });
+
+      assert.strictEqual(capabilities?.estimateFieldLabel, "Story Points");
+      assert.strictEqual(capabilities?.canCreateSubtasks, true);
     }),
   );
 
@@ -232,10 +271,10 @@ projectIssuesLayer("t3team Atlassian project issues projection", (it) => {
       });
 
       assert.deepStrictEqual(
-        first.items.map((item) => item.displayId),
+        first.page.items.map((item) => item.displayId),
         ["PRC-1", "PRC-10", "PRC-2"],
       );
-      assert.deepStrictEqual(first.items, second.items);
+      assert.deepStrictEqual(first.page.items, second.page.items);
     }),
   );
 });

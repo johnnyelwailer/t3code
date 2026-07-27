@@ -92,7 +92,7 @@ export function OAuthCallbackPage() {
       {status.kind === "failed" ? (
         <T3TeamErrorState
           error={status.error}
-          action="Connect Atlassian"
+          action="connecting to Atlassian"
           variant="page"
           className="w-full max-w-md"
         />

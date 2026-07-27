@@ -74,7 +74,7 @@ export function T3TeamImageLightbox({
               <T3TeamErrorState
                 variant="inline"
                 error={new Error("Failed to load image")}
-                action="Load image"
+                action="loading the image"
                 className="max-w-sm"
               />
             ) : (

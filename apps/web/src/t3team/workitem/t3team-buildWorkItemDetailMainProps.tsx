@@ -91,6 +91,7 @@ export function buildWorkItemDetailMainProps({
     attachments: normalizeTicketAttachments(view.attachments),
     comments: normalizeTicketComments(view.sortedComments),
     nowMs: Date.now(),
+    ...(view.estimateFieldLabel ? { estimateFieldLabel: view.estimateFieldLabel } : {}),
     loading: view.loading,
     error: view.error,
     onReload: () => void view.reload(),

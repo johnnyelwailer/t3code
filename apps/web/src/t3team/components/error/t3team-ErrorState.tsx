@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, RotateCw } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { T3SurfaceCard, T3SurfaceCardContent } from "~/t3team/components/ui/t3team-surface";
@@ -41,23 +41,42 @@ export function T3TeamErrorState({
     );
   }
 
+  /*
+    One line when it fits. An error in a section is an interruption, not a destination: the message,
+    the retry and the details toggle belong on the same row, wrapping only when the container is too
+    narrow to hold them.
+
+    The retry is `outline`, never the primary fill — a saturated accent button on a danger surface
+    fights the surface it sits on, and this is a recovery affordance, not the page's main action.
+  */
   const body = (
-    <div className="flex items-start gap-2.5">
-      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
-      <div className="min-w-0 flex-1 space-y-2">
-        <p className="text-sm font-medium text-foreground">{userFacing.headline}</p>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <AlertTriangle className="size-4 shrink-0 text-destructive" aria-hidden="true" />
+
+      <p className="min-w-0 flex-1 text-xs leading-5 text-foreground">
+        <span className="font-medium">{userFacing.headline}</span>
         {userFacing.detail ? (
-          <p className="whitespace-pre-line text-xs text-muted-foreground">{userFacing.detail}</p>
+          <span className="text-muted-foreground"> {userFacing.detail}</span>
         ) : null}
-        {showRetry ? (
-          <Button type="button" size="xs" variant="outline" onClick={onRetry}>
-            Try again
-          </Button>
-        ) : null}
-        {userFacing.technical ? (
-          <T3TeamErrorTechnicalDisclosure technical={userFacing.technical} />
-        ) : null}
-      </div>
+      </p>
+
+      {showRetry ? (
+        <Button type="button" size="xs" variant="outline" className="shrink-0" onClick={onRetry}>
+          <RotateCw className="size-3.5" />
+          Try again
+        </Button>
+      ) : null}
+
+      {/*
+        `basis-full` puts the disclosure on its own line of the same wrapping row, so its expanded
+        output gets the full width. Nested in the trailing cluster it inherited that cluster's narrow
+        column and the stack trace rendered as a cramped second column beside the message.
+      */}
+      {userFacing.technical ? (
+        <div className="basis-full">
+          <T3TeamErrorTechnicalDisclosure technical={userFacing.technical} compact />
+        </div>
+      ) : null}
     </div>
   );
 
@@ -68,7 +87,8 @@ export function T3TeamErrorState({
         className={cn("flex min-h-40 items-center justify-center py-10", className)}
       >
         <T3SurfaceCard tone="danger" className="w-full max-w-md">
-          <T3SurfaceCardContent>{body}</T3SurfaceCardContent>
+          {/* Tighter than the default card padding — this is a strip in a section, not a panel. */}
+      <T3SurfaceCardContent className="p-2.5">{body}</T3SurfaceCardContent>
         </T3SurfaceCard>
       </div>
     );
@@ -76,7 +96,8 @@ export function T3TeamErrorState({
 
   return (
     <T3SurfaceCard role="alert" tone="danger" className={className}>
-      <T3SurfaceCardContent>{body}</T3SurfaceCardContent>
+      {/* Tighter than the default card padding — this is a strip in a section, not a panel. */}
+      <T3SurfaceCardContent className="p-2.5">{body}</T3SurfaceCardContent>
     </T3SurfaceCard>
   );
 }

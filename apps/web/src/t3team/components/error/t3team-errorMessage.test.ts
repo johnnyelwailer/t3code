@@ -153,10 +153,14 @@ describe("toUserFacingError", () => {
     });
   });
 
-  it("folds the action context into technical detail without changing the headline", () => {
+  it("names what failed in the headline and keeps the action in technical detail", () => {
     const result = toUserFacingError(new Error("boom"), { action: "loading assignees" });
-    expect(result.headline).toBe("Something went wrong.");
+    expect(result.headline).toBe("Loading assignees failed.");
     expect(result.technical).toContain("Action: loading assignees");
     expect(result.technical).toContain("boom");
+  });
+
+  it("falls back to the generic sentence only when no action is supplied", () => {
+    expect(toUserFacingError(new Error("boom")).headline).toBe("Something went wrong.");
   });
 });

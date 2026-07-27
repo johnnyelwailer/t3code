@@ -17,6 +17,7 @@ export function WorkItemChildRow({
   canWrite,
   backend,
   accountId,
+  estimateFieldLabel,
   onReload,
 }: {
   readonly child: ProjectTicket;
@@ -25,6 +26,12 @@ export function WorkItemChildRow({
   readonly canWrite: boolean;
   readonly backend?: AtlassianBackendApi | undefined;
   readonly accountId?: string | undefined;
+  /**
+   * The project's story-point field label, as the backlog resolves it. Without it the cell can
+   * only offer an estimate on hour-tracked issues; leaving it undefined is the honest state, not
+   * a reason to invent a unit.
+   */
+  readonly estimateFieldLabel?: string | undefined;
   readonly onReload?: (() => void) | undefined;
 }) {
   return (
@@ -47,6 +54,8 @@ export function WorkItemChildRow({
               <ProjectBacklogRowEstimateCell
                 ticket={child}
                 compact
+                quiet
+                {...(estimateFieldLabel ? { estimateFieldLabel } : {})}
                 onUpdateEstimate={async (target, estimateValue) => {
                   await backend!.updateIssueEstimate({
                     accountId: accountId!,

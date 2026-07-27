@@ -53,7 +53,11 @@ export function useWorkItemDetailViewModel({
   const { addToChatFromRequest } = useAddToChat();
   // Whole project, not My Work: children/parents/links are routinely assigned
   // to somebody else, so `assignee = currentUser()` can never resolve them.
-  const { tickets: projectTickets, lastCheckedAt: jiraLastCheckedAt } = useProjectIssues(project);
+  const {
+    tickets: projectTickets,
+    estimateFieldLabel,
+    lastCheckedAt: jiraLastCheckedAt,
+  } = useProjectIssues(project);
   const currentUserName = useAtlassianCurrentUserDisplayName(project.source.accountId);
 
   const ticketLookup = useMemo(() => buildProjectTicketLookup(projectTickets), [projectTickets]);
@@ -153,6 +157,7 @@ export function useWorkItemDetailViewModel({
     attachments: asRecordArray(snapshot?.fields.attachments),
     sortedComments: sortCommentItems(asRecordArray(snapshot?.fields.commentItems)),
     projectTickets,
+    estimateFieldLabel,
     ticketsWithRelated,
     relatedTickets,
     relationshipKeys,

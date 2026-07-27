@@ -35,6 +35,7 @@ export function WorkItemSecondaryColumn({
   attachments,
   comments,
   nowMs,
+  estimateFieldLabel,
   htmlBaseUrl,
   resolveAssetUrl,
   renderCommentBody,
@@ -58,6 +59,8 @@ export function WorkItemSecondaryColumn({
   readonly attachments: ReadonlyArray<JiraAttachment>;
   readonly comments: ReadonlyArray<JiraCommentItem>;
   readonly nowMs: number;
+  /** The project's story-point field label, resolved server-side; absent means "not known". */
+  readonly estimateFieldLabel?: string | undefined;
   readonly htmlBaseUrl?: string | undefined;
   readonly resolveAssetUrl?: ((url: string) => string) | undefined;
   readonly renderCommentBody?: (comment: JiraCommentItem) => ReactNode;
@@ -74,6 +77,7 @@ export function WorkItemSecondaryColumn({
         anchorId={anchors.children}
         onOpenTicket={onOpenTicket}
         {...(externalProjectId ? { externalProjectId } : {})}
+        {...(estimateFieldLabel ? { estimateFieldLabel } : {})}
         {...writeProps}
         {...(currentUserName ? { currentUserName } : {})}
         {...sectionMenu("relationships", `${issueKey} child items`)}

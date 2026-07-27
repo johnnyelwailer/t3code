@@ -40,6 +40,8 @@ export type WorkItemDetailMainProps = {
   readonly attachments: ReadonlyArray<JiraAttachment>;
   readonly comments: ReadonlyArray<JiraCommentItem>;
   readonly nowMs: number;
+  /** Project's story-point field label, for the child rows' estimate cell. Absent = not known. */
+  readonly estimateFieldLabel?: string | undefined;
   readonly loading: boolean;
   readonly error: string | null;
   readonly onReload: () => void;
@@ -83,6 +85,7 @@ export function WorkItemDetailMain({
   attachments,
   comments,
   nowMs,
+  estimateFieldLabel,
   loading,
   error,
   onReload,
@@ -149,7 +152,7 @@ export function WorkItemDetailMain({
       primary={
         <>
           {error ? (
-            <T3TeamErrorState error={error} action="load this work item" onRetry={onReload} />
+            <T3TeamErrorState error={error} action="loading this work item" onRetry={onReload} />
           ) : null}
 
           <WorkItemSection
@@ -196,6 +199,7 @@ export function WorkItemDetailMain({
           attachments={attachments}
           comments={comments}
           nowMs={nowMs}
+          {...(estimateFieldLabel ? { estimateFieldLabel } : {})}
           onOpenTicket={onOpenTicket}
           onReload={onReload}
           renderCommentBody={renderCommentBody}

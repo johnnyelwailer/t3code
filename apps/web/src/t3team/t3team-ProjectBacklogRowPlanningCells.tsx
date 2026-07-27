@@ -1,6 +1,8 @@
+import { Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 
 import { Badge } from "~/t3team/components/ui/t3team-badge";
+import { cn } from "~/t3team/lib/t3team-utils";
 import { Input } from "~/t3team/components/ui/t3team-input";
 import { getProjectTicketEstimatePresentation } from "~/t3team/t3team-projectBacklogEstimate";
 import { ProjectBacklogEstimateReadonlyValue } from "~/t3team/t3team-ProjectBacklogEstimateReadonly";
@@ -13,6 +15,7 @@ export function ProjectBacklogRowEstimateCell({
   estimateFieldLabel,
   onUpdateEstimate,
   compact = false,
+  quiet = false,
   draftValue,
   onDraftChange,
   onCommitRequest,
@@ -22,6 +25,8 @@ export function ProjectBacklogRowEstimateCell({
   estimateFieldLabel?: string;
   onUpdateEstimate: (ticket: ProjectTicket, estimateValue: number | null) => Promise<void>;
   compact?: boolean;
+  /** Drop the field's chrome until hover or focus, for use inside a list row rather than a table. */
+  quiet?: boolean;
   draftValue?: string;
   onDraftChange?: (value: string) => void;
   onCommitRequest?: () => void;
@@ -85,6 +90,33 @@ export function ProjectBacklogRowEstimateCell({
     focusAndSelectEstimateInput();
   }
 
+  /*
+    ± stepping, folded into this cell rather than living in a second component.
+
+    `ChildIssueEstimateField` had the stepper but hardcoded hours; this cell had the unit but only a
+    bare number field. Neither was right on its own, so the step size now follows the resolved unit —
+    half-hours for time, whole points for story points, since half a story point is not a thing.
+  */
+  const stepSize = estimatePresentation.valueSuffix === "H" ? 0.5 : 1;
+
+  async function stepEstimate(delta: number) {
+    const current = Number(estimateDraft.trim());
+    const base = Number.isFinite(current) ? current : 0;
+    const next = Math.max(0, Math.round((base + delta) / stepSize) * stepSize);
+    const nextText = next === 0 ? "" : String(next);
+    updateEstimateDraft(nextText);
+
+    setEstimateSaving(true);
+    setEstimateError(null);
+    try {
+      await onUpdateEstimate(ticket, next === 0 ? null : next);
+    } catch (cause) {
+      setEstimateError(cause instanceof Error ? cause.message : "Failed to save estimate.");
+    } finally {
+      setEstimateSaving(false);
+    }
+  }
+
   async function handleEstimateCommit() {
     const trimmed = estimateDraft.trim();
     if (!trimmed) {
@@ -137,8 +169,17 @@ export function ProjectBacklogRowEstimateCell({
             title={estimateError ?? undefined}
             className={
               compact
-                ? `inline-flex h-7 min-w-[5.25rem] cursor-text items-center gap-1 rounded-md border bg-background/90 px-1.5 ${
-                    estimateError ? "border-destructive" : "border-border/70"
+                ? `inline-flex h-7 min-w-[5.25rem] cursor-text items-center gap-1 rounded-md border px-1.5 transition-colors ${
+                    estimateError
+                      ? "border-destructive bg-background/90"
+                      : quiet
+                        ? /*
+                            In a list row the filled box reads as a heavy control sitting in the
+                            middle of the line. Quiet keeps it flush until you go near it, then it
+                            becomes obviously editable.
+                          */
+                          "border-transparent bg-transparent hover:border-border/70 hover:bg-background/90 focus-within:border-border/70 focus-within:bg-background/90"
+                        : "border-border/70 bg-background/90"
                   }`
                 : `inline-flex h-8 cursor-text items-center rounded-md border bg-background/90 px-2 ${
                     estimateError ? "border-destructive" : "border-border/70"
@@ -191,6 +232,33 @@ export function ProjectBacklogRowEstimateCell({
                 {estimatePresentation.valueSuffix}
               </span>
             ) : null}
+
+            {/*
+              Revealed with the field's own chrome rather than always on: in a quiet row the ±
+              buttons would be two more permanent marks per line. Sizing by hand is still one click.
+            */}
+            <span
+              className={cn(
+                "ml-0.5 flex shrink-0 items-center gap-0.5",
+                quiet && "opacity-0 transition-opacity group-hover/issue-row:opacity-100",
+              )}
+            >
+              {([-stepSize, stepSize] as const).map((delta) => (
+                <button
+                  key={delta}
+                  type="button"
+                  aria-label={`${delta < 0 ? "Decrease" : "Increase"} ${resolvedEstimateLabel.toLowerCase()} for ${ticket.ref.displayId}`}
+                  disabled={estimateSaving || (delta < 0 && Number(estimateDraft.trim() || 0) <= 0)}
+                  className="flex size-4 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void stepEstimate(delta);
+                  }}
+                >
+                  {delta < 0 ? <Minus className="size-3" /> : <Plus className="size-3" />}
+                </button>
+              ))}
+            </span>
           </div>
         )
       ) : (
