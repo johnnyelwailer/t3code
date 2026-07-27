@@ -1,7 +1,7 @@
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
+import { ProjectBacklogRowEstimateCell } from "~/t3team/t3team-ProjectBacklogRowPlanningCells";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { WorkItemChildAssigneeControl } from "~/t3team/workitem/t3team-WorkItemChildAssigneeControl";
-import { WorkItemChildEstimateControl } from "~/t3team/workitem/t3team-WorkItemChildEstimateControl";
 import { WorkItemIssueRow } from "~/t3team/workitem/t3team-WorkItemIssueRow";
 
 /**
@@ -34,12 +34,27 @@ export function WorkItemChildRow({
       {...(onOpenTicket ? { onOpen: onOpenTicket } : {})}
       {...(canWrite
         ? {
+            /*
+              The backlog's own estimate cell, used unchanged.
+
+              It already resolves hours versus story points from the project's Jira configuration,
+              prints the matching unit, owns its draft/saving/error state, and goes read-only when
+              Jira says the field is not editable. A work-item-specific estimate control was a second
+              copy of all that — and a worse one: it hardcoded "Story points", so an hours project
+              was asked for points.
+            */
             estimateControl: (
-              <WorkItemChildEstimateControl
-                child={child}
-                backend={backend!}
-                accountId={accountId!}
-                onReload={onReload!}
+              <ProjectBacklogRowEstimateCell
+                ticket={child}
+                compact
+                onUpdateEstimate={async (target, estimateValue) => {
+                  await backend!.updateIssueEstimate({
+                    accountId: accountId!,
+                    issueIdOrKey: target.ref.displayId ?? target.id,
+                    estimateValue,
+                  });
+                  onReload!();
+                }}
               />
             ),
             assigneeControl: (

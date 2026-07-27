@@ -55,6 +55,8 @@ export type WorkItemDetailMainProps = {
     | undefined;
   /** Extra sections rendered under the description — GitHub activity, draft review. */
   readonly supplementalSections?: ReactNode;
+  /** The Description section header's own affordance — the "Rewrite with agent" control. */
+  readonly descriptionAction?: ReactNode;
 };
 
 /**
@@ -88,6 +90,7 @@ export function WorkItemDetailMain({
   currentUserName,
   onSectionContextMenu,
   supplementalSections,
+  descriptionAction,
 }: WorkItemDetailMainProps) {
   // Built first: `mutations` is the one shared instance per field the chip and the strip both
   // commit through, so the content hook below can hand it to the strip.
@@ -152,6 +155,7 @@ export function WorkItemDetailMain({
           <WorkItemSection
             title="Description"
             anchorId={anchors.description}
+            {...(descriptionAction ? { action: descriptionAction } : {})}
             {...sectionMenu("description", `${model.key} description`)}
           >
             {/* Only the first load shows a skeleton; a refresh keeps the current content visible. */}

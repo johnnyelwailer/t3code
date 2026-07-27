@@ -90,19 +90,40 @@ export function WorkItemPersonAvatar({
 }
 
 /** Avatar plus name, the standard way a person appears inline throughout the detail view. */
+/**
+ * Whether a displayed person is the signed-in user.
+ *
+ * One comparison, shared. Each call site doing its own `trim().toLowerCase()` is how the "assigned
+ * to me" ring ended up on some chips and not others — a chip rendered through
+ * `WorkItemAssigneeControl` never received the flag at all, so the marker silently vanished
+ * everywhere the interactive control replaced a plain avatar.
+ */
+export function isWorkItemCurrentUser(
+  person: WorkItemPerson | undefined,
+  currentUserName: string | undefined,
+): boolean {
+  if (!person || !currentUserName) return false;
+  return person.displayName.trim().toLowerCase() === currentUserName.trim().toLowerCase();
+}
+
 export function WorkItemPersonChip({
   person,
   emptyLabel = "Unassigned",
   size = "md",
-  isCurrentUser = false,
+  currentUserName,
+  isCurrentUser,
   className,
 }: {
   readonly person: WorkItemPerson | undefined;
   readonly emptyLabel?: string;
   readonly size?: WorkItemAvatarSize;
+  /** Preferred over `isCurrentUser`: the chip derives the marker so no caller can forget it. */
+  readonly currentUserName?: string | undefined;
   readonly isCurrentUser?: boolean;
   readonly className?: string;
 }) {
+  const marksCurrentUser = isCurrentUser ?? isWorkItemCurrentUser(person, currentUserName);
+
   return (
     /*
       The chip decides for itself whether it has room for a name: below ~5rem of its OWN container it
@@ -112,10 +133,14 @@ export function WorkItemPersonChip({
     <span
       className={cn("@container/person-chip flex min-w-0 items-center gap-1.5", className)}
       title={
-        person ? (isCurrentUser ? `${person.displayName} (you)` : person.displayName) : emptyLabel
+        person
+          ? marksCurrentUser
+            ? `${person.displayName} (you)`
+            : person.displayName
+          : emptyLabel
       }
     >
-      <WorkItemPersonAvatar person={person} size={size} isCurrentUser={isCurrentUser} />
+      <WorkItemPersonAvatar person={person} size={size} isCurrentUser={marksCurrentUser} />
       <span
         data-slot="person-name"
         className={cn(

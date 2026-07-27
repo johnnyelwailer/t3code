@@ -24,6 +24,7 @@ export function buildWorkItemDetailMainProps({
   project,
   onOpenTicket,
   showAgentContextMenu,
+  descriptionAction,
 }: {
   readonly view: WorkItemDetailView;
   readonly project: ProjectShellProject;
@@ -31,6 +32,9 @@ export function buildWorkItemDetailMainProps({
   readonly showAgentContextMenu: Parameters<
     typeof createSectionContextMenuHandler
   >[0]["showAgentContextMenu"];
+  /** The Description section header's own affordance — built by the caller, which owns the thread
+   * context ("Rewrite with agent" needs `activeThread`/`onKickoffThread`, not this pure mapping). */
+  readonly descriptionAction?: WorkItemDetailMainProps["descriptionAction"];
 }): WorkItemDetailMainProps {
   const resolvedTicketId = view.ticket?.id ?? view.canonicalTicketId;
 
@@ -91,6 +95,7 @@ export function buildWorkItemDetailMainProps({
     error: view.error,
     onReload: () => void view.reload(),
     onOpenTicket,
+    ...(descriptionAction ? { descriptionAction } : {}),
     supplementalSections: (
       <>
         {/*

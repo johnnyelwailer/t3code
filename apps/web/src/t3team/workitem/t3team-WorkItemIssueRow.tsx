@@ -2,7 +2,7 @@ import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueTy
 import { cn } from "~/t3team/lib/t3team-utils";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { getProjectTicketEstimatePresentation } from "~/t3team/t3team-projectBacklogEstimate";
-import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
+import { WorkItemPersonChip } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 import { WorkItemStatusBadge } from "~/t3team/workitem/t3team-WorkItemStatusBadge";
 
 /**
@@ -34,10 +34,6 @@ export function WorkItemIssueRow({
   readonly className?: string;
 }) {
   const summary = ticket.ref.title;
-  const isAssignedToCurrentUser =
-    currentUserName !== undefined &&
-    ticket.assignee !== undefined &&
-    ticket.assignee.trim().toLowerCase() === currentUserName.trim().toLowerCase();
   const isPlaceholder = summary === ticket.ref.displayId;
 
   /*
@@ -130,10 +126,10 @@ export function WorkItemIssueRow({
         */}
         <span className="min-w-0 justify-self-start">
           {assigneeControl ?? (
-            <WorkItemPersonAvatar
+            <WorkItemPersonChip
               person={ticket.assignee ? { displayName: ticket.assignee } : undefined}
               size="md"
-              isCurrentUser={isAssignedToCurrentUser}
+              {...(currentUserName ? { currentUserName } : {})}
             />
           )}
         </span>

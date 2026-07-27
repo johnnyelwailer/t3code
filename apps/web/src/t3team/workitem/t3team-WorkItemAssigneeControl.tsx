@@ -158,7 +158,10 @@ export function WorkItemAssigneeControl({
           className="-mx-1.5 inline-flex min-w-0 items-center rounded-md px-1.5 py-0.5 leading-none outline-none transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
         >
           <span className="flex min-w-0 items-center gap-1.5">
-            <WorkItemPersonChip person={mutation.value ?? undefined} />
+            <WorkItemPersonChip
+              person={mutation.value ?? undefined}
+              {...(currentUserName ? { currentUserName } : {})}
+            />
             {marker}
             {mutation.pending ? <Spinner className="size-3 shrink-0" /> : null}
           </span>
