@@ -56,6 +56,21 @@ export function isAtlassianOAuthPopupClosedError(error: unknown): boolean {
 }
 
 function acceptOAuthCallbackMessage(event: MessageEvent, redirectUri: string): string | null {
+  /*
+    Origin check first, before the payload is looked at.
+
+    The shape check and the redirect-URI prefix are both attacker-forgeable — any document able to
+    reach this window could post a message carrying an href that starts with our redirect URI, and
+    we would have handed its `code` and `state` straight to the token exchange. That defeats the
+    CSRF protection `state` exists to provide.
+
+    Both real senders are same-origin: the callback page posts to `window.opener`, and the
+    no-opener path uses a BroadcastChannel, which is same-origin by construction and reports this
+    page's origin here.
+  */
+  if (event.origin !== window.location.origin) {
+    return null;
+  }
   if (!isAtlassianOAuthCallbackMessage(event.data, redirectUri)) {
     return null;
   }

@@ -28,7 +28,12 @@ export function postAtlassianOAuthCallbackToOpener(href: string): boolean {
     type: ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE,
     href,
   };
-  opener.postMessage(message, "*");
+  /*
+    Addressed to our own origin, never "*". The callback page and the waiting app are the same
+    origin by construction, so there is no reason to broadcast the authorization href to whatever
+    document happens to hold this window — and `*` meant any listener could read it.
+  */
+  opener.postMessage(message, window.location.origin);
   return true;
 }
 
