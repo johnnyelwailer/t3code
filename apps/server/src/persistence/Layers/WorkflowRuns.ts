@@ -49,9 +49,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           interaction_mode,
           status,
           origin,
+          recipe_path,
           pending_thread_id,
           pending_correlation_id,
           pending_kind,
+          failure_reason,
+          failure_step,
           wake_at,
           created_at,
           updated_at
@@ -68,9 +71,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           ${row.interactionMode},
           ${row.status},
           ${row.origin},
+          ${row.recipePath},
           ${row.pendingThreadId},
           ${row.pendingCorrelationId},
           ${row.pendingKind},
+          ${row.failureReason ?? null},
+          ${row.failureStep ?? null},
           ${row.wakeAt},
           ${row.createdAt},
           ${row.updatedAt}
@@ -87,9 +93,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           interaction_mode = excluded.interaction_mode,
           status = excluded.status,
           origin = excluded.origin,
+          recipe_path = excluded.recipe_path,
           pending_thread_id = excluded.pending_thread_id,
           pending_correlation_id = excluded.pending_correlation_id,
           pending_kind = excluded.pending_kind,
+          failure_reason = excluded.failure_reason,
+          failure_step = excluded.failure_step,
           wake_at = excluded.wake_at,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
@@ -113,9 +122,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           status,
           origin,
+          recipe_path AS "recipePath",
           pending_thread_id AS "pendingThreadId",
           pending_correlation_id AS "pendingCorrelationId",
           pending_kind AS "pendingKind",
+          failure_reason AS "failureReason",
+          failure_step AS "failureStep",
           wake_at AS "wakeAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -141,9 +153,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           status,
           origin,
+          recipe_path AS "recipePath",
           pending_thread_id AS "pendingThreadId",
           pending_correlation_id AS "pendingCorrelationId",
           pending_kind AS "pendingKind",
+          failure_reason AS "failureReason",
+          failure_step AS "failureStep",
           wake_at AS "wakeAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -153,7 +168,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
-  // Observability listing (t3team.workflow.status list mode) — most recently touched runs,
+  // Observability listing (t3team.orchestration.status list mode) — most recently touched runs,
   // any status, newest first. Not used for boot rehydration (that scans by status).
   const listRecentWorkflowRunRows = SqlSchema.findAll({
     Request: ListRecentWorkflowRunsInput,
@@ -172,9 +187,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           status,
           origin,
+          recipe_path AS "recipePath",
           pending_thread_id AS "pendingThreadId",
           pending_correlation_id AS "pendingCorrelationId",
           pending_kind AS "pendingKind",
+          failure_reason AS "failureReason",
+          failure_step AS "failureStep",
           wake_at AS "wakeAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -240,15 +258,19 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
+  // Terminal settle. The failure columns are written UNCONDITIONALLY (NULL when the caller
+  // supplied none), so completing a previously failed run after a resume clears its stale reason.
   const clearWorkflowRunPendingRow = SqlSchema.void({
     Request: ClearWorkflowRunPendingInput,
-    execute: ({ runId, status, updatedAt }) =>
+    execute: ({ runId, status, updatedAt, failureReason, failureStep }) =>
       sql`
         UPDATE workflow_runs
         SET status = ${status},
             pending_thread_id = NULL,
             pending_correlation_id = NULL,
             pending_kind = NULL,
+            failure_reason = ${failureReason ?? null},
+            failure_step = ${failureStep ?? null},
             wake_at = NULL,
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND status != 'cancelled'

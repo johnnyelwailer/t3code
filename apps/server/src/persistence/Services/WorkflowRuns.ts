@@ -43,7 +43,7 @@ export const WorkflowRunPendingKind = Schema.Literals(["thread.turn", "user.inpu
 export type WorkflowRunPendingKind = typeof WorkflowRunPendingKind.Type;
 
 /** How the run was launched: from a discovered recipe, or agent-authored via
- * `t3team.workflow.run` (ephemeral — no recipe on disk, source under `.t3team-runs/`). */
+ * `t3team.orchestration.run` (ephemeral — no recipe on disk, source under `.t3team-runs/`). */
 export const WorkflowRunOrigin = Schema.Literals(["recipe", "ephemeral"]);
 export type WorkflowRunOrigin = typeof WorkflowRunOrigin.Type;
 
@@ -64,12 +64,21 @@ export const WorkflowRun = Schema.Struct({
   status: WorkflowRunStatus,
   /** Launch origin — `recipe` (discovered recipe) or `ephemeral` (agent-authored, tool-launched). */
   origin: WorkflowRunOrigin,
+  /** The launching recipe's directory — rehydration re-resolves the recipe's private scripts
+   * from it (`resolveRecipeWorkflowScripts`). NULL for ephemeral/scriptless (or pre-043) runs. */
+  recipePath: Schema.NullOr(Schema.String),
   /** The thread the current ask is parked on (a spawned thread for agent() sub-threads). */
   pendingThreadId: Schema.NullOr(Schema.String),
   /** The correlation the run is parked on — an ask reply for `suspended`, the `waitUntil` sent
    * entry for `sleeping` (the scheduler resolves this when the deadline arrives). */
   pendingCorrelationId: Schema.NullOr(Schema.String),
   pendingKind: Schema.NullOr(WorkflowRunPendingKind),
+  /** Agent-facing readable reason the run failed (migration 044), written by the ONE terminal
+   * failure funnel and cleared by any non-failing settle. NULL unless the run failed. Optional
+   * on the domain shape so existing row builders stay valid; the column itself is nullable. */
+  failureReason: Schema.optional(Schema.NullOr(Schema.String)),
+  /** Where it failed — the settle phase plus the primitive in flight (migration 044). */
+  failureStep: Schema.optional(Schema.NullOr(Schema.String)),
   /** The wall-clock instant a `sleeping` run is due (Epic 27) — the scheduler's index. Null
    * for a run not parked on a timer. */
   wakeAt: Schema.NullOr(IsoDateTime),
@@ -84,7 +93,7 @@ export type GetWorkflowRunInput = typeof GetWorkflowRunInput.Type;
 export const ListWorkflowRunsByStatusInput = Schema.Struct({ status: WorkflowRunStatus });
 export type ListWorkflowRunsByStatusInput = typeof ListWorkflowRunsByStatusInput.Type;
 
-/** The N most recently updated runs, any status — backs `t3team.workflow.status`'s list mode. */
+/** The N most recently updated runs, any status — backs `t3team.orchestration.status`'s list mode. */
 export const ListRecentWorkflowRunsInput = Schema.Struct({ limit: Schema.Number });
 export type ListRecentWorkflowRunsInput = typeof ListRecentWorkflowRunsInput.Type;
 
@@ -112,11 +121,15 @@ export const SetWorkflowRunPendingInput = Schema.Struct({
 });
 export type SetWorkflowRunPendingInput = typeof SetWorkflowRunPendingInput.Type;
 
-/** Clear the pending ask and set a (typically terminal) status, in one update. */
+/** Clear the pending ask and set a (typically terminal) status, in one update. A failing settle
+ * also records WHY here; a non-failing settle omits both and the columns are reset to NULL, so a
+ * later successful resume never leaves a stale reason behind. */
 export const ClearWorkflowRunPendingInput = Schema.Struct({
   runId: Schema.String,
   status: WorkflowRunStatus,
   updatedAt: IsoDateTime,
+  failureReason: Schema.optional(Schema.String),
+  failureStep: Schema.optional(Schema.String),
 });
 export type ClearWorkflowRunPendingInput = typeof ClearWorkflowRunPendingInput.Type;
 

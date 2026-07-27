@@ -17,13 +17,13 @@
 import * as Clock from "effect/Clock";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as NodeURL from "node:url";
 
 import { queryableToReadonlyArray } from "@t3tools/project-context";
 import {
-  buildRecipeMatchSignalsFromRenderContext,
   matchRecipes,
   type ProjectRecipeDiscovered,
   type ProjectRecipeRenderContext,
@@ -34,7 +34,21 @@ import {
 } from "@t3tools/project-recipes";
 import type { AnyRecipeRef } from "@t3team/sdk";
 
-import { isRelativePath, resolveWithinRoot } from "./t3team-projectRecipeDiscoveryShared.ts";
+import {
+  resolveRecipeDefaultPrompt,
+  resolveRecipeNamedActions,
+  resolveRecipeWorkflowPath,
+} from "./t3team-projectRecipeActions.ts";
+import { ensureProjectRecipeModuleResolution } from "./t3team-projectRecipeModuleResolution.ts";
+import {
+  renderRecipeMetadata,
+  type RenderedRecipeMetadata,
+} from "./t3team-projectRecipeMetadata.ts";
+import {
+  originFields,
+  PROJECT_LOCAL_ORIGIN,
+  type ProjectRecipeOrigin,
+} from "./t3team-projectRecipeOrigin.ts";
 
 /** A `recipe.ts` module loaded fine but did not default-export a `defineRecipe(...)` result. */
 export class T3TeamRecipeModuleShapeError extends Data.TaggedError("T3TeamRecipeModuleShapeError")<{
@@ -46,26 +60,32 @@ export class T3TeamRecipeModuleShapeError extends Data.TaggedError("T3TeamRecipe
  * {@link matchRecipes} applicability/scoring engine — the same one bundled recipes use — decides
  * visibility and rank. Keeps recipe.ts and recipe.json recipes ranked on one ruleset.
  */
-function toRecipe(ref: AnyRecipeRef): Recipe {
+function toRecipe(ref: AnyRecipeRef, metadata: RenderedRecipeMetadata): Recipe {
   return {
     id: ref.id,
-    title: ref.title,
-    shortDescription: ref.shortDescription,
+    title: metadata.title,
+    shortDescription: metadata.shortDescription,
     surfaces: ref.surfaces as ReadonlyArray<RecipeSurface>,
     appliesTo: (ref.appliesTo ?? {}) as RecipeApplicability,
-    requiredContext: [],
+    // Declared needs reach the locked matcher, which hides the recipe when a non-optional key is
+    // absent from `availableContextKeys` — the specced "say what you need" path, no I/O per recipe.
+    requiredContext: (ref.requiredContext ?? []) as Recipe["requiredContext"],
     outputPreference: "markdown",
-    ...(ref.icon !== undefined ? { icon: ref.icon } : {}),
-    ...(ref.rank !== undefined ? { rankHint: ref.rank } : {}),
+    ...(metadata.icon !== undefined ? { icon: metadata.icon } : {}),
+    ...(ref.slashAlias !== undefined ? { slashAlias: ref.slashAlias } : {}),
+    ...(metadata.rank !== undefined ? { rankHint: metadata.rank } : {}),
   };
 }
 
 /** Build a {@link RecipeMatchInput} from the render context (mirrors the bundled-compat matcher). */
 function buildMatchInput(context: ProjectRecipeRenderContext): RecipeMatchInput {
   const provider = context.project.provider;
-  const linkedProviders = queryableToReadonlyArray(context.linkedResources)
-    .map((resource) => resource.provider)
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  // Filter through the Queryable so the access stays observable and only matches materialise —
+  // `toReadonlyArray().filter(...)` would pull the whole collection and defeat the tracking.
+  const linkedProviders = context.linkedResources
+    .where((resource) => typeof resource.provider === "string" && resource.provider.length > 0)
+    .toReadonlyArray()
+    .map((resource) => resource.provider as string);
   return {
     activeProject: provider ? { source: { provider } } : {},
     selectedResource: null,
@@ -76,26 +96,13 @@ function buildMatchInput(context: ProjectRecipeRenderContext): RecipeMatchInput 
     enabledSkillPacks: context.enabledSkillPacks,
     profile: context.profile,
     availableContextKeys: queryableToReadonlyArray(context.availableContextKeys),
-    signals: buildRecipeMatchSignalsFromRenderContext(context),
+    // Handed through so a recipe's `visible` filter has something to read.
+    renderContext: context,
   };
 }
 
-/**
- * Resolve the recipe's `defaultAction` workflow to an absolute path within the recipe directory.
- * Recompute from `recipePath` + the ref's original relative `path` (rather than trusting the ref's
- * stack-derived `absolutePath`) so resolution is stable regardless of how the module was loaded;
- * fall back to `absolutePath` for absolute / `file://` author forms.
- */
-export function resolveRecipeWorkflowPath(
-  pathService: Path.Path,
-  recipePath: string,
-  ref: AnyRecipeRef,
-): string {
-  const actionPath = ref.defaultAction.path;
-  return isRelativePath(actionPath)
-    ? resolveWithinRoot(pathService, recipePath, actionPath)
-    : ref.defaultAction.absolutePath;
-}
+/** Re-exported so existing callers keep one import site for "the recipe's default workflow". */
+export { resolveRecipeWorkflowPath };
 
 /**
  * Import a project-local `recipe.ts` module (cache-busted so edits re-import fresh) and return its
@@ -105,6 +112,9 @@ export function resolveRecipeWorkflowPath(
 export const importRecipeModuleRef = Effect.fn("importRecipeModuleRef")(function* (
   modulePath: string,
 ) {
+  // Project-local modules import `@t3team/sdk`; without this they fail with ERR_MODULE_NOT_FOUND
+  // in any workspace that is not itself under an install.
+  ensureProjectRecipeModuleResolution();
   const moduleUrl = NodeURL.pathToFileURL(modulePath);
   moduleUrl.searchParams.set("v", String(yield* Clock.currentTimeMillis));
   const imported = (yield* Effect.tryPromise(() => import(moduleUrl.toString()))) as {
@@ -129,6 +139,8 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
     /** Absolute path to the recipe's `recipe.ts`. */
     readonly modulePath: string;
     readonly context: ProjectRecipeRenderContext;
+    /** Defaults to project-local; pack discovery passes its own pack-scoped origin. */
+    readonly origin?: ProjectRecipeOrigin;
   }) {
     const pathService = yield* Path.Path;
 
@@ -137,31 +149,54 @@ export const discoverProjectRecipeModuleAtPath = Effect.fn("discoverProjectRecip
       return Option.none<ProjectRecipeDiscovered>();
     }
 
-    const match = matchRecipes([toRecipe(ref)], buildMatchInput(input.context))[0];
+    // ctx-derived metadata + `visible` (Epic 16 §Plugin Modules). A deriver that throws hides only
+    // this recipe; `visible` is ANDed with the declarative gates below, so it can only narrow.
+    const rendered = renderRecipeMetadata(ref, input.context);
+    if (rendered.kind !== "rendered") {
+      return Option.none<ProjectRecipeDiscovered>();
+    }
+    const metadata = rendered.metadata;
+
+    const match = matchRecipes([toRecipe(ref, metadata)], buildMatchInput(input.context))[0];
     if (!match) {
       return Option.none<ProjectRecipeDiscovered>();
     }
 
     const workflowPath = resolveRecipeWorkflowPath(pathService, input.recipePath, ref);
+    const actions = resolveRecipeNamedActions(pathService, input.recipePath, ref);
+
+    // A prompt default action (`definePrompt`) supplies the launcher's prompt material through the
+    // same `prompt`/`promptPath` fields the retired recipe.json form used, so no launcher has to
+    // learn a new shape. A prompt file that cannot be read degrades to empty prompt material
+    // rather than removing the recipe from the catalog.
+    const defaultPrompt = resolveRecipeDefaultPrompt(pathService, input.recipePath, ref);
+    const promptText = defaultPrompt?.promptPath
+      ? yield* (yield* FileSystem.FileSystem)
+          .readFileString(defaultPrompt.promptPath)
+          .pipe(Effect.orElseSucceed(() => ""))
+      : (defaultPrompt?.promptText ?? "");
 
     return Option.some({
       id: ref.id,
       version: ref.version,
-      source: "project-local",
-      displayName: ref.title,
-      shortDescription: ref.shortDescription,
-      ...(ref.icon ? { icon: ref.icon } : {}),
+      ...originFields(input.origin ?? PROJECT_LOCAL_ORIGIN),
+      displayName: metadata.title,
+      shortDescription: metadata.shortDescription,
+      ...(metadata.icon ? { icon: metadata.icon } : {}),
+      ...(ref.slashAlias ? { slashAlias: ref.slashAlias } : {}),
       surfaces: ref.surfaces as ReadonlyArray<RecipeSurface>,
       rank: match.score,
       ...(match.reason ? { reason: match.reason } : {}),
-      // recipe.ts recipes are workflow-first: their prompt material lives in the `.workflow.ts`
-      // body (each `agent` call), not a separate prompt.md, so the legacy prompt fields are empty.
-      prompt: "",
-      promptPath: "",
+      // Workflow-first recipes keep their prompt material in the `.workflow.ts` body (each `agent`
+      // call), so these stay empty; a `definePrompt` default action fills them.
+      prompt: promptText,
+      promptPath: defaultPrompt?.promptPath ?? "",
       sourcePath: input.modulePath,
       recipePath: input.recipePath,
-      workflowPath,
+      ...(workflowPath ? { workflowPath } : {}),
+      ...(actions.length === 0 ? {} : { actions }),
       allowedToolGroups: ref.allowedToolGroups ?? [],
+      ...(ref.scripts === undefined ? {} : { scriptNames: Object.keys(ref.scripts) }),
     } satisfies ProjectRecipeDiscovered);
   },
 );

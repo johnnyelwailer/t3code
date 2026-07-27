@@ -634,6 +634,9 @@ export function deriveWorkLogEntries(
     // Workflow step activities belong to the workflow card, which already renders their live
     // state. Keeping them in the generic log duplicates repair/progress copy below the card.
     if (activity.kind === PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP) continue;
+    // Same for workflow-owned child handoffs (payload carries the owning workflowRunId): the
+    // card's step rows already link the spawned threads — logging them again floods the timeline.
+    if (isWorkflowOwnedHandoffActivity(activity)) continue;
     if (activity.kind === "tool.started") continue;
     if (activity.kind === "task.started") continue;
     if (activity.kind === "context-window.updated") continue;
@@ -645,6 +648,17 @@ export function deriveWorkLogEntries(
     const { activityKind, collapseKey: _collapseKey, ...rest } = entry;
     return Object.assign(rest, { sourceActivityKind: activityKind });
   });
+}
+
+function isWorkflowOwnedHandoffActivity(activity: OrchestrationThreadActivity): boolean {
+  if (activity.kind !== "t3team.handoff.started" && activity.kind !== "t3team.handoff.created") {
+    return false;
+  }
+  const payload =
+    activity.payload && typeof activity.payload === "object" && !Array.isArray(activity.payload)
+      ? (activity.payload as Record<string, unknown>)
+      : null;
+  return typeof payload?.workflowRunId === "string" && payload.workflowRunId.length > 0;
 }
 
 function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): boolean {

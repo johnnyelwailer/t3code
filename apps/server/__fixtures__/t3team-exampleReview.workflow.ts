@@ -4,6 +4,7 @@
 // exercising agent(schema) (isolated turn) + thread.askUser(schema) (user escalation) through
 // the durable engine's suspend/resume.
 import { Schema } from "effect";
+import { agent, getArgs, getThread } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ prTitle: Schema.String });
 
@@ -20,18 +21,23 @@ export const meta = {
   capabilities: ["user"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const thread = getThread();
 
-const Summary = Schema.Struct({ summary: Schema.String });
-const review = await agent(`Review this pull request and summarize the risk: ${input.prTitle}`, {
-  schema: Summary,
-});
+  const input = Schema.decodeSync(Inputs)(args);
 
-if (thread === undefined) throw new Error("example.pr-review must run in a launching thread");
+  const Summary = Schema.Struct({ summary: Schema.String });
+  const review = await agent(`Review this pull request and summarize the risk: ${input.prTitle}`, {
+    schema: Summary,
+  });
 
-const Decision = Schema.Struct({ merge: Schema.Boolean });
-const decision = await thread.askUser(`Merge "${input.prTitle}"?\n\n${review.summary}`, {
-  schema: Decision,
-});
+  if (thread === undefined) throw new Error("example.pr-review must run in a launching thread");
 
-return { summary: review.summary, merged: decision.merge };
+  const Decision = Schema.Struct({ merge: Schema.Boolean });
+  const decision = await thread.askUser(`Merge "${input.prTitle}"?\n\n${review.summary}`, {
+    schema: Decision,
+  });
+
+  return { summary: review.summary, merged: decision.merge };
+}

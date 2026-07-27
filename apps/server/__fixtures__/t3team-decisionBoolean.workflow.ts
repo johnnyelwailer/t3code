@@ -3,6 +3,7 @@
 // message must carry the `workflow.decision` view with a `boolean` affordance, and the run
 // completes with the chosen boolean.
 import { Schema } from "effect";
+import { getArgs, getThread } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ question: Schema.String });
 
@@ -16,13 +17,18 @@ export const meta = {
   capabilities: ["user"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const thread = getThread();
 
-if (thread === undefined) throw new Error("fixtures.decision-boolean requires a launching thread");
+  const input = Schema.decodeSync(Inputs)(args);
 
-const approved = await thread.askUser(input.question, {
-  schema: Schema.Boolean,
-  labels: { true: "Ship it", false: "Hold" },
-});
+  if (thread === undefined) throw new Error("fixtures.decision-boolean requires a launching thread");
 
-return { approved };
+  const approved = await thread.askUser(input.question, {
+    schema: Schema.Boolean,
+    labels: { true: "Ship it", false: "Hold" },
+  });
+
+  return { approved };
+}

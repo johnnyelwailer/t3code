@@ -5,7 +5,7 @@
  * launch drive through identical durability wiring:
  *   • the HTTP recipe-launch route (`t3team-thread-recipe-workflow-routes.ts`), which stamps the
  *     recipe-launch activity BEFORE calling in (composer-override disarm — recipe-only concern);
- *   • the `t3team.workflow.run` tool handler (`t3team-toolBrokerWorkflowRunTools.ts`), which
+ *   • the `t3team.orchestration.run` tool handler (`t3team-toolBrokerWorkflowRunTools.ts`), which
  *     skips the stamp (no composer override to disarm) and passes origin `ephemeral`.
  * It builds the SQLite-backed lifecycle row (with `origin`), emits the best-effort play-as-shape
  * preview into the launch thread (observability — an unreadable source skips it), then launches
@@ -18,7 +18,7 @@ import type {
   ProviderInteractionMode,
   RuntimeMode,
 } from "@t3tools/contracts";
-import type { JournalStore, WorkflowRunIntent } from "@t3team/sdk";
+import type { AnyScriptRef, JournalStore, WorkflowRunIntent } from "@t3team/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -74,6 +74,11 @@ export interface PreparedWorkflowLaunchInput {
   readonly runId: string;
   readonly workflowPath: string;
   readonly args: unknown;
+  /** The launching recipe's private scripts (recipe launches only; Epic 25 §Scripts). */
+  readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
+  /** The launching recipe's directory — persisted on the run row so boot rehydration can
+   * re-resolve `scripts` after a restart (see t3team-workflowRehydrateScripts.ts). */
+  readonly recipePath?: string | undefined;
   /** Agent-supplied contract; present for ephemeral workflow-tool launches. */
   readonly intent?: WorkflowRunIntent;
   /** Bounded host repair attempts; zero disables repair. */
@@ -117,6 +122,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
         origin: input.origin,
+        ...(input.recipePath === undefined ? {} : { recipePath: input.recipePath }),
         nowIso: nowIso(),
       }),
       ...(input.origin === "ephemeral" ? { status: "queued" as const } : {}),
@@ -158,7 +164,6 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
             workflowPath: input.workflowPath,
             sourceText: shapeSource,
             runId: input.runId,
-            newId: () => t3teamRandomUUID(),
             nowIso: nowIso(),
           });
     if (shapeCommand) {
@@ -182,6 +187,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       runId: input.runId,
       workflowPath: input.workflowPath,
       args: input.args,
+      ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
       runsRoot: `${input.workspaceRoot}/.t3team-runs`,
       launchThreadId: input.launchThreadId,
       projectId: input.projectId,

@@ -22,14 +22,14 @@ export interface T3TeamHelpTopic {
 const TOPICS: ReadonlyArray<T3TeamHelpTopic> = [
   {
     slug: "agent-orchestration",
-    title: "Agent orchestration (t3team_workflow_run)",
+    title: "Agent orchestration (t3team_orchestration_run)",
     summary:
-      "How to author t3team_workflow_run bodies — fan-out, sequencing, durable timers/routines, injected globals, and meta.",
+      "How to author t3team_orchestration_run bodies — fan-out, sequencing, durable timers/routines, injected globals, and meta.",
     body: T3TEAM_WORKFLOW_MANUAL,
   },
   {
     slug: "timers",
-    title: "Durable workflow timers and routines",
+    title: "Durable orchestration timers and routines",
     summary: "Exact waitUntil/now syntax for one-shot waits and recurring durable routines.",
     body: T3TEAM_TIMERS_MANUAL,
   },
@@ -40,9 +40,10 @@ const ALIASES: Readonly<Record<string, string>> = {
   workflow: "agent-orchestration",
   workflows: "agent-orchestration",
   runbook: "agent-orchestration",
-  runbooks: "agent-orchestration",
   orchestration: "agent-orchestration",
   "workflow-run": "agent-orchestration",
+  "orchestration-run": "agent-orchestration",
+  runbooks: "agent-orchestration",
   timer: "timers",
   schedule: "timers",
   scheduling: "timers",

@@ -20,6 +20,7 @@ import {
   setPackSetupProfileOverlay,
 } from "../t3team-pack-setupProfileOverlay.ts";
 import { setPackProviderOverlay } from "../t3team-pack-providerOverlay.ts";
+import { loadPackRecipeSources, setPackRecipeSources } from "../t3team-packRecipeSources.ts";
 import { setWorkflowRepairPolicy } from "../t3team-workflowRepairPolicy.ts";
 import { setWorkflowAgentModelPolicy } from "../t3team-workflowAgentModelPolicy.ts";
 import {
@@ -48,6 +49,13 @@ export const runT3TeamServerCommand = (
       inspectConfiguredWorkspacePacks(Option.getOrUndefined(workspacePacksDir)),
     );
     if (packDiagnostic.enabled) {
+      // Pack recipe roots (Epic 16 §Recipe Sources And Precedence). Pure resolution — the recipes
+      // themselves load lazily through the shared discovery pipeline on each discover request.
+      const recipeSources = loadPackRecipeSources(packDiagnostic);
+      setPackRecipeSources(recipeSources);
+      for (const diagnostic of recipeSources.diagnostics) {
+        yield* Effect.logWarning("Workspace pack recipe source skipped", { diagnostic });
+      }
       const appearanceOverlay = yield* Effect.tryPromise({
         try: () => loadPackAppearanceOverlay(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),

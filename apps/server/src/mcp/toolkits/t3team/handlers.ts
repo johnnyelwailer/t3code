@@ -57,11 +57,26 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
   t3team_start_child: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_start_child, input),
   t3team_send_message: (input) => sendMessage(input),
+  t3team_orchestration_run: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_run, input),
+  t3team_orchestration_status: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_status, input),
+  t3team_orchestration_resume: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_resume, input),
+  // Deprecated aliases — routed to the SAME canonical targets as the
+  // t3team_orchestration_* handlers above, so agents already calling the
+  // workflow-era ids keep working.
   t3team_workflow_run: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_workflow_run, input),
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_run, input),
   t3team_workflow_status: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_workflow_status, input),
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_status, input),
+  t3team_workflow_resume: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_resume, input),
   t3team_show_widget: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_show_widget, input),
   t3team_help: (input) => Effect.succeed(t3teamHelp(input.topic)),
+  t3team_recipe_list: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_recipe_list, input),
+  t3team_recipe_validate: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_recipe_validate, input),
 });

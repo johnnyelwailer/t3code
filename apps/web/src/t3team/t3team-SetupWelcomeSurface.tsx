@@ -46,9 +46,10 @@ export function T3TeamSetupWelcomeSurface({
   const livePackProfiles = useT3TeamPackSetupProfiles();
   const packProfiles = profilesOverride ?? livePackProfiles;
   const setupProfileId = useT3TeamProjectSetupProfile();
-  const selectedProfile = listT3TeamProjectSetupCardOptions(packProfiles).find(
-    (option) => option.id === setupProfileId,
-  );
+  const cardOptions = listT3TeamProjectSetupCardOptions(packProfiles);
+  // Never label the chip with a profile that is not in the rendered catalog.
+  const selectedProfile =
+    cardOptions.find((option) => option.id === setupProfileId) ?? cardOptions[0];
 
   // `align-items: safe center` rather than `items-center`: once the card is taller
   // than the viewport, plain centering overflows the *start* edge, and that overflow

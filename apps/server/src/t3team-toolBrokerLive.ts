@@ -11,11 +11,7 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-import {
-  T3TeamToolBroker,
-  type T3TeamToolBrokerShape,
-  type T3TeamTurnToolContext,
-} from "./t3team-toolBroker.ts";
+import { T3TeamToolBroker, type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
 import {
   createT3TeamPrelaunchToolBinding,
   createT3TeamThreadToolBinding,
@@ -25,7 +21,8 @@ import { makeActorSendMessage } from "./t3team-actorSendMessage.ts";
 import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3team-toolBrokerStartChild.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
-import { buildThreadWorkspaceView } from "./t3team-toolBrokerViewWorkspace.ts";
+import { makeLoadThreadView } from "./t3team-toolBrokerViewWorkspace.ts";
+import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { setBacklogAssigneeFilterForContext } from "./t3team-toolBrokerBacklogFilter.ts";
 import { bindChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
@@ -37,13 +34,17 @@ import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
   // Host tools every provider may call without an explicit `surface:"t3team"`
   // tool-context (e.g. a pack driver reaching the /mcp endpoint): thread rename,
-  // child spawning, and running an ephemeral runbook (workflow).
+  // child spawning, running an ephemeral agent orchestration, and inspecting/
+  // validating saved or inline recipe orchestrations.
   const genericThreadToolIds = [
     "t3team.thread.rename",
     "t3team.thread.start_child",
-    "t3team.workflow.run",
-    "t3team.workflow.status",
+    "t3team.orchestration.run",
+    "t3team.orchestration.status",
+    "t3team.orchestration.resume",
     "t3team.widget.show",
+    "t3team.recipe.list",
+    "t3team.recipe.validate",
   ] as const;
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;
@@ -59,6 +60,9 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     yield* Effect.serviceOption(ProjectSetupScriptRunner),
   );
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
+  const workflowRegistry = Option.getOrUndefined(
+    yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
+  );
   bindChildProviderCatalog(providerRegistry);
   const bindShowWidget = yield* makeT3TeamWidgetShowBinder();
 
@@ -75,35 +79,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
       return { project, thread };
     });
 
-  const loadThreadView = (threadId: ThreadIdType, toolContext: T3TeamTurnToolContext) =>
-    Effect.gen(function* () {
-      const resolved = yield* loadThreadProject(threadId).pipe(Effect.option);
-      const thread = Option.isSome(resolved) ? resolved.value.thread : undefined;
-      const project = Option.isSome(resolved) ? resolved.value.project : undefined;
-      return {
-        surface: toolContext.surface,
-        state: toolContext.state,
-        project: project
-          ? {
-              id: project.id,
-              title: project.title,
-              workspaceRoot: project.workspaceRoot,
-            }
-          : null,
-        thread: thread
-          ? {
-              id: thread.id,
-              projectId: thread.projectId,
-              title: thread.title,
-              runtimeMode: thread.runtimeMode,
-              interactionMode: thread.interactionMode,
-              messageCount: thread.messages.length,
-              latestTurnId: thread.latestTurn?.turnId ?? null,
-              ...buildThreadWorkspaceView({ thread, project }),
-            }
-          : null,
-      };
-    });
+  // Extracted to t3team-toolBrokerViewWorkspace.ts (additive LOC budget) — behavior unchanged.
+  const loadThreadView = makeLoadThreadView(loadThreadProject);
 
   const dispatchCommand: typeof orchestration.dispatch = (command) =>
     orchestration.dispatch(command);
@@ -133,6 +110,9 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
       ...(sourceControlProviders ? { sourceControlProviders } : {}),
       ...(projectSetupScriptRunner ? { projectSetupScriptRunner } : {}),
       ...(providerRegistry ? { listProviders: () => providerRegistry.getProviders } : {}),
+      ...(workflowRegistry
+        ? { workflowLaunchThreadForChild: workflowRegistry.launchThreadForChildThread }
+        : {}),
     },
   });
 
@@ -188,6 +168,9 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
           : {}),
         ...(workflowTools.workflowStatusToolsForThread
           ? { workflowStatusTools: workflowTools.workflowStatusToolsForThread(threadId) }
+          : {}),
+        ...(workflowTools.workflowResumeToolsForThread
+          ? { workflowResumeTools: workflowTools.workflowResumeToolsForThread(threadId) }
           : {}),
       });
     });

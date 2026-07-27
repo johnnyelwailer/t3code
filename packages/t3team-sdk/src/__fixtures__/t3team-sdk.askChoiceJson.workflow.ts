@@ -2,6 +2,7 @@
 // Regression guard: an in-options reply must reach the literal decode AS THE STRING — running
 // the JSON-reply coercion on it would turn "true" into boolean true and fail the decode.
 import { Schema } from "effect";
+import { getArgs, getThread } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ question: Schema.String });
 
@@ -15,11 +16,16 @@ export const meta = {
   capabilities: ["user"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const thread = getThread();
 
-if (thread === undefined) throw new Error("fixtures.ask-choice-json requires a launching thread");
+  const input = Schema.decodeSync(Inputs)(args);
 
-const Confirm = Schema.Literals(["true", "false"]);
-const confirmed = await thread.askUser(input.question, { schema: Confirm });
+  if (thread === undefined) throw new Error("fixtures.ask-choice-json requires a launching thread");
 
-return { confirmed };
+  const Confirm = Schema.Literals(["true", "false"]);
+  const confirmed = await thread.askUser(input.question, { schema: Confirm });
+
+  return { confirmed };
+}

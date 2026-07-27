@@ -711,6 +711,34 @@ describe("deriveWorkLogEntries", () => {
     expect(entries.map((entry) => entry.id)).toEqual(["unrelated-task"]);
   });
 
+  it("keeps workflow-owned child handoffs out of the log but keeps plain start_child handoffs", () => {
+    const entries = deriveWorkLogEntries([
+      makeActivity({
+        id: "workflow-handoff-started",
+        kind: "t3team.handoff.started",
+        summary: "Started child session Risk analysis",
+        tone: "info",
+        payload: { childThreadId: "child-1", workflowRunId: "run-1" },
+      }),
+      makeActivity({
+        id: "workflow-handoff-created",
+        kind: "t3team.handoff.created",
+        summary: "Created by workflow",
+        tone: "info",
+        payload: { parentThreadId: "parent-1", workflowRunId: "run-1" },
+      }),
+      makeActivity({
+        id: "manual-handoff-started",
+        kind: "t3team.handoff.started",
+        summary: "Started child session Fix login bug",
+        tone: "info",
+        payload: { childThreadId: "child-2" },
+      }),
+    ]);
+
+    expect(entries.map((entry) => entry.id)).toEqual(["manual-handoff-started"]);
+  });
+
   it("omits tool started entries and keeps completed entries", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

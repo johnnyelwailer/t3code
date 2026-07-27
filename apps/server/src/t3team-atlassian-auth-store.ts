@@ -5,7 +5,6 @@ import {
   type TokenExchangeResult,
   refreshAccessToken,
 } from "@t3tools/integrations-atlassian";
-import { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
@@ -19,6 +18,7 @@ import {
   readAtlassianOAuthClientId,
   readAtlassianOAuthClientSecret,
 } from "./t3team-atlassian-oauthEnv.ts";
+import { t3teamFixtureOrMockProvider } from "./t3team-fixtureProjectRegistry.ts";
 
 export type BasicConnectInput = {
   readonly auth: {
@@ -37,7 +37,6 @@ export type OAuthConnectInput = {
   };
 };
 
-const mockProvider = new MockIntegrationProvider();
 const atlassianAuths = new Map<string, JiraApiAuth>();
 const OAUTH_REFRESH_SKEW_MS = 60_000;
 
@@ -166,7 +165,7 @@ export function providerForAccount(accountId: string) {
       ? new AtlassianIntegrationProvider(
           yield* refreshOAuthAuthIfNeeded(resolved.accountId, resolved.auth),
         )
-      : mockProvider;
+      : yield* t3teamFixtureOrMockProvider(accountId);
   });
 }
 

@@ -223,6 +223,8 @@ function SidebarV2ThreadTooltip({
   projectCwd,
   environmentLabel,
   driverKind,
+  providerAccentColor,
+  providerIconDataUrl,
   modelInstanceId,
   modelLabel,
   branchMismatch,
@@ -232,6 +234,8 @@ function SidebarV2ThreadTooltip({
   projectCwd: string | null;
   environmentLabel: string | null;
   driverKind: ProviderInstanceEntry["driverKind"] | null;
+  providerAccentColor: ProviderInstanceEntry["accentColor"];
+  providerIconDataUrl: ProviderInstanceEntry["iconDataUrl"];
   modelInstanceId: string;
   modelLabel: string;
   branchMismatch: {
@@ -288,6 +292,8 @@ function SidebarV2ThreadTooltip({
               <ProviderInstanceIcon
                 driverKind={driverKind}
                 displayName={thread.session?.providerName ?? modelInstanceId}
+                accentColor={providerAccentColor}
+                iconDataUrl={providerIconDataUrl}
                 iconClassName="size-4 shrink-0"
               />
               <div className="min-w-0 wrap-break-word text-foreground/90">{modelLabel}</div>
@@ -538,6 +544,8 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
       projectCwd={props.projectCwd}
       environmentLabel={props.environmentLabel}
       driverKind={driverKind}
+      providerAccentColor={providerEntry?.accentColor}
+      providerIconDataUrl={providerEntry?.iconDataUrl}
       modelInstanceId={modelInstanceId}
       modelLabel={modelLabel}
       branchMismatch={branchMismatch}
@@ -978,6 +986,11 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
                     <ProviderInstanceIcon
                       driverKind={driverKind}
                       displayName={thread.session?.providerName ?? modelInstanceId}
+                      // Pack-configured providers ship their icon as a data URL and
+                      // have no built-in `PROVIDER_ICON_BY_PROVIDER` entry; without
+                      // this the row falls back to initials ("NE" for Nexplore).
+                      accentColor={providerEntry?.accentColor}
+                      iconDataUrl={providerEntry?.iconDataUrl}
                       iconClassName="size-3.5"
                     />
                   </span>

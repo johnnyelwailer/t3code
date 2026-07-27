@@ -19,7 +19,8 @@ export function isT3TeamRecipeTool(tool: string): tool is T3TeamRecipeToolId {
 export type T3TeamRecipeToolHandlers = {
   readonly listRecipes: () => Effect.Effect<ListRecipesToolResult, string>;
   readonly validateRecipe: (args: {
-    readonly path: string;
+    readonly path?: string;
+    readonly source?: string;
   }) => Effect.Effect<ValidateRecipeToolResult, string>;
 };
 

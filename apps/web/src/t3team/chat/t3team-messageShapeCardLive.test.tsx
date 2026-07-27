@@ -256,14 +256,14 @@ describe("live workflow step overlay on the plan card", () => {
     const preparingMarkup = await renderTimeline([
       stepActivity(step(1, "workflow.self-heal", "started", { detail: "Repairing workflow" })),
     ]);
-    expect(preparingMarkup).toContain("Getting workflow ready");
-    expect(preparingMarkup).not.toContain(">Repairing workflow<");
+    expect(preparingMarkup).toContain("Getting orchestration ready");
+    expect(preparingMarkup).not.toContain(">Repairing orchestration<");
     expect(countOccurrences(preparingMarkup, "animate-spin")).toBe(1);
 
     const startingMarkup = await renderTimeline([
       stepActivity(step(1, "workflow.self-heal", "started", { detail: "Resuming workflow" })),
     ]);
-    expect(startingMarkup).toContain("Starting workflow");
+    expect(startingMarkup).toContain("Starting orchestration");
     expect(countOccurrences(startingMarkup, "animate-spin")).toBe(0);
   }, 30000);
 
@@ -275,7 +275,7 @@ describe("live workflow step overlay on the plan card", () => {
     );
 
     expect(stoppedMarkup).toContain('data-run-live-status="Stopped"');
-    expect(stoppedMarkup).not.toContain("Getting workflow ready");
+    expect(stoppedMarkup).not.toContain("Getting orchestration ready");
     expect(stoppedMarkup).not.toContain("data-workflow-repair-status");
     expect(stoppedMarkup).not.toContain('data-run-live-status="Running');
     expect(stoppedMarkup).not.toContain("animate-spin");
@@ -303,9 +303,9 @@ describe("live workflow step overlay on the plan card", () => {
       () => {},
     );
 
-    expect(markup).toContain('data-workflow-repair-status="Getting workflow ready"');
+    expect(markup).toContain('data-workflow-repair-status="Getting orchestration ready"');
     expect(markup).toContain("Release validation timed out");
-    expect(markup).toContain('aria-label="Open workflow repair thread"');
+    expect(markup).toContain('aria-label="Open orchestration repair thread"');
     expect(markup).toContain("lucide-chevron-right");
   }, 30000);
 
@@ -322,7 +322,7 @@ describe("live workflow step overlay on the plan card", () => {
     ]);
 
     expect(markup).not.toContain("internal setup");
-    expect(markup).toContain("Additional workflow work");
+    expect(markup).toContain("Additional orchestration work");
     expect(markup).not.toContain("custom.operation");
     expect(markup.indexOf("Workflow step")).toBeLessThan(markup.indexOf("Merge it?"));
   }, 30000);
@@ -358,21 +358,21 @@ describe("live workflow step overlay on the plan card", () => {
   it("shows pause only at parked boundaries, resume while paused, and stop while live", async () => {
     const waiting = [stepActivity(step(1, "thread.turn", "started"))];
     const suspendedMarkup = await renderTimeline(waiting, undefined, { status: "suspended" });
-    expect(suspendedMarkup).toContain('aria-label="Pause workflow"');
-    expect(suspendedMarkup).toContain('aria-label="More workflow actions"');
+    expect(suspendedMarkup).toContain('aria-label="Pause orchestration"');
+    expect(suspendedMarkup).toContain('aria-label="More orchestration actions"');
     expect(suspendedMarkup).not.toContain('aria-label="Stop workflow"');
-    expect(suspendedMarkup).not.toContain('aria-label="Resume workflow"');
+    expect(suspendedMarkup).not.toContain('aria-label="Resume orchestration"');
 
     const runningMarkup = await renderTimeline(waiting, undefined, { status: "running" });
-    expect(runningMarkup).not.toContain('aria-label="Pause workflow"');
-    expect(runningMarkup).toContain('aria-label="More workflow actions"');
+    expect(runningMarkup).not.toContain('aria-label="Pause orchestration"');
+    expect(runningMarkup).toContain('aria-label="More orchestration actions"');
     expect(runningMarkup).not.toContain('aria-label="Stop workflow"');
 
     const pausedMarkup = await renderTimeline([...waiting, runActivity("paused")], undefined, {
       status: "paused",
     });
-    expect(pausedMarkup).toContain('aria-label="Resume workflow"');
-    expect(pausedMarkup).toContain('aria-label="More workflow actions"');
+    expect(pausedMarkup).toContain('aria-label="Resume orchestration"');
+    expect(pausedMarkup).toContain('aria-label="More orchestration actions"');
     expect(pausedMarkup).toContain("Run paused");
 
     const stoppedMarkup = await renderTimeline([...waiting, runActivity("cancelled")], undefined, {
@@ -383,7 +383,7 @@ describe("live workflow step overlay on the plan card", () => {
     expect(stoppedMarkup).not.toContain('data-step-status="started"');
     expect(stoppedMarkup).not.toContain("animate-spin");
     expect(stoppedMarkup).not.toContain('aria-label="Stop workflow"');
-    expect(stoppedMarkup).not.toContain('aria-label="More workflow actions"');
+    expect(stoppedMarkup).not.toContain('aria-label="More orchestration actions"');
   }, 30000);
 
   it("keeps the static plan card when no step activities exist for the run", async () => {

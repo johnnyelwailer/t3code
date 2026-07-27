@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+import { useT3TeamPackDefaultSetupProfileId } from "~/t3team/t3team-packSetupProfiles";
 import {
   DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID,
   resolveT3TeamProjectSetupProfileId,
@@ -10,13 +11,19 @@ export type { T3TeamProjectSetupProfileId };
 export const T3TEAM_PROJECT_SETUP_PROFILE_STORAGE_KEY = "t3team:project-setup-profile";
 export const T3TEAM_PROJECT_SETUP_PROFILE_CHANGED_EVENT = "t3team:project-setup-profile-changed";
 
-export function readT3TeamProjectSetupProfile(): T3TeamProjectSetupProfileId {
+/**
+ * Stored profile id wins over everything. With nothing stored, a pack-declared
+ * default (`packDefaultProfileId`) outranks the bundled default.
+ */
+export function readT3TeamProjectSetupProfile(
+  packDefaultProfileId?: string,
+): T3TeamProjectSetupProfileId {
   if (typeof window === "undefined") {
-    return DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID;
+    return packDefaultProfileId ?? DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID;
   }
-  return resolveT3TeamProjectSetupProfileId(
-    window.localStorage.getItem(T3TEAM_PROJECT_SETUP_PROFILE_STORAGE_KEY) ?? undefined,
-  );
+  const stored = window.localStorage.getItem(T3TEAM_PROJECT_SETUP_PROFILE_STORAGE_KEY);
+  if (!stored?.trim() && packDefaultProfileId) return packDefaultProfileId;
+  return resolveT3TeamProjectSetupProfileId(stored ?? undefined);
 }
 
 export function writeT3TeamProjectSetupProfile(mode: T3TeamProjectSetupProfileId): void {
@@ -58,9 +65,14 @@ export function subscribeT3TeamProjectSetupProfile(onStoreChange: () => void): (
 }
 
 export function useT3TeamProjectSetupProfile(): T3TeamProjectSetupProfileId {
-  return useSyncExternalStore(
-    subscribeT3TeamProjectSetupProfile,
-    readT3TeamProjectSetupProfile,
-    () => DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID,
+  const packDefaultProfileId = useT3TeamPackDefaultSetupProfileId();
+  const getSnapshot = useCallback(
+    () => readT3TeamProjectSetupProfile(packDefaultProfileId),
+    [packDefaultProfileId],
   );
+  const getServerSnapshot = useCallback(
+    () => packDefaultProfileId ?? DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID,
+    [packDefaultProfileId],
+  );
+  return useSyncExternalStore(subscribeT3TeamProjectSetupProfile, getSnapshot, getServerSnapshot);
 }

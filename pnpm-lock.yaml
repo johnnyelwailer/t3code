@@ -938,6 +938,9 @@ importers:
 
   packages/project-recipes:
     dependencies:
+      '@t3team/sdk':
+        specifier: workspace:*
+        version: link:../t3team-sdk
       '@t3tools/project-context':
         specifier: workspace:*
         version: link:../project-context
@@ -1057,6 +1060,9 @@ importers:
 
   packages/t3team-skill-packs:
     dependencies:
+      '@t3team/sdk':
+        specifier: workspace:*
+        version: link:../t3team-sdk
       '@t3tools/project-recipes':
         specifier: workspace:*
         version: link:../project-recipes

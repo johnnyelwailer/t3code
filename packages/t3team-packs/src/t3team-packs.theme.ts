@@ -85,6 +85,23 @@ export const ThemeDefinition = Schema.Struct({
   density: Schema.optionalKey(
     Schema.Number.check(Schema.isBetween({ minimum: 0.875, maximum: 1.125 })),
   ),
+  /**
+   * Starting values for the client-side appearance settings a USER owns (Settings → Appearance /
+   * Beta). Everything above is the theme itself; these are preferences, so a distribution may only
+   * choose where they START. They are applied once and never re-applied over a later user choice.
+   *
+   * `sidebarLens` is the product concept rather than upstream's beta flag name: the fork ships no
+   * control of its own, and `useT3TeamSidebarLens` is the single place that maps the lens onto
+   * whichever switch upstream currently owns.
+   */
+  appearanceDefaults: Schema.optionalKey(
+    Schema.Struct({
+      sidebarLens: Schema.optionalKey(Schema.Literals(["code", "work"])),
+      glassOpacity: Schema.optionalKey(
+        Schema.Int.check(Schema.isBetween({ minimum: 40, maximum: 100 })),
+      ),
+    }),
+  ),
 });
 export type ThemeDefinition = typeof ThemeDefinition.Type;
 export const decodeThemeDefinition = Schema.decodeUnknownSync(ThemeDefinition);

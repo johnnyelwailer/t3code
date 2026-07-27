@@ -4,11 +4,14 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { normalizeQueryable } from "@t3tools/project-context";
 import {
+  type DiscoverProjectRecipesResponse,
   type ProjectRecipeDiscovered,
   type ProjectRecipeRenderContext,
 } from "@t3tools/project-recipes";
 
+import { discoverPackRecipes } from "./t3team-projectRecipeDiscoveryPack.ts";
 import { discoverProjectRecipeAtPath, sortRecipes } from "./t3team-projectRecipeDiscoveryRecipe.ts";
+import { mergeRecipesByPrecedence } from "./t3team-projectRecipeOrigin.ts";
 import { T3TEAM_PROJECT_RECIPES_ROOT } from "./t3team-projectSetupShared.ts";
 
 function normalizeRenderContext(context: ProjectRecipeRenderContext): ProjectRecipeRenderContext {
@@ -23,6 +26,23 @@ function normalizeRenderContext(context: ProjectRecipeRenderContext): ProjectRec
   };
 }
 
+/** Apply the cross-source precedence merge and the existing rank/name sort in one place. */
+function finalize(input: {
+  readonly workspaceRoot: string;
+  readonly hasProjectLocalRecipes: boolean;
+  readonly recipes: ReadonlyArray<ProjectRecipeDiscovered>;
+  readonly diagnostics: ReadonlyArray<string>;
+}): DiscoverProjectRecipesResponse {
+  const merged = mergeRecipesByPrecedence(input.recipes);
+  const diagnostics = [...input.diagnostics, ...merged.diagnostics];
+  return {
+    workspaceRoot: input.workspaceRoot,
+    hasProjectLocalRecipes: input.hasProjectLocalRecipes,
+    recipes: merged.recipes.toSorted(sortRecipes),
+    ...(diagnostics.length > 0 ? { diagnostics } : {}),
+  };
+}
+
 export const discoverProjectRecipes = Effect.fn("discoverProjectRecipes")(function* (input: {
   readonly workspaceRoot: string;
   readonly context: ProjectRecipeRenderContext;
@@ -31,13 +51,18 @@ export const discoverProjectRecipes = Effect.fn("discoverProjectRecipes")(functi
   const pathService = yield* Path.Path;
   const workspaceRoot = pathService.resolve(input.workspaceRoot);
   const context = normalizeRenderContext(input.context);
+  // Pack-provided recipes are the same concept with a different source (Epic 16 §Recipe Sources
+  // And Precedence), so they are discovered even when the workspace has no `.t3team/recipes/`.
+  const packDiscovery = yield* discoverPackRecipes({ workspaceRoot, context });
+
   const recipesRoot = pathService.join(workspaceRoot, T3TEAM_PROJECT_RECIPES_ROOT);
   if (!(yield* fileSystem.exists(recipesRoot).pipe(Effect.orElseSucceed(() => false)))) {
-    return {
+    return finalize({
       workspaceRoot,
       hasProjectLocalRecipes: false,
-      recipes: [],
-    };
+      recipes: packDiscovery.recipes,
+      diagnostics: packDiscovery.diagnostics,
+    });
   }
 
   const recipeEntries = yield* fileSystem.readDirectory(recipesRoot, { recursive: false });
@@ -74,9 +99,11 @@ export const discoverProjectRecipes = Effect.fn("discoverProjectRecipes")(functi
     }
   }
 
-  return {
+  return finalize({
     workspaceRoot,
     hasProjectLocalRecipes,
-    recipes: discoveredRecipes.toSorted(sortRecipes),
-  };
+    // Pack recipes first so a project-local recipe of the same id wins the merge below.
+    recipes: [...packDiscovery.recipes, ...discoveredRecipes],
+    diagnostics: packDiscovery.diagnostics,
+  });
 });

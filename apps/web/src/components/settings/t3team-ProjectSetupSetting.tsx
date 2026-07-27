@@ -1,10 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
 
+import { useT3TeamPackAppearance } from "../../t3team/t3team-packAppearance";
+import { useT3TeamPackSetupProfiles } from "../../t3team/t3team-packSetupProfiles";
 import {
-  listT3TeamProjectSetupProfiles,
   resolveT3TeamProjectSetupProfileId,
   type T3TeamProjectSetupProfileId,
 } from "../../t3team/t3team-projectSetup";
+import { listT3TeamProjectSetupCardOptions } from "../../t3team/t3team-projectSetupProfileCatalog";
 import {
   useT3TeamProjectSetupProfile,
   writeT3TeamProjectSetupProfile,
@@ -15,7 +17,12 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 export function T3TeamProjectSetupSetting() {
   const navigate = useNavigate();
   const projectSetupProfile = useT3TeamProjectSetupProfile();
-  const projectSetupProfiles = listT3TeamProjectSetupProfiles();
+  // Same catalog the setup wizard renders: pack-contributed profiles replace the
+  // bundled ones. Reading the bundled list here made Settings offer profiles the
+  // distribution does not ship (and label the selection "Product Partner").
+  const projectSetupProfiles = listT3TeamProjectSetupCardOptions(useT3TeamPackSetupProfiles());
+  const appearance = useT3TeamPackAppearance();
+  const productName = appearance?.labels?.appName ?? "T3 Team";
 
   const setProjectSetupProfile = (profileId: T3TeamProjectSetupProfileId) => {
     writeT3TeamProjectSetupProfile(profileId);
@@ -26,14 +33,14 @@ export function T3TeamProjectSetupSetting() {
       <div className="space-y-1">
         <h3 className="text-sm font-medium">Project workspace</h3>
         <p className="text-sm text-muted-foreground">
-          Defaults used when T3 Team creates a managed project workspace.
+          Defaults used when {productName} creates a managed project workspace.
         </p>
       </div>
       <div className="space-y-2">
         <div className="space-y-1">
           <h4 className="text-sm font-medium">Default project setup</h4>
           <p className="text-xs text-muted-foreground">
-            Choose the default profile used when T3 Team creates a managed project workspace.
+            Choose the default profile used when {productName} creates a managed project workspace.
           </p>
         </div>
         <Select
@@ -44,8 +51,8 @@ export function T3TeamProjectSetupSetting() {
         >
           <SelectTrigger className="w-full sm:w-56" aria-label="Default project setup profile">
             <SelectValue>
-              {projectSetupProfiles.find((profile) => profile.id === projectSetupProfile)
-                ?.title ?? "Product Partner"}
+              {projectSetupProfiles.find((profile) => profile.id === projectSetupProfile)?.title ??
+                projectSetupProfiles[0]?.title}
             </SelectValue>
           </SelectTrigger>
           <SelectPopup align="start" alignItemWithTrigger={false}>

@@ -30,7 +30,7 @@ import type {
   WorkflowRunRepositoryShape,
 } from "./persistence/Services/WorkflowRuns.ts";
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineLaunch.ts";
-import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
+import { makeOrphanIfSleeping } from "./t3team-workflowEngineDurabilityOrphan.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 
 export interface BuildRunningRowInput {
@@ -44,6 +44,9 @@ export interface BuildRunningRowInput {
   readonly interactionMode: ProviderInteractionMode;
   /** Launch origin; defaults to `recipe` (the ephemeral tool path passes `ephemeral`). */
   readonly origin?: WorkflowRun["origin"];
+  /** The launching recipe's directory (recipe launches with scripts); rehydration re-resolves
+   * the recipe's private `scripts.*` tree from it. Absent → NULL. */
+  readonly recipePath?: string | undefined;
   readonly nowIso: string;
 }
 
@@ -61,6 +64,7 @@ export function buildRunningWorkflowRunRow(input: BuildRunningRowInput): Workflo
     interactionMode: input.interactionMode,
     status: "running",
     origin: input.origin ?? "recipe",
+    recipePath: input.recipePath ?? null,
     pendingThreadId: null,
     pendingCorrelationId: null,
     pendingKind: null,
@@ -153,49 +157,25 @@ export function makeWorkflowRunLifecycle(opts: {
       Effect.runPromise(
         repo.clearPending({ runId: row.runId, status: "completed", updatedAt: opts.nowIso() }),
       ).then(releaseAdmission),
-    recordFailed: () =>
+    recordFailed: (detail) =>
       Effect.runPromise(
-        repo.clearPending({ runId: row.runId, status: "failed", updatedAt: opts.nowIso() }),
-      ).then(releaseAdmission),
-    // Crash-recovery guard: the scheduler resumed a clock park whose `waitUntil` reply was already
-    // journaled by a PRIOR process that died before settling (appendResolvedEntry → wrote:false).
-    // The run row is stuck `sleeping`, so listSleeping re-arms it forever. Mark it failed — but
-    // ONLY when the row is still sleeping on THIS correlation, so a late/duplicate ask reply on an
-    // already-woken run (now sleeping on a different waitUntil) is never spuriously failed.
-    orphanIfSleeping: (correlationId) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const current = yield* repo.getById({ runId: row.runId });
-          if (
-            Option.isNone(current) ||
-            (current.value.status !== "sleeping" && current.value.status !== "running") ||
-            current.value.pendingCorrelationId !== correlationId
-          )
-            return;
-          yield* repo.clearPending({
-            runId: row.runId,
-            status: "failed",
-            updatedAt: opts.nowIso(),
-          });
-          releaseAdmission();
-          yield* Effect.logWarning(
-            "workflow scheduler orphaned a sleeping run whose wake reply was resolved before settle",
-            { runId: row.runId, correlationId },
-          );
-          if (opts.dispatch !== undefined && opts.newId !== undefined) {
-            yield* Effect.promise(() =>
-              deliverWorkflowFailure({
-                launchThreadId: row.launchThreadId ?? undefined,
-                workflowRunId: row.runId,
-                errorText:
-                  "A crash interrupted this run's scheduled wake-up; it could not be resumed.",
-                dispatch: opts.dispatch!,
-                newId: opts.newId!,
-                nowIso: opts.nowIso,
-              }),
-            );
-          }
+        repo.clearPending({
+          runId: row.runId,
+          status: "failed",
+          updatedAt: opts.nowIso(),
+          ...(detail === undefined
+            ? {}
+            : { failureReason: detail.reason, failureStep: detail.step }),
         }),
-      ),
+      ).then(releaseAdmission),
+    // Crash-recovery guard (see ./t3team-workflowEngineDurabilityOrphan.ts).
+    orphanIfSleeping: makeOrphanIfSleeping({
+      repo,
+      row,
+      nowIso: opts.nowIso,
+      releaseAdmission,
+      ...(opts.dispatch === undefined ? {} : { dispatch: opts.dispatch }),
+      ...(opts.newId === undefined ? {} : { newId: opts.newId }),
+    }),
   };
 }

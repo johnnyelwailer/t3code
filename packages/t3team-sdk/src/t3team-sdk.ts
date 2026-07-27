@@ -12,7 +12,13 @@ import {
 import type * as T from "./t3team-sdk.types.ts";
 
 export type * from "./t3team-sdk.types.ts";
-export { defineRecipe, getRegisteredRecipe, listRegisteredRecipes } from "./t3team-sdk.recipe.ts";
+export {
+  DEFAULT_RECIPE_ACTION_NAME,
+  defineRecipe,
+  getRegisteredRecipe,
+  listRegisteredRecipes,
+} from "./t3team-sdk.recipe.ts";
+export { definePrompt, isPromptRef, type PromptRef } from "./t3team-sdk.prompt.ts";
 
 export function withWorkflowRuntime<T>(
   runtime: T.WorkflowRuntime,

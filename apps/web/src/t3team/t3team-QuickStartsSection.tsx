@@ -13,6 +13,14 @@ export type QuickStartsSectionProps = {
   readonly recipeInput: T3TeamSidecarRecipeInput & {
     readonly backend: BackendApi | null;
   };
+  /**
+   * Catalog the host already resolved for this surface. Hosts that render both
+   * this section and a composer slash menu (the project dashboard) pass their
+   * single `useT3TeamSidecarRecipeQuickStarts` result so the mount performs one
+   * `discoverRecipes` round-trip instead of two. Hosts that have no other
+   * consumer omit it and the section resolves the catalog itself.
+   */
+  readonly quickStarts?: ReadonlyArray<T3TeamSidecarRecipeQuickStart> | undefined;
   readonly selectedRecipeId?: string | undefined;
   readonly shell?: T3TeamSidecarSectionShellProps<T3TeamSidecarRecipeQuickStart> | undefined;
 };
@@ -21,14 +29,15 @@ function isQuickStartsSectionProps(props: unknown): props is QuickStartsSectionP
   return typeof props === "object" && props !== null && "recipeInput" in props;
 }
 
-function QuickStartsSectionContent({
+function QuickStartsSectionList({
   host,
   sectionProps,
+  quickStarts,
 }: {
   host: SidecarSectionHost;
   sectionProps: QuickStartsSectionProps;
+  quickStarts: ReadonlyArray<T3TeamSidecarRecipeQuickStart>;
 }) {
-  const quickStarts = useT3TeamSidecarRecipeQuickStarts(sectionProps.recipeInput);
   const orderedQuickStarts = orderT3TeamSidecarSectionItems({
     items: quickStarts,
     getItemId: (quickStart) => quickStart.id,
@@ -51,6 +60,20 @@ function QuickStartsSectionContent({
   );
 }
 
+function QuickStartsSectionContent({
+  host,
+  sectionProps,
+}: {
+  host: SidecarSectionHost;
+  sectionProps: QuickStartsSectionProps;
+}) {
+  const quickStarts = useT3TeamSidecarRecipeQuickStarts(sectionProps.recipeInput);
+
+  return (
+    <QuickStartsSectionList host={host} sectionProps={sectionProps} quickStarts={quickStarts} />
+  );
+}
+
 export function T3TeamQuickStartsSection({
   host,
   props,
@@ -62,5 +85,11 @@ export function T3TeamQuickStartsSection({
     return null;
   }
 
-  return <QuickStartsSectionContent host={host} sectionProps={props} />;
+  // Whether the host supplies the catalog is a property of the host, not of
+  // render-time state, so the branch never swaps component identity mid-mount.
+  return props.quickStarts ? (
+    <QuickStartsSectionList host={host} sectionProps={props} quickStarts={props.quickStarts} />
+  ) : (
+    <QuickStartsSectionContent host={host} sectionProps={props} />
+  );
 }

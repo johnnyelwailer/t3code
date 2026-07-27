@@ -13,6 +13,7 @@ import {
 } from "~/t3team/t3team-TicketKickoffComposer";
 import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 import type { T3TeamSelectedRecipeQuickStart } from "~/t3team/t3team-recipeQuickStartLaunch";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import type { T3TeamThreadToolId } from "~/t3team/t3team-types";
 
 type ProjectDashboardKickoffComposerProps = {
@@ -21,6 +22,9 @@ type ProjectDashboardKickoffComposerProps = {
   onClearSelectedRecipe?: () => void;
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
+  workspaceRoot?: string;
+  slashRecipes?: ReadonlyArray<T3TeamSidecarRecipeQuickStart>;
+  onSelectSlashRecipe?: (recipe: T3TeamSidecarRecipeQuickStart) => void;
   injectedContextAttachments: ReadonlyArray<T3TeamContextAttachment>;
   onRemoveContextAttachment: (id: string) => void;
   onSubmit: (
@@ -58,6 +62,9 @@ export const ProjectDashboardKickoffComposer = forwardRef<
           : {})}
         providers={input.providers}
         isConnected={input.isConnected}
+        {...(input.workspaceRoot ? { workspaceRoot: input.workspaceRoot } : {})}
+        {...(input.slashRecipes ? { slashRecipes: input.slashRecipes } : {})}
+        {...(input.onSelectSlashRecipe ? { onSelectSlashRecipe: input.onSelectSlashRecipe } : {})}
         onSubmit={input.onSubmit}
       />
     </div>

@@ -29,6 +29,7 @@ import type { MessageBroker, MessageEnvelope } from "@t3team/sdk";
 
 import {
   messageUpsert,
+  type ModelResolvePayload,
   type ThreadCreatePayload,
   type ThreadMessagePayload,
   type ThreadTurnPayload,
@@ -38,8 +39,13 @@ import {
 } from "./t3team-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities.ts";
 import { dispatchWorkflowChild } from "./t3team-workflowChildPlacement.ts";
-import { resolveWorkflowChildModel } from "./t3team-workflowChildModel.ts";
+import {
+  resolveWorkflowChildModel,
+  resolveWorkflowModelCascade,
+} from "./t3team-workflowChildModel.ts";
+import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
+import { workflowTurnText } from "./t3team-workflowTurnText.ts";
 import {
   buildT3TeamWidgetAttachment,
   parseT3TeamWidgetShowInput,
@@ -129,14 +135,30 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
           deps.stepActivities?.emitResolved(correlationId, "completed") ?? Promise.resolve(),
         resolve: resolver.resolve,
       });
+    if (kind === "model.resolve") {
+      // Walk the author's provider ladder against the LIVE registry and settle SYNCHRONOUSLY: the
+      // chosen selection becomes this primitive's `resolved` journal line, so a replay reuses the
+      // recorded choice instead of re-probing a registry whose availability may have changed.
+      const p = payload as ModelResolvePayload;
+      const choice = await resolveWorkflowModelCascade(deps.modelSelection, p.entries);
+      step(correlationId, kind, "completed", `Model cascade — ${choice.reason}`);
+      resolver.resolve({
+        selection:
+          choice.selection === undefined ? null : toWorkflowModelSelection(choice.selection),
+        reason: choice.reason,
+      });
+      return;
+    }
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
       // Resolve BEFORE registering/dispatching: enqueueOneWay swallows dispatch errors, so an
       // invalid provider/model must reject this send() while the SDK still observes it.
+      // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
+      // microtask before `setPending`, and callers observe the pending entry right after `send`.
       const modelSelection =
-        p.model === undefined
+        p.model === undefined && p.effort === undefined
           ? deps.modelSelection
-          : await resolveWorkflowChildModel(deps.modelSelection, p.model);
+          : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
       step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
       await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p, modelSelection)));
       return;
@@ -145,10 +167,12 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       const p = payload as ThreadTurnPayload;
       // Resolve BEFORE recording pending state (registry + durable recordPending): an invalid
       // provider/model must reject this ask cleanly, not park the run on an undispatched turn.
+      // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
+      // microtask before `setPending`, and callers observe the pending entry right after `send`.
       const modelSelection =
-        p.model === undefined
+        p.model === undefined && p.effort === undefined
           ? deps.modelSelection
-          : await resolveWorkflowChildModel(deps.modelSelection, p.model);
+          : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
       step(correlationId, kind, "started", p.label ?? p.prompt, p.threadId);
       const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
       deps.registry.setPending(p.threadId, {
@@ -167,7 +191,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
               message: {
                 messageId: MessageId.make(deps.newId()),
                 role: "user",
-                text: p.prompt,
+                text: workflowTurnText(p),
                 attachments: [],
                 // Marks this as an automated start for decider turn admission.
                 t3teamExt: { author: { kind: "system", workflowRunId: deps.runId } },

@@ -10,6 +10,11 @@
 import type { OrchestrationCommand } from "@t3tools/contracts";
 
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
+import {
+  workflowFailureReasonText,
+  workflowFailureStepText,
+  type WorkflowFailurePhase,
+} from "./t3team-workflowFailureReason.ts";
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
@@ -25,9 +30,19 @@ export async function settleWorkflowRunFailure(input: {
   readonly newId: () => string;
   readonly nowIso: () => string;
   readonly onError: ((error: unknown) => Promise<void>) | undefined;
+  /** Which funnel is settling — the coarse half of the persisted failing-step label. */
+  readonly phase?: WorkflowFailurePhase;
 }): Promise<void> {
   input.registry.deleteRun(input.runId);
-  await input.lifecycle?.recordFailed();
+  // Captured BEFORE deleteRun's siblings can churn: the primitive in flight is the step label.
+  const detail = {
+    reason: workflowFailureReasonText(input.error),
+    step: workflowFailureStepText(
+      input.phase ?? "launch",
+      input.stepActivities.describePendingStep?.(),
+    ),
+  };
+  await input.lifecycle?.recordFailed(detail);
   const errorText = input.error instanceof Error ? input.error.message : String(input.error);
   await input.stepActivities.emitRun("failed", errorText);
   await deliverWorkflowFailure({

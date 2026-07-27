@@ -7,6 +7,7 @@ import { createHomeProject } from "~/t3team/t3team-homeProject";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 import type { ProjectDashboardKickoffAsideProps } from "~/t3team/t3team-ProjectDashboardKickoffAsideTypes";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
+import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import { T3TeamSetupWelcomeSurface } from "~/t3team/t3team-SetupWelcomeSurface";
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
 import {
@@ -85,6 +86,11 @@ function ProjectBrowserEmpty({
   showInlineCreateWizard?: boolean;
   shouldInsetDesktopHeader?: boolean;
 }) {
+  // The welcome surface beside this header already titles itself with the pack's
+  // `labels.appName`; hardcoding the product name here made the distribution read
+  // "Set up t3team" next to "Bring your Jira work into Nexi Work".
+  const appearance = useT3TeamPackAppearance();
+  const productName = appearance?.labels?.appName ?? "t3team";
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header
@@ -93,7 +99,9 @@ function ProjectBrowserEmpty({
         })}
       >
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-        <span className="text-sm font-medium text-muted-foreground/70">Set up t3team</span>
+        <span className="text-sm font-medium text-muted-foreground/70">
+          Set up {productName}
+        </span>
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
         <div

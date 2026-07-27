@@ -56,8 +56,12 @@ export interface WorkflowRunLifecycle {
   readonly recordSleeping: (sleep: WorkflowEngineSleep) => Promise<void>;
   /** Mark the run `completed` and clear the pending ask. */
   readonly recordCompleted: () => Promise<void>;
-  /** Mark the run `failed` and clear the pending ask. */
-  readonly recordFailed: () => Promise<void>;
+  /** Mark the run `failed`, clear the pending ask, and persist the agent-facing failure detail
+   * (migration 044) so `status`/`resume` can report WHY without a journal read. */
+  readonly recordFailed: (detail?: {
+    readonly reason: string;
+    readonly step: string;
+  }) => Promise<void>;
   /** Crash-recovery: if this correlation still owns a sleeping or newly-claimed active row and
    * its reply was already journaled, mark it failed. Correlation pinning protects newer work. */
   readonly orphanIfSleeping: (correlationId: string) => Promise<void>;
@@ -102,6 +106,8 @@ export interface ThreadCreatePayload {
   readonly threadId: string;
   readonly name?: string;
   readonly model?: WorkflowModelSelection;
+  /** Provider-agnostic thinking level; see `resolveWorkflowChildModel`. */
+  readonly effort?: import("@t3team/sdk").AgentEffort;
   /** Omitted is ephemeral, preserving one-shot agent() as a hidden child. */
   readonly retention?: "ephemeral" | "retained";
 }
@@ -111,6 +117,11 @@ export interface ThreadTurnPayload {
   readonly model?: WorkflowModelSelection;
   /** Short human-facing status label, separate from the provider prompt. */
   readonly label?: string;
+  /** Provider-agnostic thinking level; see `resolveWorkflowChildModel`. */
+  readonly effort?: import("@t3team/sdk").AgentEffort;
+  /** The author's structured data, named by the SDK and journaled as structure; the host
+   * serializes it into the turn text (`workflowTurnText`). Absent on older journals. */
+  readonly attachments?: ReadonlyArray<import("@t3team/sdk").NamedAttachment>;
 }
 export interface ThreadMessagePayload {
   readonly threadId: string;
@@ -133,6 +144,14 @@ export interface UserInputPayload {
   readonly affordance?: AskAffordance;
   /** External-resource refs to render as cards on the decision message. */
   readonly attachments?: ReadonlyArray<unknown>;
+}
+/**
+ * The `model.resolve` envelope payload: the author's provider ladder (`{ models: [...] }`), in
+ * wire form. Resolved host-side against the live registry; the chosen selection is the
+ * primitive's journaled reply, so replays reuse it instead of re-probing.
+ */
+export interface ModelResolvePayload {
+  readonly entries: ReadonlyArray<import("@t3team/sdk").ModelCascadeWireEntry>;
 }
 /** The `wait.until` envelope payload: the wall-clock deadline (epoch millis) the run sleeps to. */
 export interface WaitUntilPayload {
