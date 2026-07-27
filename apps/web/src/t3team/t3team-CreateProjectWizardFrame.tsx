@@ -87,7 +87,9 @@ export function CreateProjectWizardFrame({
         <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-[radial-gradient(44rem_22rem_at_top,color-mix(in_srgb,var(--color-sky-400)_18%,transparent),transparent)] opacity-80" />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_88%,white)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-amber-100))_100%)] dark:bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_92%,black)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-sky-950))_100%)]" />
 
-        <Card className="relative flex h-[min(48rem,calc(100dvh-1.5rem))] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border-border/70 bg-card/95 shadow-2xl shadow-black/10 sm:h-[min(48rem,calc(100dvh-3rem))]">
+        {/* Same content-fit-with-cap treatment as the dialog variant below, for the same reason:
+            a short step (review, creating) should not carry the tall steps' void along with it. */}
+        <Card className="relative flex max-h-[calc(100dvh-1.5rem)] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border-border/70 bg-card/95 shadow-2xl shadow-black/10 sm:max-h-[calc(100dvh-3rem)]">
           {content}
         </Card>
       </div>
@@ -95,8 +97,16 @@ export function CreateProjectWizardFrame({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 p-2 sm:items-center sm:p-4">
-      <Card className="relative flex h-full w-full max-w-3xl flex-col overflow-hidden bg-card/95 sm:h-[min(40rem,calc(100dvh-2rem))]">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-2 sm:items-center sm:p-4">
+      {/*
+        No fixed height: the card fits its content (a short step like "review" or "creating" no
+        longer leaves a void), capped by a max-height so it never grows past the viewport. Tall
+        steps ("project" with a long Jira list, "profile" with the card grid) still hit that cap and
+        scroll internally via the `ScrollArea` below — `overflow-hidden` plus the scroll area's
+        `min-h-0 flex-1` is what makes the cap win over the content instead of pushing the card
+        taller than the screen.
+      */}
+      <Card className="relative flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden bg-card/95 sm:max-h-[calc(100dvh-2rem)]">
         {content}
       </Card>
     </div>

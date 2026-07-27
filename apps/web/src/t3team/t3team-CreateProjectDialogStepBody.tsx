@@ -122,6 +122,8 @@ export function CreateProjectDialogStepBody(props: {
           setupProfileId={props.setupProfileId}
           customProfile={props.customProfile}
           linkedRepositoryUrls={props.linkedRepositoryUrls}
+          selectedAccount={setup.selectedAccount}
+          projectTitle={setup.selectedProject?.title}
         />
       ) : null}
       {setup.step === "creating" ? (

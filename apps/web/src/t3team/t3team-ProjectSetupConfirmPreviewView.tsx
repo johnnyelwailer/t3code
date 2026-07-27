@@ -3,25 +3,26 @@ import { useMemo } from "react";
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
 
 import { buildT3TeamProjectSetupConfirmPreview } from "~/t3team/t3team-projectSetupConfirmPreview";
+import {
+  WorkItemPropertyChips,
+  WorkItemPropertyRow,
+} from "~/t3team/workitem/t3team-WorkItemPropertyRow";
 
 /**
- * One always-visible line stating what creating this project will turn on: the profile's skill
- * packs, how many starter recipes match, and how many repositories are linked.
+ * The "Turns on" rows: which skill packs the selected profile enables, and which starter recipes
+ * will already be usable. Both come from the same builder the previous single-line summary used
+ * (`buildT3TeamProjectSetupConfirmPreview`) — this only changes how the result is laid out, not
+ * what it computes, so what is shown here can never drift from what actually gets created.
  *
- * This used to be a closed-by-default disclosure (title + chip row + a nested "N starter recipes"
- * sub-disclosure) sitting under the profile cards on a single overloaded "confirm" step. Now that
- * "review" is its own dedicated step whose only job is to state the consequence of the choices
- * made on the earlier steps, the summary can just say it once instead of hiding it behind two
- * levels of toggle.
+ * Returns bare rows (no `<dl>` of its own) so the review step can lay these out inside the same
+ * list as `CreateProjectDialogReviewDetails`'s rows.
  */
 export function T3TeamProjectSetupConfirmPreviewView({
   profileId,
   customProfile,
-  repositoryCount,
 }: {
   readonly profileId: string;
   readonly customProfile?: T3TeamProfile;
-  readonly repositoryCount: number;
 }) {
   const preview = useMemo(
     () =>
@@ -31,19 +32,22 @@ export function T3TeamProjectSetupConfirmPreviewView({
       }),
     [profileId, customProfile],
   );
-
   const recipeCount = preview.topRecipes.length;
 
   return (
-    <div className="rounded-xl border border-border/65 bg-muted/15 px-3 py-2.5 text-sm">
-      <span className="font-medium text-foreground">Turns on: </span>
-      <span className="text-muted-foreground">
-        {preview.skillPacks.map((pack) => pack.title).join(", ")}
-        {" · "}
-        {recipeCount} starter recipe{recipeCount === 1 ? "" : "s"}
-        {" · "}
-        {repositoryCount} repo{repositoryCount === 1 ? "" : "s"} linked
-      </span>
-    </div>
+    <>
+      <WorkItemPropertyRow label="Skill packs" values={preview.skillPacks}>
+        <WorkItemPropertyChips values={preview.skillPacks.map((pack) => pack.title)} />
+      </WorkItemPropertyRow>
+
+      <WorkItemPropertyRow label="Starter recipes" values={preview.topRecipes}>
+        <div className="space-y-1">
+          <span className="text-muted-foreground">
+            {recipeCount} recipe{recipeCount === 1 ? "" : "s"} ready to use
+          </span>
+          <WorkItemPropertyChips values={preview.topRecipes.map((recipe) => recipe.title)} />
+        </div>
+      </WorkItemPropertyRow>
+    </>
   );
 }

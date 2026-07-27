@@ -268,6 +268,8 @@ function CreateProjectExperienceStory({ autoAdvance = false }: { autoAdvance?: b
                       setupProfileId={setupProfileId}
                       customProfile={undefined}
                       linkedRepositoryUrls={repositoryUrls}
+                      selectedAccount={selectedAccount}
+                      projectTitle={selectedProject?.title}
                     />
                   ) : null}
                   {step === "creating" ? (
@@ -418,8 +420,11 @@ export const RepositoriesStepInDialog: StoryObj = {
 };
 
 function ReviewStepStory() {
+  // Realistic fixtures on purpose — this is the story used to eyeball the fully populated
+  // summary (site, profile, skill packs, recipes, repos, workspace) rather than an empty shell.
   const [linkedRepositoryUrls] = useState<ReadonlyArray<string>>([
     "https://github.com/acme/mobile-checkout",
+    "https://github.com/acme/mobile-checkout-api",
   ]);
 
   return (
@@ -428,6 +433,8 @@ function ReviewStepStory() {
         setupProfileId={DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID}
         customProfile={undefined}
         linkedRepositoryUrls={linkedRepositoryUrls}
+        selectedAccount={accounts[0] ?? null}
+        projectTitle={projects[0]?.title}
       />
     </StepInDialogFrame>
   );
