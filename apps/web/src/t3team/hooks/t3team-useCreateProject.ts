@@ -34,7 +34,15 @@ export function useCreateProject() {
   const [accounts, setAccounts] = useState<ReadonlyArray<IntegrationAccount>>([]);
   const [selectedAccount, setSelectedAccount] = useState<IntegrationAccount | null>(null);
   const [projects, setProjects] = useState<ReadonlyArray<ExternalProject>>([]);
-  const [selectedProject, setSelectedProject] = useState<ExternalProject | null>(null);
+  // Selection is tracked by id, not by object reference: deriving `selectedProject` from the
+  // CURRENT `projects` list means a stale project object can never be read back, even if a
+  // background refresh swaps the list out from under an in-flight click (see
+  // t3team-useCreateProjectAccountLoaders.ts / t3team-useCreateProjectLoadPersisted.ts).
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
+  const setSelectedProject = useCallback((project: ExternalProject | null) => {
+    setSelectedProjectId(project?.id ?? null);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);

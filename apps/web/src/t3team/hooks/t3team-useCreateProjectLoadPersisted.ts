@@ -5,6 +5,7 @@ import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 import type { CreateProjectStep } from "./t3team-useCreateProject";
 import { persistLastAccountId, pickPreferredAccount } from "./t3team-createProjectUtils";
 import { readIntegrationCache, writeIntegrationCache } from "./t3team-integrationCache";
+import { advanceStepForward } from "./t3team-useCreateProjectHelpers";
 
 type FailFn = (value: unknown, fallback: string, nextStep?: CreateProjectStep) => void;
 
@@ -12,7 +13,7 @@ export async function loadPersistedAccountsStep(input: {
   backend: BackendApi | null;
   setAccounts: Dispatch<SetStateAction<ReadonlyArray<IntegrationAccount>>>;
   setSelectedAccount: Dispatch<SetStateAction<IntegrationAccount | null>>;
-  setSelectedProject: Dispatch<SetStateAction<ExternalProject | null>>;
+  setSelectedProject: (project: ExternalProject | null) => void;
   setProjects: Dispatch<SetStateAction<ReadonlyArray<ExternalProject>>>;
   setStep: Dispatch<SetStateAction<CreateProjectStep>>;
   setBootstrapping: Dispatch<SetStateAction<boolean>>;
@@ -69,25 +70,30 @@ export async function loadPersistedAccountsStep(input: {
         `atlassian:listProjects:${preferredAccount.provider}:${preferredAccount.id}`,
         projects,
       );
+      // No unconditional `setSelectedProject(null)` here: a late bootstrap resolution must
+      // never clear a selection the user already made while the cached list was showing.
+      // `advanceStepForward` also refuses to move the step backwards out of "confirm"/
+      // "creating" if the user finished picking before this network call landed.
       runT3TeamViewTransition(
         () => {
           input.setAccounts(loadedAccounts);
           input.setSelectedAccount(preferredAccount);
-          input.setSelectedProject(null);
           input.setProjects(projects);
-          input.setStep("project");
+          advanceStepForward(input.setStep, "project");
         },
         { types: ["t3team-wizard-forward"] },
       );
       return;
     }
 
+    // Clearing the project list is gated the same way: it must only happen when the step
+    // is genuinely still advancing to "account", never as a side effect of a late promise
+    // landing after the user has moved on with the (correct) cached list.
     runT3TeamViewTransition(
       () => {
         input.setAccounts(loadedAccounts);
         input.setSelectedAccount(preferredAccount);
-        input.setProjects([]);
-        input.setStep("account");
+        advanceStepForward(input.setStep, "account", () => input.setProjects([]));
       },
       { types: ["t3team-wizard-forward"] },
     );

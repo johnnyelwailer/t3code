@@ -46,6 +46,7 @@ export async function ensureThreadBootstrapProject(input: {
       createWorkspaceRootIfMissing: true,
       defaultModelSelection: input.kickoffModelSelection,
       createdAt: input.createdAt,
+      source: { provider: "local" },
     });
     recordThreadBootstrapEvent("thread-bootstrap.project-create.success", {
       threadId: input.threadId,

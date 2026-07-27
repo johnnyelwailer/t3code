@@ -16,6 +16,7 @@ import {
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
 import { AccountStep, ProjectStep } from "~/t3team/t3team-CreateProjectDialogSteps";
+import { useCreateProjectAlreadyAdded } from "~/t3team/hooks/t3team-useCreateProjectAlreadyAdded";
 import { ConfirmStep, CreatingStep } from "~/t3team/t3team-CreateProjectDialogConfirmStep";
 import { CreateProjectDialogFooter } from "~/t3team/t3team-CreateProjectDialogFooter";
 import { ConnectAtlassianStep } from "~/t3team/t3team-ConnectAtlassianStep";
@@ -25,23 +26,17 @@ export function CreateProjectDialog({
   onClose,
   onCreated,
   variant = "dialog",
+  onOpenExistingProject,
 }: {
   onClose: () => void;
   onCreated: (project: ProjectShellProject) => void;
   variant?: CreateProjectWizardVariant;
+  onOpenExistingProject?: (projectId: string) => void;
 }) {
   const setup = useCreateProject();
   const oauth = useAtlassianOAuth();
-  const {
-    loadPersistedAccounts,
-    loadAccountsWithOAuth,
-    projects,
-    selectedAccount,
-    selectedProject,
-    bootstrapping,
-    loadingAccounts,
-    loadingProjects,
-  } = setup;
+  const { loadPersistedAccounts, loadAccountsWithOAuth, projects, selectedAccount } = setup;
+  const { selectedProject, bootstrapping, loadingAccounts, loadingProjects } = setup;
   const setupProfileId = useT3TeamProjectSetupProfile();
   const [siteUrl, setSiteUrl] = useState(defaultAtlassianSiteUrlInput);
   const [email, setEmail] = useState("");
@@ -77,6 +72,12 @@ export function CreateProjectDialog({
     void loadPersistedAccounts();
   }, [oauth.state, loadPersistedAccounts]);
 
+  const { alreadyAdded, handleOpenExisting } = useCreateProjectAlreadyAdded({
+    accountId: selectedAccount?.id ?? null,
+    projects,
+    onOpenExistingProject,
+    onClose,
+  });
   const filteredProjects = useMemo(() => {
     const query = projectQuery.trim().toLowerCase();
     if (!query) return projects;
@@ -165,6 +166,8 @@ export function CreateProjectDialog({
               setProjectQuery={setProjectQuery}
               onSelectProject={setup.setSelectedProject}
               loading={loadingProjects}
+              alreadyAdded={alreadyAdded}
+              onOpenExistingProject={handleOpenExisting}
             />
           ) : null}
           {setup.step === "confirm" ? (

@@ -15,10 +15,37 @@ export function failWithStep(
   setStep(nextStep);
 }
 
+const STEP_ORDER: ReadonlyArray<CreateProjectStep> = [
+  "source",
+  "account",
+  "project",
+  "confirm",
+  "creating",
+];
+
+/**
+ * Moves `setStep` to `target` only if that is actually a forward move relative to whatever
+ * step is live right now. A resolved background promise (account refresh, bootstrap project
+ * load) must never yank the user backwards out of a step they already advanced past while it
+ * was in flight. `onAdvance` runs only when the move is genuinely forward, so a stale response
+ * can't clear state (e.g. the project list) the user is actively interacting with either.
+ */
+export function advanceStepForward(
+  setStep: Dispatch<SetStateAction<CreateProjectStep>>,
+  target: CreateProjectStep,
+  onAdvance?: () => void,
+): void {
+  setStep((cur) => {
+    if (STEP_ORDER.indexOf(target) <= STEP_ORDER.indexOf(cur)) return cur;
+    onAdvance?.();
+    return target;
+  });
+}
+
 export function applyLoadedAccounts(input: {
   loadedAccounts: ReadonlyArray<IntegrationAccount>;
   setAccounts: Dispatch<SetStateAction<ReadonlyArray<IntegrationAccount>>>;
-  setSelectedProject: Dispatch<SetStateAction<ExternalProject | null>>;
+  setSelectedProject: (project: ExternalProject | null) => void;
   setError: Dispatch<SetStateAction<string | null>>;
   setStep: Dispatch<SetStateAction<CreateProjectStep>>;
   setSelectedAccount: Dispatch<SetStateAction<IntegrationAccount | null>>;
