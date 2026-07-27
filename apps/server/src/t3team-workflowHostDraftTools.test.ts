@@ -103,10 +103,14 @@ async function launch(input: {
   readonly workflowPath: string;
   readonly launchThreadId: string | undefined;
   readonly broker: T3TeamToolBrokerShape;
+  readonly allowedToolGroups?: ReadonlyArray<string>;
 }) {
   const hostToolClient = makeT3TeamWorkflowHostDraftToolClient({
     broker: input.broker,
     launchThreadId: input.launchThreadId,
+    ...(input.allowedToolGroups === undefined
+      ? {}
+      : { allowedToolGroups: input.allowedToolGroups }),
   });
   const completed: unknown[] = [];
   const errors: unknown[] = [];
@@ -169,6 +173,40 @@ describe("workflow host draft tools", () => {
         patch: { description: "Rewritten acceptance criteria." },
       },
     });
+  });
+
+  it("honours the launching recipe's allowedToolGroups, even though the body declares the group", async () => {
+    const { broker, brokerDispatched } = await makeBrokerWithSeededThread();
+
+    // The recipe scopes itself to reads only. The body still declares `mutation.draft`, so the SDK
+    // call-site gate passes — the RECIPE's scope is what must stop it.
+    const { result, errors } = await launch({
+      runId: "host-tool-scoped-out",
+      workflowPath: declaredWorkflowPath,
+      launchThreadId: threadId,
+      broker,
+      allowedToolGroups: ["integration.read"],
+    });
+
+    expect(result.status).toBe("failed");
+    expect(String(errors[0])).toContain("requires group 'mutation.draft'");
+    expect(String(errors[0])).toContain("integration.read");
+    expect(findDraftCarrier(brokerDispatched)).toBeUndefined();
+  });
+
+  it("allows the call when the recipe's allowedToolGroups include the draft group", async () => {
+    const { broker, brokerDispatched } = await makeBrokerWithSeededThread();
+
+    const { result } = await launch({
+      runId: "host-tool-scoped-in",
+      workflowPath: declaredWorkflowPath,
+      launchThreadId: threadId,
+      broker,
+      allowedToolGroups: ["integration.read", "mutation.draft"],
+    });
+
+    expect(result.status).toBe("completed");
+    expect(findDraftCarrier(brokerDispatched)?.command.threadId).toBe(threadId);
   });
 
   it("refuses the same call when the body does not declare the capability", async () => {

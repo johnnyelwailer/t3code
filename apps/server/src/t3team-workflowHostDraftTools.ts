@@ -1,10 +1,8 @@
 /**
  * The broker-owned work-item DRAFT tools, made callable from a workflow body's `getTools()` tree.
  *
- * The durable engine used to launch every run with `tools: []`, so `getTools()` was empty and a
- * body reaching for a host tool died on `Cannot read properties of undefined`. The two registries
- * never met: `defineTool` refs live in the SDK registry, while the t3team capability surface is
- * dispatched by string id through {@link ./t3team-toolBrokerBinding.ts}. This module is the seam,
+ * `defineTool` refs live in the SDK registry while the t3team capability surface is dispatched by
+ * string id through {@link ./t3team-toolBrokerBinding.ts}; this module is the seam between them,
  * deliberately narrow — only the work-item draft family, never the whole broker surface. A draft
  * tool cannot write anything; it builds a proposal a human accepts in the review UI, which is what
  * makes it the one family safe to hand to an orchestration body.
@@ -14,11 +12,11 @@
  * → `makeT3TeamDraftMutationPublisher({ threadId, … })`), so the hidden `draft-mutation` carrier
  * message reaches the thread the user launched from — the one whose `ThreadChatView` ingests drafts.
  * Binding per call (not once at launch) also reads the thread's CURRENT tool context, like an agent
- * turn does.
+ * turn does, and re-applies the recipe's `allowedToolGroups` every time.
  *
- * Three pre-existing gates still apply: the body must declare the group in `meta.capabilities`
+ * Three gates apply, all pre-existing: the body must declare the group in `meta.capabilities`
  * (`assertToolGroupDeclared`), the id must be in the thread's tool context (`availableToolIdSet`),
- * and `allowedToolGroups` still filters.
+ * and the recipe's `allowedToolGroups` filters what survives.
  *
  * @module t3team-workflowHostDraftTools
  */
@@ -60,11 +58,9 @@ export const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS = [
 
 const HOST_DRAFT_TOOL_ID_SET: ReadonlySet<string> = new Set(T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS);
 
-/**
- * Permissive on purpose. The broker already validates every draft tool's arguments and answers a
- * bad call with a specific message (`… requires issue_id.`); restating those shapes here would be
- * a second copy of that contract, free to drift from the one the agent path uses.
- */
+/** Permissive on purpose: the broker already validates each draft tool's arguments and answers a
+ * bad call specifically (`… requires issue_id.`). Restating those shapes here would be a second
+ * copy of that contract, free to drift from the one the agent path uses. */
 const HostDraftToolArgs = Schema.Unknown;
 const HostDraftToolResult = Schema.Unknown;
 
@@ -90,11 +86,9 @@ function hostDraftToolRef(id: string): ToolRef<unknown, unknown> {
   });
 }
 
-/**
- * Registered ONCE at module load — `defineTool` refuses a duplicate id, and the engine executes a
+/** Registered ONCE at module load — `defineTool` refuses a duplicate id, and the engine executes a
  * tool by looking its id up in that global registry, so per-run refs would never be reached. The
- * per-run part is the `ctx.t3team` client the handlers read.
- */
+ * per-run part is the `ctx.t3team` client the handlers read. */
 export const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> =
   T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS.map(hostDraftToolRef);
 
@@ -102,12 +96,17 @@ export const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS: ReadonlyArray<ToolRef<unknown
  * The per-run host bridge. `undefined` for a headless run: with no launch thread there is no
  * binding to reach and nowhere a proposal could be reviewed, so the refs stay bound but each call
  * reports exactly that instead of drafting into a void.
+ *
+ * `allowedToolGroups` is the LAUNCHING RECIPE's declared scope and must be forwarded: omitting it
+ * leaves `buildBindingState` with `effectiveGroups === undefined`, which means "every tool the
+ * thread offers" and silently ignores a recipe that scoped itself narrowly.
  */
 export function makeT3TeamWorkflowHostDraftToolClient(input: {
   readonly broker: T3TeamToolBrokerShape;
   readonly launchThreadId: string | undefined;
+  readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
 }): T3TeamToolHandlerClient | undefined {
-  const { broker, launchThreadId } = input;
+  const { broker, launchThreadId, allowedToolGroups } = input;
   if (launchThreadId === undefined || launchThreadId.trim().length === 0) return undefined;
 
   return {
@@ -122,7 +121,10 @@ export function makeT3TeamWorkflowHostDraftToolClient(input: {
         throw new Error(`Tool '${tool}' is not exposed to workflow bodies.`);
       }
       const binding = await Effect.runPromise(
-        broker.bindSession({ threadId: ThreadId.make(launchThreadId) }),
+        broker.bindSession({
+          threadId: ThreadId.make(launchThreadId),
+          ...(allowedToolGroups === undefined ? {} : { allowedToolGroups }),
+        }),
       );
       if (binding === undefined) {
         throw new Error(
@@ -145,13 +147,11 @@ export function makeT3TeamWorkflowHostDraftToolClient(input: {
   };
 }
 
-/**
- * The run-option fragment for a launch. The refs are bound even with NO client, so a body that
+/** The run-option fragment for a launch. The refs are bound even with NO client, so a body that
  * calls one on a headless run fails at the CALL with a sentence naming the cause instead of
- * `Cannot read properties of undefined` — the same reasoning as the SDK's `defaultBroker`
- * stand-in (`t3team-sdk.bodyTrees.ts`). The capability gate runs first either way, so binding a
- * ref grants nothing: without a client every call can only fail.
- */
+ * `Cannot read properties of undefined` — the same reasoning as the SDK's `defaultBroker` stand-in
+ * (`t3team-sdk.bodyTrees.ts`). The capability gate runs first either way, so binding a ref grants
+ * nothing: without a client every call can only fail. */
 export function t3teamWorkflowHostToolRunOptions(client: T3TeamToolHandlerClient | undefined): {
   readonly tools: ReadonlyArray<ToolRef<unknown, unknown>>;
   readonly t3team?: T3TeamToolHandlerClient;
