@@ -43,7 +43,12 @@ const ISSUE_TYPE_VISUALS: Record<JiraIssueTypeKey, JiraIssueTypeVisual> = {
     label: "Subtask",
     toneClassName: "bg-muted-foreground/70 text-background",
   },
-  issue: { key: "issue", label: "Issue", toneClassName: "bg-muted-foreground/70 text-background" },
+  /*
+    No fill. Every other key names a type we actually resolved, and its solid tile carries that
+    meaning at a glance. "issue" means we do not know the type — a filled tile would assert a
+    certainty we do not have, so this one is a bare stroked outline in muted ink.
+  */
+  issue: { key: "issue", label: "Issue", toneClassName: "text-muted-foreground" },
 };
 
 function normalizeText(value: string): string {
