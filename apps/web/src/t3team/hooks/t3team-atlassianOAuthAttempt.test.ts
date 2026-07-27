@@ -28,14 +28,16 @@ function closedPopup(): WindowProxy {
 }
 
 /**
- * A callback delivered the way a real one is: same-origin.
+ * A callback delivered the way a real one is: from the redirect URI's own origin.
  *
- * `origin` matters. Without it a synthetic `MessageEvent` carries `""`, which the receiver now
- * rejects — and it rejects it for the right reason, since a message from an unknown origin is
- * indistinguishable from a forged one. These tests used to pass precisely because no origin was
- * checked, which is why the suite could not have caught the CSRF hole it was covering.
+ * `origin` matters, and the default is the *callback* origin rather than this page's. They differ in
+ * the desktop shell, where the app loads from a custom scheme while the callback necessarily lands on
+ * http://localhost — so the receiver validates against the redirect URI it started the flow with.
+ * Without an origin a synthetic `MessageEvent` carries `""`, which is correctly rejected: a message
+ * from an unknown origin is indistinguishable from a forged one. These tests used to pass precisely
+ * because nothing was checked, which is why the suite could not have caught the CSRF hole.
  */
-function deliverCallback(href: string, origin: string = window.location.origin) {
+function deliverCallback(href: string, origin: string = new URL(REDIRECT_URI).origin) {
   const message: AtlassianOAuthCallbackMessage = {
     type: ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE,
     href,
