@@ -1,57 +1,59 @@
 /**
- * Controller for the description section's "Rewrite with agent" control.
+ * Controller for the description section's `Rewrite` control.
  *
- * The agent never writes the description directly — it always proposes through
- * `t3team.work_item.description.draft_update`, and a human accepts the draft in the existing review
- * UI (`WorkItemDescriptionDraftDiff`). This hook only starts the turn that asks for that proposal:
+ * Clicking it launches the bundled `describe-rewrite` RECIPE WORKFLOW — it does not start an agent
+ * turn. That is the whole point of this path: the workflow opens with a deterministic `askUser`
+ * card, so a click costs nothing until the human has said what should change. The writer turn runs
+ * afterwards, and the workflow BODY calls `t3team.work_item.description.draft_update`, so "exactly
+ * one draft, always reviewed" is a property of the engine rather than of prompt obedience.
  *
- * - If the work item's aside is already showing a thread, the turn is started on THAT thread
- *   (`sendT3TeamThreadTurn`) — the draft lands there via the existing hidden-attachment pipe, and the
- *   reviewer is looking at the thread that produced it.
- * - Otherwise a ticket kickoff thread is created with the rewrite instruction as its kickoff message,
- *   reusing the same `onKickoffThread` callback the kickoff composer itself calls — never a second
- *   thread-creation path.
+ * Two launch shapes, one workflow:
  *
- * Starting a turn on a thread that already has one in progress is rejected by the server; that
- * rejection is surfaced here rather than swallowed; see `deliverDraftFeedbackToSourceThread` for the
- * sibling case (routing feedback back to a thread) that established this must never fail silently.
+ * - The aside is already showing a thread ⇒ one step: `launchRecipeWorkflow` on that thread id.
+ *   The launch route rejects an empty `threadId`, so this is only available once a thread exists.
+ * - No thread yet ⇒ two steps, and the second one has to survive a navigation. The kickoff
+ *   NAVIGATES to the new thread and unmounts this component, so the launch cannot be awaited here.
+ *   Rather than inventing a parallel "do it once the thread is ready" mechanism, the kickoff
+ *   carries the workflow as `kickoffWorkflow`: `runThreadBootstrapKickoff` already branches on a
+ *   kickoff that has a `workflowPath` and calls `launchRecipeWorkflow` INSTEAD of
+ *   `thread.turn.start`. That branch is what makes the no-thread case honour the no-model-first
+ *   invariant, and it is the same path every Quick Start recipe launch takes.
  *
- * The kickoff path is fire-and-forget (`onKickoffThread` returns void — it navigates synchronously,
- * it doesn't report success/failure), so there is no promise to key `isStarting` off like the
- * active-thread path has. Instead a one-way `kickoffLaunched` latch closes the double-click window:
- * once a kickoff has been requested, the control stays disabled for the rest of this component's
- * life. That's deliberately permanent, not reset-after-a-timeout — the click above it navigates to
- * the new thread, which unmounts this component, so the latch never needs to un-latch.
+ * Failures are surfaced, never swallowed — see `deliverDraftFeedbackToSourceThread` for the
+ * sibling case that established that. The kickoff path reports nothing back (`onKickoffThread`
+ * returns void and navigates synchronously), so a one-way `kickoffLaunched` latch closes the
+ * double-click window instead; it never un-latches because the navigation unmounts this component.
  */
 
 import { useCallback, useState } from "react";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { sendT3TeamThreadTurn } from "~/t3team/chat/t3team-sendThreadTurn";
-import {
-  toUserFacingError,
-  type T3TeamUserFacingError,
-} from "~/t3team/components/error/t3team-errorMessage";
+import type { T3TeamUserFacingError } from "~/t3team/components/error/t3team-errorMessage";
 import { createDefaultT3TeamKickoffLaunchConfig } from "~/t3team/t3team-kickoffLaunchConfig";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import type { TicketKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
-import { buildWorkItemAgentRewritePrompt } from "~/t3team/workitem/t3team-workItemAgentRewritePrompt";
-
-const THREAD_BUSY_FRAGMENT = "already has a turn in progress";
-
-function isThreadBusyError(cause: unknown): boolean {
-  const message = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : "";
-  return message.includes(THREAD_BUSY_FRAGMENT);
-}
+import {
+  toWorkItemRewriteLaunchError,
+  workItemRewriteDisconnectedError,
+  workItemRewriteMissingWorkspaceError,
+} from "~/t3team/workitem/t3team-workItemRewriteLaunchErrors";
+import {
+  buildWorkItemRewriteKickoffMessage,
+  buildWorkItemRewriteWorkflow,
+  launchWorkItemRewriteOnThread,
+} from "~/t3team/workitem/t3team-workItemRewriteWorkflowLaunch";
 
 export type UseWorkItemAgentRewriteInput = {
   readonly backend: BackendApi | null | undefined;
   readonly projectId: string;
   readonly ticketId: string;
-  /** The issue key both the prompt and the draft tool target — `model.key`, not the raw ticket id. */
+  /** The issue key both the workflow input and the draft tool target — `model.key`, not the raw
+   * ticket id. */
   readonly issueIdOrKey: string;
   /** `ProjectThread.ticketDisplayId`'s value for a freshly created kickoff thread. */
   readonly ticketDisplayId: string;
+  /** Where `.t3team/recipes/describe-rewrite` lives. Without it there is no recipe to launch. */
+  readonly projectWorkspaceRoot?: string | undefined;
   readonly descriptionText?: string | undefined;
   readonly summary?: string | undefined;
   readonly githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
@@ -60,9 +62,9 @@ export type UseWorkItemAgentRewriteInput = {
   readonly onKickoffThread: (input: TicketKickoffThreadInput) => void;
   /** From `useWorkItemDrafts` — not re-derived here. */
   readonly hasPendingDescriptionDraft: boolean;
-  /** Whether the work item's own data (ticket or snapshot) has actually loaded. A prompt built from
-   * nothing — no description, no real summary — is worse than no control at all, so the caller gates
-   * this rather than the control silently sending an empty-data prompt. */
+  /** Whether the work item's own data (ticket or snapshot) has actually loaded. A workflow started
+   * on nothing — no description, no real summary — is worse than no control at all, so the caller
+   * gates this rather than the control silently launching on empty data. */
   readonly hasLoadedWorkItem: boolean;
 };
 
@@ -78,6 +80,7 @@ export function useWorkItemAgentRewrite(input: UseWorkItemAgentRewriteInput): {
     ticketId,
     issueIdOrKey,
     ticketDisplayId,
+    projectWorkspaceRoot,
     descriptionText,
     summary,
     githubActivityItems,
@@ -96,46 +99,55 @@ export function useWorkItemAgentRewrite(input: UseWorkItemAgentRewriteInput): {
     // a future caller renders its own trigger without wiring `isDisabled` through.
     if (isStarting || kickoffLaunched || hasPendingDescriptionDraft || !hasLoadedWorkItem) return;
 
-    const prompt = buildWorkItemAgentRewritePrompt({ issueIdOrKey, descriptionText, summary });
+    const workflow = buildWorkItemRewriteWorkflow({
+      issueIdOrKey,
+      ...(summary ? { summary } : {}),
+      ...(descriptionText ? { currentBody: descriptionText } : {}),
+      ...(projectWorkspaceRoot ? { projectWorkspaceRoot } : {}),
+    });
+    if (!workflow) {
+      setError(workItemRewriteMissingWorkspaceError());
+      return;
+    }
+    const kickoffMessage = buildWorkItemRewriteKickoffMessage(issueIdOrKey);
+    const launchConfig = createDefaultT3TeamKickoffLaunchConfig();
 
     if (activeThreadId) {
       if (!backend) {
-        setError(toUserFacingError(new Error("The app is not connected to a server."), {
-          action: "start the rewrite",
-        }));
+        setError(workItemRewriteDisconnectedError());
         return;
       }
       setIsStarting(true);
       setError(null);
-      void sendT3TeamThreadTurn({ backend, threadId: activeThreadId, text: prompt })
+      void launchWorkItemRewriteOnThread({
+        backend,
+        threadId: activeThreadId,
+        workflow,
+        launchConfig,
+        kickoffMessage,
+      })
         .then(() => setIsStarting(false))
         .catch((cause: unknown) => {
           setIsStarting(false);
-          setError(
-            isThreadBusyError(cause)
-              ? {
-                  headline: "This thread is still finishing a turn.",
-                  detail: "Wait for it to finish, then try again.",
-                  canRetry: true,
-                }
-              : toUserFacingError(cause, { action: "start the rewrite" }),
-          );
+          setError(toWorkItemRewriteLaunchError(cause));
         });
       return;
     }
 
-    // Latched before calling out: `onKickoffThread` navigates synchronously but reports nothing back,
-    // so this is the only signal that stops a second click from creating a second kickoff thread for
-    // the same ticket.
+    // Latched before calling out: `onKickoffThread` navigates synchronously but reports nothing
+    // back, so this is the only signal that stops a second click from creating a second kickoff
+    // thread for the same ticket.
     setKickoffLaunched(true);
-    const launchConfig = createDefaultT3TeamKickoffLaunchConfig();
     onKickoffThread({
       projectId,
       ticketId,
       ticketDisplayId,
       githubActivityItems,
-      kickoffMessage: prompt,
+      // Not a prompt: the bootstrap needs a non-empty initial message to plan a kickoff at all, and
+      // routes it to the workflow launch (not a turn) because `kickoffWorkflow` has a workflowPath.
+      kickoffMessage,
       kickoffPending: true,
+      kickoffWorkflow: workflow,
       kickoffModelSelection: launchConfig.selection,
       kickoffRuntimeMode: launchConfig.runtimeMode,
       kickoffInteractionMode: launchConfig.interactionMode,
@@ -154,6 +166,7 @@ export function useWorkItemAgentRewrite(input: UseWorkItemAgentRewriteInput): {
     isStarting,
     onKickoffThread,
     projectId,
+    projectWorkspaceRoot,
     summary,
     ticketDisplayId,
     ticketId,

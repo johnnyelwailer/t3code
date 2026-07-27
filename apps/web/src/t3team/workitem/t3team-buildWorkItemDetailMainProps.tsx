@@ -33,7 +33,7 @@ export function buildWorkItemDetailMainProps({
     typeof createSectionContextMenuHandler
   >[0]["showAgentContextMenu"];
   /** The Description section header's own affordance — built by the caller, which owns the thread
-   * context ("Rewrite with agent" needs `activeThread`/`onKickoffThread`, not this pure mapping). */
+   * context ("Rewrite" needs `activeThread`/`onKickoffThread`, not this pure mapping). */
   readonly descriptionAction?: WorkItemDetailMainProps["descriptionAction"];
 }): WorkItemDetailMainProps {
   const resolvedTicketId = view.ticket?.id ?? view.canonicalTicketId;

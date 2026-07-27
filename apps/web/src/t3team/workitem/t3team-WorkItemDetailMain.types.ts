@@ -49,6 +49,6 @@ export type WorkItemDetailMainProps = {
     | undefined;
   /** Extra sections rendered under the description — GitHub activity, draft review. */
   readonly supplementalSections?: ReactNode;
-  /** The Description section header's own affordance — the "Rewrite with agent" control. */
+  /** The Description section header's own affordance — the "Rewrite" control. */
   readonly descriptionAction?: ReactNode;
 };
