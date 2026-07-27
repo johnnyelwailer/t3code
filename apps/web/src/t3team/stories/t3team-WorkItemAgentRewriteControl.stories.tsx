@@ -14,6 +14,7 @@ const BASE_PROPS: UseWorkItemAgentRewriteInput = {
   ticketId: "KOOR-1",
   issueIdOrKey: "KOOR-1",
   ticketDisplayId: "KOOR-1",
+  projectWorkspaceRoot: "/tmp/project-koor",
   descriptionText: "The camera resets to the default angle after a session reload.",
   summary: "Camera resets on reload",
   githubActivityItems: [],
@@ -23,11 +24,13 @@ const BASE_PROPS: UseWorkItemAgentRewriteInput = {
   onKickoffThread: () => {},
 };
 
-function fakeBackend(dispatchCommand: BackendApi["dispatchCommand"]): BackendApi {
-  return { dispatchCommand } as unknown as BackendApi;
+/** The control's only backend call is the recipe-workflow launch — no turn is ever dispatched from
+ * here, so the stories only need that one method. */
+function fakeBackend(launchRecipeWorkflow: BackendApi["launchRecipeWorkflow"]): BackendApi {
+  return { launchRecipeWorkflow } as unknown as BackendApi;
 }
 
-/** Starts the rewrite itself on mount, so the story lands directly on the state it demonstrates
+/** Starts the launch itself on mount, so the story lands directly on the state it demonstrates
  * rather than requiring the Storybook viewer to click the button first. */
 function AutoStart(props: UseWorkItemAgentRewriteInput) {
   const rewrite = useWorkItemAgentRewrite(props);
@@ -66,8 +69,8 @@ export const DisabledDraftPending: Story = {
   render: () => <WorkItemAgentRewriteControl {...BASE_PROPS} hasPendingDescriptionDraft />,
 };
 
-/** The work item itself hasn't loaded (or failed to) — disabled rather than sending a prompt built
- * from empty data. */
+/** The work item itself hasn't loaded (or failed to) — disabled rather than launching a workflow
+ * built from empty data. */
 export const DisabledNotLoaded: Story = {
   render: () => <WorkItemAgentRewriteControl {...BASE_PROPS} hasLoadedWorkItem={false} />,
 };
@@ -82,4 +85,13 @@ export const ErrorState: Story = {
       )}
     />
   ),
+};
+
+/** No local workspace ⇒ no `.t3team/recipes/describe-rewrite` on disk. The control refuses rather
+ * than launching a run whose draft-tool call could not resolve. */
+export const ErrorNoWorkspace: Story = {
+  render: () => {
+    const { projectWorkspaceRoot: _omitted, ...props } = BASE_PROPS;
+    return <AutoStart {...props} />;
+  },
 };

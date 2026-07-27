@@ -10,6 +10,7 @@ import {
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { buildT3TeamActionRecipeLaunchContext } from "~/t3team/t3team-actionRecipeLaunchContext";
+import { QUICK_START_WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import { buildAvailableContextKeys } from "~/t3team/t3team-sidecarRecipeContextKeys";
 import {
   buildPinnedQuickStartSelection,
@@ -72,8 +73,8 @@ export function buildT3TeamSidecarRecipeQuickStarts(
   return buildPinnedQuickStartSelection(matches, input.limit ?? 5).map((result) => {
     const bundledRecipe = getBundledT3TeamRecipe(result.recipe.id);
     const localBundledRecipePath =
-      result.recipe.id === "create-recipe" && projectWorkspaceRoot
-        ? `${projectWorkspaceRoot}/.t3team/recipes/create-recipe`
+      QUICK_START_WORKFLOW_BACKED_BUNDLED_RECIPE_IDS.has(result.recipe.id) && projectWorkspaceRoot
+        ? `${projectWorkspaceRoot}/.t3team/recipes/${result.recipe.id}`
         : undefined;
     const renderedTitle = renderPromptTemplate(
       bundledRecipe?.manifestDisplayName ?? result.recipe.title,

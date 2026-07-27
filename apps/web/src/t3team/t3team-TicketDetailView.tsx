@@ -72,7 +72,8 @@ export function TicketDetailView({
   const resolvedTicketId = view.ticket?.id ?? view.canonicalTicketId;
   const descriptionDrafts = useWorkItemDrafts({ issueIdOrKey: view.fieldModel.key });
   // `view.title` falls back to the literal string "Ticket" once nothing has loaded — real ticket/
-  // snapshot data or nothing, never that fallback, so the prompt never claims a title it doesn't have.
+  // snapshot data or nothing, never that fallback, so the workflow's `summary` input never claims
+  // a title the work item doesn't have.
   const realTicketTitle = view.ticket?.ref.title ?? view.snapshot?.ref.title;
   const descriptionAction = (
     <WorkItemAgentRewriteControl
@@ -81,6 +82,9 @@ export function TicketDetailView({
       ticketId={resolvedTicketId}
       issueIdOrKey={view.fieldModel.key}
       ticketDisplayId={view.displayId}
+      {...(project.workspace?.rootPath
+        ? { projectWorkspaceRoot: project.workspace.rootPath }
+        : {})}
       {...(view.fieldModel.descriptionText
         ? { descriptionText: view.fieldModel.descriptionText }
         : {})}

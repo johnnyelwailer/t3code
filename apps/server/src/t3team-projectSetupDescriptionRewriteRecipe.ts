@@ -14,11 +14,11 @@
  *      it never touches the tool — so "exactly one draft, always reviewed" is a property of the
  *      engine rather than of prompt obedience.
  *
- * WHY THE WRITER PROMPT IS NOT `buildWorkItemAgentRewritePrompt`
- * That builder (apps/web/.../t3team-workItemAgentRewritePrompt.ts) tells the agent to CALL the
- * draft tool itself — correct for the chat-turn control it serves, and exactly wrong here, where
- * the body owns the call. Sharing it would produce two drafts. The contracts differ, so the text
- * differs; this is a different prompt, not a second copy of that one.
+ * WHY THE WRITER PROMPT IS AUTHORED HERE
+ * The web control this backs used to build its own prompt telling the agent to CALL the draft tool
+ * itself; that builder was deleted when the control moved onto this workflow, because here the
+ * BODY owns the call and an agent that also called it would produce two drafts for one rewrite.
+ * The writer's contract is "return prose, touch nothing", and it lives with the body that enforces it.
  *
  * WHY THIS IS A RENDERED STRING
  * Bundled recipes reach a user's disk through project-setup scaffolding

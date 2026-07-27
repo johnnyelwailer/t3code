@@ -14,6 +14,9 @@ import {
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+const WORKSPACE_ROOT = "/tmp/project-alpha";
+const RECIPE_PATH = `${WORKSPACE_ROOT}/.t3team/recipes/describe-rewrite`;
+
 type Result = ReturnType<typeof useWorkItemAgentRewrite>;
 
 function mount(initialProps: UseWorkItemAgentRewriteInput): {
@@ -60,12 +63,20 @@ function baseProps(overrides?: Partial<UseWorkItemAgentRewriteInput>): UseWorkIt
     ticketId: "ticket-1",
     issueIdOrKey: "PROJ-42",
     ticketDisplayId: "PROJ-42",
+    projectWorkspaceRoot: WORKSPACE_ROOT,
     descriptionText: "Current text.",
     githubActivityItems: [],
     hasPendingDescriptionDraft: false,
     hasLoadedWorkItem: true,
     onKickoffThread: () => {},
     ...overrides,
+  };
+}
+
+function backendWith(launchRecipeWorkflow: ReturnType<typeof vi.fn>, dispatchCommand = vi.fn()) {
+  return {
+    backend: { launchRecipeWorkflow, dispatchCommand } as unknown as BackendApi,
+    dispatchCommand,
   };
 }
 
@@ -77,9 +88,9 @@ describe("useWorkItemAgentRewrite", () => {
     harness = null;
   });
 
-  it("starts a turn on the active thread with the built prompt", async () => {
-    const dispatchCommand = vi.fn().mockResolvedValue(undefined);
-    const backend = { dispatchCommand } as unknown as BackendApi;
+  it("launches the describe-rewrite workflow on the active thread instead of a model turn", async () => {
+    const launchRecipeWorkflow = vi.fn().mockResolvedValue({ ok: true });
+    const { backend, dispatchCommand } = backendWith(launchRecipeWorkflow);
     harness = mount(baseProps({ backend, activeThreadId: "thread-1" }));
     await harness.rerender(baseProps({ backend, activeThreadId: "thread-1" }));
 
@@ -88,26 +99,42 @@ describe("useWorkItemAgentRewrite", () => {
       await flush();
     });
 
-    expect(dispatchCommand).toHaveBeenCalledTimes(1);
-    const command = dispatchCommand.mock.calls[0]?.[0] as {
-      type: string;
+    // The invariant: clicking spends nothing. No turn is dispatched — the workflow's deterministic
+    // askUser card runs first, and only the human's answer reaches a model.
+    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(launchRecipeWorkflow).toHaveBeenCalledTimes(1);
+    const request = launchRecipeWorkflow.mock.calls[0]?.[0] as {
       threadId: string;
-      message: { text: string };
+      modelSelection: { instanceId: string; model: string };
+      launch: {
+        recipeId: string;
+        recipePath: string;
+        workflowPath: string;
+        parameters: Record<string, unknown>;
+      };
     };
-    expect(command.type).toBe("thread.turn.start");
-    expect(command.threadId).toBe("thread-1");
-    expect(command.message.text).toContain("PROJ-42");
-    expect(command.message.text).toContain("t3team.work_item.description.draft_update");
+    expect(request.threadId).toBe("thread-1");
+    expect(request.modelSelection.instanceId.length).toBeGreaterThan(0);
+    expect(request.launch.recipeId).toBe("describe-rewrite");
+    expect(request.launch.recipePath).toBe(RECIPE_PATH);
+    expect(request.launch.workflowPath).toBe(`${RECIPE_PATH}/workflow.ts`);
+    expect(request.launch.parameters).toMatchObject({
+      issueIdOrKey: "PROJ-42",
+      currentBody: "Current text.",
+    });
     expect(harness!.latest.result?.isStarting).toBe(false);
   });
 
-  it("kicks off a new ticket thread with the prompt as the kickoff message when there is no active thread", async () => {
+  it("hands the workflow to the kickoff when there is no thread yet, and starts no turn itself", async () => {
     const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
-    harness = mount(baseProps({ onKickoffThread }));
-    await harness.rerender(baseProps({ onKickoffThread }));
+    const launchRecipeWorkflow = vi.fn().mockResolvedValue({ ok: true });
+    const { backend, dispatchCommand } = backendWith(launchRecipeWorkflow);
+    harness = mount(baseProps({ backend, onKickoffThread }));
+    await harness.rerender(baseProps({ backend, onKickoffThread }));
 
-    act(() => {
+    await act(async () => {
       harness!.latest.result?.start();
+      await flush();
     });
 
     expect(onKickoffThread).toHaveBeenCalledTimes(1);
@@ -115,8 +142,19 @@ describe("useWorkItemAgentRewrite", () => {
     expect(input?.projectId).toBe("proj-1");
     expect(input?.ticketId).toBe("ticket-1");
     expect(input?.ticketDisplayId).toBe("PROJ-42");
-    expect(input?.kickoffMessage).toContain("PROJ-42");
-    expect(input?.kickoffMessage).toContain("t3team.work_item.description.draft_update");
+    // Step two runs after the navigation, inside the thread bootstrap: this step only creates the
+    // thread and carries the workflow, so nothing is launched (or spent) here.
+    expect(launchRecipeWorkflow).not.toHaveBeenCalled();
+    expect(dispatchCommand).not.toHaveBeenCalled();
+    // A workflowPath is what makes the bootstrap launch the recipe rather than start a turn.
+    expect(input?.kickoffWorkflow?.workflowPath).toBe(`${RECIPE_PATH}/workflow.ts`);
+    expect(input?.kickoffWorkflow?.recipePath).toBe(RECIPE_PATH);
+    expect(input?.kickoffWorkflow?.parameters).toMatchObject({ issueIdOrKey: "PROJ-42" });
+    // The bootstrap only plans a kickoff when there is an initial message, and it must not be the
+    // old rewrite prompt (which told the agent to call the draft tool itself).
+    expect(input?.kickoffPending).toBe(true);
+    expect(input?.kickoffMessage.trim().length).toBeGreaterThan(0);
+    expect(input?.kickoffMessage).not.toContain("draft_update");
   });
 
   it("does not fire a second kickoff when start() is called again right after a kickoff launch", async () => {
@@ -150,9 +188,38 @@ describe("useWorkItemAgentRewrite", () => {
     expect(onKickoffThread).not.toHaveBeenCalled();
   });
 
-  it("surfaces an error and clears isStarting when sendT3TeamThreadTurn rejects", async () => {
-    const dispatchCommand = vi.fn().mockRejectedValue(new Error("Thread already has a turn in progress."));
-    const backend = { dispatchCommand } as unknown as BackendApi;
+  it("is disabled while a description draft is already pending", async () => {
+    const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
+    harness = mount(baseProps({ onKickoffThread, hasPendingDescriptionDraft: true }));
+    await harness.rerender(baseProps({ onKickoffThread, hasPendingDescriptionDraft: true }));
+
+    expect(harness!.latest.result?.isDisabled).toBe(true);
+    act(() => {
+      harness!.latest.result?.start();
+    });
+    expect(onKickoffThread).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a missing workspace instead of launching a run with no draft tools", async () => {
+    const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
+    const props = baseProps({ onKickoffThread });
+    const { projectWorkspaceRoot: _omitted, ...withoutWorkspace } = props;
+    harness = mount(withoutWorkspace);
+    await harness.rerender(withoutWorkspace);
+
+    act(() => {
+      harness!.latest.result?.start();
+    });
+
+    expect(onKickoffThread).not.toHaveBeenCalled();
+    expect(harness!.latest.result?.error).not.toBeNull();
+  });
+
+  it("surfaces an error and clears isStarting when the launch rejects", async () => {
+    const launchRecipeWorkflow = vi
+      .fn()
+      .mockRejectedValue(new Error("Thread already has a turn in progress."));
+    const { backend } = backendWith(launchRecipeWorkflow);
     harness = mount(baseProps({ backend, activeThreadId: "thread-1" }));
     await harness.rerender(baseProps({ backend, activeThreadId: "thread-1" }));
 
