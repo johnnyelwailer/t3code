@@ -1,10 +1,9 @@
 /** @vitest-environment jsdom */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { BackendApi } from "~/t3team/backend/t3team-types";
-import type { TicketKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
+import { useT3TeamStagedComposerActionStore } from "~/t3team/t3team-stagedComposerActionStore";
 import {
   useWorkItemAgentRewrite,
   type UseWorkItemAgentRewriteInput,
@@ -16,10 +15,11 @@ import {
 
 const WORKSPACE_ROOT = "/tmp/project-alpha";
 const RECIPE_PATH = `${WORKSPACE_ROOT}/.t3team/recipes/describe-rewrite`;
+const STAGED_KEY = "proj-1:ticket-1";
 
 type Result = ReturnType<typeof useWorkItemAgentRewrite>;
 
-function mount(initialProps: UseWorkItemAgentRewriteInput): {
+function mount(): {
   readonly latest: { result: Result | null };
   readonly rerender: (nextProps: UseWorkItemAgentRewriteInput) => Promise<void>;
   readonly unmount: () => Promise<void>;
@@ -50,186 +50,175 @@ function mount(initialProps: UseWorkItemAgentRewriteInput): {
   };
 }
 
-/** Flushes both the microtask queue (promise chains) and a macrotask tick, for fire-and-forget
- * async work started from an event handler rather than awaited directly. */
-function flush(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 function baseProps(overrides?: Partial<UseWorkItemAgentRewriteInput>): UseWorkItemAgentRewriteInput {
   return {
-    backend: {} as BackendApi,
     projectId: "proj-1",
     ticketId: "ticket-1",
     issueIdOrKey: "PROJ-42",
-    ticketDisplayId: "PROJ-42",
     projectWorkspaceRoot: WORKSPACE_ROOT,
     descriptionText: "Current text.",
-    githubActivityItems: [],
+    summary: "Camera resets on reload",
     hasPendingDescriptionDraft: false,
     hasLoadedWorkItem: true,
-    onKickoffThread: () => {},
     ...overrides,
   };
 }
 
-function backendWith(launchRecipeWorkflow: ReturnType<typeof vi.fn>, dispatchCommand = vi.fn()) {
-  return {
-    backend: { launchRecipeWorkflow, dispatchCommand } as unknown as BackendApi,
-    dispatchCommand,
-  };
+function stagedAction() {
+  return useT3TeamStagedComposerActionStore.getState().byKey[STAGED_KEY];
 }
 
 describe("useWorkItemAgentRewrite", () => {
   let harness: ReturnType<typeof mount> | null = null;
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    useT3TeamStagedComposerActionStore.setState({ byKey: {} });
+    fetchSpy = vi.fn();
+    (globalThis as unknown as { fetch: unknown }).fetch = fetchSpy;
+  });
 
   afterEach(async () => {
     await harness?.unmount();
     harness = null;
   });
 
-  it("launches the describe-rewrite workflow on the active thread instead of a model turn", async () => {
-    const launchRecipeWorkflow = vi.fn().mockResolvedValue({ ok: true });
-    const { backend, dispatchCommand } = backendWith(launchRecipeWorkflow);
-    harness = mount(baseProps({ backend, activeThreadId: "thread-1" }));
-    await harness.rerender(baseProps({ backend, activeThreadId: "thread-1" }));
+  async function mounted(overrides?: Partial<UseWorkItemAgentRewriteInput>) {
+    harness = mount();
+    await harness.rerender(baseProps(overrides));
+    return harness;
+  }
 
-    await act(async () => {
-      harness!.latest.result?.start();
-      await flush();
-    });
+  /**
+   * The whole point of the restructure: the click is free. Nothing is created, nothing is sent, so
+   * "no model turn before the human has submitted their intent" holds structurally — this hook has
+   * no backend to reach even if it wanted to.
+   */
+  it("opens the popout and preselects the workflow without any network call", async () => {
+    const h = await mounted();
 
-    // The invariant: clicking spends nothing. No turn is dispatched — the workflow's deterministic
-    // askUser card runs first, and only the human's answer reaches a model.
-    expect(dispatchCommand).not.toHaveBeenCalled();
-    expect(launchRecipeWorkflow).toHaveBeenCalledTimes(1);
-    const request = launchRecipeWorkflow.mock.calls[0]?.[0] as {
-      threadId: string;
-      modelSelection: { instanceId: string; model: string };
-      launch: {
-        recipeId: string;
-        recipePath: string;
-        workflowPath: string;
-        parameters: Record<string, unknown>;
-      };
-    };
-    expect(request.threadId).toBe("thread-1");
-    expect(request.modelSelection.instanceId.length).toBeGreaterThan(0);
-    expect(request.launch.recipeId).toBe("describe-rewrite");
-    expect(request.launch.recipePath).toBe(RECIPE_PATH);
-    expect(request.launch.workflowPath).toBe(`${RECIPE_PATH}/workflow.ts`);
-    expect(request.launch.parameters).toMatchObject({
+    act(() => h.latest.result?.open());
+
+    expect(h.latest.result?.isComposing).toBe(true);
+    expect(h.latest.result?.isStaged).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    const staged = stagedAction();
+    // Preselected, not launched: the recipe paths are staged so that the composer's submit can hand
+    // the server a run whose tool scope resolves.
+    expect(staged?.selectedRecipe.recipe.workflow?.recipePath).toBe(RECIPE_PATH);
+    expect(staged?.selectedRecipe.recipe.workflow?.workflowPath).toBe(`${RECIPE_PATH}/workflow.ts`);
+    expect(staged?.selectedRecipe.recipe.workflow?.parameters).toMatchObject({
       issueIdOrKey: "PROJ-42",
       currentBody: "Current text.",
     });
-    expect(harness!.latest.result?.isStarting).toBe(false);
+    // Submit-time inputs are NOT staged; they are collected by the composer.
+    expect(staged?.selectedRecipe.recipe.workflow?.parameters).not.toHaveProperty("instructions");
+    expect(staged?.comments).toEqual([]);
   });
 
-  it("hands the workflow to the kickoff when there is no thread yet, and starts no turn itself", async () => {
-    const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
-    const launchRecipeWorkflow = vi.fn().mockResolvedValue({ ok: true });
-    const { backend, dispatchCommand } = backendWith(launchRecipeWorkflow);
-    harness = mount(baseProps({ backend, onKickoffThread }));
-    await harness.rerender(baseProps({ backend, onKickoffThread }));
+  it("attaches the popout note as a comment and still launches nothing", async () => {
+    const h = await mounted();
 
-    await act(async () => {
-      harness!.latest.result?.start();
-      await flush();
-    });
+    act(() => h.latest.result?.open());
+    act(() => h.latest.result?.submitComment("Lead with the user impact."));
 
-    expect(onKickoffThread).toHaveBeenCalledTimes(1);
-    const input = onKickoffThread.mock.calls[0]?.[0];
-    expect(input?.projectId).toBe("proj-1");
-    expect(input?.ticketId).toBe("ticket-1");
-    expect(input?.ticketDisplayId).toBe("PROJ-42");
-    // Step two runs after the navigation, inside the thread bootstrap: this step only creates the
-    // thread and carries the workflow, so nothing is launched (or spent) here.
-    expect(launchRecipeWorkflow).not.toHaveBeenCalled();
-    expect(dispatchCommand).not.toHaveBeenCalled();
-    // A workflowPath is what makes the bootstrap launch the recipe rather than start a turn.
-    expect(input?.kickoffWorkflow?.workflowPath).toBe(`${RECIPE_PATH}/workflow.ts`);
-    expect(input?.kickoffWorkflow?.recipePath).toBe(RECIPE_PATH);
-    expect(input?.kickoffWorkflow?.parameters).toMatchObject({ issueIdOrKey: "PROJ-42" });
-    // The bootstrap only plans a kickoff when there is an initial message, and it must not be the
-    // old rewrite prompt (which told the agent to call the draft tool itself).
-    expect(input?.kickoffPending).toBe(true);
-    expect(input?.kickoffMessage.trim().length).toBeGreaterThan(0);
-    expect(input?.kickoffMessage).not.toContain("draft_update");
+    expect(h.latest.result?.isComposing).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(stagedAction()?.comments).toEqual([
+      {
+        id: expect.stringContaining("description:") as unknown as string,
+        blockId: "description",
+        // Empty on purpose: nothing was selected, and the workflow body drops its `On "…":` prefix
+        // rather than inventing a quote the user never wrote.
+        quote: "",
+        body: "Lead with the user impact.",
+      },
+    ]);
   });
 
-  it("does not fire a second kickoff when start() is called again right after a kickoff launch", async () => {
-    const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
-    harness = mount(baseProps({ onKickoffThread }));
-    await harness.rerender(baseProps({ onKickoffThread }));
+  it("keeps both notes when a second one is attached, and each stays removable", async () => {
+    const h = await mounted();
 
-    act(() => {
-      harness!.latest.result?.start();
-    });
-    expect(onKickoffThread).toHaveBeenCalledTimes(1);
-    expect(harness!.latest.result?.isDisabled).toBe(true);
+    act(() => h.latest.result?.open());
+    act(() => h.latest.result?.submitComment("Lead with the user impact."));
+    act(() => h.latest.result?.open());
+    act(() => h.latest.result?.submitComment("Drop the changelog section."));
 
-    // A second click before navigation has unmounted the control — the latch must hold.
+    const bodies = stagedAction()?.comments.map((comment) => comment.body);
+    expect(bodies).toEqual(["Lead with the user impact.", "Drop the changelog section."]);
+    expect(h.latest.result?.stagedCommentCount).toBe(2);
+
+    const firstId = stagedAction()?.comments[0]?.id ?? "";
     act(() => {
-      harness!.latest.result?.start();
+      useT3TeamStagedComposerActionStore
+        .getState()
+        .removeComment({ projectId: "proj-1", ticketId: "ticket-1" }, firstId);
     });
-    expect(onKickoffThread).toHaveBeenCalledTimes(1);
+
+    expect(stagedAction()?.comments.map((comment) => comment.body)).toEqual([
+      "Drop the changelog section.",
+    ]);
+    // Removing a note must not un-preselect the action.
+    expect(stagedAction()?.selectedRecipe.recipe.workflow?.recipePath).toBe(RECIPE_PATH);
   });
 
-  it("does not start when the work item has not loaded", async () => {
-    const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
-    harness = mount(baseProps({ onKickoffThread, hasLoadedWorkItem: false }));
-    await harness.rerender(baseProps({ onKickoffThread, hasLoadedWorkItem: false }));
+  it("drops empty notes rather than staging feedback with nothing in it", async () => {
+    const h = await mounted();
 
-    expect(harness!.latest.result?.isDisabled).toBe(true);
+    act(() => h.latest.result?.open());
+    act(() => h.latest.result?.submitComment("   "));
 
-    act(() => {
-      harness!.latest.result?.start();
-    });
-    expect(onKickoffThread).not.toHaveBeenCalled();
+    expect(stagedAction()?.comments).toEqual([]);
+  });
+
+  it("un-preselects on cancel when the human left no note behind", async () => {
+    const h = await mounted();
+
+    act(() => h.latest.result?.open());
+    act(() => h.latest.result?.cancel());
+
+    expect(stagedAction()).toBeUndefined();
+    expect(h.latest.result?.isStaged).toBe(false);
+  });
+
+  it("keeps the staged notes when the popout is cancelled after one was attached", async () => {
+    const h = await mounted();
+
+    act(() => h.latest.result?.open());
+    act(() => h.latest.result?.submitComment("Lead with the user impact."));
+    act(() => h.latest.result?.open());
+    act(() => h.latest.result?.cancel());
+
+    expect(stagedAction()?.comments).toHaveLength(1);
+  });
+
+  it("surfaces a missing workspace instead of preselecting a run with no draft tools", async () => {
+    const { projectWorkspaceRoot: _omitted, ...withoutWorkspace } = baseProps();
+    harness = mount();
+    await harness.rerender(withoutWorkspace);
+
+    act(() => harness!.latest.result?.open());
+
+    expect(harness.latest.result?.error).not.toBeNull();
+    expect(harness.latest.result?.isComposing).toBe(false);
+    expect(stagedAction()).toBeUndefined();
+  });
+
+  it("does not open while the work item has not loaded", async () => {
+    const h = await mounted({ hasLoadedWorkItem: false });
+
+    expect(h.latest.result?.isDisabled).toBe(true);
+    act(() => h.latest.result?.open());
+    expect(h.latest.result?.isComposing).toBe(false);
+    expect(stagedAction()).toBeUndefined();
   });
 
   it("is disabled while a description draft is already pending", async () => {
-    const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
-    harness = mount(baseProps({ onKickoffThread, hasPendingDescriptionDraft: true }));
-    await harness.rerender(baseProps({ onKickoffThread, hasPendingDescriptionDraft: true }));
+    const h = await mounted({ hasPendingDescriptionDraft: true });
 
-    expect(harness!.latest.result?.isDisabled).toBe(true);
-    act(() => {
-      harness!.latest.result?.start();
-    });
-    expect(onKickoffThread).not.toHaveBeenCalled();
-  });
-
-  it("surfaces a missing workspace instead of launching a run with no draft tools", async () => {
-    const onKickoffThread = vi.fn<(input: TicketKickoffThreadInput) => void>();
-    const props = baseProps({ onKickoffThread });
-    const { projectWorkspaceRoot: _omitted, ...withoutWorkspace } = props;
-    harness = mount(withoutWorkspace);
-    await harness.rerender(withoutWorkspace);
-
-    act(() => {
-      harness!.latest.result?.start();
-    });
-
-    expect(onKickoffThread).not.toHaveBeenCalled();
-    expect(harness!.latest.result?.error).not.toBeNull();
-  });
-
-  it("surfaces an error and clears isStarting when the launch rejects", async () => {
-    const launchRecipeWorkflow = vi
-      .fn()
-      .mockRejectedValue(new Error("Thread already has a turn in progress."));
-    const { backend } = backendWith(launchRecipeWorkflow);
-    harness = mount(baseProps({ backend, activeThreadId: "thread-1" }));
-    await harness.rerender(baseProps({ backend, activeThreadId: "thread-1" }));
-
-    await act(async () => {
-      harness!.latest.result?.start();
-      await flush();
-    });
-
-    expect(harness!.latest.result?.isStarting).toBe(false);
-    expect(harness!.latest.result?.error).not.toBeNull();
-    expect(harness!.latest.result?.error?.headline).toContain("finishing a turn");
+    expect(h.latest.result?.isDisabled).toBe(true);
+    act(() => h.latest.result?.open());
+    expect(stagedAction()).toBeUndefined();
   });
 });

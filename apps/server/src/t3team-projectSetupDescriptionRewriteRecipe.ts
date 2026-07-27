@@ -96,7 +96,13 @@ export default async function run() {
   const anchored = (input.comments ?? []).filter((entry) => trimmed(entry.body).length > 0);
   const requested = [
     trimmed(input.instructions),
-    ...anchored.map((entry) => 'On "' + trimmed(entry.quote) + '": ' + trimmed(entry.body)),
+    // A note on the whole field carries no quote. Prefixing it anyway would put a fabricated
+    // 'On "": ...' on the user's own confirmation card, so an unquoted note stands alone.
+    ...anchored.map((entry) => {
+      const quote = trimmed(entry.quote);
+      const body = trimmed(entry.body);
+      return quote.length === 0 ? body : 'On "' + quote + '": ' + body;
+    }),
   ].filter((line) => line.length > 0);
 
   const question =

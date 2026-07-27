@@ -15,15 +15,22 @@
  */
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { toProjectRecipeWorkflowLaunch } from "~/t3team/chat/t3team-recipeWorkflowLaunch";
+import { launchRecipeWorkflowOnThread } from "~/t3team/chat/t3team-launchRecipeWorkflowOnThread";
 import { T3TEAM_DESCRIPTION_REWRITE_RECIPE_ID } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import type { T3TeamKickoffLaunchConfig } from "~/t3team/t3team-kickoffLaunchConfig";
+import type { T3TeamSelectedRecipeQuickStart } from "~/t3team/t3team-recipeQuickStartLaunch";
 import {
   buildBundledSidecarRecipeWorkflowLaunch,
   type BundledRecipeWorkflow,
 } from "~/t3team/t3team-sidecarRecipeLaunch";
 
 const REWRITE_SURFACE = "workitem.detail.sidepanel" as const;
+
+/** The workflow inputs the composer's two channels land on. The composer's own prompt text is the
+ * human's free-form intent; the staged notes are quoted feedback. Separate inputs, separate meaning
+ * — the workflow's confirmation card renders them differently. */
+export const WORK_ITEM_REWRITE_INSTRUCTIONS_PARAMETER = "instructions";
+export const WORK_ITEM_REWRITE_COMMENTS_PARAMETER = "comments";
 
 export type WorkItemRewriteWorkflowInput = {
   /** The key the workflow's `issueIdOrKey` input and the draft tool both target. */
@@ -67,6 +74,39 @@ export function buildWorkItemRewriteWorkflow(
 }
 
 /**
+ * The rewrite packaged as the composer's PRESELECTED action.
+ *
+ * This is the same `{recipe, customization}` value the Quick Starts card stages and the composer
+ * already renders as its "Selected action" card, so the `Rewrite` control gets the existing
+ * preselect-then-submit behaviour instead of a second launch path. `instructions`/`comments` are
+ * deliberately absent here: they are submit-time inputs, merged by
+ * `resolveStagedComposerActionRecipe` once the human actually sends.
+ */
+export function buildWorkItemRewriteSelectedRecipe(
+  input: WorkItemRewriteWorkflowInput,
+): T3TeamSelectedRecipeQuickStart | null {
+  const workflow = buildWorkItemRewriteWorkflow(input);
+  if (!workflow) {
+    return null;
+  }
+
+  return {
+    recipe: {
+      id: T3TEAM_DESCRIPTION_REWRITE_RECIPE_ID,
+      title: workflow.title,
+      description: workflow.description,
+      // Becomes the thread's opening human message via `buildT3TeamSelectedRecipeKickoffLaunch`.
+      prompt: buildWorkItemRewriteKickoffMessage(input.issueIdOrKey),
+      composerGuidance: {
+        helperText: "Add notes on the description, or send to start the rewrite.",
+        placeholder: "Anything else the rewrite should take into account (optional)",
+      },
+      workflow,
+    },
+  };
+}
+
+/**
  * The message a freshly kicked-off rewrite thread opens with.
  *
  * On the kickoff path this is handed to `runThreadBootstrapKickoff`, which — because the kickoff
@@ -79,7 +119,13 @@ export function buildWorkItemRewriteKickoffMessage(issueIdOrKey: string): string
   return `Rewrite the description of ${issueIdOrKey} and propose it as a reviewable draft.`;
 }
 
-/** Launches the workflow on a thread that already exists (the aside is showing one). */
+/**
+ * Launches the workflow on a thread that already exists, from a `T3TeamKickoffLaunchConfig`.
+ *
+ * A thin adapter over `launchRecipeWorkflowOnThread` — the composer reaches that directly with its own
+ * model/runtime picks, and one implementation means the two callers cannot disagree about what a
+ * launch on an existing thread looks like.
+ */
 export async function launchWorkItemRewriteOnThread(input: {
   readonly backend: Pick<BackendApi, "launchRecipeWorkflow">;
   readonly threadId: string;
@@ -87,19 +133,13 @@ export async function launchWorkItemRewriteOnThread(input: {
   readonly launchConfig: T3TeamKickoffLaunchConfig;
   readonly kickoffMessage: string;
 }): Promise<void> {
-  await input.backend.launchRecipeWorkflow({
+  await launchRecipeWorkflowOnThread({
+    backend: input.backend,
     threadId: input.threadId,
+    workflow: input.workflow,
     kickoffMessage: input.kickoffMessage,
-    titleSeed: input.workflow.title,
-    createdAt: new Date().toISOString(),
-    // Required by the launch route. The run's own writer turn uses it; the deterministic askUser
-    // that runs first does not, which is what keeps the click itself free.
-    modelSelection: {
-      instanceId: String(input.launchConfig.selection.instanceId),
-      model: input.launchConfig.selection.model,
-    },
+    modelSelection: input.launchConfig.selection,
     runtimeMode: input.launchConfig.runtimeMode,
     interactionMode: input.launchConfig.interactionMode,
-    launch: toProjectRecipeWorkflowLaunch(input.workflow),
   });
 }

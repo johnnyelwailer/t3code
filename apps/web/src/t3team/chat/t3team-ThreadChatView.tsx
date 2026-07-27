@@ -9,7 +9,7 @@ import { useThreadChatDebug } from "~/t3team/chat/t3team-useThreadChatDebug";
 import { useThreadChatServerState } from "~/t3team/chat/t3team-useThreadChatServerState";
 import { useThreadChatTurnToolContext } from "~/t3team/chat/t3team-useThreadChatTurnToolContext";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
-import { ContextAttachmentStrip } from "~/t3team/components/t3team-ContextAttachmentChip";
+import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
 import type { T3TeamKickoffWorkflow, T3TeamThreadToolId } from "~/t3team/t3team-types";
 
 export interface ThreadChatViewProps {
@@ -145,10 +145,14 @@ export function ThreadChatView({
     hasServerLaunchActivity,
   });
 
-  const contextAttachmentSlot =
-    contextAttachments.length > 0 ? (
-      <ContextAttachmentStrip attachments={contextAttachments} onRemove={removeContextAttachment} />
-    ) : null;
+  const contextAttachmentSlot = (
+    <T3TeamThreadComposerAccessory
+      projectId={projectId}
+      {...(ticketId ? { ticketId } : {})}
+      attachments={contextAttachments}
+      onRemoveAttachment={removeContextAttachment}
+    />
+  );
   const controlWorkflow = backend?.controlWorkflow
     ? ({ workflowRunId, action }: { workflowRunId: string; action: "pause" | "resume" | "stop" }) =>
         backend.controlWorkflow!({ threadId, workflowRunId, action })
