@@ -168,12 +168,29 @@ function toBaseUrl(host: string): string {
 }
 
 const GITHUB_ENTERPRISE_HOST_SUFFIXES: ReadonlyArray<string> = [".ghe.com", ".ghe.localhost"];
+const GITHUB_HOST_LABELS: ReadonlyArray<string> = ["github", "ghe"];
 
+/**
+ * Matches github.com, its subdomains, GitHub's managed `.ghe.com` /
+ * `.ghe.localhost` domains, and self-hosted Enterprise Server hosts that carry
+ * `github`/`ghe` as a whole dot-separated label (`github.acme.com`,
+ * `ghe.acme.internal`).
+ *
+ * Deliberately label-based rather than a `host.includes("github")` substring:
+ * the substring form failed for `nexplore.ghe.com` (no "github" in it) while
+ * also matching unrelated hosts like `mygithubmirror.example.com`. Matching on
+ * whole labels keeps the common `github.<corp>.<tld>` Enterprise shape working —
+ * narrowing to only `*.github.com` + `.ghe.com` would silently reclassify those
+ * as `unknown` and break every PR operation against them.
+ */
 function isGitHubHost(host: string): boolean {
   if (host === "github.com" || host.endsWith(".github.com")) {
     return true;
   }
-  return GITHUB_ENTERPRISE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  if (GITHUB_ENTERPRISE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) {
+    return true;
+  }
+  return host.split(".").some((label) => GITHUB_HOST_LABELS.includes(label));
 }
 
 function isGitLabHost(host: string): boolean {
