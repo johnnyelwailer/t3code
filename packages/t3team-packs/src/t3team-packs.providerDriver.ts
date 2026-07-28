@@ -28,6 +28,13 @@ export type PackProviderSnapshot = {
   readonly authenticated?: boolean;
   readonly message?: string;
   readonly models: readonly PackProviderModel[];
+  /**
+   * Whether the composer shows the Chat/Plan interaction-mode toggle. Absent means
+   * the host default (`true`). A driver that ignores `interactionMode` should set
+   * `false` so the composer does not offer a control that changes nothing — the
+   * built-in Grok provider does the same via its own snapshot.
+   */
+  readonly showInteractionModeToggle?: boolean;
 };
 
 export type PackSessionStartInput = {

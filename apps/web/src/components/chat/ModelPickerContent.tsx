@@ -8,6 +8,7 @@ import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { SearchIcon } from "lucide-react";
 import { ModelListRow } from "./ModelListRow";
+import { ModelPickerProviderConnectPanel } from "./t3team-ModelPickerProviderConnectPanel";
 import { ModelPickerSidebar } from "./ModelPickerSidebar";
 import { isModelPickerNewModel } from "./modelPickerModelHighlights";
 import { buildModelPickerSearchText, scoreModelPickerSearch } from "./modelPickerSearch";
@@ -27,7 +28,9 @@ import {
   isProviderInstancePickerVisible,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
+import { resolveProviderInstanceReadiness } from "../../t3team-providerInstanceReadiness";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
+import { toolAuthToolForDriverKind } from "../settings/t3team-toolAuthTools";
 
 type ModelPickerItem = {
   slug: string;
@@ -224,6 +227,35 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   const isLocked = props.lockedProvider !== null;
   const isSearching = searchQuery.trim().length > 0;
+  /**
+   * When the selected tab is installed-but-unauthenticated or not installed
+   * at all, the model list area renders a connect/install panel instead —
+   * this is the actual moment the user hits the problem, not a settings page
+   * they may never visit. Only for tools with a sign-in flow at all
+   * (`toolAuthToolForDriverKind` returns `undefined` for cursor/grok/
+   * opencode/...); those fall back to today's behaviour (an empty list).
+   * Suppressed while searching: search already flattens matches across every
+   * *ready* instance regardless of which tab is selected, so the connect
+   * panel would be showing the wrong instance's state.
+   */
+  const connectPanelTarget = useMemo(() => {
+    if (isSearching || selectedInstanceId === "favorites") {
+      return null;
+    }
+    const entry = entryByInstanceId.get(selectedInstanceId);
+    if (!entry) {
+      return null;
+    }
+    const tool = toolAuthToolForDriverKind(entry.driverKind);
+    if (!tool) {
+      return null;
+    }
+    const readiness = resolveProviderInstanceReadiness(entry);
+    if (readiness !== "needsAuth" && readiness !== "needsInstall") {
+      return null;
+    }
+    return { entry, tool, readiness };
+  }, [entryByInstanceId, isSearching, selectedInstanceId]);
   const lockedDisabledInstanceIds = useMemo(() => {
     if (!isLocked) {
       return undefined;
@@ -619,59 +651,69 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               </div>
             </div>
 
-            {/* Model list */}
-            <div className="relative min-h-0 flex-1 overflow-hidden">
-              <ComboboxListVirtualized className="model-picker-list size-full min-w-0 p-0">
-                <LegendList<string>
-                  ref={modelListRef}
-                  data={filteredModelKeys}
-                  extraData={favoritesSet}
-                  keyExtractor={(modelKey) => modelKey}
-                  renderItem={({ item: modelKey, index }) => {
-                    const model = filteredModelByKey.get(modelKey);
-                    if (!model) {
-                      return null;
-                    }
-                    const disabledReason =
-                      getModelDisabledReason?.(model.instanceId, model.slug) ?? null;
-                    return (
-                      <ModelListRow
-                        key={modelKey}
-                        index={index}
-                        model={model}
-                        instanceId={model.instanceId}
-                        driverKind={model.driverKind}
-                        providerDisplayName={model.instanceDisplayName}
-                        providerAccentColor={model.instanceAccentColor}
-                        providerIconDataUrl={model.instanceIconDataUrl}
-                        isFavorite={favoritesSet.has(modelKey)}
-                        isSelected={modelKey === `${props.activeInstanceId}:${props.model}`}
-                        showProvider
-                        preferShortName={!isLocked}
-                        useTriggerLabel={false}
-                        showNewBadge={isModelPickerNewModel(model.driverKind, model.slug)}
-                        jumpLabel={modelJumpLabelByKey.get(modelKey) ?? null}
-                        disabledReason={disabledReason}
-                        onToggleFavorite={() => toggleFavorite(model.instanceId, model.slug)}
-                      />
-                    );
-                  }}
-                  estimatedItemSize={60}
-                  drawDistance={480}
-                  recycleItems
-                  onLayout={updateModelListScrollFades}
-                  onScroll={updateModelListScrollFades}
-                  className={cn(
-                    "scrollbar-gutter-both h-full overflow-x-hidden overscroll-y-contain py-1.5 [--fade-size:1.5rem]",
-                    showTopScrollFade && "mask-t-from-[calc(100%-var(--fade-size))]",
-                    showBottomScrollFade && "mask-b-from-[calc(100%-var(--fade-size))]",
-                  )}
-                />
-              </ComboboxListVirtualized>
-            </div>
-            <ComboboxEmpty className="not-empty:py-6 empty:h-0 text-xs font-normal leading-snug">
-              No models found
-            </ComboboxEmpty>
+            {connectPanelTarget ? (
+              <ModelPickerProviderConnectPanel
+                entry={connectPanelTarget.entry}
+                tool={connectPanelTarget.tool}
+                readiness={connectPanelTarget.readiness}
+              />
+            ) : (
+              <>
+                {/* Model list */}
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  <ComboboxListVirtualized className="model-picker-list size-full min-w-0 p-0">
+                    <LegendList<string>
+                      ref={modelListRef}
+                      data={filteredModelKeys}
+                      extraData={favoritesSet}
+                      keyExtractor={(modelKey) => modelKey}
+                      renderItem={({ item: modelKey, index }) => {
+                        const model = filteredModelByKey.get(modelKey);
+                        if (!model) {
+                          return null;
+                        }
+                        const disabledReason =
+                          getModelDisabledReason?.(model.instanceId, model.slug) ?? null;
+                        return (
+                          <ModelListRow
+                            key={modelKey}
+                            index={index}
+                            model={model}
+                            instanceId={model.instanceId}
+                            driverKind={model.driverKind}
+                            providerDisplayName={model.instanceDisplayName}
+                            providerAccentColor={model.instanceAccentColor}
+                            providerIconDataUrl={model.instanceIconDataUrl}
+                            isFavorite={favoritesSet.has(modelKey)}
+                            isSelected={modelKey === `${props.activeInstanceId}:${props.model}`}
+                            showProvider
+                            preferShortName={!isLocked}
+                            useTriggerLabel={false}
+                            showNewBadge={isModelPickerNewModel(model.driverKind, model.slug)}
+                            jumpLabel={modelJumpLabelByKey.get(modelKey) ?? null}
+                            disabledReason={disabledReason}
+                            onToggleFavorite={() => toggleFavorite(model.instanceId, model.slug)}
+                          />
+                        );
+                      }}
+                      estimatedItemSize={60}
+                      drawDistance={480}
+                      recycleItems
+                      onLayout={updateModelListScrollFades}
+                      onScroll={updateModelListScrollFades}
+                      className={cn(
+                        "scrollbar-gutter-both h-full overflow-x-hidden overscroll-y-contain py-1.5 [--fade-size:1.5rem]",
+                        showTopScrollFade && "mask-t-from-[calc(100%-var(--fade-size))]",
+                        showBottomScrollFade && "mask-b-from-[calc(100%-var(--fade-size))]",
+                      )}
+                    />
+                  </ComboboxListVirtualized>
+                </div>
+                <ComboboxEmpty className="not-empty:py-6 empty:h-0 text-xs font-normal leading-snug">
+                  No models found
+                </ComboboxEmpty>
+              </>
+            )}
           </div>
         </Combobox>
       </div>

@@ -69,7 +69,17 @@
     "packages/shared/src/sourceControl.ts",
     "apps/server/src/sourceControl/gitHubAuthStatus.ts",
     "apps/server/src/sourceControl/GitHubSourceControlProvider.ts",
-    "apps/server/src/sourceControl/SourceControlProviderRegistry.ts"
+    "apps/server/src/sourceControl/SourceControlProviderRegistry.ts",
+    "apps/server/src/t3team-server.ts",
+    "apps/server/src/ws.ts",
+    "apps/web/src/components/chat/ModelPickerContent.tsx",
+    "apps/web/src/components/chat/ModelPickerSidebar.tsx",
+    "apps/web/src/components/settings/SettingsSidebarNav.tsx",
+    "packages/client-runtime/package.json",
+    "packages/client-runtime/src/rpc/client.ts",
+    "packages/contracts/src/rpc.ts",
+    "scripts/lib/additive-guard-core.mjs",
+    "scripts/lib/t3team-upstream-source-of-truth.mjs"
   ],
   "allowedUnprefixedNewFiles": [
     ".t3team-additive-guard.json",
@@ -86,6 +96,7 @@
     "docs/t3team-company-agentic-shell-handoff.md",
     "apps/web/src/routes/t3team.tsx",
     "apps/web/src/routes/oauth.callback.tsx",
+    "apps/web/src/routes/settings.connected-tools.tsx",
     "apps/web/src/types/*.d.ts",
     "packages/integrations-atlassian/**",
     "packages/integrations-core/**",

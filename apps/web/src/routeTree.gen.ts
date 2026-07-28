@@ -22,6 +22,7 @@ import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybi
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
 import { Route as SettingsDiagnosticsRouteImport } from './routes/settings.diagnostics'
 import { Route as SettingsConnectionsRouteImport } from './routes/settings.connections'
+import { Route as SettingsConnectedToolsRouteImport } from './routes/settings.connected-tools'
 import { Route as SettingsBetaRouteImport } from './routes/settings.beta'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
@@ -96,6 +97,11 @@ const SettingsConnectionsRoute = SettingsConnectionsRouteImport.update({
   path: '/connections',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsConnectedToolsRoute = SettingsConnectedToolsRouteImport.update({
+  id: '/connected-tools',
+  path: '/connected-tools',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsBetaRoute = SettingsBetaRouteImport.update({
   id: '/beta',
   path: '/beta',
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
+  '/settings/connected-tools': typeof SettingsConnectedToolsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -177,6 +184,7 @@ export interface FileRoutesByTo {
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
+  '/settings/connected-tools': typeof SettingsConnectedToolsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
+  '/settings/connected-tools': typeof SettingsConnectedToolsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -228,6 +237,7 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/settings/archived'
     | '/settings/beta'
+    | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/diagnostics'
     | '/settings/general'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/settings/archived'
     | '/settings/beta'
+    | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/diagnostics'
     | '/settings/general'
@@ -274,6 +285,7 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/settings/archived'
     | '/settings/beta'
+    | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/diagnostics'
     | '/settings/general'
@@ -392,6 +404,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsConnectionsRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/connected-tools': {
+      id: '/settings/connected-tools'
+      path: '/connected-tools'
+      fullPath: '/settings/connected-tools'
+      preLoaderRoute: typeof SettingsConnectedToolsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/beta': {
       id: '/settings/beta'
       path: '/beta'
@@ -475,6 +494,7 @@ const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 interface SettingsRouteChildren {
   SettingsArchivedRoute: typeof SettingsArchivedRoute
   SettingsBetaRoute: typeof SettingsBetaRoute
+  SettingsConnectedToolsRoute: typeof SettingsConnectedToolsRoute
   SettingsConnectionsRoute: typeof SettingsConnectionsRoute
   SettingsDiagnosticsRoute: typeof SettingsDiagnosticsRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
@@ -486,6 +506,7 @@ interface SettingsRouteChildren {
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsArchivedRoute: SettingsArchivedRoute,
   SettingsBetaRoute: SettingsBetaRoute,
+  SettingsConnectedToolsRoute: SettingsConnectedToolsRoute,
   SettingsConnectionsRoute: SettingsConnectionsRoute,
   SettingsDiagnosticsRoute: SettingsDiagnosticsRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
