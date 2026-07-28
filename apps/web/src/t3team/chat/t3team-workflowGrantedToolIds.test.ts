@@ -17,6 +17,17 @@ import {
 import { buildWorkItemRewriteWorkflow } from "~/t3team/workitem/t3team-workItemRewriteWorkflowLaunch";
 
 const DRAFT_TOOL = "t3team.work_item.description.draft_update";
+/**
+ * The read tools that ACTUALLY EXIST. `t3team.work_item.read_view_state`, `read_description` and
+ * `read_attachment` are `definePlannedTools` — planned, never implemented — so they cannot be granted to
+ * anything, and no mapping here can conjure them.
+ */
+const GRANTABLE_READ_TOOL = "t3team.project.refresh_context_bundle";
+const PLANNED_READ_TOOLS = [
+  "t3team.work_item.read_view_state",
+  "t3team.work_item.read_description",
+  "t3team.work_item.read_attachment",
+] as const;
 
 function rewriteWorkflow() {
   const workflow = buildWorkItemRewriteWorkflow({
@@ -37,11 +48,37 @@ describe("resolveT3TeamWorkflowGrantedToolIds", () => {
     );
   });
 
+  /**
+   * The second half of the same defect: told to read the epic/children/comments first, the agent ran
+   * shell commands instead, because the work-item read tools are `kind: "read"` on the work-item
+   * surface and so are absent from the thread defaults too.
+   */
+  it("maps integration.read onto the implemented read tools", () => {
+    const granted = resolveT3TeamWorkflowGrantedToolIds(["integration.read"]);
+
+    expect(DEFAULT_T3TEAM_THREAD_TOOL_IDS).not.toContain(GRANTABLE_READ_TOOL);
+    expect(granted).toContain(GRANTABLE_READ_TOOL);
+    // A read-only group must not smuggle in write tools.
+    expect(granted).not.toContain(DRAFT_TOOL);
+  });
+
+  /**
+   * Guard against the wrong conclusion: the tools a reader would EXPECT to satisfy "read the parent
+   * epic, children, comments and links" are planned, not implemented. Granting `integration.read` cannot
+   * provide them, so a prompt that asks for them will keep improvising until they are built.
+   */
+  it("cannot grant read tools that were only ever planned", () => {
+    const granted = resolveT3TeamWorkflowGrantedToolIds(["integration.read"]);
+    for (const plannedToolId of PLANNED_READ_TOOLS) {
+      expect(granted).not.toContain(plannedToolId);
+    }
+  });
+
   it("grants nothing for a workflow that declares no groups", () => {
     expect(resolveT3TeamWorkflowGrantedToolIds(undefined)).toEqual([]);
     expect(resolveT3TeamWorkflowGrantedToolIds([])).toEqual([]);
-    // Read-only groups must not smuggle in write tools.
-    expect(resolveT3TeamWorkflowGrantedToolIds(["integration.read"])).toEqual([]);
+    // An unmapped group stays unmapped rather than widening on a guess.
+    expect(resolveT3TeamWorkflowGrantedToolIds(["custom.group"])).toEqual([]);
   });
 });
 
@@ -67,6 +104,8 @@ describe("the describe-rewrite launch thread's tool context", () => {
 
     const toolIds = toolContext?.tools.map((tool) => tool.id) ?? [];
     expect(toolIds).toContain(DRAFT_TOOL);
+    // Both declared groups must reach the thread, or the writer improvises around the missing one.
+    expect(toolIds).toContain(GRANTABLE_READ_TOOL);
     // The thread keeps everything it had; the grant only adds.
     for (const defaultToolId of DEFAULT_T3TEAM_THREAD_TOOL_IDS) {
       expect(toolIds).toContain(defaultToolId);

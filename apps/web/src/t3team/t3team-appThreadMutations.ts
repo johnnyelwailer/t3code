@@ -2,7 +2,6 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { enqueueThreadKickoffAttachments } from "~/t3team/t3team-enqueueThreadKickoffAttachments";
 import { enqueueWorkItemContextSyncRequest } from "~/t3team/hooks/t3team-useWorkItemContextSyncQueue";
-import { buildJiraWorkItemSummary } from "~/t3team/t3team-jiraContextMetadata";
 import type { TicketKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import { useT3TeamPinnedSidebarStore } from "~/t3team/t3team-pinnedSidebarStore";
 import { useT3TeamSidebarNavPreferencesStore } from "~/t3team/t3team-sidebarNavPreferencesStore";
@@ -12,16 +11,13 @@ import {
   isEmbeddedProjectThread,
 } from "~/t3team/t3team-projectThreadViewState";
 import { buildTicketSidebarPinnedItem } from "~/t3team/t3team-sidebarPinningTypes";
-import { buildWorkItemAddToChatPayload } from "~/t3team/components/t3team-projectSidebarAddToChatRequests";
 import type { ViewState } from "~/t3team/t3team-types";
-import type { useAddToChat } from "~/t3team/hooks/t3team-useAddToChat";
 import type { useBackend } from "~/t3team/backend/t3team-index";
 import type { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { useThreadActions } from "~/hooks/useThreadActions";
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
 type Backend = ReturnType<typeof useBackend>;
-type AddToChat = ReturnType<typeof useAddToChat>["addToChatFromRequest"];
 type DeleteLiveThread = ReturnType<typeof useThreadActions>["deleteThread"];
 type EnvironmentId = ReturnType<typeof usePrimaryEnvironmentId>;
 type OnOpenDashboard =
@@ -35,14 +31,13 @@ type OnOpenTicket =
   | ((projectId: string, ticketId: string, embeddedThreadId?: string | null) => void)
   | undefined;
 
-export async function createTicketKickoffThread(input: {
-  addToChatFromRequest: AddToChat;
+export function createTicketKickoffThread(input: {
   backend: Backend;
   onOpenTicket: OnOpenTicket;
   store: ProjectStore;
   threadInput: TicketKickoffThreadInput;
 }) {
-  const { addToChatFromRequest, backend, onOpenTicket, store, threadInput } = input;
+  const { backend, onOpenTicket, store, threadInput } = input;
   const resolvedProjectId = store.resolveProjectId(threadInput.projectId);
   const thread = store.createThreadForTicket({
     ...threadInput,
@@ -71,6 +66,7 @@ export async function createTicketKickoffThread(input: {
 
   if (!backend || !project) return thread.id;
 
+  // A work item that has not loaded yet cannot be attached; the sync queue attaches it once it has.
   if (!ticket) {
     enqueueWorkItemContextSyncRequest({
       id: thread.id,
@@ -78,28 +74,22 @@ export async function createTicketKickoffThread(input: {
       ticketKey: threadInput.ticketDisplayId || threadInput.ticketId,
       threadId: thread.id,
     });
-    return thread.id;
   }
 
-  const jiraSummary = buildJiraWorkItemSummary(ticket);
-  await addToChatFromRequest(
-    {
-      projectId: resolvedProjectId,
-      projectTitle: project.title,
-      ...(project.workspace?.rootPath ? { projectWorkspaceRoot: project.workspace.rootPath } : {}),
-      targetLabel: `${ticket.ref.displayId} ${ticket.ref.title}`,
-      targetType: "work-item",
-      kind: "jira-work-item",
-      ...(jiraSummary.jiraIssueType ? { jiraIssueType: jiraSummary.jiraIssueType } : {}),
-      ...(jiraSummary.jiraIssueTypeIconUrl
-        ? { jiraIssueTypeIconUrl: jiraSummary.jiraIssueTypeIconUrl }
-        : {}),
-      summaryItems: jiraSummary.summaryItems,
-      payload: buildWorkItemAddToChatPayload({ backend, project, ticket }),
-    },
-    { type: "thread", threadId: thread.id },
-  );
-
+  // Attaching the work item is NOT done here.
+  //
+  // This used to hand-roll its own add-to-chat request and enqueue it on the new thread. That request
+  // was a copy of `buildTicketSidebarAddToChatRequest` minus the `dedupeKey` — and dedupe is all-or-
+  // nothing, so a keyless attachment collides with nothing. Every ticket kickoff therefore attached the
+  // work item twice: once here, and once from `useTicketDetailEmbeddedThreadEffects`, whose auto-attach
+  // fires as soon as the kickoff navigates to the ticket view with this thread in the aside. Two chips
+  // for one issue, and — because `prepareThreadContextAttachments` feeds the kickoff message — the whole
+  // context bundle sent to the model twice.
+  //
+  // The auto-attach is the better of the two: it uses the canonical builder, so it carries the identity
+  // dedupeKey and the related-ticket/GitHub context this one omitted. It covers exactly the same case,
+  // because a ticket kickoff always lands on the ticket view with its thread embedded. So the redundant
+  // enqueue is deleted rather than deduped — one attach path, nothing to keep in sync.
   return thread.id;
 }
 

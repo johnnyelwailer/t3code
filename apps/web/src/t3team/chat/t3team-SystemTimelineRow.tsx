@@ -115,6 +115,7 @@ export function T3TeamSystemTimelineRow(props: {
               : {})}
             {...(onControlWorkflow ? { onControlWorkflow } : {})}
             {...(onOpenThread ? { onOpenThread } : {})}
+            {...(threadRef ? { currentThreadId: threadRef.threadId } : {})}
             childStatuses={childStatuses}
           />
         ) : (

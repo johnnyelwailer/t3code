@@ -38,6 +38,18 @@ export function T3TeamDiffText({
       {segments.map((segment, index) => {
         const key = `${segment.kind ?? "same"}:${index}:${segment.text}`;
         /*
+          Whitespace is never marked.
+
+          The word differ emits the gaps between words as their own segments, so a marked run used to
+          put every space in its own `<mark>` — `mx-px` margin, `px-1` padding and a rounded fill around
+          a single space. That is what turned a highlighted paragraph into a chain of green chips with
+          padded gaps between them: the gaps WERE marks. Nothing is communicated by highlighting a
+          space; only the words carry the change.
+        */
+        if (segment.text.trim() === "") {
+          return <span key={key}>{segment.text}</span>;
+        }
+        /*
           A comment mark has to read differently from a diff mark or the reader cannot tell what the
           agent changed from what a colleague questioned. Diff marks are fills; a comment is a dotted
           underline, so the two stack legibly on the same words.

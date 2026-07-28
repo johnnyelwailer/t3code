@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Bot, Check, MessageSquare, X } from "lucide-react";
+import { Bot, Check, ChevronUp, MessageSquare, X } from "lucide-react";
 
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
 import { Button } from "~/t3team/components/ui/t3team-button";
@@ -8,14 +8,9 @@ import { draftContentToComparableText } from "~/t3team/t3team-draftMutationDiff"
 import { selectJiraDocumentDrafts, useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 import { deliverDraftFeedbackToSourceThread } from "~/t3team/workitem/t3team-deliverDraftFeedbackToSourceThread";
 import { useWorkItemDraftReviewUiStore } from "~/t3team/workitem/t3team-workItemDraftReviewUiStore";
-import {
-  DIFF_BLOCK_ATTRIBUTE,
-  T3TeamDiffCommentThread,
-  T3TeamDiffSelectionComposer,
-} from "~/t3team/workitem/t3team-WorkItemDiffCommentUi";
-import { T3TeamDiffGutter, T3TeamDiffText } from "~/t3team/workitem/t3team-WorkItemDiffPrimitives";
-import { applyCommentQuotes } from "~/t3team/workitem/t3team-workItemDiffModel";
+import { T3TeamDiffSelectionComposer } from "~/t3team/workitem/t3team-WorkItemDiffCommentUi";
 import { useWorkItemDiffComments } from "~/t3team/workitem/t3team-useWorkItemDiffComments";
+import { WorkItemDescriptionDiffBlock } from "~/t3team/workitem/t3team-WorkItemDescriptionDiffBlock";
 import {
   buildDraftDiffParagraphs,
   draftDiffMagnitude,
@@ -55,6 +50,9 @@ export function WorkItemDescriptionDraftDiff({
   const discardDraft = useT3TeamDraftMutationStore((state) => state.discardDraft);
   const returnDraftWithFeedback = useT3TeamDraftMutationStore((state) => state.returnDraftWithFeedback);
   const closeDescriptionReview = useWorkItemDraftReviewUiStore((state) => state.closeDescriptionReview);
+  const collapseDescriptionReview = useWorkItemDraftReviewUiStore(
+    (state) => state.collapseDescriptionReview,
+  );
   const comments = useWorkItemDiffComments();
   const backend = useBackend();
 
@@ -117,6 +115,16 @@ export function WorkItemDescriptionDraftDiff({
             <Check className="size-3.5" />
             Accept
           </Button>
+          {/* The draft shows itself; collapsing is the reader's choice, not the price of admission. */}
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label="Collapse proposed rewrite"
+            title="Collapse proposed rewrite"
+            onClick={() => collapseDescriptionReview(issueIdOrKey)}
+          >
+            <ChevronUp className="size-3.5" />
+          </Button>
         </span>
       </div>
 
@@ -124,18 +132,13 @@ export function WorkItemDescriptionDraftDiff({
 
       <div className="space-y-2.5 px-3 py-3 text-sm leading-6 text-foreground">
         {paragraphs.map((paragraph) => (
-          <div key={paragraph.id} className="group flex">
-            <T3TeamDiffGutter
-              {...(paragraph.state ? { state: paragraph.state } : {})}
-              commentCount={comments.forBlock(paragraph.id).length}
-            />
-            <div className="min-w-0 flex-1" {...{ [DIFF_BLOCK_ATTRIBUTE]: paragraph.id }}>
-              <p>
-                <T3TeamDiffText segments={applyCommentQuotes(paragraph.segments, comments.quotesForBlock(paragraph.id))} />
-              </p>
-              <T3TeamDiffCommentThread comments={comments.forBlock(paragraph.id)} onRemove={comments.remove} />
-            </div>
-          </div>
+          <WorkItemDescriptionDiffBlock
+            key={paragraph.id}
+            paragraph={paragraph}
+            comments={comments.forBlock(paragraph.id)}
+            quotes={comments.quotesForBlock(paragraph.id)}
+            onRemoveComment={comments.remove}
+          />
         ))}
       </div>
     </div>

@@ -3,7 +3,6 @@ import { useCallback } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThreadActions } from "~/hooks/useThreadActions";
 import { useBackend } from "~/t3team/backend/t3team-index";
-import { useAddToChat } from "~/t3team/hooks/t3team-useAddToChat";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { matchesProjectThreadTicket } from "~/t3team/t3team-ticketLookup";
 import type {
@@ -31,7 +30,6 @@ export function useAppHandlers({
 }: AppHandlersInput) {
   const environmentId = usePrimaryEnvironmentId();
   const backend = useBackend();
-  const { addToChatFromRequest } = useAddToChat();
   const { deleteThread: deleteLiveThread } = useThreadActions();
   const { handleDeleteProject, handleRenameProject } = useLocalWorkspaceCommands({
     store,
@@ -118,13 +116,12 @@ export function useAppHandlers({
   const handleCreateTicketKickoffThread = useCallback(
     (input: TicketKickoffThreadInput) =>
       createTicketKickoffThread({
-        addToChatFromRequest,
         backend,
         onOpenTicket,
         store,
         threadInput: input,
       }),
-    [addToChatFromRequest, backend, onOpenTicket, store],
+    [backend, onOpenTicket, store],
   );
 
   const handleCreateProjectKickoffThread = useCallback(

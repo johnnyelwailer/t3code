@@ -124,3 +124,27 @@ export function draftDiffMagnitude(paragraphs: ReadonlyArray<DraftDiffParagraph>
   }
   return { added, removed };
 }
+
+/**
+ * The same segments with their add/del marking removed.
+ *
+ * For a block where EVERY token changed, word-level marking shows nothing: there is no "which words"
+ * to point at, and ~20 individually padded chips are harder to read than the prose they are supposed to
+ * be showing. Such a block is rendered as ordinary text with a left border in the semantic colour, and
+ * the border carries "this whole block is new/gone".
+ *
+ * `commented` survives, because anchored feedback must stay visible however the block is drawn.
+ */
+export function flattenDiffSegmentKinds(
+  segments: ReadonlyArray<T3TeamDiffSegment>,
+): ReadonlyArray<T3TeamDiffSegment> {
+  return segments.map((segment) => {
+    const { kind: _dropped, ...rest } = segment;
+    return rest;
+  });
+}
+
+/** Whether a block changed in its entirety, and so needs no word-level marking. */
+export function isWholeBlockChange(state: DraftDiffParagraph["state"]): boolean {
+  return state === "add" || state === "del";
+}

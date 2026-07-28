@@ -13,17 +13,27 @@ type WorkItemDraftReviewUiState = {
   readonly openStripForIssue: string | undefined;
   readonly highlightField: string | undefined;
   readonly reviewingDescriptionForIssue: string | undefined;
+  /**
+   * The issue whose description review the reader COLLAPSED.
+   *
+   * A pending description draft now renders expanded in place by default — it was three clicks deep
+   * (banner → row → "Review in place") to read something the agent had already written, which read as
+   * "nothing happened". So this tracks the collapse, not the open: absence means visible.
+   */
+  readonly collapsedDescriptionReviewForIssue: string | undefined;
   readonly openStrip: (issueIdOrKey: string, field?: string) => void;
   readonly closeStrip: () => void;
   readonly toggleStrip: (issueIdOrKey: string) => void;
   readonly openDescriptionReview: (issueIdOrKey: string) => void;
   readonly closeDescriptionReview: () => void;
+  readonly collapseDescriptionReview: (issueIdOrKey: string) => void;
 };
 
 export const useWorkItemDraftReviewUiStore = create<WorkItemDraftReviewUiState>((set, get) => ({
   openStripForIssue: undefined,
   highlightField: undefined,
   reviewingDescriptionForIssue: undefined,
+  collapsedDescriptionReviewForIssue: undefined,
   openStrip: (issueIdOrKey, field) => {
     set({ openStripForIssue: issueIdOrKey, highlightField: field });
   },
@@ -38,9 +48,19 @@ export const useWorkItemDraftReviewUiStore = create<WorkItemDraftReviewUiState>(
     });
   },
   openDescriptionReview: (issueIdOrKey) => {
-    set({ reviewingDescriptionForIssue: issueIdOrKey });
+    // Re-expands: the strip's "Review in place" must win over an earlier collapse.
+    set({
+      reviewingDescriptionForIssue: issueIdOrKey,
+      collapsedDescriptionReviewForIssue: undefined,
+    });
   },
   closeDescriptionReview: () => {
     set({ reviewingDescriptionForIssue: undefined });
+  },
+  collapseDescriptionReview: (issueIdOrKey) => {
+    set({
+      reviewingDescriptionForIssue: undefined,
+      collapsedDescriptionReviewForIssue: issueIdOrKey,
+    });
   },
 }));

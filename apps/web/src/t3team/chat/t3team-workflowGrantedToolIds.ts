@@ -26,11 +26,18 @@ import type { T3TeamThreadToolId } from "~/t3team/t3team-types";
 /**
  * Tool group → the catalog `kind` it authorises.
  *
- * Only `mutation.draft` is mapped: it is the group whose absence has been observed to break a run.
- * `integration.read`'s reads already work from the thread defaults, and inventing a mapping for groups
- * with no demonstrated gap would widen thread tool context on a guess.
+ * `integration.read` was initially left unmapped on the assumption that reads already worked from the
+ * thread defaults. That was WRONG, and a live run proved it: told to read the parent epic, children,
+ * comments and links first, the agent instead ran shell commands hunting for the work item on disk and
+ * found nothing. `t3team.work_item.read_view_state`, `read_description` and `read_attachment` are
+ * `kind: "read"` on the **work-item** surface, so — exactly like the draft tool — they are absent from
+ * `DEFAULT_T3TEAM_THREAD_TOOL_IDS`, which is the `thread` surface. A tool the agent cannot see is a tool
+ * it will improvise around.
+ *
+ * Same discipline for both: a thread gains these only while launching a workflow that declares the group.
  */
 const TOOL_GROUP_CATALOG_KINDS: Record<string, string> = {
+  "integration.read": "read",
   "mutation.draft": "draft-mutation",
 };
 

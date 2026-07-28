@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import { canOpenStepThread } from "~/t3team/chat/t3team-workflowRunStepRow";
 
 const STEP_ROW_SHELL_CLASS_NAME = "rounded-md px-1 py-0.5";
 
@@ -32,8 +33,10 @@ export function T3TeamWorkflowStepDetails(props: {
   readonly redactDetail?: boolean;
   readonly children: ReactNode;
   readonly onOpenThread?: (input: { projectId: string; threadId: string }) => void;
+  /** The thread this row is rendered IN. A step that ran here has nowhere to navigate to. */
+  readonly currentThreadId?: string | undefined;
 }) {
-  const { step, children, hideDetail, redactDetail, onOpenThread } = props;
+  const { step, children, hideDetail, redactDetail, onOpenThread, currentThreadId } = props;
   if (!step) {
     return (
       <div className={STEP_ROW_SHELL_CLASS_NAME} data-step-row-shell="static">
@@ -42,7 +45,11 @@ export function T3TeamWorkflowStepDetails(props: {
     );
   }
 
-  const canOpenThread = Boolean(step.projectId && step.threadId && onOpenThread);
+  const canOpenThread = canOpenStepThread({
+    step,
+    currentThreadId,
+    hasHandler: onOpenThread !== undefined,
+  });
   // `thread.turn`, `thread.create`, and similar values are journal implementation
   // details. They must never become a visible "work log" just because an agent
   // step has no authored detail.
