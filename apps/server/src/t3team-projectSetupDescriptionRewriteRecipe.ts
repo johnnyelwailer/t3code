@@ -3,10 +3,10 @@
  * "rewrite this description" entry point.
  *
  * SHAPE (Epic 25 engine format, not the retired `export const steps` union):
- *   1. `thread.askUser` — a DETERMINISTIC gate. No model runs before the human has said what
- *      should change. When the caller already supplied intent (anchored comments and/or free-form
- *      instructions) the card CONFIRMS that list instead of asking from scratch — one step,
- *      pre-filled, never a second code path.
+ *   1. `thread.askUser` — a DETERMINISTIC gate, but ONLY when the caller arrived with nothing. No
+ *      model runs before the human has said what should change; attaching a note and submitting IS
+ *      that statement, so re-confirming it would cost a click and gather nothing. With intent
+ *      supplied this step does not exist.
  *   2. `thread.askAgent` — the writer turn, ON THE LAUNCH THREAD. Never `agent()`/`spawnThread()`:
  *      a workflow child thread is created with no tool context and is invisible to the user, so a
  *      draft proposed there would reach nobody (see t3team-workflowChildPlacement.ts).
@@ -90,7 +90,6 @@ export default async function run() {
     throw new Error("describe-rewrite needs the chat it was launched from; it cannot run headless.");
   }
 
-  phase("Confirm");
   // Anchored comments and free-form instructions are the same thing to the writer: targeted
   // intent. Quoting the passage is what makes a note actionable rather than a vague preference.
   const anchored = (input.comments ?? []).filter((entry) => trimmed(entry.body).length > 0);
@@ -105,23 +104,19 @@ export default async function run() {
     }),
   ].filter((line) => line.length > 0);
 
-  const question =
-    requested.length > 0
-      ? "Rewrite the description of " +
-        input.issueIdOrKey +
-        " with these changes?\\n\\n" +
-        requested.join("\\n") +
-        "\\n\\nConfirm, or reply with what to do instead."
-      : "What should change in the description of " + input.issueIdOrKey + "?";
-
-  const answer = trimmed(await thread.askUser(question, { label: "Rewrite scope" }));
-  // A bare confirmation keeps the pre-filled list; anything else REPLACES it, so the human always
-  // has the last word on intent.
-  const confirmations = ["", "y", "yes", "ok", "okay", "confirm", "confirmed", "go", "do it"];
-  const intent =
-    confirmations.indexOf(answer.toLowerCase()) === -1 && answer.length > 0
-      ? answer
-      : requested.join("\\n");
+  // The ask exists to stop a model turn before the human has said what they want. Attaching a note and
+  // submitting IS that statement, so asking again would cost a click and gather nothing. We only ask
+  // when we arrived with nothing.
+  let intent = requested.join("\\n");
+  if (requested.length === 0) {
+    phase("Ask");
+    intent = trimmed(
+      await thread.askUser(
+        "What should change in the description of " + input.issueIdOrKey + "?",
+        { label: "Rewrite scope" },
+      ),
+    );
+  }
 
   phase("Write");
   const current = trimmed(input.currentBody);
@@ -133,9 +128,13 @@ export default async function run() {
     "",
     intent.length > 0 ? "Requested changes:\\n" + intent : "No specific changes were named; improve clarity and structure.",
     "",
-    "Reply with the rewritten description and NOTHING else — no preamble, no commentary, no code",
-    "fences. Do not call any tool and do not edit anything: this workflow proposes your text as a",
-    "draft that a human reviews and accepts.",
+    "Before writing, READ the work item for context — its parent or epic, its children, its comments,",
+    "and any linked issues. A description written from the key and summary alone reads like filler; the",
+    "point is to say what THIS item is, in its actual context.",
+    "",
+    "Then reply with the rewritten description and NOTHING else — no preamble, no commentary, no code",
+    "fences. Do not EDIT anything: this workflow proposes your text as a draft a human reviews and",
+    "accepts, so your final message must be the description itself.",
   ].join("\\n");
 
   const rewritten = trimmed(await thread.askAgent(writerPrompt, { label: "Rewrite " + input.issueIdOrKey }));
