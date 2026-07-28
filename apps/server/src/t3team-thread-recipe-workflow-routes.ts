@@ -13,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import { HttpRouter } from "effect/unstable/http";
 
+import { expandHomePath } from "./pathExpansion.ts";
 import {
   errorResponse,
   okJson,
@@ -72,10 +73,13 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         message: "launch.workflowPath is required: this recipe has no .workflow.ts to run.",
       });
     }
+    // Single expansion point (pathExpansion.ts): a workspace-root recipePath may carry a literal
+    // `~`; expand it ONCE so every downstream use below — plus the persisted run row — agrees.
+    const recipePath = input.launch.recipePath && expandHomePath(input.launch.recipePath);
     // One recipe, several actions (Epic 16): a named action is resolved from the recipe's own
     // module, so it can only select a workflow the recipe declares. No name ⇒ defaultAction.
     const workflowPath = yield* resolveLaunchWorkflowPath({
-      recipePath: input.launch.recipePath,
+      recipePath,
       workflowPath: defaultWorkflowPath,
       actionName,
     });
@@ -137,7 +141,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     // `scripts` registration becomes the body's `scripts.*` tree. recipe.json recipes (no
     // module) resolve to an empty record and the engine keeps its `scripts: {}` default.
     const scripts = yield* resolveRecipeWorkflowScripts({
-      recipePath: input.launch.recipePath,
+      recipePath,
       workflowPath,
     });
 
@@ -147,7 +151,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     // handed unrestricted scope); unresolvable ⇒ no bridge at all, and the resolved scope is what
     // is persisted as the grant, so a restart restores this rather than the request.
     const hostToolScope = yield* resolveRecipeHostToolScope({
-      recipePath: input.launch.recipePath,
+      recipePath,
       workflowPath,
     });
     if (hostToolScope.kind === "denied") {
@@ -186,9 +190,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         args,
         // Persist the recipe dir alongside the resolved scripts so a restart can re-resolve
         // them during rehydration (a scriptless launch needs neither).
-        ...(Object.keys(scripts).length === 0
-          ? {}
-          : { scripts, recipePath: input.launch.recipePath }),
+        ...(Object.keys(scripts).length === 0 ? {} : { scripts, recipePath }),
         ...(hostToolClient === undefined || hostToolGrant === undefined
           ? {}
           : { hostToolClient, hostToolGrant }),

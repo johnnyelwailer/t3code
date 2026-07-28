@@ -76,6 +76,7 @@ const input = Schema.decodeSync(Inputs)(args);
 const Summary = Schema.Struct({ summary: Schema.String });
 const review = await agent(\`Review this pull request and summarize the risk: \${input.prTitle}\`, {
   schema: Summary,
+  capabilities: "inherit",
 });
 
 if (thread === undefined)

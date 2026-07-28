@@ -24,6 +24,39 @@ import type {
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import { tryWorkflowRepair } from "./t3team-workflowEngineRepair.ts";
 
+/**
+ * The per-run `fail` closure: a HOST-detected terminal failure for a run whose ask can never be
+ * answered (an agent turn that ended without a word of reply text — see
+ * `WorkflowRegisteredRun.fail`). The body cannot observe that condition, so the reactor reports it
+ * here, through the SAME funnel a thrown body error takes: the launching conversation is told, the
+ * durable row records the reason, and the step strip flips to failed. No repair attempt — nothing
+ * about the body is broken, so re-running it would only reproduce the silence.
+ */
+export function makeControllerFail(deps: {
+  readonly input: LaunchWorkflowRecipeInput;
+  readonly stepActivities: WorkflowStepActivityEmitter;
+  readonly isCancelled: () => boolean;
+}): (error: unknown) => Promise<void> {
+  const { input } = deps;
+  return async (error) => {
+    if (deps.isCancelled()) return;
+    if (input.registry.getRun(input.runId) === undefined) return;
+    await settleWorkflowRunFailure({
+      runId: input.runId,
+      launchThreadId: input.launchThreadId,
+      error,
+      registry: input.registry,
+      lifecycle: input.lifecycle,
+      stepActivities: deps.stepActivities,
+      dispatch: input.dispatch,
+      newId: input.newId,
+      nowIso: input.nowIso,
+      onError: input.onError,
+      phase: "resume",
+    });
+  };
+}
+
 export function makeControllerResume(deps: {
   readonly input: LaunchWorkflowRecipeInput;
   readonly ref: WorkflowRef;

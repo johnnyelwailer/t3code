@@ -31,7 +31,7 @@ Recurring pattern (the orchestration loop is the schedule):
   const DAY = 24 * 60 * 60 * 1000
   while (true) {
     await waitUntil(now() + DAY)
-    const result = await agent('Review current risks.', { label: 'Review daily risks' })
+    const result = await agent('Review current risks.', { label: 'Review daily risks', capabilities: 'inherit' })
     await thread.notifyUser(result)
   }
 

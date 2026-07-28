@@ -52,7 +52,10 @@ export function ContextAttachmentChip({ attachment, onRemove }: ContextAttachmen
   return (
     <div
       className={cn(
-        "group flex max-w-xs items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+        // The chip floats above timeline content in the composer accessory; an opaque base plus
+        // backdrop blur keeps the low-alpha provider tint readable instead of letting chat text
+        // bleed through it.
+        "group flex max-w-xs items-center gap-1.5 rounded-md border bg-background/80 px-2 py-1 text-xs backdrop-blur-md transition-colors",
         chipClassName,
         attachment.syncStatus === "error" && "border-destructive/40 bg-destructive/5",
       )}

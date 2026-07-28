@@ -21,6 +21,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
+import type { T3TeamMessageWorkflowAuthor } from "@t3tools/contracts";
+
 import type { AskAffordance } from "@t3team/sdk";
 
 /** Which ask kind a thread is parked on — selects the event that resolves it. */
@@ -35,6 +37,13 @@ export interface WorkflowPendingAsk {
    * only (not persisted): after a restart-rehydration it is absent and the route check degrades
    * gracefully — the SDK still schema-validates the reply on resume. */
   readonly affordance?: AskAffordance;
+  /**
+   * The attribution stamped on this step's prompt, reused to stamp the assistant messages that
+   * ANSWER it — so a step's prompt and its answer carry the same run id, step id and label, and a
+   * client can collapse both under one label. Hot-index only, like `affordance`: a run rehydrated
+   * after a restart has no author, and its answers stay unattributed rather than guessing a label.
+   */
+  readonly author?: T3TeamMessageWorkflowAuthor;
   /** Black-boxed composition asks settle in-memory inside the still-running composition. */
   readonly resolveLive?: (reply: unknown) => Promise<void>;
   /** Settle an in-memory waiter when its owning run is cancelled. */
@@ -47,6 +56,15 @@ export interface WorkflowRegisteredRun {
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
   /** Prevent a detached controller from publishing a later terminal result. */
   readonly cancel: () => void;
+  /**
+   * Fail the run from the HOST side, for a condition the body can never observe because its ask
+   * will never be answered — an agent turn that ended without a single word of reply text being
+   * the case that motivated it. Resolving such an ask with `""` instead would let a workflow
+   * propose an empty artifact and report success.
+   *
+   * Optional so registrations made directly in tests keep compiling; callers must fall back.
+   */
+  readonly fail?: (error: unknown) => Promise<void>;
 }
 
 export interface T3TeamWorkflowEngineRegistryShape {

@@ -23,7 +23,9 @@ export function renderTypedWorkflowModuleStarter(): string {
     "const input = Schema.decodeSync(Inputs)(args);",
     "",
     "const Summary = Schema.Struct({ summary: Schema.String });",
-    "const result = await agent(input.prompt, { schema: Summary });",
+    // `capabilities` is required on a subagent: inherit the launch thread's grant, or name an
+    // explicit list. A starter that omitted it would fail the moment it ran.
+    'const result = await agent(input.prompt, { schema: Summary, capabilities: "inherit" });',
     "",
     "return { summary: result.summary };",
     "",

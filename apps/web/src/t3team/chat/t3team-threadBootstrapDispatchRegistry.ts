@@ -16,6 +16,7 @@
  * shares one state object, so the second mount plans `action: "none"`.
  */
 
+import { releaseRecipeWorkflowLaunchClaim } from "~/t3team/chat/t3team-recipeLaunchDedup";
 import {
   resolveThreadBootstrapDispatchState,
   type ThreadBootstrapDispatchState,
@@ -52,9 +53,17 @@ export function readThreadBootstrapDispatchState(threadId: string): ThreadBootst
   return created;
 }
 
-/** Drops the claim so an explicit user retry can bootstrap the thread again. */
+/**
+ * Drops the claims so an explicit user retry can bootstrap the thread again — BOTH of them.
+ *
+ * The recipe-workflow launch claim is the other half of "this thread has already been bootstrapped",
+ * and it is taken before the launch is dispatched. Leaving it behind made a retry create the thread
+ * and then skip the launch, which is a worse failure than the one being retried: the user sees a
+ * conversation appear and no run ever start.
+ */
 export function resetThreadBootstrapDispatchState(threadId: string): void {
   dispatchStatesByThreadId.delete(threadId);
+  releaseRecipeWorkflowLaunchClaim(threadId);
 }
 
 /** Test-only: clears every claim so cases cannot leak state into each other. */

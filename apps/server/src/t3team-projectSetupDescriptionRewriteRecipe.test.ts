@@ -7,8 +7,10 @@
  * A rendered workflow is not typechecked, so running it is the only thing that keeps it honest.
  * Everything under the fixture is production wiring: the real `T3TeamToolBrokerLive` (hence the
  * real `publishDraft`), the real `launchWorkflowRecipe`, the real suspend/resume machinery. Only
- * the orchestration engine is a recording stub, and the two human/agent replies are supplied the
- * way the reactor supplies them.
+ * the orchestration engine is a recording stub, and the human/agent reply(ies) are supplied the
+ * way the reactor supplies them: NONE when the caller already supplied intent (the body skips
+ * `askUser` entirely and runs straight to the writer turn), exactly ONE `askUser` reply when it
+ * didn't, then always the writer's `askAgent` reply.
  */
 
 import * as NodeFS from "node:fs";
@@ -23,6 +25,7 @@ import {
   type T3TeamMessageExt,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
+import { deriveWorkflowShape } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 
@@ -46,7 +49,8 @@ import {
 import { renderBundledRecipeSetupFiles } from "./t3team-projectSetupRecipes.ts";
 
 const DRAFT_TOOL = "t3team.work_item.description.draft_update";
-const WRITTEN = "## Goal\nCheckout must round to two decimals.\n\n## Acceptance criteria\n- Totals match the invoice.";
+const WRITTEN =
+  "## Goal\nCheckout must round to two decimals.\n\n## Acceptance criteria\n- Totals match the invoice.";
 
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-rewrite-"));
 const workflowPath = NodePath.join(runsRoot, "workflow.ts");
@@ -123,7 +127,9 @@ function draftCarrier(commands: ReadonlyArray<OrchestrationCommand>) {
 async function runRewrite(input: {
   readonly runId: string;
   readonly args: unknown;
-  readonly userAnswer: string;
+  // One reply per parked `askUser`: EMPTY when notes were already supplied (the body skips the
+  // ask entirely and runs straight to the writer), exactly one when nothing was supplied yet.
+  readonly userAnswers: ReadonlyArray<string>;
 }) {
   const { broker, brokerDispatched } = await makeBrokerWithSeededThread();
   const runDispatched: OrchestrationCommand[] = [];
@@ -157,14 +163,18 @@ async function runRewrite(input: {
     },
   });
 
-  // 1. parked on the deterministic askUser gate — no model has run yet.
-  const gate = await reply(registry, input.runId, input.userAnswer);
-  // 2. parked on the writer turn, on the LAUNCH thread.
+  // 1. parked on the deterministic askUser gate, ONLY when no intent was supplied yet — the body
+  // skips the ask entirely once notes (instructions and/or anchored comments) are already in hand.
+  const gates: Array<Awaited<ReturnType<typeof reply>>> = [];
+  for (const answer of input.userAnswers) {
+    gates.push(await reply(registry, input.runId, answer));
+  }
+  // 2. parked on the writer turn, on the LAUNCH thread — always present.
   const writer = await reply(registry, input.runId, WRITTEN);
 
   return {
     launched,
-    gate,
+    gates,
     writer,
     completed,
     errors,
@@ -174,7 +184,7 @@ async function runRewrite(input: {
 }
 
 describe("describe-rewrite bundled workflow", () => {
-  it("gates on askUser, writes on the launch thread, then proposes the writer's text as a draft", async () => {
+  it("skips the ask and writes straight from supplied instructions, then proposes the writer's text as a draft", async () => {
     const run = await runRewrite({
       runId: "rewrite-basic",
       args: {
@@ -183,12 +193,14 @@ describe("describe-rewrite bundled workflow", () => {
         currentBody: "Rounding is wrong.",
         instructions: "Add acceptance criteria.",
       },
-      userAnswer: "yes",
+      userAnswers: [],
     });
 
     expect(run.launched.status).toBe("suspended");
-    // The gate is deterministic: a user.input ask, not an agent turn.
-    expect(run.gate.kind).toBe("user.input");
+    // No confirmation card at all: supplying instructions already IS the human stating intent,
+    // so asking again would cost a click and gather nothing new.
+    expect(run.gates).toHaveLength(0);
+    expect(userQuestions(run.runDispatched)).toHaveLength(0);
     // The writer runs on the LAUNCH thread — never a spawned child. `thread.create` would be the
     // fingerprint of `agent()`/`spawnThread()`, whose draft would land where nobody can see it.
     expect(run.writer.kind).toBe("thread.turn");
@@ -204,7 +216,15 @@ describe("describe-rewrite bundled workflow", () => {
     expect(prompt).toContain("T3-42");
     expect(prompt).toContain("Rounding is wrong.");
     expect(prompt).toContain("Add acceptance criteria.");
-    expect(prompt).toContain("Do not call any tool");
+    expect(prompt).toContain("Do not EDIT anything");
+    // …and WHERE to read the item from: the work tracker is mirrored to disk, so a writer left to
+    // guess searches the workspace, finds nothing, and writes filler. The file name is the key
+    // lowercased with non-alphanumerics collapsed, exactly as the context sync writes it.
+    expect(prompt).toContain(".t3team/context/work-items/t3-42.json");
+    expect(prompt).toContain(".t3team/context/work-items/index.json");
+    expect(prompt).toContain("availability");
+    expect(prompt).toContain("fullBundleRootRelativePath");
+    expect(prompt).toContain("ticketEntryPointRelativePath");
 
     // The BODY proposed the draft, carrying the writer's text verbatim.
     const carrier = draftCarrier(run.brokerDispatched);
@@ -220,7 +240,7 @@ describe("describe-rewrite bundled workflow", () => {
     });
   });
 
-  it("carries anchored comments into the confirmation card and the writer prompt", async () => {
+  it("skips the ask and carries every anchored note into the writer prompt when comments were supplied", async () => {
     const run = await runRewrite({
       runId: "rewrite-anchored",
       args: {
@@ -232,16 +252,14 @@ describe("describe-rewrite bundled workflow", () => {
           { blockId: "b2", quote: "log in", body: "Cover the SSO failure path too." },
         ],
       },
-      userAnswer: "yes",
+      userAnswers: [],
     });
 
-    // Pre-filled confirmation, not a blank ask: the card quotes what was annotated.
-    const question = userQuestions(run.runDispatched)[0] ?? "";
-    expect(question).toContain("with these changes?");
-    expect(question).toContain('On "Users log in.": Say which identity provider.');
-    expect(question).toContain('On "log in": Cover the SSO failure path too.');
+    // Annotating and submitting already stated the intent, so no confirmation card is asked for.
+    expect(run.gates).toHaveLength(0);
+    expect(userQuestions(run.runDispatched)).toHaveLength(0);
 
-    // And the same anchored notes reach the writer as targeted instructions.
+    // Both anchored notes reach the writer as targeted instructions — not just the last one.
     const prompt = turnPrompts(run.runDispatched)[0] ?? "";
     expect(prompt).toContain('On "Users log in.": Say which identity provider.');
     expect(prompt).toContain('On "log in": Cover the SSO failure path too.');
@@ -250,6 +268,24 @@ describe("describe-rewrite bundled workflow", () => {
     expect(draftCarrier(run.brokerDispatched)?.attachment).toMatchObject({
       draft: { target: { issueIdOrKey: "T3-77" }, patch: { description: WRITTEN } },
     });
+  });
+
+  it("declares exactly the phases its body runs, with steps the live card can match", () => {
+    // The live card groups rows by the phase the SHAPE SCAN assigns and heads them from the
+    // declared strip. A strip that names a phase the body never declares ("Confirm" while the body
+    // calls phase("Ask")) files real steps under a phantom group; a non-static step label
+    // ("Rewrite " + key) degrades to "Ask the agent", which no runtime step can ever match, so the
+    // writer turn is rendered as unplanned work under the previous phase.
+    const source = renderDescriptionRewriteWorkflow();
+    const shape = deriveWorkflowShape({ absolutePath: workflowPath, sourceText: source });
+    expect(shape.phases.map((phase) => phase.title)).toEqual(["Ask", "Write", "Propose"]);
+    const declared = new Set(shape.phases.map((phase) => phase.title));
+    for (const step of shape.steps) expect(declared.has(step.phase ?? "")).toBe(true);
+    const writer = shape.steps.find((step) => step.kind === "agent");
+    expect(writer?.phase).toBe("Write");
+    expect(writer?.label).not.toBe("Ask the agent");
+    // The runtime step's label starts with the authored one, which is what makes them match.
+    expect(`${writer?.label ?? ""} T3-42`.startsWith(writer?.label ?? "x")).toBe(true);
   });
 
   it("ships to a workspace as a workflow-backed bundled recipe, with no authoring by the user", () => {
@@ -267,21 +303,26 @@ describe("describe-rewrite bundled workflow", () => {
     expect(module?.contents).toContain('"mutation.draft"');
   });
 
-  it("a non-confirming reply replaces the pre-filled intent", async () => {
+  it("asks exactly once when no intent was supplied yet, and the reply becomes the intent", async () => {
     const run = await runRewrite({
-      runId: "rewrite-override",
+      runId: "rewrite-freeform",
       args: {
         issueIdOrKey: "T3-9",
-        instructions: "Add acceptance criteria.",
-        comments: [{ blockId: "b1", quote: "old", body: "drop this" }],
+        summary: "Empty backlog item",
       },
-      userAnswer: "Actually just tighten the wording.",
+      userAnswers: ["Explain the retry behavior."],
     });
 
+    // With nothing supplied, the deterministic gate is a single user.input ask — not an agent turn.
+    expect(run.gates).toHaveLength(1);
+    expect(run.gates[0]?.kind).toBe("user.input");
+    const question = userQuestions(run.runDispatched)[0] ?? "";
+    expect(question).toBe("What should change in the description of T3-9?");
+
+    // The reply becomes the intent that reaches the writer.
     const prompt = turnPrompts(run.runDispatched)[0] ?? "";
-    expect(prompt).toContain("Actually just tighten the wording.");
-    expect(prompt).not.toContain("Add acceptance criteria.");
-    expect(prompt).not.toContain("drop this");
+    expect(prompt).toContain("Explain the retry behavior.");
     expect(run.errors).toHaveLength(0);
+    expect(run.completed[0]).toMatchObject({ issueIdOrKey: "T3-9", proposed: true });
   });
 });

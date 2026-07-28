@@ -11,7 +11,9 @@
  */
 import type * as TsApi from "typescript";
 
-export type WorkflowAuditFacet = "determinism" | "capability";
+/** `"types"` is the real-compiler facet ({@link ./t3team-sdk.typeCheck.ts}); the other two are
+ * pure AST inspection. */
+export type WorkflowAuditFacet = "determinism" | "capability" | "types";
 
 export interface WorkflowAuditFinding {
   readonly facet: WorkflowAuditFacet;
@@ -55,6 +57,36 @@ export function finding(
     ...positionOf(ts, sf, node),
     message: input.message,
   };
+}
+
+/**
+ * A finding built from a character OFFSET rather than a node — what a `ts.Diagnostic` carries. Used
+ * by the `"types"` facet, where the compiler reports a span and there is no AST node to hand.
+ */
+export function findingAt(
+  sf: TsApi.SourceFile,
+  start: number,
+  length: number,
+  input: { readonly facet: WorkflowAuditFacet; readonly rule: string; readonly message: string },
+): WorkflowAuditFinding {
+  const { line, character } = sf.getLineAndCharacterOfPosition(start);
+  return {
+    facet: input.facet,
+    rule: input.rule,
+    construct: truncateConstruct(sf.text.slice(start, start + Math.max(length, 1))),
+    line: line + 1,
+    column: character + 1,
+    message: input.message,
+  };
+}
+
+/** A finding with no position at all — the degraded `"types"` path, where the compiler never ran. */
+export function findingWithoutPosition(input: {
+  readonly facet: WorkflowAuditFacet;
+  readonly rule: string;
+  readonly message: string;
+}): WorkflowAuditFinding {
+  return { ...input, construct: "", line: 1, column: 1 };
 }
 
 /** Render a finding as a single validation-error line: `rule (line:col): message [construct]`. */

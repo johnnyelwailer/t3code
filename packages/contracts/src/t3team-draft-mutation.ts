@@ -2,6 +2,17 @@ import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
+/**
+ * Where a proposal stands. `draft` is what the proposing tool publishes; `applied` and `dismissed`
+ * are the reviewer's verdicts, recorded ON THE CARRIER so they survive a reload — before this the
+ * payload was pinned to `draft` and the verdict lived only in the client's session store, so an
+ * accepted rewrite came back as pending review the next time the thread was read.
+ *
+ * Additive by construction: every carrier ever written says `draft`, which is still a member.
+ */
+export const T3TeamDraftMutationStatus = Schema.Literals(["draft", "applied", "dismissed"]);
+export type T3TeamDraftMutationStatus = typeof T3TeamDraftMutationStatus.Type;
+
 export const T3TeamDraftMutationField = Schema.Literals([
   "assignee",
   "estimate",
@@ -31,7 +42,7 @@ export const T3TeamDraftMutationPayload = Schema.Struct({
   }),
   field: T3TeamDraftMutationField,
   patch: Schema.Record(Schema.String, Schema.Unknown),
-  status: Schema.Literal("draft"),
+  status: T3TeamDraftMutationStatus,
   summary: Schema.optional(Schema.String),
   commitPolicy: Schema.Struct({
     requiresUserApproval: Schema.Boolean,
@@ -39,6 +50,32 @@ export const T3TeamDraftMutationPayload = Schema.Struct({
   }),
 });
 export type T3TeamDraftMutationPayload = typeof T3TeamDraftMutationPayload.Type;
+
+/**
+ * A POINTER to a work item that has a draft waiting on its review surface — what a run's completion
+ * message carries so the conversation can render a navigable card instead of prose the reader has to
+ * act on themselves ("Proposed a rewritten description for NXAI-6 — review it on the work item").
+ *
+ * Deliberately NOT the draft itself: the proposal already travels as
+ * {@link T3TeamMessageDraftMutationAttachment} on its own hidden carrier, and duplicating the patch
+ * here would give the client two sources for one draft that can disagree after an accept. This says
+ * only "there is something to review, and here is where" — id fields to navigate by, plus a line of
+ * preview so the card means something before the user clicks.
+ *
+ * `summary` and `field` are optional because the producer is a workflow body's output: a body that
+ * names neither still gets a working card, just a plainer one.
+ */
+export const T3TeamMessageWorkItemDraftRefAttachment = Schema.Struct({
+  kind: Schema.Literal("work-item-draft"),
+  projectId: TrimmedNonEmptyString,
+  issueIdOrKey: TrimmedNonEmptyString,
+  /** Which field the draft proposes, when the producer says so. Same vocabulary as the draft. */
+  field: Schema.optional(T3TeamDraftMutationField),
+  /** One line for the card face. */
+  summary: Schema.optional(Schema.String),
+});
+export type T3TeamMessageWorkItemDraftRefAttachment =
+  typeof T3TeamMessageWorkItemDraftRefAttachment.Type;
 
 /**
  * Carrier for one proposed draft. The message it rides on is hidden from both the user and the

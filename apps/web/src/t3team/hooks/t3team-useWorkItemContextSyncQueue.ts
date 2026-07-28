@@ -1,9 +1,8 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { buildWorkItemAddToChatPayload } from "~/t3team/components/t3team-projectSidebarAddToChatRequests";
 import type { AddToChatTarget } from "~/t3team/hooks/t3team-useAddToChat";
-import { buildJiraWorkItemSummary } from "~/t3team/t3team-jiraContextMetadata";
+import { buildTicketSidebarAddToChatRequest } from "~/t3team/components/t3team-projectSidebarAddToChatRequests";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import type { AddToChatRequest } from "~/t3team/t3team-addToChatUtils";
 
@@ -87,28 +86,18 @@ export async function drainQueuedWorkItemContextSyncRequests(input: {
     completedRequestIds,
     readProjectTickets: () => input.projectTickets,
     ensureFullWorkItemContextBundle: async ({ ticket, request }) => {
-      const jiraSummary = buildJiraWorkItemSummary(ticket);
+      // The canonical request builder, not a third copy of it. Its `dedupeKey` is what makes the
+      // PENDING attachment identifiable the moment it is enqueued: `buildPendingContextAttachment` is
+      // called without the payload, so a request that omits the key produces a keyless entry, and a
+      // keyless entry cannot be deduped. That is how this queue's attachment ended up beside the ticket
+      // aside's auto-attached one for the same Epic.
       await input.addToChatFromRequest(
-        {
+        buildTicketSidebarAddToChatRequest({
+          backend: input.backend,
+          project: input.project,
           projectId: input.project.id,
-          projectTitle: input.project.title,
-          ...(input.project.workspace?.rootPath
-            ? { projectWorkspaceRoot: input.project.workspace.rootPath }
-            : {}),
-          targetLabel: `${ticket.ref.displayId} ${ticket.ref.title}`,
-          targetType: "work-item",
-          kind: "jira-work-item",
-          ...(jiraSummary.jiraIssueType ? { jiraIssueType: jiraSummary.jiraIssueType } : {}),
-          ...(jiraSummary.jiraIssueTypeIconUrl
-            ? { jiraIssueTypeIconUrl: jiraSummary.jiraIssueTypeIconUrl }
-            : {}),
-          summaryItems: jiraSummary.summaryItems,
-          payload: buildWorkItemAddToChatPayload({
-            backend: input.backend,
-            project: input.project,
-            ticket,
-          }),
-        },
+          ticket,
+        }),
         { type: "thread", threadId: request.threadId },
       );
     },

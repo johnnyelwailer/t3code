@@ -1,28 +1,24 @@
 import { useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Bot, Check, MessageSquare, X } from "lucide-react";
 
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
-import { Button } from "~/t3team/components/ui/t3team-button";
 import { draftContentToComparableText } from "~/t3team/t3team-draftMutationDiff";
 import { selectJiraDocumentDrafts, useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 import { deliverDraftFeedbackToSourceThread } from "~/t3team/workitem/t3team-deliverDraftFeedbackToSourceThread";
+import { recordDraftCarrierOutcome } from "~/t3team/workitem/t3team-recordDraftCarrierOutcome";
+import { useWorkItemDraftActionAccept } from "~/t3team/workitem/t3team-useWorkItemDraftActionAccept";
 import { useWorkItemDraftReviewUiStore } from "~/t3team/workitem/t3team-workItemDraftReviewUiStore";
-import {
-  DIFF_BLOCK_ATTRIBUTE,
-  T3TeamDiffCommentThread,
-  T3TeamDiffSelectionComposer,
-} from "~/t3team/workitem/t3team-WorkItemDiffCommentUi";
-import { T3TeamDiffGutter, T3TeamDiffText } from "~/t3team/workitem/t3team-WorkItemDiffPrimitives";
-import { applyCommentQuotes } from "~/t3team/workitem/t3team-workItemDiffModel";
+import { T3TeamDiffSelectionComposer } from "~/t3team/workitem/t3team-WorkItemDiffCommentUi";
 import { useWorkItemDiffComments } from "~/t3team/workitem/t3team-useWorkItemDiffComments";
+import { WorkItemDescriptionDiffBlock } from "~/t3team/workitem/t3team-WorkItemDescriptionDiffBlock";
+import { WorkItemDescriptionDraftDiffHeader } from "~/t3team/workitem/t3team-WorkItemDescriptionDraftDiffHeader";
 import {
   buildDraftDiffParagraphs,
   draftDiffMagnitude,
 } from "~/t3team/workitem/t3team-workItemDescriptionDiffModel";
 
-/** Jira has no description write route wired yet — see `t3team-TicketDetailDraftDocumentReview.tsx`. */
-const APPLY_UNAVAILABLE_REASON = "Jira description write routes are not available yet.";
+/** Accept needs a connected Atlassian account to write through. */
+const APPLY_UNAVAILABLE_REASON = "Connect the Atlassian account for this project to apply drafts.";
 
 export function shouldDisableDescriptionAccept(input: {
   readonly canApply: boolean;
@@ -41,11 +37,16 @@ export function shouldDisableDescriptionAccept(input: {
 export function WorkItemDescriptionDraftDiff({
   issueIdOrKey,
   projectId,
+  accountId,
   currentText,
+  onReload,
 }: {
   readonly issueIdOrKey: string;
   readonly projectId: string;
+  /** Without a connected account there is nothing to write through, so Accept stays disabled. */
+  readonly accountId?: string | undefined;
   readonly currentText?: string | undefined;
+  readonly onReload?: (() => void) | undefined;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const drafts = useT3TeamDraftMutationStore(
@@ -55,8 +56,12 @@ export function WorkItemDescriptionDraftDiff({
   const discardDraft = useT3TeamDraftMutationStore((state) => state.discardDraft);
   const returnDraftWithFeedback = useT3TeamDraftMutationStore((state) => state.returnDraftWithFeedback);
   const closeDescriptionReview = useWorkItemDraftReviewUiStore((state) => state.closeDescriptionReview);
+  const collapseDescriptionReview = useWorkItemDraftReviewUiStore(
+    (state) => state.collapseDescriptionReview,
+  );
   const comments = useWorkItemDiffComments();
   const backend = useBackend();
+  const acceptAction = useWorkItemDraftActionAccept();
 
   if (!draft) return null; // Accepted/dismissed elsewhere while this was open.
 
@@ -67,10 +72,30 @@ export function WorkItemDescriptionDraftDiff({
     draftContentToComparableText(draft.proposedContent),
   );
   const { added, removed } = draftDiffMagnitude(paragraphs);
+  const atlassian = backend?.atlassian;
   const acceptDisabled = shouldDisableDescriptionAccept({
-    canApply: false,
+    canApply: Boolean(atlassian) && Boolean(accountId),
     pendingCommentCount: comments.total,
   });
+
+  /**
+   * The fourth sibling of the scalar accepts: the same `applying → applied/error` lifecycle, the same
+   * user-facing error surface. The proposed body is sent AS MARKDOWN — the server runs the same
+   * markdown→ADF converter comments use, so pre-rendering it here would write a lossy projection to Jira.
+   */
+  function accept() {
+    if (!atlassian || !accountId || !draft) return;
+    acceptAction(draft, async () => {
+      await atlassian.updateIssueDescription({
+        accountId,
+        issueIdOrKey: draft.target.issueIdOrKey,
+        description: draftContentToComparableText(draft.proposedContent),
+      });
+      // Jira has the new body; record the outcome so a reload cannot re-offer it (see the seam's note).
+      await recordDraftCarrierOutcome({ backend, draft, outcome: "applied" });
+      onReload?.();
+    });
+  }
 
   function sendBack() {
     const feedback = comments.comments.map((comment) => `> ${comment.quote}\n${comment.body}`).join("\n\n");
@@ -88,54 +113,33 @@ export function WorkItemDescriptionDraftDiff({
 
   return (
     <div ref={containerRef} className="relative rounded-lg border border-border bg-background">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <Bot className="size-3.5 text-primary" aria-hidden="true" />
-          Proposed rewrite
-        </span>
-        <span className="flex items-center gap-2 text-xs tabular-nums">
-          {added > 0 ? <span className="text-success-foreground">+{added}</span> : null}
-          {removed > 0 ? <span className="text-destructive">−{removed}</span> : null}
-        </span>
-        <span className="ml-auto flex items-center gap-1.5">
-          <Button size="xs" variant="ghost" disabled={comments.total === 0} onClick={sendBack}>
-            <MessageSquare className="size-3.5" />
-            {comments.total > 0 ? `Send ${comments.total} back` : "Comment"}
-          </Button>
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => {
-              discardDraft(draft!.id);
-              closeDescriptionReview();
-            }}
-          >
-            <X className="size-3.5" />
-            Dismiss
-          </Button>
-          <Button size="xs" disabled={acceptDisabled} title={APPLY_UNAVAILABLE_REASON}>
-            <Check className="size-3.5" />
-            Accept
-          </Button>
-        </span>
-      </div>
+      <WorkItemDescriptionDraftDiffHeader
+        added={added}
+        removed={removed}
+        commentCount={comments.total}
+        acceptDisabled={acceptDisabled}
+        {...(acceptDisabled && comments.total === 0 ? { acceptReason: APPLY_UNAVAILABLE_REASON } : {})}
+        onSendBack={sendBack}
+        onDismiss={() => {
+          discardDraft(draft.id);
+          void recordDraftCarrierOutcome({ backend, draft, outcome: "dismissed" });
+          closeDescriptionReview();
+        }}
+        onAccept={accept}
+        onCollapse={() => collapseDescriptionReview(issueIdOrKey)}
+      />
 
       <T3TeamDiffSelectionComposer containerRef={containerRef} onSubmit={comments.add} />
 
       <div className="space-y-2.5 px-3 py-3 text-sm leading-6 text-foreground">
         {paragraphs.map((paragraph) => (
-          <div key={paragraph.id} className="group flex">
-            <T3TeamDiffGutter
-              {...(paragraph.state ? { state: paragraph.state } : {})}
-              commentCount={comments.forBlock(paragraph.id).length}
-            />
-            <div className="min-w-0 flex-1" {...{ [DIFF_BLOCK_ATTRIBUTE]: paragraph.id }}>
-              <p>
-                <T3TeamDiffText segments={applyCommentQuotes(paragraph.segments, comments.quotesForBlock(paragraph.id))} />
-              </p>
-              <T3TeamDiffCommentThread comments={comments.forBlock(paragraph.id)} onRemove={comments.remove} />
-            </div>
-          </div>
+          <WorkItemDescriptionDiffBlock
+            key={paragraph.id}
+            paragraph={paragraph}
+            comments={comments.forBlock(paragraph.id)}
+            quotes={comments.quotesForBlock(paragraph.id)}
+            onRemoveComment={comments.remove}
+          />
         ))}
       </div>
     </div>

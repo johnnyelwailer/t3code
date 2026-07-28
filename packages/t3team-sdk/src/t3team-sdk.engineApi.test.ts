@@ -33,7 +33,7 @@ describe("imported engine API", () => {
     calls = [];
     const result = await withBodyApi(surface(), async () => {
       phase("Review");
-      return await agent("summarize");
+      return await agent("summarize", { capabilities: "inherit" });
     });
     expect(result).toBe("answered:summarize");
     expect(calls).toEqual(["Review"]);
@@ -59,7 +59,9 @@ describe("imported engine API", () => {
   // a programming error, so it fails at the call site with a clean stack instead of becoming a
   // rejected promise someone has to trace back.
   it("names the verb when called outside a run", () => {
-    expect(() => agent("summarize")).toThrow(/'agent' was called outside a workflow runtime/);
+    expect(() => agent("summarize", { capabilities: "inherit" })).toThrow(
+      /'agent' was called outside a workflow runtime/,
+    );
     expect(() => getArgs()).toThrow(/'args' was called outside a workflow runtime/);
     expect(() => getThread()).toThrow(/'getThread' was called outside a workflow runtime/);
   });

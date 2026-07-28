@@ -1,11 +1,19 @@
 import { useCallback, useMemo, useState } from "react";
 
+import {
+  addDiffComment,
+  indexDiffCommentsByBlock,
+  removeDiffComment,
+  type T3TeamDiffComment,
+  type T3TeamDiffCommentInput,
+} from "~/t3team/workitem/t3team-workItemDiffCommentList";
+
 /**
- * Anchored review comments over a proposed document.
+ * Anchored review comments over a proposed document, held as local review state.
  *
- * A comment belongs to a block and quotes the exact text it was made against. The quote is the
- * anchor: ADF has no stable node identity, so there is nothing durable to point at, and a character
- * offset survives even less — the agent's next revision shifts every offset after the first edit.
+ * The list model itself lives in `t3team-workItemDiffCommentList` — the composer's staged rewrite
+ * action needs the same one, and a comment must mean the same thing on both surfaces because both
+ * end up as the `describe-rewrite` workflow's `comments` input.
  *
  * Matching on the quote degrades honestly. It still resolves after unrelated edits elsewhere in the
  * block, and when the quoted text is itself rewritten the comment stays visible but unanchored,
@@ -13,19 +21,14 @@ import { useCallback, useMemo, useState } from "react";
  * risks silently pinning a remark to words nobody selected.
  */
 
-export type T3TeamDiffComment = {
-  readonly id: string;
-  readonly blockId: string;
-  readonly quote: string;
-  readonly body: string;
-};
+export type { T3TeamDiffComment } from "~/t3team/workitem/t3team-workItemDiffCommentList";
 
 export type T3TeamDiffCommentsApi = {
   readonly comments: ReadonlyArray<T3TeamDiffComment>;
   readonly total: number;
   readonly forBlock: (blockId: string) => ReadonlyArray<T3TeamDiffComment>;
   readonly quotesForBlock: (blockId: string) => ReadonlyArray<string>;
-  readonly add: (input: { blockId: string; quote: string; body: string }) => void;
+  readonly add: (input: T3TeamDiffCommentInput) => void;
   readonly remove: (id: string) => void;
 };
 
@@ -34,15 +37,7 @@ export function useWorkItemDiffComments(
 ): T3TeamDiffCommentsApi {
   const [comments, setComments] = useState<ReadonlyArray<T3TeamDiffComment>>(initial);
 
-  const byBlock = useMemo(() => {
-    const index = new Map<string, Array<T3TeamDiffComment>>();
-    for (const comment of comments) {
-      const bucket = index.get(comment.blockId);
-      if (bucket) bucket.push(comment);
-      else index.set(comment.blockId, [comment]);
-    }
-    return index;
-  }, [comments]);
+  const byBlock = useMemo(() => indexDiffCommentsByBlock(comments), [comments]);
 
   const forBlock = useCallback(
     (blockId: string): ReadonlyArray<T3TeamDiffComment> => byBlock.get(blockId) ?? [],
@@ -54,22 +49,12 @@ export function useWorkItemDiffComments(
     [forBlock],
   );
 
-  const add = useCallback((input: { blockId: string; quote: string; body: string }) => {
-    const body = input.body.trim();
-    if (body === "") return;
-    setComments((current) => [
-      ...current,
-      {
-        id: `${input.blockId}:${current.length}:${body.length}`,
-        blockId: input.blockId,
-        quote: input.quote,
-        body,
-      },
-    ]);
+  const add = useCallback((input: T3TeamDiffCommentInput) => {
+    setComments((current) => addDiffComment(current, input));
   }, []);
 
   const remove = useCallback((id: string) => {
-    setComments((current) => current.filter((comment) => comment.id !== id));
+    setComments((current) => removeDiffComment(current, id));
   }, []);
 
   return { comments, total: comments.length, forBlock, quotesForBlock, add, remove };

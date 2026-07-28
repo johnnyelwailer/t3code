@@ -11,7 +11,8 @@ export const meta = {
 } as const;
 
 export default async function run() {
-  const child = spawnThread({ name: "worker" });
+  // The child inherits `["user"]`, which is what lets the escalation below surface at all.
+  const child = spawnThread({ name: "worker", capabilities: "inherit" });
   const answer = await child.askUser("Approve child work?", { schema: Schema.String });
   return { answer };
 }

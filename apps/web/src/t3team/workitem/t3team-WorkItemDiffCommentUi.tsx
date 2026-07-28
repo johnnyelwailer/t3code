@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { MessageSquarePlus, X } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
-import { Textarea } from "~/t3team/components/ui/t3team-textarea";
 import { cn } from "~/t3team/lib/t3team-utils";
-import type { T3TeamDiffComment } from "~/t3team/workitem/t3team-useWorkItemDiffComments";
+import { T3TeamCommentPopoutCard } from "~/t3team/workitem/t3team-CommentPopoutCard";
+import type { T3TeamDiffComment } from "~/t3team/workitem/t3team-workItemDiffCommentList";
 
 const COMPOSER_WIDTH_PX = 288;
 
@@ -38,7 +38,6 @@ export function T3TeamDiffSelectionComposer({
 }) {
   const [anchor, setAnchor] = useState<Anchor | undefined>(undefined);
   const [composing, setComposing] = useState(false);
-  const [body, setBody] = useState("");
 
   useEffect(() => {
     const onMouseUp = () => {
@@ -79,7 +78,6 @@ export function T3TeamDiffSelectionComposer({
   const close = () => {
     setAnchor(undefined);
     setComposing(false);
-    setBody("");
     window.getSelection()?.removeAllRanges();
   };
 
@@ -89,35 +87,14 @@ export function T3TeamDiffSelectionComposer({
       style={{ top: anchor.top, left: anchor.left }}
     >
       {composing ? (
-        <div className="rounded-lg border border-border bg-popover p-2 shadow-lg">
-          <p className="mb-1.5 line-clamp-2 border-l-2 border-primary/50 pl-2 text-[11px] italic text-muted-foreground">
-            {anchor.quote}
-          </p>
-          <Textarea
-            autoFocus
-            rows={2}
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            placeholder="What should change here?"
-            className="text-xs"
-            aria-label="Comment on the selected text"
-          />
-          <div className="mt-1.5 flex justify-end gap-1.5">
-            <Button size="xs" variant="ghost" onClick={close}>
-              Cancel
-            </Button>
-            <Button
-              size="xs"
-              disabled={body.trim() === ""}
-              onClick={() => {
-                onSubmit({ blockId: anchor.blockId, quote: anchor.quote, body });
-                close();
-              }}
-            >
-              Comment
-            </Button>
-          </div>
-        </div>
+        <T3TeamCommentPopoutCard
+          quote={anchor.quote}
+          onCancel={close}
+          onSubmit={(body) => {
+            onSubmit({ blockId: anchor.blockId, quote: anchor.quote, body });
+            close();
+          }}
+        />
       ) : (
         <Button size="xs" onClick={() => setComposing(true)}>
           <MessageSquarePlus className="size-3.5" />

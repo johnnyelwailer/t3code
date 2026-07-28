@@ -32,6 +32,7 @@ export default async function run() {
   const judged = await agent(`Judge gate ${input.gate}`, {
     label: "Judge gate",
     schema: Verdict,
+    capabilities: "inherit",
   });
 
   return { verdict: judged.verdict, score: judged.score };

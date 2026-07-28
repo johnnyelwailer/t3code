@@ -1,181 +1,156 @@
 /**
  * Controller for the description section's `Rewrite` control.
  *
- * Clicking it launches the bundled `describe-rewrite` RECIPE WORKFLOW — it does not start an agent
- * turn. That is the whole point of this path: the workflow opens with a deterministic `askUser`
- * card, so a click costs nothing until the human has said what should change. The writer turn runs
- * afterwards, and the workflow BODY calls `t3team.work_item.description.draft_update`, so "exactly
- * one draft, always reviewed" is a property of the engine rather than of prompt obedience.
+ * Clicking it does NOT launch anything. It PRESELECTS the bundled `describe-rewrite` recipe workflow
+ * on the work item's composer and opens an inline note popout — both pure client state, so the click
+ * is instant: no request, no thread, no run, no model. The workflow starts when the human submits the
+ * composer, which is also where their own prompt text joins in.
  *
- * Two launch shapes, one workflow:
+ * That is a behaviour change, not a shortcut. The control used to create a thread and launch the run
+ * on click, so the human waited through two round-trips before the workflow's `askUser` card let them
+ * type anything — the intent was collected AFTER the machinery instead of before it.
  *
- * - The aside is already showing a thread ⇒ one step: `launchRecipeWorkflow` on that thread id.
- *   The launch route rejects an empty `threadId`, so this is only available once a thread exists.
- * - No thread yet ⇒ two steps, and the second one has to survive a navigation. The kickoff
- *   NAVIGATES to the new thread and unmounts this component, so the launch cannot be awaited here.
- *   Rather than inventing a parallel "do it once the thread is ready" mechanism, the kickoff
- *   carries the workflow as `kickoffWorkflow`: `runThreadBootstrapKickoff` already branches on a
- *   kickoff that has a `workflowPath` and calls `launchRecipeWorkflow` INSTEAD of
- *   `thread.turn.start`. That branch is what makes the no-thread case honour the no-model-first
- *   invariant, and it is the same path every Quick Start recipe launch takes.
+ * TWO CHANNELS, KEPT SEPARATE
+ * Notes left in the popout become the workflow's `comments` input (quoted feedback, a list, each item
+ * individually removable). The composer's own text becomes `instructions`. The popout never writes
+ * into the composer's text box, because the workflow's confirmation card treats the two differently
+ * and folding them together would lose which is which.
  *
- * Failures are surfaced, never swallowed — see `deliverDraftFeedbackToSourceThread` for the
- * sibling case that established that. The kickoff path reports nothing back (`onKickoffThread`
- * returns void and navigates synchronously), so a one-way `kickoffLaunched` latch closes the
- * double-click window instead; it never un-latches because the navigation unmounts this component.
+ * WHY THERE IS NO BACKEND IN THIS HOOK
+ * Deliberate: an input that cannot reach a server cannot spend a token. The invariant "no model turn
+ * before the human has submitted their intent" is now structural rather than something the click path
+ * has to be careful about. The launch lives with the composer — see
+ * `t3team-stagedComposerActionLaunch` for the one place the two channels are merged into
+ * `workflow.parameters`, and `buildBundledSidecarRecipeWorkflowLaunch` for the recipePath/workflowPath
+ * guarantee the server derives the run's tool scope from.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import type { BackendApi } from "~/t3team/backend/t3team-types";
 import type { T3TeamUserFacingError } from "~/t3team/components/error/t3team-errorMessage";
-import { createDefaultT3TeamKickoffLaunchConfig } from "~/t3team/t3team-kickoffLaunchConfig";
-import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
-import type { TicketKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import {
-  toWorkItemRewriteLaunchError,
-  workItemRewriteDisconnectedError,
-  workItemRewriteMissingWorkspaceError,
-} from "~/t3team/workitem/t3team-workItemRewriteLaunchErrors";
+  useT3TeamStagedComposerAction,
+  useT3TeamStagedComposerActionStore,
+} from "~/t3team/t3team-stagedComposerActionStore";
+import { workItemRewriteMissingWorkspaceError } from "~/t3team/workitem/t3team-workItemRewriteLaunchErrors";
 import {
-  buildWorkItemRewriteKickoffMessage,
-  buildWorkItemRewriteWorkflow,
-  launchWorkItemRewriteOnThread,
+  buildWorkItemRewriteSelectedRecipe,
+  WORK_ITEM_REWRITE_COMMENTS_PARAMETER,
+  WORK_ITEM_REWRITE_INSTRUCTIONS_PARAMETER,
 } from "~/t3team/workitem/t3team-workItemRewriteWorkflowLaunch";
+import {
+  T3TEAM_WHOLE_DESCRIPTION_BLOCK_ID,
+  T3TEAM_WHOLE_DESCRIPTION_QUOTE,
+} from "~/t3team/workitem/t3team-workItemDiffCommentList";
 
 export type UseWorkItemAgentRewriteInput = {
-  readonly backend: BackendApi | null | undefined;
   readonly projectId: string;
   readonly ticketId: string;
   /** The issue key both the workflow input and the draft tool target — `model.key`, not the raw
    * ticket id. */
   readonly issueIdOrKey: string;
-  /** `ProjectThread.ticketDisplayId`'s value for a freshly created kickoff thread. */
-  readonly ticketDisplayId: string;
-  /** Where `.t3team/recipes/describe-rewrite` lives. Without it there is no recipe to launch. */
+  /** Where `.t3team/recipes/describe-rewrite` lives. Without it there is no recipe to preselect. */
   readonly projectWorkspaceRoot?: string | undefined;
   readonly descriptionText?: string | undefined;
   readonly summary?: string | undefined;
-  readonly githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
-  /** The thread id the work item's aside is currently showing, if any. */
-  readonly activeThreadId?: string | undefined;
-  readonly onKickoffThread: (input: TicketKickoffThreadInput) => void;
   /** From `useWorkItemDrafts` — not re-derived here. */
   readonly hasPendingDescriptionDraft: boolean;
-  /** Whether the work item's own data (ticket or snapshot) has actually loaded. A workflow started
-   * on nothing — no description, no real summary — is worse than no control at all, so the caller
-   * gates this rather than the control silently launching on empty data. */
+  /** Whether the work item's own data (ticket or snapshot) has actually loaded. A rewrite staged on
+   * nothing — no description, no real summary — is worse than no control at all, so the caller gates
+   * this rather than the control silently staging empty data. */
   readonly hasLoadedWorkItem: boolean;
 };
 
-export function useWorkItemAgentRewrite(input: UseWorkItemAgentRewriteInput): {
-  readonly start: () => void;
-  readonly isStarting: boolean;
+export type UseWorkItemAgentRewriteResult = {
+  readonly isComposing: boolean;
+  /** Preselects the workflow on the composer and opens the note popout. Pure state. */
+  readonly open: () => void;
+  /** Closes the popout, and un-preselects when the human left no note behind. */
+  readonly cancel: () => void;
+  readonly submitComment: (body: string) => void;
+  readonly stagedCommentCount: number;
+  readonly isStaged: boolean;
   readonly error: T3TeamUserFacingError | null;
   readonly isDisabled: boolean;
-} {
-  const {
-    backend,
-    projectId,
-    ticketId,
-    issueIdOrKey,
-    ticketDisplayId,
-    projectWorkspaceRoot,
-    descriptionText,
-    summary,
-    githubActivityItems,
-    activeThreadId,
-    onKickoffThread,
-    hasPendingDescriptionDraft,
-    hasLoadedWorkItem,
-  } = input;
-  const [isStarting, setIsStarting] = useState(false);
+};
+
+export function useWorkItemAgentRewrite(
+  input: UseWorkItemAgentRewriteInput,
+): UseWorkItemAgentRewriteResult {
+  const { projectId, ticketId, issueIdOrKey, hasPendingDescriptionDraft, hasLoadedWorkItem } = input;
+  const [isComposing, setIsComposing] = useState(false);
   const [error, setError] = useState<T3TeamUserFacingError | null>(null);
-  const [kickoffLaunched, setKickoffLaunched] = useState(false);
 
-  const start = useCallback(() => {
-    // Re-entrancy guard: `isDisabled` already keeps the button from being clicked twice, but `start`
-    // is also called directly in tests/stories, and defending it here means the latch holds even if
-    // a future caller renders its own trigger without wiring `isDisabled` through.
-    if (isStarting || kickoffLaunched || hasPendingDescriptionDraft || !hasLoadedWorkItem) return;
+  const target = useMemo(() => ({ projectId, ticketId }), [projectId, ticketId]);
+  const staged = useT3TeamStagedComposerAction(target);
+  const stage = useT3TeamStagedComposerActionStore((state) => state.stage);
+  const addComment = useT3TeamStagedComposerActionStore((state) => state.addComment);
+  const clear = useT3TeamStagedComposerActionStore((state) => state.clear);
 
-    const workflow = buildWorkItemRewriteWorkflow({
+  const isDisabled = hasPendingDescriptionDraft || !hasLoadedWorkItem;
+
+  const open = useCallback(() => {
+    if (isDisabled) return;
+
+    const selectedRecipe = buildWorkItemRewriteSelectedRecipe({
       issueIdOrKey,
-      ...(summary ? { summary } : {}),
-      ...(descriptionText ? { currentBody: descriptionText } : {}),
-      ...(projectWorkspaceRoot ? { projectWorkspaceRoot } : {}),
+      ...(input.summary ? { summary: input.summary } : {}),
+      ...(input.descriptionText ? { currentBody: input.descriptionText } : {}),
+      ...(input.projectWorkspaceRoot ? { projectWorkspaceRoot: input.projectWorkspaceRoot } : {}),
     });
-    if (!workflow) {
+    if (!selectedRecipe) {
       setError(workItemRewriteMissingWorkspaceError());
       return;
     }
-    const kickoffMessage = buildWorkItemRewriteKickoffMessage(issueIdOrKey);
-    const launchConfig = createDefaultT3TeamKickoffLaunchConfig();
 
-    if (activeThreadId) {
-      if (!backend) {
-        setError(workItemRewriteDisconnectedError());
-        return;
-      }
-      setIsStarting(true);
-      setError(null);
-      void launchWorkItemRewriteOnThread({
-        backend,
-        threadId: activeThreadId,
-        workflow,
-        launchConfig,
-        kickoffMessage,
-      })
-        .then(() => setIsStarting(false))
-        .catch((cause: unknown) => {
-          setIsStarting(false);
-          setError(toWorkItemRewriteLaunchError(cause));
-        });
-      return;
-    }
-
-    // Latched before calling out: `onKickoffThread` navigates synchronously but reports nothing
-    // back, so this is the only signal that stops a second click from creating a second kickoff
-    // thread for the same ticket.
-    setKickoffLaunched(true);
-    onKickoffThread({
-      projectId,
-      ticketId,
-      ticketDisplayId,
-      githubActivityItems,
-      // Not a prompt: the bootstrap needs a non-empty initial message to plan a kickoff at all, and
-      // routes it to the workflow launch (not a turn) because `kickoffWorkflow` has a workflowPath.
-      kickoffMessage,
-      kickoffPending: true,
-      kickoffWorkflow: workflow,
-      kickoffModelSelection: launchConfig.selection,
-      kickoffRuntimeMode: launchConfig.runtimeMode,
-      kickoffInteractionMode: launchConfig.interactionMode,
-      selectedToolIds: launchConfig.selectedToolIds,
-      kickoffContextAttachments: [],
+    setError(null);
+    // Re-staging is idempotent for the comment list: the store preserves whatever is already
+    // attached, so re-opening to add a second note never replaces the first.
+    stage(target, {
+      selectedRecipe,
+      composerNoteParameter: WORK_ITEM_REWRITE_INSTRUCTIONS_PARAMETER,
+      commentsParameter: WORK_ITEM_REWRITE_COMMENTS_PARAMETER,
     });
+    setIsComposing(true);
   }, [
-    activeThreadId,
-    backend,
-    descriptionText,
-    githubActivityItems,
-    hasLoadedWorkItem,
-    hasPendingDescriptionDraft,
+    input.descriptionText,
+    input.projectWorkspaceRoot,
+    input.summary,
+    isDisabled,
     issueIdOrKey,
-    kickoffLaunched,
-    isStarting,
-    onKickoffThread,
-    projectId,
-    projectWorkspaceRoot,
-    summary,
-    ticketDisplayId,
-    ticketId,
+    stage,
+    target,
   ]);
 
+  const stagedCommentCount = staged?.comments.length ?? 0;
+
+  const cancel = useCallback(() => {
+    setIsComposing(false);
+    // A stray click must not leave the composer holding an action the human never asked for; a
+    // click that produced notes must not throw them away.
+    if (stagedCommentCount === 0) clear(target);
+  }, [clear, stagedCommentCount, target]);
+
+  const submitComment = useCallback(
+    (body: string) => {
+      addComment(target, {
+        blockId: T3TEAM_WHOLE_DESCRIPTION_BLOCK_ID,
+        quote: T3TEAM_WHOLE_DESCRIPTION_QUOTE,
+        body,
+      });
+      setIsComposing(false);
+    },
+    [addComment, target],
+  );
+
   return {
-    start,
-    isStarting,
+    isComposing,
+    open,
+    cancel,
+    submitComment,
+    stagedCommentCount,
+    isStaged: staged !== undefined,
     error,
-    isDisabled: isStarting || hasPendingDescriptionDraft || kickoffLaunched || !hasLoadedWorkItem,
+    isDisabled,
   };
 }

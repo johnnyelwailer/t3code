@@ -75,13 +75,13 @@ export function TicketDetailView({
   // snapshot data or nothing, never that fallback, so the workflow's `summary` input never claims
   // a title the work item doesn't have.
   const realTicketTitle = view.ticket?.ref.title ?? view.snapshot?.ref.title;
+  // No backend, no thread id, no kickoff callback: the control preselects the rewrite on the aside's
+  // composer and can therefore not launch anything by itself. The composer owns the launch.
   const descriptionAction = (
     <WorkItemAgentRewriteControl
-      backend={view.backend}
       projectId={project.id}
       ticketId={resolvedTicketId}
       issueIdOrKey={view.fieldModel.key}
-      ticketDisplayId={view.displayId}
       {...(project.workspace?.rootPath
         ? { projectWorkspaceRoot: project.workspace.rootPath }
         : {})}
@@ -89,9 +89,6 @@ export function TicketDetailView({
         ? { descriptionText: view.fieldModel.descriptionText }
         : {})}
       {...(realTicketTitle ? { summary: realTicketTitle } : {})}
-      githubActivityItems={view.matchedGitHubActivityItems}
-      {...(view.activeThread ? { activeThreadId: view.activeThread.id } : {})}
-      onKickoffThread={onKickoffThread}
       hasPendingDescriptionDraft={descriptionDrafts.description !== undefined}
       hasLoadedWorkItem={Boolean(view.ticket) || Boolean(view.snapshot)}
     />

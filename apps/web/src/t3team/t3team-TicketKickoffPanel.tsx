@@ -1,60 +1,44 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import type { ProjectThread, T3TeamThreadToolId } from "~/t3team/t3team-types";
-import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import type { ProjectThread } from "~/t3team/t3team-types";
 import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 import { mergeContextAttachmentsById } from "~/t3team/t3team-contextAttachmentMerge";
-import { ContextAttachmentChip } from "~/t3team/components/t3team-ContextAttachmentChip";
 import { T3TeamSidecarComposition } from "~/t3team/t3team-SidecarComposition";
-import {
-  applyT3TeamRecipeQuickStartLaunchCustomization,
-  buildT3TeamSelectedRecipeKickoffLaunch,
-  type T3TeamSelectedRecipeQuickStart,
-} from "~/t3team/t3team-recipeQuickStartLaunch";
+import { applyT3TeamRecipeQuickStartLaunchCustomization } from "~/t3team/t3team-recipeQuickStartLaunch";
 import type { T3TeamSidecarRecipeInput } from "~/t3team/t3team-sidecarRecipeTypes";
-import { type T3TeamKickoffComposerHandle } from "~/t3team/t3team-TicketKickoffComposer";
+import {
+  useT3TeamStagedComposerAction,
+  useT3TeamStagedComposerActionStore,
+} from "~/t3team/t3team-stagedComposerActionStore";
+import {
+  TicketKickoffPanelFooter,
+  type T3TeamKickoffComposerRenderer,
+  type T3TeamKickoffPanelKickoff,
+} from "~/t3team/t3team-TicketKickoffPanelFooter";
 import { useBundledSidecarRecipeLaunch } from "~/t3team/t3team-useBundledSidecarRecipeLaunch";
-import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
 type TicketKickoffPanelProps = {
   profileId?: string;
   projectId: string;
+  /** Present on the work item surface. It is half the key an action staged from the content column
+   * is filed under, so without it nothing can be preselected here. */
+  ticketId?: string;
   issueThreads: ProjectThread[];
   quickStartRecipeInput: T3TeamSidecarRecipeInput & {
     readonly backend: BackendApi | null;
   };
   injectedContextAttachments?: ReadonlyArray<T3TeamContextAttachment>;
   onOpenThread: (threadId: string) => void;
-  onKickoff: (
-    instruction: string,
-    kickoffPending: boolean | undefined,
-    selection: ModelSelection,
-    runtimeMode: RuntimeMode,
-    interactionMode: ProviderInteractionMode,
-    selectedToolIds: ReadonlyArray<T3TeamThreadToolId>,
-    contextAttachments: ReadonlyArray<T3TeamContextAttachment>,
-    kickoffWorkflow?: T3TeamKickoffWorkflow,
-  ) => void;
-  renderComposer: (props: {
-    composerRef: React.RefObject<T3TeamKickoffComposerHandle | null>;
-    prefillText?: string;
-    selectedRecipe?: T3TeamSelectedRecipeQuickStart;
-    onClearSelectedRecipe?: () => void;
-    onSubmit: (
-      text: string,
-      selection: ModelSelection,
-      runtimeMode: RuntimeMode,
-      interactionMode: ProviderInteractionMode,
-      selectedToolIds: ReadonlyArray<T3TeamThreadToolId>,
-    ) => void;
-  }) => React.ReactNode;
+  onKickoff: T3TeamKickoffPanelKickoff;
+  renderComposer: T3TeamKickoffComposerRenderer;
 };
 
 export function TicketKickoffPanel({
   profileId,
   projectId,
+  ticketId,
   issueThreads,
   quickStartRecipeInput,
   injectedContextAttachments,
@@ -63,6 +47,13 @@ export function TicketKickoffPanel({
   renderComposer,
 }: TicketKickoffPanelProps) {
   const environmentId = usePrimaryEnvironmentId();
+  const stagedTarget = useMemo(
+    () => (ticketId ? { projectId, ticketId } : undefined),
+    [projectId, ticketId],
+  );
+  const stagedAction = useT3TeamStagedComposerAction(stagedTarget);
+  const removeStagedComment = useT3TeamStagedComposerActionStore((state) => state.removeComment);
+  const clearStagedAction = useT3TeamStagedComposerActionStore((state) => state.clear);
   const [localContextAttachments, setLocalContextAttachments] = useState<
     ReadonlyArray<T3TeamContextAttachment>
   >([]);
@@ -159,46 +150,23 @@ export function TicketKickoffPanel({
         />
       </ScrollArea>
 
-      <div className="shrink-0 border-t border-border bg-background/75 p-3 sm:p-4">
-        {localContextAttachments.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {localContextAttachments.map((a) => (
-              <ContextAttachmentChip
-                key={a.id}
-                attachment={a}
-                onRemove={removeLocalContextAttachment}
-              />
-            ))}
-          </div>
-        )}
-        {renderComposer({
-          composerRef,
-          ...(selectedRecipe ? { selectedRecipe } : {}),
-          onClearSelectedRecipe: clearSelectedRecipe,
-          onSubmit: (text, selection, runtimeMode, interactionMode, selectedToolIds) => {
-            const kickoff = selectedRecipe
-              ? buildT3TeamSelectedRecipeKickoffLaunch({
-                  selectedRecipe,
-                  customMessage: text,
-                })
-              : {
-                  kickoffMessage: text,
-                  kickoffPending: true,
-                };
-            onKickoff(
-              kickoff.kickoffMessage,
-              kickoff.kickoffPending,
-              selection,
-              runtimeMode,
-              interactionMode,
-              selectedToolIds,
-              localContextAttachments,
-              selectedRecipe?.recipe.workflow,
-            );
-            clearPanelState();
-          },
-        })}
-      </div>
+      <TicketKickoffPanelFooter
+        composerRef={composerRef}
+        contextAttachments={localContextAttachments}
+        stagedAction={stagedAction}
+        selectedRecipe={selectedRecipe}
+        onRemoveContextAttachment={removeLocalContextAttachment}
+        onRemoveStagedComment={(commentId) => {
+          if (stagedTarget) removeStagedComment(stagedTarget, commentId);
+        }}
+        onClearStagedAction={() => {
+          if (stagedTarget) clearStagedAction(stagedTarget);
+        }}
+        onClearSelectedRecipe={clearSelectedRecipe}
+        onKickoff={onKickoff}
+        onSubmitted={clearPanelState}
+        renderComposer={renderComposer}
+      />
     </div>
   );
 }

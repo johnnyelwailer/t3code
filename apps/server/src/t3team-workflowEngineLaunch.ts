@@ -23,7 +23,7 @@ import {
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
-import { makeControllerResume } from "./t3team-workflowEngineResume.ts";
+import { makeControllerFail, makeControllerResume } from "./t3team-workflowEngineResume.ts";
 import {
   createWorkflowStepActivityEmitter,
   type WorkflowStepActivityEmitter,
@@ -201,6 +201,7 @@ export function createWorkflowRunController(
       launchThreadId: input.launchThreadId,
       workflowRunId: input.runId,
       output: result.result,
+      projectId: input.projectId,
       dispatch: input.dispatch,
       newId: input.newId,
       nowIso: input.nowIso,
@@ -229,6 +230,9 @@ export function createWorkflowRunController(
 
   input.registry.registerRun(input.runId, {
     resume,
+    // Host-detected terminal failure — an ask that can never be answered (see
+    // `WorkflowRegisteredRun.fail`), routed through the ONE failure funnel.
+    fail: makeControllerFail({ input, stepActivities, isCancelled: () => cancelled }),
     cancel: () => {
       cancelled = true;
     },
@@ -274,6 +278,9 @@ export async function launchWorkflowRecipe(
       newId: input.newId,
       nowIso: input.nowIso,
       onError: input.onError,
+      // Only an ephemeral, agent-authored run carries a repair intent, and only its reader owns the
+      // source. A bundled or project recipe run was started by a human who cannot edit it.
+      hostOwnsSource: input.repairIntent !== undefined,
     });
     return { runId: input.runId, status: "failed" };
   }

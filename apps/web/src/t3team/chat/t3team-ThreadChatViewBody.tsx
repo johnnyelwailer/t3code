@@ -5,7 +5,7 @@ import { ThreadPendingChat } from "~/t3team/chat/t3team-threadPendingChat";
 import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
-import { ContextAttachmentStrip } from "~/t3team/components/t3team-ContextAttachmentChip";
+import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 import type { ChatMessage } from "~/types";
 
@@ -14,6 +14,9 @@ type ThreadChatComposerState = ReturnType<typeof useThreadChatComposerState>;
 export interface ThreadChatViewBodyProps {
   environmentId: EnvironmentId;
   threadId: string;
+  projectId: string;
+  /** Absent on threads that do not belong to a work item — nothing can be staged for those. */
+  ticketId?: string | undefined;
   hasServerThread: boolean;
   showKickoffPlaceholder: boolean;
   kickoffMessage: string | undefined;
@@ -34,6 +37,8 @@ export interface ThreadChatViewBodyProps {
 export function ThreadChatViewBody({
   environmentId,
   threadId,
+  projectId,
+  ticketId,
   hasServerThread,
   showKickoffPlaceholder,
   kickoffMessage,
@@ -60,10 +65,16 @@ export function ThreadChatViewBody({
     onOpenThread,
   },
 }: ThreadChatViewBodyProps) {
-  const contextAttachmentSlot =
-    contextAttachments.length > 0 ? (
-      <ContextAttachmentStrip attachments={contextAttachments} onRemove={removeContextAttachment} />
-    ) : null;
+  // Handed over unconditionally: the accessory self-gates (attachment strip, staged action card,
+  // staged note rows), so this must NOT re-derive "is anything staged" from attachments alone.
+  const contextAttachmentSlot = (
+    <T3TeamThreadComposerAccessory
+      projectId={projectId}
+      {...(ticketId ? { ticketId } : {})}
+      attachments={contextAttachments}
+      onRemoveAttachment={removeContextAttachment}
+    />
+  );
   const controlWorkflow = backend?.controlWorkflow
     ? ({ workflowRunId, action }: { workflowRunId: string; action: "pause" | "resume" | "stop" }) =>
         backend.controlWorkflow!({ threadId, workflowRunId, action })
@@ -111,7 +122,11 @@ export function ThreadChatViewBody({
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {kickoffPlaceholder}
-          <ThreadPendingChat bootstrapStatus={bootstrapStatus} onRetryLaunch={retryThreadBootstrap} />
+          <ThreadPendingChat
+            bootstrapStatus={bootstrapStatus}
+            threadId={threadId}
+            onRetryLaunch={retryThreadBootstrap}
+          />
         </div>
       )}
     </div>

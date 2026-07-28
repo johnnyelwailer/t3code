@@ -15,6 +15,7 @@ export const meta = {
 export default async function run() {
   const verdict = await agent("judge this gate", {
     label: "Judge gate",
+    capabilities: "inherit",
     model: { provider: "pinned", model: { kind: "model", id: "pinned-a", provider: "pinned" } },
     models: [{ instanceId: "nexplore", model: "minimax-m2.7" }],
   });

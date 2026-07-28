@@ -121,6 +121,14 @@ function describeAgentVisibleAttachment(attachment: T3TeamMessageAttachment): st
         [attachment.draft.summary],
       )}`;
     }
+    case "work-item-draft": {
+      // A run's completion card: a POINTER to a proposal, not the patch. Told to the agent so a
+      // follow-up turn knows a review is outstanding and does not re-propose the same change.
+      return `Draft awaiting review on ${attachment.issueIdOrKey}${formatAttachmentDetails([
+        attachment.field,
+        attachment.summary,
+      ])}`;
+    }
   }
 }
 

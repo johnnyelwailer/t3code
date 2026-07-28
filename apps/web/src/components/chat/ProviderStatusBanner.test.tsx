@@ -39,7 +39,10 @@ describe("ProviderStatusBanner", () => {
       <ProviderStatusBanner status={warningProvider()} onDismiss={() => {}} />,
     );
 
-    expect(markup).toContain('role="alert"');
+    // A degraded provider is not an emergency: `status` announces politely, `alert` interrupts. Only a real
+    // error (auth failure, a provider that answered badly) keeps the assertive role.
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('data-provider-status-severity="warning"');
     expect(markup).toContain('aria-label="Dismiss Codex provider warning"');
     expect(markup).toContain("absolute top-2 right-2");
   });

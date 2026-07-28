@@ -1,6 +1,6 @@
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { useWorkItemDetailMainControls } from "~/t3team/workitem/t3team-useWorkItemDetailMainControls";
-import { useWorkItemDraftReviewUiStore } from "~/t3team/workitem/t3team-workItemDraftReviewUiStore";
+import { useWorkItemDescriptionReviewOpen } from "~/t3team/workitem/t3team-useWorkItemDescriptionReviewOpen";
 import { WorkItemDescription } from "~/t3team/workitem/t3team-WorkItemDescription";
 import { WorkItemDescriptionDraftDiff } from "~/t3team/workitem/t3team-WorkItemDescriptionDraftDiff";
 import { WorkItemDetailLayout } from "~/t3team/workitem/t3team-WorkItemDetailLayout";
@@ -79,9 +79,7 @@ export function WorkItemDetailMain({
       ...(onSectionContextMenu ? { onSectionContextMenu } : {}),
     });
 
-  const isReviewingDescription = useWorkItemDraftReviewUiStore(
-    (state) => state.reviewingDescriptionForIssue === model.key,
-  );
+  const isReviewingDescription = useWorkItemDescriptionReviewOpen(model.key);
 
   return (
     <WorkItemDetailLayout
@@ -127,6 +125,8 @@ export function WorkItemDetailMain({
                         <WorkItemDescriptionDraftDiff
                           issueIdOrKey={model.key}
                           projectId={projectId}
+                          {...(accountId ? { accountId } : {})}
+                          onReload={onReload}
                           {...(model.descriptionText ? { currentText: model.descriptionText } : {})}
                         />
                       ),

@@ -1373,6 +1373,38 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     return { label: estimateField.label };
   }
 
+  /**
+   * Write a work item's description. The fourth sibling of the scalar field writes above, and the
+   * apply side of the `description` draft family: a draft proposes markdown, this is what commits it.
+   *
+   * Markdown → ADF via {@link markdownToAdf}, the SAME conversion `addIssueComment` /
+   * `updateIssueComment` already use for prose entering Jira, so a writer's headings, lists, code
+   * fences and inline marks survive. NOT `buildPlainTextAdfDocument` (used for subtask creation),
+   * which flattens everything to paragraphs and would silently degrade the rewrite it is applying.
+   *
+   * The editmeta gate runs first, exactly like the sibling writes, so a project whose edit screen
+   * omits Description fails with that sentence instead of a bare Jira 400.
+   */
+  async updateIssueDescription(
+    accountId: string,
+    issueIdOrKey: string,
+    bodyMarkdown: string,
+  ): Promise<void> {
+    const entry = this.getClientForAccount(accountId) ?? this.getDefaultClient();
+    if (!entry) {
+      throw new Error("No Jira client available");
+    }
+    if (bodyMarkdown.trim().length === 0) {
+      // Refuse rather than write an empty doc: this path exists to APPLY a proposal, and an empty
+      // one would silently wipe the description a human still has in Jira.
+      throw new Error(`Refusing to write an empty description to ${issueIdOrKey}.`);
+    }
+    await this.ensureIssueFieldEditable(entry.client, issueIdOrKey, "description", "Description");
+    await entry.client.updateIssue(issueIdOrKey, {
+      description: markdownToAdf(bodyMarkdown),
+    });
+  }
+
   async transitionIssueStatus(
     accountId: string,
     issueIdOrKey: string,
@@ -1417,8 +1449,9 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
 
     const subtaskIssueTypes = await this.resolveSubtaskIssueTypes(input.projectId, entry.client);
     const subtaskIssueType =
-      (input.issueTypeId ? subtaskIssueTypes.find((type) => type.id === input.issueTypeId) : undefined) ??
-      subtaskIssueTypes[0];
+      (input.issueTypeId
+        ? subtaskIssueTypes.find((type) => type.id === input.issueTypeId)
+        : undefined) ?? subtaskIssueTypes[0];
     if (!subtaskIssueType) {
       throw new Error("No Jira subtask issue type was detected for this project.");
     }

@@ -24,6 +24,22 @@ import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore"
 import type { T3TeamDraftMutation } from "~/t3team/t3team-draftMutationTypes";
 
 /** Pure half: the drafts in `messages` that the store does not already know about. */
+/**
+ * Whether a carrier is still awaiting review.
+ *
+ * The carrier's `status` is the DURABLE record of what happened to a proposal. Once it reads `applied` or
+ * `dismissed`, re-ingesting the thread must not resurrect it as pending — otherwise a reload puts an
+ * already-accepted rewrite back in the review strip and invites a second write to Jira.
+ *
+ * Read as a plain string on purpose: the contract currently types `status` as the literal `"draft"` and is
+ * being widened to `"draft" | "applied" | "dismissed"`. This is correct before and after that lands, and
+ * treats any status it does not recognise as settled rather than pending — the safe direction, since the
+ * cost of hiding a draft is a reload and the cost of resurrecting one is a duplicate write.
+ */
+export function isPendingT3TeamDraftCarrier(status: unknown): boolean {
+  return status === "draft" || status === undefined;
+}
+
 export function collectT3TeamDraftMutations(input: {
   readonly messages: ReadonlyArray<Pick<OrchestrationMessage, "t3teamExt" | "createdAt">>;
   readonly sourceThreadId: string;
@@ -35,6 +51,7 @@ export function collectT3TeamDraftMutations(input: {
   for (const message of input.messages) {
     for (const attachment of message.t3teamExt?.attachments ?? []) {
       if (attachment.kind !== "draft-mutation" || seen.has(attachment.draft.id)) continue;
+      if (!isPendingT3TeamDraftCarrier((attachment.draft as { status?: unknown }).status)) continue;
       const draft = normalizeT3TeamDraftMutation({
         raw: attachment.draft,
         // `projectId` is deliberately not stamped: the thread's project id and the work item view's

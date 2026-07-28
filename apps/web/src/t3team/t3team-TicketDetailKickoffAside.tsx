@@ -124,6 +124,7 @@ export function TicketDetailKickoffAside({
         profileId={profileId}
         issueThreads={issueThreads}
         projectId={projectId}
+        ticketId={ticketId}
         quickStartRecipeInput={quickStartRecipeInput}
         injectedContextAttachments={injectedContextAttachments}
         onOpenThread={(threadId) =>

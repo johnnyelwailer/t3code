@@ -26,6 +26,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
+import { expandHomePath } from "./pathExpansion.ts";
 import { resolveRecipeActions } from "./t3team-projectRecipeActions.ts";
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 
@@ -47,10 +48,14 @@ export const resolveRecipeHostToolScope = Effect.fn("resolveRecipeHostToolScope"
   readonly recipePath: string | undefined;
   readonly workflowPath: string;
 }) {
-  const recipePath = input.recipePath?.trim() ?? "";
+  const recipePath = expandHomePath(input.recipePath?.trim() ?? "");
   if (recipePath.length === 0) {
     return denied("the launch carries no recipePath, so no recipe declaration can be read");
   }
+  // Workspace roots (and thus recipe/workflow launch paths derived from them) may legitimately
+  // carry a literal `~` — expand it here, once, so this fs.exists/import and the ownership
+  // compare below all operate on the real absolute path (see pathExpansion.ts).
+  const workflowPath = expandHomePath(input.workflowPath);
 
   const fileSystem = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
@@ -70,10 +75,8 @@ export const resolveRecipeHostToolScope = Effect.fn("resolveRecipeHostToolScope"
   // `resolveRecipeActions` swallows per-action resolution failures itself, so an unresolvable
   // action simply never joins the owned set — which denies rather than grants.
   const owned = resolveRecipeActions(pathService, recipePath, ref);
-  if (!owned.some((action) => action.workflowPath === input.workflowPath)) {
-    return denied(
-      `recipe '${ref.id}' does not declare '${input.workflowPath}' as one of its actions`,
-    );
+  if (!owned.some((action) => action.workflowPath === workflowPath)) {
+    return denied(`recipe '${ref.id}' does not declare '${workflowPath}' as one of its actions`);
   }
 
   // `?? []` is load-bearing: undefined would read as "unrestricted" downstream.

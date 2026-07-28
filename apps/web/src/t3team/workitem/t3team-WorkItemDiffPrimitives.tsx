@@ -38,6 +38,18 @@ export function T3TeamDiffText({
       {segments.map((segment, index) => {
         const key = `${segment.kind ?? "same"}:${index}:${segment.text}`;
         /*
+          Whitespace is never marked.
+
+          The word differ emits the gaps between words as their own segments, so a marked run used to
+          put every space in its own `<mark>` — `mx-px` margin, `px-1` padding and a rounded fill around
+          a single space. That is what turned a highlighted paragraph into a chain of green chips with
+          padded gaps between them: the gaps WERE marks. Nothing is communicated by highlighting a
+          space; only the words carry the change.
+        */
+        if (segment.text.trim() === "") {
+          return <span key={key}>{segment.text}</span>;
+        }
+        /*
           A comment mark has to read differently from a diff mark or the reader cannot tell what the
           agent changed from what a colleague questioned. Diff marks are fills; a comment is a dotted
           underline, so the two stack legibly on the same words.
@@ -145,6 +157,11 @@ export function T3TeamDiffRibbon({
  *
  * Keeping it in a reserved column, outside the text, is what lets a reader tell the document from
  * the commentary on it at a glance. Nothing here is content.
+ *
+ * WIDTH: one glyph wide, not a column. It reserved 36px for a single `+`, which on the work item's
+ * content column is width taken from the prose being reviewed — and the comment badge shares the same
+ * slot, so nothing needed the extra room. The count badge overlays into the padding when present rather
+ * than widening the rail.
  */
 export function T3TeamDiffGutter({
   state,
@@ -158,9 +175,9 @@ export function T3TeamDiffGutter({
   const marker = state === "add" ? "+" : state === "del" ? "−" : state === "edit" ? "~" : "";
 
   return (
-    <div className="flex w-9 shrink-0 select-none items-start justify-end gap-1 pt-0.5 pr-1.5">
+    <div className="relative flex w-4 shrink-0 select-none items-start justify-end pt-0.5 pr-1">
       {commentCount > 0 ? (
-        <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+        <span className="absolute -left-4 top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
           {commentCount}
         </span>
       ) : onComment ? (
@@ -168,7 +185,7 @@ export function T3TeamDiffGutter({
           type="button"
           aria-label="Comment on this block"
           onClick={onComment}
-          className="flex size-4 cursor-pointer items-center justify-center rounded-[3px] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+          className="absolute -left-4 top-0.5 flex size-4 cursor-pointer items-center justify-center rounded-[3px] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
         >
           <MessageSquarePlus className="size-3.5" />
         </button>

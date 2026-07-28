@@ -4,6 +4,7 @@ import { InfoIcon, XIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { formatProviderDriverKindLabel } from "../../providerModels";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { classifyT3TeamProviderStatusSeverity } from "~/t3team/chat/t3team-providerStatusSeverity";
 
 export function getProviderStatusBannerKey(status: ServerProvider | null): string | null {
   return !status || status.status === "ready" || status.status === "disabled"
@@ -42,16 +43,22 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
         ? `${providerName} provider is unavailable.`
         : `${providerName} provider has limited availability.`));
 
+  // A failed status CHECK is not a failed provider — see `classifyT3TeamProviderStatusSeverity`. It also
+  // must not claim the assertive `role="alert"`, which interrupts a screen reader mid-turn.
+  const severity = classifyT3TeamProviderStatusSeverity(status);
+
   return (
     <div className="pointer-events-auto mx-auto w-fit max-w-[calc(100%-2rem)] pt-3">
       <div
         className={cn(
           "relative inline-flex items-center gap-3 rounded-xl border py-3 ps-3.5 pe-10 text-card-foreground text-sm",
-          status.status === "warning"
-            ? "border-warning/32 bg-warning/4 [&_svg]:text-warning"
-            : "border-destructive/32 bg-destructive/4 text-destructive-foreground [&_svg]:text-destructive",
+          severity === "warning" && "border-warning/32 bg-warning/4 [&_svg]:text-warning",
+          severity === "error" &&
+            "border-destructive/32 bg-destructive/4 text-destructive-foreground [&_svg]:text-destructive",
+          severity === "info" && "border-border bg-muted/40 [&_svg]:text-muted-foreground",
         )}
-        role="alert"
+        data-provider-status-severity={severity}
+        role={severity === "error" ? "alert" : "status"}
       >
         <InfoIcon className="size-4 shrink-0" aria-hidden />
         <div className="flex min-w-0 flex-col gap-1">

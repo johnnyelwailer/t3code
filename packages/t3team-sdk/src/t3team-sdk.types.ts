@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
+import type { ToolGroupRef } from "./t3team-sdk.capabilityVocabulary.ts";
 import type { AnyRecipeRef } from "./t3team-sdk.recipeTypes.ts";
 import type { WorkflowRunIntent } from "./tools/t3team-sdk.workflow.ts";
 
@@ -19,8 +20,16 @@ export type {
   RecipeVisiblePredicate,
 } from "./t3team-sdk.recipeTypes.ts";
 export type { PrimitiveCall, PrimitiveKind, WorkflowRuntime } from "./t3team-sdk.runtimeTypes.ts";
+// The capability vocabulary lives in ONE module; re-exported here because this file is the `T.`
+// namespace the whole SDK reads types through.
+export type {
+  EngineCapability,
+  ToolGroupId,
+  ToolGroupRef,
+  WorkflowCapability,
+  WorkflowChildCapabilities,
+} from "./t3team-sdk.capabilityVocabulary.ts";
 
-export type EngineCapability = "thread" | "child" | "user" | "script" | "ui" | "workflow";
 export type IntegrationMethod = (...args: ReadonlyArray<unknown>) => Promise<unknown>;
 
 export interface IntegrationClient {
@@ -70,15 +79,6 @@ export interface T3TeamToolHandlerClient {
     readonly args: unknown;
   }) => Promise<unknown>;
 }
-
-export interface ToolGroupRef<Id extends string = string> {
-  readonly kind: "tool-group";
-  readonly id: Id;
-  readonly label: string;
-  readonly description: string;
-}
-
-export type WorkflowCapability = EngineCapability | ToolGroupRef;
 
 export interface ModelRef<Id extends string = string, Provider extends string = string> {
   readonly kind: "model";

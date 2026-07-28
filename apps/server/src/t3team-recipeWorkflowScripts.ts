@@ -21,6 +21,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import type { AnyScriptRef } from "@t3team/sdk";
 
+import { expandHomePath } from "./pathExpansion.ts";
 import {
   resolveRecipeActions,
   resolveRecipeWorkflowPath,
@@ -45,8 +46,12 @@ export const NO_RECIPE_SCRIPTS: Readonly<Record<string, AnyScriptRef>> = Object.
  */
 export const resolveRecipeWorkflowScripts = Effect.fn("resolveRecipeWorkflowScripts")(
   function* (input: { readonly recipePath: string | undefined; readonly workflowPath: string }) {
-    const recipePath = input.recipePath?.trim() ?? "";
+    const recipePath = expandHomePath(input.recipePath?.trim() ?? "");
     if (recipePath.length === 0) return NO_RECIPE_SCRIPTS;
+    // Workspace roots (and thus recipe/workflow launch paths derived from them) may legitimately
+    // carry a literal `~` — expand it here, once, so this fs.exists/import and the ownership
+    // compare below all operate on the real absolute path (see pathExpansion.ts).
+    const workflowPath = expandHomePath(input.workflowPath);
 
     const fileSystem = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;
@@ -82,11 +87,11 @@ export const resolveRecipeWorkflowScripts = Effect.fn("resolveRecipeWorkflowScri
         }),
     });
     const owned = resolveRecipeActions(pathService, recipePath, ref);
-    if (!owned.some((action) => action.workflowPath === input.workflowPath)) {
+    if (!owned.some((action) => action.workflowPath === workflowPath)) {
       return yield* new T3TeamRecipeScriptResolutionError({
         message: `Recipe '${ref.id}' registers scripts for its declared actions (${owned
           .map((action) => `${action.name} -> ${action.workflowPath}`)
-          .join(", ")}), but this launch targets '${input.workflowPath}'. Scripts are recipe-owned; launch one of the recipe's own actions to use them.`,
+          .join(", ")}), but this launch targets '${workflowPath}'. Scripts are recipe-owned; launch one of the recipe's own actions to use them.`,
       });
     }
     return scripts;

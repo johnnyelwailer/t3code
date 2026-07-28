@@ -90,23 +90,29 @@ cannot be a per-run binding: getArgs(), getThread(), getBudget(), getScripts(), 
     const findings = await parallel(
       dims.map((d) => () => agent(
         \`Review the change for \${d} issues. List concrete findings.\`,
-        { label: \`Review \${d}\` },
+        { label: \`Review \${d}\`, capabilities: 'inherit' },
       ))
     )
 
     phase('Synthesize')
     return await agent(
       \`Merge these reviews into one ranked report:\\n\${findings.filter(Boolean).join('\\n---\\n')}\`,
-      { label: 'Synthesize reviews' },
+      { label: 'Synthesize reviews', capabilities: 'inherit' },
     )
   }
 
 THE ENGINE API (import the ones you use from "@t3team/sdk")
-- agent(prompt, opts?)        one-shot agent on a fresh isolated thread; returns its text,
+- agent(prompt, opts)         one-shot agent on a fresh isolated thread; returns its text,
                               or a validated value with opts.schema. opts.model can pick a
                               different provider/model per call. Always pass a concise,
                               human-facing opts.label describing the work.
-- spawnThread({name?,model?,retention?}) makes a multi-turn thread; it is ephemeral by default
+                              opts.capabilities is REQUIRED: either 'inherit' to take this
+                              workflow's own grant, or an explicit list such as
+                              ['integration.read']. There is no default — a child that
+                              inherits silently over-grants, and one granted nothing fails
+                              later with a confusing "tool not enabled".
+- spawnThread({capabilities,name?,model?,retention?}) makes a multi-turn thread; capabilities
+                              is REQUIRED here too, same two forms. It is ephemeral by default
                               (hidden from the sidebar but inspectable inline). Set
                               retention: 'retained' only when it must remain sidebar-visible.
                               Then t.askAgent(prompt,opts?), t.notifyAgent(msg),
@@ -161,7 +167,7 @@ Recurring interval pattern (the loop is the schedule):
       await waitUntil(now() + DAY)
       const result = await agent(
         'Check the current state and report only actionable changes.',
-        { label: 'Check daily changes' },
+        { label: 'Check daily changes', capabilities: 'inherit' },
       )
       await getThread().notifyUser(result)
     }

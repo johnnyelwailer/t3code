@@ -2,6 +2,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import type { AddToChatPayloadInput, AddToChatRequest } from "~/t3team/t3team-addToChatUtils";
+import { buildT3TeamWorkItemDedupeKey } from "~/t3team/t3team-contextAttachmentDedupeKey";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { isWorkProject } from "~/t3team/t3team-isWorkProject";
 import { buildJiraWorkItemSummary } from "~/t3team/t3team-jiraContextMetadata";
@@ -44,7 +45,11 @@ export function buildTicketSidebarAddToChatRequest(input: {
     targetLabel: `${ticket.ref.displayId} ${ticket.ref.title}`,
     targetType: "work-item",
     kind: "jira-work-item",
-    dedupeKey: `${project.id}:${ticket.ref.displayId}:work-item`,
+    // Identity-based, from the one builder, so any path attaching this work item collides with it.
+    dedupeKey: buildT3TeamWorkItemDedupeKey({
+      projectId: project.id,
+      workItemKey: ticket.ref.displayId,
+    }),
     ...jiraSummary,
     payload: buildWorkItemAddToChatPayload({ backend, project, ticket }),
   };

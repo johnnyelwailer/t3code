@@ -2,6 +2,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 
@@ -28,8 +29,18 @@ const WorkflowRunDbRow = WorkflowRun.mapFields(
   Struct.assign({
     args: Schema.fromJsonString(Schema.Unknown),
     modelSelection: Schema.fromJsonString(ModelSelection),
+    // `host_tool_grant` decodes LENIENTLY, and the fallback is `null` — i.e. NOT granted.
+    //
+    // This column is read by the boot scan (`listByStatus` for suspended/sleeping/paused/queued).
+    // A strict decode makes one malformed value — `'not-json'`, or valid JSON of the wrong shape —
+    // fail the whole query, which aborts rehydration for EVERY run instead of for the one bad row.
+    // So the failure is absorbed here, per row, in the denying direction: an unreadable grant is
+    // treated exactly like a missing one, which is the safe reading of a capability record. The
+    // domain type is unchanged, so callers see the same `WorkflowRunHostToolGrant | null`.
     hostToolGrant: Schema.optional(
-      Schema.NullOr(Schema.fromJsonString(WorkflowRunHostToolGrant)),
+      Schema.NullOr(Schema.fromJsonString(WorkflowRunHostToolGrant)).pipe(
+        Schema.catchDecoding(() => Effect.succeed(Option.some(null))),
+      ),
     ),
   }),
 );
