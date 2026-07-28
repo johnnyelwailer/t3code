@@ -95,9 +95,11 @@ export function validateWorkflowSourceStatic(input: {
   // PermissionDeniedError. Capability rules are skipped when `meta` did not extract (the meta
   // error above is the real finding — a guessed empty capability set would bury it).
   try {
+    // `typecheck` is opt-in on the audit and enabled ONLY here: validate is where an authoring
+    // agent iterates, so it is the one caller worth the compiler-program cost (cached across calls).
     for (const item of auditWorkflowSourceStatic(
       source,
-      declared === undefined ? {} : { declared },
+      declared === undefined ? { typecheck: true } : { declared, typecheck: true },
     )) {
       errors.push(issue(workflowPath, item.facet, formatFinding(item)));
     }

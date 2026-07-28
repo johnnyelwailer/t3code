@@ -11,8 +11,18 @@ import { defineTool } from "../t3team-sdk.ts";
 /** One structured, agent-actionable problem found while discovering/loading/validating. */
 export const RecipeToolIssue = Schema.Struct({
   path: Schema.String,
-  /** `determinism` / `capability` are the phase-25.5 load-time static audits. */
-  phase: Schema.Literals(["discover", "load", "meta", "shape", "determinism", "capability"]),
+  /** `determinism` / `capability` are the phase-25.5 load-time static audits; `types` is the real
+   * TypeScript checker (`t3team-sdk.typeCheck.ts`). These mirror `WorkflowAuditFacet` — a facet
+   * missing here cannot be reported, and the tool result fails to encode. */
+  phase: Schema.Literals([
+    "discover",
+    "load",
+    "meta",
+    "shape",
+    "determinism",
+    "capability",
+    "types",
+  ]),
   message: Schema.String,
 });
 export type RecipeToolIssue = typeof RecipeToolIssue.Type;

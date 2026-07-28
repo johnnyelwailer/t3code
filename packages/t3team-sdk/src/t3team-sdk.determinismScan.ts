@@ -62,7 +62,7 @@ function isAllowlistedSchemaImport(ts: typeof TsApi, node: TsApi.ImportDeclarati
  * vm-wrapped body has every import blanked, so the SAME line would leave `agent` undefined at run
  * time. One rule, two body shapes, opposite verdicts; hence the branch rather than a blanket exemption.
  */
-function isEsmShapedBody(ts: typeof TsApi, sf: TsApi.SourceFile): boolean {
+export function isEsmShapedBody(ts: typeof TsApi, sf: TsApi.SourceFile): boolean {
   return sf.statements.some(
     (statement) =>
       (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&

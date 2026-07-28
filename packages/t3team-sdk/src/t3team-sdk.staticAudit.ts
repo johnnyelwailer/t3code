@@ -14,9 +14,10 @@ import type * as TsApi from "typescript";
 
 import { normalizeCapabilities } from "./t3team-sdk.capabilityGating.ts";
 import { scanCapabilities } from "./t3team-sdk.capabilityScan.ts";
-import { scanDeterminism } from "./t3team-sdk.determinismScan.ts";
+import { isEsmShapedBody, scanDeterminism } from "./t3team-sdk.determinismScan.ts";
 import { extractMeta, prepareWorkflow, type WorkflowSource } from "./t3team-sdk.loader.ts";
 import type { WorkflowAuditFinding } from "./t3team-sdk.staticAuditTypes.ts";
+import { typeCheckWorkflowSource } from "./t3team-sdk.typeCheck.ts";
 import { getRegisteredTool } from "./t3team-sdk.ts";
 
 const nodeRequire = NodeModule.createRequire(import.meta.url);
@@ -39,6 +40,14 @@ export interface WorkflowStaticAuditOptions {
    */
   readonly declared?: ReadonlySet<string>;
   readonly resolveToolGroupId?: (toolId: string) => string | undefined;
+  /**
+   * Run the real TypeScript checker too (the `"types"` facet). OFF by default: it builds a
+   * `ts.Program`, which costs far more than the AST scans, so a caller opts in per validate rather
+   * than paying for it on every load. See {@link ./t3team-sdk.typeCheck.ts}.
+   */
+  readonly typecheck?: boolean;
+  /** Passed through to the type facet; tests use it to force the degraded path. */
+  readonly typecheckAnchorPath?: string;
 }
 
 /**
@@ -76,6 +85,15 @@ export function auditWorkflowSourceStatic(
         declared,
         resolveToolGroupId: options.resolveToolGroupId ?? registryToolGroupResolver,
       }),
+    );
+  }
+  // Only an ESM-shaped body is a valid TypeScript MODULE; the retired legacy shape (bare ambient
+  // `args`, top-level `return`) still executes via the vm wrapper, so typechecking it would drown
+  // a still-working recipe in syntax findings. Legacy bodies keep the AST facets only.
+  if (options.typecheck === true && isEsmShapedBody(ts, sf)) {
+    const anchorPath = options.typecheckAnchorPath;
+    findings.push(
+      ...typeCheckWorkflowSource(source, anchorPath === undefined ? {} : { anchorPath }),
     );
   }
   return findings;
