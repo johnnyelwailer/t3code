@@ -59,13 +59,18 @@ export interface WorkflowTurnTracker {
     messageId: string,
     delta: string,
   ) => void;
-  /** Record a finalized assistant message as a candidate answer. Never settles the ask. */
+  /**
+   * Record a finalized assistant message as a candidate answer. Never settles the ask.
+   *
+   * Returns the text retained as a candidate, so the caller can attribute THAT message without
+   * re-deriving it, or `undefined` when the message said nothing substantive.
+   */
   readonly completeMessage: (
     threadId: string,
     correlationId: string,
     messageId: string,
     markerText: string,
-  ) => void;
+  ) => string | undefined;
   /** Fold a session write in; `"ended"` means the caller should arm the settle. */
   readonly noteSession: (
     threadId: string,
@@ -121,7 +126,9 @@ export function createWorkflowTurnTracker(): WorkflowTurnTracker {
       const assembled = watch.deltas.get(messageId);
       watch.deltas.delete(messageId);
       const text = assembled ?? markerText;
-      if (text.trim().length > 0) watch.candidates.push(text);
+      if (text.trim().length === 0) return undefined;
+      watch.candidates.push(text);
+      return text;
     },
 
     noteSession: (threadId, correlationId, session) => {

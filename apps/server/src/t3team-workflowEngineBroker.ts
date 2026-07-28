@@ -176,10 +176,14 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
           : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
       step(correlationId, kind, "started", p.label ?? p.prompt, p.threadId);
       const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
+      // ONE author for the whole step: it rides the prompt below, and the reactor reuses it to
+      // attribute the assistant messages that answer it.
+      const author = workflowTurnAuthor(deps.runId, correlationId, p);
       deps.registry.setPending(p.threadId, {
         runId: deps.runId,
         correlationId,
         kind: "thread.turn",
+        author,
         ...(liveSettlement ? { resolveLive: liveSettlement.resolve } : {}),
       });
       await runPrimitive(
@@ -198,7 +202,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
                 // person wrote it. The author says so: it marks the start as automated for decider
                 // turn admission AND is the only signal a client has for telling nine paragraphs of
                 // machine instructions apart from something the user typed.
-                t3teamExt: { author: workflowTurnAuthor(deps.runId, correlationId, p) },
+                t3teamExt: { author },
               },
               modelSelection,
               runtimeMode: deps.runtimeMode,

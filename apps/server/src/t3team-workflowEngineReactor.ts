@@ -53,6 +53,9 @@ export const T3TeamWorkflowEngineReactorLive = Layer.effectDiscard(
     const handle = createWorkflowReactorTaskHandler({
       registry,
       tracker,
+      // Attribution is cosmetic: `result` swallows a failed stamp so a run never dies because a
+      // label could not be written onto its answer.
+      dispatch: (command) => orchestration.dispatch(command).pipe(Effect.result),
       armSettle: (threadId, correlationId) =>
         Effect.suspend(() => enqueueSettle(threadId, correlationId)).pipe(
           Effect.delay(Duration.millis(WORKFLOW_TURN_SETTLE_MS)),

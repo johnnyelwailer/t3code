@@ -14,6 +14,17 @@ const running = { status: "running", activeTurnId: "turn-1" } as const;
 const idle = { status: "ready", activeTurnId: null } as const;
 
 describe("workflow turn tracker", () => {
+  it("hands back the text it retained, so the caller can attribute that message", () => {
+    const tracker = createWorkflowTurnTracker();
+    tracker.appendDelta(THREAD, ASK, "m1", "the answer");
+    // The retained text is returned — the reactor stamps THIS message with the step's author.
+    expect(tracker.completeMessage(THREAD, ASK, "m1", "")).toBe("the answer");
+    // Nothing substantive to attribute.
+    expect(tracker.completeMessage(THREAD, ASK, "m2", "")).toBeUndefined();
+    tracker.appendDelta(THREAD, ASK, "m3", "   \n ");
+    expect(tracker.completeMessage(THREAD, ASK, "m3", "")).toBeUndefined();
+  });
+
   it("answers with the LAST substantive message of the turn", () => {
     const tracker = createWorkflowTurnTracker();
     expect(tracker.noteSession(THREAD, ASK, running)).toBe("running");

@@ -12,8 +12,15 @@
  *   • a settlement with no substantive text FAILS the run instead of resolving with "".
  */
 
-import type { OrchestrationEvent } from "@t3tools/contracts";
+import type { OrchestrationCommand, OrchestrationEvent } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+
+import {
+  isWorkflowAttributed,
+  workflowAnswerAttributionCommand,
+} from "./t3team-workflowAnswerAttribution.ts";
+import { t3teamRandomUUID } from "./t3team-random.ts";
 
 import type {
   T3TeamWorkflowEngineRegistryShape,
@@ -34,6 +41,9 @@ export interface WorkflowReactorTaskDeps {
   readonly tracker: WorkflowTurnTracker;
   /** Queue the settlement for a turn that just ended, after the straggler grace window. */
   readonly armSettle: (threadId: string, correlationId: string) => Effect.Effect<void>;
+  /** Dispatch a command — used ONLY to attribute a step's answer to the step (see
+   * t3team-workflowAnswerAttribution.ts). Absent leaves answers unattributed. */
+  readonly dispatch?: (command: OrchestrationCommand) => Effect.Effect<unknown>;
 }
 
 const NO_TEXT_MESSAGE =
@@ -71,11 +81,38 @@ export function createWorkflowReactorTaskHandler(
       if (role !== "assistant" && role !== "user") return;
 
       if (role === "assistant") {
+        // Our own attribution upsert comes back as a completed assistant message. Ignoring it keeps
+        // the stamp from looping and keeps the message from counting twice as a candidate answer.
+        if (isWorkflowAttributed(event.payload.t3teamExt)) return;
         if (awaitedTurn === undefined) {
           tracker.forget(threadId);
           return;
         }
-        tracker.completeMessage(threadId, awaitedTurn.correlationId, messageId, text);
+        const answer = tracker.completeMessage(
+          threadId,
+          awaitedTurn.correlationId,
+          messageId,
+          text,
+        );
+        // Attribute the reply to the step that asked for it, so the client can collapse it under the
+        // same label as the prompt instead of rendering workflow output as ordinary chat.
+        if (
+          answer !== undefined &&
+          awaitedTurn.author !== undefined &&
+          deps.dispatch !== undefined
+        ) {
+          yield* deps.dispatch(
+            workflowAnswerAttributionCommand({
+              threadId,
+              messageId,
+              text: answer,
+              turnId: event.payload.turnId,
+              author: awaitedTurn.author,
+              commandId: t3teamRandomUUID(),
+              createdAt: DateTime.formatIso(yield* DateTime.now),
+            }),
+          );
+        }
         return;
       }
 

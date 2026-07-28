@@ -246,6 +246,31 @@ it.live("resolves askAgent with the turn's FINAL answer, not the preamble it ope
       label: "Write",
     });
 
+    // The ANSWER carries the SAME attribution, which is what lets a client collapse a step's reply
+    // under the step's label instead of rendering workflow output as an ordinary assistant message.
+    const assistantMessages = detail.messages.filter((message) => message.role === "assistant");
+    const answer = assistantMessages.find((message) => message.text === ANSWER);
+    assert.isDefined(answer);
+    assert.deepStrictEqual(answer?.t3teamExt?.author, prompt?.t3teamExt?.author);
+    // Every message OF THE TURN is attributed — the preamble and the tool narration too, since they
+    // are just as machine-authored as the answer. Turn messages are the ones carrying a turnId.
+    const turnMessages = assistantMessages.filter((message) => message.turnId !== null);
+    assert.strictEqual(turnMessages.length, 3);
+    assert.deepStrictEqual(
+      turnMessages.map((message) => message.t3teamExt?.author?.kind),
+      ["workflow", "workflow", "workflow"],
+    );
+    // The run's COMPLETION message is assistant-role too and is deliberately NOT stamped: it is the
+    // run reporting to the human, rendered as its own card (it carries the draft ref), not a step's
+    // output to collapse. Attributing it would collapse the card the user is meant to click.
+    const completion = assistantMessages.find((message) => message.turnId === null);
+    assert.isDefined(completion);
+    assert.isUndefined(completion?.t3teamExt?.author);
+    // NOT hidden: observability over gates. The web collapses it; the server never suppresses it.
+    assert.isUndefined(answer?.t3teamExt?.visibleToUser);
+    // Attribution is an in-place update, not an extra bubble: still one message per emitted reply.
+    assert.strictEqual(answer?.text, ANSWER);
+
     // …and an ordinary typed message carries NO author, which is what "render as human" means.
     const orchestration = yield* OrchestrationEngineService;
     yield* orchestration.dispatch({
