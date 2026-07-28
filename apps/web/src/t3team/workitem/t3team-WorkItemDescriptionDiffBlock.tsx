@@ -52,6 +52,9 @@ export function WorkItemDescriptionDiffBlock({
       <div className="min-w-0 flex-1" {...{ [DIFF_BLOCK_ATTRIBUTE]: paragraph.id }}>
         <p
           className={cn(
+            // A list block keeps one item per line, so the newlines between them must survive: a plain
+            // <p> collapses them and "- RE - PO / PPO - Dev" runs together on one line.
+            "whitespace-pre-line",
             wholeBlock && "border-l-2 pl-3",
             wholeBlock && paragraph.state === "add" && "border-success",
             wholeBlock &&

@@ -1,4 +1,6 @@
 import type { T3TeamDiffSegment } from "~/t3team/workitem/t3team-WorkItemDiffPrimitives";
+import { diffWords, words } from "~/t3team/workitem/t3team-workItemDiffWords";
+import { splitT3TeamMarkdownBlocks } from "~/t3team/workitem/t3team-workItemMarkdownBlocks";
 
 /**
  * A real (if modest) diff for a proposed description/comment: word-level, on plain text.
@@ -18,99 +20,71 @@ export type DraftDiffParagraph = {
 
 export type DraftDiffMagnitude = { readonly added: number; readonly removed: number };
 
-function words(text: string): ReadonlyArray<string> {
-  return text.split(/(\s+)/).filter((token) => token.length > 0);
-}
-
 /**
- * Longest-common-subsequence word diff. O(n*m) — fine for a ticket description, not for a novel; a
- * long enough document should fall back to a magnitude-only summary rather than call this.
+ * Word-level diff, one block per markdown block.
+ *
+ * Blocks come from `splitT3TeamMarkdownBlocks`, and segments are attributed back to them BY TOKEN INDEX
+ * rather than by counting words.
+ *
+ * The counting version drifted, cumulatively, and produced exactly the blocks PJ saw. It joined blocks with
+ * `\n\n` before diffing, which became its own whitespace token in the flat list — but the per-block count it
+ * walked with did not include that joiner. So every block boundary slid by one token: each block began with a
+ * literal `"\n\n"` span and stole the previous block's last word ("Projektkontext. ## Rollen im", then
+ * "MVP Dieses Epic umfasst"). Counting whitespace runs as words made the same accounting worse.
+ *
+ * Indexing is exact by construction: each `after` token knows which block it came from, so a segment that
+ * exists in `after` lands in that block, and a deletion lands in the block being read when it appears.
+ *
+ * `before` is `undefined` for a brand-new document (a proposed comment), which reads as every block added.
  */
-function diffWords(
-  before: ReadonlyArray<string>,
-  after: ReadonlyArray<string>,
-): ReadonlyArray<T3TeamDiffSegment> {
-  const rows = before.length;
-  const cols = after.length;
-  const lengths: number[][] = Array.from({ length: rows + 1 }, () =>
-    Array.from({ length: cols + 1 }, () => 0),
-  );
-
-  for (let i = rows - 1; i >= 0; i -= 1) {
-    for (let j = cols - 1; j >= 0; j -= 1) {
-      lengths[i]![j] =
-        before[i] === after[j] ? lengths[i + 1]![j + 1]! + 1 : Math.max(lengths[i + 1]![j]!, lengths[i]![j + 1]!);
-    }
-  }
-
-  const segments: T3TeamDiffSegment[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < rows && j < cols) {
-    if (before[i] === after[j]) {
-      segments.push({ text: before[i]! });
-      i += 1;
-      j += 1;
-    } else if (lengths[i + 1]![j]! >= lengths[i]![j + 1]!) {
-      segments.push({ text: before[i]!, kind: "del" });
-      i += 1;
-    } else {
-      segments.push({ text: after[j]!, kind: "add" });
-      j += 1;
-    }
-  }
-  while (i < rows) {
-    segments.push({ text: before[i]!, kind: "del" });
-    i += 1;
-  }
-  while (j < cols) {
-    segments.push({ text: after[j]!, kind: "add" });
-    j += 1;
-  }
-
-  return segments;
-}
-
-/** One paragraph per blank-line-separated chunk, in order of first appearance in `after`. */
-function splitParagraphs(text: string): ReadonlyArray<string> {
-  return text
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter((paragraph) => paragraph.length > 0);
-}
-
-/** Word-level diff, one block per paragraph. `before` is `undefined` for a brand-new document (a
- *  proposed comment), which reads as every paragraph being wholly added. */
 export function buildDraftDiffParagraphs(
   before: string | undefined,
   after: string,
 ): ReadonlyArray<DraftDiffParagraph> {
-  const beforeParagraphs = before ? splitParagraphs(before) : [];
-  const afterParagraphs = splitParagraphs(after);
-  const segments = diffWords(words(beforeParagraphs.join("\n\n")), words(afterParagraphs.join("\n\n")));
+  const beforeBlocks = before ? splitT3TeamMarkdownBlocks(before) : [];
+  const afterBlocks = splitT3TeamMarkdownBlocks(after);
 
-  // Re-group the flat word diff back into paragraphs by walking `after`'s own newlines.
-  const paragraphs: DraftDiffParagraph[] = [];
-  let cursor = 0;
-  afterParagraphs.forEach((paragraph, index) => {
-    const paragraphWordCount = words(paragraph).length;
-    const consumed: T3TeamDiffSegment[] = [];
-    let consumedAfterWords = 0;
-    while (cursor < segments.length && consumedAfterWords < paragraphWordCount) {
-      const segment = segments[cursor]!;
-      consumed.push(segment);
-      if (segment.kind !== "del") consumedAfterWords += 1;
-      cursor += 1;
+  const afterTokens: string[] = [];
+  const blockIndexByToken: number[] = [];
+  afterBlocks.forEach((block, blockIndex) => {
+    for (const token of words(block.text)) {
+      afterTokens.push(token);
+      blockIndexByToken.push(blockIndex);
     }
-    const state = consumed.every((segment) => segment.kind === "add")
-      ? "add"
-      : consumed.some((segment) => segment.kind)
-        ? "edit"
-        : undefined;
-    paragraphs.push({ id: `p${index}`, segments: consumed, ...(state ? { state } : {}) });
   });
 
-  return paragraphs;
+  const beforeTokens = beforeBlocks.flatMap((block) => [...words(block.text)]);
+  const segments = diffWords(beforeTokens, afterTokens);
+
+  const perBlock: T3TeamDiffSegment[][] = afterBlocks.map(() => []);
+  let afterCursor = 0;
+  for (const segment of segments) {
+    if (segment.kind === "del") {
+      // A deletion has no `after` token of its own; it belongs where the reader currently is.
+      const blockIndex = blockIndexByToken[Math.min(afterCursor, blockIndexByToken.length - 1)] ?? 0;
+      perBlock[blockIndex]?.push(segment);
+      continue;
+    }
+    const blockIndex = blockIndexByToken[afterCursor] ?? afterBlocks.length - 1;
+    perBlock[blockIndex]?.push(segment);
+    afterCursor += 1;
+  }
+
+  return afterBlocks.map((block, index) => {
+    const consumed = perBlock[index] ?? [];
+    const meaningful = consumed.filter((segment) => segment.text.trim().length > 0);
+    // Whitespace-only segments must not decide a block's state — a block whose words are all new is "add"
+    // even though the spaces between them were unchanged.
+    const state =
+      meaningful.length > 0 && meaningful.every((segment) => segment.kind === "add")
+        ? "add"
+        : meaningful.length > 0 && meaningful.every((segment) => segment.kind === "del")
+          ? "del"
+          : consumed.some((segment) => segment.kind)
+            ? "edit"
+            : undefined;
+    return { id: `p${String(index)}`, segments: consumed, ...(state ? { state } : {}) };
+  });
 }
 
 export function draftDiffMagnitude(paragraphs: ReadonlyArray<DraftDiffParagraph>): DraftDiffMagnitude {
