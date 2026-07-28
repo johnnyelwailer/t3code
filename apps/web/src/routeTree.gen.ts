@@ -25,6 +25,7 @@ import { Route as SettingsConnectionsRouteImport } from './routes/settings.conne
 import { Route as SettingsConnectedToolsRouteImport } from './routes/settings.connected-tools'
 import { Route as SettingsBetaRouteImport } from './routes/settings.beta'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
+import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as ConnectCallbackRouteImport } from './routes/connect_.callback'
 import { Route as T3teamProjectsProjectIdRouteImport } from './routes/t3team.projects.$projectId'
@@ -113,6 +114,11 @@ const SettingsArchivedRoute = SettingsArchivedRouteImport.update({
   path: '/archived',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const OauthCallbackRoute = OauthCallbackRouteImport.update({
   id: '/oauth/callback',
   path: '/oauth/callback',
@@ -165,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/t3team': typeof T3teamRouteWithChildren
   '/connect/callback': typeof ConnectCallbackRoute
   '/oauth/callback': typeof OauthCallbackRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
   '/settings/connected-tools': typeof SettingsConnectedToolsRoute
@@ -189,6 +196,7 @@ export interface FileRoutesByTo {
   '/t3team': typeof T3teamRouteWithChildren
   '/connect/callback': typeof ConnectCallbackRoute
   '/oauth/callback': typeof OauthCallbackRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
   '/settings/connected-tools': typeof SettingsConnectedToolsRoute
@@ -216,6 +224,7 @@ export interface FileRoutesById {
   '/t3team': typeof T3teamRouteWithChildren
   '/connect_/callback': typeof ConnectCallbackRoute
   '/oauth/callback': typeof OauthCallbackRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
   '/settings/connected-tools': typeof SettingsConnectedToolsRoute
@@ -244,6 +253,7 @@ export interface FileRouteTypes {
     | '/t3team'
     | '/connect/callback'
     | '/oauth/callback'
+    | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
     | '/settings/connected-tools'
@@ -268,6 +278,7 @@ export interface FileRouteTypes {
     | '/t3team'
     | '/connect/callback'
     | '/oauth/callback'
+    | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
     | '/settings/connected-tools'
@@ -294,6 +305,7 @@ export interface FileRouteTypes {
     | '/t3team'
     | '/connect_/callback'
     | '/oauth/callback'
+    | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
     | '/settings/connected-tools'
@@ -437,6 +449,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsArchivedRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/appearance': {
+      id: '/settings/appearance'
+      path: '/appearance'
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof SettingsAppearanceRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/oauth/callback': {
       id: '/oauth/callback'
       path: '/oauth/callback'
@@ -511,6 +530,7 @@ const ChatRouteChildren: ChatRouteChildren = {
 const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 
 interface SettingsRouteChildren {
+  SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsArchivedRoute: typeof SettingsArchivedRoute
   SettingsBetaRoute: typeof SettingsBetaRoute
   SettingsConnectedToolsRoute: typeof SettingsConnectedToolsRoute
@@ -523,6 +543,7 @@ interface SettingsRouteChildren {
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsArchivedRoute: SettingsArchivedRoute,
   SettingsBetaRoute: SettingsBetaRoute,
   SettingsConnectedToolsRoute: SettingsConnectedToolsRoute,

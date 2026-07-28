@@ -27,6 +27,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import { createQueryable } from "@t3tools/project-context";
 import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
+import { it as effectIt } from "@effect/vitest";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
@@ -86,47 +87,57 @@ afterAll(() => {
 });
 
 const discover = (workspaceRoot: string, keys: ReadonlyArray<string>) =>
-  Effect.runPromise(
-    Effect.scoped(
-      discoverProjectRecipes({ workspaceRoot, context: contextWithKeys(keys) }).pipe(
-        Effect.provide(NodeServices.layer),
-      ),
+  Effect.scoped(
+    discoverProjectRecipes({ workspaceRoot, context: contextWithKeys(keys) }).pipe(
+      Effect.provide(NodeServices.layer),
     ),
   );
 
 const REQUIRED = `  requiredContext: [{ key: "deploy.topology", description: "Deployment topology" }],`;
 
-const rankOf = async (requiredContextLine: string, keys: ReadonlyArray<string>) => {
-  const discovered = await discover(makeWorkspaceWithRecipe(requiredContextLine), keys);
-  return discovered.recipes.find((entry) => entry.id === "needs-deploy-context")?.rank;
-};
+const rankOf = (requiredContextLine: string, keys: ReadonlyArray<string>) =>
+  discover(makeWorkspaceWithRecipe(requiredContextLine), keys).pipe(
+    Effect.map(
+      (discovered) => discovered.recipes.find((entry) => entry.id === "needs-deploy-context")?.rank,
+    ),
+  );
 
 describe("defineRecipe requiredContext", () => {
-  it("costs the recipe rank while a declared key is unavailable, and stops costing once supplied", async () => {
-    const withoutKey = await rankOf(REQUIRED, ["project.summary"]);
-    const withKey = await rankOf(REQUIRED, ["project.summary", "deploy.topology"]);
-    expect(withoutKey).toBeDefined();
-    expect(withKey).toBeDefined();
-    // Proves the declaration reached the matcher at all: hardcoded `[]` scored both identically.
-    expect(withKey! - withoutKey!).toBe(5);
-  });
+  effectIt.effect(
+    "costs the recipe rank while a declared key is unavailable, and stops costing once supplied",
+    () =>
+      Effect.gen(function* () {
+        const withoutKey = yield* rankOf(REQUIRED, ["project.summary"]);
+        const withKey = yield* rankOf(REQUIRED, ["project.summary", "deploy.topology"]);
+        expect(withoutKey).toBeDefined();
+        expect(withKey).toBeDefined();
+        // Proves the declaration reached the matcher at all: hardcoded `[]` scored both identically.
+        expect(withKey! - withoutKey!).toBe(5);
+      }),
+  );
 
-  it("still shows the recipe — the matcher reports, it does not exclude", async () => {
-    const discovered = await discover(makeWorkspaceWithRecipe(REQUIRED), ["project.summary"]);
-    const recipe = discovered.recipes.find((entry) => entry.id === "needs-deploy-context");
-    expect(recipe).toBeDefined();
-    expect(recipe?.displayName).toBe("Deployment erklaeren");
-  });
+  effectIt.effect("still shows the recipe — the matcher reports, it does not exclude", () =>
+    Effect.gen(function* () {
+      const discovered = yield* discover(makeWorkspaceWithRecipe(REQUIRED), ["project.summary"]);
+      const recipe = discovered.recipes.find((entry) => entry.id === "needs-deploy-context");
+      expect(recipe).toBeDefined();
+      expect(recipe?.displayName).toBe("Deployment erklaeren");
+    }),
+  );
 
-  it("an optional requirement costs nothing", async () => {
-    const optional = `  requiredContext: [{ key: "deploy.topology", description: "Deployment topology", optional: true }],`;
-    const withoutKey = await rankOf(optional, ["project.summary"]);
-    const withKey = await rankOf(optional, ["project.summary", "deploy.topology"]);
-    expect(withoutKey).toBe(withKey);
-  });
+  effectIt.effect("an optional requirement costs nothing", () =>
+    Effect.gen(function* () {
+      const optional = `  requiredContext: [{ key: "deploy.topology", description: "Deployment topology", optional: true }],`;
+      const withoutKey = yield* rankOf(optional, ["project.summary"]);
+      const withKey = yield* rankOf(optional, ["project.summary", "deploy.topology"]);
+      expect(withoutKey).toBe(withKey);
+    }),
+  );
 
-  it("declaring nothing keeps the previous behaviour", async () => {
-    const discovered = await discover(makeWorkspaceWithRecipe(`  rank: 50,`), []);
-    expect(discovered.recipes.find((entry) => entry.id === "needs-deploy-context")).toBeDefined();
-  });
+  effectIt.effect("declaring nothing keeps the previous behaviour", () =>
+    Effect.gen(function* () {
+      const discovered = yield* discover(makeWorkspaceWithRecipe(`  rank: 50,`), []);
+      expect(discovered.recipes.find((entry) => entry.id === "needs-deploy-context")).toBeDefined();
+    }),
+  );
 });

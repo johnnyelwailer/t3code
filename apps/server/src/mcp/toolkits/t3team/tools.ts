@@ -36,11 +36,35 @@ export const T3TEAM_MCP_DEPRECATED_TOOL_ALIASES = {
   t3team_workflow_resume: "t3team_orchestration_resume",
 } as const;
 
+/**
+ * Canonical tools deliberately NOT on the provider `/mcp` surface. The parity test forces an
+ * explicit decision for every implemented catalog tool — mapped above, or listed here.
+ *
+ * The `draft_*` family is excluded for a structural reason, not convenience: those tools are
+ * reachable only from a workflow body's `getTools()` tree (`t3team-workflowHostDraftTools.ts`),
+ * and they are gated three ways — the body must declare the group in `meta.capabilities`, the id
+ * must be in the thread's tool context, and the recipe's `allowedToolGroups` filters what
+ * survives. Their `publishDraft` is also pinned to the launch thread so the draft carrier message
+ * lands where the user can review it. Exposing them over `/mcp`, whose invocation scope carries
+ * none of that, would bypass all three gates and unpin the target thread.
+ */
 export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = new Set([
   "t3team.backlog.set_assignee_filter",
   "t3team.view.read",
   "t3team.work_item.refresh_context_bundle",
   "t3team.project.refresh_context_bundle",
+  // Draft mutations — workflow-body surface only; see the note above.
+  "t3team.backlog.item.assignee.draft_update",
+  "t3team.backlog.item.estimate.draft_update",
+  "t3team.backlog.item.subtask.draft_create",
+  "t3team.work_item.assignee.draft_update",
+  "t3team.work_item.estimate.draft_update",
+  "t3team.work_item.status.draft_update",
+  "t3team.work_item.description.draft_update",
+  "t3team.work_item.comment.draft_create",
+  "t3team.work_item.subtask.draft_create",
+  "t3team.work_item.link.draft_create",
+  "t3team.work_item.link.draft_remove",
 ]);
 
 export class T3TeamMcpToolError extends Schema.TaggedErrorClass<T3TeamMcpToolError>()(
@@ -250,15 +274,21 @@ export const T3TeamHelpTool = Tool.make("t3team_help", {
 // `Schema.Struct({})` renders as `{anyOf:[{object},{array}]}` (an empty TS object
 // type means "any non-null"), and MCP clients reject a non-object tool inputSchema
 // on tools/list — which would take the whole toolkit down for that client.
-export const T3TeamRecipeListTool = Tool.dynamic("t3team_recipe_list", {
+// `Tool.make`, not `Tool.dynamic`: a dynamic tool cannot declare `dependencies`, so its
+// handler is required to be `Effect<…, …, never>`. This one dispatches through the broker
+// like every sibling, so it needs `McpInvocationContext` + `T3TeamToolBroker` in scope —
+// as `Tool.dynamic` that was a type error (R was `T3TeamToolBroker | McpInvocationContext`,
+// expected `never`). It takes no arguments, which `Schema.Struct({})` expresses.
+export const T3TeamRecipeListTool = Tool.make("t3team_recipe_list", {
   description:
     "List every saved recipe orchestration you can run — both the project's own and the ones " +
     "shipped by installed packs. Each entry carries {id, title, recipePath, workflowPath?, " +
-    "source} where source is \"project-local\" or \"pack\"; pass recipePath to run or validate " +
+    'source} where source is "project-local" or "pack"; pass recipePath to run or validate ' +
     "it. Prefer an existing recipe over re-authoring one. Read-only.",
-  parameters: { type: "object", properties: {}, additionalProperties: false },
+  parameters: Schema.Struct({}),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
+  dependencies,
 });
 
 // Static, read-only validation of an orchestration before running it — either an

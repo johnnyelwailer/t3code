@@ -43,6 +43,7 @@ apps/mobile/.showcase/
 artifacts/app-store/screenshots/
 node_modules/
 .alchemy/
+.nexi-dev/
 *.log
 .env*
 !.env.example

@@ -150,9 +150,8 @@ it.effect(
             threadId,
             providerSessionId: "provider-session-recipe-mcp-live",
             providerInstanceId,
-            capabilities: new Set<string>(),
+            capabilities: new Set<McpInvocationContext.McpCapability>(),
             issuedAt: 1,
-            expiresAt: Number.MAX_SAFE_INTEGER,
           }),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
@@ -184,9 +183,8 @@ it.effect(
             threadId,
             providerSessionId: "provider-session-recipe-mcp-live",
             providerInstanceId,
-            capabilities: new Set<string>(),
+            capabilities: new Set<McpInvocationContext.McpCapability>(),
             issuedAt: 1,
-            expiresAt: Number.MAX_SAFE_INTEGER,
           }),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
