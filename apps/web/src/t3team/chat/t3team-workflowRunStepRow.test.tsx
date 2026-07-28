@@ -12,7 +12,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { T3TeamWorkflowStepDetails } from "~/t3team/chat/t3team-WorkflowStepDetails";
-import { canOpenStepThread } from "~/t3team/chat/t3team-workflowRunStepRow";
+import {
+  canOpenStepThread,
+  displayedStepStatus,
+  StepStatusIcon,
+} from "~/t3team/chat/t3team-workflowRunStepRow";
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 
 const LAUNCH_THREAD = "thread-launch";
@@ -104,5 +108,42 @@ describe("T3TeamWorkflowStepDetails", () => {
 
     expect(markup).toContain('aria-label="Open step thread"');
     expect(markup).toContain('data-step-row-shell="thread-link"');
+  });
+});
+
+/**
+ * The `describe-rewrite` residue PJ hit: the body skips its `askUser` when intent was supplied, so the plan
+ * row "Rewrite scope ASK" never gets a runtime match — and rendered as a pending circle forever, on a run
+ * that had finished two minutes earlier.
+ */
+describe("displayedStepStatus for a plan row the run never reached", () => {
+  it("is pending while the run is still going", () => {
+    expect(displayedStepStatus(undefined, "running")).toBe("pending");
+    expect(displayedStepStatus(undefined, "suspended")).toBe("pending");
+    expect(displayedStepStatus(undefined, undefined)).toBe("pending");
+  });
+
+  it("is skipped once the run has settled", () => {
+    expect(displayedStepStatus(undefined, "completed")).toBe("skipped");
+    expect(displayedStepStatus(undefined, "failed")).toBe("skipped");
+    expect(displayedStepStatus(undefined, "cancelled")).toBe("skipped");
+  });
+
+  it("renders a skipped row as skipped, not as not-started", () => {
+    const markup = renderToStaticMarkup(<StepStatusIcon status="skipped" />);
+
+    expect(markup).toContain('data-step-status="skipped"');
+    expect(markup).toContain("skipped — the run did not need this step");
+    expect(markup).not.toContain("not started yet");
+  });
+
+  /** A step that DID run is unaffected by the run's terminal status. */
+  it("leaves an executed step alone", () => {
+    expect(
+      displayedStepStatus(
+        { stepId: "run-1:1", seq: 1, stepKind: "thread.turn", phase: "completed" },
+        "completed",
+      ),
+    ).toBe("completed");
   });
 });

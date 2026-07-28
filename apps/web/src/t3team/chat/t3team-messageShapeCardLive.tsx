@@ -232,6 +232,10 @@ export function T3TeamWorkflowShapeLiveCard({
                     {planStep ? (
                       <T3TeamShapeStepRow
                         step={planStep}
+                        muted={
+                          index !== scheduledPlanRow &&
+                          displayedStepStatus(step, status) === "skipped"
+                        }
                         leading={
                           <StepStatusIcon
                             status={

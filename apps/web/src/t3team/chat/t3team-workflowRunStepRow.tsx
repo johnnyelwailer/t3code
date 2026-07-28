@@ -6,21 +6,16 @@
  * this is where the ONE navigation rule for a step row lives (see `canOpenStepThread`).
  */
 
-import {
-  CheckCircle2Icon,
-  CircleAlertIcon,
-  CircleDashedIcon,
-  ClockIcon,
-  LoaderCircleIcon,
-  PauseIcon,
-  SquareIcon,
-} from "lucide-react";
 import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
-import type { ProjectRecipeWorkflowStepPhase } from "@t3tools/project-recipes";
 
-import { cn } from "~/lib/utils";
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { StepTrailing } from "~/t3team/chat/t3team-workflowStepTrailing";
+import {
+  displayedStepStatus,
+  StepStatusIcon,
+  type StepStatus,
+} from "~/t3team/chat/t3team-workflowStepStatus";
+export { displayedStepStatus, StepStatusIcon, type StepStatus };
 export { StepTrailing } from "~/t3team/chat/t3team-workflowStepTrailing";
 
 /**
@@ -40,49 +35,6 @@ export function canOpenStepThread(input: {
 }): boolean {
   if (!input.hasHandler || !input.step.projectId || !input.step.threadId) return false;
   return input.step.threadId !== input.currentThreadId;
-}
-
-export type StepStatus = ProjectRecipeWorkflowStepPhase | "pending" | "scheduled";
-
-const STATUS_META: Record<StepStatus, { Icon: typeof ClockIcon; className: string }> = {
-  started: { Icon: LoaderCircleIcon, className: "animate-spin text-primary" },
-  completed: { Icon: CheckCircle2Icon, className: "text-emerald-600 dark:text-emerald-400" },
-  waiting: { Icon: CircleDashedIcon, className: "text-muted-foreground" },
-  scheduled: { Icon: ClockIcon, className: "text-amber-600 dark:text-amber-400" },
-  failed: { Icon: CircleAlertIcon, className: "text-destructive" },
-  paused: { Icon: PauseIcon, className: "text-muted-foreground" },
-  cancelled: { Icon: SquareIcon, className: "text-muted-foreground" },
-  pending: { Icon: CircleDashedIcon, className: "text-muted-foreground/40" },
-};
-
-export function StepStatusIcon({ status }: { status: StepStatus }) {
-  const meta = STATUS_META[status];
-  return (
-    <span
-      data-step-status={status}
-      className="flex size-5 shrink-0 items-center justify-center"
-      title={status === "pending" ? "not started yet" : status}
-    >
-      <meta.Icon className={cn("size-3.5", meta.className)} />
-    </span>
-  );
-}
-
-export function displayedStepStatus(
-  step: T3TeamWorkflowStepEntry | undefined,
-  runStatus?: OrchestrationWorkflowRunStatus["status"],
-): StepStatus {
-  if (step === undefined) return "pending";
-  if (step.phase === "started" || step.phase === "waiting") {
-    if (runStatus === "cancelled") return "cancelled";
-    if (runStatus === "failed") return "failed";
-    if (runStatus === "paused") return "paused";
-    if (runStatus === "completed") return "completed";
-  }
-  if (step.stepKind === "wait.until" && (step.phase === "started" || step.phase === "waiting")) {
-    return "scheduled";
-  }
-  return step.phase;
 }
 
 function runtimeDetailLabel(detail: string | undefined): string | null {

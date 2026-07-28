@@ -96,7 +96,20 @@ export function WorkItemDescriptionDraftDiff({
           {removed > 0 ? <span className="text-destructive">−{removed}</span> : null}
         </span>
         <span className="ml-auto flex items-center gap-1.5">
-          <Button size="xs" variant="ghost" disabled={comments.total === 0} onClick={sendBack}>
+          {/* Disabled until there is something to send: this is "return the draft WITH my notes", not
+              "start a note". Notes are made by selecting text in the proposal below — without saying so the
+              button reads as a broken action. */}
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={comments.total === 0}
+            title={
+              comments.total === 0
+                ? "Select text in the proposal below to leave a note, then send it back."
+                : "Return this draft with your notes"
+            }
+            onClick={sendBack}
+          >
             <MessageSquare className="size-3.5" />
             {comments.total > 0 ? `Send ${comments.total} back` : "Comment"}
           </Button>
