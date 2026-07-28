@@ -1,93 +1,46 @@
 import { Loader2 } from "lucide-react";
 import type { ExternalProject } from "@t3tools/integrations-core";
-import { T3TeamCreateProjectRepositorySection } from "~/t3team/t3team-CreateProjectRepositorySection";
-import {
-  listT3TeamProjectSetupCardOptions,
-  T3TeamProjectSetupProfileCards,
-} from "~/t3team/t3team-ProjectSetupProfileCards";
-import { T3TeamCloneProjectSetupProfileDialog } from "~/t3team/t3team-CloneProjectSetupProfileDialog";
-import { T3TeamProjectSetupConfirmPreviewView } from "~/t3team/t3team-ProjectSetupConfirmPreviewView";
+import { ProjectAvatar } from "~/t3team/components/t3team-ProjectAvatar";
+import { listT3TeamProjectSetupCardOptions } from "~/t3team/t3team-ProjectSetupProfileCards";
 import { useT3TeamPackSetupProfiles } from "~/t3team/t3team-packSetupProfiles";
 import type { T3TeamProjectSetupProfileId } from "~/t3team/t3team-projectSetup";
-import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
 
-export function ConfirmStep({
+/**
+ * Names the project being added, in the wizard frame's own heading slot (see
+ * `CreateProjectWizardFrame`'s `heading` prop) — used for the "review" step. Reuses `ProjectAvatar`
+ * — the same icon/key presentation the project-picker step already uses — instead of inventing a
+ * second one.
+ */
+export function ConfirmStepHeading({
   selectedProject,
-  setupProfileId,
-  linkedRepositoryUrls,
-  discoveredRepositoryUrls,
-  newRepositoryUrl,
-  setNewRepositoryUrl,
-  onSetupProfileChange,
-  onAddRepository,
-  onRemoveRepository,
-  onAddRepositories,
-  onDiscoveredRepositoryUrlsChange,
-  customProfile,
-  onCustomProfileChange,
 }: {
   selectedProject: ExternalProject | null;
-  setupProfileId: T3TeamProjectSetupProfileId;
-  linkedRepositoryUrls: ReadonlyArray<string>;
-  discoveredRepositoryUrls: ReadonlyArray<string>;
-  newRepositoryUrl: string;
-  setNewRepositoryUrl: (value: string) => void;
-  onSetupProfileChange: (profileId: T3TeamProjectSetupProfileId) => void;
-  onAddRepository: () => void;
-  onRemoveRepository: (url: string) => void;
-  onAddRepositories: (urls: ReadonlyArray<string>) => void;
-  onDiscoveredRepositoryUrlsChange: (urls: ReadonlyArray<string>) => void;
-  customProfile?: T3TeamProfile | undefined;
-  onCustomProfileChange: (profile: T3TeamProfile | undefined) => void;
 }) {
-  const packProfiles = useT3TeamPackSetupProfiles();
+  if (!selectedProject) return null;
 
-  /*
-    One decision, stated once. The heading used to carry a subtitle explaining that it set "the
-    default tone" — the cards below say that better than a sentence above them can. What follows the
-    cards is consequence and optional extras, both collapsed, so the choice itself fits the dialog
-    without scrolling.
-  */
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">How should t3team work with you?</h3>
-        <T3TeamCloneProjectSetupProfileDialog
-          sourceProfileId={setupProfileId}
-          onClone={(profile) => {
-            onCustomProfileChange(profile);
-            onSetupProfileChange(profile.id);
-          }}
-        />
+    <div className="flex min-w-0 items-center gap-2.5 px-1">
+      <ProjectAvatar
+        title={selectedProject.title}
+        projectKey={selectedProject.key}
+        raw={selectedProject.raw}
+        iconUrl={selectedProject.iconUrl}
+        className="size-8 shrink-0 rounded-lg object-cover"
+      />
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+          Add project
+        </div>
+        <h2 className="truncate text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+          {selectedProject.title}
+          {selectedProject.key ? (
+            <span className="ml-2 text-sm font-medium text-muted-foreground">
+              {selectedProject.key}
+            </span>
+          ) : null}
+        </h2>
       </div>
-
-      <T3TeamProjectSetupProfileCards
-        compact
-        selectedProfileId={setupProfileId}
-        onSelectProfile={(profileId) => {
-          onCustomProfileChange(undefined);
-          onSetupProfileChange(profileId);
-        }}
-        profiles={packProfiles}
-      />
-
-      <T3TeamProjectSetupConfirmPreviewView
-        profileId={setupProfileId}
-        {...(customProfile ? { customProfile } : {})}
-      />
-
-      <T3TeamCreateProjectRepositorySection
-        selectedProject={selectedProject}
-        linkedRepositoryUrls={linkedRepositoryUrls}
-        discoveredRepositoryUrls={discoveredRepositoryUrls}
-        newRepositoryUrl={newRepositoryUrl}
-        setNewRepositoryUrl={setNewRepositoryUrl}
-        onAddRepository={onAddRepository}
-        onRemoveRepository={onRemoveRepository}
-        onAddRepositories={onAddRepositories}
-        onDiscoveredRepositoryUrlsChange={onDiscoveredRepositoryUrlsChange}
-      />
-    </section>
+    </div>
   );
 }
 

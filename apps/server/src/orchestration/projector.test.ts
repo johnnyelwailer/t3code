@@ -961,4 +961,38 @@ describe("orchestration projector", () => {
     expect(thread?.checkpoints[0]?.turnId).toBe("turn-100");
     expect(thread?.checkpoints.at(-1)?.turnId).toBe("turn-599");
   });
+
+  it("projects a project.created event with no `source` key (replay compat)", async () => {
+    const now = "2026-01-01T00:00:00.000Z";
+    const model = createEmptyReadModel(now);
+
+    const next = await Effect.runPromise(
+      projectEvent(
+        model,
+        makeEvent({
+          sequence: 1,
+          type: "project.created",
+          aggregateKind: "project",
+          aggregateId: "project-1",
+          occurredAt: now,
+          commandId: "cmd-project-create",
+          payload: {
+            // Historical `project.created` events predate the `source`
+            // field entirely — this payload has no `source` key at all,
+            // not `source: undefined`.
+            projectId: "project-1",
+            title: "demo",
+            workspaceRoot: "/tmp/demo",
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        }),
+      ),
+    );
+
+    expect(next.projects).toHaveLength(1);
+    expect(next.projects[0]?.source).toBeUndefined();
+  });
 });

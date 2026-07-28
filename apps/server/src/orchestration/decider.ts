@@ -22,6 +22,7 @@ import {
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
 import { admitsTurnStart } from "../t3team-deciderTurnAdmission.ts";
+import { requireProjectSourceBindingUnclaimed } from "./t3team-projectSourceInvariants.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -237,6 +238,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         workspaceRoot: command.workspaceRoot,
         exceptProjectId: command.projectId,
       });
+      yield* requireProjectSourceBindingUnclaimed({
+        readModel,
+        command,
+        source: command.source,
+        exceptProjectId: command.projectId,
+      });
 
       return {
         ...(yield* withEventBase({
@@ -254,6 +261,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           scripts: [],
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
+          ...(command.source !== undefined ? { source: command.source } : {}),
         },
       };
     }
@@ -272,6 +280,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           exceptProjectId: command.projectId,
         });
       }
+      yield* requireProjectSourceBindingUnclaimed({
+        readModel,
+        command,
+        source: command.source,
+        exceptProjectId: command.projectId,
+      });
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -290,6 +304,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
           updatedAt: occurredAt,
+          ...(command.source !== undefined ? { source: command.source } : {}),
         },
       };
     }

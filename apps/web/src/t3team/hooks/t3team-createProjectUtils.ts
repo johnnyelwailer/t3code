@@ -41,7 +41,8 @@ export function persistLastAccountId(accountId: string): void {
   }
 }
 
-function atlassianSiteHost(value: string): string | null {
+/** Exported for the review step, which shows the connected site as a bare hostname. */
+export function atlassianSiteHost(value: string): string | null {
   try {
     return new URL(normalizeAtlassianUrl(value)).hostname.toLowerCase();
   } catch {

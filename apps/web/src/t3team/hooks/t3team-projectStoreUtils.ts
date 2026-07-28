@@ -15,6 +15,10 @@ import {
   readLiveProjectRoots,
   readOwnedWorkspaceRoots,
 } from "./t3team-threadBridge";
+import {
+  reconcileStoredProjectSource,
+  toProjectSource,
+} from "~/t3team/t3team-projectSourceBinding";
 
 let projectIdCounter = 0;
 let threadIdCounter = 0;
@@ -95,17 +99,15 @@ function synthesizeLooseWorkspaceProject(project: Project): ProjectShellProject 
   const createdAt = project.createdAt ?? new Date().toISOString();
   const updatedAt = project.updatedAt ?? createdAt;
   const title = project.title.trim() || project.workspaceRoot;
+  // Derive the source from the live project's own binding. Never fabricate an
+  // externalProjectId/externalProjectKey when there is none — see Defect 1 (fix/t3team-wizard-
+  // binding-invariant): a fake local-source binding masked the missing real one and broke every
+  // Jira read for this project.
+  const boundSource = toProjectSource(project.source) ?? { provider: "local" as const };
   return {
     id: project.id as never,
     title,
-    source: {
-      provider: "local",
-      externalProjectId: project.id,
-      externalProjectKey: project.title,
-      raw: {
-        environmentId: project.environmentId,
-      },
-    },
+    source: { ...boundSource, raw: { environmentId: project.environmentId } },
     workspace: {
       rootPath: project.workspaceRoot,
       createdAt,
@@ -130,6 +132,17 @@ export function deriveLooseWorkspaceProjects(
       return [];
     }
     return [synthesizeLooseWorkspaceProject(project)];
+  });
+}
+
+/** Reconciles every stored project's source against its live counterpart (see t3team-projectSourceBinding). */
+export function reconcileStoredProjectsWithLive(
+  storedProjects: ReadonlyArray<ProjectShellProject>,
+  liveProjects: ReadonlyArray<Project>,
+): ProjectShellProject[] {
+  return storedProjects.map((stored) => {
+    const live = liveProjects.find((candidate) => String(candidate.id) === String(stored.id));
+    return live ? reconcileStoredProjectSource(stored, live) : stored;
   });
 }
 

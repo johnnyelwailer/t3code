@@ -26,7 +26,12 @@ function normalizeWorkspaceDirectoryName(title: string): string {
   return normalized.length > 0 ? normalized.slice(0, 80) : "Project";
 }
 
-const makeWorkspacePath = (title: string): string => {
+/**
+ * Also used by the review step (`t3team-CreateProjectDialogReviewStep.tsx`) to preview where the
+ * project will land before it exists — exported rather than duplicated so the preview can never
+ * drift from the path actually used at creation time.
+ */
+export const makeWorkspacePath = (title: string): string => {
   const maybeProcess = globalThis as typeof globalThis & {
     process?: { env?: Record<string, string | undefined>; platform?: string };
   };

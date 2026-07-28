@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AsyncResult } from "effect/unstable/reactivity";
-import { usePrimaryEnvironmentId } from "~/state/environments";
-import { sourceControlEnvironment } from "~/state/sourceControl";
-import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import {
   normalizeCacheList,
   readIntegrationCache,
   writeIntegrationCache,
 } from "./t3team-integrationCache";
+import { useGitHubAuthProbe } from "./t3team-useGitHubAuthProbe";
 import {
-  parseGitHubAuth,
+  type GitHubAuthAccount,
   type GitHubAuthCache,
   type GitHubDiscoveryCache,
 } from "./t3team-githubRepositoryDiscoveryUtils";
@@ -27,10 +24,6 @@ export function useGitHubRepositoryDiscovery({
   linkedRepositoryUrls: ReadonlyArray<string>;
 }) {
   const backend = useBackend();
-  const environmentId = usePrimaryEnvironmentId();
-  const discoverSourceControl = useAtomQueryRunner(sourceControlEnvironment.discovery, {
-    reportFailure: false,
-  });
   const authCache = readIntegrationCache<GitHubAuthCache>("github:auth")?.value;
   const discoveryCacheKey = useMemo(
     () =>
@@ -58,6 +51,9 @@ export function useGitHubRepositoryDiscovery({
   );
   const [discoveryWarning, setDiscoveryWarning] = useState<string | undefined>(
     discoveryCache?.discoveryWarning,
+  );
+  const [authenticatedHosts, setAuthenticatedHosts] = useState<ReadonlyArray<GitHubAuthAccount>>(
+    [],
   );
 
   useEffect(() => {
@@ -111,60 +107,16 @@ export function useGitHubRepositoryDiscovery({
     [backend, discoveryCacheKey, linkedRepositoryUrls, projectKey, projectTitle],
   );
 
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    const run = async () => {
-      setLoadingAuth(true);
-      try {
-        if (environmentId === null) {
-          if (!cancelled) {
-            setAuthStatus("unknown");
-            setAuthDetail("Server environment is unavailable.");
-          }
-          return;
-        }
-        const discoveryResult = await discoverSourceControl({
-          environmentId,
-          input: {},
-        });
-        if (AsyncResult.isFailure(discoveryResult)) {
-          if (!cancelled) {
-            setAuthStatus("unknown");
-            setAuthDetail("Failed to inspect GitHub auth.");
-          }
-          return;
-        }
-        const discovery = discoveryResult.value;
-        if (cancelled) return;
-        const auth = parseGitHubAuth(discovery);
-        writeIntegrationCache("github:auth", {
-          githubHost: auth.host ?? "github.com",
-          ...(auth.account ? { githubAccount: auth.account } : {}),
-          authStatus: auth.status,
-          ...(auth.detail ? { authDetail: auth.detail } : {}),
-        });
-        setAuthStatus(auth.status);
-        setAuthDetail(auth.detail);
-        setGithubHost(auth.host ?? "github.com");
-        setGithubAccount(auth.account);
-        if (auth.status === "authenticated") {
-          await discoverSuggestions(auth.host ?? "github.com", auth.account);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setAuthStatus("unknown");
-          setAuthDetail(error instanceof Error ? error.message : "Failed to inspect GitHub auth.");
-        }
-      } finally {
-        if (!cancelled) setLoadingAuth(false);
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [discoverSourceControl, discoverSuggestions, enabled, environmentId]);
+  useGitHubAuthProbe({
+    enabled,
+    onAuthenticated: discoverSuggestions,
+    setAuthStatus,
+    setAuthDetail,
+    setLoadingAuth,
+    setGithubHost,
+    setGithubAccount,
+    setAuthenticatedHosts,
+  });
 
   const visibleSuggestedUrls = useMemo(
     () => suggestedUrls.filter((url) => !linkedRepositoryUrls.includes(url)),
@@ -190,6 +142,16 @@ export function useGitHubRepositoryDiscovery({
     });
   }, []);
 
+  const selectHost = useCallback(
+    (host: string) => {
+      const matched = authenticatedHosts.find((entry) => entry.host === host);
+      setGithubHost(host);
+      setGithubAccount(matched?.account);
+      void discoverSuggestions(host, matched?.account);
+    },
+    [authenticatedHosts, discoverSuggestions],
+  );
+
   return {
     backendAvailable: Boolean(backend),
     githubHost,
@@ -201,7 +163,9 @@ export function useGitHubRepositoryDiscovery({
     visibleSuggestedUrls,
     selectedSuggestedUrls,
     discoveryWarning,
+    authenticatedHosts,
     setGithubHost,
+    selectHost,
     refresh: () => discoverSuggestions(githubHost, githubAccount),
     toggleSuggestion,
   };

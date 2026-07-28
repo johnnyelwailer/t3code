@@ -81,6 +81,7 @@ export function AppContentPane({
                 shouldInsetDesktopHeader={shouldInsetDesktopHeader}
                 onOpenTicket={onOpenTicket}
                 onManageRepositories={onManageRepositories}
+                onProjectUpdated={(next) => store.updateProject(next.id, next)}
               />
             )}
             renderTicketDetail={(project, ticketId, activeThreadId) => (

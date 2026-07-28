@@ -8,8 +8,18 @@ import {
   isExpectedUpstreamRemoteUrl,
 } from "./t3team-upstream-source-of-truth.mjs";
 
+// `git ls-tree -r upstream/main` already emits >1 MB in this repo, which exceeds Node's default
+// 1 MB maxBuffer. execFileSync then THROWS, `maybeRunGit` swallows it, and `listFilesInRef`
+// returns an empty Set — so every upstream file looks new and the guard reports hundreds of bogus
+// "New file must use one of prefixes" violations while missing real ones. Fail loudly on real git
+// errors instead of silently degrading into a useless gate.
+const GIT_OUTPUT_MAX_BUFFER = 256 * 1024 * 1024;
+
 export function runGit(args) {
-  return NodeChildProcess.execFileSync("git", args, { encoding: "utf8" }).trim();
+  return NodeChildProcess.execFileSync("git", args, {
+    encoding: "utf8",
+    maxBuffer: GIT_OUTPUT_MAX_BUFFER,
+  }).trim();
 }
 
 export function maybeRunGit(args) {
