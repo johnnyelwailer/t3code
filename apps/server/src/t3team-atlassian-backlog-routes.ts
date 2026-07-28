@@ -15,9 +15,11 @@ import {
   type T3TeamAtlassianBacklogEstimateUpdateInput,
   type T3TeamAtlassianBacklogInput,
   type T3TeamAtlassianChildIssueTypesInput,
+  type T3TeamAtlassianIssueDescriptionUpdateInput,
   type T3TeamAtlassianIssueStatusUpdateInput,
   updateT3TeamAtlassianBacklogAssignee,
   updateT3TeamAtlassianBacklogEstimate,
+  updateT3TeamAtlassianIssueDescription,
   updateT3TeamAtlassianIssueStatus,
 } from "./t3team-atlassian-backlog.ts";
 import {
@@ -134,6 +136,23 @@ const t3teamAtlassianIssueStatusRouteLayer = HttpRouter.add(
   }).pipe(Effect.catch(errorResponse)),
 );
 
+/**
+ * The apply side of a `description` draft — deliberately the fourth sibling of update-assignee /
+ * update-estimate / update-status rather than a new species: same POST-JSON shape, same account
+ * plumbing, same `errorResponse` mapping. It joins the merged layer below, which both route
+ * registries (`makeT3TeamRoutesLayer` and the merge list in `server.ts`) already include, so there
+ * is no second place to remember.
+ */
+const t3teamAtlassianIssueDescriptionRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/t3team/atlassian/issue/update-description",
+  Effect.gen(function* () {
+    const input = yield* readJsonBody<T3TeamAtlassianIssueDescriptionUpdateInput>();
+    yield* updateT3TeamAtlassianIssueDescription(input);
+    return okJson({ ok: true });
+  }).pipe(Effect.catch(errorResponse)),
+);
+
 const t3teamAtlassianBacklogCreateSubtaskRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/atlassian/backlog/create-subtask",
@@ -163,6 +182,7 @@ export const t3teamAtlassianBacklogRouteLayer = Layer.mergeAll(
   t3teamAtlassianBacklogAssigneeRouteLayer,
   t3teamAtlassianBacklogEstimateRouteLayer,
   t3teamAtlassianIssueStatusRouteLayer,
+  t3teamAtlassianIssueDescriptionRouteLayer,
   t3teamAtlassianBacklogCreateSubtaskRouteLayer,
   t3teamAtlassianChildIssueTypesRouteLayer,
 );

@@ -201,6 +201,7 @@ export function createWorkflowRunController(
       launchThreadId: input.launchThreadId,
       workflowRunId: input.runId,
       output: result.result,
+      projectId: input.projectId,
       dispatch: input.dispatch,
       newId: input.newId,
       nowIso: input.nowIso,

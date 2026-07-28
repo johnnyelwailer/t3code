@@ -50,6 +50,17 @@ export type T3TeamAtlassianIssueStatusUpdateInput = {
   readonly targetStatus: string;
 };
 
+/**
+ * The apply side of a `description` draft. `description` is MARKDOWN — the provider converts it to
+ * ADF on the way into Jira (the same conversion comments use), so callers hand over the writer's
+ * text as written and never a pre-flattened projection of it.
+ */
+export type T3TeamAtlassianIssueDescriptionUpdateInput = {
+  readonly accountId: string;
+  readonly issueIdOrKey: string;
+  readonly description: string;
+};
+
 export type T3TeamAtlassianBacklogCreateSubtaskInput = {
   readonly accountId: string;
   readonly projectId: string;

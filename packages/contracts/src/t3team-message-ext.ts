@@ -1,7 +1,10 @@
 import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { T3TeamMessageDraftMutationAttachment } from "./t3team-draft-mutation.ts";
+import {
+  T3TeamMessageDraftMutationAttachment,
+  T3TeamMessageWorkItemDraftRefAttachment,
+} from "./t3team-draft-mutation.ts";
 // WHO wrote a message lives in its own module (see t3team-message-author.ts); re-exported here so
 // `T3TeamMessageExt`'s neighbours keep resolving from one place.
 import { T3TeamMessageAuthor } from "./t3team-message-author.ts";
@@ -137,6 +140,7 @@ export const T3TeamMessageAttachment = Schema.Union([
   T3TeamMessageViewAttachment,
   T3TeamMessageWidgetAttachment,
   T3TeamMessageDraftMutationAttachment,
+  T3TeamMessageWorkItemDraftRefAttachment,
 ]);
 export type T3TeamMessageAttachment = typeof T3TeamMessageAttachment.Type;
 

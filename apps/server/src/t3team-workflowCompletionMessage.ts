@@ -1,6 +1,13 @@
 // @effect-diagnostics globalConsole:off -- fire-and-forget delivery failure log in a plain Promise path, outside any Effect runtime.
-import { CommandId, MessageId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  MessageId,
+  type OrchestrationCommand,
+  type T3TeamMessageAttachment,
+  ThreadId,
+} from "@t3tools/contracts";
 
+import { workflowCompletionDraftRef } from "./t3team-workflowCompletionDraftRef.ts";
 import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities.ts";
 
 export function formatWorkflowOutput(output: unknown): string {
@@ -44,6 +51,8 @@ async function postTerminalMessage(input: {
   readonly workflowRunId: string;
   readonly kind: "complete" | "failed";
   readonly text: string;
+  /** Structured card data for clients that render one; the text stays the fallback. */
+  readonly attachments?: ReadonlyArray<T3TeamMessageAttachment>;
   readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
   readonly newId: () => string;
   readonly nowIso: () => string;
@@ -60,6 +69,9 @@ async function postTerminalMessage(input: {
         text: input.text,
         turnId: null,
         streaming: false,
+        ...(input.attachments === undefined || input.attachments.length === 0
+          ? {}
+          : { t3teamExt: { attachments: input.attachments } }),
       },
       createdAt: input.nowIso(),
     })
@@ -78,15 +90,21 @@ export async function deliverWorkflowCompletion(input: {
   readonly launchThreadId: string | undefined;
   readonly workflowRunId: string;
   readonly output: unknown;
+  /** The run's project, so a proposal card can navigate to the work item. */
+  readonly projectId?: string;
   readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
   readonly newId: () => string;
   readonly nowIso: () => string;
 }): Promise<void> {
+  // A run that proposed a draft also carries a card ref (see t3team-workflowCompletionDraftRef.ts).
+  // The TEXT is unchanged either way: a client that renders no card still reads the same summary.
+  const draftRef = workflowCompletionDraftRef(input.output, input.projectId);
   await postTerminalMessage({
     launchThreadId: input.launchThreadId,
     workflowRunId: input.workflowRunId,
     kind: "complete",
     text: formatWorkflowOutput(input.output),
+    ...(draftRef === undefined ? {} : { attachments: [draftRef] }),
     dispatch: input.dispatch,
     newId: input.newId,
     nowIso: input.nowIso,

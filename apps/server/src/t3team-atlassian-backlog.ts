@@ -8,6 +8,7 @@ export type {
   T3TeamAtlassianBacklogEstimateUpdateInput,
   T3TeamAtlassianBacklogInput,
   T3TeamAtlassianChildIssueTypesInput,
+  T3TeamAtlassianIssueDescriptionUpdateInput,
   T3TeamAtlassianIssueStatusUpdateInput,
   T3TeamAtlassianBacklogResponse,
 } from "./t3team-atlassian-backlogTypes.ts";
@@ -21,5 +22,6 @@ export {
   searchT3TeamAtlassianAssignableUsers,
   updateT3TeamAtlassianBacklogAssignee,
   updateT3TeamAtlassianBacklogEstimate,
+  updateT3TeamAtlassianIssueDescription,
   updateT3TeamAtlassianIssueStatus,
 } from "./t3team-atlassian-backlogMutations.ts";
