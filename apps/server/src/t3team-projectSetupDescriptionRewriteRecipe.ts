@@ -24,18 +24,14 @@
  * Bundled recipes reach a user's disk through project-setup scaffolding
  * (`renderBundledRecipeSetupFiles`), the same way `create-recipe` and `edit-plugin-module` ship
  * their `workflow.ts`. The packed server has no source tree to read at runtime, so the text must be
- * embedded — but it is embedded from a REAL module (`./t3team-descriptionRewrite.workflow.ts`) via
- * a `?raw` import that the bundler inlines at BUILD time. The compiler therefore checks the exact
- * artifact the engine executes, and its companion test still runs that text through the real
- * engine.
+ * embedded — but it is embedded from a REAL module (`./t3team-descriptionRewrite.workflow.ts`), so
+ * the compiler checks the exact artifact the engine executes. Getting that module's TEXT differs
+ * per loader; `./t3team-descriptionRewriteBody.ts` owns that, and validates it.
  *
  * @module t3team-projectSetupDescriptionRewriteRecipe
  */
 
-// The body's TEXT, inlined at build time. It is a real module (typechecked, navigable) that is
-// never IMPORTED as code here — only its source is, which is exactly what gets written to disk.
-import body from "./t3team-descriptionRewrite.workflow.ts?raw";
-
+import { DESCRIPTION_REWRITE_WORKFLOW_BODY } from "./t3team-descriptionRewriteBody.ts";
 import {
   T3TEAM_PROJECT_RECIPES_ROOT,
   type T3TeamProjectSetupFile,
@@ -59,5 +55,5 @@ export function descriptionRewriteSetupFiles(
 
 /** The scaffolded `workflow.ts` for {@link DESCRIPTION_REWRITE_RECIPE_ID}. */
 export function renderDescriptionRewriteWorkflow(): string {
-  return body;
+  return DESCRIPTION_REWRITE_WORKFLOW_BODY;
 }
