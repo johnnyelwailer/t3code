@@ -177,6 +177,7 @@ function createBackend(input: {
     createIssueLink: vi.fn(async () => undefined),
     deleteIssueLink: vi.fn(async () => undefined),
     listIssueLinkTypes: vi.fn(async () => []),
+    updateIssueDescription: vi.fn(async () => undefined),
     listChildIssueTypes: vi.fn(async () => [{ id: "subtask-type-1", name: "Subtask" }]),
   } satisfies BackendApi["atlassian"] & Pick<T3TeamPollingBackend["atlassian"], "pollBacklog">;
 

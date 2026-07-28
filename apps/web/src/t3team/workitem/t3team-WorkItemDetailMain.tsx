@@ -125,6 +125,8 @@ export function WorkItemDetailMain({
                         <WorkItemDescriptionDraftDiff
                           issueIdOrKey={model.key}
                           projectId={projectId}
+                          {...(accountId ? { accountId } : {})}
+                          onReload={onReload}
                           {...(model.descriptionText ? { currentText: model.descriptionText } : {})}
                         />
                       ),

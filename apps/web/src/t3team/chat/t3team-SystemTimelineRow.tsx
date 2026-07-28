@@ -21,6 +21,7 @@ import {
 } from "~/t3team/chat/t3team-messageShapeCard";
 import { T3TeamWorkflowShapeLiveCard } from "~/t3team/chat/t3team-messageShapeCardLive";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import { useOpenT3TeamWorkItemDraft } from "~/t3team/chat/t3team-useOpenWorkItemDraft";
 import { useMergedThreads } from "~/t3team/t3team-mergedThreads";
 
 const TERMINAL_WORKFLOW_STATUSES = new Set(["completed", "failed", "cancelled"]);
@@ -64,6 +65,7 @@ export function T3TeamSystemTimelineRow(props: {
   readonly onControlWorkflow?: ChatViewT3TeamExtensionProps["onControlWorkflow"];
   readonly onOpenThread?: ChatViewT3TeamExtensionProps["onOpenThread"];
 }) {
+  const openWorkItemDraft = useOpenT3TeamWorkItemDraft();
   const mergedThreads = useMergedThreads();
   const childStatuses = Object.fromEntries(
     mergedThreads.flatMap((thread) =>
@@ -164,7 +166,11 @@ export function T3TeamSystemTimelineRow(props: {
           }
         />
         {genericAttachments.length > 0 ? (
-          <T3TeamMessageAttachmentList attachments={genericAttachments} />
+          <T3TeamMessageAttachmentList
+            attachments={genericAttachments}
+            {...(message.text ? { fallbackText: message.text } : {})}
+            onOpenWorkItemDraft={openWorkItemDraft}
+          />
         ) : null}
       </div>
     );
@@ -251,7 +257,11 @@ export function T3TeamSystemTimelineRow(props: {
           </div>
         ))}
         {genericAttachments.length > 0 ? (
-          <T3TeamMessageAttachmentList attachments={genericAttachments} />
+          <T3TeamMessageAttachmentList
+            attachments={genericAttachments}
+            {...(message.text ? { fallbackText: message.text } : {})}
+            onOpenWorkItemDraft={openWorkItemDraft}
+          />
         ) : null}
       </div>
     </div>

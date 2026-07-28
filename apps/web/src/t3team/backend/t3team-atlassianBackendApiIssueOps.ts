@@ -18,6 +18,7 @@ type AtlassianIssueOpsApi = Pick<
   | "updateIssueAssignee"
   | "updateIssueEstimate"
   | "updateIssueStatus"
+  | "updateIssueDescription"
   | "createSubtask"
   | "listChildIssueTypes"
   | "downloadAsset"
@@ -72,6 +73,18 @@ export function createAtlassianIssueOpsApi(post: PostJson): AtlassianIssueOpsApi
         input,
       );
       return { status: response.status };
+    },
+
+    async updateIssueDescription(input: {
+      readonly accountId: string;
+      readonly issueIdOrKey: string;
+      readonly description: string;
+    }): Promise<void> {
+      // Markdown as authored; the server owns the conversion.
+      await post<typeof input, { ok: true }>(
+        "/api/t3team/atlassian/issue/update-description",
+        input,
+      );
     },
 
     async createSubtask(input: {
