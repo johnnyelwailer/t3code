@@ -1553,6 +1553,66 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       assert.equal(shellSnapshot.threads.length, 0);
     }),
   );
+
+  it.effect(
+    "returns `source` in the shell snapshot for a bound project, and `undefined` for an unbound one",
+    () =>
+      Effect.gen(function* () {
+        const snapshotQuery = yield* ProjectionSnapshotQuery;
+        const sql = yield* SqlClient.SqlClient;
+
+        yield* sql`DELETE FROM projection_projects`;
+        yield* sql`DELETE FROM projection_threads`;
+        yield* sql`DELETE FROM projection_state`;
+        yield* sql`DELETE FROM t3team_project_source_bindings`;
+
+        yield* sql`
+          INSERT INTO projection_projects (
+            project_id, title, workspace_root, default_model_selection_json,
+            scripts_json, created_at, updated_at, deleted_at
+          )
+          VALUES
+            (
+              'project-bound', 'Bound Project', '/tmp/bound-project',
+              '{"provider":"codex","model":"gpt-5-codex"}', '[]',
+              '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:01.000Z', NULL
+            ),
+            (
+              'project-unbound', 'Unbound Project', '/tmp/unbound-project',
+              '{"provider":"codex","model":"gpt-5-codex"}', '[]',
+              '2026-05-01T00:00:02.000Z', '2026-05-01T00:00:03.000Z', NULL
+            )
+        `;
+
+        // Note the `OrchestrationProjectShell`/`decodeShellSnapshot` stripping trap this
+        // guards against: `decodeShellSnapshot` decodes with excess properties ignored, so
+        // an undeclared `source` key on the shell schema would silently vanish here even
+        // though this row-mapping code sets it.
+        yield* sql`
+          INSERT INTO t3team_project_source_bindings (
+            project_id, provider, account_id, external_project_id,
+            external_project_key, external_project_url, updated_at
+          )
+          VALUES (
+            'project-bound', 'atlassian', 'acct-1', 'ext-1',
+            'ENG', 'https://example.atlassian.net/browse/ENG', '2026-05-01T00:00:04.000Z'
+          )
+        `;
+
+        const shellSnapshot = yield* snapshotQuery.getShellSnapshot();
+        const bound = shellSnapshot.projects.find((project) => project.id === "project-bound");
+        const unbound = shellSnapshot.projects.find((project) => project.id === "project-unbound");
+
+        assert.deepEqual(bound?.source, {
+          provider: "atlassian",
+          accountId: "acct-1",
+          externalProjectId: "ext-1",
+          externalProjectKey: "ENG",
+          externalProjectUrl: "https://example.atlassian.net/browse/ENG",
+        });
+        assert.equal(unbound?.source, undefined);
+      }),
+  );
 });
 
 it.effect(

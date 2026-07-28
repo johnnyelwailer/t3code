@@ -1,7 +1,9 @@
 import type { ExternalProject, IntegrationAccount } from "@t3tools/integrations-core";
 import { Input } from "~/t3team/components/ui/t3team-input";
+import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { ProjectAvatar } from "~/t3team/components/t3team-ProjectAvatar";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
+import type { ExistingProjectMatch } from "~/t3team/hooks/t3team-useExistingProjectForExternalProject";
 
 export function AccountStep({
   accounts,
@@ -32,6 +34,7 @@ export function AccountStep({
                 key={account.id}
                 type="button"
                 onClick={() => onSelectAccount(account)}
+                aria-pressed={selectedAccount?.id === account.id}
                 className={`flex w-full items-center justify-between rounded-md border p-3 text-left ${selectedAccount?.id === account.id ? "border-primary bg-primary/5" : "border-border"}`}
               >
                 <span className="text-sm font-medium">{account.label}</span>
@@ -50,6 +53,8 @@ export function ProjectStep({
   setProjectQuery,
   onSelectProject,
   loading,
+  alreadyAdded,
+  onOpenExistingProject,
 }: {
   filteredProjects: ReadonlyArray<ExternalProject>;
   selectedProject: ExternalProject | null;
@@ -57,6 +62,9 @@ export function ProjectStep({
   setProjectQuery: (value: string) => void;
   onSelectProject: (project: ExternalProject) => void;
   loading: boolean;
+  /** Externally-bound projects already added to the workspace, keyed by external project id. */
+  alreadyAdded?: ReadonlyMap<string, ExistingProjectMatch>;
+  onOpenExistingProject?: (projectId: string) => void;
 }) {
   const showLoadingSkeletons = loading && filteredProjects.length === 0;
 
@@ -79,28 +87,42 @@ export function ProjectStep({
           ? ["project-1", "project-2", "project-3", "project-4"].map((key) => (
               <Skeleton key={key} className="h-14 w-full rounded-md" />
             ))
-          : filteredProjects.map((project) => (
-              <button
-                key={project.id}
-                type="button"
-                onClick={() => onSelectProject(project)}
-                className={`flex w-full items-center justify-between rounded-md border p-3 text-left ${selectedProject?.id === project.id ? "border-primary bg-primary/5" : "border-border"}`}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <ProjectAvatar
-                    title={project.title}
-                    projectKey={project.key}
-                    raw={project.raw}
-                    iconUrl={project.iconUrl}
-                    className="size-5 shrink-0 rounded-sm object-cover"
-                  />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{project.title}</div>
-                    <div className="text-xs text-muted-foreground">{project.key}</div>
+          : filteredProjects.map((project) => {
+              const existing = alreadyAdded?.get(project.id);
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() =>
+                    existing ? onOpenExistingProject?.(existing.projectId) : onSelectProject(project)
+                  }
+                  aria-pressed={selectedProject?.id === project.id}
+                  className={`flex w-full items-center justify-between rounded-md border p-3 text-left ${selectedProject?.id === project.id ? "border-primary bg-primary/5" : "border-border"}`}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <ProjectAvatar
+                      title={project.title}
+                      projectKey={project.key}
+                      raw={project.raw}
+                      iconUrl={project.iconUrl}
+                      className="size-5 shrink-0 rounded-sm object-cover"
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{project.title}</div>
+                      <div className="text-xs text-muted-foreground">{project.key}</div>
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                  {existing ? (
+                    <span className="flex shrink-0 items-center gap-2">
+                      <Badge variant="secondary" size="sm">
+                        Already added
+                      </Badge>
+                      <span className="text-xs font-medium text-foreground">Open project</span>
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
       </div>
     </section>
   );

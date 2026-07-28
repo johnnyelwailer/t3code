@@ -210,6 +210,25 @@ export const ProjectScript = Schema.Struct({
 });
 export type ProjectScript = typeof ProjectScript.Type;
 
+export const ProjectWorkSourceProvider = Schema.Literals(["atlassian", "linear", "github", "managed"]);
+export type ProjectWorkSourceProvider = typeof ProjectWorkSourceProvider.Type;
+
+/**
+ * A project's work-source binding. A non-local provider CANNOT omit the ids —
+ * that is what makes "Jira project without a binding" unrepresentable.
+ */
+export const ProjectSourceBinding = Schema.Union([
+  Schema.Struct({ provider: Schema.Literal("local") }),
+  Schema.Struct({
+    provider: ProjectWorkSourceProvider,
+    accountId: TrimmedNonEmptyString,
+    externalProjectId: TrimmedNonEmptyString,
+    externalProjectKey: Schema.optional(TrimmedNonEmptyString),
+    externalProjectUrl: Schema.optional(TrimmedNonEmptyString),
+  }),
+]);
+export type ProjectSourceBinding = typeof ProjectSourceBinding.Type;
+
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
@@ -220,6 +239,11 @@ export const OrchestrationProject = Schema.Struct({
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
+  // Optional: historical `project.created` events (and any project row
+  // projected before this field existed) carry no binding at all. A
+  // required field would make every pre-existing user database fail to
+  // decode on boot.
+  source: Schema.optional(ProjectSourceBinding),
 });
 export type OrchestrationProject = typeof OrchestrationProject.Type;
 
@@ -459,6 +483,12 @@ export const OrchestrationProjectShell = Schema.Struct({
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
+  // Optional: absent for projects created before this field existed, and
+  // for `local`-source projects that have no binding to report. NOTE:
+  // `decodeShellSnapshot` decodes with `onExcessProperty: "ignore"` — this
+  // key MUST be declared here or the binding is silently stripped from
+  // every shell snapshot sent to clients.
+  source: Schema.optional(ProjectSourceBinding),
 });
 export type OrchestrationProjectShell = typeof OrchestrationProjectShell.Type;
 
@@ -594,6 +624,9 @@ export const ProjectCreateCommand = Schema.Struct({
   createWorkspaceRootIfMissing: Schema.optional(Schema.Boolean),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
   createdAt: IsoDateTime,
+  // Optional: omitted for `local` projects (the default) and by any older
+  // client build that predates work-source binding.
+  source: Schema.optional(ProjectSourceBinding),
 });
 
 const ProjectMetaUpdateCommand = Schema.Struct({
@@ -604,6 +637,10 @@ const ProjectMetaUpdateCommand = Schema.Struct({
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
+  // Optional: absence means "leave the existing binding untouched" (this is
+  // the repair/rebind mechanism — a meta-update without `source` must never
+  // clear a previously-set binding).
+  source: Schema.optional(ProjectSourceBinding),
 });
 
 const ProjectDeleteCommand = Schema.Struct({
@@ -1048,6 +1085,10 @@ export const ProjectCreatedPayload = Schema.Struct({
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
+  // Optional: historical `project.created` events were persisted without
+  // this field entirely — required would fail decode on every existing
+  // user database at boot.
+  source: Schema.optional(ProjectSourceBinding),
 });
 
 export const ProjectMetaUpdatedPayload = Schema.Struct({
@@ -1058,6 +1099,10 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
   updatedAt: IsoDateTime,
+  // Optional: historical `project.meta-updated` events predate this field,
+  // and an update that doesn't touch the binding must omit it (never clear
+  // it) — both reasons this cannot be required.
+  source: Schema.optional(ProjectSourceBinding),
 });
 
 export const ProjectDeletedPayload = Schema.Struct({

@@ -190,6 +190,19 @@
 }
 
 @supports (view-transition-name: none) {
+  /*
+   * While a view transition is running, the browser paints OLD snapshots for up to its full
+   * animation duration while still hit-testing the LIVE DOM underneath. A click in that window
+   * can land on whatever now occupies that screen position (wrong row) or land between
+   * mousedown/mouseup and get dispatched to a container ancestor instead of any row (no
+   * selection at all). Disabling pointer events on the stepped wizard panel for the duration of
+   * the transition closes that window entirely, regardless of which race variant would
+   * otherwise fire. See t3team-runViewTransition.ts for the attribute lifecycle.
+   */
+  html[data-t3team-view-transition-types] [data-step] {
+    pointer-events: none;
+  }
+
   ::view-transition-group(t3team-right-sidebar-shell),
   ::view-transition-group(t3team-right-sidebar-panel) {
     animation-duration: 180ms;

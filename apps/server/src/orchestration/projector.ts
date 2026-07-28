@@ -215,6 +215,7 @@ export function projectEvent(
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
             deletedAt: null,
+            ...(payload.source !== undefined ? { source: payload.source } : {}),
           };
 
           return {
@@ -244,6 +245,7 @@ export function projectEvent(
                     ? { defaultModelSelection: payload.defaultModelSelection }
                     : {}),
                   ...(payload.scripts !== undefined ? { scripts: payload.scripts } : {}),
+                  ...(payload.source !== undefined ? { source: payload.source } : {}),
                   updatedAt: payload.updatedAt,
                 }
               : project,

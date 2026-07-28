@@ -55,7 +55,7 @@ export function runT3TeamViewTransition<T>(
   const startViewTransition = document?.startViewTransition?.bind(document);
   const dedupedTypes = options?.types?.length ? [...new Set(options.types)] : undefined;
 
-  let result!: T;
+  let result: T | undefined;
   const applyUpdate = () => {
     flushSync(() => {
       result = update();
@@ -64,7 +64,7 @@ export function runT3TeamViewTransition<T>(
 
   if (typeof startViewTransition !== "function") {
     applyUpdate();
-    return result;
+    return result as T;
   }
 
   const cleanupRootTransitionTypes = withRootTransitionTypes(document, dedupedTypes);
@@ -84,5 +84,10 @@ export function runT3TeamViewTransition<T>(
     applyUpdate();
   }
 
-  return result;
+  // On the view-transition path the browser invokes the update callback ASYNCHRONOUSLY (after it
+  // snapshots the old state), so `update()` has deliberately not run yet. Do NOT "recover" by
+  // applying it here: that double-applies the update and calls `flushSync` mid-render. This path
+  // therefore cannot return a meaningful `T` — no caller reads the result, and the cast documents
+  // that, replacing the previous `let result!: T` trap which hid it behind a false type.
+  return result as T;
 }
