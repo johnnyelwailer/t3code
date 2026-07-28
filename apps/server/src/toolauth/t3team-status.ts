@@ -27,6 +27,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import * as ProcessRunner from "../processRunner.ts";
+import { EXPIRY_WARNING_MS, extractLabel, parseCredentialExpiry } from "./t3team-statusMetadata.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
 export interface ToolAuthStatusOptions {
@@ -37,46 +38,6 @@ export interface ToolAuthStatusOptions {
    * production. Passed verbatim to the probe command.
    */
   readonly env: NodeJS.ProcessEnv;
-}
-
-const EXPIRY_WARNING_MS = 3 * 24 * 60 * 60 * 1000;
-const MS_EPOCH_THRESHOLD = 1_000_000_000_000;
-
-function resolveDotPath(record: unknown, dotPath: string): unknown {
-  let cursor: unknown = record;
-  for (const segment of dotPath.split(".")) {
-    if (cursor === null || typeof cursor !== "object") return undefined;
-    cursor = (cursor as Record<string, unknown>)[segment];
-  }
-  return cursor;
-}
-
-/** Normalizes epoch-seconds, epoch-ms, or an ISO string into epoch-ms. */
-function normalizeExpiry(raw: unknown): number | undefined {
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return raw < MS_EPOCH_THRESHOLD ? raw * 1000 : raw;
-  }
-  if (typeof raw === "string") {
-    const parsed = Date.parse(raw);
-    return Number.isNaN(parsed) ? undefined : parsed;
-  }
-  return undefined;
-}
-
-function parseCredentialExpiry(adapter: ToolAuthAdapter, fileText: string): number | undefined {
-  const dotPath = adapter.status.credentialExpiryPath;
-  if (!dotPath) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(fileText);
-    return normalizeExpiry(resolveDotPath(parsed, dotPath));
-  } catch {
-    return undefined;
-  }
-}
-
-function extractLabel(pattern: RegExp | undefined, text: string): string | undefined {
-  if (!pattern || text.length === 0) return undefined;
-  return pattern.exec(text)?.[1]?.trim() || undefined;
 }
 
 /**
@@ -138,10 +99,19 @@ export const probeStatus = Effect.fn("toolauth.probeStatus")(function* (
       probeOutput = probeResult.value.stdout.length > 0
         ? probeResult.value.stdout
         : probeResult.value.stderr;
-      const parsed = adapter.status.parseProbe?.(probeOutput);
+      // Empty output is NOT an answer. Every `parseProbe` ends in a defensive
+      // `return "idle"`, so handing it "" yields a confident-looking "logged
+      // out" that the CLI never actually said — and downstream logic that keys
+      // off "did the probe answer?" would then trust it.
+      const parsed =
+        probeOutput.trim().length > 0 ? adapter.status.parseProbe?.(probeOutput) : undefined;
       if (parsed) phase = parsed;
     }
   }
+
+  // Whether the CLI itself gave us an answer, as opposed to us inferring one.
+  // The non-OAuth reclaim below turns on this distinction.
+  const probeAnswered = phase !== undefined;
 
   // The probe didn't resolve a phase (none declared, it failed to run, or its
   // output didn't parse) — fall back to the credential-file hint.
@@ -155,13 +125,34 @@ export const probeStatus = Effect.fn("toolauth.probeStatus")(function* (
   //
   // Verified live: with ANTHROPIC_BASE_URL set, `claude auth status --json`
   // reports loggedIn:false while the Claude provider is healthy and serving
-  // models. Only `idle` is reclaimed here — a genuinely `expired` or `failed`
-  // OAuth session still deserves to be surfaced as-is.
+  // models. Only `idle` is reclaimed — a genuinely `expired` or `failed` OAuth
+  // session still surfaces as-is.
+  //
+  // And ONLY when the probe gave no answer. If the CLI was asked and said "you
+  // are not logged in", that is real information and must not be overwritten:
+  // `OPENAI_API_KEY=definitely-invalid` alongside an explicit logged-out probe
+  // was being reported as connected, which hides a broken credential behind a
+  // reassuring green dot. Absence of an answer is what this reclaim is for.
   const nonOAuthEnvVar = adapter.status.nonOAuthEnvVars?.find((name) => {
     const value = options.env[name];
     return typeof value === "string" && value.trim().length > 0;
   });
-  if (phase === "idle" && nonOAuthEnvVar !== undefined) {
+  // The probe DID answer "logged out" while a non-OAuth var is set. Both
+  // readings are possible from identical output — a gateway that makes OAuth
+  // irrelevant, or an invalid API key that makes the tool unusable — and the CLI
+  // gives us nothing to tell them apart. Report the answer we were given rather
+  // than the flattering one: a needless Connect button is a small annoyance,
+  // whereas a green dot on a tool that cannot run is a dead end the user has no
+  // way to diagnose. The message carries the context so it is not baffling.
+  if (phase === "idle" && probeAnswered && nonOAuthEnvVar !== undefined) {
+    return {
+      tool: adapter.tool,
+      phase: "idle",
+      message: `Not signed in. ${nonOAuthEnvVar} is set, so ${adapter.label} may already work through it — sign in only if it does not.`,
+    };
+  }
+
+  if (phase === "idle" && !probeAnswered && nonOAuthEnvVar !== undefined) {
     return {
       tool: adapter.tool,
       phase: "connected",

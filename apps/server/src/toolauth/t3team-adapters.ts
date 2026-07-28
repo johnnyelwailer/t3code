@@ -42,7 +42,11 @@ export const CLAUDE: ToolAuthAdapter = {
     // reach the CLI's localhost callback, which is always true for a remote sandbox.
     awaitingCode: /paste code here|enter the code|authorization code/i,
     success: /login successful|logged in as|already authenticated/i,
-    failure: /authentication failed|login failed|invalid code|expired/i,
+    // `expired` is qualified rather than bare: on its own it also fires on
+    // incidental prose like "Login successful; expired credentials removed",
+    // which is a SUCCESS line. Success is matched first now, but a matcher this
+    // loose would still mislabel any failure-free line that mentions expiry.
+    failure: /authentication failed|login failed|invalid code|(?:code|token|session|link) (?:has )?expired/i,
   },
   status: {
     // A HINT, not authoritative (see `ToolAuthStatusConfig.credentialPath`):
@@ -105,7 +109,13 @@ export const CODEX: ToolAuthAdapter = {
   match: {
     url: /(https:\/\/(?:auth\.openai\.com|chatgpt\.com)\/[^\s"']+)/i,
     // Device flow: the code is DISPLAYED, never sent back to us.
-    displayCode: /\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/,
+    //
+    // The leading `(?<![/\w-])` matters. Without it this also matches a code
+    // embedded in a URL path — `https://auth.openai.com/device/ABCD-1234` — and
+    // the UI would then present a fragment of the sign-in URL as the code to
+    // type, on the very same line that carries the URL. Requiring the match not
+    // to follow a slash keeps it to a standalone token.
+    displayCode: /(?<![/\w-])([A-Z0-9]{4}-[A-Z0-9]{4})\b/,
     success: /successfully logged in|authentication complete|logged in as/i,
     failure: /device code (?:login )?(?:is )?(?:not enabled|disabled)|expired|denied/i,
   },

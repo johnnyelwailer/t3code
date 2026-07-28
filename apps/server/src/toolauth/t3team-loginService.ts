@@ -93,7 +93,9 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     let pending = "";
 
     process.onData((chunk) => {
-      const read = assemblePtyRead(pending, stripAnsi(chunk));
+      // RAW chunk on purpose: `foldPtyRead` strips ANSI per assembled line, so
+      // an escape sequence split across two reads is reunited before stripping.
+      const read = assemblePtyRead(pending, chunk);
       pending = read.pending;
       Effect.runFork(
         Effect.gen(function* () {

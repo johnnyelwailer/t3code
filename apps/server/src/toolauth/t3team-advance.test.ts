@@ -183,6 +183,55 @@ describe("pty read assembly (chunk boundaries)", () => {
     const state = feed([`Visit: ${AUTHORIZE_URL}\n`, "Login successful"], { exit: true });
     expect(state.phase).toBe("connected");
   });
+
+  it("strips an ANSI escape that is itself split across two reads", () => {
+    // Colour codes straddle reads exactly like URLs do. Stripping each raw
+    // chunk on arrival left the split CSI intact in the reassembled line, so
+    // the prose matcher never fired and the flow stalled until process exit.
+    // Split INSIDE the escape sequence itself: neither read carries a complete
+    // CSI, so per-chunk stripping leaves it embedded in the reassembled line.
+    const state = feed(["\u001B", "[32mLogin successful\u001B[0m\n"]);
+    expect(state.phase).toBe("connected");
+  });
+});
+
+describe("success and failure patterns colliding on one line", () => {
+  it("treats a line matching BOTH patterns as success, not failure", () => {
+    // These are broad prose matchers and one line can satisfy both. Reporting
+    // a completed sign-in as failed is the worst direction to be wrong in: the
+    // credential is on disk and working, and we would tell the user it is not.
+    const next = advance(
+      { tool: "claude", phase: "awaiting-code" },
+      "Login successful; expired credentials removed",
+      CLAUDE,
+    );
+    expect(next.phase).toBe("connected");
+  });
+
+  it("still reports a genuine failure", () => {
+    const next = advance({ tool: "claude", phase: "verifying" }, "Login failed: invalid code", CLAUDE);
+    expect(next.phase).toBe("failed");
+    expect(next.message).toContain("invalid code");
+  });
+});
+
+describe("Codex device code must not be scraped out of the sign-in URL", () => {
+  it("ignores a code-shaped fragment inside a URL path", () => {
+    const next = advance(
+      idle("codex"),
+      "Visit https://auth.openai.com/device/ABCD-1234 to continue",
+      CODEX,
+    );
+    // The URL is captured; the path fragment must NOT become the device code,
+    // or the UI tells the user to type part of the link they just opened.
+    expect(next.url).toContain("auth.openai.com");
+    expect(next.displayCode).toBeUndefined();
+  });
+
+  it("still captures a standalone device code", () => {
+    const next = advance(idle("codex"), "Your code is WDJB-MJHT", CODEX);
+    expect(next.displayCode).toBe("WDJB-MJHT");
+  });
 });
 
 describe("stripAnsi", () => {

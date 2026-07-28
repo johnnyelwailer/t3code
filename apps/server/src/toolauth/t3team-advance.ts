@@ -25,11 +25,21 @@ export function advance(prev: AuthState, chunk: string, adapter: ToolAuthAdapter
   const next: AuthState = { ...prev };
   const m = adapter.match;
 
-  if (m.failure?.test(chunk)) {
-    return { ...next, phase: "failed", message: firstLine(chunk) };
-  }
+  // SUCCESS is checked first, deliberately. These patterns are broad prose
+  // matchers and a single line can satisfy both — "Login successful; expired
+  // credentials removed" matches `success` and also the failure alternative
+  // `expired`. Checking failure first reported a completed sign-in as failed,
+  // which is the worst possible direction to get wrong: the credential is on
+  // disk and working, and we tell the user it did not work.
+  //
+  // The reverse collision is far less likely, because failure lines say so
+  // explicitly ("login failed", "invalid code") and do not contain a success
+  // phrase.
   if (m.success.test(chunk)) {
     return { ...next, phase: "connected", message: undefined };
+  }
+  if (m.failure?.test(chunk)) {
+    return { ...next, phase: "failed", message: firstLine(chunk) };
   }
 
   const url = chunk.match(m.url)?.[1];
@@ -144,17 +154,28 @@ export function assemblePtyRead(
   return { lines: parts, partial: carried, pending: carried };
 }
 
-/** Fold half: complete lines through `advance()`, plus the prompt-only check. */
+/**
+ * Fold half: complete lines through `advance()`, plus the prompt-only check.
+ *
+ * ANSI is stripped HERE, per assembled line, not per raw chunk. An escape
+ * sequence straddles reads just like a URL does — `Login \x1b[31` + `m
+ * successful` — and stripping each chunk on arrival leaves the split CSI
+ * intact, so the reassembled line still carries `\x1b[31m` in the middle of the
+ * prose and no matcher fires. Stripping after reassembly sees the whole
+ * sequence and removes it.
+ */
 export function foldPtyRead(
   prev: AuthState,
   read: AssembledPtyRead,
   adapter: ToolAuthAdapter,
 ): AuthState {
   let state = prev;
-  for (const line of read.lines) {
+  for (const rawLine of read.lines) {
+    const line = stripAnsi(rawLine);
     if (line.length > 0) state = advance(state, line, adapter);
   }
-  if (read.partial.length > 0 && adapter.match.awaitingCode?.test(read.partial) && state.url) {
+  const partial = stripAnsi(read.partial);
+  if (partial.length > 0 && adapter.match.awaitingCode?.test(partial) && state.url) {
     state = { ...state, phase: "awaiting-code" };
   }
   return state;

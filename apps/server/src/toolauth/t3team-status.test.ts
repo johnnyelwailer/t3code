@@ -229,20 +229,41 @@ it.layer(NodeServices.layer)("toolauth status probe", (it) => {
   });
 
   describe("a non-OAuth path counts as usable — don't nag someone with nothing to fix", () => {
-    it.effect("ANTHROPIC_BASE_URL set: loggedIn:false is reported as connected, not idle", () =>
+    it.effect("an EXPLICIT logged-out probe is not overwritten, but is explained", () =>
       Effect.gen(function* () {
         const homeDir = makeTempHome();
         try {
-          // The exact live situation: the CLI is pointed at a gateway, holds no
-          // OAuth credential, and the provider is healthy and serving models.
+          // The live situation that started this: the CLI is pointed at a
+          // gateway, holds no OAuth credential, and the provider is healthy.
+          // Identical output, though, also describes an invalid API key on a
+          // tool that cannot run. The CLI gives us no way to tell them apart, so
+          // we report what it actually said and explain the ambiguity rather
+          // than showing a green dot over a possibly-dead tool.
           const state = yield* probe(
             CLAUDE,
             homeDir,
             () => okTextResult('{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty"}'),
             { ANTHROPIC_BASE_URL: "https://gateway.example.invalid" },
           );
-          expect(state.phase).toBe("connected");
+          expect(state.phase).toBe("idle");
           expect(state.message).toContain("ANTHROPIC_BASE_URL");
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+
+    it.effect("reclaims idle as connected only when the probe gave NO answer", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          // No probe output at all (binary missing / unparseable): the env var is
+          // then the best evidence available, and nagging helps nobody.
+          const state = yield* probe(CLAUDE, homeDir, () => okTextResult(""), {
+            ANTHROPIC_BASE_URL: "https://gateway.example.invalid",
+          });
+          expect(state.phase).toBe("connected");
+          expect(state.message).toContain("not verified");
         } finally {
           removeTempHome(homeDir);
         }
