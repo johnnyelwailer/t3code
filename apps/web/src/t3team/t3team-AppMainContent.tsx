@@ -5,23 +5,15 @@ import type {
   TicketKickoffThreadInput,
 } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
-import {
-  readActiveThreadIdFromView,
-  type ProjectThreadDisplayMode,
-  type ProjectThread,
-  type ViewState,
-} from "~/t3team/t3team-types";
+import type { ProjectThreadDisplayMode, ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { AppDashboardPane } from "~/t3team/t3team-AppDashboardPane";
 import { AppMainContentHomeBrowser } from "~/t3team/t3team-AppMainContentHomeBrowser";
+import { AppDraftPane } from "~/t3team/t3team-AppDraftPane";
 import { AppThreadPane } from "~/t3team/t3team-AppThreadPane";
-import { useThreadResolutionDebug } from "~/t3team/t3team-useThreadResolutionDebug";
-import { useHomeProjectChat, useSyncActiveChatTarget } from "./t3team-AppMainContentShell";
-import { useProjectWorkspaceAutoSync } from "~/t3team/hooks/t3team-useProjectWorkspaceAutoSync";
-import {
-  resolveEmbeddedThread,
-  resolveThreadProject,
-  resolveWorkHomeProject,
-} from "~/t3team/t3team-appMainContentResolution";
+import { useHomeProjectChat } from "./t3team-AppMainContentShell";
+import { resolveWorkHomeProject } from "~/t3team/t3team-appMainContentResolution";
+import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
+import { useAppMainContentThreadResolution } from "~/t3team/t3team-useAppMainContentThreadResolution";
 
 type MainContentProps = {
   view: ViewState | null;
@@ -81,6 +73,11 @@ export function AppMainContent({
     getThreadsForProject,
   });
   const showInitialSetup = !view && (reopenInitialSetup || allProjects.length === 0);
+  const setupSurfaceReason = resolveT3TeamSetupSurfaceReason({
+    allProjects,
+    selectedProjectId,
+    reopenInitialSetup,
+  });
   const homeProject = resolveWorkHomeProject({
     allProjects,
     selectedProjectId,
@@ -93,6 +90,7 @@ export function AppMainContent({
       onCreate={onCreate}
       onInlineProjectCreated={onInlineProjectCreated}
       showInitialSetup={showInitialSetup}
+      setupSurfaceReason={setupSurfaceReason}
       showAside={!reopenInitialSetup && projects.length > 0}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       homeChatProject={homeChatProject}
@@ -106,49 +104,15 @@ export function AppMainContent({
     />
   );
 
-  useSyncActiveChatTarget({
-    view,
-    getThreadsForProject,
-    homeChatProject,
-    homeChatThreadId,
-  });
-
-  const activeThreadId = readActiveThreadIdFromView(view);
-  const threadProject = resolveThreadProject({
-    activeThreadId,
-    view,
-    allProjects,
-    homeChatProject,
-  });
-  const threadProjectThreads = threadProject ? getThreadsForProject(threadProject.id) : [];
-  const resolvedThread = activeThreadId
-    ? (threadProjectThreads.find((candidate) => candidate.id === activeThreadId) ?? null)
-    : null;
-  const embeddedThread = resolveEmbeddedThread(view, threadProjectThreads);
-  const viewProject = view
-    ? (allProjects.find((candidate) => candidate.id === view.projectId) ?? null)
-    : null;
-  const workspaceSyncProject = threadProject ?? viewProject ?? homeProject;
-  const workspaceSyncProjectThreads = workspaceSyncProject
-    ? getThreadsForProject(workspaceSyncProject.id)
-    : [];
-
-  useProjectWorkspaceAutoSync({
-    project: workspaceSyncProject,
-    projectThreads: workspaceSyncProjectThreads,
-  });
-
-  useThreadResolutionDebug({
-    routeProjectId: view?.projectId ?? null,
-    routeThreadId: activeThreadId,
-    resolvedProjectId: threadProject?.id ?? null,
-    resolvedProjectWorkspaceRoot: threadProject?.workspace?.rootPath ?? null,
-    projectThreadCount: threadProjectThreads.length,
-    resolvedThreadId: resolvedThread?.id ?? null,
-    resolvedThreadProjectId: resolvedThread?.projectId ?? null,
-    resolvedThreadStatus: resolvedThread?.status ?? null,
-    kickoffPending: resolvedThread?.kickoffPending ?? null,
-  });
+  const { threadProject, resolvedThread, embeddedThread, viewProject } =
+    useAppMainContentThreadResolution({
+      view,
+      allProjects,
+      homeProject,
+      homeChatProject,
+      homeChatThreadId,
+      getThreadsForProject,
+    });
 
   if (!view) {
     if (homeProject) {
@@ -172,6 +136,12 @@ export function AppMainContent({
     }
 
     return homeBrowser;
+  }
+
+  // A draft has no project or thread of its own yet, so it resolves nothing
+  // above and must be handled before any project lookup.
+  if (view.type === "draft") {
+    return <AppDraftPane draftId={view.draftId} />;
   }
 
   if (view.type === "thread") {

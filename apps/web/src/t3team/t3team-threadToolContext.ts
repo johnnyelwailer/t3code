@@ -1,4 +1,5 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import type { ProjectSource } from "@t3tools/project-context";
 import {
   DEFAULT_T3TEAM_THREAD_TOOL_IDS as SHARED_DEFAULT_T3TEAM_THREAD_TOOL_IDS,
   listImplementedT3TeamToolCatalogEntries,
@@ -13,6 +14,8 @@ import type {
 } from "~/t3team/t3team-types";
 
 import { projectThreadsEqual } from "~/t3team/t3team-threadToolContextEquality";
+import { buildT3TeamKickoffState } from "~/t3team/t3team-threadToolContextKickoff";
+import { resolveT3TeamThreadToolIds } from "~/t3team/t3team-toolPolicy";
 
 export type T3TeamTurnToolCapability = T3TeamToolCapability;
 
@@ -55,18 +58,26 @@ type CreateT3TeamTurnToolContextInput = {
   ticketId?: string;
   ticketDisplayId?: string;
   selectedToolIds?: ReadonlyArray<T3TeamThreadToolId>;
+  // See t3team-toolPolicy.ts; absent projectSource keeps the catalog unfiltered.
+  projectSource?: Pick<ProjectSource, "provider">;
 };
 
 export function createT3TeamTurnToolContext(
   input: CreateT3TeamTurnToolContextInput,
 ): T3TeamTurnToolContext | undefined {
-  const selectedTools = [...new Set(input.selectedToolIds ?? DEFAULT_T3TEAM_THREAD_TOOL_IDS)]
+  const allowedToolIds = resolveT3TeamThreadToolIds({
+    projectSource: input.projectSource,
+    candidateToolIds: input.selectedToolIds ?? DEFAULT_T3TEAM_THREAD_TOOL_IDS,
+  });
+  const selectedTools = [...new Set(allowedToolIds)]
     .map((toolId) => TOOL_BY_ID.get(toolId))
     .filter((tool): tool is T3TeamTurnToolDescriptor => tool !== undefined);
 
   if (selectedTools.length === 0) {
     return undefined;
   }
+
+  const kickoffState = buildT3TeamKickoffState(input);
 
   return {
     surface: "t3team",
@@ -83,53 +94,7 @@ export function createT3TeamTurnToolContext(
         ...(input.ticketId ? { ticketId: input.ticketId } : {}),
         ...(input.ticketDisplayId ? { ticketDisplayId: input.ticketDisplayId } : {}),
       },
-      ...(input.kickoffMessage || input.kickoffWorkflow || input.kickoffPending !== undefined
-        ? {
-            kickoff: {
-              ...(input.kickoffMessage ? { message: input.kickoffMessage } : {}),
-              ...(input.kickoffPending !== undefined ? { pending: input.kickoffPending } : {}),
-              ...(input.kickoffWorkflow
-                ? {
-                    workflow: {
-                      kind: input.kickoffWorkflow.kind,
-                      recipeId: input.kickoffWorkflow.recipeId,
-                      ...(input.kickoffWorkflow.recipeVersion
-                        ? { recipeVersion: input.kickoffWorkflow.recipeVersion }
-                        : {}),
-                      ...(input.kickoffWorkflow.parameters
-                        ? { parameters: input.kickoffWorkflow.parameters }
-                        : {}),
-                      title: input.kickoffWorkflow.title,
-                      description: input.kickoffWorkflow.description,
-                      source: input.kickoffWorkflow.source,
-                      surface: input.kickoffWorkflow.surface,
-                      ...(input.kickoffWorkflow.kickoff
-                        ? { kickoff: input.kickoffWorkflow.kickoff }
-                        : {}),
-                      ...(input.kickoffWorkflow.reason
-                        ? { reason: input.kickoffWorkflow.reason }
-                        : {}),
-                      ...(input.kickoffWorkflow.recipePath
-                        ? { recipePath: input.kickoffWorkflow.recipePath }
-                        : {}),
-                      ...(input.kickoffWorkflow.promptPath
-                        ? { promptPath: input.kickoffWorkflow.promptPath }
-                        : {}),
-                      ...(input.kickoffWorkflow.workflowPath
-                        ? { workflowPath: input.kickoffWorkflow.workflowPath }
-                        : {}),
-                      ...(input.kickoffWorkflow.allowedToolGroups
-                        ? { allowedToolGroups: input.kickoffWorkflow.allowedToolGroups }
-                        : {}),
-                      ...(input.kickoffWorkflow.launchContext
-                        ? { launchContext: input.kickoffWorkflow.launchContext }
-                        : {}),
-                    },
-                  }
-                : {}),
-            },
-          }
-        : {}),
+      ...(kickoffState ? { kickoff: kickoffState } : {}),
     },
   };
 }

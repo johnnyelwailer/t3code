@@ -102,6 +102,12 @@ export function useProjectThreadActions(input: {
           return prev;
         }
 
+        // A draft view owns no server thread and has no project to fall back
+        // to, so a thread deletion never changes it.
+        if (prev.type === "draft") {
+          return prev;
+        }
+
         if (prev.type === "thread") {
           return prev.threadId === threadId ? null : prev;
         }

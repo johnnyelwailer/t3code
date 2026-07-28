@@ -1,4 +1,5 @@
 import { ArrowUpRightIcon } from "lucide-react";
+import type { ProjectSource } from "@t3tools/project-context";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
@@ -8,6 +9,7 @@ type EmbeddedThreadAsideProps = {
   thread: ProjectThread;
   projectId: string;
   projectTitle: string;
+  projectSource?: Pick<ProjectSource, "provider">;
   projectWorkspaceRoot?: string;
   ticketId?: string;
   onThreadKickoffConsumed: (threadId: string) => void;
@@ -18,6 +20,7 @@ export function EmbeddedThreadAside({
   thread,
   projectId,
   projectTitle,
+  projectSource,
   projectWorkspaceRoot,
   ticketId,
   onThreadKickoffConsumed,
@@ -43,6 +46,7 @@ export function EmbeddedThreadAside({
           threadId={thread.id}
           projectId={projectId}
           projectTitle={projectTitle}
+          {...(projectSource ? { projectSource } : {})}
           {...(projectWorkspaceRoot ? { projectWorkspaceRoot } : {})}
           title={thread.title}
           {...(thread.kickoffMessage ? { kickoffMessage: thread.kickoffMessage } : {})}

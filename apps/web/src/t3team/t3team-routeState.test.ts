@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseT3TeamRouteSearch, parseT3TeamViewFromPath } from "~/t3team/t3team-routeState";
+import {
+  parseT3TeamRouteSearch,
+  parseT3TeamViewFromPath,
+  resolveT3TeamRouteSearchTarget,
+} from "~/t3team/t3team-routeState";
 
 describe("t3team route state", () => {
   it("parses an embedded chat thread id from route search", () => {
@@ -51,6 +55,20 @@ describe("t3team route state", () => {
       projectId: "acme",
       threadId: "thread-123",
       embeddedThreadId: "thread-456",
+    });
+  });
+
+  it("parses a draft route by draft id alone", () => {
+    expect(parseT3TeamViewFromPath("/t3team/drafts/draft-9", {})).toEqual({
+      type: "draft",
+      draftId: "draft-9",
+    });
+  });
+
+  it("resolves a draft view back to the draft route target", () => {
+    expect(resolveT3TeamRouteSearchTarget("/t3team/drafts/draft-9")).toEqual({
+      to: "/t3team/drafts/$draftId",
+      params: { draftId: "draft-9" },
     });
   });
 });
