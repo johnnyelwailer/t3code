@@ -234,6 +234,7 @@ import {
   ProviderStatusBanner,
   shouldShowProviderStatusBanner,
 } from "./chat/ProviderStatusBanner";
+import { shouldSuppressT3TeamProviderStatus } from "~/t3team/chat/t3team-providerStatusSeverity";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import { resolveThreadPr } from "./ThreadStatusIndicators";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
@@ -2439,12 +2440,20 @@ function ChatViewContent(props: ChatViewProps) {
       setDismissedProviderStatusBannerKey(null);
     }
   }, [dismissedProviderStatusBannerKey, providerStatusBannerKey]);
-  const visibleProviderStatus = shouldShowProviderStatusBanner(
-    activeProviderStatus,
-    dismissedProviderStatusBannerKey,
-  )
-    ? activeProviderStatus
-    : null;
+  // The banner follows the model PICKER, which is not necessarily the instance a turn is streaming on. An
+  // informational status (a probe that timed out) must not interrupt work the user can see succeeding on
+  // another instance; real errors are never suppressed.
+  const visibleProviderStatus =
+    shouldShowProviderStatusBanner(activeProviderStatus, dismissedProviderStatusBannerKey) &&
+    !shouldSuppressT3TeamProviderStatus({
+      status: activeProviderStatus,
+      isTurnInProgress: isWorking,
+      ...(activeThread?.session?.providerInstanceId
+        ? { activeTurnInstanceId: activeThread.session.providerInstanceId }
+        : {}),
+    })
+      ? activeProviderStatus
+      : null;
   const hasTimelineTopBanner = Boolean(threadError) || visibleProviderStatus !== null;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
@@ -5816,8 +5825,10 @@ function ChatViewContent(props: ChatViewProps) {
         <div className="flex min-h-0 min-w-0 flex-1">
           {/* Chat column */}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            {/* Provider status overlays the timeline without changing its content height. */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
+            {/* Provider status occupies layout space at the top of the timeline column. It used to be an
+                absolutely positioned layer, which collided with the first cards in the timeline — the live
+                report had it printed over a Work Log card. */}
+            <div className="shrink-0">
               <ProviderStatusBanner
                 status={visibleProviderStatus}
                 onDismiss={() => setDismissedProviderStatusBannerKey(providerStatusBannerKey)}
