@@ -75,7 +75,9 @@ export const meta = {
   name: "work-item.description-rewrite",
   description: "Rewrite a work item description and propose it as a reviewable draft.",
   inputs: Inputs,
-  phases: [{ title: "Confirm" }, { title: "Write" }, { title: "Propose" }],
+  // Exactly the phase() titles the body declares, in order. A strip that names a phase the body
+  // never declares ("Confirm") puts the run's steps under a group the card cannot match.
+  phases: [{ title: "Ask" }, { title: "Write" }, { title: "Propose" }],
   capabilities: ["user", "mutation.draft"],
 } as const;
 
@@ -121,6 +123,9 @@ export default async function run() {
   phase("Write");
   const current = trimmed(input.currentBody);
   const title = trimmed(input.summary);
+  // Where this item is mirrored on disk. The sync writes one file per work item, its name the key
+  // lowercased with every run of non-alphanumerics collapsed to a dash (NXAI-6 -> nxai-6.json).
+  const contextFile = ".t3team/context/work-items/" + input.issueIdOrKey.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".json";
   const writerPrompt = [
     "Rewrite the description of " + input.issueIdOrKey + (title.length > 0 ? " (" + title + ")" : "") + ".",
     "",
@@ -128,16 +133,30 @@ export default async function run() {
     "",
     intent.length > 0 ? "Requested changes:\\n" + intent : "No specific changes were named; improve clarity and structure.",
     "",
-    "Before writing, READ the work item for context — its parent or epic, its children, its comments,",
-    "and any linked issues. A description written from the key and summary alone reads like filler; the",
-    "point is to say what THIS item is, in its actual context.",
+    "Before writing, READ this item from the workspace context mirror. The work tracker is mirrored to",
+    "disk, so this is a file read, not an API call. Start at " + contextFile + ", relative to the",
+    "workspace root you are running in; .t3team/context/work-items/index.json maps every key to its",
+    "file if that path is missing.",
+    "",
+    "That file carries the ticket itself plus summaryItems and an availability field. When availability",
+    "is not 'full', the parent or epic, the children, the comments and the links are NOT in it: they",
+    "live under the directory named by fullBundleRootRelativePath, whose entry point is the file named",
+    "by ticketEntryPointRelativePath. Read those when they exist. When they do not, write from the",
+    "summary and the current description alone and invent nothing — no parent, child, decision or",
+    "acceptance criterion you have not actually read.",
+    "",
+    "A description written from the key and summary alone reads like filler; the point is to say what",
+    "THIS item is, in its actual context.",
     "",
     "Then reply with the rewritten description and NOTHING else — no preamble, no commentary, no code",
     "fences. Do not EDIT anything: this workflow proposes your text as a draft a human reviews and",
     "accepts, so your final message must be the description itself.",
   ].join("\\n");
 
-  const rewritten = trimmed(await thread.askAgent(writerPrompt, { label: "Rewrite " + input.issueIdOrKey }));
+  // A template literal, not concatenation: the static shape scan can read the leading text out of
+  // one, so the live card matches this runtime step to its authored plan row instead of filing it
+  // under the previous phase as unplanned work.
+  const rewritten = trimmed(await thread.askAgent(writerPrompt, { label: \`Rewrite the description of \${input.issueIdOrKey}\` }));
   if (rewritten.length === 0) {
     throw new Error("The writer returned no description text, so there is nothing to propose.");
   }

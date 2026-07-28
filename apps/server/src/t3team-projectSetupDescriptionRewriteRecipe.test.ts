@@ -25,6 +25,7 @@ import {
   type T3TeamMessageExt,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
+import { deriveWorkflowShape } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 
@@ -48,7 +49,8 @@ import {
 import { renderBundledRecipeSetupFiles } from "./t3team-projectSetupRecipes.ts";
 
 const DRAFT_TOOL = "t3team.work_item.description.draft_update";
-const WRITTEN = "## Goal\nCheckout must round to two decimals.\n\n## Acceptance criteria\n- Totals match the invoice.";
+const WRITTEN =
+  "## Goal\nCheckout must round to two decimals.\n\n## Acceptance criteria\n- Totals match the invoice.";
 
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-rewrite-"));
 const workflowPath = NodePath.join(runsRoot, "workflow.ts");
@@ -215,6 +217,14 @@ describe("describe-rewrite bundled workflow", () => {
     expect(prompt).toContain("Rounding is wrong.");
     expect(prompt).toContain("Add acceptance criteria.");
     expect(prompt).toContain("Do not EDIT anything");
+    // …and WHERE to read the item from: the work tracker is mirrored to disk, so a writer left to
+    // guess searches the workspace, finds nothing, and writes filler. The file name is the key
+    // lowercased with non-alphanumerics collapsed, exactly as the context sync writes it.
+    expect(prompt).toContain(".t3team/context/work-items/t3-42.json");
+    expect(prompt).toContain(".t3team/context/work-items/index.json");
+    expect(prompt).toContain("availability");
+    expect(prompt).toContain("fullBundleRootRelativePath");
+    expect(prompt).toContain("ticketEntryPointRelativePath");
 
     // The BODY proposed the draft, carrying the writer's text verbatim.
     const carrier = draftCarrier(run.brokerDispatched);
@@ -258,6 +268,24 @@ describe("describe-rewrite bundled workflow", () => {
     expect(draftCarrier(run.brokerDispatched)?.attachment).toMatchObject({
       draft: { target: { issueIdOrKey: "T3-77" }, patch: { description: WRITTEN } },
     });
+  });
+
+  it("declares exactly the phases its body runs, with steps the live card can match", () => {
+    // The live card groups rows by the phase the SHAPE SCAN assigns and heads them from the
+    // declared strip. A strip that names a phase the body never declares ("Confirm" while the body
+    // calls phase("Ask")) files real steps under a phantom group; a non-static step label
+    // ("Rewrite " + key) degrades to "Ask the agent", which no runtime step can ever match, so the
+    // writer turn is rendered as unplanned work under the previous phase.
+    const source = renderDescriptionRewriteWorkflow();
+    const shape = deriveWorkflowShape({ absolutePath: workflowPath, sourceText: source });
+    expect(shape.phases.map((phase) => phase.title)).toEqual(["Ask", "Write", "Propose"]);
+    const declared = new Set(shape.phases.map((phase) => phase.title));
+    for (const step of shape.steps) expect(declared.has(step.phase ?? "")).toBe(true);
+    const writer = shape.steps.find((step) => step.kind === "agent");
+    expect(writer?.phase).toBe("Write");
+    expect(writer?.label).not.toBe("Ask the agent");
+    // The runtime step's label starts with the authored one, which is what makes them match.
+    expect(`${writer?.label ?? ""} T3-42`.startsWith(writer?.label ?? "x")).toBe(true);
   });
 
   it("ships to a workspace as a workflow-backed bundled recipe, with no authoring by the user", () => {

@@ -47,6 +47,15 @@ export interface WorkflowRegisteredRun {
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
   /** Prevent a detached controller from publishing a later terminal result. */
   readonly cancel: () => void;
+  /**
+   * Fail the run from the HOST side, for a condition the body can never observe because its ask
+   * will never be answered — an agent turn that ended without a single word of reply text being
+   * the case that motivated it. Resolving such an ask with `""` instead would let a workflow
+   * propose an empty artifact and report success.
+   *
+   * Optional so registrations made directly in tests keep compiling; callers must fall back.
+   */
+  readonly fail?: (error: unknown) => Promise<void>;
 }
 
 export interface T3TeamWorkflowEngineRegistryShape {
