@@ -15,25 +15,30 @@
  */
 
 export function buildT3TeamResourceDedupeKey(input: {
-  /** Where the resource lives — `project.source.provider` ("jira", "github", "local", …). */
-  readonly provider: string;
   /** What kind of thing it is ("work-item", "project-context", …). */
   readonly kind: string;
-  /** Stable id within the provider — a Jira issue KEY, never a title. */
+  /** Stable id within the source — a Jira issue KEY, never a title. */
   readonly id: string;
   readonly projectId: string;
 }): string {
-  return `${input.provider}:${input.kind}:${input.projectId}:${input.id}`;
+  return `${input.kind}:${input.projectId}:${input.id}`;
 }
 
+/**
+ * The key for one work item.
+ *
+ * Deliberately does NOT include the provider. A project has exactly one source, so `projectId` already
+ * scopes it — and every producer of this key must be able to spell it identically from whatever data it
+ * happens to hold. The context-bundle payload builder only has `projectId` and `ticketKey`; requiring a
+ * provider there is what let two producers emit different keys for the same Epic, which disabled dedupe
+ * and put two identical chips on one composer.
+ */
 export function buildT3TeamWorkItemDedupeKey(input: {
-  readonly provider: string;
   readonly projectId: string;
   /** The work item's display key (e.g. `NXAI-8`). */
   readonly workItemKey: string;
 }): string {
   return buildT3TeamResourceDedupeKey({
-    provider: input.provider,
     kind: "work-item",
     id: input.workItemKey,
     projectId: input.projectId,

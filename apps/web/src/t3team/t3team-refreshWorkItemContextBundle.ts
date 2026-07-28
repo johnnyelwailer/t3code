@@ -5,6 +5,7 @@ import {
 } from "@t3tools/project-context/t3teamContextPaths";
 
 import type { AddToChatPayloadProgressUpdate } from "~/t3team/t3team-addToChatUtils";
+import { buildT3TeamWorkItemDedupeKey } from "~/t3team/t3team-contextAttachmentDedupeKey";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import type { T3TeamDirectoryBundlePayload } from "~/t3team/t3team-contextDirectoryBundle";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -21,7 +22,11 @@ export function buildServerOwnedWorkItemContextBundle(input: {
   const references = [{ label: "Ticket entrypoint", relativePath: input.entryPointRelativePath }];
   return {
     kind: "t3team-directory-bundle",
-    dedupeKey: `${input.projectId}:${input.ticketKey}:work-item`,
+    // The one canonical key — a hand-spelled variant here is what produced two chips for one Epic.
+    dedupeKey: buildT3TeamWorkItemDedupeKey({
+      projectId: input.projectId,
+      workItemKey: input.ticketKey,
+    }),
     bundleRootRelativePath,
     files: [],
     fileReferences: references,

@@ -15,7 +15,6 @@ import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment"
 
 const THREAD_ID = "thread-1";
 const DEDUPE_KEY = buildT3TeamWorkItemDedupeKey({
-  provider: "atlassian",
   projectId: "project-1",
   workItemKey: "NXAI-8",
 });
@@ -46,11 +45,10 @@ describe("work item dedupe key", () => {
   });
 
   it("is identity-based, so a renamed work item still collides with itself", () => {
-    expect(DEDUPE_KEY).toBe("atlassian:work-item:project-1:NXAI-8");
+    expect(DEDUPE_KEY).toBe("work-item:project-1:NXAI-8");
     // Same resource, different title — same key.
     expect(
       buildT3TeamWorkItemDedupeKey({
-        provider: "atlassian",
         projectId: "project-1",
         workItemKey: "NXAI-8",
       }),
@@ -58,7 +56,6 @@ describe("work item dedupe key", () => {
     // Same Jira key in a different connected project is a different resource.
     expect(
       buildT3TeamWorkItemDedupeKey({
-        provider: "atlassian",
         projectId: "project-2",
         workItemKey: "NXAI-8",
       }),
@@ -114,7 +111,6 @@ describe("work item dedupe key", () => {
       workItemAttachment({
         label: "NXAI-6 Rollendefinitionen",
         dedupeKey: buildT3TeamWorkItemDedupeKey({
-          provider: "atlassian",
           projectId: "project-1",
           workItemKey: "NXAI-6",
         }),

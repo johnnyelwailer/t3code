@@ -47,7 +47,6 @@ export function buildTicketSidebarAddToChatRequest(input: {
     kind: "jira-work-item",
     // Identity-based, from the one builder, so any path attaching this work item collides with it.
     dedupeKey: buildT3TeamWorkItemDedupeKey({
-      provider: project.source.provider,
       projectId: project.id,
       workItemKey: ticket.ref.displayId,
     }),
