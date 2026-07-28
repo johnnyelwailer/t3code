@@ -165,91 +165,76 @@ const config: ViteUserConfig = {
       "effect/Order",
       "react-dom/client",
     ],
-    optimizeDeps: {
-      include: [
-        "@clerk/clerk-js",
-        "@clerk/react/internal",
-        "@pierre/diffs",
-        "@pierre/diffs/editor",
-        "@pierre/diffs/react",
-        "@pierre/diffs/worker/worker.js",
-        "effect/Array",
-        "effect/Order",
-        "react-dom/client",
-      ],
-    },
-    define: {
-      // In dev mode, tell the web app where the WebSocket server lives
-      "import.meta.env.VITE_WS_URL": JSON.stringify(configuredWsUrl ?? ""),
-      // Pinned explicitly rather than left to Vite's automatic VITE_ exposure:
-      // under single-origin dev this must stay empty even when a `.env`
-      // supplies it, so the client falls back to window.location.origin.
-      "import.meta.env.VITE_HTTP_URL": JSON.stringify(configuredHttpUrl ?? ""),
-      "import.meta.env.VITE_T3CODE_RELAY_URL": JSON.stringify(configuredRelayUrl),
-      "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(configuredClerkPublishableKey),
-      "import.meta.env.VITE_CLERK_JWT_TEMPLATE": JSON.stringify(configuredClerkJwtTemplate),
-      "import.meta.env.VITE_CLERK_CLI_OAUTH_CLIENT_ID": JSON.stringify(
-        configuredClerkCliOAuthClientId,
-      ),
-      "import.meta.env.VITE_RELAY_OTLP_TRACES_URL": JSON.stringify(configuredRelayTracingUrl),
-      "import.meta.env.VITE_RELAY_OTLP_TRACES_DATASET": JSON.stringify(
-        configuredRelayTracingDataset,
-      ),
-      "import.meta.env.VITE_RELAY_OTLP_TRACES_TOKEN": JSON.stringify(configuredRelayTracingToken),
-      "import.meta.env.VITE_HOSTED_APP_URL": JSON.stringify(configuredHostedAppUrl ?? ""),
-      "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(configuredHostedAppChannel),
-      "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
-      __ATLASSIAN_CLIENT_ID__: JSON.stringify(configuredAtlassianClientId),
-      __ATLASSIAN_SITE_URL__: JSON.stringify(configuredAtlassianSiteUrl),
-      __ATLASSIAN_OAUTH_REDIRECT_URI__: JSON.stringify(configuredAtlassianOAuthRedirectUri),
-    },
-    resolve: {
-      tsconfigPaths: true,
-      dedupe: ["react", "react-dom"],
-    },
-    experimental: {
-      bundledDev,
-    },
-    server: {
-      host,
-      port,
-      strictPort: true,
-      allowedHosts,
-      ...(devProxyTarget
-        ? {
-            // One entry per shared prefix; the server's dev catch-all 404s the
-            // same list, so the two sides cannot drift. `/ws` is the app's own
-            // socket — Vite's HMR socket is matched separately and exactly
-            // (path "/" plus a vite-hmr subprotocol), so the two upgrade
-            // handlers don't collide.
-            proxy: Object.fromEntries(
-              DEV_PROXIED_PATH_PREFIXES.map((prefix) => [
-                prefix,
-                {
-                  target: devProxyTarget,
-                  changeOrigin: true,
-                  ...(prefix === "/ws" ? { ws: true } : {}),
-                },
-              ]),
-            ),
-          }
-        : {}),
-      // Electron's BrowserWindow needs the HMR socket pinned to an explicit
-      // host to connect reliably; dev:desktop is the only mode that sets HOST.
-      // Everywhere else, leaving this unset lets the client derive it from the
-      // page origin, which is what makes HMR work over Tailscale/LAN instead of
-      // failing an attempt against the wrong machine's localhost first.
-      // (Vite 8 logs connection state via console.debug — enable "Verbose".)
-      ...(explicitHost
-        ? {
-            hmr: {
-              protocol: "ws",
-              host: explicitHost,
-              clientPort: port,
-            },
-          }
-        : {}),
-    },
+  },
+  define: {
+    // In dev mode, tell the web app where the WebSocket server lives
+    "import.meta.env.VITE_WS_URL": JSON.stringify(configuredWsUrl ?? ""),
+    // Pinned explicitly rather than left to Vite's automatic VITE_ exposure:
+    // under single-origin dev this must stay empty even when a `.env`
+    // supplies it, so the client falls back to window.location.origin.
+    "import.meta.env.VITE_HTTP_URL": JSON.stringify(configuredHttpUrl ?? ""),
+    "import.meta.env.VITE_T3CODE_RELAY_URL": JSON.stringify(configuredRelayUrl),
+    "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(configuredClerkPublishableKey),
+    "import.meta.env.VITE_CLERK_JWT_TEMPLATE": JSON.stringify(configuredClerkJwtTemplate),
+    "import.meta.env.VITE_CLERK_CLI_OAUTH_CLIENT_ID": JSON.stringify(
+      configuredClerkCliOAuthClientId,
+    ),
+    "import.meta.env.VITE_RELAY_OTLP_TRACES_URL": JSON.stringify(configuredRelayTracingUrl),
+    "import.meta.env.VITE_RELAY_OTLP_TRACES_DATASET": JSON.stringify(configuredRelayTracingDataset),
+    "import.meta.env.VITE_RELAY_OTLP_TRACES_TOKEN": JSON.stringify(configuredRelayTracingToken),
+    "import.meta.env.VITE_HOSTED_APP_URL": JSON.stringify(configuredHostedAppUrl ?? ""),
+    "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(configuredHostedAppChannel),
+    "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
+    __ATLASSIAN_CLIENT_ID__: JSON.stringify(configuredAtlassianClientId),
+    __ATLASSIAN_SITE_URL__: JSON.stringify(configuredAtlassianSiteUrl),
+    __ATLASSIAN_OAUTH_REDIRECT_URI__: JSON.stringify(configuredAtlassianOAuthRedirectUri),
+  },
+  resolve: {
+    tsconfigPaths: true,
+    dedupe: ["react", "react-dom"],
+  },
+  experimental: {
+    bundledDev,
+  },
+  server: {
+    host,
+    port,
+    strictPort: true,
+    allowedHosts,
+    ...(devProxyTarget
+      ? {
+          // One entry per shared prefix; the server's dev catch-all 404s the
+          // same list, so the two sides cannot drift. `/ws` is the app's own
+          // socket — Vite's HMR socket is matched separately and exactly
+          // (path "/" plus a vite-hmr subprotocol), so the two upgrade
+          // handlers don't collide.
+          proxy: Object.fromEntries(
+            DEV_PROXIED_PATH_PREFIXES.map((prefix) => [
+              prefix,
+              {
+                target: devProxyTarget,
+                changeOrigin: true,
+                ...(prefix === "/ws" ? { ws: true } : {}),
+              },
+            ]),
+          ),
+        }
+      : {}),
+    // Electron's BrowserWindow needs the HMR socket pinned to an explicit
+    // host to connect reliably; dev:desktop is the only mode that sets HOST.
+    // Everywhere else, leaving this unset lets the client derive it from the
+    // page origin, which is what makes HMR work over Tailscale/LAN instead of
+    // failing an attempt against the wrong machine's localhost first.
+    // (Vite 8 logs connection state via console.debug — enable "Verbose".)
+    ...(explicitHost
+      ? {
+          hmr: {
+            protocol: "ws",
+            host: explicitHost,
+            clientPort: port,
+          },
+        }
+      : {}),
   },
   build: {
     outDir: "dist",

@@ -152,7 +152,6 @@ it.effect(
             providerInstanceId,
             capabilities: new Set<McpInvocationContext.McpCapability>(),
             issuedAt: 1,
-            expiresAt: Number.MAX_SAFE_INTEGER,
           }),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
@@ -186,7 +185,6 @@ it.effect(
             providerInstanceId,
             capabilities: new Set<McpInvocationContext.McpCapability>(),
             issuedAt: 1,
-            expiresAt: Number.MAX_SAFE_INTEGER,
           }),
           Effect.provideService(McpSchema.McpServerClient, client),
         );

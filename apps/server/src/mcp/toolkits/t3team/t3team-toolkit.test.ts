@@ -30,7 +30,6 @@ const invocation: McpInvocationContext.McpInvocationScope = {
   providerInstanceId: ProviderInstanceId.make("pack-test"),
   capabilities: new Set(),
   issuedAt: 1,
-  expiresAt: Number.MAX_SAFE_INTEGER,
 };
 const client = McpSchema.McpServerClient.of({
   clientId: 1,

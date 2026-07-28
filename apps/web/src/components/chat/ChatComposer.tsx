@@ -204,6 +204,9 @@ import {
 } from "../../lib/contextWindow";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
+import { ComposerControl, ComposerControlIcon, ComposerSelectControl } from "./ComposerControl";
+import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
+import { searchSlashCommandItems } from "./composerSlashCommandSearch";
 
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
 
@@ -1742,7 +1745,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         promptRef.current = nextPrompt;
         setComposerDraftPrompt(composerDraftTarget, nextPrompt);
         setComposerCursor(collapseExpandedComposerCursor(nextPrompt, nextPrompt.length));
-        setComposerTrigger(null);
+        resetComposerTrigger();
       }
 
       let unrestoredImageNames: string[] = [];
@@ -1919,7 +1922,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       promptRef.current = "";
       clearComposerDraftPromptAndImages(stashTarget);
       setComposerCursor(0);
-      setComposerTrigger(null);
+      resetComposerTrigger();
       pulseStashBadge();
 
       if (evicted) {

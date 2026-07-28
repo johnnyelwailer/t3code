@@ -188,7 +188,7 @@ function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings
     return { ...settings, textGenerationModelSelection: policySelection };
   }
   const selection = settings.textGenerationModelSelection;
-  const configuredSelection = getConfiguredDefaultModelSelection(DEFAULT_GIT_TEXT_GENERATION_MODEL);
+  const configuredSelection = getConfiguredDefaultModelSelection(DEFAULT_TEXT_GENERATION_MODEL);
   if (selection.instanceId === configuredSelection.instanceId) {
     return settings;
   }
@@ -271,7 +271,7 @@ const make = Effect.gen(function* () {
   const configuredDefaultServerSettings: ServerSettings = {
     ...DEFAULT_SERVER_SETTINGS,
     textGenerationModelSelection: getConfiguredDefaultModelSelection(
-      DEFAULT_GIT_TEXT_GENERATION_MODEL,
+      DEFAULT_TEXT_GENERATION_MODEL,
     ),
   };
   yield* Effect.addFinalizer(() => Scope.close(watcherScope, Exit.void));
