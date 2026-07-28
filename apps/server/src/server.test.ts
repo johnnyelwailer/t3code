@@ -88,6 +88,7 @@ import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
+import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as BrowserTraceCollector from "./observability/BrowserTraceCollector.ts";
@@ -351,6 +352,7 @@ const buildAppUnderTest = (options?: {
       ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
+    toolAuthService?: Partial<ToolAuthService.ToolAuthService["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     checkpointDiffQuery?: Partial<CheckpointDiffQuery.CheckpointDiffQuery["Service"]>;
@@ -690,10 +692,19 @@ const buildAppUnderTest = (options?: {
           ...options?.layers?.projectSetupScriptRunner,
         }),
       ),
+      // Sharing one `.pipe()` slot: the chain here is already at the ~20-arg
+      // ceiling on TypeScript's typed `pipe` overloads (see the similar note
+      // on `WorkflowEngineDurabilityLive` in server.ts).
       Layer.provide(
-        Layer.mock(TerminalManager.TerminalManager)({
-          ...options?.layers?.terminalManager,
-        }),
+        Layer.mergeAll(
+          Layer.mock(TerminalManager.TerminalManager)({
+            ...options?.layers?.terminalManager,
+          }),
+          Layer.mock(ToolAuthService.ToolAuthService)({
+            list: Effect.succeed([]),
+            ...options?.layers?.toolAuthService,
+          }),
+        ),
       ),
       Layer.provide(
         Layer.mergeAll(

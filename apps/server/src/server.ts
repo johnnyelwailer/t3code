@@ -37,6 +37,7 @@ import * as GitLabCli from "./sourceControl/GitLabCli.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import { ProviderInstanceRegistryHydrationLive } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
+import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -290,6 +291,10 @@ const TerminalLayerLive = TerminalManager.layer.pipe(
   Layer.provide(PortScannerLayerLive),
 );
 
+// "Connected tools" sign-in flows. Reuses the same real pty service the
+// terminal does — see apps/server/src/toolauth/t3team-ToolAuthService.ts.
+const ToolAuthLayerLive = ToolAuthService.layer.pipe(Layer.provide(PtyAdapterLive));
+
 const PreviewLayerLive = Layer.empty.pipe(
   Layer.provideMerge(PreviewManager.layer),
   Layer.provideMerge(PortScannerLayerLive),
@@ -358,7 +363,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(VcsLayerLive),
   Layer.provideMerge(ProviderRuntimeLayerLive),
-  Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive)),
+  Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive, ToolAuthLayerLive)),
   Layer.provideMerge(PersistenceLayerLive),
   Layer.provideMerge(Keybindings.layer),
   Layer.provideMerge(ProviderRegistryLive),
