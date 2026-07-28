@@ -29,11 +29,13 @@ import {
   ProjectId,
   ProviderInstanceId,
   type T3TeamMessageExt,
+  ThreadId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as Stream from "effect/Stream";
 
 import { ServerConfig } from "./config.ts";
@@ -133,6 +135,7 @@ const TestLayer = Layer.mergeAll(
   Layer.succeed(OrchestrationEngineService, stubEngine),
   makeBrokerLayer(brokerEngineMock),
   ServerConfig.layerTest(cwd, { prefix: "t3-grant-test-" }),
+  SqlitePersistenceMemory, // same reference as DurabilityTestLive's, so it's memoized — exposes SqlClient below.
 ).pipe(Layer.provideMerge(NodeServices.layer));
 
 function draftCarrier() {
@@ -148,15 +151,18 @@ function draftCarrier() {
 const parkProbe = Effect.fn("parkProbe")(function* (input: {
   readonly runId: string;
   readonly granted: boolean;
+  /** Distinct thread for concurrent parks — one pending ask per thread; defaults to `threadId`. */
+  readonly launchThreadId?: ThreadId;
 }) {
   const repo = yield* WorkflowRunRepository;
   const store = yield* WorkflowJournalStore;
   const config = yield* ServerConfig;
   const broker = yield* T3TeamToolBroker;
+  const runThreadId = input.launchThreadId ?? threadId;
 
   // Seed the launch thread's tool context, as the web composer does before a turn.
   yield* broker.bindSession({
-    threadId,
+    threadId: runThreadId,
     toolContext: createThreadToolContext({
       tools: [{ id: DRAFT_TOOL, label: "Draft description", capabilities: ["write"] }],
     }),
@@ -166,7 +172,7 @@ const parkProbe = Effect.fn("parkProbe")(function* (input: {
   const hostToolClient = input.granted
     ? makeT3TeamWorkflowHostDraftToolClient({
         broker,
-        launchThreadId: threadId,
+        launchThreadId: runThreadId,
         allowedToolGroups: ["mutation.draft"],
       })
     : undefined;
@@ -178,7 +184,7 @@ const parkProbe = Effect.fn("parkProbe")(function* (input: {
       workflowPath: probeWorkflowPath,
       args: {},
       runsRoot: NodePath.join(config.cwd, ".t3team-runs"),
-      launchThreadId: threadId,
+      launchThreadId: runThreadId,
       projectId,
       modelSelection,
       runtimeMode: "full-access",
@@ -196,7 +202,7 @@ const parkProbe = Effect.fn("parkProbe")(function* (input: {
           runId: input.runId,
           workflowPath: probeWorkflowPath,
           args: {},
-          launchThreadId: threadId,
+          launchThreadId: runThreadId,
           projectId,
           modelSelection,
           runtimeMode: "full-access",
@@ -283,4 +289,44 @@ it.effect("a run launched WITH a host-tool grant keeps it, and its scope, across
     assert.isDefined(carrier);
     assert.strictEqual(carrier?.threadId, threadId);
   }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect(
+  "a malformed host_tool_grant rehydrates only that row ungranted — siblings in the same scan are unaffected",
+  () =>
+    Effect.gen(function* () {
+      brokerDispatched.length = 0;
+      const sql = yield* SqlClient.SqlClient;
+
+      const bad1 = { runId: "grant-malformed-string", thread: ThreadId.make("thread-malformed-string") };
+      const bad2 = { runId: "grant-malformed-shape", thread: ThreadId.make("thread-malformed-shape") };
+      const good = { runId: "grant-malformed-sibling-good", thread: ThreadId.make("thread-malformed-good") };
+
+      // Park all three, then bypass the repo's encoder (it would reject these) with a raw write.
+      yield* parkProbe({ runId: bad1.runId, granted: false, launchThreadId: bad1.thread });
+      yield* parkProbe({ runId: bad2.runId, granted: false, launchThreadId: bad2.thread });
+      const goodRow = yield* parkProbe({ runId: good.runId, granted: true, launchThreadId: good.thread });
+      assert.deepStrictEqual(goodRow.hostToolGrant, { toolGroups: ["mutation.draft"] });
+      yield* sql`UPDATE workflow_runs SET host_tool_grant = 'not-json' WHERE run_id = ${bad1.runId}`; // unparsable string
+      yield* sql`UPDATE workflow_runs SET host_tool_grant = ${'{"toolGroups":123}'} WHERE run_id = ${bad2.runId}`; // valid JSON, wrong shape
+
+      yield* rehydrateSuspendedWorkflowRuns(); // ONE scan; a bad row must not fail the whole query
+
+      for (const { runId, thread, expectFailed } of [
+        { ...bad1, expectFailed: true },
+        { ...bad2, expectFailed: true },
+        { ...good, expectFailed: false },
+      ] as const) {
+        const registry = yield* T3TeamWorkflowEngineRegistry;
+        const ask = registry.peekPending(thread);
+        assert.strictEqual(ask?.kind, "user.input", `no restored ask for ${runId}`);
+        yield* Effect.promise(() => registry.getRun(runId)!.resume(ask!.correlationId, "yes"));
+        const settled = Option.getOrThrow(yield* (yield* WorkflowRunRepository).getById({ runId }));
+        assert.strictEqual(settled.status, expectFailed ? "failed" : "completed");
+        if (expectFailed) assert.include(settled.failureReason ?? "", "thread-bound host runtime");
+      }
+      const carrier = draftCarrier();
+      assert.isDefined(carrier);
+      assert.strictEqual(carrier?.threadId, good.thread);
+    }).pipe(Effect.provide(TestLayer)),
 );
