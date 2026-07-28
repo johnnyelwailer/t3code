@@ -15,6 +15,22 @@ export function resolveWorkHomeProject(input: {
   return selected && isWorkProject(selected) ? selected : null;
 }
 
+/**
+ * Remaps a route view's project id onto the id the shell actually stores, so a
+ * loose workspace and its stored counterpart resolve to one project.
+ *
+ * A draft view is routed by draft id alone: it has no project to remap, and
+ * inventing one would make the draft pane resolve the wrong workspace.
+ */
+export function resolveViewStoredProject(
+  view: ViewState | null,
+  resolveProjectId: (projectId: string) => string,
+): ViewState | null {
+  if (!view || view.type === "draft") return view;
+  const resolvedProjectId = resolveProjectId(view.projectId);
+  return resolvedProjectId === view.projectId ? view : { ...view, projectId: resolvedProjectId };
+}
+
 export function resolveEmbeddedThread(
   view: ViewState | null,
   threads: readonly ProjectThread[],

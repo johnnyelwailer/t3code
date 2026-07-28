@@ -10,6 +10,12 @@ import {
 } from "./t3team-atlassianOAuthCallbackMessage";
 
 describe("postAtlassianOAuthCallbackToOpener", () => {
+  /*
+    The wildcard is load-bearing, not an oversight: the desktop shell's opener is on a custom scheme
+    while this page is on http://localhost, so naming an origin here would address the message to the
+    wrong window. Forgery is rejected on the receiving side instead — see the origin check in
+    `t3team-atlassianOAuthPopup.ts`, which compares against the flow's own redirect URI.
+  */
   it("posts callback href to opener with wildcard target for cross-origin shells", () => {
     const postMessage = vi.fn();
     const opener = { closed: false, postMessage } as unknown as Window;

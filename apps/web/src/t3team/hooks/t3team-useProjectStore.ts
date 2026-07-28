@@ -14,6 +14,7 @@ import {
   generateProjectId,
   deriveLooseWorkspaceProjects,
   loadStoredProjects,
+  reconcileStoredProjectsWithLive,
 } from "./t3team-projectStoreUtils";
 import { persistStoredThreads } from "./t3team-projectThreadPersistence";
 import {
@@ -90,6 +91,10 @@ export function useProjectStore() {
     );
   }, [liveProjects, liveThreads, storedProjects]);
 
+  const reconciledStoredProjects = useMemo(
+    () => reconcileStoredProjectsWithLive(storedProjects, liveProjects),
+    [liveProjects, storedProjects],
+  );
   const looseWorkspaceProjects = useMemo(
     () => deriveLooseWorkspaceProjects(storedProjects, liveProjects),
     [liveProjects, storedProjects],
@@ -103,8 +108,8 @@ export function useProjectStore() {
     [looseWorkspaceProjects, resolveProjectId],
   );
   const allProjects = useMemo(
-    () => [...storedProjects, ...looseWorkspaceProjects],
-    [looseWorkspaceProjects, storedProjects],
+    () => [...reconciledStoredProjects, ...looseWorkspaceProjects],
+    [looseWorkspaceProjects, reconciledStoredProjects],
   );
 
   const { getThreadsForProject, getTicketsForProject } = useProjectStoreQueries({
@@ -166,7 +171,7 @@ export function useProjectStore() {
   );
 
   return {
-    projects: storedProjects,
+    projects: reconciledStoredProjects,
     looseWorkspaceProjects: visibleLooseWorkspaceProjects,
     allProjects,
     selectedProject,

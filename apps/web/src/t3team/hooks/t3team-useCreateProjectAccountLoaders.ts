@@ -5,6 +5,7 @@ import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 import { persistLastAccountId } from "./t3team-createProjectUtils";
 import { readIntegrationCache, writeIntegrationCache } from "./t3team-integrationCache";
 import type { CreateProjectStep } from "./t3team-useCreateProject";
+import { advanceStepForward } from "./t3team-useCreateProjectHelpers";
 
 type FailFn = (value: unknown, fallback: string, nextStep?: CreateProjectStep) => void;
 
@@ -14,7 +15,7 @@ export async function loadProjectsForAccount(input: {
   setError: Dispatch<SetStateAction<string | null>>;
   setLoadingProjects: Dispatch<SetStateAction<boolean>>;
   setSelectedAccount: Dispatch<SetStateAction<IntegrationAccount | null>>;
-  setSelectedProject: Dispatch<SetStateAction<ExternalProject | null>>;
+  setSelectedProject: (project: ExternalProject | null) => void;
   setProjects: Dispatch<SetStateAction<ReadonlyArray<ExternalProject>>>;
   setStep: Dispatch<SetStateAction<CreateProjectStep>>;
   fail: FailFn;
@@ -49,13 +50,13 @@ export async function loadProjectsForAccount(input: {
       provider: account.provider,
     });
     writeIntegrationCache(cacheKey, loadedProjects);
-    runT3TeamViewTransition(
-      () => {
-        input.setProjects(loadedProjects);
-        input.setStep("project");
-      },
-      { types: ["t3team-wizard-forward"] },
-    );
+    // No view transition here: by the time this network response lands the step has usually
+    // already moved to "project" via the cached-list branch above, so this is a background
+    // data refresh, not a step change — animating it would repaint mid-interaction and steal
+    // clicks (the wizard-binding bug). `advanceStepForward` also guards the rare case where
+    // there was no cache: it still moves the step forward, just without an animated repaint.
+    input.setProjects(loadedProjects);
+    advanceStepForward(input.setStep, "project");
   } catch (error) {
     input.fail(error, "Failed to load Jira projects", "account");
   } finally {

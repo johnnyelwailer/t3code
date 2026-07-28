@@ -28,6 +28,18 @@ export function postAtlassianOAuthCallbackToOpener(href: string): boolean {
     type: ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE,
     href,
   };
+  /*
+    `"*"` is deliberate, and it is not the CSRF hole it looks like.
+
+    This page cannot know its opener's origin. In the desktop shell the app is loaded from a custom
+    scheme (`getDesktopOrigin`) while Atlassian only accepts an http(s)://localhost redirect, so the
+    opener is legitimately cross-origin to this page; naming our own origin here addresses the
+    message to the wrong window and every desktop sign-in silently stops working.
+
+    The forgery protection therefore lives on the receiving side, where the expected origin IS
+    known: `acceptOAuthCallbackMessage` compares `event.origin` against the origin of the
+    `redirectUri` it started the flow with, so a message from anywhere else is dropped.
+  */
   opener.postMessage(message, "*");
   return true;
 }

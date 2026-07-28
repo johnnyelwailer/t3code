@@ -126,6 +126,18 @@ function sweepExpiredCompletedFlows(nowMs: number): void {
 export function markAtlassianOAuthFlowCompleted(state: string, nowMs: number): void {
   sweepExpiredCompletedFlows(nowMs);
   completedFlows.set(state, nowMs);
+
+  /*
+    Same hard ceiling as `pendingFlows`. Reaching this needs a *successful* token exchange against a
+    live pending state, and pending is capped at 16, so unbounded growth was never really reachable —
+    but a map with a sweep and no ceiling is one behaviour change away from being a leak, and the
+    oldest completion is always the least useful to a poller.
+  */
+  while (completedFlows.size > ATLASSIAN_OAUTH_FLOW_MAX_PENDING) {
+    const oldest = completedFlows.keys().next();
+    if (oldest.done) break;
+    completedFlows.delete(oldest.value);
+  }
 }
 
 /**

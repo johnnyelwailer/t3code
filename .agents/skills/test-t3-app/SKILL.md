@@ -78,6 +78,8 @@ When teardown is appropriate:
 2. Preserve the isolated base directory when it contains useful reproduction evidence or state for a likely follow-up.
 3. Otherwise remove only a path created for this test after resolving and verifying the exact target.
 
+Stop only the process this session started. **This machine runs several agents and the user's own apps at once**, so never tear down by machine-wide pattern or by port range: `pkill -f "vp run dev"`, `pkill -9 -f "dev-runner.ts dev$"`, and `for p in 5733..5737; do kill $(lsof -ti:$p); done` all reach other people's servers. `lsof -ti:PORT` lists connected *clients* as well as the listener, so killing its output kills browsers and peer agents instead of the server. Resolve the runner's own PID from the process tree of the command this session launched, and kill that. If an orphan from an earlier round is holding a port, identify its base directory before touching it and leave it alone when it is not this session's.
+
 If completion is uncertain, keep the environment alive and mention that it is retained for further iteration. A fresh isolated base directory remains the safest reset when authentication, migrations, or fixture state becomes ambiguous.
 
 ## Troubleshoot predictably
@@ -87,3 +89,4 @@ If completion is uncertain, keep the environment alive and mention that it is re
 - If the replacement token is rejected, verify that the CLI and server use the identical absolute base directory and web URL.
 - If the UI shows unexpected data, verify that every command uses the identical explicit base directory before editing anything.
 - If ports move because another instance is running, trust the current dev-runner output rather than assuming ports `13773` and `5733`.
+- **Atlassian OAuth is the exception to the rule above.** The registered `redirect_uri` is pinned to `http://localhost:5733/oauth/callback`, so a web port that auto-climbed to 5734+ fails sign-in with `redirect_uri is not registered for client: …`. Before testing anything behind Atlassian auth, confirm the web port is actually 5733 — free it (see teardown rules) rather than accepting the auto-selected port. A moved port also silently invalidates an already-paired browser tab, which looks like a lost session rather than a port problem.

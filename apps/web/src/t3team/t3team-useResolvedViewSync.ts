@@ -29,7 +29,18 @@ export function useResolvedViewSync({
   view: ViewState | null | undefined;
 }) {
   useEffect(() => {
-    if (!view || !resolvedView || resolvedView.projectId === view.projectId) {
+    if (!view || !resolvedView) {
+      return;
+    }
+
+    // A draft view is routed by draft id and has no project of its own, so
+    // there is nothing to reconcile here — falling through would push the user
+    // onto a dashboard and abandon the draft they just opened.
+    if (view.type === "draft" || resolvedView.type === "draft") {
+      return;
+    }
+
+    if (resolvedView.projectId === view.projectId) {
       return;
     }
 

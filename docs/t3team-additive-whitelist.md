@@ -79,6 +79,16 @@ Prefix policy:
   - Add optional `t3teamExt` and `thread.message.upsert` to the orchestration contract so first-class system messages flow through the existing command/event channel.
 - `packages/project-context/src/index.ts`
   - Export additive action-recipe context helpers from the shared package entrypoint so runtime and UI code can share one canonical launch-context schema.
+- `packages/contracts/src/sourceControl.ts`
+  - Carry every authenticated source-control host, additively. `SourceControlProviderAuth` exposes a single `host`, so a user signed in to both `github.com` and a GitHub Enterprise host (e.g. `nexplore.ghe.com`) can only ever see one of them. The existing `host` field stays untouched; a new optional list is added alongside it.
+- `packages/shared/src/sourceControl.ts`
+  - Fix `isGitHubHost`, which classified hosts with `host.includes("github")`. That is `false` for `nexplore.ghe.com`, so GitHub Enterprise remotes resolved to provider `"unknown"` and every PR operation failed with "No unknown source control provider is registered."
+- `apps/server/src/sourceControl/gitHubAuthStatus.ts`
+  - Surface the full authenticated-host list already parsed from `gh auth status --json hosts` instead of collapsing it to the single active host. Existing single-host selection is preserved for backwards compatibility.
+- `apps/server/src/sourceControl/GitHubSourceControlProvider.ts`
+  - Populate the additive multi-host auth field from the probe result.
+- `apps/server/src/sourceControl/SourceControlProviderRegistry.ts`
+  - Pass the multi-host auth data through provider resolution.
 - `bun.lock`
   - Lockfile drift due workspace/package updates.
 

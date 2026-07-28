@@ -14,6 +14,10 @@ import {
   useT3TeamProjectSetupProfile,
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
+import {
+  T3TEAM_FIRST_PROJECT_SETUP_REASON,
+  type T3TeamSetupSurfaceReason,
+} from "~/t3team/t3team-setupSurfaceReason";
 
 const SETUP_STEPS = [
   {
@@ -36,10 +40,13 @@ const SETUP_STEPS = [
 export function T3TeamSetupWelcomeSurface({
   onCreate,
   profilesOverride,
+  reason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
 }: {
   onCreate: () => void;
   /** Storybook/preview escape hatch to supply pack profiles without a live server. */
   profilesOverride?: readonly EnvironmentSetupProfile[] | undefined;
+  /** Why this surface is showing — first-run setup vs. an existing project with no work source. */
+  reason?: T3TeamSetupSurfaceReason;
 }) {
   const appearance = useT3TeamPackAppearance();
   const productName = appearance?.labels?.appName ?? "t3team";
@@ -50,6 +57,15 @@ export function T3TeamSetupWelcomeSurface({
   // Never label the chip with a profile that is not in the rendered catalog.
   const selectedProfile =
     cardOptions.find((option) => option.id === setupProfileId) ?? cardOptions[0];
+
+  const chipLabel =
+    reason.kind === "no-work-project" ? "Not connected to a work source" : "First project setup";
+  const headingText =
+    reason.kind === "no-work-project"
+      ? (reason.projectTitle
+          ? `“${reason.projectTitle}” is a local workspace with no Jira project connected, so there is no work to show here yet. Connect a Jira project to see tickets, backlog, and My work.`
+          : "None of your projects are connected to a Jira project yet, so there is no work to show here. Connect a Jira project to see tickets, backlog, and My work.")
+      : `Bring your Jira work into ${productName} in a few clicks.`;
 
   // `align-items: safe center` rather than `items-center`: once the card is taller
   // than the viewport, plain centering overflows the *start* edge, and that overflow
@@ -74,7 +90,7 @@ export function T3TeamSetupWelcomeSurface({
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-medium text-foreground/80 shadow-sm backdrop-blur-sm">
               <Sparkles className="size-3.5 text-sky-500" />
-              First project setup
+              {chipLabel}
             </div>
 
             <div className="max-w-2xl space-y-3">
@@ -85,7 +101,7 @@ export function T3TeamSetupWelcomeSurface({
                 className="h-6 w-auto"
               />
               <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                Bring your Jira work into {productName} in a few clicks.
+                {headingText}
               </h1>
               <p className="max-w-xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
                 Pick how you want {productName} to communicate, connect a Jira project, and start

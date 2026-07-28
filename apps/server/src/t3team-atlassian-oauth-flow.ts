@@ -49,12 +49,31 @@ function requiredClientId(): string {
 }
 
 /**
+ * Is this a redirect URI we are willing to start a flow for?
+ *
+ * Atlassian already refuses any `redirect_uri` not registered in the Developer Console, so an
+ * arbitrary value fails at sign-in. This is the second lock: the value still arrives in a request
+ * body, and without a check the server would happily mint a flow — and later exchange a code —
+ * against whichever *registered* URI a tampered client names. Local origins only, which is the
+ * only shape this desktop/dev app legitimately calls back to.
+ */
+export function isAllowedAtlassianRedirectUri(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Start a flow the server owns end to end.
  *
  * `redirectUri` comes from the caller because it is registered in the Atlassian Developer Console
  * against the web origin, which the server cannot infer in dev (the SPA is on the Vite port). It is
  * only ever used as an OAuth parameter and in the token exchange — never as a redirect target of
- * ours — and Atlassian rejects any value that is not registered, so a bad one fails at sign-in.
+ * ours — and it is constrained by `isAllowedAtlassianRedirectUri` above before any of that.
  */
 export function beginAtlassianOAuthFlow(input: { readonly redirectUri: string }) {
   return Effect.gen(function* () {
@@ -62,6 +81,11 @@ export function beginAtlassianOAuthFlow(input: { readonly redirectUri: string })
     if (!redirectUri) {
       return yield* new T3TeamAtlassianError({
         message: "Atlassian OAuth redirect URI is missing from the request.",
+      });
+    }
+    if (!isAllowedAtlassianRedirectUri(redirectUri)) {
+      return yield* new T3TeamAtlassianError({
+        message: "Atlassian OAuth redirect URI is not an allowed local origin.",
       });
     }
 

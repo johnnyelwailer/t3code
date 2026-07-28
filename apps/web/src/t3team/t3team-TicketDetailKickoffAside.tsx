@@ -107,6 +107,7 @@ export function TicketDetailKickoffAside({
         thread={activeThread}
         projectId={projectId}
         projectTitle={projectTitle}
+        projectSource={project.source}
         {...(projectWorkspaceRoot ? { projectWorkspaceRoot } : {})}
         ticketId={ticketId}
         {...(onOpenFullThread

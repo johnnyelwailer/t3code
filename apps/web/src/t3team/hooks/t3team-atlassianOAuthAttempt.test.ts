@@ -27,12 +27,22 @@ function closedPopup(): WindowProxy {
   return { closed: true, close: () => {} } as unknown as WindowProxy;
 }
 
-function deliverCallback(href: string) {
+/**
+ * A callback delivered the way a real one is: from the redirect URI's own origin.
+ *
+ * `origin` matters, and the default is the *callback* origin rather than this page's. They differ in
+ * the desktop shell, where the app loads from a custom scheme while the callback necessarily lands on
+ * http://localhost — so the receiver validates against the redirect URI it started the flow with.
+ * Without an origin a synthetic `MessageEvent` carries `""`, which is correctly rejected: a message
+ * from an unknown origin is indistinguishable from a forged one. These tests used to pass precisely
+ * because nothing was checked, which is why the suite could not have caught the CSRF hole.
+ */
+function deliverCallback(href: string, origin: string = new URL(REDIRECT_URI).origin) {
   const message: AtlassianOAuthCallbackMessage = {
     type: ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE,
     href,
   };
-  window.dispatchEvent(new MessageEvent("message", { data: message }));
+  window.dispatchEvent(new MessageEvent("message", { data: message, origin }));
 }
 
 function startAttempt(overrides: {
@@ -123,6 +133,32 @@ describe("runAtlassianOAuthAttempt", () => {
     deliverCallback(`${REDIRECT_URI}?code=code-1&state=someone-elses-state`);
 
     await expect(attempt).rejects.toThrow("OAuth state mismatch");
+  });
+
+  /*
+    The regression test for the CSRF hole a pre-merge review found: the payload here is entirely
+    valid — right message type, href on the real redirect URI, the attempt's own state — and it must
+    still be ignored, because it did not come from our origin. Everything except the origin is
+    forgeable by whoever can reach this window.
+  */
+  it("ignores a valid-looking callback that did not come from our own origin", async () => {
+    const attempt = startAttempt({ popup: null });
+
+    await vi.advanceTimersByTimeAsync(0);
+    deliverCallback(`${REDIRECT_URI}?code=code-1&state=${TAB_STATE}`, "https://evil.example");
+
+    // Nothing resolved or rejected: the forged message was dropped, so the attempt is still waiting.
+    let settled = false;
+    void attempt.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+
+    // The genuine same-origin callback still works afterwards.
+    deliverCallback(`${REDIRECT_URI}?code=code-1&state=${TAB_STATE}`);
+    await expect(attempt).resolves.toBeDefined();
   });
 
   it("reports an Atlassian refusal from the callback rather than a bare mismatch", async () => {

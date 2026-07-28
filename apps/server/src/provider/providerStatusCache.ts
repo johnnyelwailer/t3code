@@ -16,10 +16,21 @@ const decodeProviderStatusCache = Schema.decodeUnknownEffect(
   Schema.fromJsonString(ServerProviderSchema),
 );
 
+/**
+ * Union the live list with cached extras, so a provider whose model list comes from
+ * probing an external CLI keeps its last-known models when the probe has not run yet
+ * (or came back empty) instead of showing an empty picker.
+ *
+ * Pack-declared providers are the exception: their `describe()` list IS the complete,
+ * authoritative set. Resurrecting cached extras there makes a model removed from a pack
+ * linger in the picker forever on any install that had already cached it.
+ */
 const mergeProviderModels = (
   fallbackModels: ReadonlyArray<ServerProvider["models"][number]>,
   cachedModels: ReadonlyArray<ServerProvider["models"][number]>,
+  fallbackIsAuthoritative: boolean,
 ): ReadonlyArray<ServerProvider["models"][number]> => {
+  if (fallbackIsAuthoritative) return fallbackModels;
   const fallbackSlugs = new Set(fallbackModels.map((model) => model.slug));
   return [...fallbackModels, ...cachedModels.filter((model) => !fallbackSlugs.has(model.slug))];
 };
@@ -59,7 +70,11 @@ export const hydrateCachedProvider = (input: {
   const { message: _fallbackMessage, ...fallbackWithoutMessage } = input.fallbackProvider;
   const hydratedProvider: ServerProvider = {
     ...fallbackWithoutMessage,
-    models: mergeProviderModels(input.fallbackProvider.models, input.cachedProvider.models),
+    models: mergeProviderModels(
+      input.fallbackProvider.models,
+      input.cachedProvider.models,
+      input.fallbackProvider.configurationSource === "pack",
+    ),
     installed: input.cachedProvider.installed,
     version: input.cachedProvider.version,
     status: input.cachedProvider.status,

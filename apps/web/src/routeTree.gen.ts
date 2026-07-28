@@ -22,11 +22,13 @@ import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybi
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
 import { Route as SettingsDiagnosticsRouteImport } from './routes/settings.diagnostics'
 import { Route as SettingsConnectionsRouteImport } from './routes/settings.connections'
+import { Route as SettingsConnectedToolsRouteImport } from './routes/settings.connected-tools'
 import { Route as SettingsBetaRouteImport } from './routes/settings.beta'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as ConnectCallbackRouteImport } from './routes/connect_.callback'
 import { Route as T3teamProjectsProjectIdRouteImport } from './routes/t3team.projects.$projectId'
+import { Route as T3teamDraftsDraftIdRouteImport } from './routes/t3team.drafts.$draftId'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 import { Route as T3teamProjectsProjectIdTicketsTicketIdRouteImport } from './routes/t3team.projects.$projectId.tickets.$ticketId'
@@ -96,6 +98,11 @@ const SettingsConnectionsRoute = SettingsConnectionsRouteImport.update({
   path: '/connections',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsConnectedToolsRoute = SettingsConnectedToolsRouteImport.update({
+  id: '/connected-tools',
+  path: '/connected-tools',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsBetaRoute = SettingsBetaRouteImport.update({
   id: '/beta',
   path: '/beta',
@@ -119,6 +126,11 @@ const ConnectCallbackRoute = ConnectCallbackRouteImport.update({
 const T3teamProjectsProjectIdRoute = T3teamProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
+  getParentRoute: () => T3teamRoute,
+} as any)
+const T3teamDraftsDraftIdRoute = T3teamDraftsDraftIdRouteImport.update({
+  id: '/drafts/$draftId',
+  path: '/drafts/$draftId',
   getParentRoute: () => T3teamRoute,
 } as any)
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
@@ -155,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
+  '/settings/connected-tools': typeof SettingsConnectedToolsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -164,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/t3team/new': typeof T3teamNewRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/t3team/drafts/$draftId': typeof T3teamDraftsDraftIdRoute
   '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
   '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
   '/t3team/projects/$projectId/tickets/$ticketId': typeof T3teamProjectsProjectIdTicketsTicketIdRoute
@@ -177,6 +191,7 @@ export interface FileRoutesByTo {
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
+  '/settings/connected-tools': typeof SettingsConnectedToolsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -187,6 +202,7 @@ export interface FileRoutesByTo {
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/t3team/drafts/$draftId': typeof T3teamDraftsDraftIdRoute
   '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
   '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
   '/t3team/projects/$projectId/tickets/$ticketId': typeof T3teamProjectsProjectIdTicketsTicketIdRoute
@@ -202,6 +218,7 @@ export interface FileRoutesById {
   '/oauth/callback': typeof OauthCallbackRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
+  '/settings/connected-tools': typeof SettingsConnectedToolsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -212,6 +229,7 @@ export interface FileRoutesById {
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/t3team/drafts/$draftId': typeof T3teamDraftsDraftIdRoute
   '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
   '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
   '/t3team/projects/$projectId/tickets/$ticketId': typeof T3teamProjectsProjectIdTicketsTicketIdRoute
@@ -228,6 +246,7 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/settings/archived'
     | '/settings/beta'
+    | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/diagnostics'
     | '/settings/general'
@@ -237,6 +256,7 @@ export interface FileRouteTypes {
     | '/t3team/new'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/t3team/drafts/$draftId'
     | '/t3team/projects/$projectId'
     | '/t3team/projects/$projectId/threads/$threadId'
     | '/t3team/projects/$projectId/tickets/$ticketId'
@@ -250,6 +270,7 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/settings/archived'
     | '/settings/beta'
+    | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/diagnostics'
     | '/settings/general'
@@ -260,6 +281,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/t3team/drafts/$draftId'
     | '/t3team/projects/$projectId'
     | '/t3team/projects/$projectId/threads/$threadId'
     | '/t3team/projects/$projectId/tickets/$ticketId'
@@ -274,6 +296,7 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/settings/archived'
     | '/settings/beta'
+    | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/diagnostics'
     | '/settings/general'
@@ -284,6 +307,7 @@ export interface FileRouteTypes {
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/draft/$draftId'
+    | '/t3team/drafts/$draftId'
     | '/t3team/projects/$projectId'
     | '/t3team/projects/$projectId/threads/$threadId'
     | '/t3team/projects/$projectId/tickets/$ticketId'
@@ -392,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsConnectionsRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/connected-tools': {
+      id: '/settings/connected-tools'
+      path: '/connected-tools'
+      fullPath: '/settings/connected-tools'
+      preLoaderRoute: typeof SettingsConnectedToolsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/beta': {
       id: '/settings/beta'
       path: '/beta'
@@ -425,6 +456,13 @@ declare module '@tanstack/react-router' {
       path: '/projects/$projectId'
       fullPath: '/t3team/projects/$projectId'
       preLoaderRoute: typeof T3teamProjectsProjectIdRouteImport
+      parentRoute: typeof T3teamRoute
+    }
+    '/t3team/drafts/$draftId': {
+      id: '/t3team/drafts/$draftId'
+      path: '/drafts/$draftId'
+      fullPath: '/t3team/drafts/$draftId'
+      preLoaderRoute: typeof T3teamDraftsDraftIdRouteImport
       parentRoute: typeof T3teamRoute
     }
     '/_chat/draft/$draftId': {
@@ -475,6 +513,7 @@ const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 interface SettingsRouteChildren {
   SettingsArchivedRoute: typeof SettingsArchivedRoute
   SettingsBetaRoute: typeof SettingsBetaRoute
+  SettingsConnectedToolsRoute: typeof SettingsConnectedToolsRoute
   SettingsConnectionsRoute: typeof SettingsConnectionsRoute
   SettingsDiagnosticsRoute: typeof SettingsDiagnosticsRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
@@ -486,6 +525,7 @@ interface SettingsRouteChildren {
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsArchivedRoute: SettingsArchivedRoute,
   SettingsBetaRoute: SettingsBetaRoute,
+  SettingsConnectedToolsRoute: SettingsConnectedToolsRoute,
   SettingsConnectionsRoute: SettingsConnectionsRoute,
   SettingsDiagnosticsRoute: SettingsDiagnosticsRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
@@ -518,11 +558,13 @@ const T3teamProjectsProjectIdRouteWithChildren =
 
 interface T3teamRouteChildren {
   T3teamNewRoute: typeof T3teamNewRoute
+  T3teamDraftsDraftIdRoute: typeof T3teamDraftsDraftIdRoute
   T3teamProjectsProjectIdRoute: typeof T3teamProjectsProjectIdRouteWithChildren
 }
 
 const T3teamRouteChildren: T3teamRouteChildren = {
   T3teamNewRoute: T3teamNewRoute,
+  T3teamDraftsDraftIdRoute: T3teamDraftsDraftIdRoute,
   T3teamProjectsProjectIdRoute: T3teamProjectsProjectIdRouteWithChildren,
 }
 

@@ -14,7 +14,7 @@ import { useAddToChat } from "~/t3team/hooks/t3team-useAddToChat";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
 import { SidebarMenuButton, SidebarMenuSub } from "~/t3team/components/ui/t3team-sidebar";
 import { LocalWorkspaceSidebarRowActions } from "./t3team-LocalWorkspaceSidebarRowActions";
-import { buildProjectSidebarAddToChatRequest } from "./t3team-projectSidebarAddToChatRequests";
+import { buildNewThreadProjectContextRequest } from "./t3team-projectSidebarAddToChatRequests";
 import { sortThreads } from "./t3team-projectSidebarShared";
 import { ProjectSidebarThreadTreeRows } from "./t3team-ProjectSidebarThreadTreeRows";
 import {
@@ -108,14 +108,15 @@ export function LocalWorkspaceSidebarRow({
   const handleNewThread = async (event: React.MouseEvent) => {
     event.stopPropagation();
     const threadId = onCreateThread(project.id);
-    await addToChatFromRequest(
-      buildProjectSidebarAddToChatRequest({
-        project,
-        projectTickets: [],
-        linkedRepositoryUrls,
-      }),
-      { type: "thread", threadId },
-    );
+    const contextRequest = buildNewThreadProjectContextRequest({
+      project,
+      projectTickets: [],
+      linkedRepositoryUrls,
+    });
+    if (!contextRequest) {
+      return;
+    }
+    await addToChatFromRequest(contextRequest, { type: "thread", threadId });
   };
 
   return (

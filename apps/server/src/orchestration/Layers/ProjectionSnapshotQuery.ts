@@ -23,6 +23,7 @@ import {
   type OrchestrationThreadShell,
   ModelSelection,
   ProjectId,
+  type ProjectSourceBinding,
   T3TeamMessageExt,
   ThreadId,
 } from "@t3tools/contracts";
@@ -52,6 +53,7 @@ import { ProjectionThreadSession } from "../../persistence/Services/ProjectionTh
 import { ProjectionThread } from "../../persistence/Services/ProjectionThreads.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
+import { queryProjectSourceBindingsByProjectId } from "./t3team-projectSourceBindingSnapshotRows.ts";
 import {
   ProjectionSnapshotQuery,
   type ProjectionFullThreadDiffContext,
@@ -272,6 +274,7 @@ function mapSessionRow(
 function mapProjectShellRow(
   row: Schema.Schema.Type<typeof ProjectionProjectDbRowSchema>,
   repositoryIdentity: OrchestrationProject["repositoryIdentity"],
+  source?: ProjectSourceBinding,
 ): OrchestrationProjectShell {
   return {
     id: row.projectId,
@@ -282,6 +285,7 @@ function mapProjectShellRow(
     scripts: row.scripts,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    ...(source !== undefined ? { source } : {}),
   };
 }
 
@@ -1410,7 +1414,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       .pipe(
         Effect.flatMap(
           ([projectRows, threadRows, proposedPlanRows, sessionRows, latestTurnRows, stateRows]) =>
-            Effect.sync(() => {
+            // A project's `source` binding must be present here — this read model is what
+            // rehydrates the decider's in-memory model on boot, and `requireProjectSourceBindingUnclaimed`
+            // reads `project.source` off of it to enforce the no-duplicate-binding invariant across
+            // restarts, not just within one server lifetime.
+            queryProjectSourceBindingsByProjectId(sql).pipe(
+              Effect.map((sourceBindings) => {
               let updatedAt: string | null = null;
               const projects: OrchestrationProject[] = [];
               const threads: OrchestrationThread[] = [];
@@ -1421,6 +1430,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   continue;
                 }
                 updatedAt = maxIso(updatedAt, row.updatedAt);
+                const source = sourceBindings.get(row.projectId);
                 projects.push({
                   id: row.projectId,
                   title: row.title,
@@ -1430,6 +1440,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
                   deletedAt: row.deletedAt,
+                  ...(source !== undefined ? { source } : {}),
                 });
               }
               for (let index = 0; index < threadRows.length; index += 1) {
@@ -1540,7 +1551,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 threads,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               } satisfies OrchestrationReadModel;
-            }),
+              }),
+            ),
         ),
         Effect.mapError((error) => {
           if (isPersistenceError(error)) {
@@ -1648,6 +1660,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             }
 
             const repositoryIdentities = yield* resolveRepositoryIdentitiesForProjects(projectRows);
+            const sourceBindings = yield* queryProjectSourceBindingsByProjectId(sql);
             const latestTurnByThread = new Map(
               latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
             );
@@ -1678,7 +1691,11 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               projects: Arr.filterMap(projectRows, (row) =>
                 row.deletedAt === null
                   ? Result.succeed(
-                      mapProjectShellRow(row, repositoryIdentities.get(row.projectId) ?? null),
+                      mapProjectShellRow(
+                        row,
+                        repositoryIdentities.get(row.projectId) ?? null,
+                        sourceBindings.get(row.projectId),
+                      ),
                     )
                   : Result.failVoid,
               ),
@@ -1815,6 +1832,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             const repositoryIdentities = yield* resolveRepositoryIdentitiesForProjects(
               projectRows.filter((row) => activeProjectIds.has(row.projectId)),
             );
+            const sourceBindings = yield* queryProjectSourceBindingsByProjectId(sql);
             const latestTurnByThread = new Map(
               latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
             );
@@ -1827,7 +1845,11 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               projects: Arr.filterMap(projectRows, (row) =>
                 row.deletedAt === null && activeProjectIds.has(row.projectId)
                   ? Result.succeed(
-                      mapProjectShellRow(row, repositoryIdentities.get(row.projectId) ?? null),
+                      mapProjectShellRow(
+                        row,
+                        repositoryIdentities.get(row.projectId) ?? null,
+                        sourceBindings.get(row.projectId),
+                      ),
                     )
                   : Result.failVoid,
               ),
@@ -1923,8 +1945,11 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         Effect.flatMap((option) =>
           Option.isNone(option)
             ? Effect.succeed(Option.none<OrchestrationProject>())
-            : repositoryIdentityResolver.resolve(option.value.workspaceRoot).pipe(
-                Effect.map((repositoryIdentity) =>
+            : Effect.all([
+                repositoryIdentityResolver.resolve(option.value.workspaceRoot),
+                queryProjectSourceBindingsByProjectId(sql),
+              ]).pipe(
+                Effect.map(([repositoryIdentity, sourceBindings]) =>
                   Option.some({
                     id: option.value.projectId,
                     title: option.value.title,
@@ -1935,6 +1960,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                     createdAt: option.value.createdAt,
                     updatedAt: option.value.updatedAt,
                     deletedAt: option.value.deletedAt,
+                    ...(sourceBindings.get(option.value.projectId) !== undefined
+                      ? { source: sourceBindings.get(option.value.projectId) }
+                      : {}),
                   } satisfies OrchestrationProject),
                 ),
               ),
@@ -1952,13 +1980,20 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       Effect.flatMap((option) =>
         Option.isNone(option)
           ? Effect.succeed(Option.none<OrchestrationProjectShell>())
-          : repositoryIdentityResolver
-              .resolve(option.value.workspaceRoot)
-              .pipe(
-                Effect.map((repositoryIdentity) =>
-                  Option.some(mapProjectShellRow(option.value, repositoryIdentity)),
+          : Effect.all([
+              repositoryIdentityResolver.resolve(option.value.workspaceRoot),
+              queryProjectSourceBindingsByProjectId(sql),
+            ]).pipe(
+              Effect.map(([repositoryIdentity, sourceBindings]) =>
+                Option.some(
+                  mapProjectShellRow(
+                    option.value,
+                    repositoryIdentity,
+                    sourceBindings.get(option.value.projectId),
+                  ),
                 ),
               ),
+            ),
       ),
     );
 

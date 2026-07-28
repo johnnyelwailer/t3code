@@ -55,7 +55,34 @@ export function isAtlassianOAuthPopupClosedError(error: unknown): boolean {
   );
 }
 
+/** The origin of a URL, or null when it is not parseable — never throws into the message handler. */
+function safeOrigin(value: string): string | null {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
 function acceptOAuthCallbackMessage(event: MessageEvent, redirectUri: string): string | null {
+  /*
+    Origin check first, before the payload is looked at.
+
+    The shape check and the redirect-URI prefix are both attacker-forgeable — any document able to
+    reach this window could post a message carrying an href that starts with our redirect URI, and
+    we would have handed its `code` and `state` straight to the token exchange. That defeats the
+    CSRF protection `state` exists to provide.
+
+    Validated against the *callback* origin, not `window.location.origin`. The two differ in the
+    desktop shell: it loads the app from a custom scheme (`getDesktopOrigin`), while Atlassian only
+    accepts an http(s)://localhost redirect URI, so the callback page is legitimately cross-origin
+    to the window waiting for it. Checking our own origin would silently drop every desktop sign-in.
+    We know the origin to expect because we built `redirectUri` when starting the flow.
+  */
+  const expectedOrigin = safeOrigin(redirectUri);
+  if (expectedOrigin === null || event.origin !== expectedOrigin) {
+    return null;
+  }
   if (!isAtlassianOAuthCallbackMessage(event.data, redirectUri)) {
     return null;
   }
