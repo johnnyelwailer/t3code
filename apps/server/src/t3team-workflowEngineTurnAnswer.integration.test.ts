@@ -28,6 +28,7 @@ import { afterAll } from "vite-plus/test";
 import {
   CommandId,
   EventId,
+  MessageId,
   type OrchestrationCommand,
   ProjectId,
   ProviderInstanceId,
@@ -38,6 +39,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
 import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -47,6 +49,7 @@ import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEng
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import { ServerConfig } from "./config.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
@@ -116,7 +119,9 @@ const StubProviderLive = (messages: ReadonlyArray<ReadonlyArray<string>>) =>
   );
 
 const EngineLive = OrchestrationEngineLive.pipe(
-  Layer.provide(OrchestrationProjectionSnapshotQueryLive),
+  // `provideMerge` (not `provide`): the test body reads the PROJECTED thread detail — the same
+  // source the client snapshot is built from — to assert what a client can actually see.
+  Layer.provideMerge(OrchestrationProjectionSnapshotQueryLive),
   Layer.provide(OrchestrationProjectionPipelineLive),
   Layer.provide(OrchestrationEventStoreLive),
   Layer.provide(OrchestrationCommandReceiptRepositoryLive),
@@ -221,6 +226,47 @@ it.live("resolves askAgent with the turn's FINAL answer, not the preamble it ope
     // THE regression: the first message must not have settled the ask.
     assert.deepStrictEqual(run.completed[0], { answer: ANSWER });
     assert.isUndefined(run.registry.getRun("turn-answer-run"));
+
+    // ── Attribution, read from the PROJECTION the client snapshot is built from ──
+    // The writer prompt is a `user`-role message because that is how a provider takes turn input.
+    // Without an author a client can only tell it from something the person typed by sniffing the
+    // text, which is how nine paragraphs of machine instructions ended up in the user's styling.
+    const query = yield* ProjectionSnapshotQuery;
+    const detail = Option.getOrThrow(
+      yield* query.getThreadDetailById(ThreadId.make(launchThreadId)),
+    );
+    const userMessages = detail.messages.filter((message) => message.role === "user");
+    const prompt = userMessages.find((message) => message.text.includes("Write the description."));
+    assert.isDefined(prompt);
+    assert.deepStrictEqual(prompt?.t3teamExt?.author, {
+      kind: "workflow",
+      workflowRunId: "turn-answer-run",
+      // The ask's correlationId — also the id its live step activity is keyed by.
+      stepId: "turn-answer-run:1",
+      label: "Write",
+    });
+
+    // …and an ordinary typed message carries NO author, which is what "render as human" means.
+    const orchestration = yield* OrchestrationEngineService;
+    yield* orchestration.dispatch({
+      type: "thread.message.upsert",
+      commandId: CommandId.make("turn-answer-human"),
+      threadId: ThreadId.make(launchThreadId),
+      message: {
+        messageId: MessageId.make("turn-answer-human-msg"),
+        role: "user",
+        text: "thanks",
+        turnId: null,
+        streaming: false,
+      },
+      createdAt: ISO,
+    });
+    const afterHuman = Option.getOrThrow(
+      yield* query.getThreadDetailById(ThreadId.make(launchThreadId)),
+    );
+    const human = afterHuman.messages.find((message) => message.text === "thanks");
+    assert.isDefined(human);
+    assert.isUndefined(human?.t3teamExt?.author);
   }).pipe(Effect.provide(testLayer([[PREAMBLE], ["Reading the work item…"], [ANSWER]]))),
 );
 

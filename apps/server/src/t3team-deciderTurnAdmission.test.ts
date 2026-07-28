@@ -17,6 +17,7 @@ import * as Effect from "effect/Effect";
 import { decideOrchestrationCommand } from "./orchestration/decider.ts";
 import type { T3TeamMessageExt } from "@t3tools/contracts";
 import { isAutomatedTurnStart } from "./t3team-deciderTurnAdmission.ts";
+import { workflowTurnAuthor } from "./t3team-workflowTurnAuthor.ts";
 import { projectEvent } from "./orchestration/projector.ts";
 
 const now = "2026-07-19T08:00:00.000Z";
@@ -205,7 +206,13 @@ it.layer(NodeServices.layer)("thread turn admission", (it) => {
   // marking itself, `isAutomatedTurnStart` returns false and it would silently
   // bypass the guard, so assert the classifier here rather than trusting greps.
   const dispatcherShapes: ReadonlyArray<readonly [string, T3TeamMessageExt]> = [
-    ["workflow step (t3team-workflowEngineBroker)", { author: { kind: "system", workflowRunId: "run-1" } }],
+    // Built with the PRODUCTION helper, not a copy of its output: the workflow author variant is
+    // what marks this dispatcher automated, so the classifier must be pinned against the real
+    // shape rather than a literal that can drift away from it.
+    [
+      "workflow step (t3team-workflowEngineBroker)",
+      { author: workflowTurnAuthor("run-1", "run-1:3", { prompt: "Rewrite the description." }) },
+    ],
     ["workflow repair (t3team-workflowEngineRepair)", { author: { kind: "system" } }],
     ["child kickoff (t3team-toolBrokerStartChild)", { author: { kind: "system" } }],
     [
@@ -217,24 +224,26 @@ it.layer(NodeServices.layer)("thread turn admission", (it) => {
     ],
   ];
 
-  it.effect.each(dispatcherShapes)("classifies %s as automated and rejects it while busy", ([, ext]) =>
-    Effect.gen(function* () {
-      const automated = {
-        ...automatedCommand,
-        commandId: CommandId.make("dispatcher-shape-command"),
-        message: { ...automatedCommand.message, t3teamExt: ext },
-      };
+  it.effect.each(dispatcherShapes)(
+    "classifies %s as automated and rejects it while busy",
+    ([, ext]) =>
+      Effect.gen(function* () {
+        const automated = {
+          ...automatedCommand,
+          commandId: CommandId.make("dispatcher-shape-command"),
+          message: { ...automatedCommand.message, t3teamExt: ext },
+        };
 
-      expect(isAutomatedTurnStart(automated)).toBe(true);
+        expect(isAutomatedTurnStart(automated)).toBe(true);
 
-      const error = yield* Effect.flip(
-        decideOrchestrationCommand({
-          command: automated,
-          readModel: withThread({ session: startingSession }),
-        }),
-      );
-      expect(error.message).toContain("already has a turn in progress");
-    }),
+        const error = yield* Effect.flip(
+          decideOrchestrationCommand({
+            command: automated,
+            readModel: withThread({ session: startingSession }),
+          }),
+        );
+        expect(error.message).toContain("already has a turn in progress");
+      }),
   );
 
   // Regression guard for upstream's "Preserve connecting status while a turn

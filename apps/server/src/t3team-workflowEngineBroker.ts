@@ -45,6 +45,7 @@ import {
 } from "./t3team-workflowChildModel.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
+import { workflowTurnAuthor } from "./t3team-workflowTurnAuthor.ts";
 import { workflowTurnText } from "./t3team-workflowTurnText.ts";
 import {
   buildT3TeamWidgetAttachment,
@@ -193,8 +194,11 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
                 role: "user",
                 text: workflowTurnText(p),
                 attachments: [],
-                // Marks this as an automated start for decider turn admission.
-                t3teamExt: { author: { kind: "system", workflowRunId: deps.runId } },
+                // `user` role because that is how a provider receives turn input — NOT because a
+                // person wrote it. The author says so: it marks the start as automated for decider
+                // turn admission AND is the only signal a client has for telling nine paragraphs of
+                // machine instructions apart from something the user typed.
+                t3teamExt: { author: workflowTurnAuthor(deps.runId, correlationId, p) },
               },
               modelSelection,
               runtimeMode: deps.runtimeMode,

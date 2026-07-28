@@ -114,6 +114,50 @@ describe("createWorkflowEngineBroker", () => {
     expect(dispatched).toHaveLength(3);
   });
 
+  it("attributes the turn prompt to the workflow step that authored it", async () => {
+    const dispatched: OrchestrationCommand[] = [];
+    const broker = createWorkflowEngineBroker({
+      runId: "run-attr",
+      launchThreadId: "parent-attr",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry: makeWorkflowEngineRegistry(),
+      dispatch: async (command) => {
+        dispatched.push(command);
+      },
+      newId: () => "id-1",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+    await broker.send(
+      {
+        correlationId: "run-attr:4",
+        kind: "thread.turn",
+        payload: {
+          threadId: "parent-attr",
+          prompt: "Rewrite the description of T3-42.\n\nRead the work item first.",
+          label: "Rewrite the description of T3-42",
+        },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+
+    // The prompt is a `user`-role message (that is how a provider takes turn input), so the author
+    // is the ONLY thing telling a client it was machine-written — and it carries the summary line a
+    // collapsed row renders, plus the step id the live plan card is keyed by.
+    const turn = dispatched.find((command) => command.type === "thread.turn.start");
+    expect(turn?.type === "thread.turn.start" ? turn.message.role : undefined).toBe("user");
+    expect(turn?.type === "thread.turn.start" ? turn.message.t3teamExt?.author : undefined).toEqual(
+      {
+        kind: "workflow",
+        workflowRunId: "run-attr",
+        stepId: "run-attr:4",
+        label: "Rewrite the description of T3-42",
+      },
+    );
+  });
+
   it("persists an ask continuation before dispatching the child turn", async () => {
     const events: string[] = [];
     const broker = createWorkflowEngineBroker({
