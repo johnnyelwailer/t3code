@@ -123,6 +123,7 @@ import {
   t3teamThreadRecipeWorkflowLaunchRouteLayer,
   t3teamThreadWorkflowResolveInputRouteLayer,
 } from "./t3team-thread-recipe-workflow-routes.ts";
+import { t3teamThreadDraftMutationStatusRouteLayer } from "./t3team-thread-draftMutation-status-route.ts";
 import { t3teamThreadWorkflowControlRouteLayer } from "./t3team-thread-workflow-control-route.ts";
 import {
   t3teamGitHubAssetRouteLayer,
@@ -482,6 +483,7 @@ export const makeRoutesLayer = Layer.mergeAll(
   t3teamThreadPlacementRouteLayer,
   t3teamThreadRecipeWorkflowLaunchRouteLayer,
   t3teamThreadWorkflowControlRouteLayer,
+  t3teamThreadDraftMutationStatusRouteLayer,
   t3teamThreadWorkflowResolveInputRouteLayer,
   t3teamThreadToolContextRouteLayer,
   t3teamWidgetToolCallRouteLayer,

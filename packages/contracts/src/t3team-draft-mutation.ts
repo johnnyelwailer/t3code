@@ -2,6 +2,17 @@ import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
+/**
+ * Where a proposal stands. `draft` is what the proposing tool publishes; `applied` and `dismissed`
+ * are the reviewer's verdicts, recorded ON THE CARRIER so they survive a reload — before this the
+ * payload was pinned to `draft` and the verdict lived only in the client's session store, so an
+ * accepted rewrite came back as pending review the next time the thread was read.
+ *
+ * Additive by construction: every carrier ever written says `draft`, which is still a member.
+ */
+export const T3TeamDraftMutationStatus = Schema.Literals(["draft", "applied", "dismissed"]);
+export type T3TeamDraftMutationStatus = typeof T3TeamDraftMutationStatus.Type;
+
 export const T3TeamDraftMutationField = Schema.Literals([
   "assignee",
   "estimate",
@@ -31,7 +42,7 @@ export const T3TeamDraftMutationPayload = Schema.Struct({
   }),
   field: T3TeamDraftMutationField,
   patch: Schema.Record(Schema.String, Schema.Unknown),
-  status: Schema.Literal("draft"),
+  status: T3TeamDraftMutationStatus,
   summary: Schema.optional(Schema.String),
   commitPolicy: Schema.Struct({
     requiresUserApproval: Schema.Boolean,
