@@ -210,6 +210,7 @@ export function ThreadChatView({
           ) : null}
           <ThreadPendingChat
             bootstrapStatus={bootstrapStatus}
+            threadId={threadId}
             onRetryLaunch={retryThreadBootstrap}
           />
         </div>

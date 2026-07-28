@@ -504,6 +504,11 @@ describe("T3TeamWorkflowDecisionCard clicks", () => {
 
     expect(container.querySelectorAll("button")).toHaveLength(0);
     expect(container.textContent).toContain("Describe the repro steps.");
-    expect(container.textContent).toContain("Reply in the composer below.");
+    // A text ask has no controls of its own, so the pointer to the composer is the whole
+    // affordance — it says the run is blocked, not merely that a reply is possible.
+    expect(container.textContent).toContain("Type your answer in the composer below");
+    expect(
+      container.querySelector('[data-workflow-decision-status="awaiting-answer"]')?.className,
+    ).toContain("text-primary");
   });
 });

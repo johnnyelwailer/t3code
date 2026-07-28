@@ -11,17 +11,17 @@
  * `isThreadWaitingForRecipeInput`); older cards in the history render disabled.
  */
 import { useState } from "react";
-import { CircleHelpIcon, LoaderCircleIcon } from "lucide-react";
+import { CircleHelpIcon, CornerDownRightIcon } from "lucide-react";
 import {
   isProjectRecipeWorkflowDecisionPayload,
   PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
   type ProjectRecipeWorkflowDecisionPayload,
 } from "@t3tools/project-recipes";
 
-import { Button } from "~/components/ui/button";
 import type { ChatMessage } from "~/types";
 
-import { T3TeamWorkflowDecisionForm } from "./t3team-messageDecisionForm";
+import { T3TeamWorkflowQuestionProse } from "./t3team-WorkflowQuestionProse";
+import { T3TeamWorkflowDecisionAffordance } from "./t3team-messageDecisionAffordance";
 
 export type WorkflowDecisionChooseHandler = (input: {
   /** The chosen option label — the reply message's display text. */
@@ -77,35 +77,6 @@ export function findActiveWorkflowInputMessageId(
   return lastWaitingIndex > lastUserIndex ? lastWaitingId : null;
 }
 
-/** A summary of a form submission for the reply message's display text. */
-function summarizeFormValue(value: Record<string, unknown>): string {
-  const entries = Object.entries(value);
-  return entries.length === 0
-    ? "Submitted"
-    : entries.map(([key, fieldValue]) => `${key}: ${String(fieldValue)}`).join(", ");
-}
-
-function DecisionButton(props: {
-  label: string;
-  busy: boolean;
-  disabled: boolean;
-  primary?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant={props.primary ? "default" : "outline"}
-      disabled={props.disabled}
-      onClick={props.onClick}
-    >
-      {props.busy ? <LoaderCircleIcon className="mr-1 size-3 animate-spin" /> : null}
-      {props.label}
-    </Button>
-  );
-}
-
 export function T3TeamWorkflowDecisionCard(props: {
   decision: ProjectRecipeWorkflowDecisionPayload;
   active: boolean;
@@ -137,7 +108,7 @@ export function T3TeamWorkflowDecisionCard(props: {
         <CircleHelpIcon className="size-3.5" />
         <span className="text-[11px] font-semibold uppercase tracking-wide">Needs your input</span>
       </div>
-      <p className="text-sm leading-6 text-foreground">{decision.question}</p>
+      <T3TeamWorkflowQuestionProse question={decision.question} />
 
       {unavailable ? (
         <p
@@ -148,58 +119,34 @@ export function T3TeamWorkflowDecisionCard(props: {
         </p>
       ) : null}
 
-      {!unavailable && affordance.kind === "choice" ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {affordance.options.map((option) => (
-            <DecisionButton
-              key={`choice:${decision.correlationId}:${option}`}
-              label={option}
-              busy={submitting === option}
-              disabled={locked}
-              onClick={() =>
-                runChoose(
-                  option,
-                  affordance.field === undefined ? option : { [affordance.field]: option },
-                )
-              }
-            />
-          ))}
-        </div>
-      ) : null}
-
-      {!unavailable && affordance.kind === "boolean" ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {([true, false] as const).map((bool) => {
-            const label = bool
-              ? (affordance.labels?.true ?? "Yes")
-              : (affordance.labels?.false ?? "No");
-            return (
-              <DecisionButton
-                key={`boolean:${decision.correlationId}:${String(bool)}`}
-                label={label}
-                busy={submitting === label}
-                disabled={locked}
-                primary={bool}
-                onClick={() => runChoose(label, bool)}
-              />
-            );
-          })}
-        </div>
-      ) : null}
-
-      {!unavailable && affordance.kind === "form" ? (
-        <T3TeamWorkflowDecisionForm
-          fields={affordance.fields}
-          disabled={!active || !onChoose}
-          submitting={submitting !== null}
-          onSubmit={(value) => runChoose(summarizeFormValue(value), value)}
+      {unavailable ? null : (
+        <T3TeamWorkflowDecisionAffordance
+          affordance={affordance}
+          correlationId={decision.correlationId}
+          submitting={submitting}
+          locked={locked}
+          formDisabled={!active || !onChoose}
+          onChoose={runChoose}
         />
-      ) : null}
+      )}
 
+      {/*
+        The run is BLOCKED here. A muted one-liner read as a status note, so the card looked like a
+        spinner and the user waited for something that was waiting for them. A text ask has no
+        buttons at all, so it needs the loudest pointer to where the answer goes.
+      */}
       {active && !unavailable ? (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p
+          className={
+            affordance.kind === "text"
+              ? "mt-3 flex items-center gap-1.5 text-sm font-medium text-primary"
+              : "mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"
+          }
+          data-workflow-decision-status="awaiting-answer"
+        >
+          <CornerDownRightIcon className="size-3.5 shrink-0" />
           {affordance.kind === "text"
-            ? "Reply in the composer below."
+            ? "Type your answer in the composer below — nothing runs until you do."
             : "…or reply in the composer below."}
         </p>
       ) : null}

@@ -47,7 +47,42 @@ const ENGINE_CAPABILITY_LABELS: Record<string, { label: string; description: str
   },
 };
 
-/** Human-friendly text for one declared capability (feature label table / group ref text). */
+/**
+ * The same table, for tool GROUPS.
+ *
+ * A group id is a permission namespace, not a sentence: `mutation.draft` sat in the chip row next to
+ * "Ask & notify you" and read as a leaked internal. Groups can carry an author-declared label, but the
+ * bundled ones do not — they are declared as bare strings in a workflow's `meta.capabilities` — so
+ * without a table here the id IS the label for every recipe in the product.
+ *
+ * Written in the same voice as the engine labels: what it may do TO YOUR WORK, and what it cannot.
+ */
+const TOOL_GROUP_CAPABILITY_LABELS: Record<string, { label: string; description: string }> = {
+  "integration.read": {
+    label: "Read your work items",
+    description: "Read issues, comments, and attachments from your connected tools. Read-only.",
+  },
+  "mutation.draft": {
+    label: "Propose changes you review",
+    description:
+      "Prepare changes as drafts for you to accept or reject. Nothing is saved to your connected tools without your approval.",
+  },
+  "mutation.write": {
+    label: "Save changes directly",
+    description: "Write changes straight to your connected tools without a review step.",
+  },
+  "repo.read": {
+    label: "Read this repository",
+    description: "Read files in the project workspace. Read-only.",
+  },
+  "repo.write": {
+    label: "Edit files in this repository",
+    description: "Create and modify files in the project workspace.",
+  },
+};
+
+/** Human-friendly text for one declared capability. Author-declared text wins; the tables fill the
+ * gap; the raw id is the last resort rather than the norm. */
 export function describeT3TeamShapeCapability(capability: ProjectRecipeWorkflowCapability): {
   label: string;
   description: string | undefined;
@@ -56,9 +91,11 @@ export function describeT3TeamShapeCapability(capability: ProjectRecipeWorkflowC
     const known = ENGINE_CAPABILITY_LABELS[capability.id];
     return known ?? { label: capability.id, description: undefined };
   }
+
+  const known = TOOL_GROUP_CAPABILITY_LABELS[capability.id];
   return {
-    label: capability.label ?? capability.id,
-    description: capability.description,
+    label: capability.label ?? known?.label ?? capability.id,
+    description: capability.description ?? known?.description,
   };
 }
 

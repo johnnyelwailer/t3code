@@ -121,7 +121,11 @@ export function AppThreadPane({
   );
 
   const embeddedThreadId = embeddedThread?.id ?? view.embeddedThreadId;
-  if (!embeddedThreadId) {
+  // A thread is never its own side-by-side companion. Rendering it twice gives one conversation two
+  // timelines and two composers, and a suspended `askUser` two places to answer it — answering in one
+  // leaves the other stale and it is ambiguous which is real. The navigation helper refuses to
+  // produce this route; this is the invariant that holds regardless of how the route was reached.
+  if (!embeddedThreadId || embeddedThreadId === view.threadId) {
     return parentChat;
   }
 
