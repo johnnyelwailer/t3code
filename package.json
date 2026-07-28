@@ -44,6 +44,7 @@
     "prepare": "effect-tsgo patch && vp config --no-agent && node scripts/setup-git-hooks.mjs",
     "setup:git-hooks": "node scripts/setup-git-hooks.mjs",
     "dev": "node scripts/dev-runner.ts dev",
+    "dev:share": "node scripts/dev-runner.ts dev --share",
     "dev:server": "node scripts/dev-runner.ts dev:server",
     "dev:web": "node scripts/dev-runner.ts dev:web",
     "dev:marketing": "vp run --filter @t3tools/marketing dev",
