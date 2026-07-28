@@ -9,8 +9,6 @@ import { createT3TeamWidgetRegistry } from "./t3team-widgetRegistry.ts";
 import { callT3TeamWidgetShowTool } from "./t3team-widgetShowTool.ts";
 import { parseT3TeamWidgetShowInput } from "./t3team-widgetShowCore.ts";
 
-const run = <A>(effect: Effect.Effect<A>) => Effect.runPromise(effect);
-
 const validArgs = {
   title: "q4_revenue_chart",
   widget_code: "<div>hello</div>",
@@ -114,51 +112,55 @@ describe("parseT3TeamWidgetShowInput", () => {
 });
 
 describe("callT3TeamWidgetShowTool", () => {
-  it("registers the allowlist and posts a widget attachment message", async () => {
-    const { commands, registry, deps } = makeDeps();
-    const result = await run(callT3TeamWidgetShowTool({ toolArgs: validArgs, deps }));
-    assert.notStrictEqual(result.isError, true);
-    const structured = result.structuredContent as { widgetId: string; format: string };
-    assert.strictEqual(structured.format, "html");
+  it.effect("registers the allowlist and posts a widget attachment message", () =>
+    Effect.gen(function* () {
+      const { commands, registry, deps } = makeDeps();
+      const result = yield* callT3TeamWidgetShowTool({ toolArgs: validArgs, deps });
+      assert.notStrictEqual(result.isError, true);
+      const structured = result.structuredContent as { widgetId: string; format: string };
+      assert.strictEqual(structured.format, "html");
 
-    const registration = await run(registry.get(structured.widgetId));
-    assert.deepStrictEqual(registration?.tools, ["t3team.view.read"]);
-    assert.strictEqual(registration?.threadId, "thread-1");
+      const registration = yield* registry.get(structured.widgetId);
+      assert.deepStrictEqual(registration?.tools, ["t3team.view.read"]);
+      assert.strictEqual(registration?.threadId, "thread-1");
 
-    assert.strictEqual(commands.length, 1);
-    const command = commands[0]!;
-    assert.strictEqual(command.type, "thread.message.upsert");
-    const upsert = command as Extract<OrchestrationCommand, { type: "thread.message.upsert" }>;
-    const attachment = upsert.message.t3teamExt?.attachments?.[0] as
-      | T3TeamMessageWidgetAttachment
-      | undefined;
-    assert.strictEqual(attachment?.kind, "widget");
-    assert.strictEqual(attachment?.widget.html, "<div>hello</div>");
-    assert.deepStrictEqual(attachment?.widget.capabilities?.tools, ["t3team.view.read"]);
-    assert.deepStrictEqual(attachment?.widget.loadingMessages, ["Setting up the widget"]);
-    // No persistence context → inline-only widget, no artifact ref.
-    assert.isUndefined(attachment?.widget.artifact);
-  });
+      assert.strictEqual(commands.length, 1);
+      const command = commands[0]!;
+      assert.strictEqual(command.type, "thread.message.upsert");
+      const upsert = command as Extract<OrchestrationCommand, { type: "thread.message.upsert" }>;
+      const attachment = upsert.message.t3teamExt?.attachments?.[0] as
+        | T3TeamMessageWidgetAttachment
+        | undefined;
+      assert.strictEqual(attachment?.kind, "widget");
+      assert.strictEqual(attachment?.widget.html, "<div>hello</div>");
+      assert.deepStrictEqual(attachment?.widget.capabilities?.tools, ["t3team.view.read"]);
+      assert.deepStrictEqual(attachment?.widget.loadingMessages, ["Setting up the widget"]);
+      // No persistence context → inline-only widget, no artifact ref.
+      assert.isUndefined(attachment?.widget.artifact);
+    }),
+  );
 
-  it("returns an error result for invalid input without dispatching", async () => {
-    const { commands, deps } = makeDeps();
-    const result = await run(callT3TeamWidgetShowTool({ toolArgs: { title: "x" }, deps }));
-    assert.strictEqual(result.isError, true);
-    assert.strictEqual(commands.length, 0);
-  });
+  it.effect("returns an error result for invalid input without dispatching", () =>
+    Effect.gen(function* () {
+      const { commands, deps } = makeDeps();
+      const result = yield* callT3TeamWidgetShowTool({ toolArgs: { title: "x" }, deps });
+      assert.strictEqual(result.isError, true);
+      assert.strictEqual(commands.length, 0);
+    }),
+  );
 
-  it("fails when the message dispatch fails and does NOT consume a registry slot", async () => {
-    const registry = createT3TeamWidgetRegistry();
-    const seen: string[] = [];
-    const wrapped = {
-      put: (r: Parameters<typeof registry.put>[0]) => {
-        seen.push(r.widgetId);
-        return registry.put(r);
-      },
-      get: registry.get,
-    };
-    const result = await run(
-      callT3TeamWidgetShowTool({
+  it.effect("fails when the message dispatch fails and does NOT consume a registry slot", () =>
+    Effect.gen(function* () {
+      const registry = createT3TeamWidgetRegistry();
+      const seen: string[] = [];
+      const wrapped = {
+        put: (r: Parameters<typeof registry.put>[0]) => {
+          seen.push(r.widgetId);
+          return registry.put(r);
+        },
+        get: registry.get,
+      };
+      const result = yield* callT3TeamWidgetShowTool({
         toolArgs: validArgs,
         deps: {
           threadId: "thread-1",
@@ -167,12 +169,12 @@ describe("callT3TeamWidgetShowTool", () => {
           dispatch: () => Effect.fail("boom"),
           persistenceContext: undefined,
         },
-      }),
-    );
-    assert.strictEqual(result.isError, true);
-    // Registration happens only AFTER a successful dispatch.
-    assert.strictEqual(seen.length, 0);
-  });
+      });
+      assert.strictEqual(result.isError, true);
+      // Registration happens only AFTER a successful dispatch.
+      assert.strictEqual(seen.length, 0);
+    }),
+  );
 });
 
 describe("t3team.widget.show broker dispatch gating", () => {
@@ -184,20 +186,22 @@ describe("t3team.widget.show broker dispatch gating", () => {
     readView: () => Effect.succeed({}),
   };
 
-  it("rejects when the showWidget callback is not wired", async () => {
-    const state = buildBindingState({ availableToolIds: ["t3team.widget.show"] });
-    const result = await run(dispatchT3TeamToolCall({ ...baseInput, state }));
-    assert.strictEqual(result.isError, true);
-  });
+  it.effect("rejects when the showWidget callback is not wired", () =>
+    Effect.gen(function* () {
+      const state = buildBindingState({ availableToolIds: ["t3team.widget.show"] });
+      const result = yield* dispatchT3TeamToolCall({ ...baseInput, state });
+      assert.strictEqual(result.isError, true);
+    }),
+  );
 
-  it("rejects when the widget tool group is not allowed", async () => {
-    const state = buildBindingState({
-      availableToolIds: ["t3team.widget.show"],
-      allowedToolGroups: ["integration.read"],
-    });
-    let called = false;
-    const result = await run(
-      dispatchT3TeamToolCall({
+  it.effect("rejects when the widget tool group is not allowed", () =>
+    Effect.gen(function* () {
+      const state = buildBindingState({
+        availableToolIds: ["t3team.widget.show"],
+        allowedToolGroups: ["integration.read"],
+      });
+      let called = false;
+      const result = yield* dispatchT3TeamToolCall({
         ...baseInput,
         state,
         showWidget: () =>
@@ -205,22 +209,22 @@ describe("t3team.widget.show broker dispatch gating", () => {
             called = true;
             return { content: [{ type: "text" as const, text: "ok" }] };
           }),
-      }),
-    );
-    assert.strictEqual(result.isError, true);
-    assert.isFalse(called);
-  });
+      });
+      assert.strictEqual(result.isError, true);
+      assert.isFalse(called);
+    }),
+  );
 
-  it("invokes the callback when available and allowed", async () => {
-    const state = buildBindingState({ availableToolIds: ["t3team.widget.show"] });
-    const result = await run(
-      dispatchT3TeamToolCall({
+  it.effect("invokes the callback when available and allowed", () =>
+    Effect.gen(function* () {
+      const state = buildBindingState({ availableToolIds: ["t3team.widget.show"] });
+      const result = yield* dispatchT3TeamToolCall({
         ...baseInput,
         state,
         showWidget: () => Effect.succeed({ content: [{ type: "text" as const, text: "shown" }] }),
-      }),
-    );
-    assert.notStrictEqual(result.isError, true);
-    assert.strictEqual(result.content[0]?.text, "shown");
-  });
+      });
+      assert.notStrictEqual(result.isError, true);
+      assert.strictEqual(result.content[0]?.text, "shown");
+    }),
+  );
 });

@@ -20,6 +20,7 @@ import * as PathService from "effect/Path";
 import { createQueryable } from "@t3tools/project-context";
 import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
 import { definePrompt } from "@t3team/sdk";
+import { it as effectIt } from "@effect/vitest";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
@@ -83,61 +84,66 @@ const renderContext: ProjectRecipeRenderContext = {
 };
 
 describe("prompt-action recipe discovery", () => {
-  it("discovers a prompt-only recipe.ts with its prompt content and no workflowPath", async () => {
-    const discovered = await Effect.runPromise(
-      Effect.scoped(
-        discoverProjectRecipes({ workspaceRoot, context: renderContext }).pipe(
-          Effect.provide(NodeServices.layer),
-        ),
-      ),
-    );
+  effectIt.effect(
+    "discovers a prompt-only recipe.ts with its prompt content and no workflowPath",
+    () =>
+      Effect.gen(function* () {
+        const discovered = yield* Effect.scoped(
+          discoverProjectRecipes({ workspaceRoot, context: renderContext }).pipe(
+            Effect.provide(NodeServices.layer),
+          ),
+        );
 
-    const recipe = discovered.recipes.find((entry) => entry.id === "explain-selected-work");
-    expect(recipe).toBeDefined();
-    expect(recipe?.displayName).toBe("Explain selected work");
-    // The prompt FILE is read at discovery, exactly as the retired recipe.json form did.
-    expect(recipe?.prompt).toContain("Explain the selected item in plain language.");
-    expect(recipe?.promptPath).toBe(NodePath.join(recipeRoot, "prompt.md"));
-    // A prompt action declares no workflow, so nothing is added to the executable set.
-    expect(recipe?.workflowPath).toBeUndefined();
-  });
+        const recipe = discovered.recipes.find((entry) => entry.id === "explain-selected-work");
+        expect(recipe).toBeDefined();
+        expect(recipe?.displayName).toBe("Explain selected work");
+        // The prompt FILE is read at discovery, exactly as the retired recipe.json form did.
+        expect(recipe?.prompt).toContain("Explain the selected item in plain language.");
+        expect(recipe?.promptPath).toBe(NodePath.join(recipeRoot, "prompt.md"));
+        // A prompt action declares no workflow, so nothing is added to the executable set.
+        expect(recipe?.workflowPath).toBeUndefined();
+      }),
+  );
 });
 
 describe("resolvePromptActionSource", () => {
-  const pathService = Effect.runSync(
-    Effect.provide(
-      Effect.gen(function* () {
-        return yield* PathService.Path;
-      }),
-      NodePathService.layer,
-    ),
+  const withPathService = <A>(f: (pathService: PathService.Path) => A) =>
+    Effect.gen(function* () {
+      const pathService = yield* PathService.Path;
+      return f(pathService);
+    }).pipe(Effect.provide(NodePathService.layer));
+
+  effectIt.effect("resolves a recipe-relative prompt file inside the recipe directory", () =>
+    withPathService((pathService) => {
+      const resolved = resolvePromptActionSource(
+        pathService,
+        recipeRoot,
+        definePrompt("./prompt.md"),
+      );
+      expect(resolved.promptPath).toBe(NodePath.join(recipeRoot, "prompt.md"));
+      expect(resolved.promptText).toBeUndefined();
+    }),
   );
 
-  it("resolves a recipe-relative prompt file inside the recipe directory", () => {
-    const resolved = resolvePromptActionSource(
-      pathService,
-      recipeRoot,
-      definePrompt("./prompt.md"),
-    );
-    expect(resolved.promptPath).toBe(NodePath.join(recipeRoot, "prompt.md"));
-    expect(resolved.promptText).toBeUndefined();
-  });
-
-  it("passes inline text through unchanged", () => {
-    const resolved = resolvePromptActionSource(
-      pathService,
-      recipeRoot,
-      definePrompt({ text: "Inline instruction." }),
-    );
-    expect(resolved.promptText).toBe("Inline instruction.");
-    expect(resolved.promptPath).toBeUndefined();
-  });
+  effectIt.effect("passes inline text through unchanged", () =>
+    withPathService((pathService) => {
+      const resolved = resolvePromptActionSource(
+        pathService,
+        recipeRoot,
+        definePrompt({ text: "Inline instruction." }),
+      );
+      expect(resolved.promptText).toBe("Inline instruction.");
+      expect(resolved.promptPath).toBeUndefined();
+    }),
+  );
 
   // The authoring-time guard blocks absolute paths; this pins the SERVER-side containment check
   // for a ref that escapes with `../`, which `definePrompt` accepts as a legal relative form.
-  it("refuses a prompt path that escapes the recipe directory", () => {
-    expect(() =>
-      resolvePromptActionSource(pathService, recipeRoot, definePrompt("../../../../etc/passwd")),
-    ).toThrow(/resolves outside/);
-  });
+  effectIt.effect("refuses a prompt path that escapes the recipe directory", () =>
+    withPathService((pathService) => {
+      expect(() =>
+        resolvePromptActionSource(pathService, recipeRoot, definePrompt("../../../../etc/passwd")),
+      ).toThrow(/resolves outside/);
+    }),
+  );
 });

@@ -7,6 +7,7 @@ import {
   type OrchestrationEvent,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import { it as effectIt } from "@effect/vitest";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
@@ -962,12 +963,12 @@ describe("orchestration projector", () => {
     expect(thread?.checkpoints.at(-1)?.turnId).toBe("turn-599");
   });
 
-  it("projects a project.created event with no `source` key (replay compat)", async () => {
-    const now = "2026-01-01T00:00:00.000Z";
-    const model = createEmptyReadModel(now);
+  effectIt.effect("projects a project.created event with no `source` key (replay compat)", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const model = createEmptyReadModel(now);
 
-    const next = await Effect.runPromise(
-      projectEvent(
+      const next = yield* projectEvent(
         model,
         makeEvent({
           sequence: 1,
@@ -989,10 +990,10 @@ describe("orchestration projector", () => {
             updatedAt: now,
           },
         }),
-      ),
-    );
+      );
 
-    expect(next.projects).toHaveLength(1);
-    expect(next.projects[0]?.source).toBeUndefined();
-  });
+      expect(next.projects).toHaveLength(1);
+      expect(next.projects[0]?.source).toBeUndefined();
+    }),
+  );
 });
