@@ -99,6 +99,31 @@ export async function deliverWorkflowCompletion(input: {
  * the Work Log knew the run died (step activities), but no message reached the
  * conversation.
  */
+/**
+ * The failure notice, written for whoever can actually act on it.
+ *
+ * An agent-authored (ephemeral) run's source belongs to the agent in the conversation, so telling it to
+ * fix the source and re-launch is correct — that reader can do exactly that.
+ *
+ * A BUNDLED or project recipe is shipped code. Its run was started by a human clicking a button, and
+ * that human cannot edit the recipe's source; self-heal does not apply either (`repairIntent` is only
+ * set for the ephemeral case). Handing them "Fix the orchestration source … call
+ * t3team_help("agent-orchestration")" is agent-facing text pointed at the one reader who has no way to
+ * comply, and it hides the only thing they can do.
+ */
+export function buildWorkflowFailureText(input: {
+  readonly errorText: string;
+  /** `true` when the reader owns the run's source — an agent-authored ephemeral run. */
+  readonly hostOwnsSource: boolean;
+}): string {
+  const reason = workflowStepDetailSnippet(input.errorText, 300);
+  const headline = `⚠️ Workflow run failed${reason.length > 0 ? `: ${reason}` : "."}`;
+
+  return input.hostOwnsSource
+    ? `${headline}\n\nThe run is no longer active. Fix the orchestration source and launch it again — call t3team_help("agent-orchestration") for the authoring format.`
+    : `${headline}\n\nThe run stopped here and nothing was saved. You can start it again — if it keeps failing, the recipe itself needs a fix, so report the message above.`;
+}
+
 export async function deliverWorkflowFailure(input: {
   readonly launchThreadId: string | undefined;
   readonly workflowRunId: string;
@@ -106,13 +131,17 @@ export async function deliverWorkflowFailure(input: {
   readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
   readonly newId: () => string;
   readonly nowIso: () => string;
+  /** Defaults to the agent-authored wording, so a funnel that cannot tell keeps today's text. */
+  readonly hostOwnsSource?: boolean;
 }): Promise<void> {
-  const reason = workflowStepDetailSnippet(input.errorText, 300);
   await postTerminalMessage({
     launchThreadId: input.launchThreadId,
     workflowRunId: input.workflowRunId,
     kind: "failed",
-    text: `⚠️ Workflow run failed${reason.length > 0 ? `: ${reason}` : "."}\n\nThe run is no longer active. Fix the orchestration source and launch it again — call t3team_help("agent-orchestration") for the authoring format.`,
+    text: buildWorkflowFailureText({
+      errorText: input.errorText,
+      hostOwnsSource: input.hostOwnsSource ?? true,
+    }),
     dispatch: input.dispatch,
     newId: input.newId,
     nowIso: input.nowIso,

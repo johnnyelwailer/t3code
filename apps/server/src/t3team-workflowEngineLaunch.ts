@@ -277,6 +277,9 @@ export async function launchWorkflowRecipe(
       newId: input.newId,
       nowIso: input.nowIso,
       onError: input.onError,
+      // Only an ephemeral, agent-authored run carries a repair intent, and only its reader owns the
+      // source. A bundled or project recipe run was started by a human who cannot edit it.
+      hostOwnsSource: input.repairIntent !== undefined,
     });
     return { runId: input.runId, status: "failed" };
   }
