@@ -1,3 +1,6 @@
+// @effect-diagnostics globalConsole:off - CLI runner: stdout IS its contract (callers parse the JSON report); Effect's logger would add framing.
+// @effect-diagnostics globalConsoleInEffect:off - Same reason inside the Effect body: the failure path writes diagnostics to stderr for a human.
+// @effect-diagnostics preferSchemaOverJson:off - Argv flags and the stdout report are untyped process boundaries, not domain payloads.
 /**
  * Recipe/orchestration E2E runner.
  *
@@ -5,20 +8,30 @@
  * stubbed model, and prints a JSON report the caller asserts on. Browser-free and offline, so
  * a distribution repo (or CI) can exercise its recipe library unattended:
  *
- *   node vendor/t3code/scripts/t3team-recipe-workflow-e2e.ts \
+ *   node vendor/t3code/apps/server/src/t3team-recipeWorkflowE2e.ts \
  *     --recipe packs/nexplore-global/recipes/discussion-recap \
  *     --fixture fixtures/demo-backlog \
  *     --replies '["{\"decisions\":[]}"]' --answers '["{}"]'
+ *
+ * Lives in `apps/server/src` rather than `scripts/` because it imports server internals: the
+ * `scripts` tsconfig project does not (and should not) own those files, so from there every
+ * import tripped TS6307 and dragged the server sources into the wrong project, cascading
+ * ~150 spurious errors through CI's `vpr typecheck`.
+ *
+ * @module t3team-recipeWorkflowE2e
  */
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import { runT3TeamRecipeWorkflowHarness } from "../apps/server/src/t3team-recipeWorkflowHarness.ts";
+import { runT3TeamRecipeWorkflowHarness } from "./t3team-recipeWorkflowHarness.ts";
 import {
   makeT3TeamRecipeHarnessEngineLayer,
   makeT3TeamRecipeHarnessReactorLayer,
-} from "../apps/server/src/t3team-recipeWorkflowHarnessLayers.ts";
-import { makeT3TeamRecipeHarnessStubProvider } from "../apps/server/src/t3team-recipeWorkflowHarnessStub.ts";
+} from "./t3team-recipeWorkflowHarnessLayers.ts";
+import {
+  makeT3TeamRecipeHarnessStubProvider,
+  type T3TeamRecipeHarnessCapture,
+} from "./t3team-recipeWorkflowHarnessStub.ts";
 
 function readFlag(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -37,7 +50,10 @@ if (!recipeDir || !fixtureRoot) {
   process.exit(2);
 }
 
-const capture: { commands: unknown[]; agentPrompts: string[] } = {
+// Typed as the harness's own capture shape, not `unknown[]`: the stub appends real
+// `OrchestrationCommand`s, and the loose type made `spec` unassignable to
+// `T3TeamRecipeHarnessSpec` (and forced a cast to read `.type` below).
+const capture: T3TeamRecipeHarnessCapture = {
   commands: [],
   agentPrompts: [],
 };
@@ -82,7 +98,7 @@ const exitCode = await Effect.runPromise(
           console.error(
             `capture: ${JSON.stringify(
               {
-                commandTypes: capture.commands.map((c: { type?: string }) => c.type),
+                commandTypes: capture.commands.map((command) => command.type),
                 agentPrompts: capture.agentPrompts.length,
               },
               null,
