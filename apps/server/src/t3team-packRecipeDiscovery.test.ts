@@ -99,6 +99,7 @@ const makePackDiagnostic = (input: {
 const run = <A>(effect: Effect.Effect<A, any, any>) =>
   Effect.runPromise(
     Effect.scoped(
+      // @effect-diagnostics-next-line anyUnknownInErrorContext:off - Generic test runner: the suite passes any effect it builds and the layer below satisfies its requirements.
       effect.pipe(
         Effect.provide(Layer.mergeAll(makeBrokerLayer(orchestrationMock), NodeServices.layer)),
       ),
@@ -260,6 +261,7 @@ describe("pack-provided recipe discovery", () => {
         // `visible` is authored inside the pack, but probes the user's project.
         yield* fileSystem.writeFileString(
           path.join(recipeRoot, "recipe.json"),
+          // @effect-diagnostics-next-line preferSchemaOverJson:off - Test fixture writes a recipe.json manifest to disk verbatim; not a domain payload.
           JSON.stringify({
             id: "triage",
             version: "0.1.0",
