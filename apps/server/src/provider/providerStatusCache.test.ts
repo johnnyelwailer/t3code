@@ -269,3 +269,33 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
     );
   });
 });
+
+it("keeps a pack-declared model list authoritative instead of resurrecting cached extras", () => {
+  // A pack's `describe()` list is the complete set. Unioning cached extras made a model
+  // removed from a pack (e.g. swapping the Nexplore coding tier) linger in the picker
+  // forever on any install that had already cached it.
+  const packDriver = ProviderDriverKind.make("nexplore");
+  const cachedPack = makeProvider(packDriver, {
+    configurationSource: "pack",
+    models: [
+      { slug: "kat-coder", name: "Coding", isCustom: false, capabilities: emptyCapabilities },
+      { slug: "retired-model", name: "Retired", isCustom: false, capabilities: emptyCapabilities },
+    ],
+  });
+  const fallbackPack = makeProvider(packDriver, {
+    configurationSource: "pack",
+    models: [
+      { slug: "kat-coder", name: "Coding", isCustom: false, capabilities: emptyCapabilities },
+    ],
+  });
+
+  const hydrated = hydrateCachedProvider({
+    cachedProvider: cachedPack,
+    fallbackProvider: fallbackPack,
+  });
+
+  assert.deepStrictEqual(
+    hydrated.models.map((model) => model.slug),
+    ["kat-coder"],
+  );
+});
