@@ -35,7 +35,12 @@ const issue = (
 
 /** Field names of a `Schema.Struct(...)` literal from the extracted meta, when derivable. */
 function schemaFieldNames(value: unknown): ReadonlyArray<string> | undefined {
-  if (value === null || typeof value !== "object" || !("fields" in value)) {
+  // effect ≥4.0.0-beta.102: `Schema.Struct(...)` is callable (typeof "function"), not a plain object.
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function") ||
+    !("fields" in value)
+  ) {
     return undefined;
   }
   const fields = (value as { readonly fields: unknown }).fields;
