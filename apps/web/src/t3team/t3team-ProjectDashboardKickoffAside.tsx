@@ -121,6 +121,7 @@ export function ProjectDashboardKickoffAside({
         thread={activeThread}
         projectId={project.id}
         projectTitle={project.title}
+        projectSource={project.source}
         {...(project.workspace?.rootPath
           ? { projectWorkspaceRoot: project.workspace.rootPath }
           : {})}

@@ -65,6 +65,7 @@ export function AppThreadPane({
       threadId={view.threadId}
       projectId={view.projectId}
       projectTitle={threadProject?.title ?? view.projectId}
+      {...(threadProject?.source ? { projectSource: threadProject.source } : {})}
       {...(threadProject?.workspace?.rootPath
         ? { projectWorkspaceRoot: threadProject.workspace.rootPath }
         : {})}
@@ -151,6 +152,7 @@ export function AppThreadPane({
           threadId={embeddedThreadId}
           projectId={view.projectId}
           projectTitle={threadProject?.title ?? view.projectId}
+          {...(threadProject?.source ? { projectSource: threadProject.source } : {})}
           {...(threadProject?.workspace?.rootPath
             ? { projectWorkspaceRoot: threadProject.workspace.rootPath }
             : {})}

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import type { ProjectSource } from "@t3tools/project-context";
 import { createT3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 import type { T3TeamThreadToolId } from "~/t3team/t3team-types";
@@ -11,6 +12,7 @@ export function useThreadChatTurnToolContext(input: {
   readonly kickoffWorkflow: T3TeamKickoffWorkflow | undefined;
   readonly projectId: string;
   readonly projectTitle: string;
+  readonly projectSource: Pick<ProjectSource, "provider"> | undefined;
   readonly projectWorkspaceRoot: string | undefined;
   readonly selectedToolIds: ReadonlyArray<T3TeamThreadToolId> | undefined;
   readonly threadId: string;
@@ -26,6 +28,7 @@ export function useThreadChatTurnToolContext(input: {
         ...(input.kickoffWorkflow ? { kickoffWorkflow: input.kickoffWorkflow } : {}),
         projectId: input.projectId,
         projectTitle: input.projectTitle,
+        ...(input.projectSource ? { projectSource: input.projectSource } : {}),
         ...(input.projectWorkspaceRoot ? { workspaceRoot: input.projectWorkspaceRoot } : {}),
         threadId: input.threadId,
         threadTitle: input.title,
@@ -41,6 +44,7 @@ export function useThreadChatTurnToolContext(input: {
       input.kickoffWorkflow,
       input.projectId,
       input.projectTitle,
+      input.projectSource,
       input.projectWorkspaceRoot,
       input.selectedToolIds,
       input.threadId,
