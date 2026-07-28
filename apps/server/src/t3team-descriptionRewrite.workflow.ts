@@ -148,5 +148,14 @@ export default async function run() {
   });
   log("Proposed a description draft for " + input.issueIdOrKey + " for review.");
 
-  return { issueIdOrKey: input.issueIdOrKey, proposed: true };
+  // `summary` is what the completion message shows the human; the raw fields would otherwise be
+  // auto-formatted into "Issue Id Or Key: … Proposed: true", which means nothing to a user.
+  return {
+    issueIdOrKey: input.issueIdOrKey,
+    proposed: true,
+    summary:
+      "Proposed a rewritten description for " +
+      input.issueIdOrKey +
+      " — review it on the work item and accept or dismiss it there.",
+  };
 }
