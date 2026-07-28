@@ -8,6 +8,7 @@
 import type * as Schema from "effect/Schema";
 
 import type { AgentAttachment } from "./t3team-sdk.askAttachments.ts";
+import type { WorkflowChildCapabilities } from "./t3team-sdk.capabilityVocabulary.ts";
 import type { ModelRef, ModelSelection } from "./t3team-sdk.types.ts";
 
 /**
@@ -102,8 +103,16 @@ export interface AskUserOpts<R = string> extends AskOpts<R> {
  * to it, which `AskUserOpts` — narrowing `attachments` to resource refs — is not. */
 export type AnyAskOpts<R = string> = AskOpts<R> & Pick<AskUserOpts<R>, "labels">;
 
-/** Options for `spawnThread`. */
+export type { WorkflowChildCapabilities } from "./t3team-sdk.capabilityVocabulary.ts";
+
+/**
+ * Options for `spawnThread`. `capabilities` is REQUIRED — see {@link WorkflowChildCapabilities} for
+ * why there is no default. Everything else keeps its existing meaning, so the only authoring form
+ * this breaks is the one that never said what the child was allowed to do.
+ */
 export interface SpawnThreadOpts {
+  /** What the spawned thread's agent may do: `"inherit"`, or an explicit subset of the parent's. */
+  readonly capabilities: WorkflowChildCapabilities;
   readonly name?: string;
   readonly model?: ModelSelection;
   /** Provider fallback ladder for the thread's asks; ignored when `model` is given. Resolved ONCE
@@ -113,6 +122,20 @@ export interface SpawnThreadOpts {
   readonly effort?: AgentEffort;
   /** Ephemeral children stay out of the sidebar; retained children are durable and visible. */
   readonly retention?: "ephemeral" | "retained";
+}
+
+/**
+ * Options for `agent(prompt, opts)` — the one-shot `spawnThread(opts).askAgent(prompt, opts)`. It
+ * CREATES a child, so like `spawnThread` it must say what that child may do; the ask-side options
+ * (`schema` / `model` / `models` / `effort` / `attachments` / `label`) are the same `AskOpts`.
+ *
+ * A verb that drives an ALREADY-EXISTING thread — `askAgent`, `askUser`, `notifyAgent`,
+ * `notifyUser`, `showWidget` — deliberately takes no `capabilities`: that thread's capabilities were
+ * decided once, where it was created. Two places to state the same grant is how they drift apart.
+ */
+export interface AgentOpts<R = string> extends AskOpts<R> {
+  /** What the one-shot child may do: `"inherit"`, or an explicit subset of the parent's. */
+  readonly capabilities: WorkflowChildCapabilities;
 }
 
 /** Sandboxed inline widget shown in a thread. HTML/SVG must be a fragment. */
@@ -138,6 +161,6 @@ export interface WorkflowThreadPrimitives {
   /** The thread the workflow runs in (the chat the user launched from); `undefined` if
    * headless (cron/automation, no chat surface). */
   readonly thread: Thread | undefined;
-  readonly spawnThread: (opts?: SpawnThreadOpts) => Thread;
-  readonly agent: <R = string>(prompt: string, opts?: AskOpts<R>) => Promise<R>;
+  readonly spawnThread: (opts: SpawnThreadOpts) => Thread;
+  readonly agent: <R = string>(prompt: string, opts: AgentOpts<R>) => Promise<R>;
 }

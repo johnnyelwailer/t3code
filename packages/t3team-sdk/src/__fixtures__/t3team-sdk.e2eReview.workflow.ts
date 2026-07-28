@@ -32,12 +32,20 @@ export default async function run() {
   if (thread === undefined) throw new Error("fixtures.e2e-review requires a launching thread");
 
   const Risk = Schema.Struct({ risk: Schema.String });
-  const classified = await agent(`classify the risk of: ${input.change}`, { schema: Risk });
+  // The isolated child inherits this body's grant (`["user"]`); the two launching-thread asks below
+  // take no `capabilities` — that thread's grant is the run's own, decided at launch.
+  const classified = await agent(`classify the risk of: ${input.change}`, {
+    schema: Risk,
+    capabilities: "inherit",
+  });
 
   const Plan = Schema.Struct({ plan: Schema.String });
-  const planned = await thread.askAgent(`draft a rollout plan for a ${classified.risk}-risk change`, {
-    schema: Plan,
-  });
+  const planned = await thread.askAgent(
+    `draft a rollout plan for a ${classified.risk}-risk change`,
+    {
+      schema: Plan,
+    },
+  );
 
   const Decision = Schema.Struct({ approved: Schema.Boolean });
   const decision = await thread.askUser(`Approve this plan?\n\n${planned.plan}`, {

@@ -18,9 +18,10 @@
  * module-level import cannot be a per-run binding, and an accessor keeps the run boundary explicit.
  */
 
-import type * as Schema from "effect/Schema";
-
+import type { WorkflowBudget } from "./t3team-sdk.primitiveTypes.ts";
 import { bodyApiStorage } from "./t3team-sdk.internal.ts";
+import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
+import type { WorkflowRef } from "./t3team-sdk.types.ts";
 
 /** Reads one member of the active body surface, or explains precisely why it is unavailable. */
 function fromRun<T>(name: string): T {
@@ -46,21 +47,25 @@ const call =
 
 // --- Orchestration -----------------------------------------------------------
 /**
- * Signatures carry the schema through, which is the whole point of imports over globals: with
- * `{ schema }` the result is the decoded `T`, without it a string. A body that reads
- * `result.someField` now fails to compile when the schema has no such field, instead of surfacing as
- * `unknown` at every use site.
+ * A one-shot subagent: `spawnThread(opts).askAgent(prompt, opts)`, thread not retained.
+ *
+ * The options are a DECLARED type ({@link AgentOpts}), not an `unknown` bag. That is the whole point
+ * of imports over globals: a misspelled key, a wrong value shape, or a missing required field is a
+ * compile error at the call site instead of a value the runtime silently drops. `R` is inferred from
+ * `schema` — with one, the result is the decoded value and `result.someField` fails to compile when
+ * the schema has no such field; without one, it is a `string`.
+ *
+ * `capabilities` is required, so `opts` is required. See {@link AgentOpts}.
  */
-export function agent<T>(
-  prompt: string,
-  opts: { readonly schema: Schema.Schema<T> } & Record<string, unknown>,
-): Promise<T>;
-export function agent(prompt: string, opts?: Record<string, unknown>): Promise<string>;
-export function agent(prompt: string, opts?: Record<string, unknown>): Promise<unknown> {
-  return fromRun<(p: string, o?: Record<string, unknown>) => Promise<unknown>>("agent")(prompt, opts);
+export function agent<R = string>(prompt: string, opts: AgentOpts<R>): Promise<R> {
+  return fromRun<(p: string, o: AgentOpts<R>) => Promise<R>>("agent")(prompt, opts);
 }
 
-export const spawnThread = call<[Record<string, unknown>?], unknown>("spawnThread");
+/** A new isolated thread the body can drive over several turns. `capabilities` is required, so
+ * `opts` is required — an unnamed, unscoped child was never a deliberate choice. */
+export function spawnThread(opts: SpawnThreadOpts): Thread {
+  return fromRun<(o: SpawnThreadOpts) => Thread>("spawnThread")(opts);
+}
 
 /**
  * Tuple-preserving, so `const [a, b] = await parallel([…])` keeps each thunk's own type instead of
@@ -76,12 +81,19 @@ export function parallel<const T extends ReadonlyArray<() => unknown>>(
 }
 
 export const pipeline = call<ReadonlyArray<unknown>, Promise<unknown[]>>("pipeline");
-export const workflow = call<[unknown, unknown?], Promise<unknown>>("workflow");
+
+/** Run another orchestration inline as one sub-step. The typed `WorkflowRef` from `defineWorkflow`
+ * carries the child's `Inputs`/`Outputs`, so `args` is checked and the result is the child's own
+ * output type rather than `unknown` (spec §The engine API: `ref` must be a typed `WorkflowRef`). */
+export function workflow<I, O>(ref: WorkflowRef<I, O>, args?: I): Promise<O> {
+  return fromRun<(r: WorkflowRef<I, O>, a?: I) => Promise<O>>("workflow")(ref, args);
+}
 
 // --- Progress and control ----------------------------------------------------
 export const phase = call<[string], void>("phase");
 export const log = call<[string], void>("log");
-export const wait = call<ReadonlyArray<unknown>, Promise<unknown>>("wait");
+/** Durable timer: suspends the run if the deadline has not passed, and survives a restart. */
+export const wait = call<[number], Promise<void>>("wait");
 export const waitUntil = call<[number], Promise<void>>("waitUntil");
 
 /** The journaled wall clock: a resume replays the recorded value, so it stays replay-deterministic. */
@@ -96,8 +108,12 @@ export function getArgs<T = unknown>(): T {
 /**
  * The chat the run was launched from, or `undefined` when headless (cron/automation) — so this is the
  * one accessor that legitimately returns undefined rather than throwing.
+ *
+ * Defaults to the real {@link Thread}, so `getThread()?.askUser(…)` typechecks and a misspelled verb
+ * or a wrong option shape is caught here. It stayed `unknown` far too long, which is why every thread
+ * verb reached through it was effectively untyped no matter how well `Thread` itself was declared.
  */
-export function getThread<T = unknown>(): T | undefined {
+export function getThread<T = Thread>(): T | undefined {
   const surface = bodyApiStorage.getStore();
   if (surface === undefined) {
     throw new Error(
@@ -107,7 +123,7 @@ export function getThread<T = unknown>(): T | undefined {
   return surface.thread as T | undefined;
 }
 
-export function getBudget<T = unknown>(): T {
+export function getBudget<T = WorkflowBudget>(): T {
   return fromRun<T>("budget");
 }
 

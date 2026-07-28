@@ -13,7 +13,7 @@ export const meta = {
 } as const;
 
 export default async function run() {
-  const worker = spawnThread({ name: "worker" });
+  const worker = spawnThread({ name: "worker", capabilities: "inherit" });
   worker.notifyAgent("heads up");
   worker.notifyUser("fyi");
 

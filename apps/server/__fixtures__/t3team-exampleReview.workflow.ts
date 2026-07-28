@@ -28,8 +28,11 @@ export default async function run() {
   const input = Schema.decodeSync(Inputs)(args);
 
   const Summary = Schema.Struct({ summary: Schema.String });
+  // The reviewer child inherits this workflow's grant (`["user"]`); `capabilities` is required on
+  // every subagent, so an isolated turn can no longer be spawned without saying what it may do.
   const review = await agent(`Review this pull request and summarize the risk: ${input.prTitle}`, {
     schema: Summary,
+    capabilities: "inherit",
   });
 
   if (thread === undefined) throw new Error("example.pr-review must run in a launching thread");

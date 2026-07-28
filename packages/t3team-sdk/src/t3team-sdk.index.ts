@@ -125,6 +125,7 @@ export type { AskAffordance, AskFormField } from "./t3team-sdk.affordance.ts";
 export type { AgentAttachment, NamedAttachment } from "./t3team-sdk.askAttachments.ts";
 export type {
   AgentEffort,
+  AgentOpts,
   AskOpts,
   AskUserAttachment,
   AskUserOpts,
@@ -133,6 +134,7 @@ export type {
   SpawnThreadOpts,
   Thread,
   ThreadRef,
+  WorkflowChildCapabilities,
   WorkflowThreadPrimitives,
 } from "./t3team-sdk.threadPrimitives.ts";
 export type { ModelCascadeWireEntry } from "./t3team-sdk.modelCascade.ts";
@@ -177,6 +179,7 @@ export type {
   ScriptRef,
   ScriptTreeFromRecord,
   T3TeamToolHandlerClient,
+  ToolGroupId,
   ToolGroupRef,
   ToolHandlerCtx,
   ToolLogger,

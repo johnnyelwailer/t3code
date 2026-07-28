@@ -16,6 +16,7 @@ export const meta = {
 export default async function run() {
   const verdict = await agent("judge this gate", {
     label: "Judge gate",
+    capabilities: "inherit",
     models: [{ instanceId: "nexplore", model: "minimax-m2.7" }, { instanceId: "claudeAgent" }],
   });
 

@@ -27,6 +27,7 @@ export default async function run() {
   const pr = await tools.github.pullRequest.get({ id: input.prId });
   const review = await agent(`Summarize the risk of: ${pr.title}`, {
     schema: Schema.Struct({ risk: Schema.String }),
+    capabilities: "inherit",
   });
 
   phase("Decide");

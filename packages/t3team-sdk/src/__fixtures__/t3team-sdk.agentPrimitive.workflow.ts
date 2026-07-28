@@ -23,12 +23,15 @@ export default async function run() {
 
   const input = Schema.decodeSync(Inputs)(args);
 
-  const summary = await agent(`summarize ${input.topic}`);
+  // `capabilities` is required on every subagent: this body declares none, so "inherit" is an
+  // explicit "the child gets nothing either" rather than a default nobody chose.
+  const summary = await agent(`summarize ${input.topic}`, { capabilities: "inherit" });
 
   const Sentiment = Schema.Struct({ sentiment: Schema.String });
   const classified = await agent(`classify ${input.topic}`, {
     label: "Classify cat sentiment",
     schema: Sentiment,
+    capabilities: "inherit",
   });
 
   return { summary, sentiment: classified.sentiment };

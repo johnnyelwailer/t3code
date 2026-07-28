@@ -16,7 +16,11 @@ export default async function run() {
   const thread = getThread();
 
   const Summary = Schema.Struct({ summary: Schema.String });
-  const worker = spawnThread({ name: "summarize", retention: "retained" });
+  const worker = spawnThread({
+    name: "summarize",
+    retention: "retained",
+    capabilities: "inherit",
+  });
   const reply = await worker.askAgent("summarize the thread", { schema: Summary });
   worker.notifyAgent("thanks");
 

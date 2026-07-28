@@ -16,13 +16,14 @@
 
 import { createAskVerb, createFireEnvelope } from "./t3team-sdk.askVerb.ts";
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
+import { resolveChildCapabilities } from "./t3team-sdk.capabilityGating.ts";
 import { PermissionDeniedError } from "./t3team-sdk.errors.ts";
 import type { HandleDispatch } from "./t3team-sdk.handles.ts";
 import { createModelCascadeResolver, createThreadCascadeAsk } from "./t3team-sdk.modelCascade.ts";
+import { type ThreadDefaults, withThreadDefaults } from "./t3team-sdk.threadDefaults.ts";
 import type {
-  AgentEffort,
+  AgentOpts,
   AskOpts,
-  ModelCascade,
   AskUserOpts,
   ShowWidgetInput,
   SpawnThreadOpts,
@@ -33,6 +34,7 @@ import type { ModelSelection } from "./t3team-sdk.types.ts";
 
 export type {
   AgentEffort,
+  AgentOpts,
   AskOpts,
   AskUserAttachment,
   AskUserOpts,
@@ -42,6 +44,7 @@ export type {
   SpawnThreadOpts,
   Thread,
   ThreadRef,
+  WorkflowChildCapabilities,
   WorkflowThreadPrimitives,
 } from "./t3team-sdk.threadTypes.ts";
 
@@ -54,13 +57,6 @@ export const workflowChildTitleFromPrompt = (prompt: string): string => {
   if (normalized.length <= CHILD_TITLE_MAX_LENGTH) return normalized;
   return `${normalized.slice(0, CHILD_TITLE_MAX_LENGTH - 1).trimEnd()}…`;
 };
-
-/** A thread's per-call defaults, applied to every ask that omits them. */
-interface ThreadDefaults {
-  readonly model: ModelSelection | undefined;
-  readonly models: ModelCascade | undefined;
-  readonly effort: AgentEffort | undefined;
-}
 
 export function createThreadPrimitives(deps: {
   readonly dispatch: HandleDispatch;
@@ -109,21 +105,6 @@ export function createThreadPrimitives(deps: {
       );
     };
 
-  const withThreadDefaults = <R>(
-    o: AskOpts<R> | undefined,
-    defaults: ThreadDefaults,
-  ): AskOpts<R> => {
-    const model = o?.model ?? defaults.model;
-    const models = o?.models ?? defaults.models;
-    const effort = o?.effort ?? defaults.effort;
-    return {
-      ...o,
-      ...(model === undefined ? {} : { model }),
-      ...(models === undefined ? {} : { models }),
-      ...(effort === undefined ? {} : { effort }),
-    };
-  };
-
   const makeThread = (threadId: string, defaults: ThreadDefaults): Thread => {
     // Cascade resolution + its per-thread memo live in t3team-sdk.modelCascade.ts; here we only
     // merge the thread's defaults in and hand the ask over.
@@ -150,11 +131,23 @@ export function createThreadPrimitives(deps: {
     };
   };
 
-  const spawnThread = (opts?: SpawnThreadOpts): Thread => {
-    const model = opts?.model ?? deps.defaultModel;
-    const retention = opts?.retention ?? "ephemeral";
+  // The child's grant is resolved and subset-checked EAGERLY, before the create fires: a child that
+  // asks beyond its parent must fail at the spawn, not mid-turn as "tool is not enabled". It rides
+  // in the broker payload, not in the journaled `args` — same treatment as `model`/`effort`, so
+  // re-authoring a grant does not invalidate the replay of an already-suspended run.
+  const spawnThread = (spawnOpts: SpawnThreadOpts): Thread => {
+    // A body transpiled from disk may predate the requirement and pass nothing at all, so read
+    // through a widened alias rather than trusting the declared type — see resolveChildCapabilities.
+    const opts: Partial<SpawnThreadOpts> = spawnOpts ?? {};
+    const model = opts.model ?? deps.defaultModel;
+    const retention = opts.retention ?? "ephemeral";
+    const capabilities = resolveChildCapabilities({
+      declared: opts.capabilities,
+      parent: deps.capabilities,
+      childLabel: opts.name ?? "child thread",
+    });
     const args = {
-      ...(opts?.name === undefined ? {} : { name: opts.name }),
+      ...(opts.name === undefined ? {} : { name: opts.name }),
       retention,
     };
     const threadId = dispatch.sendOneWay({
@@ -168,28 +161,32 @@ export function createThreadPrimitives(deps: {
             kind: "thread.create",
             payload: {
               threadId: correlationId,
-              ...(opts?.name === undefined ? {} : { name: opts.name }),
-              ...(opts?.retention === undefined ? {} : { retention: opts.retention }),
+              ...(opts.name === undefined ? {} : { name: opts.name }),
+              ...(opts.retention === undefined ? {} : { retention: opts.retention }),
               ...(model === undefined ? {} : { model }),
-              ...(opts?.effort === undefined ? {} : { effort: opts.effort }),
+              ...(opts.effort === undefined ? {} : { effort: opts.effort }),
               retention,
+              capabilities,
             },
           },
           resolver,
         ),
     });
-    return makeThread(threadId, { model, models: opts?.models, effort: opts?.effort });
+    return makeThread(threadId, { model, models: opts.models, effort: opts.effort });
   };
 
   // `models` rides through to the spawned thread so `agent()`'s create + turn share ONE
   // journaled cascade resolution (the ladder array identity is the same object).
-  const agent = <R = string>(prompt: string, opts?: AskOpts<R>): Promise<R> =>
-    spawnThread({
-      name: opts?.label?.trim() || workflowChildTitleFromPrompt(prompt),
-      ...(opts?.model === undefined ? {} : { model: opts.model }),
-      ...(opts?.models === undefined ? {} : { models: opts.models }),
-      ...(opts?.effort === undefined ? {} : { effort: opts.effort }),
+  const agent = <R = string>(prompt: string, agentOpts: AgentOpts<R>): Promise<R> => {
+    const opts: Partial<AgentOpts<R>> = agentOpts ?? {};
+    return spawnThread({
+      capabilities: opts.capabilities as AgentOpts<R>["capabilities"],
+      name: opts.label?.trim() || workflowChildTitleFromPrompt(prompt),
+      ...(opts.model === undefined ? {} : { model: opts.model }),
+      ...(opts.models === undefined ? {} : { models: opts.models }),
+      ...(opts.effort === undefined ? {} : { effort: opts.effort }),
     }).askAgent(prompt, opts);
+  };
 
   return {
     thread:

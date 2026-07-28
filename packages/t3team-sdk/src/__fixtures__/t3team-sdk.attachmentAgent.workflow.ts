@@ -28,6 +28,7 @@ export default async function run() {
   const reply = await agent("Judge these gates", {
     label: "Judge gates",
     effort: "high",
+    capabilities: "inherit",
     attachments: [{ name: "gates", value: input.gates }, { policy: "strict" }],
   });
 

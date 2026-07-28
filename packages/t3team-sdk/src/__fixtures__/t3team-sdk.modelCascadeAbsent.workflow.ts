@@ -13,7 +13,8 @@ export const meta = {
 } as const;
 
 export default async function run() {
-  const verdict = await agent("judge this gate", { label: "Judge gate" });
+  // `capabilities` never enters the journaled args, so this stays argsHash-comparable to its twin.
+  const verdict = await agent("judge this gate", { label: "Judge gate", capabilities: "inherit" });
 
   return { verdict };
 }
