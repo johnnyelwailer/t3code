@@ -215,6 +215,16 @@ const config: ViteUserConfig = {
                 target: devProxyTarget,
                 changeOrigin: true,
                 ...(prefix === "/ws" ? { ws: true } : {}),
+                // t3team: /oauth/callback is a RENDERER route (the Atlassian
+                // callback page); in prod the server SPA-fallbacks it, but the
+                // dev proxy would 404 it against the backend. Serve the SPA —
+                // the router reads the real location, so index.html suffices.
+                ...(prefix === "/oauth"
+                  ? {
+                      bypass: (req: { url?: string | undefined }) =>
+                        req.url?.startsWith("/oauth/callback") ? "/index.html" : undefined,
+                    }
+                  : {}),
               },
             ]),
           ),
