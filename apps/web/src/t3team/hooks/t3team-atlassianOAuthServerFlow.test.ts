@@ -41,6 +41,8 @@ describe("beginAtlassianOAuthServerFlow", () => {
     });
 
     expect(started.shareUrl).toBe("http://localhost:5736/api/t3team/atlassian/oauth/begin/abc");
+    // The desktop path needs the server's own origin — with an unroutable bind host made loopback.
+    expect(started.serverOriginUrl).toBe("http://127.0.0.1:13776/api/t3team/atlassian/oauth/begin/abc");
     expect(started.state).toBe("abc");
     const [, init] = fetchMock.mock.calls[0] ?? [];
     expect(init).toMatchObject({ body: JSON.stringify({ redirectUri: CALLBACK }) });

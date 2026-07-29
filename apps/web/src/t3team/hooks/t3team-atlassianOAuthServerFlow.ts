@@ -33,6 +33,13 @@ export type AtlassianOAuthServerFlowStart = {
    * reach and which a tunnelled or LAN setup would get wrong.
    */
   readonly shareUrl: string;
+  /**
+   * The same link built by the SERVER from its own `Host`. The one place `shareUrl` cannot work is
+   * the desktop renderer: its origin is the `t3code-dev://app` custom protocol, which no external
+   * browser (and no `shell.openExternal`) will accept — while the server's own host, "a port only
+   * this machine can reach", is exactly what a browser on this machine needs.
+   */
+  readonly serverOriginUrl: string;
 };
 
 type BeginResponse = {
@@ -58,7 +65,21 @@ export async function beginAtlassianOAuthServerFlow(input: {
     authorizeUrl: response.authorizeUrl,
     expiresAtMs: response.expiresAtMs,
     shareUrl: new URL(response.beginPath, apiBaseUrl).toString(),
+    serverOriginUrl: loopbackFromBindHost(response.beginUrl),
   };
+}
+
+/** A server bound to 0.0.0.0/:: names itself that way in absolute URLs; a browser needs loopback. */
+function loopbackFromBindHost(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    if (url.hostname === "0.0.0.0" || url.hostname === "::" || url.hostname === "[::]") {
+      url.hostname = "127.0.0.1";
+    }
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
 }
 
 export type AtlassianOAuthCallbackParams = {

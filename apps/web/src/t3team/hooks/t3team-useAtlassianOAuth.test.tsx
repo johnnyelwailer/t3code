@@ -56,6 +56,7 @@ vi.mock("@t3tools/integrations-atlassian", () => ({
 import { useAtlassianOAuth, type OAuthState } from "./t3team-useAtlassianOAuth";
 
 const SHARE_URL = "https://example.test/api/t3team/atlassian/oauth/begin/server-state";
+const SERVER_ORIGIN_URL = "http://127.0.0.1:13773/api/t3team/atlassian/oauth/begin/server-state";
 
 function makeBackend(): BackendApi {
   return {
@@ -124,6 +125,7 @@ describe("useAtlassianOAuth desktop system-browser flow", () => {
       authorizeUrl: "https://auth.atlassian.test/authorize",
       expiresAtMs: 0,
       shareUrl: SHARE_URL,
+      serverOriginUrl: SERVER_ORIGIN_URL,
     });
     mockGetAtlassianOAuthFlowStatus.mockReset().mockResolvedValue("pending");
     mockRunAtlassianOAuthAttempt.mockReset();
@@ -176,7 +178,7 @@ describe("useAtlassianOAuth desktop system-browser flow", () => {
 
     expect(mockOpenOAuthPopup).not.toHaveBeenCalled();
     expect(windowOpenSpy).not.toHaveBeenCalled();
-    expect(openExternal).toHaveBeenCalledWith(SHARE_URL);
+    expect(openExternal).toHaveBeenCalledWith(SERVER_ORIGIN_URL);
     // Resolves via the same server-flow status-polling path the blocked-popup case already uses.
     expect(latest.result?.state).toEqual<OAuthState>({ kind: "connected" });
     // The attempt must know it already opened the link, so a null popup there isn't treated as
@@ -224,7 +226,7 @@ describe("useAtlassianOAuth desktop system-browser flow", () => {
     });
 
     expect(mockOpenOAuthPopup).not.toHaveBeenCalled();
-    expect(openExternal).toHaveBeenCalledWith(SHARE_URL);
+    expect(openExternal).toHaveBeenCalledWith(SERVER_ORIGIN_URL);
   });
 
   it("desktop: falls back to needs_manual_open when openExternal is unavailable", async () => {
@@ -238,7 +240,7 @@ describe("useAtlassianOAuth desktop system-browser flow", () => {
     await startAndWaitFor(() => {
       expect(latest.result?.state).toEqual<OAuthState>({
         kind: "needs_manual_open",
-        signinUrl: SHARE_URL,
+        signinUrl: SERVER_ORIGIN_URL,
       });
     });
 
@@ -260,7 +262,7 @@ describe("useAtlassianOAuth desktop system-browser flow", () => {
     await startAndWaitFor(() => {
       expect(latest.result?.state).toEqual<OAuthState>({
         kind: "needs_manual_open",
-        signinUrl: SHARE_URL,
+        signinUrl: SERVER_ORIGIN_URL,
       });
     });
   });
