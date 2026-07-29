@@ -13,7 +13,7 @@ import type { GitHubDiscoveryState } from "~/t3team/components/t3team-GitHubRepo
  * `github.com` and a GitHub Enterprise host). Single-host users keep the plain manual "Host" input
  * below with no added picker noise.
  */
-function GitHubAuthHostPicker({ discovery }: { discovery: GitHubDiscoveryState }) {
+export function GitHubAuthHostPicker({ discovery }: { discovery: GitHubDiscoveryState }) {
   if (discovery.authenticatedHosts.length <= 1) {
     return null;
   }
@@ -27,10 +27,15 @@ function GitHubAuthHostPicker({ discovery }: { discovery: GitHubDiscoveryState }
       <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         Authenticated host
       </div>
-      <Select value={selected?.host ?? null} onValueChange={(next) => next && discovery.selectHost(next)}>
+      <Select
+        value={selected?.host ?? null}
+        onValueChange={(next) => next && discovery.selectHost(next)}
+      >
         <SelectTrigger size="sm" aria-label="Authenticated GitHub host">
           <SelectValue placeholder="Choose a host">
-            {selected ? `${selected.host}${selected.account ? ` · ${selected.account}` : ""}` : undefined}
+            {selected
+              ? `${selected.host}${selected.account ? ` · ${selected.account}` : ""}`
+              : undefined}
           </SelectValue>
         </SelectTrigger>
         <SelectPopup>
