@@ -130,7 +130,7 @@
     "vitest.config.ts"
   ],
   "allowedUnprefixedNewFiles": [
-    ".agents/skills/merge-upstream/**",
+    ".agents/skills/merge-upstream/SKILL.md",
     ".claude/**",
     ".cursor/**",
     ".githooks/pre-commit",
