@@ -67,7 +67,7 @@ import {
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
-import { getConfiguredDefaultModelSelection } from "../configuredDefaultModelSelection";
+import { getConfiguredDefaultModelSelection } from "../t3team-configuredDefaultModelSelection";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {

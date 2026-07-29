@@ -14,7 +14,7 @@ import { planThreadBootstrap } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import { runThreadBootstrap } from "~/t3team/chat/t3team-runThreadBootstrap";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
-import { getConfiguredDefaultModelSelection } from "~/configuredDefaultModelSelection";
+import { getConfiguredDefaultModelSelection } from "~/t3team-configuredDefaultModelSelection";
 import {
   recordThreadBootstrapFailure,
   recordThreadBootstrapPlan,

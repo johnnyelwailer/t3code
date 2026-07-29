@@ -2,9 +2,9 @@ import type { ProviderInstanceConfigMap } from "@t3tools/contracts";
 import { ProviderDriverKind } from "@t3tools/contracts";
 import type { PackProviderDriverDefinition } from "@t3team/packs";
 
-import { makeOpenCodeHarnessDriver } from "./provider/Drivers/OpenCodeDriver.ts";
 import type { AnyProviderDriver } from "./provider/ProviderDriver.ts";
 import { bridgePackProviderDriver } from "./t3team-pack-driverBridge.ts";
+import { makeOpenCodeHarnessDriver } from "./t3team-pack-driverHarness.ts";
 
 /**
  * Boot-only pack provider overlay. Carries both the data-only instance

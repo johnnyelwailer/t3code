@@ -5,7 +5,7 @@ import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { syncProjectWorkspaceContext } from "~/t3team/t3team-projectWorkspaceSync";
 import { randomUUID } from "~/lib/utils";
-import { getConfiguredDefaultModelSelection } from "~/configuredDefaultModelSelection";
+import { getConfiguredDefaultModelSelection } from "~/t3team-configuredDefaultModelSelection";
 
 import { applyWorkspaceBootstrapToProject } from "./t3team-createProjectBootstrap";
 import { isWorkProject } from "~/t3team/t3team-isWorkProject";

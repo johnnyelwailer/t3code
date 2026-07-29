@@ -44,7 +44,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { getConfiguredDefaultModelSelection } from "../configuredDefaultModelSelection";
+import { getConfiguredDefaultModelSelection } from "../t3team-configuredDefaultModelSelection";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
