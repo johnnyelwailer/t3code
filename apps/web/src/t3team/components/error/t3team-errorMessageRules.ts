@@ -39,8 +39,11 @@ const ATLASSIAN_OAUTH_UNCONFIGURED_RESULT: T3TeamErrorClassification = {
  * the same moment, so the only thing that helps is starting again for a fresh link.
  */
 const SIGNIN_LINK_EXPIRED_RESULT: T3TeamErrorClassification = {
-  headline: "The sign-in link expired.",
-  detail: "Start the Atlassian connection again to get a fresh link.",
+  // "Link" would name something the user never saw: on desktop the sign-in opens
+  // in their browser, and on the web it's a popup. What they experience is a
+  // sign-in that was not finished in time.
+  headline: "Atlassian sign-in timed out.",
+  detail: 'It wasn’t completed in time — press "Continue with Atlassian" to try again.',
   canRetry: true,
 };
 
