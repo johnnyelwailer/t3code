@@ -70,6 +70,7 @@ import Migration0045 from "./Migrations/t3team-045_WorkflowRecipePath.ts";
 import Migration0046 from "./Migrations/t3team-046_WorkflowFailureReason.ts";
 import Migration0047 from "./Migrations/t3team-047_WorkflowHostToolGrant.ts";
 import Migration0048 from "./Migrations/t3team-048_ProjectSourceBindings.ts";
+import Migration0049 from "./Migrations/t3team-049_RenameT3workExtColumn.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -130,6 +131,7 @@ export const migrationEntries = [
   [46, "WorkflowFailureReason", Migration0046],
   [47, "WorkflowHostToolGrant", Migration0047],
   [48, "ProjectSourceBindings", Migration0048],
+  [49, "RenameT3workExtColumn", Migration0049],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>
