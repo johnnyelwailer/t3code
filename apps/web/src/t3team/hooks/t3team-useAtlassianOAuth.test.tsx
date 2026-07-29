@@ -179,6 +179,32 @@ describe("useAtlassianOAuth desktop system-browser flow", () => {
     expect(openExternal).toHaveBeenCalledWith(SHARE_URL);
     // Resolves via the same server-flow status-polling path the blocked-popup case already uses.
     expect(latest.result?.state).toEqual<OAuthState>({ kind: "connected" });
+    // The attempt must know it already opened the link, so a null popup there isn't treated as
+    // needing a manual open.
+    expect(mockRunAtlassianOAuthAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({ popup: null, externallyOpened: true }),
+    );
+  });
+
+  it("desktop: never opens the tab-owned authUrl and errors when the server flow can't be begun", async () => {
+    mockIsElectron.value = true;
+    mockBeginAtlassianOAuthServerFlow.mockReset().mockRejectedValue(new Error("network down"));
+    const openExternal = vi.fn(async () => true);
+    (window as unknown as { desktopBridge: { openExternal: typeof openExternal } }).desktopBridge =
+      {
+        openExternal,
+      };
+
+    await mount();
+    await act(async () => {
+      await latest.result?.startOAuth("client-id");
+    });
+
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(mockOpenOAuthPopup).not.toHaveBeenCalled();
+    expect(windowOpenSpy).not.toHaveBeenCalled();
+    expect(mockRunAtlassianOAuthAttempt).not.toHaveBeenCalled();
+    expect(latest.result?.state.kind).toBe("error");
   });
 
   it("desktop: lands in waiting while the attempt is still in flight", async () => {

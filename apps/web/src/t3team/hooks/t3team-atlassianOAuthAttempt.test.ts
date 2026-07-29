@@ -54,6 +54,7 @@ function startAttempt(overrides: {
   readonly getStatus?: (state: string) => Promise<AtlassianOAuthFlowStatus>;
   readonly isCancelled?: () => boolean;
   readonly onLinkExpired?: () => void;
+  readonly externallyOpened?: boolean;
 }) {
   return runAtlassianOAuthAttempt({
     popup: overrides.popup,
@@ -68,6 +69,7 @@ function startAttempt(overrides: {
     isCancelled: overrides.isCancelled ?? (() => false),
     onNeedsManualOpen: overrides.onNeedsManualOpen ?? (() => {}),
     onLinkExpired: overrides.onLinkExpired ?? (() => {}),
+    externallyOpened: overrides.externallyOpened ?? false,
   });
 }
 
@@ -115,6 +117,47 @@ describe("runAtlassianOAuthAttempt", () => {
 
     await vi.advanceTimersByTimeAsync(120_000);
     await expect(settled).resolves.toMatchObject({ message: expect.stringContaining("expired") });
+  });
+
+  /*
+    Regression test for a real bug a review caught: with `popup: null` (a system browser opened
+    externally, or a popup the browser refused outright), `waitForOAuthCallback` alone can only ever
+    notice a same-browser broadcast — it never starts the server-status poll, so a sign-in completed
+    in the system browser or another device would hang until the full TTL. Status polling has to run
+    immediately, without first waiting for a popup to close that never existed.
+  */
+  it("starts server-status polling immediately with no popup, resolving well before the TTL", async () => {
+    const onNeedsManualOpen = vi.fn();
+    let polls = 0;
+    const attempt = startAttempt({
+      popup: null,
+      onNeedsManualOpen,
+      getStatus: async () => {
+        polls += 1;
+        return polls > 1 ? "completed" : "pending";
+      },
+    });
+
+    // Two status-poll ticks (2s each) — nowhere near the ~15 minute TTL.
+    await vi.advanceTimersByTimeAsync(4_100);
+
+    await expect(attempt).resolves.toEqual({ kind: "server_connected" });
+    expect(polls).toBeGreaterThan(1);
+  });
+
+  it("does not call onNeedsManualOpen when the caller already opened the link itself", async () => {
+    const onNeedsManualOpen = vi.fn();
+    const attempt = startAttempt({
+      popup: null,
+      onNeedsManualOpen,
+      externallyOpened: true,
+      getStatus: async () => "completed",
+    });
+
+    await vi.advanceTimersByTimeAsync(2_100);
+
+    await expect(attempt).resolves.toEqual({ kind: "server_connected" });
+    expect(onNeedsManualOpen).not.toHaveBeenCalled();
   });
 
   it("accepts a callback carrying the server flow's state without trying to exchange it", async () => {
