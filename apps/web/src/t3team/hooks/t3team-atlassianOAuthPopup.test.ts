@@ -39,6 +39,7 @@ describe("t3team-atlassianOAuthPopup", () => {
       new MessageEvent("message", {
         data: { type: ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE, href },
         source: {} as Window,
+        origin: "http://127.0.0.1:5733",
       }),
     );
 
@@ -58,6 +59,7 @@ describe("t3team-atlassianOAuthPopup", () => {
       new MessageEvent("message", {
         data: { type: ATLASSIAN_OAUTH_CALLBACK_MESSAGE_TYPE, href },
         source: {} as Window,
+        origin: "http://127.0.0.1:5733",
       }),
     );
 
