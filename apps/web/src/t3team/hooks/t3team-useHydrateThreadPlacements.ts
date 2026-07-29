@@ -85,7 +85,11 @@ export function useHydrateThreadPlacements(input: {
       }),
     [liveThreads, threads],
   );
-  const candidateThreadIdsKey = candidateThreadIds.join("\n");
+  // JSON.stringify (not `.join`) so an embedded delimiter inside a thread id
+  // can't collide two distinct candidate sets onto the same dependency key —
+  // e.g. `["a\nb", "c"]` vs `["a", "b\nc"]` would otherwise both join to
+  // "a\nb\nc".
+  const candidateThreadIdsKey = JSON.stringify(candidateThreadIds);
 
   useEffect(() => {
     let cancelled = false;

@@ -91,6 +91,14 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   const persist = Effect.fn("EnvironmentThreadState.persist")(function* (
     snapshot: OrchestrationThreadDetailSnapshot,
   ) {
+    // A debounced/queued persist can still be pending when the thread is
+    // deleted (terminal not-found, or a live thread.deleted event) — without
+    // this check the delayed write races `setDeleted`'s `removeThread` and
+    // can resurrect a stale cache entry for a thread that no longer exists.
+    const current = yield* SubscriptionRef.get(state);
+    if (current.status === "deleted") {
+      return;
+    }
     yield* cache.saveThread(environmentId, snapshot).pipe(
       Effect.catch((error) =>
         Effect.logWarning("Could not persist the thread cache.").pipe(

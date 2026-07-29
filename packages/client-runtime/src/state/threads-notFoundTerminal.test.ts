@@ -114,6 +114,7 @@ const makeHarness = Effect.fn("TestEnvironmentThreads.notFoundTerminal.makeHarne
     const subscriptionCount = yield* Ref.make(0);
     const loaderCalls = yield* Ref.make(0);
     const removedThreads = yield* Ref.make<ReadonlyArray<ThreadId>>([]);
+    const savedThreads = yield* Ref.make<ReadonlyArray<OrchestrationThreadDetailSnapshot>>([]);
     const wakeups = yield* Queue.unbounded<ConnectionWakeups.ConnectionWakeup>();
     const supervisorState = yield* SubscriptionRef.make<SupervisorConnectionState>(
       AVAILABLE_CONNECTION_STATE,
@@ -162,7 +163,8 @@ const makeHarness = Effect.fn("TestEnvironmentThreads.notFoundTerminal.makeHarne
             ? Option.some({ snapshotSequence: 1, thread: options.cached })
             : Option.none(),
         ),
-      saveThread: () => Effect.void,
+      saveThread: (_environmentId, snapshot) =>
+        Ref.update(savedThreads, (current) => [...current, snapshot]),
       removeThread: (_environmentId, threadId) =>
         Ref.update(removedThreads, (current) => [...current, threadId]),
       loadServerConfig: () => Effect.succeed(Option.none()),
@@ -187,7 +189,15 @@ const makeHarness = Effect.fn("TestEnvironmentThreads.notFoundTerminal.makeHarne
       Effect.forkScoped,
     );
 
-    return { inputs, observed, latest, subscriptionCount, loaderCalls, removedThreads };
+    return {
+      inputs,
+      observed,
+      latest,
+      subscriptionCount,
+      loaderCalls,
+      removedThreads,
+      savedThreads,
+    };
   },
 );
 
@@ -225,6 +235,38 @@ describe("EnvironmentThreads not-found terminal handling", () => {
       yield* Effect.yieldNow;
       expect(yield* Ref.get(harness.subscriptionCount)).toBe(1);
     }),
+  );
+
+  it.effect(
+    "does not resurrect a removed thread from a persist debounced before the deletion arrived",
+    () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({ cached: BASE_THREAD });
+        // Publishing a live update queues a persist that is debounced 500ms —
+        // long enough for a not-found failure to arrive and remove the cache
+        // entry before the queued write fires.
+        yield* Queue.offer(harness.inputs, snapshot({ ...BASE_THREAD, title: "Updated title" }));
+        yield* awaitThreadState(
+          harness.observed,
+          (value) => Option.isSome(value.data) && value.data.value.title === "Updated title",
+        );
+        yield* Queue.offer(
+          harness.inputs,
+          new OrchestrationGetSnapshotError({
+            message: `Thread ${THREAD_ID} was not found`,
+            reason: "not-found",
+          }),
+        );
+
+        yield* awaitThreadState(harness.observed, (value) => value.status === "deleted");
+        expect(yield* Ref.get(harness.removedThreads)).toEqual([THREAD_ID]);
+
+        // Let the debounced persist fire.
+        yield* TestClock.adjust("1 second");
+        yield* Effect.yieldNow;
+
+        expect(yield* Ref.get(harness.savedThreads)).toEqual([]);
+      }),
   );
 
   it.effect("keeps retrying an untagged (non-terminal) failure as today", () =>

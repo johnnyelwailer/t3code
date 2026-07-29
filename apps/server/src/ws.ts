@@ -1462,24 +1462,22 @@ const makeWsRpcLayer = (
               if (input.afterSequence !== undefined) {
                 // Resume path: the client already loaded the thread once (it
                 // has a sequence), but the thread may have been deleted since
-                // (e.g. DB wipe). Assert existence up front with a cheap shell
-                // lookup so an unknown thread fails fast with the same
-                // tagged not-found instead of hanging on a replay stream that
-                // never produces (or errors on) anything for a nonexistent
-                // aggregate.
-                const shell = yield* projectionSnapshotQuery
-                  .getThreadShellById(input.threadId)
-                  .pipe(
-                    Effect.mapError(
-                      (cause) =>
-                        new OrchestrationGetSnapshotError({
-                          message: `Failed to load thread ${input.threadId}`,
-                          cause,
-                        }),
-                    ),
-                  );
+                // (e.g. DB wipe). Assert existence up front with the cheapest
+                // available probe (a single-column, single-row read) so an
+                // unknown thread fails fast with the same tagged not-found
+                // instead of hanging on a replay stream that never produces
+                // (or errors on) anything for a nonexistent aggregate.
+                const exists = yield* projectionSnapshotQuery.threadExists(input.threadId).pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new OrchestrationGetSnapshotError({
+                        message: `Failed to load thread ${input.threadId}`,
+                        cause,
+                      }),
+                  ),
+                );
 
-                if (Option.isNone(shell)) {
+                if (!exists) {
                   return yield* new OrchestrationGetSnapshotError({
                     message: `Thread ${input.threadId} was not found`,
                     cause: input.threadId,

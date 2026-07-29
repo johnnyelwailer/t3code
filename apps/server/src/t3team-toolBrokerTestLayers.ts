@@ -99,6 +99,7 @@ const projectionQueryMock: ProjectionSnapshotQueryShape = {
   getThreadDetailSnapshot: () => Effect.die("unused"),
   getFullThreadDiffContext: () => Effect.die("unused"),
   getThreadShellById: () => Effect.die("unused"),
+  threadExists: () => Effect.die("unused"),
   getThreadDetailById: () =>
     Effect.succeed(
       Option.some({

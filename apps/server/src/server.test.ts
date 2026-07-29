@@ -5919,7 +5919,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           projectionSnapshotQuery: {
-            getThreadShellById: () => Effect.succeed(Option.none()),
+            threadExists: () => Effect.succeed(false),
           },
         },
       });
@@ -5945,8 +5945,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           projectionSnapshotQuery: {
-            getThreadShellById: () =>
-              Effect.succeed(Option.some(makeDefaultOrchestrationThreadShell())),
+            threadExists: () => Effect.succeed(true),
           },
         },
       });
