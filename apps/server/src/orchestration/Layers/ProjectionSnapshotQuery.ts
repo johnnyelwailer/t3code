@@ -838,6 +838,23 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  // Single-column, single-row existence probe — cheaper than
+  // getActiveThreadRowById (which decodes the full thread row) and far
+  // cheaper than getThreadShellById (four parallel reads), for call sites
+  // that only need to know whether the thread is still there.
+  const getActiveThreadIdRowById = SqlSchema.findOneOption({
+    Request: ThreadIdLookupInput,
+    Result: ProjectionThreadIdLookupRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT thread_id AS "threadId"
+        FROM projection_threads
+        WHERE thread_id = ${threadId}
+          AND deleted_at IS NULL
+        LIMIT 1
+      `,
+  });
+
   const listThreadMessageRowsByThread = SqlSchema.findAll({
     Request: ThreadIdLookupInput,
     Result: ProjectionThreadMessageDbRowSchema,
@@ -1420,137 +1437,137 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             // restarts, not just within one server lifetime.
             queryProjectSourceBindingsByProjectId(sql).pipe(
               Effect.map((sourceBindings) => {
-              let updatedAt: string | null = null;
-              const projects: OrchestrationProject[] = [];
-              const threads: OrchestrationThread[] = [];
+                let updatedAt: string | null = null;
+                const projects: OrchestrationProject[] = [];
+                const threads: OrchestrationThread[] = [];
 
-              for (let index = 0; index < projectRows.length; index += 1) {
-                const row = projectRows[index];
-                if (!row) {
-                  continue;
+                for (let index = 0; index < projectRows.length; index += 1) {
+                  const row = projectRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  updatedAt = maxIso(updatedAt, row.updatedAt);
+                  const source = sourceBindings.get(row.projectId);
+                  projects.push({
+                    id: row.projectId,
+                    title: row.title,
+                    workspaceRoot: row.workspaceRoot,
+                    defaultModelSelection: row.defaultModelSelection,
+                    scripts: row.scripts,
+                    createdAt: row.createdAt,
+                    updatedAt: row.updatedAt,
+                    deletedAt: row.deletedAt,
+                    ...(source !== undefined ? { source } : {}),
+                  });
                 }
-                updatedAt = maxIso(updatedAt, row.updatedAt);
-                const source = sourceBindings.get(row.projectId);
-                projects.push({
-                  id: row.projectId,
-                  title: row.title,
-                  workspaceRoot: row.workspaceRoot,
-                  defaultModelSelection: row.defaultModelSelection,
-                  scripts: row.scripts,
-                  createdAt: row.createdAt,
-                  updatedAt: row.updatedAt,
-                  deletedAt: row.deletedAt,
-                  ...(source !== undefined ? { source } : {}),
-                });
-              }
-              for (let index = 0; index < threadRows.length; index += 1) {
-                const row = threadRows[index];
-                if (!row) {
-                  continue;
+                for (let index = 0; index < threadRows.length; index += 1) {
+                  const row = threadRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  updatedAt = maxIso(updatedAt, row.updatedAt);
                 }
-                updatedAt = maxIso(updatedAt, row.updatedAt);
-              }
-              for (let index = 0; index < proposedPlanRows.length; index += 1) {
-                const row = proposedPlanRows[index];
-                if (!row) {
-                  continue;
+                for (let index = 0; index < proposedPlanRows.length; index += 1) {
+                  const row = proposedPlanRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  updatedAt = maxIso(updatedAt, row.updatedAt);
                 }
-                updatedAt = maxIso(updatedAt, row.updatedAt);
-              }
-              for (let index = 0; index < sessionRows.length; index += 1) {
-                const row = sessionRows[index];
-                if (!row) {
-                  continue;
+                for (let index = 0; index < sessionRows.length; index += 1) {
+                  const row = sessionRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  updatedAt = maxIso(updatedAt, row.updatedAt);
                 }
-                updatedAt = maxIso(updatedAt, row.updatedAt);
-              }
-              for (let index = 0; index < latestTurnRows.length; index += 1) {
-                const row = latestTurnRows[index];
-                if (!row) {
-                  continue;
+                for (let index = 0; index < latestTurnRows.length; index += 1) {
+                  const row = latestTurnRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  updatedAt = maxIso(updatedAt, row.requestedAt);
+                  if (row.startedAt !== null) {
+                    updatedAt = maxIso(updatedAt, row.startedAt);
+                  }
+                  if (row.completedAt !== null) {
+                    updatedAt = maxIso(updatedAt, row.completedAt);
+                  }
                 }
-                updatedAt = maxIso(updatedAt, row.requestedAt);
-                if (row.startedAt !== null) {
-                  updatedAt = maxIso(updatedAt, row.startedAt);
+                for (let index = 0; index < stateRows.length; index += 1) {
+                  const row = stateRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  updatedAt = maxIso(updatedAt, row.updatedAt);
                 }
-                if (row.completedAt !== null) {
-                  updatedAt = maxIso(updatedAt, row.completedAt);
-                }
-              }
-              for (let index = 0; index < stateRows.length; index += 1) {
-                const row = stateRows[index];
-                if (!row) {
-                  continue;
-                }
-                updatedAt = maxIso(updatedAt, row.updatedAt);
-              }
 
-              const latestTurnByThread = new Map<string, OrchestrationLatestTurn>();
-              for (let index = 0; index < latestTurnRows.length; index += 1) {
-                const row = latestTurnRows[index];
-                if (!row) {
-                  continue;
+                const latestTurnByThread = new Map<string, OrchestrationLatestTurn>();
+                for (let index = 0; index < latestTurnRows.length; index += 1) {
+                  const row = latestTurnRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  latestTurnByThread.set(row.threadId, mapLatestTurn(row));
                 }
-                latestTurnByThread.set(row.threadId, mapLatestTurn(row));
-              }
-              const proposedPlansByThread = new Map<string, Array<OrchestrationProposedPlan>>();
-              const sessionByThread = new Map<string, OrchestrationSession>();
+                const proposedPlansByThread = new Map<string, Array<OrchestrationProposedPlan>>();
+                const sessionByThread = new Map<string, OrchestrationSession>();
 
-              for (let index = 0; index < sessionRows.length; index += 1) {
-                const row = sessionRows[index];
-                if (!row) {
-                  continue;
+                for (let index = 0; index < sessionRows.length; index += 1) {
+                  const row = sessionRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  sessionByThread.set(row.threadId, mapSessionRow(row));
                 }
-                sessionByThread.set(row.threadId, mapSessionRow(row));
-              }
 
-              for (let index = 0; index < proposedPlanRows.length; index += 1) {
-                const row = proposedPlanRows[index];
-                if (!row) {
-                  continue;
+                for (let index = 0; index < proposedPlanRows.length; index += 1) {
+                  const row = proposedPlanRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  const threadProposedPlans = proposedPlansByThread.get(row.threadId) ?? [];
+                  threadProposedPlans.push(mapProposedPlanRow(row));
+                  proposedPlansByThread.set(row.threadId, threadProposedPlans);
                 }
-                const threadProposedPlans = proposedPlansByThread.get(row.threadId) ?? [];
-                threadProposedPlans.push(mapProposedPlanRow(row));
-                proposedPlansByThread.set(row.threadId, threadProposedPlans);
-              }
 
-              for (let index = 0; index < threadRows.length; index += 1) {
-                const row = threadRows[index];
-                if (!row) {
-                  continue;
+                for (let index = 0; index < threadRows.length; index += 1) {
+                  const row = threadRows[index];
+                  if (!row) {
+                    continue;
+                  }
+                  threads.push({
+                    id: row.threadId,
+                    projectId: row.projectId,
+                    title: row.title,
+                    modelSelection: row.modelSelection,
+                    runtimeMode: row.runtimeMode,
+                    interactionMode: row.interactionMode,
+                    branch: row.branch,
+                    worktreePath: row.worktreePath,
+                    latestTurn: latestTurnByThread.get(row.threadId) ?? null,
+                    createdAt: row.createdAt,
+                    updatedAt: row.updatedAt,
+                    archivedAt: row.archivedAt,
+                    settledOverride: row.settledOverride,
+                    settledAt: row.settledAt,
+                    snoozedUntil: row.snoozedUntil,
+                    snoozedAt: row.snoozedAt,
+                    deletedAt: row.deletedAt,
+                    messages: [],
+                    proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
+                    activities: [],
+                    checkpoints: [],
+                    session: sessionByThread.get(row.threadId) ?? null,
+                  });
                 }
-                threads.push({
-                  id: row.threadId,
-                  projectId: row.projectId,
-                  title: row.title,
-                  modelSelection: row.modelSelection,
-                  runtimeMode: row.runtimeMode,
-                  interactionMode: row.interactionMode,
-                  branch: row.branch,
-                  worktreePath: row.worktreePath,
-                  latestTurn: latestTurnByThread.get(row.threadId) ?? null,
-                  createdAt: row.createdAt,
-                  updatedAt: row.updatedAt,
-                  archivedAt: row.archivedAt,
-                  settledOverride: row.settledOverride,
-                  settledAt: row.settledAt,
-                  snoozedUntil: row.snoozedUntil,
-                  snoozedAt: row.snoozedAt,
-                  deletedAt: row.deletedAt,
-                  messages: [],
-                  proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
-                  activities: [],
-                  checkpoints: [],
-                  session: sessionByThread.get(row.threadId) ?? null,
-                });
-              }
 
-              return {
-                snapshotSequence: computeSnapshotSequence(stateRows),
-                projects,
-                threads,
-                updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
-              } satisfies OrchestrationReadModel;
+                return {
+                  snapshotSequence: computeSnapshotSequence(stateRows),
+                  projects,
+                  threads,
+                  updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
+                } satisfies OrchestrationReadModel;
               }),
             ),
         ),
@@ -2339,6 +2356,17 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         ),
       );
 
+  const threadExists: ProjectionSnapshotQueryShape["threadExists"] = (threadId) =>
+    getActiveThreadIdRowById({ threadId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.threadExists:query",
+          "ProjectionSnapshotQuery.threadExists:decodeRow",
+        ),
+      ),
+      Effect.map(Option.isSome),
+    );
+
   return {
     getCommandReadModel,
     getSnapshot,
@@ -2354,6 +2382,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getThreadShellById,
     getThreadDetailById,
     getThreadDetailSnapshot,
+    threadExists,
   } satisfies ProjectionSnapshotQueryShape;
 });
 

@@ -155,6 +155,15 @@ interface SubscriptionOptions<TTag extends EnvironmentSubscriptionRpcTag> {
   ) => Effect.Effect<void, never, never>;
   readonly retryExpectedFailureAfter?: Duration.Input;
   readonly resubscribe?: Stream.Stream<unknown, never, never>;
+  /**
+   * Classifies an expected failure as terminal (e.g. the subscribed resource
+   * no longer exists). Terminal failures still invoke `onExpectedFailure`
+   * once, but the stream ends afterwards instead of sleeping and
+   * resubscribing — retrying a resource that will never come back just
+   * hammers the server. The outer `switchMap` over sessions still gives a
+   * fresh attempt on the next session change / application-active wakeup.
+   */
+  readonly isTerminalFailure?: (cause: Cause.Cause<unknown>) => boolean;
 }
 
 export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
@@ -228,6 +237,16 @@ export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
                                 const handled = Stream.fromEffect(
                                   options.onExpectedFailure(cause),
                                 ).pipe(Stream.drain);
+                                const isTerminal =
+                                  options.isTerminalFailure !== undefined &&
+                                  options.isTerminalFailure(cause);
+                                if (isTerminal) {
+                                  // Do not sleep or resubscribe: the resource is
+                                  // gone for good. The outer switchMap over
+                                  // sessions still gives one fresh attempt per
+                                  // new session / application-active wakeup.
+                                  return handled;
+                                }
                                 if (options.retryExpectedFailureAfter === undefined) {
                                   return handled;
                                 }

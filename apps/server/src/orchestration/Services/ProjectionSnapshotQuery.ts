@@ -168,6 +168,17 @@ export interface ProjectionSnapshotQueryShape {
   readonly getThreadDetailSnapshot: (
     threadId: ThreadId,
   ) => Effect.Effect<Option.Option<OrchestrationThreadDetailSnapshot>, ProjectionRepositoryError>;
+
+  /**
+   * Cheaply check whether an active (non-deleted) thread row exists.
+   *
+   * A single-column, single-row probe — use this instead of
+   * `getThreadShellById`/`getThreadDetailById` when only existence matters
+   * (e.g. asserting a thread is still there before resuming a subscription),
+   * since those hydrate the full shell/detail shape across several parallel
+   * reads.
+   */
+  readonly threadExists: (threadId: ThreadId) => Effect.Effect<boolean, ProjectionRepositoryError>;
 }
 
 /**
