@@ -311,10 +311,22 @@ export const readEnvironmentFromLoginShell: ShellEnvironmentReader = (
     return {};
   }
 
-  const output = execFile(shell, ["-ilc", buildEnvironmentCaptureCommand(names)], {
-    encoding: "utf8",
-    timeout: 5000,
-  });
+  // Non-interactive login first: profile files (.zprofile/.profile) are where PATH
+  // canonically lives and they load in milliseconds. `-i` additionally sources rc
+  // files (.zshrc), which on a heavy setup takes longer than the whole timeout —
+  // an ETIMEDOUT here used to mean NO hydrated PATH at all, so every CLI the
+  // server shells out to (gh, provider CLIs) silently vanished. Fall back to the
+  // interactive form only for setups that export PATH exclusively in rc files.
+  const command = buildEnvironmentCaptureCommand(names);
+  let output: string;
+  try {
+    output = execFile(shell, ["-lc", command], { encoding: "utf8", timeout: 5000 });
+    if (names.includes("PATH") && extractEnvironmentValue(output, "PATH") === undefined) {
+      output = execFile(shell, ["-ilc", command], { encoding: "utf8", timeout: 5000 });
+    }
+  } catch {
+    output = execFile(shell, ["-ilc", command], { encoding: "utf8", timeout: 5000 });
+  }
 
   const environment: Partial<Record<string, string>> = {};
   for (const name of names) {

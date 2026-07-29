@@ -81,7 +81,7 @@ describe("readPathFromLoginShell", () => {
     const [shell, args, options] = firstCall;
     expect(shell).toBe("/opt/homebrew/bin/fish");
     expect(args).toHaveLength(2);
-    expect(args?.[0]).toBe("-ilc");
+    expect(args?.[0]).toBe("-lc");
     expect(args?.[1]).toContain("printenv PATH || true");
     expect(args?.[1]).toContain("__T3CODE_ENV_PATH_START__");
     expect(args?.[1]).toContain("__T3CODE_ENV_PATH_END__");
@@ -145,6 +145,45 @@ describe("readEnvironmentFromLoginShell", () => {
       SSH_AUTH_SOCK: "/tmp/secretive.sock",
     });
     expect(execFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to an interactive login shell when PATH only lives in rc files", () => {
+    const execFile = vi.fn<
+      (
+        file: string,
+        args: ReadonlyArray<string>,
+        options: { encoding: "utf8"; timeout: number },
+      ) => string
+    >((_file, args) =>
+      args[0] === "-lc"
+        ? "__T3CODE_ENV_PATH_START__\n__T3CODE_ENV_PATH_END__"
+        : "__T3CODE_ENV_PATH_START__\n/rc-only/bin\n__T3CODE_ENV_PATH_END__",
+    );
+
+    expect(readEnvironmentFromLoginShell("/bin/zsh", ["PATH"], execFile)).toEqual({
+      PATH: "/rc-only/bin",
+    });
+    expect(execFile).toHaveBeenCalledTimes(2);
+    expect(execFile.mock.calls[0]?.[1]?.[0]).toBe("-lc");
+    expect(execFile.mock.calls[1]?.[1]?.[0]).toBe("-ilc");
+  });
+
+  it("falls back to an interactive login shell when the fast form throws", () => {
+    const execFile = vi.fn<
+      (
+        file: string,
+        args: ReadonlyArray<string>,
+        options: { encoding: "utf8"; timeout: number },
+      ) => string
+    >((_file, args) => {
+      if (args[0] === "-lc") throw new Error("spawnSync /bin/zsh ETIMEDOUT");
+      return "__T3CODE_ENV_PATH_START__\n/slow/bin\n__T3CODE_ENV_PATH_END__";
+    });
+
+    expect(readEnvironmentFromLoginShell("/bin/zsh", ["PATH"], execFile)).toEqual({
+      PATH: "/slow/bin",
+    });
+    expect(execFile.mock.calls[1]?.[1]?.[0]).toBe("-ilc");
   });
 
   it("omits environment variables that are missing or empty", () => {
