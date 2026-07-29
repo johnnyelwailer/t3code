@@ -24,6 +24,12 @@ describe("t3team legacy canonical tool ids", () => {
       "t3team.workflow.run": T3TEAM_WORKFLOW_RUN_TOOL_ID,
       "t3team.workflow.status": T3TEAM_WORKFLOW_STATUS_TOOL_ID,
       "t3team.workflow.resume": T3TEAM_WORKFLOW_RESUME_TOOL_ID,
+      "t3work.workflow.run": T3TEAM_WORKFLOW_RUN_TOOL_ID,
+      "t3work.workflow.status": T3TEAM_WORKFLOW_STATUS_TOOL_ID,
+      "t3work.workflow.resume": T3TEAM_WORKFLOW_RESUME_TOOL_ID,
+      "t3work.orchestration.run": T3TEAM_WORKFLOW_RUN_TOOL_ID,
+      "t3work.orchestration.status": T3TEAM_WORKFLOW_STATUS_TOOL_ID,
+      "t3work.orchestration.resume": T3TEAM_WORKFLOW_RESUME_TOOL_ID,
     });
     expect(resolveT3TeamCanonicalToolId("t3team.thread.rename")).toBe("t3team.thread.rename");
   });
