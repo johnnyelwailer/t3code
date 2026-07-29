@@ -210,7 +210,12 @@ export const ProjectScript = Schema.Struct({
 });
 export type ProjectScript = typeof ProjectScript.Type;
 
-export const ProjectWorkSourceProvider = Schema.Literals(["atlassian", "linear", "github", "managed"]);
+export const ProjectWorkSourceProvider = Schema.Literals([
+  "atlassian",
+  "linear",
+  "github",
+  "managed",
+]);
 export type ProjectWorkSourceProvider = typeof ProjectWorkSourceProvider.Type;
 
 /**
@@ -1603,6 +1608,9 @@ export class OrchestrationGetSnapshotError extends Schema.TaggedErrorClass<Orche
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
+    // Discriminator for terminal failure classification (e.g. client retry logic).
+    // Optional and additive so old-shape payloads without `reason` still decode.
+    reason: Schema.optional(Schema.Literals(["not-found"])),
   },
 ) {}
 

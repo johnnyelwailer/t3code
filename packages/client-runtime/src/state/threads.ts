@@ -1,5 +1,6 @@
 import {
   ORCHESTRATION_WS_METHODS,
+  OrchestrationGetSnapshotError,
   type EnvironmentId as EnvironmentIdType,
   type OrchestrationThread,
   type OrchestrationThreadDetailSnapshot,
@@ -46,6 +47,11 @@ function formatThreadError(cause: Cause.Cause<unknown>): string {
 function shouldPersistThread(thread: OrchestrationThread): boolean {
   const status = thread.session?.status;
   return status !== "starting" && status !== "running";
+}
+
+function isThreadNotFoundFailure(cause: Cause.Cause<unknown>): boolean {
+  const error = Cause.squash(cause);
+  return error instanceof OrchestrationGetSnapshotError && error.reason === "not-found";
 }
 
 export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make")(function* (
@@ -132,14 +138,31 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   const setStreamError = (cause: Cause.Cause<unknown>) =>
     Ref.set(awaitingCompletion, false).pipe(
       Effect.andThen(
-        SubscriptionRef.update(state, (current) => ({
-          ...current,
-          status:
-            current.status === "deleted" ? current.status : statusWithoutLiveData(current.data),
-          error: Option.some(formatThreadError(cause)),
-        })),
+        SubscriptionRef.update(state, (current) => {
+          const nextStatus =
+            current.status === "deleted" ? current.status : statusWithoutLiveData(current.data);
+          const nextError = formatThreadError(cause);
+          // A lost transport can retry many times per second; writing an
+          // unchanged {status, error} pair on every attempt fans out
+          // re-renders to every subscriber for no observable state change.
+          if (
+            current.status === nextStatus &&
+            Option.isSome(current.error) &&
+            current.error.value === nextError
+          ) {
+            return current;
+          }
+          return {
+            ...current,
+            status: nextStatus,
+            error: Option.some(nextError),
+          };
+        }),
       ),
     );
+
+  const onSubscribeThreadFailure = (cause: Cause.Cause<unknown>) =>
+    isThreadNotFoundFailure(cause) ? setDeleted() : setStreamError(cause);
 
   const setThread = Effect.fn("EnvironmentThreadState.setThread")(function* (
     thread: OrchestrationThread,
@@ -291,9 +314,10 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         };
       }),
       {
-        onExpectedFailure: setStreamError,
+        onExpectedFailure: onSubscribeThreadFailure,
         retryExpectedFailureAfter: "250 millis",
         resubscribe: foregroundResubscriptions,
+        isTerminalFailure: isThreadNotFoundFailure,
       },
     ).pipe(Stream.runForEach(applyItem)),
   );
