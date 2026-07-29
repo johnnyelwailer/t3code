@@ -6,6 +6,7 @@ import {
   type AtlassianOAuthConfig,
   type TokenExchangeResult,
 } from "@t3tools/integrations-atlassian";
+import { isElectron } from "~/env";
 import { randomUUID } from "~/lib/utils";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { runAtlassianOAuthAttempt } from "~/t3team/hooks/t3team-atlassianOAuthAttempt";
@@ -138,7 +139,10 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
         const tabState = randomUUID();
         const authUrl = buildAuthorizeUrl(config, pkce, tabState);
 
-        const popup = openOAuthPopup(authUrl);
+        // window.open must run inside the click's user gesture, so on the web this happens before any
+        // awaited work. Skipped entirely on desktop: the embedded Electron window has an isolated
+        // session with none of the user's real browser cookies, so a popup there forces a fresh login.
+        const popup = isElectron ? null : openOAuthPopup(authUrl);
         // Read before anything can change it, so "a new account appeared" stays a usable signal even
         // when the user is reconnecting and accounts already exist.
         const baselineAccountIds = listAccountIds(backend);
@@ -153,13 +157,17 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
         serverStateRef.current = serverFlow?.state ?? null;
         const signinUrl = serverFlow?.shareUrl ?? authUrl;
 
-        /*
-          A blocked popup is not an error worth stopping for. Opening a window needs a user gesture
-          the browser trusts, and plenty of setups withhold it — a strict blocker, an embedded
-          webview, a click we arrived at indirectly. So keep waiting and hand the URL to the UI for
-          the user to open themselves; the callback comes back over the broadcast channel either way.
-        */
-        applyState(popup ? { kind: "waiting" } : { kind: "needs_manual_open", signinUrl });
+        if (isElectron) {
+          // Hand the link to the system browser, where the user is very likely already signed in.
+          const openResult = window.desktopBridge?.openExternal?.(signinUrl);
+          const opened = openResult ? await openResult.catch(() => false) : false;
+          applyState(opened ? { kind: "waiting" } : { kind: "needs_manual_open", signinUrl });
+        } else {
+          // A blocked popup is not an error worth stopping for — plenty of setups withhold the user
+          // gesture a window.open needs. Keep waiting and hand the URL to the UI for the user to open
+          // themselves; the callback comes back over the broadcast channel either way.
+          applyState(popup ? { kind: "waiting" } : { kind: "needs_manual_open", signinUrl });
+        }
 
         const outcome = await runAtlassianOAuthAttempt({
           popup,
