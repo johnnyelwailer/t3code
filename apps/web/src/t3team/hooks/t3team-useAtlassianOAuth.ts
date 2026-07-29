@@ -163,7 +163,10 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
             });
             return;
           }
-          signinUrl = serverFlow.shareUrl;
+          // Not shareUrl: this renderer's origin is the t3code-dev://app custom protocol,
+          // which neither shell.openExternal nor any external browser accepts. The
+          // server-origin form (http://127.0.0.1:<port>/…) is what a browser here needs.
+          signinUrl = serverFlow.serverOriginUrl;
           const openResult = window.desktopBridge?.openExternal?.(signinUrl);
           const opened = openResult ? await openResult.catch(() => false) : false;
           externallyOpened = opened;
