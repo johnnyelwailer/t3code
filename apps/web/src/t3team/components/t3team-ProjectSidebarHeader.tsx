@@ -48,7 +48,10 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
       />
       <div
         className={cn(
-          "relative z-10 ml-[var(--workspace-titlebar-content-left)] flex h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden",
+          "relative z-10 flex h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden",
+          // Titlebar inset only where native window buttons exist — on the web
+          // the brand docks left instead of reserving phantom control space.
+          isElectron && "ml-[var(--workspace-titlebar-content-left)]",
           onBackdrop ? "text-white" : "text-sidebar-foreground",
         )}
       >

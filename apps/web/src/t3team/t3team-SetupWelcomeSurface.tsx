@@ -59,13 +59,18 @@ export function T3TeamSetupWelcomeSurface({
     cardOptions.find((option) => option.id === setupProfileId) ?? cardOptions[0];
 
   const chipLabel =
-    reason.kind === "no-work-project" ? "Not connected to a work source" : "First project setup";
-  const headingText =
+    reason.kind === "no-work-project" ? "No work source connected yet" : "First project setup";
+  // The heading stays an invitation in both cases. A local workspace is a
+  // legitimate place to be, not a defective project — so the "why you landed
+  // here" detail belongs in the muted subline, named as a workspace, never
+  // shouted as the page title.
+  const headingText = `Bring your Jira work into ${productName} in a few clicks.`;
+  const sublineText =
     reason.kind === "no-work-project"
       ? (reason.projectTitle
-          ? `“${reason.projectTitle}” is a local workspace with no Jira project connected, so there is no work to show here yet. Connect a Jira project to see tickets, backlog, and My work.`
-          : "None of your projects are connected to a Jira project yet, so there is no work to show here. Connect a Jira project to see tickets, backlog, and My work.")
-      : `Bring your Jira work into ${productName} in a few clicks.`;
+          ? `My work shows tickets and backlog from a connected Jira project. “${reason.projectTitle}” is a local workspace and keeps working as one — connecting a Jira project here adds the work views alongside it.`
+          : `My work shows tickets and backlog from a connected Jira project. Your local workspaces keep working as they are — connecting a Jira project adds the work views alongside them.`)
+      : `Pick how you want ${productName} to communicate, connect a Jira project, and start from a workspace that feels ready out of the box.`;
 
   // `align-items: safe center` rather than `items-center`: once the card is taller
   // than the viewport, plain centering overflows the *start* edge, and that overflow
@@ -104,8 +109,7 @@ export function T3TeamSetupWelcomeSurface({
                 {headingText}
               </h1>
               <p className="max-w-xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
-                Pick how you want {productName} to communicate, connect a Jira project, and start
-                from a workspace that feels ready out of the box.
+                {sublineText}
               </p>
             </div>
 
