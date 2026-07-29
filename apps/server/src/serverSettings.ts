@@ -54,7 +54,7 @@ import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import {
   getConfiguredDefaultModelSelection,
   getConfiguredTextGenerationModelSelection,
-} from "./configuredDefaultModelSelection.ts";
+} from "./t3team-configuredDefaultModelSelection.ts";
 
 export { resolveSourceControlWriterModelSelection } from "@t3tools/shared/serverSettings";
 

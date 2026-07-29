@@ -2,6 +2,9 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { EnvironmentId, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { EnvironmentAppearance, EnvironmentSetupProfile } from "./t3team-packAppearance.ts";
+
+export { EnvironmentAppearance, EnvironmentSetupProfile } from "./t3team-packAppearance.ts";
 
 export const ExecutionEnvironmentPlatformOs = Schema.Literals([
   "darwin",
@@ -53,70 +56,6 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   serverSelfUpdate: Schema.optionalKey(ServerSelfUpdateCapability),
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
-
-export const EnvironmentAppearance = Schema.Struct({
-  themeId: TrimmedNonEmptyString,
-  name: TrimmedNonEmptyString,
-  productName: Schema.optionalKey(TrimmedNonEmptyString),
-  publisher: Schema.optionalKey(TrimmedNonEmptyString),
-  labels: Schema.optionalKey(
-    Schema.Struct({
-      appName: Schema.optionalKey(TrimmedNonEmptyString),
-    }),
-  ),
-  defaultMode: Schema.optionalKey(Schema.Literals(["light", "dark", "system"])),
-  brand: Schema.optionalKey(
-    Schema.Struct({
-      mark: Schema.optionalKey(TrimmedNonEmptyString),
-      markDark: Schema.optionalKey(TrimmedNonEmptyString),
-      wordmark: Schema.optionalKey(TrimmedNonEmptyString),
-      wordmarkDark: Schema.optionalKey(TrimmedNonEmptyString),
-      displayFont: Schema.optionalKey(TrimmedNonEmptyString),
-    }),
-  ),
-  colors: Schema.Struct({
-    light: Schema.Record(Schema.String, Schema.String),
-    dark: Schema.Record(Schema.String, Schema.String),
-  }),
-  typography: Schema.optionalKey(
-    Schema.Struct({
-      sans: Schema.optionalKey(Schema.String),
-      mono: Schema.optionalKey(Schema.String),
-      display: Schema.optionalKey(Schema.String),
-    }),
-  ),
-  shape: Schema.optionalKey(Schema.Struct({ radius: Schema.optionalKey(Schema.String) })),
-  density: Schema.optionalKey(Schema.Number),
-  /**
-   * Starting values for user-owned client appearance settings, carried from the pack theme's
-   * `appearanceDefaults`. Applied once per distinct set of values, never over a later user choice
-   * — see `t3team-packAppearanceDefaults.ts`.
-   */
-  appearanceDefaults: Schema.optionalKey(
-    Schema.Struct({
-      sidebarLens: Schema.optionalKey(Schema.Literals(["code", "work"])),
-      glassOpacity: Schema.optionalKey(Schema.Number),
-    }),
-  ),
-});
-export type EnvironmentAppearance = typeof EnvironmentAppearance.Type;
-
-/**
- * Presentation view of a pack-contributed project-setup profile ("role"),
- * surfaced to the first-run setup wizard. Behavior (recipe weights, communication
- * style) stays server-side and is not part of this client-facing payload.
- */
-export const EnvironmentSetupProfile = Schema.Struct({
-  id: TrimmedNonEmptyString,
-  title: TrimmedNonEmptyString,
-  description: TrimmedNonEmptyString,
-  badge: TrimmedNonEmptyString,
-  bullets: Schema.Array(TrimmedNonEmptyString),
-  category: Schema.Literals(["product", "delivery", "engineering", "operations", "security"]),
-  iconDataUrl: Schema.optionalKey(TrimmedNonEmptyString),
-  default: Schema.optionalKey(Schema.Boolean),
-});
-export type EnvironmentSetupProfile = typeof EnvironmentSetupProfile.Type;
 
 export const ExecutionEnvironmentDescriptor = Schema.Struct({
   environmentId: EnvironmentId,

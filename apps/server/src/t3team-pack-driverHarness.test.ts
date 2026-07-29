@@ -1,7 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import { ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
 
-import { adaptOpenCodeHarnessSnapshot } from "./OpenCodeDriver.ts";
+import { adaptOpenCodeHarnessSnapshot } from "./t3team-pack-driverHarness.ts";
 
 it("gives a pack harness its own identity and hides OpenCode inventory models", () => {
   const snapshot = {

@@ -34,7 +34,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import { T3TeamThreadToolContextEvictionReactor } from "./t3team-threadToolContextEvictionReactor.ts";
-import { getConfiguredDefaultModelSelection } from "./configuredDefaultModelSelection.ts";
+import { getConfiguredDefaultModelSelection } from "./t3team-configuredDefaultModelSelection.ts";
 import {
   formatHeadlessServeOutput,
   formatHostForUrl,
