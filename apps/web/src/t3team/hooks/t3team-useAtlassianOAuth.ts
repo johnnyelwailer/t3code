@@ -6,6 +6,7 @@ import {
   type AtlassianOAuthConfig,
   type TokenExchangeResult,
 } from "@t3tools/integrations-atlassian";
+import { isElectron } from "~/env";
 import { randomUUID } from "~/lib/utils";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { runAtlassianOAuthAttempt } from "~/t3team/hooks/t3team-atlassianOAuthAttempt";
@@ -21,14 +22,12 @@ export type OAuthState =
   | { kind: "opening" }
   | { kind: "waiting" }
   /**
-   * Sign-in has to be opened by the user rather than by us. Two causes, one situation: the browser
-   * refused the popup, or the user closed it before finishing. Neither is a failure — they simply
-   * have not signed in yet — so this carries a live `signinUrl` and the attempt keeps waiting.
+   * Sign-in has to be opened by the user rather than by us — the browser refused the popup, or it
+   * was closed before finishing. Neither is a failure, so this carries a live `signinUrl` and the
+   * attempt keeps waiting.
    *
-   * `expired` is set once the server reports that this exact link can no longer finish (seen
-   * `pending`, then `unknown` — evicted or past its TTL). The wait itself does not stop: the caller
-   * should say the link expired and let `mintFreshSigninLink` replace it, not imply this one might
-   * still come through.
+   * `expired` is set once the server reports this exact link can no longer finish. The wait itself
+   * does not stop: the caller should say the link expired and let `mintFreshSigninLink` replace it.
    */
   | { kind: "needs_manual_open"; signinUrl: string; expired?: boolean }
   | { kind: "exchanging" }
@@ -36,8 +35,8 @@ export type OAuthState =
   | { kind: "done"; token: TokenExchangeResult; sites: ReadonlyArray<AtlassianAccessibleResource> }
   /**
    * The server completed the flow itself, because sign-in finished somewhere this tab cannot see —
-   * another browser, another profile, a phone. No token comes back here: the account is already
-   * persisted, so the consumer's job is to reload the account list rather than to connect anything.
+   * another browser, another profile, a phone. No token comes back: the consumer's job is to reload
+   * the account list rather than to connect anything.
    */
   | { kind: "connected" }
   | { kind: "error"; message: string };
@@ -46,10 +45,9 @@ export type UseAtlassianOAuthResult = {
   state: OAuthState;
   startOAuth: (clientId?: string) => Promise<void>;
   /**
-   * Begins a brand new server-owned flow and swaps it in as the one being waited on, replacing
-   * `signinUrl` and clearing any `expired` flag. The link just displayed stays valid — minting a
-   * successor never consumes it — so this is safe to call opportunistically (see
-   * `t3team-OAuthPopupBlockedNotice.tsx`) rather than only when a link is already known to be dead.
+   * Begins a brand new server-owned flow and swaps it in, replacing `signinUrl` and clearing any
+   * `expired` flag. The link just displayed stays valid — minting a successor never consumes it — so
+   * this is safe to call opportunistically rather than only once a link is known to be dead.
    */
   mintFreshSigninLink: () => Promise<string>;
   reset: () => void;
@@ -73,10 +71,9 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
 
   /**
    * Bumped by `reset` and on unmount, and captured by each `startOAuth` call at its own start. Every
-   * state update from that attempt checks its captured id against this before touching state, so a
-   * cancelled or superseded attempt cannot clobber whatever came after it — one guard covering both
-   * "Cancel" and "the component went away" without threading a real abort signal through three layers
-   * of already-in-flight `Promise`s.
+   * state update from that attempt checks its captured id first, so a cancelled or superseded attempt
+   * cannot clobber whatever came after it — one guard covering both "Cancel" and unmount without a
+   * real abort signal threaded through three layers of in-flight `Promise`s.
    */
   const attemptIdRef = useRef(0);
   /** The server-owned flow's `state` this attempt is currently waiting on; read fresh every poll. */
@@ -138,28 +135,44 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
         const tabState = randomUUID();
         const authUrl = buildAuthorizeUrl(config, pkce, tabState);
 
-        const popup = openOAuthPopup(authUrl);
-        // Read before anything can change it, so "a new account appeared" stays a usable signal even
-        // when the user is reconnecting and accounts already exist.
+        // window.open needs the click's user gesture, so on the web this runs before any awaited
+        // work. Skipped on desktop: the embedded Electron window's isolated session has none of the
+        // user's real browser cookies, so a popup there would force a fresh login every time.
+        const popup = isElectron ? null : openOAuthPopup(authUrl);
+        // Read before anything can change it, so a new account still counts as new on a reconnect.
         const baselineAccountIds = listAccountIds(backend);
 
-        /*
-          Started alongside the popup, not instead of it. If the user finishes in the popup the
-          tab-owned flow wins and this one is left to expire; if they end up opening sign-in
-          themselves, this is the link worth handing them — short, needing no prior session, and
-          completable by the server from a browser that shares nothing with this tab.
-        */
+        // Started alongside the popup: if the user finishes there this is left to expire, and if
+        // they open sign-in themselves this is the link worth handing them — completable by the
+        // server from a browser sharing nothing with this tab.
         const serverFlow = await beginAtlassianOAuthServerFlow({ redirectUri }).catch(() => null);
         serverStateRef.current = serverFlow?.state ?? null;
-        const signinUrl = serverFlow?.shareUrl ?? authUrl;
 
-        /*
-          A blocked popup is not an error worth stopping for. Opening a window needs a user gesture
-          the browser trusts, and plenty of setups withhold it — a strict blocker, an embedded
-          webview, a click we arrived at indirectly. So keep waiting and hand the URL to the UI for
-          the user to open themselves; the callback comes back over the broadcast channel either way.
-        */
-        applyState(popup ? { kind: "waiting" } : { kind: "needs_manual_open", signinUrl });
+        let signinUrl: string;
+        let externallyOpened = false;
+
+        if (isElectron) {
+          if (!serverFlow) {
+            // authUrl is tab-owned: its PKCE verifier lives only in this renderer, so a callback
+            // landing in the system browser could never hand it back. Opening it there would just
+            // dead-end, so this is a real failure rather than a fallback link.
+            applyState({
+              kind: "error",
+              message:
+                "Couldn't reach the server to start Atlassian sign-in. Check your connection and try again.",
+            });
+            return;
+          }
+          signinUrl = serverFlow.shareUrl;
+          const openResult = window.desktopBridge?.openExternal?.(signinUrl);
+          const opened = openResult ? await openResult.catch(() => false) : false;
+          externallyOpened = opened;
+          applyState(opened ? { kind: "waiting" } : { kind: "needs_manual_open", signinUrl });
+        } else {
+          signinUrl = serverFlow?.shareUrl ?? authUrl;
+          // A blocked popup isn't an error worth stopping for; hand the URL to the UI to open.
+          applyState(popup ? { kind: "waiting" } : { kind: "needs_manual_open", signinUrl });
+        }
 
         const outcome = await runAtlassianOAuthAttempt({
           popup,
@@ -170,6 +183,7 @@ export function useAtlassianOAuth(): UseAtlassianOAuthResult {
           listAccountIds: () => listAccountIds(backend),
           baselineAccountIds,
           isCancelled: () => !isCurrent(),
+          externallyOpened,
           onNeedsManualOpen: () => applyState({ kind: "needs_manual_open", signinUrl }),
           onLinkExpired: () => {
             if (!isCurrent()) return;

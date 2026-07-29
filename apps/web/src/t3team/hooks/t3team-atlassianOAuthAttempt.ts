@@ -50,13 +50,19 @@ function readAttemptOutcome(input: {
 /**
  * Waits out one sign-in attempt, through however it ends up being completed.
  *
- * The popup is only the first hope. If it is closed before sign-in finishes the attempt is not over —
- * the user still needs to sign in, and now they need a link to do it with. So the wait is re-armed
- * without a window handle, which is the same shape used when a popup was never allowed at all, and it
- * additionally watches for the server completing the flow from a browser this tab cannot see.
+ * The popup is only the first hope. If it is closed before sign-in finishes, or there never was one
+ * to begin with — a blocked popup, or the link handed to a system browser instead — the attempt is
+ * not over, and there is no window to keep polling for closure. Either way this falls through to the
+ * same manual-signin race: the broadcast listener for a same-browser callback, alongside actively
+ * polling the server for the flow completing somewhere this tab cannot see. Waiting on the broadcast
+ * listener alone (as a bare `waitForOAuthCallback(null, ...)` would) can only ever notice a
+ * same-browser finish; a sign-in completed from another browser or the system browser would never be
+ * observed until the shared flow's TTL simply expired.
  *
- * `onNeedsManualOpen` fires when the caller should show that link. It can fire for either cause, and
- * the caller must treat it as a prompt rather than a failure.
+ * `onNeedsManualOpen` fires when the caller should show that link as one the user has to open
+ * themselves. It is skipped when `externallyOpened` is set: the caller already opened the link (the
+ * desktop system browser), so there is nothing to prompt the user to do, and firing it anyway would
+ * incorrectly downgrade an already-"waiting" state.
  */
 export async function runAtlassianOAuthAttempt(input: {
   readonly popup: WindowProxy | null;
@@ -70,6 +76,8 @@ export async function runAtlassianOAuthAttempt(input: {
   readonly isCancelled: () => boolean;
   readonly onNeedsManualOpen: () => void;
   readonly onLinkExpired: () => void;
+  /** True when the caller already opened the sign-in link itself rather than via a popup. */
+  readonly externallyOpened?: boolean;
 }): Promise<AtlassianOAuthAttemptOutcome> {
   const readOutcome = (callbackUrl: string) =>
     readAttemptOutcome({
@@ -78,13 +86,15 @@ export async function runAtlassianOAuthAttempt(input: {
       serverState: input.getServerState(),
     });
 
-  try {
-    return readOutcome(await waitForOAuthCallback(input.popup, input.redirectUri));
-  } catch (error) {
-    if (!isAtlassianOAuthPopupClosedError(error)) throw error;
+  if (input.popup !== null) {
+    try {
+      return readOutcome(await waitForOAuthCallback(input.popup, input.redirectUri));
+    } catch (error) {
+      if (!isAtlassianOAuthPopupClosedError(error)) throw error;
+    }
   }
 
-  input.onNeedsManualOpen();
+  if (!input.externallyOpened) input.onNeedsManualOpen();
   const outcome = await awaitManualAtlassianSignin({
     redirectUri: input.redirectUri,
     listAccountIds: input.listAccountIds,
