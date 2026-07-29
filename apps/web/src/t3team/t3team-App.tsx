@@ -4,6 +4,7 @@ import { Sidebar, SidebarProvider, SidebarRail } from "~/t3team/components/ui/t3
 import { AppContentPane } from "~/t3team/t3team-AppContentPane";
 import { AppSidebarLens } from "~/t3team/components/t3team-AppSidebarLens";
 import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarState";
+import { useT3TeamMacosTitlebarInsetStyle } from "~/t3team/hooks/t3team-useMacosTitlebarInset";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ViewState } from "~/t3team/t3team-types";
 import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
@@ -52,6 +53,7 @@ export function App({
   onProjectCreated,
 }: AppProps = {}) {
   const store = useProjectStore();
+  const macosTitlebarInsetStyle = useT3TeamMacosTitlebarInsetStyle();
   useHydratePinnedSidebarItems();
   const { state: sidebarState, setState: setSidebarState } = useProjectSidebarState();
   const [showCreateInternal, setShowCreateInternal] = useState(false);
@@ -106,7 +108,11 @@ export function App({
   });
 
   return (
-    <SidebarProvider className="h-dvh! min-h-0! overflow-hidden!" defaultOpen>
+    <SidebarProvider
+      className="h-dvh! min-h-0! overflow-hidden!"
+      defaultOpen
+      style={macosTitlebarInsetStyle}
+    >
       <Sidebar
         side="left"
         collapsible="offcanvas"
