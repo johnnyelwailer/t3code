@@ -14,6 +14,23 @@ const approval = await thread.askUser("Merge this pull request?", { schema: Appr
 await waitUntil(deadline);
 ```
 
+## Naming and lifecycle surface
+
+Use **Runbook** for the package and system name, and keep **workflow** for the authoring concept and invocation. The existing lifecycle surface is sufficient:
+
+```text
+workflow(ref, args)
+  author-facing inline sub-workflow invocation
+
+startWorkflow(ref, args)
+  start a top-level run and return its run ID/result or suspension
+
+resumeWorkflow(runId, ref, args)
+  resume an existing durable run
+```
+
+There is no need for a new generic `run(...)` API or a parallel old/new alias layer. `t3team.orchestration.run` is a T3Code-specific agent-facing tool, not a generic Runbook primitive.
+
 The reusable boundary is below those APIs: journaling, replay, handles, suspension, typed references, dispatch, persistence, and host integration.
 
 ## Capability tiers
@@ -41,8 +58,8 @@ The first extraction should use a small number of deliberate package boundaries.
 @runbook/core
   Durable runtime, replay, journal coordination, handles,
   suspension, deterministic primitives, runtime ports, and
-  generic contracts such as ToolRef, ScriptRef, WorkflowRef,
-  ModelRef, journal entries, and handles.
+  generic execution contracts such as workflow identity,
+  journal entries, handles, and runtime ports.
 
 @runbook/agent
   Optional first-class agent primitive: typed prompts and replies,
@@ -53,6 +70,10 @@ The first extraction should use a small number of deliberate package boundaries.
   User-authored arbitrary TypeScript extension code:
   ScriptRef, defineScript, script registries, execution context,
   replay policy, and pluggable script executors.
+
+@runbook/tools
+  ToolRef, defineTool, capability groups, tool registration,
+  and the typed application-tool surface.
 
 @runbook/ts
   The existing .workflow.ts loader, static metadata extraction,
@@ -66,12 +87,12 @@ The first extraction should use a small number of deliberate package boundaries.
   filesystem, cloud APIs, or application-specific tools.
 
 @runbook/t3code-adapter
-  Compatibility integration for the current T3Code/T3Team host:
+  T3Code/T3Team integration for the current host:
   broker, persistence, models, threads, `spawnThread`, workspace,
   server lifecycle, scheduler, and existing permission behavior.
 
 @t3team/sdk
-  Existing compatibility facade, initially re-exporting the extracted surface.
+  Current T3Team application surface, migrated directly to the extracted packages.
 ```
 
 The generic packages must not import T3Team domain types, server services, database implementations, or a particular provider. The T3Code/T3Team adapter may depend on all of those. In particular, `@runbook/core` must not assume that a workflow has threads, chat, or even an agent provider installed.
@@ -170,7 +191,7 @@ For v1, existing `defineTool` declarations can continue to contain their handler
 
 Effect is a fitting implementation technology for the runtime: cancellation, typed failures, concurrency, resource lifetimes, dependency injection, scheduling, and observability all matter here.
 
-The package boundary should still be domain-oriented. Effect Schema may remain part of the v1 compatibility surface because existing workflows already use it. The reusable contracts should avoid accidental dependencies on T3Team services, SQLite, or provider-specific Effect layers. A non-Effect host should be able to implement the runtime ports through a thin adapter.
+The package boundary should still be domain-oriented. Effect Schema may remain part of the existing v1 surface because current workflows already use it. The reusable contracts should avoid accidental dependencies on T3Team services, SQLite, or provider-specific Effect layers. A non-Effect host should be able to implement the runtime ports through a thin adapter.
 
 ## First implementation phase
 
@@ -183,8 +204,8 @@ The first version is an extraction, not a language redesign:
 - preserve current journal ordering, replay behavior, handle correlations, capability checks, and error behavior;
 - preserve the current T3Code/T3Team broker and persistence integration through an adapter;
 - start with the existing embedded/SQLite-style host while keeping runtime ports suitable for distributed backends;
-- make the current `@t3team/sdk` facade continue to work;
-- add compatibility and replay tests before changing semantics.
+- migrate the current `@t3team/sdk` implementation directly onto the extracted packages;
+- add behavioral and replay tests before changing semantics.
 
 External durability systems are a later integration target, not a first-phase extraction requirement. A given run should have one source of durability; the runbook journal and an external workflow history must not independently replay the same execution.
 
@@ -192,7 +213,7 @@ External durability systems are a later integration target, not a first-phase ex
 
 The branch can progress through these stages without changing the authoring contract:
 
-1. **Compatibility extraction:** move the existing runtime behind package boundaries and keep current T3Code/T3Team workflows working unchanged.
+1. **Direct extraction and integration:** move the existing runtime behind package boundaries and keep current T3Code/T3Team workflows working unchanged.
 2. **Reusable implementation:** make the core ports, typed capability contracts, agent package, loader, persistence, and host adapter explicit and testable.
 3. **Optional catalog modularization:** split tool catalogs only where a concrete application needs distribution or reuse.
 4. **Deployment adapters:** add backends such as distributed database/queue hosts and integrations with established durable workflow systems.
@@ -201,7 +222,7 @@ The first commit may be documentation-only, but the branch is deliberately named
 
 ## Open design questions
 
-- Should the compatibility adapter be named `runbook-t3code` or `runbook-t3team` once the host/product naming settles?
+- Should the host adapter be named `runbook-t3code` or `runbook-t3team` once the host/product naming settles?
 - Do any concrete applications need shared catalog packages, or is defining tools locally sufficient?
 - Should scripts remain atomic asynchronous calls, or should a future script mode be allowed to durably suspend on `agent`, `waitUntil`, or thread replies?
 - What are the exact semantics of the existing `runWorkflow(...)` launch path, and does it already cover the required child-workflow use cases?
