@@ -28,7 +28,7 @@ The reusable boundary is below those APIs: journaling, replay, handles, suspensi
 | Agent primitive | `agent` | Optional `@runbook/agent` package; provider adapter supplies execution |
 | Host conversation surface | `spawnThread`, `thread.askAgent`, `thread.askUser`, `thread.notifyUser` | T3Code/T3Team adapter or another host-specific package |
 | Application tool catalogs | `tools.github.*`, `tools.jira.*`, filesystem, browser, cloud APIs | Optional catalog packages and host bindings |
-| Recipe scripts | `scripts.*`, `defineScript` | Recipe/project packages |
+| User-authored scripts | `scripts.*`, `defineScript` | Optional `@runbook/scripts` package |
 | Models and providers | `defineModel`, provider/model selection, agent turn execution | Provider packages and host adapters |
 
 All tiers use the same durable primitive and replay machinery. They should not all be flattened into one global catalog: the built-in agent/thread surface has lifecycle and suspension semantics that ordinary application tools do not.
@@ -48,6 +48,11 @@ The first extraction should use a small number of deliberate package boundaries.
   Optional first-class agent primitive: typed prompts and replies,
   model/provider selection, durable agent-turn semantics, and
   an adapter interface for custom agent providers.
+
+@runbook/scripts
+  User-authored arbitrary TypeScript extension code:
+  ScriptRef, defineScript, script registries, execution context,
+  replay policy, and pluggable script executors.
 
 @runbook/ts
   The existing .workflow.ts loader, static metadata extraction,
@@ -84,6 +89,32 @@ These are three different extension points:
 3. A **runtime adapter** supplies durability: journaling, replay, wakeups, leases, queues, and run ownership.
 
 The optional agent package is adjacent to this model. It defines the generic agent-turn capability and provider contract, while a host-specific package may add richer concepts such as T3Code's threads and spawned conversations.
+
+## Scripts and tools
+
+Scripts and tools are intentionally different extension mechanisms:
+
+| | Scripts | Tools |
+| --- | --- | --- |
+| Primary purpose | Let a project add arbitrary TypeScript behavior | Expose a host or integration capability |
+| Typical owner | Runbook author, recipe, or project | Host, integration pack, or application |
+| Example | Parse a PR, inspect a workspace, combine results, apply custom logic | GitHub merge, Jira search, browser action |
+| Surface | `scripts.<name>(args)` | `tools.<group>.<name>(args)` |
+| Core concern | Code execution policy and replay boundary | Capability, permissions, and host dispatch |
+
+For the target use case—an asynchronous distributed agent system that reviews PRs or Jira tickets—the project can be configured by adding TypeScript runbooks and scripts:
+
+```text
+workflow body
+  ├── scripts.*       project-specific analysis and decision logic
+  ├── tools.*         host/integration actions
+  ├── agent(...)      model-backed reasoning
+  └── wait/handles    durable pauses and external replies
+```
+
+This does not require a universal tool catalog or portable workflow source. Each deployment can define the tools it needs, while the runbook engine and script execution package remain reusable.
+
+The current engine treats a script call as an asynchronous but atomic primitive: its final result is journaled, but the script itself does not create an independent durable suspension point. That behavior should remain unchanged during extraction unless we deliberately add nested durable script execution.
 
 For example:
 
@@ -128,6 +159,7 @@ The first version is an extraction, not a language redesign:
 - preserve the `.workflow.ts` file shape and top-level `await`;
 - preserve `tools.*`, `scripts.*`, `thread.*`, `agent`, `workflow`, `parallel`, `pipeline`, and `waitUntil`;
 - preserve the distinction between the generic `agent` primitive and T3Code-specific `spawnThread` / `Thread` behavior;
+- preserve `scripts.*` as a dedicated arbitrary-code extension surface;
 - preserve current journal ordering, replay behavior, handle correlations, capability checks, and error behavior;
 - preserve the current T3Code/T3Team broker and persistence integration through an adapter;
 - start with the existing embedded/SQLite-style host while keeping runtime ports suitable for distributed backends;
@@ -151,3 +183,4 @@ The first commit may be documentation-only, but the branch is deliberately named
 
 - Should the compatibility adapter be named `runbook-t3code` or `runbook-t3team` once the host/product naming settles?
 - Do any concrete applications need shared catalog packages, or is defining tools locally sufficient?
+- Should scripts remain atomic asynchronous calls, or should a future script mode be allowed to durably suspend on `agent`, `waitUntil`, or thread replies?
