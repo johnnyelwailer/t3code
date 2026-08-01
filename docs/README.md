@@ -6,6 +6,9 @@
   - [Connection runtime](./architecture/connection-runtime.md)
   - [Remote environments](./architecture/remote.md)
   - [Server updates](./architecture/server-updates.md)
+- Reusable runbook engine
+  - [Concept and package architecture](./runbook/README.md)
+  - [Durable backend adapters](./runbook/durable-backend-adapters.md)
 - User guides
   - [Background service](./user/background-service.md)
   - [Remote access](./user/remote-access.md)
