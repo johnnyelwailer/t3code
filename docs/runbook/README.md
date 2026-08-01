@@ -38,14 +38,11 @@ All tiers use the same durable primitive and replay machinery. They should not a
 The first extraction should use a small number of deliberate package boundaries. Internal modules can be split further once their contracts are proven.
 
 ```text
-@runbook/contracts
-  Stable serializable and type-level contracts:
-  ToolRef, ScriptRef, ToolGroupRef, WorkflowRef, ModelRef,
-  journal entries, handles, broker messages, codecs, and errors.
-
 @runbook/core
   Durable runtime, replay, journal coordination, handles,
-  suspension, deterministic primitives, and runtime ports.
+  suspension, deterministic primitives, runtime ports, and
+  generic contracts such as ToolRef, ScriptRef, WorkflowRef,
+  ModelRef, journal entries, and handles.
 
 @runbook/agent
   Optional first-class agent primitive: typed prompts and replies,
@@ -73,6 +70,8 @@ The first extraction should use a small number of deliberate package boundaries.
 ```
 
 The generic packages must not import T3Team domain types, server services, database implementations, or a particular provider. The T3Code/T3Team adapter may depend on all of those. In particular, `@runbook/core` must not assume that a workflow has threads, chat, or even an agent provider installed.
+
+`@runbook/core` may own the generic contracts; they do not need a separate package initially. A contract belongs in core when it describes reusable execution semantics or a host-neutral typed capability. T3Code-specific handler contexts, clients, thread objects, and server services belong in the adapter.
 
 The adapter name is intentionally still provisional. The important boundary is that the generic package is not named after either product.
 
@@ -150,6 +149,5 @@ The first commit may be documentation-only, but the branch is deliberately named
 
 ## Open design questions
 
-- Should `@runbook/contracts` be a published package immediately, or should the first extraction keep contracts inside `@runbook/core` until the dependency graph stabilizes?
 - Should the compatibility adapter be named `runbook-t3code` or `runbook-t3team` once the host/product naming settles?
 - Do any concrete applications need shared catalog packages, or is defining tools locally sufficient?
