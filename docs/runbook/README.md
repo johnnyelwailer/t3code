@@ -132,7 +132,7 @@ spawned child workflow
   parent may await it, continue without it, or outlive it
 ```
 
-The existing `workflow(ref, args)` primitive is the first form and must remain unchanged during extraction. The second form is an important reusable capability for autonomous systems: a PR-review workflow could spawn analysis, test, or remediation workflows, each independently recoverable and observable.
+The existing `workflow(ref, args)` primitive is the first form and must remain unchanged during extraction. The repository also has a host-level `runWorkflow(...)` launch path. Before introducing any new child-workflow API, the implementation work should inventory those existing surfaces and preserve their actual semantics. A PR-review workflow may already be able to launch analysis, test, or remediation work through that host path.
 
 Child workflow semantics belong to the runbook orchestration model rather than to a T3Code-specific tool catalog. The host adapter supplies child-run persistence, launch, resume, and lifecycle operations.
 
@@ -204,4 +204,4 @@ The first commit may be documentation-only, but the branch is deliberately named
 - Should the compatibility adapter be named `runbook-t3code` or `runbook-t3team` once the host/product naming settles?
 - Do any concrete applications need shared catalog packages, or is defining tools locally sufficient?
 - Should scripts remain atomic asynchronous calls, or should a future script mode be allowed to durably suspend on `agent`, `waitUntil`, or thread replies?
-- Should a spawned child workflow be independently durable with its own run ID and journal, and what should parent/child cancellation and failure propagation mean?
+- What are the exact semantics of the existing `runWorkflow(...)` launch path, and does it already cover the required child-workflow use cases?
