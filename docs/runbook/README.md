@@ -4,7 +4,7 @@ Status: architecture and implementation track.
 
 The runbook engine is the durable execution system currently embedded in T3Code/T3Team. This branch is intended to both extract that engine and build the reusable implementation around it. Its distinctive authoring model is ordinary TypeScript: an author writes a `.workflow.ts` module with top-level `await`, imports the typed SDK surfaces that are needed, and lets the engine journal primitive boundaries so the module can be replayed after a pause or failure.
 
-The extraction goal is to make that engine reusable without changing the existing workflow authoring model or introducing a generic dispatcher API. Existing code should continue to write APIs such as:
+The goal is to make that engine reusable without changing the existing workflow authoring model or introducing a generic dispatcher API. The engine should be portable across hosts; individual workflows do not need to be portable across hosts, and may depend on the tool surface available in their environment. Existing code should continue to write APIs such as:
 
 ```ts
 const review = await agent("Review this change", { schema: ReviewSchema });
@@ -99,7 +99,7 @@ For example:
   durable dispatch through the current T3Code broker
 ```
 
-Catalogs may be split by domain and permission boundary:
+Catalogs may optionally be split by domain and permission boundary when an application wants to distribute or reuse them:
 
 ```text
 @runbook/catalog-github-core
@@ -111,6 +111,8 @@ Catalogs may be split by domain and permission boundary:
 ```
 
 An application composes only the catalogs it wants. Composition must detect duplicate IDs, namespace collisions, incompatible schemas, and missing capability-group definitions. Catalog selection should be scoped to a host/project/recipe environment rather than one universal process-global catalog.
+
+This is not required for workflow portability. A workflow may depend on a host-specific tool surface, and another environment may define a completely different set of tools. Only the durable engine and its runtime contracts are intended to be reusable across hosts.
 
 For v1, existing `defineTool` declarations can continue to contain their handler, preserving the current contract. Contract-only catalogs and separate bindings should be possible later without forcing a migration during extraction.
 
@@ -141,13 +143,13 @@ The branch can progress through these stages without changing the authoring cont
 
 1. **Compatibility extraction:** move the existing runtime behind package boundaries and keep current T3Code/T3Team workflows working unchanged.
 2. **Reusable implementation:** make the core ports, typed capability contracts, agent package, loader, persistence, and host adapter explicit and testable.
-3. **Catalog modularization:** move optional tool catalogs and provider bindings into independently installable packages.
+3. **Optional catalog modularization:** split tool catalogs only where a concrete application needs distribution or reuse.
 4. **Deployment adapters:** add backends such as distributed database/queue hosts and integrations with established durable workflow systems.
 
 The first commit may be documentation-only, but the branch is deliberately named and scoped to continue into the implementation work.
 
 ## Open design questions
 
-- Should catalog packages export only typed declarations, or also default bindings? Both should be supported, but remain separable.
 - Should `@runbook/contracts` be a published package immediately, or should the first extraction keep contracts inside `@runbook/core` until the dependency graph stabilizes?
 - Should the compatibility adapter be named `runbook-t3code` or `runbook-t3team` once the host/product naming settles?
+- Do any concrete applications need shared catalog packages, or is defining tools locally sufficient?
