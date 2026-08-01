@@ -116,6 +116,26 @@ This does not require a universal tool catalog or portable workflow source. Each
 
 The current engine treats a script call as an asynchronous but atomic primitive: its final result is journaled, but the script itself does not create an independent durable suspension point. That behavior should remain unchanged during extraction unless we deliberately add nested durable script execution.
 
+## Child workflows
+
+Workflow composition has two distinct forms:
+
+```text
+inline composition
+  parent awaits workflow(ref, args)
+  child body is a black-box sub-step
+  parent receives one result
+
+spawned child workflow
+  parent starts an independent durable run
+  child receives its own run ID and journal
+  parent may await it, continue without it, or outlive it
+```
+
+The existing `workflow(ref, args)` primitive is the first form and must remain unchanged during extraction. The second form is an important reusable capability for autonomous systems: a PR-review workflow could spawn analysis, test, or remediation workflows, each independently recoverable and observable.
+
+Child workflow semantics belong to the runbook orchestration model rather than to a T3Code-specific tool catalog. The host adapter supplies child-run persistence, launch, resume, and lifecycle operations.
+
 For example:
 
 ```text
@@ -184,3 +204,4 @@ The first commit may be documentation-only, but the branch is deliberately named
 - Should the compatibility adapter be named `runbook-t3code` or `runbook-t3team` once the host/product naming settles?
 - Do any concrete applications need shared catalog packages, or is defining tools locally sufficient?
 - Should scripts remain atomic asynchronous calls, or should a future script mode be allowed to durably suspend on `agent`, `waitUntil`, or thread replies?
+- Should a spawned child workflow be independently durable with its own run ID and journal, and what should parent/child cancellation and failure propagation mean?
