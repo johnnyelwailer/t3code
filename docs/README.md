@@ -9,6 +9,7 @@
 - Reusable runbook engine
   - [Concept and package architecture](./runbook/README.md)
   - [Durable backend adapters](./runbook/durable-backend-adapters.md)
+  - [Current module map](./runbook/module-map.md)
 - User guides
   - [Background service](./user/background-service.md)
   - [Remote access](./user/remote-access.md)
