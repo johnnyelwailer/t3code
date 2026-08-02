@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createWorkflowEngine } from "./engine.ts";
 import type { WorkflowReference } from "./engine.ts";
-import { createStoreSink, FsJournalStore } from "./journalStore.ts";
+import { FsJournalStore } from "./journalStore.ts";
 
 const roots: string[] = [];
 
@@ -24,8 +24,7 @@ describe("@runbook/core lifecycle engine", () => {
       createStore: (root) => new FsJournalStore(root),
       newRunId: () => "generated-run",
       nowIso: () => "2026-08-02T00:00:00.000Z",
-      executeRun: async ({ runId, store, args }) => {
-        const sink = createStoreSink(store, runId);
+      executeBody: async ({ runId, sink, args }) => {
         sink.append({
           seq: 1,
           callId: "1:test:execute",
@@ -36,9 +35,7 @@ describe("@runbook/core lifecycle engine", () => {
           startedAt: "2026-08-02T00:00:00.000Z",
           endedAt: "2026-08-02T00:00:00.000Z",
         });
-        await sink.flush();
-        sink.dispose();
-        return { kind: "completed", output: { ok: true } } as const;
+        return { ok: true };
       },
     });
 

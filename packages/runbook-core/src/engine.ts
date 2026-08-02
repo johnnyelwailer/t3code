@@ -1,5 +1,7 @@
 import { hashArgs, hashPrefix } from "./canonicalJson.ts";
 import { ReplayDriftError, WorkflowError, WorkflowRunNotFoundError } from "./errors.ts";
+import { executeWorkflowRun, type WorkflowBodyExecutor } from "./runEngine.ts";
+import type { RunOutcome } from "./runEngine.ts";
 import type { RunMeta } from "./journal.ts";
 import type { JournalStore } from "./journalStore.ts";
 
@@ -14,10 +16,7 @@ export interface WorkflowRunOptionsBase {
   readonly store?: JournalStore;
 }
 
-/** The result of one body execution, including the durable suspension boundary. */
-export type RunOutcome<O> =
-  | { readonly kind: "completed"; readonly output: O }
-  | { readonly kind: "suspended"; readonly correlationId: string };
+export type { RunOutcome } from "./runEngine.ts";
 
 export interface WorkflowRunResult<O> {
   readonly runId: string;
@@ -35,15 +34,6 @@ export type StartWorkflowOptions<Options extends WorkflowRunOptionsBase> = Optio
   readonly overwrite?: boolean;
 };
 
-export interface ExecuteRunRequest<Ref extends WorkflowReference, Options> {
-  readonly runId: string;
-  readonly ref: Ref;
-  readonly args: unknown;
-  readonly runsRoot: string;
-  readonly store: JournalStore;
-  readonly options: Options;
-}
-
 export interface WorkflowEngineAdapter<Ref extends WorkflowReference, Options> {
   /** Host policy for the default filesystem root; custom stores may ignore it. */
   readonly defaultRunsRoot: () => string;
@@ -54,7 +44,7 @@ export interface WorkflowEngineAdapter<Ref extends WorkflowReference, Options> {
   /** Timestamp used for run metadata; body-visible time remains runtime-journaled. */
   readonly nowIso: () => string;
   /** Bind the generic lifecycle to a host-specific body loader/executor. */
-  readonly executeRun: (request: ExecuteRunRequest<Ref, Options>) => Promise<RunOutcome<unknown>>;
+  readonly executeBody: WorkflowBodyExecutor<Ref, Options>;
 }
 
 export interface WorkflowEngine<
@@ -76,11 +66,11 @@ export interface WorkflowEngine<
 
 function toRunResult<O>(
   runId: string,
-  outcome: RunOutcome<O>,
+  outcome: RunOutcome,
 ): WorkflowRunResult<O> | SuspendedResult {
   return outcome.kind === "suspended"
     ? { runId, suspended: true, correlationId: outcome.correlationId }
-    : { runId, result: outcome.output };
+    : { runId, result: outcome.output as O };
 }
 
 /** Verify a resume's args hash at the seq-0 drift boundary. */
@@ -140,14 +130,15 @@ export function createWorkflowEngine<
       createdAt: adapter.nowIso(),
     });
 
-    const outcome = (await adapter.executeRun({
+    const outcome = await executeWorkflowRun({
       runId,
       ref,
       args,
       runsRoot,
       store,
       options,
-    })) as RunOutcome<O>;
+      body: adapter.executeBody,
+    });
     return toRunResult(runId, outcome);
   };
 
@@ -162,14 +153,15 @@ export function createWorkflowEngine<
     if (!(await store.hasRun(runId))) throw new WorkflowRunNotFoundError(store.locator(runId));
     const meta = await store.readRunMeta(runId);
     assertInputArgsMatch({ meta, args, absolutePath: ref.absolutePath });
-    const outcome = (await adapter.executeRun({
+    const outcome = await executeWorkflowRun({
       runId,
       ref,
       args,
       runsRoot,
       store,
       options,
-    })) as RunOutcome<O>;
+      body: adapter.executeBody,
+    });
     return toRunResult(runId, outcome);
   };
 

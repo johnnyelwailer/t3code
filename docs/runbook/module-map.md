@@ -46,7 +46,7 @@ The package names are logical boundaries for now. We can initially implement the
 
 ### Implementation checkpoint
 
-`@runbook/core` now owns the extracted journal foundation, replay-aware runtime primitive, durable Handle dispatch, and generic `startWorkflow`/`resumeWorkflow` lifecycle. The core runtime shares one sequence seat across deterministic values, ordinary primitive calls, and sent/resolved handles; its primitive-kind vocabulary is open so adapters and capability packages can add identifiers without changing core. The lifecycle adapter supplies only default storage, run IDs, timestamps, and the host body executor. Direct core regression tests cover live execution, suspension/resolution, replay without refiring side effects, overwrite guards, and input drift.
+`@runbook/core` now owns the extracted journal foundation, replay-aware runtime primitive, durable Handle dispatch, generic `startWorkflow`/`resumeWorkflow` lifecycle, and the `readEntries → body → suspension funnel → flush/dispose` run loop. The core runtime shares one sequence seat across deterministic values, ordinary primitive calls, and sent/resolved handles; its primitive-kind vocabulary is open so adapters and capability packages can add identifiers without changing core. The lifecycle adapter supplies only default storage, run IDs, timestamps, and the host body executor. Direct core regression tests cover live execution, suspension/resolution, replay without refiring side effects, overwrite guards, input drift, and failure of the journal durability barrier.
 
 The T3Code SDK consumes that package through thin adapter entry points and preserves its historical `.t3team-runs` default. Agent, thread, tool, script, and TypeScript-loader extraction remains deliberately separate.
 
@@ -54,24 +54,25 @@ The T3Code SDK consumes that package through thin adapter entry points and prese
 
 ### Move mostly unchanged
 
-| Current modules                                      | Role                                                              |
-| ---------------------------------------------------- | ----------------------------------------------------------------- |
-| `t3team-sdk.engine.ts`                               | `startWorkflow`, `resumeWorkflow`, run results, suspension result |
-| `t3team-sdk.workflowRunner.ts`                       | execute body, replay journal, suspension/failure funnel           |
-| `t3team-sdk.durableRuntime.ts`                       | runtime service used by primitive calls                           |
-| `t3team-sdk.durableRuntimePrimitive.ts`              | journaled primitive boundary                                      |
-| `t3team-sdk.primitives.ts`                           | `parallel`, `pipeline`, inline `workflow`, deterministic waits    |
-| `t3team-sdk.journal.ts`                              | journal entry model and run metadata                              |
-| `t3team-sdk.journalReader.ts`                        | wire-entry maps and lookup                                        |
-| `t3team-sdk.journalWriter.ts`                        | stable wire serialization                                         |
-| `t3team-sdk.journalStore.ts`                         | `JournalStore`, sink, filesystem implementation split             |
-| `t3team-sdk.journal.ts` and `replayDrift.ts`         | replay drift and run metadata                                     |
-| `t3team-sdk.canonicalJson.ts`                        | stable argument/result hashing                                    |
-| `t3team-sdk.handles.ts`                              | pending/resolved handle model and suspension error                |
-| `t3team-sdk.handlesDispatch.ts`                      | sent/resolved dispatch and first-write-wins resolution            |
-| `t3team-sdk.errors.ts`                               | generic workflow, journal, replay, and suspension errors          |
-| `t3team-sdk.runtimeTypes.ts` and `primitiveTypes.ts` | generic runtime/primitive contracts                               |
-| `t3team-sdk.schedulePrimitive.ts`                    | durable deadline primitive against a scheduler port               |
+| Current modules                                      | Role                                                           |
+| ---------------------------------------------------- | -------------------------------------------------------------- |
+| `t3team-sdk.engine.ts`                               | T3Code lifecycle adapter and public run-result surface         |
+| `t3team-sdk.workflowRunner.ts`                       | T3Code body executor: registries, contexts, loader, threads    |
+| `runbook-core/src/runEngine.ts`                      | generic journal read, body, suspension, flush/dispose run loop |
+| `t3team-sdk.durableRuntime.ts`                       | runtime service used by primitive calls                        |
+| `t3team-sdk.durableRuntimePrimitive.ts`              | journaled primitive boundary                                   |
+| `t3team-sdk.primitives.ts`                           | `parallel`, `pipeline`, inline `workflow`, deterministic waits |
+| `t3team-sdk.journal.ts`                              | journal entry model and run metadata                           |
+| `t3team-sdk.journalReader.ts`                        | wire-entry maps and lookup                                     |
+| `t3team-sdk.journalWriter.ts`                        | stable wire serialization                                      |
+| `t3team-sdk.journalStore.ts`                         | `JournalStore`, sink, filesystem implementation split          |
+| `t3team-sdk.journal.ts` and `replayDrift.ts`         | replay drift and run metadata                                  |
+| `t3team-sdk.canonicalJson.ts`                        | stable argument/result hashing                                 |
+| `t3team-sdk.handles.ts`                              | pending/resolved handle model and suspension error             |
+| `t3team-sdk.handlesDispatch.ts`                      | sent/resolved dispatch and first-write-wins resolution         |
+| `t3team-sdk.errors.ts`                               | generic workflow, journal, replay, and suspension errors       |
+| `t3team-sdk.runtimeTypes.ts` and `primitiveTypes.ts` | generic runtime/primitive contracts                            |
+| `t3team-sdk.schedulePrimitive.ts`                    | durable deadline primitive against a scheduler port            |
 
 `t3team-sdk.broker.ts` needs a split: the generic message/handle contracts belong near core; T3Team-specific handler construction and thread message mapping belong in the adapter.
 

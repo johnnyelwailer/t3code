@@ -16,7 +16,7 @@ import {
 
 import { defaultRunsRoot, FsJournalStore } from "./t3team-sdk.journalStore.ts";
 import type * as T from "./t3team-sdk.types.ts";
-import { executeRun, nowIso } from "./t3team-sdk.workflowRunner.ts";
+import { executeWorkflowBody, nowIso } from "./t3team-sdk.workflowRunner.ts";
 
 /** Options shared by {@link startWorkflow} and {@link resumeWorkflow}. */
 export type { WorkflowRunOptions } from "./t3team-sdk.types.ts";
@@ -30,7 +30,7 @@ const engine = createWorkflowEngine<T.WorkflowRef, T.WorkflowRunOptions>({
   createStore: (runsRoot) => new FsJournalStore(runsRoot),
   newRunId: NodeCrypto.randomUUID,
   nowIso,
-  executeRun,
+  executeBody: executeWorkflowBody,
 });
 
 export const startWorkflow = engine.startWorkflow;
