@@ -1,0 +1,54 @@
+{
+  "name": "@runbook/core",
+  "version": "0.0.1",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./canonicalJson": {
+      "types": "./src/canonicalJson.ts",
+      "import": "./src/canonicalJson.ts"
+    },
+    "./errors": {
+      "types": "./src/errors.ts",
+      "import": "./src/errors.ts"
+    },
+    "./journal": {
+      "types": "./src/journal.ts",
+      "import": "./src/journal.ts"
+    },
+    "./journalReader": {
+      "types": "./src/journalReader.ts",
+      "import": "./src/journalReader.ts"
+    },
+    "./journalStore": {
+      "types": "./src/journalStore.ts",
+      "import": "./src/journalStore.ts"
+    },
+    "./journalWriter": {
+      "types": "./src/journalWriter.ts",
+      "import": "./src/journalWriter.ts"
+    },
+    "./primitiveKinds": {
+      "types": "./src/primitiveKinds.ts",
+      "import": "./src/primitiveKinds.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

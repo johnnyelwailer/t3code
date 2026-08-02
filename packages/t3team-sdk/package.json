@@ -45,6 +45,7 @@
     "test": "vp test run"
   },
   "dependencies": {
+    "@runbook/core": "workspace:*",
     "effect": "catalog:",
     "typescript": "catalog:"
   },

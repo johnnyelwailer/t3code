@@ -44,6 +44,12 @@ apps/server
 
 The package names are logical boundaries for now. We can initially implement them as subpaths or a small number of workspace packages if a fully split publish layout would create needless plumbing.
 
+### Implementation checkpoint
+
+`@runbook/core` now owns the first extracted slice: canonical argument/result encoding, the generic workflow error taxonomy, journal path and metadata helpers, journal wire encoding/decoding, replay maps, and the pluggable `JournalStore`/`JournalSink` seam. Its primitive-kind vocabulary is open so adapters and capability packages can add identifiers without changing core.
+
+The T3Code SDK consumes that package through thin adapter entry points and preserves its historical `.t3team-runs` default. Agent, thread, tool, script, and TypeScript-loader extraction remains deliberately separate.
+
 ## `@runbook/core`
 
 ### Move mostly unchanged
