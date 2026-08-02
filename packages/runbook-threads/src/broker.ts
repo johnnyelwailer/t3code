@@ -25,9 +25,9 @@ import { WorkflowError } from "@runbook/core/errors";
 import type { ReplyResolver } from "@runbook/core/handles";
 import { FsJournalStore, type JournalStore } from "@runbook/core/journalStore";
 
-/** The thread-verb primitives, as the broker sees them, plus the clock-driven `wait.until`
- * (Epic 27): a durable suspension fired through the broker like an ask, but woken by the
- * scheduler at its journaled deadline rather than by an event. */
+/** The thread-verb primitives, as the broker sees them, plus the clock-driven `wait.until`: a
+ * durable suspension fired through the broker like an ask, but woken by the host scheduler at
+ * its journaled deadline rather than by an event. */
 export type HandleKind =
   | "thread.create"
   | "thread.turn"
@@ -93,7 +93,7 @@ export interface HostBrokerHandlers {
   readonly "thread.turn"?: (envelope: MessageEnvelope) => Promise<void>;
   readonly "thread.message"?: (envelope: MessageEnvelope) => Promise<void>;
   readonly "user.input"?: (envelope: MessageEnvelope) => Promise<void>;
-  /** Record the run's wake deadline with the scheduler (Epic 27); no reply settled here —
+  /** Record the run's wake deadline with the host scheduler; no reply settled here —
    * the scheduler appends the resolved entry when the clock reaches the deadline. */
   readonly "wait.until"?: (envelope: MessageEnvelope) => Promise<void>;
   /** Walk a model cascade against the live provider registry. UNLIKE the others this handler MUST
