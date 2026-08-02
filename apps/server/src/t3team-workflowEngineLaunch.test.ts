@@ -41,9 +41,11 @@ describe("launchWorkflowRecipe — real launch path", () => {
 
     const runId = "wf-test-run";
     const launchThreadId = "launch-1";
+    const localWorkflowPath = NodePath.join(runsRoot, "exampleReview.workflow.ts");
+    NodeFS.copyFileSync(workflowPath, localWorkflowPath);
     const result = await launchWorkflowRecipe({
       runId,
-      workflowPath,
+      workflowPath: localWorkflowPath,
       args: { prTitle: "Fix the billing rounding bug" },
       runsRoot,
       launchThreadId,
@@ -84,6 +86,10 @@ describe("launchWorkflowRecipe — real launch path", () => {
 
     const run = registry.getRun(runId);
     expect(run).toBeDefined();
+
+    // T3Team historically replayed the current workflow source when a run was paused. This
+    // source edit must remain compatible after the generic engine gains version identities.
+    NodeFS.appendFileSync(localWorkflowPath, "\n// edited while the run was paused\n");
 
     // Reactor step 1: the agent turn completed on the spawned thread (`${runId}:1`).
     const agentAsk = registry.takePending(`${runId}:1`);

@@ -190,9 +190,10 @@ export function createWorkflowRunController(
         }),
     ...(input.store === undefined ? {} : { store: input.store }),
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
-    ...(input.workflowVersionPolicy === undefined
-      ? {}
-      : { workflowVersionPolicy: input.workflowVersionPolicy }),
+    // Preserve T3Team's pre-extraction behavior for every controller-driven resume (pending
+    // replies, timers, and boot rehydration): use the current source on disk unless a host caller
+    // explicitly requests strict checking. The reusable core remains strict by default.
+    workflowVersionPolicy: input.workflowVersionPolicy ?? "allow-change",
   };
 
   const settle = async (
