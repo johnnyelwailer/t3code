@@ -7,7 +7,7 @@ import {
 import type { MessageBroker } from "@runbook/threads/broker";
 import type { HandleDispatch } from "@runbook/core/handles";
 import type { ModelSelection } from "./t3team-sdk.types.ts";
-import type { Thread, WorkflowThreadPrimitives } from "./t3team-sdk.threadTypes.ts";
+import type { WorkflowThreadPrimitives } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowChildCapabilities } from "./t3team-sdk.capabilityVocabulary.ts";
 
 export { workflowChildTitleFromPrompt };

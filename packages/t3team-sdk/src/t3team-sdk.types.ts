@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 
 import type { ToolRef as GenericToolRef } from "@runbook/tools";
 import type { ScriptRef as GenericScriptRef } from "@runbook/scripts";
-import type { ModelRef, ModelSelection } from "@runbook/threads/models";
+import type { ModelSelection } from "@runbook/threads/models";
 
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
 import type { ToolGroupRef } from "./t3team-sdk.capabilityVocabulary.ts";
