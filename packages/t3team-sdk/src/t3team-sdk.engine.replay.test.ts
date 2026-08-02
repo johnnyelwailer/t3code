@@ -177,7 +177,7 @@ describe("durable workflow engine — replay drift", () => {
     expect(counters.mergeCalls).toBe(1);
   });
 
-  it("rejects a changed workflow source before replaying the run", async () => {
+  it("preserves legacy source resumes while allowing strict identity checks", async () => {
     const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-source-version-"));
     const sourcePath = NodePath.join(root, "review.workflow.ts");
     const runRoot = NodePath.join(root, "runs");
@@ -200,11 +200,23 @@ describe("durable workflow engine — replay drift", () => {
       });
       NodeFS.appendFileSync(sourcePath, "\n// source version changed\n");
 
-      const error = await resumeWorkflow(
+      const resumed = await resumeWorkflow(
         "source-version-run",
         ref,
         { prId: "PR-source-version" },
         { runsRoot: runRoot, tools: demoTools },
+      );
+      expect("result" in resumed && resumed.result).toEqual({
+        approved: true,
+        mergedSha: "sha-PR-source-version",
+      });
+
+      NodeFS.appendFileSync(sourcePath, "\n// source version changed again\n");
+      const error = await resumeWorkflow(
+        "source-version-run",
+        ref,
+        { prId: "PR-source-version" },
+        { runsRoot: runRoot, tools: demoTools, workflowVersionPolicy: "strict" },
       ).catch((cause: unknown) => cause);
       expect(error).toBeInstanceOf(ReplayDriftError);
       expect((error as ReplayDriftError).reason).toBe("workflow");

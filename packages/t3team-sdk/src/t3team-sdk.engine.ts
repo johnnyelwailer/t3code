@@ -60,7 +60,13 @@ export async function resumeWorkflow<I, O>(
   args: I,
   options: T.WorkflowRunOptions = {},
 ): Promise<WorkflowRunResult<O> | SuspendedResult> {
-  return await engine.resumeWorkflow<I, O>(runId, ref, args, options);
+  // T3Team's pre-extraction API resumed the current source at the workflow path. Keep that
+  // adapter behavior by default; hosts that want content identity to be a hard gate can opt into
+  // the reusable engine's strict policy explicitly.
+  return await engine.resumeWorkflow<I, O>(runId, ref, args, {
+    ...options,
+    workflowVersionPolicy: options.workflowVersionPolicy ?? "allow-change",
+  });
 }
 
 // Re-export `createDurableWorkflowRuntime` + the `DurableWorkflowRuntime` interface so

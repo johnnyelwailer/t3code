@@ -157,7 +157,7 @@ export interface WorkflowRunOptions {
   readonly runsRoot?: string;
   // Durable journal storage (default fs at `runsRoot`); host injects SQLite for restart durability (§OQ2).
   readonly store?: import("./t3team-sdk.journalStore.ts").JournalStore;
-  /** Strict by default; an explicit source repair can accept and persist a new executable. */
+  /** T3Team preserves legacy current-source resumes by default; pass `strict` to enforce identity. */
   readonly workflowVersionPolicy?: WorkflowVersionPolicy;
   readonly tools?: ReadonlyArray<AnyToolRef>;
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;

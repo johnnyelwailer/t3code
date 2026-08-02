@@ -39,10 +39,11 @@ against changed source before replaying any primitives. The field is optional so
 hosts with another artifact identity remain supported. A host that intentionally accepts corrected
 source can opt into `workflowVersionPolicy: "allow-change"`; the accepted identity is then persisted
 as the new replay baseline, while ordinary generic resumes stay strict. The current T3Team adapter
-deliberately opts into that policy for its existing `t3team.orchestration.resume` surface, including
-when the caller simply resumes the current workflow file without sending an inline replacement;
-that preserves the pre-extraction behavior. The same adapter default applies to controller-driven
-pending replies, timers, and boot rehydration. A future host adapter can choose strict resumes instead.
+deliberately opts into that policy for its existing SDK and `t3team.orchestration.resume` surfaces,
+including when the caller simply resumes the current workflow file without sending an inline
+replacement; that preserves the pre-extraction behavior. The same adapter default applies to
+controller-driven pending replies, timers, and boot rehydration. A future host adapter can choose
+strict resumes instead.
 
 ## Capability tiers
 
