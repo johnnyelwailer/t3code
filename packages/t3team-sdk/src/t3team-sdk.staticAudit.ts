@@ -8,7 +8,6 @@
  * the backstop — this is the early-warning half.
  */
 import * as Schema from "effect/Schema";
-import type * as TsApi from "typescript";
 
 import { normalizeCapabilities } from "./t3team-sdk.capabilityGating.ts";
 import { scanCapabilities } from "./t3team-sdk.capabilityScan.ts";

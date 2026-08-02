@@ -12,8 +12,6 @@
 
 import * as NodeVM from "node:vm";
 
-import type * as TsApi from "typescript";
-
 import { WorkflowLoadError } from "@runbook/core/errors";
 
 import {
@@ -113,7 +111,7 @@ export function extractMeta(
   options: MetaExtractionOptions = {},
 ): WorkflowMeta {
   const context: Record<string, unknown> = {
-    ...(options.globals ?? {}),
+    ...options.globals,
     Schema: schema,
   };
   context["globalThis"] = context;

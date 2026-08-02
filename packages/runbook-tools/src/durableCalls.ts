@@ -17,14 +17,16 @@ export interface ToolCallsDeps<Context> {
 export function createToolCalls<Context>(deps: ToolCallsDeps<Context>) {
   const executePrimitive = async <R>(execute: () => Promise<R>): Promise<R> => {
     if ((await deps.beforePrimitive?.()) === false) throw new WorkflowError("Workflow was stopped");
+    let result!: R;
     try {
-      return await execute();
+      result = await execute();
     } finally {
       deps.afterPrimitive?.();
-      if ((await deps.beforePrimitive?.()) === false) {
-        throw new WorkflowError("Workflow was stopped");
-      }
     }
+    if ((await deps.beforePrimitive?.()) === false) {
+      throw new WorkflowError("Workflow was stopped");
+    }
+    return result;
   };
 
   return {

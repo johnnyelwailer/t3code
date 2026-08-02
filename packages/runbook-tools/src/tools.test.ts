@@ -2,7 +2,6 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  createToolGroup,
   defineTool,
   defineToolGroup,
   executeToolHandler,
