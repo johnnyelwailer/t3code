@@ -58,6 +58,10 @@
       "types": "./src/runEngine.ts",
       "import": "./src/runEngine.ts"
     },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "import": "./src/schema.ts"
+    },
     "./handles": {
       "types": "./src/handles.ts",
       "import": "./src/handles.ts"

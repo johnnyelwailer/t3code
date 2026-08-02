@@ -46,6 +46,8 @@
   },
   "dependencies": {
     "@runbook/core": "workspace:*",
+    "@runbook/scripts": "workspace:*",
+    "@runbook/tools": "workspace:*",
     "effect": "catalog:",
     "typescript": "catalog:"
   },
