@@ -43,7 +43,7 @@ The reusable boundary is below those APIs: journaling, replay, handles, suspensi
 | --- | --- | --- |
 | Engine primitives | `waitUntil`, `now`, `parallel`, `pipeline`, `workflow`, `phase`, `log` | Runbook core |
 | Agent primitive | `agent` | Optional `@runbook/agent` package; provider adapter supplies execution |
-| Host conversation surface | `spawnThread`, `thread.askAgent`, `thread.askUser`, `thread.notifyUser` | T3Code/T3Team adapter or another host-specific package |
+| Thread and interaction surface | `spawnThread`, `thread.askAgent`, `thread.askUser`, `thread.notifyUser` | `@runbook/threads` contract plus host binding |
 | Application tool catalogs | `tools.github.*`, `tools.jira.*`, filesystem, browser, cloud APIs | Optional catalog packages and host bindings |
 | User-authored scripts | `scripts.*`, `defineScript` | Optional `@runbook/scripts` package |
 | Models and providers | `defineModel`, provider/model selection, agent turn execution | Provider packages and host adapters |
@@ -65,6 +65,10 @@ The first extraction should use a small number of deliberate package boundaries.
   Optional first-class agent primitive: typed prompts and replies,
   model/provider selection, durable agent-turn semantics, and
   an adapter interface for custom agent providers.
+
+@runbook/threads
+  Generic agent and human interaction primitives:
+  Thread, ask/notify, user replies, and durable interaction handles.
 
 @runbook/scripts
   User-authored arbitrary TypeScript extension code:

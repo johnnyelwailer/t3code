@@ -102,6 +102,8 @@ The package owns the typed tool surface. Individual applications can define thei
 
 Scripts are arbitrary user-authored TypeScript extension code, not merely another tool catalog. The package should own the script execution policy, replay policy, registry, and an executor port. V1 preserves the current atomic behavior: a script may be asynchronous, but its final result is the journal boundary and it does not independently durably suspend.
 
+The generic `ScriptExecutionContext` should expose only host-neutral facilities such as logging, fetch, workspace access, and generic tool access. Adapter-specific capabilities must be injected through an extensible mechanism; generic interfaces must not grow fixed fields such as `github`, `jira`, or `t3team`.
+
 ## `@runbook/agent` and `@runbook/threads`
 
 ### Agent package
@@ -120,11 +122,11 @@ Scripts are arbitrary user-authored TypeScript extension code, not merely anothe
 
 | Current modules | Role |
 | --- | --- |
-| `t3team-sdk.threadPrimitives.ts` | `Thread`, `spawnThread`, ask/notify behavior; split generic contract from T3Code implementation |
+| `t3team-sdk.threadPrimitives.ts` | `Thread`, `spawnThread`, `askAgent`, `notifyAgent`, `askUser`, and `notifyUser`; split generic contract from T3Code implementation |
 | `t3team-sdk.threadTypes.ts` | thread refs, ask options, provider-neutral thread types |
 | `t3team-sdk.threadDefaults.ts` | defaults; host-specific portions leave the package |
 | `t3team-sdk.handlesDispatch.ts` | shared handle mechanics remain in core; thread mapping uses them |
-| `t3team-sdk.askVerb.ts` | likely T3Code/user-interaction adapter unless a generic human-interaction contract is desired |
+| `t3team-sdk.askVerb.ts` | generic interaction verb normalization; UI-specific rendering stays outside |
 | `t3team-sdk.askRender.ts`, `affordance.ts` | UI/rendering adapter, not core threads |
 
 The T3Code adapter maps these contracts to its broker, thread records, provider model cascade, and user-message system.
@@ -173,8 +175,8 @@ These modules should remain outside the reusable engine:
 6. Rewire the current server directly to the extracted packages.
 7. Only then evaluate distributed run ownership, alternate executors, and external durability adapters.
 
-## Boundary ambiguities to resolve
+## Boundary decisions recorded
 
-1. Should `@runbook/threads` include `askUser` and user notifications, or should it define only agent/conversation interactions while human interaction remains T3Code-specific?
-2. Should `@runbook/tools` be a real package immediately, or should `defineTool` stay alongside the TypeScript authoring package until the first non-T3Code consumer exists?
-3. What should the generic `ScriptExecutionContext` contain? The current context exposes logging, fetch, workspace, and nested tool access; T3Code-specific clients such as GitHub/Jira/T3Team should remain adapter-provided.
+1. `@runbook/threads` includes both agent and human interaction primitives. T3Code supplies the broker, UI, and persistence binding.
+2. `@runbook/tools` is a real package boundary immediately. This does not require shared catalogs; applications may still define tools locally.
+3. `ScriptExecutionContext` is generic. Adapter-specific capabilities are fully extensible and pluggable rather than fixed fields in the generic context.
