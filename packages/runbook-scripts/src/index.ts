@@ -66,6 +66,6 @@ export async function executeScriptHandler<I, O, Context>(
   return await decodeWithSchema(ref.outputs, result, "Invalid result for script");
 }
 
-export type ScriptTreeFromRecord<TScripts extends Record<string, AnyScriptRef>> = {
+export type ScriptTreeFromRecord<TScripts extends Record<string, unknown>> = {
   readonly [K in keyof TScripts]: TScripts[K];
 };
