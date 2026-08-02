@@ -1,9 +1,11 @@
-import { hashArgs, hashPrefix } from "./canonicalJson.ts";
-import { ReplayDriftError, WorkflowError, WorkflowRunNotFoundError } from "./errors.ts";
+import { hashArgs } from "./canonicalJson.ts";
+import { WorkflowError, WorkflowRunNotFoundError } from "./errors.ts";
 import { executeWorkflowRun, type WorkflowBodyExecutor } from "./runEngine.ts";
 import type { RunOutcome } from "./runEngine.ts";
-import type { RunMeta } from "./journal.ts";
 import type { JournalStore } from "./journalStore.ts";
+import { assertInputArgsMatch, assertWorkflowVersionMatch } from "./engineValidation.ts";
+
+export { assertInputArgsMatch, assertWorkflowVersionMatch } from "./engineValidation.ts";
 
 /** The minimum workflow-reference shape required by the lifecycle engine. */
 export interface WorkflowReference {
@@ -83,54 +85,6 @@ function toRunResult<O>(
   return outcome.kind === "suspended"
     ? { runId, suspended: true, correlationId: outcome.correlationId }
     : { runId, result: outcome.output as O };
-}
-
-/** Verify a resume's args hash at the seq-0 drift boundary. */
-export function assertInputArgsMatch(opts: {
-  readonly meta: RunMeta | undefined;
-  readonly args: unknown;
-  readonly workflowPath: string;
-}): void {
-  if (opts.meta === undefined) return;
-  const suppliedHash = hashArgs(opts.args);
-  if (opts.meta.argsHash !== suppliedHash) {
-    throw new ReplayDriftError({
-      seq: 0,
-      reason: "args",
-      expected: { argsHash: hashPrefix(opts.meta.argsHash) },
-      observed: { argsHash: hashPrefix(suppliedHash) },
-      filePath: opts.workflowPath,
-    });
-  }
-}
-
-/** Verify that a resume still targets the same executable workflow identity when both sides have
- * a version identity. The optionality preserves runs written before this check was introduced. */
-export function assertWorkflowVersionMatch(opts: {
-  readonly meta: RunMeta | undefined;
-  readonly workflowVersion: string | undefined;
-  readonly workflowPath: string;
-  readonly policy: WorkflowVersionPolicy | undefined;
-}): void {
-  const recorded = opts.meta?.workflowVersion;
-  // A caller may intentionally resume with a different ref to obtain the existing primitive-level
-  // drift diagnostic (for example a repaired workflow at another identity). Version identity
-  // applies only when the run still targets the same recorded host identity.
-  if (
-    opts.policy === "allow-change" ||
-    opts.meta?.workflowPath !== opts.workflowPath ||
-    recorded === undefined ||
-    opts.workflowVersion === undefined ||
-    recorded === opts.workflowVersion
-  )
-    return;
-  throw new ReplayDriftError({
-    seq: 0,
-    reason: "workflow",
-    expected: { workflowVersion: hashPrefix(recorded) },
-    observed: { workflowVersion: hashPrefix(opts.workflowVersion) },
-    filePath: opts.workflowPath,
-  });
 }
 
 /**

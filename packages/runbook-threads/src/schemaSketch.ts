@@ -1,22 +1,4 @@
-/**
- * `sketchSchema` — render an effect `Schema` as a compact, model-legible shape sketch plus a
- * synthesized example value, so the ask verbs can tell an agent what JSON to return WITHOUT the
- * workflow author restating the schema in the prompt (PR review: "the API should enforce the
- * schema itself without the need for any reinforcement in the prompt").
- *
- * Two outputs per node, both derived from a pure AST walk (no clock, no entropy, property order
- * taken from the AST) so the derived prompt — and therefore the verb payload's `argsHash` — is
- * byte-identical on replay:
- *   • `text` — TypeScript-ish type notation (`string`, `"a" | "b"`, `string[]`, `{ … }`), because
- *     it is far shorter than JSON Schema and mid-size models follow it reliably;
- *   • `example` — a JSON value of that shape, which is what models actually imitate.
- *
- * Author docs and examples ride along as effect **annotations** (`Schema.annotate({ description,
- * examples })`): a node's `examples[0]` replaces the synthesized example for that node, and
- * `description` is surfaced as a trailing comment by the schema prompt describer.
- * Anything unrecognized degrades to a loose label (`any JSON value`) rather than throwing — an
- * exotic schema must never break an ask.
- */
+/** Create a deterministic, compact schema sketch and example for an agent prompt. */
 
 import type * as Schema from "effect/Schema";
 import * as SchemaAST from "effect/SchemaAST";

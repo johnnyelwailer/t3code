@@ -1,18 +1,4 @@
-/**
- * The Thread model (Epic 25 §The thread model) — the author-facing globals `thread`,
- * `spawnThread`, and `agent`, plus the `Thread` interface they hand back. An interactive
- * conversation IS the Handle pattern: every verb reduces to a `sent`/`resolved` pair routed
- * through {@link HandleDispatch}, so there is no separate suspension machinery.
- *
- * The 2×2 surface is recipient (Agent / User) × mode (ask = drive + await a typed reply /
- * notify = fire-and-forget): `askAgent`→`thread.turn`, `notifyAgent`→`thread.message`,
- * `askUser`→`user.input`, `notifyUser`→`thread.message`. `spawnThread`→`thread.create` makes
- * an isolated thread whose id is the `thread.create` correlationId (so it re-derives on
- * replay), and `agent(p, o)` = `spawnThread(o).askAgent(p, o)` (one-shot, thread not retained).
- *
- * The ask verbs' dispatch/schema-retry loop lives in `askVerb.ts`. A thread's `model`
- * and `effort` are its per-call defaults: an ask inherits them unless it names its own.
- */
+/** Author-facing thread, child-thread, and one-shot agent primitives. */
 
 import { createAskVerb, createFireEnvelope } from "./askVerb.ts";
 import type { MessageBroker } from "./broker.ts";

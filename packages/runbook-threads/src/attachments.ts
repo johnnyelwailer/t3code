@@ -1,21 +1,4 @@
-/**
- * First-class attachments for agent asks (PR review: "I don't like stringifies… I'd like first
- * class apis so we can just pass objects as attachments" / "never inline any data. Always as
- * attachments").
- *
- * A workflow author passes the objects themselves —
- * `agent("Judge these gates", { label: "Judge gates", attachments: [gates] })` — and never calls
- * `JSON.stringify`, never string-concatenates data into a prompt. The runtime does the rest,
- * exactly once, at two distinct boundaries:
- *   • {@link normalizeAgentAttachments} names them and puts them in the verb payload as
- *     STRUCTURE, so the journal records data as data (and the argsHash covers it via the
- *     canonical-JSON encoder, key order and all — replay-stable);
- *   • {@link renderAgentAttachments} serializes them once at dispatch, when the host composes the
- *     provider-facing turn text.
- *
- * Anything that is not already a `{ name, value }` pair is taken as the value itself and named
- * positionally, so the common case (`attachments: [gates]`) needs no wrapper.
- */
+/** Normalize structured attachments for journaling and render them only at provider dispatch. */
 
 import { canonicalJsonStringify } from "@runbook/core/canonicalJson";
 

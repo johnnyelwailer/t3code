@@ -1,16 +1,4 @@
-/**
- * `describeSchemaForPrompt` — the implicit, schema-derived prompt addition the ask verbs append
- * for an agent turn. This is the API "magically and implicitly generating a prompt addition based
- * on the schema" (PR review), replacing the hand-written JSON examples workflow authors used to
- * paste into their prompts: an author writes `agent("Judge these gates", { schema: Verdict })`
- * and the runtime — not the author — tells the model what shape to return.
- *
- * The block is: one instruction line, the schema shape (one line per top-level field of a Struct,
- * with the field's `description` annotation as a trailing comment), and one example JSON value.
- * A `description` annotation on the schema root becomes a leading gloss. Everything is derived by
- * the pure AST walk in `schemaSketch.ts`, so the block — and the enclosing verb
- * payload's `argsHash` — re-derives byte-identically on replay.
- */
+/** Render a deterministic schema-derived prompt addition for agent turns. */
 
 import type * as Schema from "effect/Schema";
 import * as SchemaAST from "effect/SchemaAST";

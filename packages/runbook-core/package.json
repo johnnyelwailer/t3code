@@ -54,6 +54,10 @@
       "types": "./src/engine.ts",
       "import": "./src/engine.ts"
     },
+    "./engineValidation": {
+      "types": "./src/engineValidation.ts",
+      "import": "./src/engineValidation.ts"
+    },
     "./runEngine": {
       "types": "./src/runEngine.ts",
       "import": "./src/runEngine.ts"
