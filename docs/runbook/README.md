@@ -35,9 +35,9 @@ The reusable boundary is below those APIs: journaling, replay, handles, suspensi
 
 ## Capability tiers
 
-`agent` is a tool in the broad sense that it is a typed, durable capability. It is also important enough to deserve a first-class optional package. It should not be put in the minimal durable core, and it should not be treated as just another application catalog entry.
+`agent` is a tool in the broad sense that it is a typed, durable capability. It is also important enough to deserve a first-class package. It should not be put in the minimal durable core, and it should not be treated as just another application catalog entry.
 
-`spawnThread` and the `Thread` surface are a different case: they express the T3Code/T3Team conversation and orchestration model, so they belong in the T3Code/T3Team adapter or an optional host-specific agent package.
+`spawnThread` and the `Thread` surface belong beside `agent` in `@runbook/threads`: they express the generic agent and human-interaction model while the host supplies the broker, provider, persistence, and UI bindings.
 
 | Tier                          | Examples                                                                         | Ownership                                   |
 | ----------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------- |

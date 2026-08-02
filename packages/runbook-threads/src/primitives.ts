@@ -156,7 +156,6 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
             payload: {
               threadId: correlationId,
               ...(opts.name === undefined ? {} : { name: opts.name }),
-              ...(opts.retention === undefined ? {} : { retention: opts.retention }),
               ...(model === undefined ? {} : { model }),
               ...(opts.effort === undefined ? {} : { effort: opts.effort }),
               retention,
