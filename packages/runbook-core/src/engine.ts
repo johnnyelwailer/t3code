@@ -7,9 +7,8 @@ import type { JournalStore } from "./journalStore.ts";
 
 /** The minimum workflow-reference shape required by the lifecycle engine. */
 export interface WorkflowReference {
-  readonly absolutePath: string;
-  /** Optional stable author-facing path used in inline workflow primitive arguments. */
-  readonly path?: string;
+  /** Stable author-facing workflow identity used in inline workflow primitive arguments. */
+  readonly path: string;
 }
 
 /** Host-independent options required by the lifecycle engine. */
@@ -41,6 +40,8 @@ export type StartWorkflowOptions<Options extends WorkflowRunOptionsBase> = Optio
 };
 
 export interface WorkflowEngineAdapter<Ref extends WorkflowReference, Options> {
+  /** Stable host identity persisted in run metadata; it may be a file path, URI, or database key. */
+  readonly workflowPath: (ref: Ref) => string;
   /** Host policy for the default filesystem root; custom stores may ignore it. */
   readonly defaultRunsRoot: () => string;
   /** Construct the host's default journal store when callers did not inject one. */
@@ -88,7 +89,7 @@ function toRunResult<O>(
 export function assertInputArgsMatch(opts: {
   readonly meta: RunMeta | undefined;
   readonly args: unknown;
-  readonly absolutePath: string;
+  readonly workflowPath: string;
 }): void {
   if (opts.meta === undefined) return;
   const suppliedHash = hashArgs(opts.args);
@@ -98,26 +99,26 @@ export function assertInputArgsMatch(opts: {
       reason: "args",
       expected: { argsHash: hashPrefix(opts.meta.argsHash) },
       observed: { argsHash: hashPrefix(suppliedHash) },
-      filePath: opts.absolutePath,
+      filePath: opts.workflowPath,
     });
   }
 }
 
-/** Verify that a resume still targets the same executable workflow artifact when both sides have
+/** Verify that a resume still targets the same executable workflow identity when both sides have
  * a version identity. The optionality preserves runs written before this check was introduced. */
 export function assertWorkflowVersionMatch(opts: {
   readonly meta: RunMeta | undefined;
   readonly workflowVersion: string | undefined;
-  readonly absolutePath: string;
+  readonly workflowPath: string;
   readonly policy: WorkflowVersionPolicy | undefined;
 }): void {
   const recorded = opts.meta?.workflowVersion;
   // A caller may intentionally resume with a different ref to obtain the existing primitive-level
-  // drift diagnostic (for example a repaired workflow at another path). Version identity applies
-  // only when the run still targets the same recorded artifact path.
+  // drift diagnostic (for example a repaired workflow at another identity). Version identity
+  // applies only when the run still targets the same recorded host identity.
   if (
     opts.policy === "allow-change" ||
-    opts.meta?.workflowPath !== opts.absolutePath ||
+    opts.meta?.workflowPath !== opts.workflowPath ||
     recorded === undefined ||
     opts.workflowVersion === undefined ||
     recorded === opts.workflowVersion
@@ -128,7 +129,7 @@ export function assertWorkflowVersionMatch(opts: {
     reason: "workflow",
     expected: { workflowVersion: hashPrefix(recorded) },
     observed: { workflowVersion: hashPrefix(opts.workflowVersion) },
-    filePath: opts.absolutePath,
+    filePath: opts.workflowPath,
   });
 }
 
@@ -154,6 +155,7 @@ export function createWorkflowEngine<
     const runsRoot = options.runsRoot ?? adapter.defaultRunsRoot();
     const store = resolveStore(options, runsRoot);
     const runId = options.runId ?? adapter.newRunId();
+    const workflowPath = adapter.workflowPath(ref);
     const existing = await store.readEntries(runId);
     if (existing.bySeq.size > 0) {
       if (options.overwrite !== true) {
@@ -167,7 +169,7 @@ export function createWorkflowEngine<
     const workflowVersion = await adapter.workflowVersion?.(ref);
 
     await store.writeRunMeta(runId, {
-      workflowPath: ref.absolutePath,
+      workflowPath,
       argsHash: hashArgs(args),
       createdAt: adapter.nowIso(),
       ...(workflowVersion === undefined ? {} : { workflowVersion }),
@@ -195,12 +197,13 @@ export function createWorkflowEngine<
     const store = resolveStore(options, runsRoot);
     if (!(await store.hasRun(runId))) throw new WorkflowRunNotFoundError(store.locator(runId));
     const meta = await store.readRunMeta(runId);
-    assertInputArgsMatch({ meta, args, absolutePath: ref.absolutePath });
+    const workflowPath = adapter.workflowPath(ref);
+    assertInputArgsMatch({ meta, args, workflowPath });
     const workflowVersion = await adapter.workflowVersion?.(ref);
     assertWorkflowVersionMatch({
       meta,
       workflowVersion,
-      absolutePath: ref.absolutePath,
+      workflowPath,
       policy: options.workflowVersionPolicy,
     });
     if (

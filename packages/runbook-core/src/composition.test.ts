@@ -40,9 +40,10 @@ describe("@runbook/core composition primitives", () => {
       "a!",
       "b!",
     ]);
-    await expect(
-      primitives.workflow({ absolutePath: "/tmp/child.ts", path: "./child.ts" }, { id: 1 }),
-    ).resolves.toEqual({ path: "./child.ts", args: { id: 1 } });
+    await expect(primitives.workflow({ path: "./child.ts" }, { id: 1 })).resolves.toEqual({
+      path: "./child.ts",
+      args: { id: 1 },
+    });
     await primitives.wait(5);
     primitives.phase("review");
     primitives.log("started");
@@ -68,8 +69,6 @@ describe("@runbook/core composition primitives", () => {
       onLog: () => {},
     });
 
-    expect(() =>
-      primitives.workflow({ absolutePath: "/tmp/nested.ts", path: "./nested.ts" }),
-    ).toThrow("one level of nesting only");
+    expect(() => primitives.workflow({ path: "./nested.ts" })).toThrow("one level of nesting only");
   });
 });

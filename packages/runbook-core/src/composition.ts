@@ -103,7 +103,7 @@ export function createWorkflowPrimitives<Ref extends WorkflowReference = Workflo
     return deps.callPrimitive<unknown>({
       kind: "workflow",
       refId: "workflow",
-      args: { workflowName: ref.path ?? ref.absolutePath, subArgs: args ?? null },
+      args: { workflowName: ref.path, subArgs: args ?? null },
       exec: () => deps.runBlackBoxed(() => runSub(ref, args)),
       decodeRecorded: (recorded) => recorded,
     });

@@ -35,6 +35,7 @@ const path = nodeRequire("node:path") as NodePathModule;
 
 /** Per-run inputs, recorded once at start so a resume can detect input-args divergence. */
 export const RunMetaSchema = Schema.Struct({
+  /** Host identity for the executable workflow: a path, URI, or database key. */
   workflowPath: Schema.String,
   /** Optional content/version identity; absent on runs written before version checks existed. */
   workflowVersion: Schema.optional(Schema.String),

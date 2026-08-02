@@ -35,7 +35,7 @@ describe("@runbook/core run loop", () => {
     const store = new FsJournalStore(runsRoot);
     const result = await executeWorkflowRun({
       runId: "run-1",
-      ref: { absolutePath: "/workflows/review.workflow.ts" },
+      ref: { path: "review.workflow.ts" },
       args: {},
       runsRoot,
       store,
@@ -68,7 +68,7 @@ describe("@runbook/core run loop", () => {
     await expect(
       executeWorkflowRun({
         runId: "run-1",
-        ref: { absolutePath: "/workflows/review.workflow.ts" },
+        ref: { path: "review.workflow.ts" },
         args: {},
         runsRoot: "/tmp",
         store,

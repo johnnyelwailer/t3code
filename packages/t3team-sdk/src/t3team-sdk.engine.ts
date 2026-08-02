@@ -36,6 +36,7 @@ export function workflowSourceVersion(ref: T.WorkflowRef): string {
 }
 
 const engine = createWorkflowEngine<T.WorkflowRef, T.WorkflowRunOptions>({
+  workflowPath: (ref) => ref.absolutePath,
   defaultRunsRoot,
   createStore: (runsRoot) => new FsJournalStore(runsRoot),
   newRunId: NodeCrypto.randomUUID,

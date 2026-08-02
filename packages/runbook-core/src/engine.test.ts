@@ -19,11 +19,12 @@ describe("@runbook/core lifecycle engine", () => {
   it("keeps start, resume, overwrite, and input-drift semantics in the generic layer", async () => {
     const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-engine-"));
     roots.push(runsRoot);
-    const ref: WorkflowReference = { absolutePath: "/workflows/review.workflow.ts" };
+    const ref: WorkflowReference = { path: "review.workflow.ts" };
     const engine = createWorkflowEngine<
       WorkflowReference,
       { runsRoot?: string; workflowVersionPolicy?: WorkflowVersionPolicy }
     >({
+      workflowPath: (workflowRef) => workflowRef.path,
       defaultRunsRoot: () => runsRoot,
       createStore: (root) => new FsJournalStore(root),
       newRunId: () => "generated-run",
@@ -68,11 +69,12 @@ describe("@runbook/core lifecycle engine", () => {
     const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-engine-version-"));
     roots.push(runsRoot);
     let version = "v1";
-    const ref: WorkflowReference = { absolutePath: "/workflows/review.workflow.ts" };
+    const ref: WorkflowReference = { path: "review.workflow.ts" };
     const engine = createWorkflowEngine<
       WorkflowReference,
       { runsRoot?: string; workflowVersionPolicy?: WorkflowVersionPolicy }
     >({
+      workflowPath: (workflowRef) => workflowRef.path,
       defaultRunsRoot: () => runsRoot,
       createStore: (root) => new FsJournalStore(root),
       newRunId: () => "versioned-run",
@@ -98,11 +100,12 @@ describe("@runbook/core lifecycle engine", () => {
     const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-engine-version-"));
     roots.push(runsRoot);
     let version = "v1";
-    const ref: WorkflowReference = { absolutePath: "/workflows/review.workflow.ts" };
+    const ref: WorkflowReference = { path: "review.workflow.ts" };
     const engine = createWorkflowEngine<
       WorkflowReference,
       { runsRoot?: string; workflowVersionPolicy?: WorkflowVersionPolicy }
     >({
+      workflowPath: (workflowRef) => workflowRef.path,
       defaultRunsRoot: () => runsRoot,
       createStore: (root) => new FsJournalStore(root),
       newRunId: () => "accepted-version-run",

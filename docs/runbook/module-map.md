@@ -39,7 +39,10 @@ apps/server
   → @runbook/t3code-adapter
 ```
 
-`@runbook/core` owns generic execution contracts and the durable runtime. It must not import T3Team clients, server services, project contracts, or T3Code thread objects.
+`@runbook/core` owns generic execution contracts and the durable runtime. Workflow references are
+opaque host identities: the core does not require a filesystem path, and the lifecycle adapter maps
+each reference to the persisted identity used for replay/version checks. It must not import T3Team
+clients, server services, project contracts, or T3Code thread objects.
 
 The package names are logical boundaries for now. We can initially implement them as subpaths or a small number of workspace packages if a fully split publish layout would create needless plumbing.
 

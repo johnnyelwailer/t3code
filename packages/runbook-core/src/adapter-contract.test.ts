@@ -64,9 +64,9 @@ describe("@runbook/core adapter contract", () => {
     const ref: HostWorkflowRef = {
       kind: "workflow",
       path: "review.workflow.ts",
-      absolutePath: "/host/review.workflow.ts",
     };
     const engine = createWorkflowEngine<HostWorkflowRef, HostOptions>({
+      workflowPath: (workflowRef) => `memory://${workflowRef.path}`,
       defaultRunsRoot: () => "memory://runs",
       createStore: () => store,
       newRunId: () => "host-run",
@@ -77,7 +77,7 @@ describe("@runbook/core adapter contract", () => {
           resolved: journal.byCorrelation,
           writer: sink,
           runId,
-          filePath: workflowRef.absolutePath,
+          filePath: workflowRef.path,
           source: { now: () => 1_700_000_000_000, random: () => 0.5, uuid: () => "host-uuid" },
           nowIso: () => "2026-08-02T00:00:00.000Z",
         });
