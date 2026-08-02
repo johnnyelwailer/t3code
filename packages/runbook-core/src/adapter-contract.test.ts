@@ -112,6 +112,9 @@ describe("@runbook/core adapter contract", () => {
     expect(primitiveExecutions).toBe(1);
     expect(deliveries).toBe(1);
     expect(pendingCorrelation).toBe("host-run:2");
+    await expect(store.readRunMeta("host-run")).resolves.toMatchObject({
+      workflowPath: "memory://review.workflow.ts",
+    });
 
     await store.appendResolved("host-run", {
       correlationId: pendingCorrelation!,
