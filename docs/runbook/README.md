@@ -38,7 +38,10 @@ exact executable artifact. The generic lifecycle records it in run metadata and 
 against changed source before replaying any primitives. The field is optional so older runs and
 hosts with another artifact identity remain supported. A host that intentionally accepts corrected
 source can opt into `workflowVersionPolicy: "allow-change"`; the accepted identity is then persisted
-as the new replay baseline, while ordinary resumes stay strict.
+as the new replay baseline, while ordinary generic resumes stay strict. The current T3Team adapter
+deliberately opts into that policy for its existing `t3team.orchestration.resume` surface, including
+when the caller simply resumes the current workflow file without sending an inline replacement;
+that preserves the pre-extraction behavior. A future host adapter can choose strict resumes instead.
 
 ## Capability tiers
 
