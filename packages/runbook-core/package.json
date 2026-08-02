@@ -37,6 +37,30 @@
     "./primitiveKinds": {
       "types": "./src/primitiveKinds.ts",
       "import": "./src/primitiveKinds.ts"
+    },
+    "./runtimeTypes": {
+      "types": "./src/runtimeTypes.ts",
+      "import": "./src/runtimeTypes.ts"
+    },
+    "./durableRuntimePrimitive": {
+      "types": "./src/durableRuntimePrimitive.ts",
+      "import": "./src/durableRuntimePrimitive.ts"
+    },
+    "./durableRuntime": {
+      "types": "./src/durableRuntime.ts",
+      "import": "./src/durableRuntime.ts"
+    },
+    "./handles": {
+      "types": "./src/handles.ts",
+      "import": "./src/handles.ts"
+    },
+    "./handlesDispatch": {
+      "types": "./src/handlesDispatch.ts",
+      "import": "./src/handlesDispatch.ts"
+    },
+    "./replayDrift": {
+      "types": "./src/replayDrift.ts",
+      "import": "./src/replayDrift.ts"
     }
   },
   "scripts": {
