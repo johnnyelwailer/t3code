@@ -76,4 +76,72 @@ describe("@runbook/threads contracts", () => {
 
     expect(() => primitives.thread?.notifyUser("hello")).toThrow("'notifyUser'");
   });
+
+  it("checks child grants before create and carries the resolved subset to the host", () => {
+    const dispatch = {
+      send: async () => "run-1:1",
+      sendOneWay: (call: Parameters<HandleDispatch["sendOneWay"]>[0]) => {
+        void call.fire("run-1:1", { resolve: () => {}, reject: () => {} });
+        return "run-1:1";
+      },
+      awaitResolution: async <R>() => undefined as R,
+    } satisfies HandleDispatch;
+    const broker = createMockBroker(() => ({ kind: "defer" }));
+    const primitives = createThreadPrimitives({
+      dispatch,
+      broker,
+      capabilities: new Set(["integration.read", "user"]),
+      launchThreadId: "launch-thread",
+      defaultModel: undefined,
+    });
+
+    primitives.spawnThread({ capabilities: ["integration.read"], retention: "retained" });
+
+    expect(broker.sent[0]?.payload).toMatchObject({
+      retention: "retained",
+      capabilities: ["integration.read"],
+    });
+    expect(() => primitives.spawnThread({ capabilities: ["integration.write"] })).toThrow(
+      "does not hold",
+    );
+    expect(broker.sent).toHaveLength(1);
+  });
+
+  it("routes a child askUser to the host launch thread", async () => {
+    const replies = new Map<string, unknown>();
+    let nextId = 0;
+    const dispatch: HandleDispatch = {
+      send: async (call) => {
+        const id = `run-1:${++nextId}`;
+        await call.fire(id, {
+          resolve: (reply) => replies.set(id, reply),
+          reject: () => replies.delete(id),
+        });
+        return id;
+      },
+      sendOneWay: (call) => {
+        const id = `run-1:${++nextId}`;
+        void call.fire(id, { resolve: () => {}, reject: () => {} });
+        return id;
+      },
+      awaitResolution: async <R>(id: string) => replies.get(id) as R,
+    };
+    const broker = createMockBroker((envelope) =>
+      envelope.kind === "user.input" ? { kind: "resolve", reply: "approved" } : { kind: "defer" },
+    );
+    const primitives = createThreadPrimitives({
+      dispatch,
+      broker,
+      capabilities: new Set(["user"]),
+      launchThreadId: "launch-thread",
+      defaultModel: undefined,
+    });
+
+    const child = primitives.spawnThread({ capabilities: "inherit" });
+    await expect(child.askUser("approve?")).resolves.toBe("approved");
+    expect(broker.sent.find((entry) => entry.kind === "user.input")?.payload).toMatchObject({
+      threadId: "launch-thread",
+      question: "approve?",
+    });
+  });
 });
