@@ -1,5 +1,7 @@
 /** T3Team's typed adapter over the host-neutral workflow composition primitives. */
 
+import * as NodeTimersPromises from "node:timers/promises";
+
 import {
   createWorkflowPrimitives as createGenericWorkflowPrimitives,
   type PipelineStage,
@@ -28,6 +30,7 @@ export function createWorkflowPrimitives(deps: WorkflowPrimitivesDeps): Workflow
     callPrimitive:
       deps.callPrimitive as GenericWorkflowPrimitivesDeps<T.WorkflowRef>["callPrimitive"],
     runBlackBoxed: deps.runBlackBoxed,
+    sleep: (durationMs) => NodeTimersPromises.setTimeout(durationMs).then(() => undefined),
     spent: deps.spentAgentTokens,
     hostNow: deps.hostNow,
     budgetTotal: deps.budgetTotal,

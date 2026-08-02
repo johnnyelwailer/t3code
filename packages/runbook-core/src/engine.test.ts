@@ -24,7 +24,7 @@ describe("@runbook/core lifecycle engine", () => {
       createStore: (root) => new FsJournalStore(root),
       newRunId: () => "generated-run",
       nowIso: () => "2026-08-02T00:00:00.000Z",
-      executeBody: async ({ runId, sink, args }) => {
+      executeBody: async ({ sink, args }) => {
         sink.append({
           seq: 1,
           callId: "1:test:execute",
@@ -40,20 +40,20 @@ describe("@runbook/core lifecycle engine", () => {
     });
 
     expect(
-      await engine.startWorkflow(ref, { ticket: "JIRA-1" }, { runsRoot, runId: "run-1" }),
+      await engine.startWorkflow(ref, { ticket: "T-1" }, { runsRoot, runId: "run-1" }),
     ).toEqual({ runId: "run-1", result: { ok: true } });
     await expect(
-      engine.startWorkflow(ref, { ticket: "JIRA-1" }, { runsRoot, runId: "run-1" }),
+      engine.startWorkflow(ref, { ticket: "T-1" }, { runsRoot, runId: "run-1" }),
     ).rejects.toThrow("resumeWorkflow");
     expect(
       await engine.startWorkflow(
         ref,
-        { ticket: "JIRA-2" },
+        { ticket: "T-2" },
         { runsRoot, runId: "run-1", overwrite: true },
       ),
     ).toEqual({ runId: "run-1", result: { ok: true } });
     await expect(
-      engine.resumeWorkflow("run-1", ref, { ticket: "JIRA-3" }, { runsRoot }),
+      engine.resumeWorkflow("run-1", ref, { ticket: "T-3" }, { runsRoot }),
     ).rejects.toThrow("replay drift");
     await expect(engine.resumeWorkflow("missing", ref, {}, { runsRoot })).rejects.toThrow(
       "No workflow journal found",

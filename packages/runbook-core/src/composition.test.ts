@@ -12,10 +12,14 @@ describe("@runbook/core composition primitives", () => {
     };
     const phases: string[] = [];
     const logs: string[] = [];
+    const sleeps: number[] = [];
     let now = 100;
     const primitives = createWorkflowPrimitives({
       callPrimitive: primitive,
       runBlackBoxed: async (fn) => fn(),
+      sleep: async (durationMs) => {
+        sleeps.push(durationMs);
+      },
       spent: () => 3,
       hostNow: () => now,
       budgetTotal: 10,
@@ -39,7 +43,7 @@ describe("@runbook/core composition primitives", () => {
     await expect(
       primitives.workflow({ absolutePath: "/tmp/child.ts", path: "./child.ts" }, { id: 1 }),
     ).resolves.toEqual({ path: "./child.ts", args: { id: 1 } });
-    await primitives.wait(0);
+    await primitives.wait(5);
     primitives.phase("review");
     primitives.log("started");
 
@@ -48,6 +52,7 @@ describe("@runbook/core composition primitives", () => {
     expect(primitives.budget.remaining()).toBe(7);
     expect(phases).toEqual(["review"]);
     expect(logs).toEqual(["started"]);
+    expect(sleeps).toEqual([5]);
     expect(calls.map((call) => call.kind)).toEqual(["parallel", "pipeline", "workflow", "wait"]);
   });
 
@@ -55,6 +60,7 @@ describe("@runbook/core composition primitives", () => {
     const primitives = createWorkflowPrimitives({
       callPrimitive: async <R>(call: PrimitiveCall<R>) => call.exec(),
       runBlackBoxed: async (fn) => fn(),
+      sleep: async () => {},
       spent: () => 0,
       hostNow: () => 0,
       budgetTotal: 0,

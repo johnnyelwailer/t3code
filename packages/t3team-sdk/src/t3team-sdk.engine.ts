@@ -33,8 +33,23 @@ const engine = createWorkflowEngine<T.WorkflowRef, T.WorkflowRunOptions>({
   executeBody: executeWorkflowBody,
 });
 
-export const startWorkflow = engine.startWorkflow;
-export const resumeWorkflow = engine.resumeWorkflow;
+/** Preserve the SDK's ref-linked input/output inference over the generic engine function. */
+export async function startWorkflow<I, O>(
+  ref: T.WorkflowRef<I, O>,
+  args: I,
+  options: StartWorkflowOptions = {},
+): Promise<WorkflowRunResult<O> | SuspendedResult> {
+  return await engine.startWorkflow<I, O>(ref, args, options);
+}
+
+export async function resumeWorkflow<I, O>(
+  runId: string,
+  ref: T.WorkflowRef<I, O>,
+  args: I,
+  options: T.WorkflowRunOptions = {},
+): Promise<WorkflowRunResult<O> | SuspendedResult> {
+  return await engine.resumeWorkflow<I, O>(runId, ref, args, options);
+}
 
 // Re-export `createDurableWorkflowRuntime` + the `DurableWorkflowRuntime` interface so
 // existing public-API consumers don't need to know about the internal split.

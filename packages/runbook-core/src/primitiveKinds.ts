@@ -15,12 +15,7 @@ export const PRIMITIVE_KINDS = [
   "parallel",
   "pipeline",
   "workflow",
-  "thread.create",
-  "thread.turn",
-  "thread.message",
-  "user.input",
   "wait.until",
-  "model.resolve",
 ] as const;
 
 /** Open primitive-kind vocabulary for adapter and catalog extensions. */

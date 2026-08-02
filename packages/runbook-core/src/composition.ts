@@ -6,8 +6,6 @@
  * executor; no provider, catalog, loader, or product policy belongs here.
  */
 
-import * as NodeTimersPromises from "node:timers/promises";
-
 import { WorkflowError } from "./errors.ts";
 import type { WorkflowReference } from "./engine.ts";
 import type { PrimitiveCall } from "./runtimeTypes.ts";
@@ -36,6 +34,7 @@ export interface WorkflowPrimitives<Ref extends WorkflowReference = WorkflowRefe
 export interface WorkflowPrimitivesDeps<Ref extends WorkflowReference = WorkflowReference> {
   readonly callPrimitive: <R>(call: PrimitiveCall<R>) => Promise<R>;
   readonly runBlackBoxed: <R>(fn: () => Promise<R>) => Promise<R>;
+  readonly sleep: (durationMs: number) => Promise<void>;
   readonly spent: () => number;
   readonly hostNow: () => number;
   readonly budgetTotal: number;
@@ -119,7 +118,7 @@ export function createWorkflowPrimitives<Ref extends WorkflowReference = Workflo
       decodeRecorded: (recorded) => recorded as { readonly deadline: number },
     });
     const remaining = deadline - deps.hostNow();
-    if (remaining > 0) await NodeTimersPromises.setTimeout(remaining);
+    if (remaining > 0) await deps.sleep(remaining);
   };
 
   const budget: WorkflowBudget = {
