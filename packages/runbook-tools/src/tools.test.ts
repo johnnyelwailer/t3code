@@ -3,16 +3,17 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   createToolGroup,
-  createToolRef,
+  defineTool,
+  defineToolGroup,
   executeToolHandler,
   type ToolHandlerContext,
 } from "./index.ts";
 
 describe("@runbook/tools", () => {
   it("creates typed refs with injected dispatch and schema validation", async () => {
-    const group = createToolGroup({ id: "demo.read", label: "Demo", description: "Tests" });
+    const group = defineToolGroup({ id: "demo.read", label: "Demo", description: "Tests" });
     let dispatched = "";
-    const ref = createToolRef({
+    const ref = defineTool({
       id: "demo.lookup" as const,
       group,
       args: Schema.Struct({ id: Schema.String }),

@@ -58,6 +58,9 @@ export function createScriptRef<I, O, Context>(opts: {
   return ref;
 }
 
+/** Author-facing alias; registration/dispatch remains a host concern. */
+export const defineScript = createScriptRef;
+
 export async function executeScriptHandler<I, O, Context>(
   ref: ScriptRef<I, O, Context>,
   args: unknown,

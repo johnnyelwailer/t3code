@@ -1,12 +1,12 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createScriptRef, executeScriptHandler, type ScriptHandlerContext } from "./index.ts";
+import { defineScript, executeScriptHandler, type ScriptHandlerContext } from "./index.ts";
 
 describe("@runbook/scripts", () => {
   it("keeps replay policy and schema validation in the reusable package", async () => {
     let dispatched = false;
-    const ref = createScriptRef({
+    const ref = defineScript({
       inputs: Schema.Struct({ name: Schema.String }),
       outputs: Schema.Struct({ greeting: Schema.String }),
       replay: "never" as const,

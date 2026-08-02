@@ -72,6 +72,9 @@ export function createToolGroup<const Id extends string>(opts: {
   return Object.freeze({ kind: "tool-group" as const, ...opts });
 }
 
+/** Author-facing alias; registration/dispatch remains a host concern. */
+export const defineToolGroup = createToolGroup;
+
 export function createToolRef<
   I,
   R,
@@ -100,6 +103,9 @@ export function createToolRef<
   ) as ToolRef<I, R, Id, Group, Context>;
   return ref;
 }
+
+/** Author-facing alias; unlike the T3Team adapter this does not touch a global registry. */
+export const defineTool = createToolRef;
 
 export async function executeToolHandler<
   I,
