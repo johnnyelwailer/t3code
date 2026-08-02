@@ -104,7 +104,7 @@ export function createToolRef<
   return ref;
 }
 
-/** Author-facing alias; unlike the T3Team adapter this does not touch a global registry. */
+/** Author-facing alias; unlike a host adapter this does not touch a global registry. */
 export const defineTool = createToolRef;
 
 export async function executeToolHandler<
