@@ -46,7 +46,7 @@ The package names are logical boundaries for now. We can initially implement the
 
 ### Implementation checkpoint
 
-`@runbook/core` now owns the extracted journal foundation plus the replay-aware runtime primitive and durable Handle dispatch. The core runtime shares one sequence seat across deterministic values, ordinary primitive calls, and sent/resolved handles; its primitive-kind vocabulary is open so adapters and capability packages can add identifiers without changing core. A direct core-runtime regression test covers live execution, suspension/resolution, and replay without refiring side effects.
+`@runbook/core` now owns the extracted journal foundation, replay-aware runtime primitive, durable Handle dispatch, and generic `startWorkflow`/`resumeWorkflow` lifecycle. The core runtime shares one sequence seat across deterministic values, ordinary primitive calls, and sent/resolved handles; its primitive-kind vocabulary is open so adapters and capability packages can add identifiers without changing core. The lifecycle adapter supplies only default storage, run IDs, timestamps, and the host body executor. Direct core regression tests cover live execution, suspension/resolution, replay without refiring side effects, overwrite guards, and input drift.
 
 The T3Code SDK consumes that package through thin adapter entry points and preserves its historical `.t3team-runs` default. Agent, thread, tool, script, and TypeScript-loader extraction remains deliberately separate.
 

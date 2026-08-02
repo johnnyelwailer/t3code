@@ -7,15 +7,15 @@
 
 import * as DateTime from "effect/DateTime";
 
+import type { RunOutcome } from "@runbook/core/engine";
+
 import { buildWorkflowPrimitives, runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
-import { hashArgs, hashPrefix } from "./t3team-sdk.canonicalJson.ts";
 import {
   createDurableWorkflowRuntime,
   type DurableWorkflowRuntime,
 } from "./t3team-sdk.durableRuntime.ts";
-import { ReplayDriftError, WorkflowError } from "./t3team-sdk.errors.ts";
+import { WorkflowError } from "./t3team-sdk.errors.ts";
 import { WorkflowSuspended } from "./t3team-sdk.handles.ts";
-import type { RunMeta } from "./t3team-sdk.journal.ts";
 import { runDirPath } from "./t3team-sdk.journal.ts";
 import { createStoreSink, type JournalStore } from "./t3team-sdk.journalStore.ts";
 import { executeToolHandler, listRegisteredTools } from "./t3team-sdk.ts";
@@ -65,12 +65,6 @@ function buildRunContexts(opts: {
   };
   return { toolCtx: toolCtxRef, scriptCtx: { ...shared, callTool } };
 }
-
-/** The result of one body execution: a completed value, or a durable suspension awaiting a
- * Handle reply. {@link startWorkflow}/{@link resumeWorkflow} map this onto their public union. */
-export type RunOutcome<O> =
-  | { readonly kind: "completed"; readonly output: O }
-  | { readonly kind: "suspended"; readonly correlationId: string };
 
 export async function executeRun<O>(opts: {
   readonly runId: string;
@@ -150,24 +144,5 @@ export async function executeRun<O>(opts: {
     // journal write that did not land.
     await sink.flush();
     sink.dispose();
-  }
-}
-
-/** Verify a resume's args hash matches the recorded runMeta; seq-0 drift boundary. */
-export function assertInputArgsMatch(opts: {
-  readonly meta: RunMeta | undefined;
-  readonly args: unknown;
-  readonly absolutePath: string;
-}): void {
-  if (opts.meta === undefined) return; // pre-this-version run, no recorded inputs to compare
-  const suppliedHash = hashArgs(opts.args);
-  if (opts.meta.argsHash !== suppliedHash) {
-    throw new ReplayDriftError({
-      seq: 0,
-      reason: "args",
-      expected: { argsHash: hashPrefix(opts.meta.argsHash) },
-      observed: { argsHash: hashPrefix(suppliedHash) },
-      filePath: opts.absolutePath,
-    });
   }
 }

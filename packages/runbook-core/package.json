@@ -50,6 +50,10 @@
       "types": "./src/durableRuntime.ts",
       "import": "./src/durableRuntime.ts"
     },
+    "./engine": {
+      "types": "./src/engine.ts",
+      "import": "./src/engine.ts"
+    },
     "./handles": {
       "types": "./src/handles.ts",
       "import": "./src/handles.ts"

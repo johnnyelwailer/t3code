@@ -218,7 +218,7 @@ External durability systems are a later integration target, not a first-phase ex
 The branch can progress through these stages without changing the authoring contract:
 
 1. **Direct extraction and integration:** move the existing runtime behind package boundaries and keep current T3Code/T3Team workflows working unchanged.
-2. **Reusable implementation:** make the core ports, typed capability contracts, agent package, loader, persistence, and host adapter explicit and testable.
+2. **Reusable implementation:** make the core ports, typed capability contracts, agent package, loader, persistence, and host adapter explicit and testable. The generic journal/runtime/lifecycle foundation is now implemented; the host body executor and catalogs remain to be split.
 3. **Optional catalog modularization:** split tool catalogs only where a concrete application needs distribution or reuse.
 4. **Deployment adapters:** add backends such as distributed database/queue hosts and integrations with established durable workflow systems.
 
