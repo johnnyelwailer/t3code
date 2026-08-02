@@ -21,6 +21,18 @@
     "./globals": {
       "types": "./src/globals.ts",
       "import": "./src/globals.ts"
+    },
+    "./staticAuditTypes": {
+      "types": "./src/staticAuditTypes.ts",
+      "import": "./src/staticAuditTypes.ts"
+    },
+    "./typeCheckHost": {
+      "types": "./src/typeCheckHost.ts",
+      "import": "./src/typeCheckHost.ts"
+    },
+    "./typescript": {
+      "types": "./src/typescript.ts",
+      "import": "./src/typescript.ts"
     }
   },
   "scripts": {

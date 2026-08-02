@@ -10,7 +10,6 @@
  * the same prepared artifacts without changing the durable engine or the authoring contract.
  */
 
-import * as NodeModule from "node:module";
 import * as NodeVM from "node:vm";
 
 import type * as TsApi from "typescript";
@@ -24,14 +23,7 @@ import {
   findMetaStatement,
   transpile,
 } from "./transpile.ts";
-
-const nodeRequire = NodeModule.createRequire(import.meta.url);
-
-let cachedTs: typeof TsApi | undefined;
-function loadTypescript(): typeof TsApi {
-  cachedTs ??= nodeRequire("typescript") as typeof TsApi;
-  return cachedTs;
-}
+import { loadTypeScript } from "./typescript.ts";
 
 export interface WorkflowSource {
   readonly absolutePath: string;
@@ -68,7 +60,7 @@ export interface MetaExtractionOptions {
 }
 
 export function prepareWorkflow(source: WorkflowSource): PreparedWorkflow {
-  const ts = loadTypescript();
+  const ts = loadTypeScript();
   const sourceFile = ts.createSourceFile(
     source.absolutePath,
     source.sourceText,
