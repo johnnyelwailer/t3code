@@ -39,14 +39,14 @@ The reusable boundary is below those APIs: journaling, replay, handles, suspensi
 
 `spawnThread` and the `Thread` surface are a different case: they express the T3Code/T3Team conversation and orchestration model, so they belong in the T3Code/T3Team adapter or an optional host-specific agent package.
 
-| Tier | Examples | Ownership |
-| --- | --- | --- |
-| Engine primitives | `waitUntil`, `now`, `parallel`, `pipeline`, `workflow`, `phase`, `log` | Runbook core |
-| Agent primitive | `agent` | Optional `@runbook/agent` package; provider adapter supplies execution |
-| Thread and interaction surface | `spawnThread`, `thread.askAgent`, `thread.askUser`, `thread.notifyUser` | `@runbook/threads` contract plus host binding |
-| Application tool catalogs | `tools.github.*`, `tools.jira.*`, filesystem, browser, cloud APIs | Optional catalog packages and host bindings |
-| User-authored scripts | `scripts.*`, `defineScript` | Optional `@runbook/scripts` package |
-| Models and providers | `defineModel`, provider/model selection, agent turn execution | Provider packages and host adapters |
+| Tier                           | Examples                                                                | Ownership                                                              |
+| ------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Engine primitives              | `waitUntil`, `now`, `parallel`, `pipeline`, `workflow`, `phase`, `log`  | Runbook core                                                           |
+| Agent primitive                | `agent`                                                                 | Optional `@runbook/agent` package; provider adapter supplies execution |
+| Thread and interaction surface | `spawnThread`, `thread.askAgent`, `thread.askUser`, `thread.notifyUser` | `@runbook/threads` contract plus host binding                          |
+| Application tool catalogs      | `tools.github.*`, `tools.jira.*`, filesystem, browser, cloud APIs       | Optional catalog packages and host bindings                            |
+| User-authored scripts          | `scripts.*`, `defineScript`                                             | Optional `@runbook/scripts` package                                    |
+| Models and providers           | `defineModel`, provider/model selection, agent turn execution           | Provider packages and host adapters                                    |
 
 All tiers use the same durable primitive and replay machinery. They should not all be flattened into one global catalog: the built-in agent/thread surface has lifecycle and suspension semantics that ordinary application tools do not.
 
@@ -119,13 +119,13 @@ The optional agent package is adjacent to this model. It defines the generic age
 
 Scripts and tools are intentionally different extension mechanisms:
 
-| | Scripts | Tools |
-| --- | --- | --- |
-| Primary purpose | Let a project add arbitrary TypeScript behavior | Expose a host or integration capability |
-| Typical owner | Runbook author, recipe, or project | Host, integration pack, or application |
-| Example | Parse a PR, inspect a workspace, combine results, apply custom logic | GitHub merge, Jira search, browser action |
-| Surface | `scripts.<name>(args)` | `tools.<group>.<name>(args)` |
-| Core concern | Code execution policy and replay boundary | Capability, permissions, and host dispatch |
+|                 | Scripts                                                              | Tools                                      |
+| --------------- | -------------------------------------------------------------------- | ------------------------------------------ |
+| Primary purpose | Let a project add arbitrary TypeScript behavior                      | Expose a host or integration capability    |
+| Typical owner   | Runbook author, recipe, or project                                   | Host, integration pack, or application     |
+| Example         | Parse a PR, inspect a workspace, combine results, apply custom logic | GitHub merge, Jira search, browser action  |
+| Surface         | `scripts.<name>(args)`                                               | `tools.<group>.<name>(args)`               |
+| Core concern    | Code execution policy and replay boundary                            | Capability, permissions, and host dispatch |
 
 For the target use case—an asynchronous distributed agent system that reviews PRs or Jira tickets—the project can be configured by adding TypeScript runbooks and scripts:
 
@@ -218,7 +218,7 @@ External durability systems are a later integration target, not a first-phase ex
 The branch can progress through these stages without changing the authoring contract:
 
 1. **Direct extraction and integration:** move the existing runtime behind package boundaries and keep current T3Code/T3Team workflows working unchanged.
-2. **Reusable implementation:** make the core ports, typed capability contracts, agent package, loader, persistence, and host adapter explicit and testable. The generic journal/runtime/lifecycle foundation is now implemented; the host body executor and catalogs remain to be split.
+2. **Reusable implementation:** make the core ports, typed capability contracts, agent package, loader, persistence, and host adapter explicit and testable. The generic journal/runtime/lifecycle foundation and the trusted TypeScript loader are now implemented; the host body executor, static analysis, and catalogs remain to be split.
 3. **Optional catalog modularization:** split tool catalogs only where a concrete application needs distribution or reuse.
 4. **Deployment adapters:** add backends such as distributed database/queue hosts and integrations with established durable workflow systems.
 

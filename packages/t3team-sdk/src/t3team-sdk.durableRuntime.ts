@@ -9,7 +9,7 @@ import type { JournalEntry, ResolvedEntry } from "./t3team-sdk.journalReader.ts"
 import type { JournalSink } from "./t3team-sdk.journalStore.ts";
 import { createToolScriptCalls } from "./t3team-sdk.toolScriptCalls.ts";
 import type * as T from "./t3team-sdk.types.ts";
-import { hostSource } from "./t3team-sdk.workflowGlobals.ts";
+import { hostSource } from "@runbook/ts/globals";
 
 export interface DurableRuntimeConfig {
   readonly journal: ReadonlyMap<number, JournalEntry>;

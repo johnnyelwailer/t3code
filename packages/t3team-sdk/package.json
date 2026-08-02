@@ -48,6 +48,7 @@
     "@runbook/core": "workspace:*",
     "@runbook/scripts": "workspace:*",
     "@runbook/tools": "workspace:*",
+    "@runbook/ts": "workspace:*",
     "effect": "catalog:",
     "typescript": "catalog:"
   },

@@ -1,0 +1,39 @@
+{
+  "name": "@runbook/ts",
+  "version": "0.0.1",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./loader": {
+      "types": "./src/loader.ts",
+      "import": "./src/loader.ts"
+    },
+    "./transpile": {
+      "types": "./src/transpile.ts",
+      "import": "./src/transpile.ts"
+    },
+    "./globals": {
+      "types": "./src/globals.ts",
+      "import": "./src/globals.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@runbook/core": "workspace:*",
+    "effect": "4.0.0-beta.102",
+    "typescript": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
