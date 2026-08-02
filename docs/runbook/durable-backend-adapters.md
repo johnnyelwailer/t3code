@@ -34,7 +34,10 @@ WorkflowSource
   resolve a logical workflow identity to the exact executable artifact
 ```
 
-The current implementation already has strong journal and broker seams. `RunStore`, distributed ownership, and exact workflow-artifact resolution need to become explicit as part of the extraction.
+The current implementation already has strong journal and broker seams, and the lifecycle accepts an
+optional executable-version identity; the T3Team adapter supplies a SHA-256 hash of the exact source
+file and persists it with the run metadata. A generic `RunStore`, distributed ownership/leases, and
+logical-to-artifact source resolution remain future adapter work.
 
 ## Integration patterns
 
