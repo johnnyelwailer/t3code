@@ -1,4 +1,8 @@
 import type { ScriptRef, ToolRef } from "./t3team-sdk.types.ts";
+import type {
+  PrimitiveCall as GenericPrimitiveCall,
+  PrimitiveRuntime,
+} from "@runbook/core/runtimeTypes";
 
 /**
  * Every kind a journal line can carry, in ONE place: the {@link PrimitiveKind} union and the
@@ -26,20 +30,13 @@ export const PRIMITIVE_KINDS = [
 
 export type PrimitiveKind = (typeof PRIMITIVE_KINDS)[number];
 
-export interface PrimitiveCall<R> {
+/** Keep the SDK's historical literal kind surface over core's open generic contract. */
+export type PrimitiveCall<R> = Omit<GenericPrimitiveCall<R>, "kind"> & {
   readonly kind: PrimitiveKind;
-  readonly refId: string;
-  readonly args: unknown;
-  readonly replay?: "default" | "never";
-  readonly exec: () => Promise<R>;
-  readonly decodeRecorded?: (recorded: unknown) => R | Promise<R>;
-}
+};
 
-export type WorkflowRuntime = {
+export type WorkflowRuntime = Omit<PrimitiveRuntime, "callPrimitive"> & {
+  readonly callPrimitive: <R>(call: PrimitiveCall<R>) => Promise<R>;
   readonly callTool: <I, R>(ref: ToolRef<I, R>, args: I) => Promise<R>;
   readonly callScript: <I, O>(ref: ScriptRef<I, O>, args: I) => Promise<O>;
-  readonly callPrimitive: <R>(call: PrimitiveCall<R>) => Promise<R>;
-  readonly now: () => number;
-  readonly random: () => number;
-  readonly uuid: () => string;
 };

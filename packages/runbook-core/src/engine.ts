@@ -8,6 +8,8 @@ import type { JournalStore } from "./journalStore.ts";
 /** The minimum workflow-reference shape required by the lifecycle engine. */
 export interface WorkflowReference {
   readonly absolutePath: string;
+  /** Optional stable author-facing path used in inline workflow primitive arguments. */
+  readonly path?: string;
 }
 
 /** Host-independent options required by the lifecycle engine. */

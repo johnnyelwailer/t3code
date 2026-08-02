@@ -58,6 +58,14 @@
       "types": "./src/runEngine.ts",
       "import": "./src/runEngine.ts"
     },
+    "./composition": {
+      "types": "./src/composition.ts",
+      "import": "./src/composition.ts"
+    },
+    "./scheduling": {
+      "types": "./src/scheduling.ts",
+      "import": "./src/scheduling.ts"
+    },
     "./schema": {
       "types": "./src/schema.ts",
       "import": "./src/schema.ts"

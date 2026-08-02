@@ -45,7 +45,7 @@ The package names are logical boundaries for now. We can initially implement the
 
 ### Implementation checkpoint
 
-`@runbook/core` now owns the extracted journal foundation, replay-aware runtime primitive, durable Handle dispatch, generic `startWorkflow`/`resumeWorkflow` lifecycle, schema decoding, and the `readEntries → body → suspension funnel → flush/dispose` run loop. The core runtime shares one sequence seat across deterministic values, ordinary primitive calls, and sent/resolved handles; its primitive-kind vocabulary is open so adapters and capability packages can add identifiers without changing core. The lifecycle adapter supplies only default storage, run IDs, timestamps, and the host body executor. Direct core regression tests cover live execution, suspension/resolution, replay without refiring side effects, overwrite guards, input drift, and failure of the journal durability barrier.
+`@runbook/core` now owns the extracted journal foundation, replay-aware runtime primitive, durable Handle dispatch, generic `startWorkflow`/`resumeWorkflow` lifecycle, composition primitives (`parallel`, `pipeline`, inline `workflow`, `wait`, `budget`, `phase`, and `log`), the injected scheduler port behind `waitUntil`, schema decoding, and the `readEntries → body → suspension funnel → flush/dispose` run loop. The core runtime shares one sequence seat across deterministic values, ordinary primitive calls, and sent/resolved handles; its primitive-kind vocabulary is open so adapters and capability packages can add identifiers without changing core. The lifecycle adapter supplies only default storage, run IDs, timestamps, and the host body executor. Direct core regression tests cover live execution, suspension/resolution, replay without refiring side effects, overwrite guards, input drift, composition, scheduling, a second-host adapter contract, and failure of the journal durability barrier.
 
 The SDK now consumes `@runbook/tools` and `@runbook/scripts` for host-neutral ref shapes, schema-validated handler execution, injected ref factories, durable tool/script call factories, and dotted-tree type utilities. T3Code still owns the process-global catalog registry, registry lookup, and adapter-specific handler context fields, preserving the existing public API while keeping those policies out of reusable packages. `@runbook/ts` now owns the trusted TypeScript loader, source transpilation, metadata extraction, journaled Date/Math/crypto global helpers, canonical TypeScript loading, static finding helpers, and the cached compiler host; the SDK supplies its existing deterministic source and full T3Team verb surface through thin adapters. `@runbook/threads` now owns the host-neutral Thread/agent implementation, ask/retry and affordance planning, attachments, model-cascade reduction, capability algebra, and broker port; the SDK retains only direct adapter shims while T3Code owns concrete broker dispatch, provider resolution, UI resource mapping, and persistence. Static capability/determinism vocabulary and shape classification remain adapter policy until a second host provides a real dialect consumer.
 
@@ -60,7 +60,7 @@ The SDK now consumes `@runbook/tools` and `@runbook/scripts` for host-neutral re
 | `runbook-core/src/runEngine.ts`                      | generic journal read, body, suspension, flush/dispose run loop |
 | `t3team-sdk.durableRuntime.ts`                       | runtime service used by primitive calls                        |
 | `t3team-sdk.durableRuntimePrimitive.ts`              | journaled primitive boundary                                   |
-| `t3team-sdk.primitives.ts`                           | `parallel`, `pipeline`, inline `workflow`, deterministic waits |
+| `t3team-sdk.primitives.ts`                           | adapter wrapper over `@runbook/core/composition`               |
 | `t3team-sdk.journal.ts`                              | journal entry model and run metadata                           |
 | `t3team-sdk.journalReader.ts`                        | wire-entry maps and lookup                                     |
 | `t3team-sdk.journalWriter.ts`                        | stable wire serialization                                      |
@@ -70,8 +70,8 @@ The SDK now consumes `@runbook/tools` and `@runbook/scripts` for host-neutral re
 | `t3team-sdk.handles.ts`                              | pending/resolved handle model and suspension error             |
 | `t3team-sdk.handlesDispatch.ts`                      | sent/resolved dispatch and first-write-wins resolution         |
 | `t3team-sdk.errors.ts`                               | generic workflow, journal, replay, and suspension errors       |
-| `t3team-sdk.runtimeTypes.ts` and `primitiveTypes.ts` | generic runtime/primitive contracts                            |
-| `t3team-sdk.schedulePrimitive.ts`                    | durable deadline primitive against a scheduler port            |
+| `t3team-sdk.runtimeTypes.ts` and `primitiveTypes.ts` | adapter aliases over generic runtime/budget contracts          |
+| `t3team-sdk.schedulePrimitive.ts`                    | T3Team capability policy and broker-envelope adapter           |
 
 `t3team-sdk.broker.ts` needs a split: the generic message/handle contracts belong near core; T3Team-specific handler construction and thread message mapping belong in the adapter.
 
