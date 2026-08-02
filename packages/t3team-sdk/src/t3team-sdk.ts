@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import { createToolGroup, createToolRef, executeToolHandler } from "@runbook/tools";
 import { createScriptRef, executeScriptHandler } from "@runbook/scripts";
+import { defineModel as defineGenericModel } from "@runbook/threads/models";
 
 import {
   duplicateRegistrationError,
@@ -62,11 +63,7 @@ export function defineModel<const Provider extends string, const Id extends stri
   readonly provider: Provider;
   readonly id: Id;
 }): T.ModelRef<Id, Provider> {
-  return Object.freeze({
-    kind: "model" as const,
-    id: opts.id,
-    provider: opts.provider,
-  });
+  return defineGenericModel(opts);
 }
 
 export function defineTool<const Id extends string, Group extends T.ToolGroupRef, I, R>(opts: {

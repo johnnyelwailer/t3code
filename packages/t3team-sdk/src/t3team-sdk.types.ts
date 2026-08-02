@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import type { ToolRef as GenericToolRef } from "@runbook/tools";
 import type { ScriptRef as GenericScriptRef } from "@runbook/scripts";
+import type { ModelRef, ModelSelection } from "@runbook/threads/models";
 
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
 import type { ToolGroupRef } from "./t3team-sdk.capabilityVocabulary.ts";
@@ -32,6 +33,7 @@ export type {
   WorkflowCapability,
   WorkflowChildCapabilities,
 } from "./t3team-sdk.capabilityVocabulary.ts";
+export type { ModelRef, ModelSelection } from "@runbook/threads/models";
 
 export type IntegrationMethod = (...args: ReadonlyArray<unknown>) => Promise<unknown>;
 
@@ -81,18 +83,6 @@ export interface T3TeamToolHandlerClient {
     readonly tool: string;
     readonly args: unknown;
   }) => Promise<unknown>;
-}
-
-export interface ModelRef<Id extends string = string, Provider extends string = string> {
-  readonly kind: "model";
-  readonly id: Id;
-  readonly provider: Provider;
-}
-
-/** A per-call model choice: a project-configured provider-instance id + a typed `ModelRef`. */
-export interface ModelSelection {
-  readonly provider: string;
-  readonly model: ModelRef;
 }
 
 export interface WorkflowRef<Inputs = unknown, Outputs = unknown, Path extends string = string> {

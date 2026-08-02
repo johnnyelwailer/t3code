@@ -6,18 +6,18 @@ This is a map of ownership, not a requirement to create one package per file. Th
 
 ## Current public entry points
 
-| Current surface                          | Current implementation                                                                       | Proposed ownership                              |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `workflow(ref, args)`                    | `packages/t3team-sdk/src/t3team-sdk.engineApi.ts` and `t3team-sdk.primitives.ts`             | `@runbook/core` authoring primitive             |
-| `startWorkflow(ref, args)`               | `packages/t3team-sdk/src/t3team-sdk.engine.ts`                                               | `@runbook/core` lifecycle API                   |
-| `resumeWorkflow(runId, ref, args)`       | `packages/t3team-sdk/src/t3team-sdk.engine.ts`                                               | `@runbook/core` lifecycle API                   |
-| `t3team.orchestration.run`               | `packages/t3team-sdk/src/tools/t3team-sdk.workflow.ts` plus server bindings                  | T3Code/T3Team adapter tool                      |
-| `defineTool`, `ToolRef`, `tools.*`       | `t3team-sdk.ts`, `t3team-sdk.types.ts`, `typeTrees.ts`, `toolScriptCalls.ts`                 | `@runbook/tools`                                |
-| `defineScript`, `ScriptRef`, `scripts.*` | `t3team-sdk.ts`, `t3team-sdk.types.ts`, `workflowGlobals.ts`                                 | `@runbook/scripts`                              |
-| `agent(...)`                             | `t3team-sdk.engineApi.ts`, `threadPrimitives.ts`                                             | `@runbook/agent`                                |
-| `spawnThread`, `Thread`, `thread.*`      | `threadPrimitives.ts`, `threadTypes.ts`, `broker.ts`                                         | `@runbook/threads` contract plus T3Code binding |
-| `.workflow.ts` loading                   | `loader.ts`, `transpile.ts`, `workflowGlobals.ts`                                            | `@runbook/ts`                                   |
-| ordered journals and replay              | `journal.ts`, `journalReader.ts`, `journalWriter.ts`, `journalStore.ts`, `workflowRunner.ts` | `@runbook/core`                                 |
+| Current surface                          | Current implementation                                                                       | Proposed ownership                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `workflow(ref, args)`                    | `packages/t3team-sdk/src/t3team-sdk.engineApi.ts` and `t3team-sdk.primitives.ts`             | `@runbook/core` authoring primitive    |
+| `startWorkflow(ref, args)`               | `packages/t3team-sdk/src/t3team-sdk.engine.ts`                                               | `@runbook/core` lifecycle API          |
+| `resumeWorkflow(runId, ref, args)`       | `packages/t3team-sdk/src/t3team-sdk.engine.ts`                                               | `@runbook/core` lifecycle API          |
+| `t3team.orchestration.run`               | `packages/t3team-sdk/src/tools/t3team-sdk.workflow.ts` plus server bindings                  | T3Code/T3Team adapter tool             |
+| `defineTool`, `ToolRef`, `tools.*`       | `t3team-sdk.ts`, `t3team-sdk.types.ts`, `typeTrees.ts`, `toolScriptCalls.ts`                 | `@runbook/tools`                       |
+| `defineScript`, `ScriptRef`, `scripts.*` | `t3team-sdk.ts`, `t3team-sdk.types.ts`, `workflowGlobals.ts`                                 | `@runbook/scripts`                     |
+| `agent(...)`                             | `t3team-sdk.engineApi.ts`, `threadPrimitives.ts`                                             | `@runbook/threads`                     |
+| `spawnThread`, `Thread`, `thread.*`      | `threadPrimitives.ts`, `threadTypes.ts`, `broker.ts`                                         | `@runbook/threads` plus T3Code binding |
+| `.workflow.ts` loading                   | `loader.ts`, `transpile.ts`, `workflowGlobals.ts`                                            | `@runbook/ts`                          |
+| ordered journals and replay              | `journal.ts`, `journalReader.ts`, `journalWriter.ts`, `journalStore.ts`, `workflowRunner.ts` | `@runbook/core`                        |
 
 The existing `runWorkflowBody` function in `loader.ts` is an internal execution helper, not another public run API.
 
@@ -30,11 +30,10 @@ The existing `runWorkflowBody` function in `loader.ts` is an internal execution 
 @runbook/tools       → @runbook/core
 @runbook/scripts     → @runbook/core
 @runbook/threads     → @runbook/core
-@runbook/agent       → @runbook/core (+ optional threads contract)
 @runbook/ts          → core + selected authoring packages
 
 @runbook/t3code-adapter
-  → @runbook/core + tools + scripts + threads + agent
+  → @runbook/core + tools + scripts + threads
 
 apps/server
   → @runbook/t3code-adapter
@@ -48,7 +47,7 @@ The package names are logical boundaries for now. We can initially implement the
 
 `@runbook/core` now owns the extracted journal foundation, replay-aware runtime primitive, durable Handle dispatch, generic `startWorkflow`/`resumeWorkflow` lifecycle, schema decoding, and the `readEntries → body → suspension funnel → flush/dispose` run loop. The core runtime shares one sequence seat across deterministic values, ordinary primitive calls, and sent/resolved handles; its primitive-kind vocabulary is open so adapters and capability packages can add identifiers without changing core. The lifecycle adapter supplies only default storage, run IDs, timestamps, and the host body executor. Direct core regression tests cover live execution, suspension/resolution, replay without refiring side effects, overwrite guards, input drift, and failure of the journal durability barrier.
 
-The SDK now consumes `@runbook/tools` and `@runbook/scripts` for host-neutral ref shapes, schema-validated handler execution, injected ref factories, durable tool/script call factories, and dotted-tree type utilities. T3Code still owns the process-global catalog registry, registry lookup, and adapter-specific handler context fields, preserving the existing public API while keeping those policies out of reusable packages. `@runbook/ts` now owns the trusted TypeScript loader, source transpilation, metadata extraction, journaled Date/Math/crypto global helpers, canonical TypeScript loading, static finding helpers, and the cached compiler host; the SDK supplies its existing deterministic source and full T3Team verb surface through thin adapters. Static capability/determinism vocabulary and shape classification remain adapter policy until a second host provides a real dialect consumer.
+The SDK now consumes `@runbook/tools` and `@runbook/scripts` for host-neutral ref shapes, schema-validated handler execution, injected ref factories, durable tool/script call factories, and dotted-tree type utilities. T3Code still owns the process-global catalog registry, registry lookup, and adapter-specific handler context fields, preserving the existing public API while keeping those policies out of reusable packages. `@runbook/ts` now owns the trusted TypeScript loader, source transpilation, metadata extraction, journaled Date/Math/crypto global helpers, canonical TypeScript loading, static finding helpers, and the cached compiler host; the SDK supplies its existing deterministic source and full T3Team verb surface through thin adapters. `@runbook/threads` now owns the host-neutral Thread/agent implementation, ask/retry and affordance planning, attachments, model-cascade reduction, capability algebra, and broker port; the SDK retains only direct adapter shims while T3Code owns concrete broker dispatch, provider resolution, UI resource mapping, and persistence. Static capability/determinism vocabulary and shape classification remain adapter policy until a second host provides a real dialect consumer.
 
 ## `@runbook/core`
 
@@ -111,30 +110,22 @@ Scripts are arbitrary user-authored TypeScript extension code, not merely anothe
 
 The generic `ScriptExecutionContext` should expose only host-neutral facilities such as logging, fetch, workspace access, and generic tool access. Adapter-specific capabilities must be injected through an extensible mechanism; generic interfaces must not grow fixed fields such as `github`, `jira`, or `t3team`.
 
-## `@runbook/agent` and `@runbook/threads`
+## `@runbook/threads`
 
-### Agent package
+Agent and human interaction primitives share this package for v1. `agent(...)` is a one-shot
+composition of `spawnThread(...).askAgent(...)`; there is no separate `@runbook/agent` package.
 
-| Current modules                                 | Role                                                                 |
-| ----------------------------------------------- | -------------------------------------------------------------------- |
-| `t3team-sdk.engineApi.ts`                       | `agent` accessor and typed result surface                            |
-| `t3team-sdk.modelCascade.ts`                    | provider/model fallback and recorded selection                       |
-| `t3team-sdk.models.ts`                          | current model definitions; provider-specific parts leave the package |
-| model-related portions of `threadPrimitives.ts` | generic model selection and agent-turn options                       |
-| `t3team-sdk.askAttachments.ts`                  | generic agent attachment normalization, if kept provider-neutral     |
+The package is provider-neutral. A host supplies provider resolution and delivery through the broker port.
 
-`@runbook/agent` defines the one-shot agent primitive and provider adapter contract. It does not assume T3Code threads.
-
-### Threads package
-
-| Current modules                            | Role                                                                                                                               |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `t3team-sdk.threadPrimitives.ts`           | `Thread`, `spawnThread`, `askAgent`, `notifyAgent`, `askUser`, and `notifyUser`; split generic contract from T3Code implementation |
-| `t3team-sdk.threadTypes.ts`                | thread refs, ask options, provider-neutral thread types                                                                            |
-| `t3team-sdk.threadDefaults.ts`             | defaults; host-specific portions leave the package                                                                                 |
-| `t3team-sdk.handlesDispatch.ts`            | shared handle mechanics remain in core; thread mapping uses them                                                                   |
-| `t3team-sdk.askVerb.ts`                    | generic interaction verb normalization; UI-specific rendering stays outside                                                        |
-| `t3team-sdk.askRender.ts`, `affordance.ts` | UI/rendering adapter, not core threads                                                                                             |
+| Current modules                            | Role                                                                                               |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `t3team-sdk.threadPrimitives.ts`           | adapter shim over `@runbook/threads/primitives`; `Thread`, `spawnThread`, and the ask/notify verbs |
+| `t3team-sdk.threadTypes.ts`                | adapter aliases over host-neutral thread refs, ask options, model and capability types             |
+| `t3team-sdk.threadDefaults.ts`             | adapter re-export over host-neutral defaults                                                       |
+| `t3team-sdk.handlesDispatch.ts`            | shared handle mechanics remain in core; thread mapping uses them                                   |
+| `t3team-sdk.askVerb.ts`                    | adapter re-export over the generic schema-retry interaction reducer                                |
+| `t3team-sdk.askRender.ts`, `affordance.ts` | generic schema/affordance planning; actual UI resource mapping stays in the adapter                |
+| `t3team-sdk.broker.ts`                     | adapter re-export over the generic broker port plus the T3Team filesystem-default helper           |
 
 The T3Code adapter maps these contracts to its broker, thread records, provider model cascade, and user-message system.
 
@@ -177,7 +168,7 @@ These modules should remain outside the reusable engine:
 1. Freeze current replay and public authoring tests as the behavioral baseline.
 2. Extract journal, replay, handles, runtime ports, and `startWorkflow`/`resumeWorkflow`.
 3. Extract tools and scripts as separate capability packages without changing `tools.*` or `scripts.*` authoring.
-4. Split generic agent and thread contracts from T3Code broker/thread implementations.
+4. Extract the generic agent/thread implementation into `@runbook/threads`, leaving T3Code broker/thread wiring behind adapter shims.
 5. Move the TypeScript loader and static audits behind `@runbook/ts`.
 6. Rewire the current server directly to the extracted packages.
 7. Only then evaluate distributed run ownership, alternate executors, and external durability adapters.
@@ -187,3 +178,4 @@ These modules should remain outside the reusable engine:
 1. `@runbook/threads` includes both agent and human interaction primitives. T3Code supplies the broker, UI, and persistence binding.
 2. `@runbook/tools` is a real package boundary immediately. This does not require shared catalogs; applications may still define tools locally.
 3. `ScriptExecutionContext` is generic. Adapter-specific capabilities are fully extensible and pluggable rather than fixed fields in the generic context.
+4. `agent(...)` remains in `@runbook/threads` for v1; there is no separate `@runbook/agent` package or compatibility alias.

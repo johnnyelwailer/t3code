@@ -47,6 +47,7 @@
   "dependencies": {
     "@runbook/core": "workspace:*",
     "@runbook/scripts": "workspace:*",
+    "@runbook/threads": "workspace:*",
     "@runbook/tools": "workspace:*",
     "@runbook/ts": "workspace:*",
     "effect": "catalog:",

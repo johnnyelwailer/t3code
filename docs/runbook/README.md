@@ -39,14 +39,13 @@ The reusable boundary is below those APIs: journaling, replay, handles, suspensi
 
 `spawnThread` and the `Thread` surface are a different case: they express the T3Code/T3Team conversation and orchestration model, so they belong in the T3Code/T3Team adapter or an optional host-specific agent package.
 
-| Tier                           | Examples                                                                | Ownership                                                              |
-| ------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Engine primitives              | `waitUntil`, `now`, `parallel`, `pipeline`, `workflow`, `phase`, `log`  | Runbook core                                                           |
-| Agent primitive                | `agent`                                                                 | Optional `@runbook/agent` package; provider adapter supplies execution |
-| Thread and interaction surface | `spawnThread`, `thread.askAgent`, `thread.askUser`, `thread.notifyUser` | `@runbook/threads` contract plus host binding                          |
-| Application tool catalogs      | `tools.github.*`, `tools.jira.*`, filesystem, browser, cloud APIs       | Optional catalog packages and host bindings                            |
-| User-authored scripts          | `scripts.*`, `defineScript`                                             | Optional `@runbook/scripts` package                                    |
-| Models and providers           | `defineModel`, provider/model selection, agent turn execution           | Provider packages and host adapters                                    |
+| Tier                          | Examples                                                                         | Ownership                                   |
+| ----------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------- |
+| Engine primitives             | `waitUntil`, `now`, `parallel`, `pipeline`, `workflow`, `phase`, `log`           | Runbook core                                |
+| Agent and interaction surface | `agent`, `spawnThread`, `thread.askAgent`, `thread.askUser`, `thread.notifyUser` | `@runbook/threads` plus host binding        |
+| Application tool catalogs     | `tools.github.*`, `tools.jira.*`, filesystem, browser, cloud APIs                | Optional catalog packages and host bindings |
+| User-authored scripts         | `scripts.*`, `defineScript`                                                      | Optional `@runbook/scripts` package         |
+| Models and providers          | `defineModel`, provider/model selection, agent turn execution                    | Provider packages and host adapters         |
 
 All tiers use the same durable primitive and replay machinery. They should not all be flattened into one global catalog: the built-in agent/thread surface has lifecycle and suspension semantics that ordinary application tools do not.
 
@@ -61,14 +60,10 @@ The first extraction should use a small number of deliberate package boundaries.
   generic execution contracts such as workflow identity,
   journal entries, handles, and runtime ports.
 
-@runbook/agent
-  Optional first-class agent primitive: typed prompts and replies,
-  model/provider selection, durable agent-turn semantics, and
-  an adapter interface for custom agent providers.
-
 @runbook/threads
   Generic agent and human interaction primitives:
-  Thread, ask/notify, user replies, and durable interaction handles.
+  Thread, agent, ask/notify, user replies, model cascades,
+  affordances, and durable interaction handles.
 
 @runbook/scripts
   User-authored arbitrary TypeScript extension code:
@@ -92,7 +87,7 @@ The first extraction should use a small number of deliberate package boundaries.
 
 @runbook/t3code-adapter
   T3Code/T3Team integration for the current host:
-  broker, persistence, models, threads, `spawnThread`, workspace,
+  broker, persistence, provider registry, UI, `spawnThread`, workspace,
   server lifecycle, scheduler, and existing permission behavior.
 
 @t3team/sdk
@@ -113,7 +108,7 @@ These are three different extension points:
 2. A **binding** supplies an implementation: an API client, credential resolver, transport, retry policy, or host-specific handler context.
 3. A **runtime adapter** supplies durability: journaling, replay, wakeups, leases, queues, and run ownership.
 
-The optional agent package is adjacent to this model. It defines the generic agent-turn capability and provider contract, while a host-specific package may add richer concepts such as T3Code's threads and spawned conversations.
+Agent turns intentionally live beside human interaction in `@runbook/threads` for v1. `agent(...)` is the one-shot composition of `spawnThread(...).askAgent(...)`; a separate package would add a packaging boundary without an independent runtime. Hosts still provide the broker and provider-resolution implementation.
 
 ## Scripts and tools
 
@@ -218,7 +213,7 @@ External durability systems are a later integration target, not a first-phase ex
 The branch can progress through these stages without changing the authoring contract:
 
 1. **Direct extraction and integration:** move the existing runtime behind package boundaries and keep current T3Code/T3Team workflows working unchanged.
-2. **Reusable implementation:** make the core ports, typed capability contracts, agent package, loader, persistence, and host adapter explicit and testable. The generic journal/runtime/lifecycle foundation, trusted TypeScript loader, and reusable TypeScript analysis machinery are now implemented; the host body executor, adapter policy vocabulary, and catalogs remain to be split.
+2. **Reusable implementation:** make the core ports, typed capability contracts, agent/thread package, loader, persistence, and host adapter explicit and testable. The generic journal/runtime/lifecycle foundation, trusted TypeScript loader, reusable TypeScript analysis machinery, and the host-neutral `@runbook/threads` implementation are now wired into the T3Team SDK; the host body executor, adapter policy vocabulary, provider registry, and catalogs remain adapter-owned.
 3. **Optional catalog modularization:** split tool catalogs only where a concrete application needs distribution or reuse.
 4. **Deployment adapters:** add backends such as distributed database/queue hosts and integrations with established durable workflow systems.
 
