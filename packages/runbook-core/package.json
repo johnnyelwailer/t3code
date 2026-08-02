@@ -2,7 +2,7 @@
   "name": "@runbook/core",
   "version": "0.0.1",
   "files": [
-    "dist"
+    "src"
   ],
   "type": "module",
   "exports": {

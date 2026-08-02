@@ -1,6 +1,9 @@
 {
   "name": "@runbook/tools",
   "version": "0.0.1",
+  "files": [
+    "src"
+  ],
   "type": "module",
   "exports": {
     ".": {
