@@ -6,7 +6,7 @@
  * ./t3team-toolBrokerWorkflowResumeFailed.ts (additive size budget).
  */
 import type { OrchestrationCommand, ThreadId } from "@t3tools/contracts";
-import type { JournalStore } from "@t3team/sdk";
+import { workflowSourceVersion, type JournalStore, type WorkflowRef } from "@t3team/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -89,6 +89,24 @@ export const replaceRunSourceIfRequested = <E>(
       Effect.provideService(Path.Path, deps.path),
       Effect.mapError(errorMessage),
     );
+    // A supplied replacement is an explicit source decision. Establish its content hash as the
+    // new baseline before a paused run's later reply re-enters the already-registered controller.
+    // This keeps that path strict for every subsequent resume without making the controller
+    // mutable or weakening ordinary source-change detection.
+    const meta = yield* Effect.promise(() => deps.journalStore.readRunMeta(run.runId));
+    if (meta !== undefined) {
+      const ref: WorkflowRef = {
+        kind: "workflow",
+        path: ephemeralPath,
+        absolutePath: ephemeralPath,
+      };
+      yield* Effect.promise(() =>
+        deps.journalStore.writeRunMeta(run.runId, {
+          ...meta,
+          workflowVersion: workflowSourceVersion(ref),
+        }),
+      );
+    }
   });
 
 /** Mirror the HTTP control route's resume action: restore the parked continuation. */

@@ -23,7 +23,12 @@ import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScri
 
 /** Re-drive a failed run from its journal, detached (a resume can park again for hours). */
 export const makeResumeFailedRun =
-  <E>(deps: WorkflowResumeToolDeps<E>, threadId: ThreadId, newId: () => string) =>
+  <E>(
+    deps: WorkflowResumeToolDeps<E>,
+    threadId: ThreadId,
+    newId: () => string,
+    workflowVersionPolicy: "strict" | "allow-change" = "strict",
+  ) =>
   (run: WorkflowRun): Effect.Effect<WorkflowResumeToolValue, string> =>
     Effect.gen(function* () {
       if (!deps.path) {
@@ -70,6 +75,7 @@ export const makeResumeFailedRun =
           nowIso,
           store: deps.journalStore,
           lifecycle,
+          workflowVersionPolicy,
         }),
       ).pipe(Effect.forkDetach({ startImmediately: true }));
       // Echo the recorded cause of the PREVIOUS failure: the resume replays the executed prefix

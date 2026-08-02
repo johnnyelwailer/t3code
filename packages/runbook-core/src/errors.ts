@@ -141,15 +141,16 @@ export class JournalSchemaError extends WorkflowError {
 
 /** Side of a replay comparison — what the journal recorded vs. what the body produced. */
 export type ReplayDriftFacet = Readonly<Record<string, string>>;
-/** Whether the divergence is in the call identity (kind/refId) or the argument hash. */
-export type ReplayDriftReason = "call" | "args";
+/** Whether the divergence is in the workflow version, call identity, or argument hash. */
+export type ReplayDriftReason = "workflow" | "call" | "args";
 
 /**
  * Raised on resume when the replayed body diverges from the journal at a given `seq`.
  *
  * `callId` is `"<seq>:<kind>:<refId>"` (see the engine module header for why we chose a
- * sequence counter over lexical position). `reason: "call"` = different (kind, refId)
- * (inserted/removed/reordered primitive). `reason: "args"` = same call, different args.
+ * sequence counter over lexical position). `reason: "workflow"` = the executable source
+ * changed, `reason: "call"` = different (kind, refId) (inserted/removed/reordered primitive),
+ * and `reason: "args"` = same call, different args.
  */
 export class ReplayDriftError extends WorkflowError {
   readonly seq: number;
@@ -192,8 +193,10 @@ function formatReplayDrift(opts: {
   // absolute path plus seq is the cheap, already-known locator.
   const at = opts.filePath === undefined ? `seq ${opts.seq}` : `${opts.filePath}:seq ${opts.seq}`;
   const headline =
-    opts.reason === "call"
-      ? `Workflow replay drift at ${at}: the primitive call changed identity.`
-      : `Workflow replay drift at ${at}: same call site, different arguments.`;
+    opts.reason === "workflow"
+      ? `Workflow replay drift at ${at}: the executable workflow version changed.`
+      : opts.reason === "call"
+        ? `Workflow replay drift at ${at}: the primitive call changed identity.`
+        : `Workflow replay drift at ${at}: same call site, different arguments.`;
   return `${headline}\n  expected (journal): ${formatFacet(opts.expected)}\n  observed (replay):  ${formatFacet(opts.observed)}\nThe workflow body diverged from its journal — this run is version-incompatible with the recorded one.`;
 }

@@ -5,7 +5,8 @@ import * as NodePath from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createWorkflowEngine } from "./engine.ts";
-import type { WorkflowReference } from "./engine.ts";
+import type { WorkflowReference, WorkflowVersionPolicy } from "./engine.ts";
+import { ReplayDriftError } from "./errors.ts";
 import { FsJournalStore } from "./journalStore.ts";
 
 const roots: string[] = [];
@@ -19,7 +20,10 @@ describe("@runbook/core lifecycle engine", () => {
     const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-engine-"));
     roots.push(runsRoot);
     const ref: WorkflowReference = { absolutePath: "/workflows/review.workflow.ts" };
-    const engine = createWorkflowEngine<WorkflowReference, { runsRoot?: string }>({
+    const engine = createWorkflowEngine<
+      WorkflowReference,
+      { runsRoot?: string; workflowVersionPolicy?: WorkflowVersionPolicy }
+    >({
       defaultRunsRoot: () => runsRoot,
       createStore: (root) => new FsJournalStore(root),
       newRunId: () => "generated-run",
@@ -58,5 +62,69 @@ describe("@runbook/core lifecycle engine", () => {
     await expect(engine.resumeWorkflow("missing", ref, {}, { runsRoot })).rejects.toThrow(
       "No workflow journal found",
     );
+  });
+
+  it("rejects a changed executable version before replaying a run", async () => {
+    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-engine-version-"));
+    roots.push(runsRoot);
+    let version = "v1";
+    const ref: WorkflowReference = { absolutePath: "/workflows/review.workflow.ts" };
+    const engine = createWorkflowEngine<
+      WorkflowReference,
+      { runsRoot?: string; workflowVersionPolicy?: WorkflowVersionPolicy }
+    >({
+      defaultRunsRoot: () => runsRoot,
+      createStore: (root) => new FsJournalStore(root),
+      newRunId: () => "versioned-run",
+      nowIso: () => "2026-08-02T00:00:00.000Z",
+      workflowVersion: () => version,
+      executeBody: async () => ({ ok: true }),
+    });
+
+    await engine.startWorkflow(ref, {}, { runsRoot });
+    const meta = await new FsJournalStore(runsRoot).readRunMeta("versioned-run");
+    expect(meta?.workflowVersion).toBe("v1");
+    version = "v2";
+
+    const error = await engine
+      .resumeWorkflow("versioned-run", ref, {}, { runsRoot })
+      .catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ReplayDriftError);
+    expect((error as ReplayDriftError).reason).toBe("workflow");
+    expect((error as ReplayDriftError).seq).toBe(0);
+  });
+
+  it("persists an explicitly accepted executable replacement as the new replay baseline", async () => {
+    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-engine-version-"));
+    roots.push(runsRoot);
+    let version = "v1";
+    const ref: WorkflowReference = { absolutePath: "/workflows/review.workflow.ts" };
+    const engine = createWorkflowEngine<
+      WorkflowReference,
+      { runsRoot?: string; workflowVersionPolicy?: WorkflowVersionPolicy }
+    >({
+      defaultRunsRoot: () => runsRoot,
+      createStore: (root) => new FsJournalStore(root),
+      newRunId: () => "accepted-version-run",
+      nowIso: () => "2026-08-02T00:00:00.000Z",
+      workflowVersion: () => version,
+      executeBody: async () => ({ ok: true }),
+    });
+
+    await engine.startWorkflow(ref, {}, { runsRoot });
+    version = "v2";
+    await expect(
+      engine.resumeWorkflow(
+        "accepted-version-run",
+        ref,
+        {},
+        {
+          runsRoot,
+          workflowVersionPolicy: "allow-change",
+        },
+      ),
+    ).resolves.toEqual({ runId: "accepted-version-run", result: { ok: true } });
+    const meta = await new FsJournalStore(runsRoot).readRunMeta("accepted-version-run");
+    expect(meta?.workflowVersion).toBe("v2");
   });
 });

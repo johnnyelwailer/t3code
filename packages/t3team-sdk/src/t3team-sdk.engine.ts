@@ -6,11 +6,13 @@
  */
 
 import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
 
 import {
   createWorkflowEngine,
   type StartWorkflowOptions as CoreStartWorkflowOptions,
   type SuspendedResult,
+  type WorkflowVersionPolicy,
   type WorkflowRunResult,
 } from "@runbook/core/engine";
 
@@ -20,16 +22,25 @@ import { executeWorkflowBody, nowIso } from "./t3team-sdk.workflowRunner.ts";
 
 /** Options shared by {@link startWorkflow} and {@link resumeWorkflow}. */
 export type { WorkflowRunOptions } from "./t3team-sdk.types.ts";
+export type { WorkflowVersionPolicy };
 
 /** Options for {@link startWorkflow} — `runId` may be supplied for deterministic tests. */
 export type StartWorkflowOptions = CoreStartWorkflowOptions<T.WorkflowRunOptions>;
 export type { SuspendedResult, WorkflowRunResult };
+
+/** Hash the exact source artifact so a resumed run cannot silently use changed workflow code. */
+export function workflowSourceVersion(ref: T.WorkflowRef): string {
+  return NodeCrypto.createHash("sha256")
+    .update(NodeFS.readFileSync(ref.absolutePath))
+    .digest("hex");
+}
 
 const engine = createWorkflowEngine<T.WorkflowRef, T.WorkflowRunOptions>({
   defaultRunsRoot,
   createStore: (runsRoot) => new FsJournalStore(runsRoot),
   newRunId: NodeCrypto.randomUUID,
   nowIso,
+  workflowVersion: workflowSourceVersion,
   executeBody: executeWorkflowBody,
 });
 

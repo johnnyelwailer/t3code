@@ -18,6 +18,7 @@ import {
   type WorkflowRef,
   type WorkflowRunOptions,
   type WorkflowRunResult,
+  type WorkflowVersionPolicy,
 } from "@t3team/sdk";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
@@ -97,6 +98,8 @@ export interface LaunchWorkflowRecipeInput {
     readonly summary?: string;
     readonly reason?: string;
   }) => Promise<void>;
+  /** Explicit source replacement policy used by a corrected-source resume. */
+  readonly workflowVersionPolicy?: WorkflowVersionPolicy;
 }
 
 export interface LaunchWorkflowRecipeResult {
@@ -187,6 +190,9 @@ export function createWorkflowRunController(
         }),
     ...(input.store === undefined ? {} : { store: input.store }),
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
+    ...(input.workflowVersionPolicy === undefined
+      ? {}
+      : { workflowVersionPolicy: input.workflowVersionPolicy }),
   };
 
   const settle = async (

@@ -16,7 +16,11 @@ export interface WorkflowReference {
 export interface WorkflowRunOptionsBase {
   readonly runsRoot?: string;
   readonly store?: JournalStore;
+  /** Explicitly accept a changed executable, then record it as the new replay baseline. */
+  readonly workflowVersionPolicy?: WorkflowVersionPolicy;
 }
+
+export type WorkflowVersionPolicy = "strict" | "allow-change";
 
 export type { RunOutcome } from "./runEngine.ts";
 
@@ -45,6 +49,11 @@ export interface WorkflowEngineAdapter<Ref extends WorkflowReference, Options> {
   readonly newRunId: () => string;
   /** Timestamp used for run metadata; body-visible time remains runtime-journaled. */
   readonly nowIso: () => string;
+  /**
+   * Optional identity for the exact executable workflow artifact. Hosts that can resolve a
+   * stable content/version hash should provide it; old metadata without one remains resumable.
+   */
+  readonly workflowVersion?: (ref: Ref) => string | Promise<string>;
   /** Bind the generic lifecycle to a host-specific body loader/executor. */
   readonly executeBody: WorkflowBodyExecutor<Ref, Options>;
 }
@@ -94,6 +103,35 @@ export function assertInputArgsMatch(opts: {
   }
 }
 
+/** Verify that a resume still targets the same executable workflow artifact when both sides have
+ * a version identity. The optionality preserves runs written before this check was introduced. */
+export function assertWorkflowVersionMatch(opts: {
+  readonly meta: RunMeta | undefined;
+  readonly workflowVersion: string | undefined;
+  readonly absolutePath: string;
+  readonly policy: WorkflowVersionPolicy | undefined;
+}): void {
+  const recorded = opts.meta?.workflowVersion;
+  // A caller may intentionally resume with a different ref to obtain the existing primitive-level
+  // drift diagnostic (for example a repaired workflow at another path). Version identity applies
+  // only when the run still targets the same recorded artifact path.
+  if (
+    opts.policy === "allow-change" ||
+    opts.meta?.workflowPath !== opts.absolutePath ||
+    recorded === undefined ||
+    opts.workflowVersion === undefined ||
+    recorded === opts.workflowVersion
+  )
+    return;
+  throw new ReplayDriftError({
+    seq: 0,
+    reason: "workflow",
+    expected: { workflowVersion: hashPrefix(recorded) },
+    observed: { workflowVersion: hashPrefix(opts.workflowVersion) },
+    filePath: opts.absolutePath,
+  });
+}
+
 /**
  * Create the reusable start/resume lifecycle around a host-specific body executor.
  *
@@ -126,10 +164,13 @@ export function createWorkflowEngine<
       await store.clear(runId);
     }
 
+    const workflowVersion = await adapter.workflowVersion?.(ref);
+
     await store.writeRunMeta(runId, {
       workflowPath: ref.absolutePath,
       argsHash: hashArgs(args),
       createdAt: adapter.nowIso(),
+      ...(workflowVersion === undefined ? {} : { workflowVersion }),
     });
 
     const outcome = await executeWorkflowRun({
@@ -155,6 +196,21 @@ export function createWorkflowEngine<
     if (!(await store.hasRun(runId))) throw new WorkflowRunNotFoundError(store.locator(runId));
     const meta = await store.readRunMeta(runId);
     assertInputArgsMatch({ meta, args, absolutePath: ref.absolutePath });
+    const workflowVersion = await adapter.workflowVersion?.(ref);
+    assertWorkflowVersionMatch({
+      meta,
+      workflowVersion,
+      absolutePath: ref.absolutePath,
+      policy: options.workflowVersionPolicy,
+    });
+    if (
+      options.workflowVersionPolicy === "allow-change" &&
+      meta !== undefined &&
+      workflowVersion !== undefined &&
+      meta.workflowVersion !== workflowVersion
+    ) {
+      await store.writeRunMeta(runId, { ...meta, workflowVersion });
+    }
     const outcome = await executeWorkflowRun({
       runId,
       ref,

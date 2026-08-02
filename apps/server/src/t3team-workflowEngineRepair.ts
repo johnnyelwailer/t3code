@@ -222,7 +222,10 @@ export async function tryWorkflowRepair(
         if (stopped()) return false;
         try {
           await controller.settle(
-            await resumeWorkflow(input.runId, controller.ref, input.args, controller.options),
+            await resumeWorkflow(input.runId, controller.ref, input.args, {
+              ...controller.options,
+              workflowVersionPolicy: "allow-change",
+            }),
           );
           return true;
         } catch {

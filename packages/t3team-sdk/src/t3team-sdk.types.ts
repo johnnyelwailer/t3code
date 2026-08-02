@@ -1,5 +1,7 @@
 import * as Schema from "effect/Schema";
 
+import type { WorkflowVersionPolicy } from "@runbook/core/engine";
+
 import type { ToolRef as GenericToolRef } from "@runbook/tools";
 import type { ScriptRef as GenericScriptRef } from "@runbook/scripts";
 import type { ModelSelection } from "@runbook/threads/models";
@@ -155,6 +157,8 @@ export interface WorkflowRunOptions {
   readonly runsRoot?: string;
   // Durable journal storage (default fs at `runsRoot`); host injects SQLite for restart durability (§OQ2).
   readonly store?: import("./t3team-sdk.journalStore.ts").JournalStore;
+  /** Strict by default; an explicit source repair can accept and persist a new executable. */
+  readonly workflowVersionPolicy?: WorkflowVersionPolicy;
   readonly tools?: ReadonlyArray<AnyToolRef>;
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
   readonly fetch?: FetchLike;

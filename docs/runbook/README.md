@@ -33,6 +33,13 @@ There is no need for a new generic `run(...)` API or a parallel old/new alias la
 
 The reusable boundary is below those APIs: journaling, replay, handles, suspension, typed references, dispatch, persistence, and host integration.
 
+Each host may also provide a workflow version identity, preferably a SHA-256 content hash of the
+exact executable artifact. The generic lifecycle records it in run metadata and rejects a resume
+against changed source before replaying any primitives. The field is optional so older runs and
+hosts with another artifact identity remain supported. A host that intentionally accepts corrected
+source can opt into `workflowVersionPolicy: "allow-change"`; the accepted identity is then persisted
+as the new replay baseline, while ordinary resumes stay strict.
+
 ## Capability tiers
 
 `agent` is a tool in the broad sense that it is a typed, durable capability. It is also important enough to deserve a first-class package. It should not be put in the minimal durable core, and it should not be treated as just another application catalog entry.

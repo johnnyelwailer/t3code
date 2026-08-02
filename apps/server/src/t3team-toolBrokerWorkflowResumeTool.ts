@@ -79,7 +79,12 @@ export function makeWorkflowResumeToolHandlers<E>(
         if (run.status === "paused") {
           return yield* makeResumePausedRun(deps)(run);
         }
-        return yield* makeResumeFailedRun(deps, threadId, () => t3teamRandomUUID())(run);
+        return yield* makeResumeFailedRun(
+          deps,
+          threadId,
+          () => t3teamRandomUUID(),
+          args.source?.trim() ? "allow-change" : "strict",
+        )(run);
       }),
   });
 }

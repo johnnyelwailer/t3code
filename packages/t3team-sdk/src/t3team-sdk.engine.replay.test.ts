@@ -6,6 +6,8 @@
  */
 
 import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -23,7 +25,12 @@ import {
   scriptWorkflow,
   twoTools,
 } from "./t3team-sdk.engineFixtures.ts";
-import { resumeWorkflow, startWorkflow, ReplayDriftError } from "./t3team-sdk.index.ts";
+import {
+  resumeWorkflow,
+  startWorkflow,
+  ReplayDriftError,
+  type WorkflowRef,
+} from "./t3team-sdk.index.ts";
 import { journalFilePath } from "./t3team-sdk.journal.ts";
 import { readJournal } from "./t3team-sdk.journalReader.ts";
 
@@ -168,5 +175,42 @@ describe("durable workflow engine — replay drift", () => {
     expect(drift.expected.presence).toBe("gap");
     // mergeCalls stays at 1 because the gap caused a drift before seq 2 was reached.
     expect(counters.mergeCalls).toBe(1);
+  });
+
+  it("rejects a changed workflow source before replaying the run", async () => {
+    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-source-version-"));
+    const sourcePath = NodePath.join(root, "review.workflow.ts");
+    const runRoot = NodePath.join(root, "runs");
+    NodeFS.copyFileSync(twoTools.absolutePath, sourcePath);
+    const ref: WorkflowRef = { kind: "workflow", path: sourcePath, absolutePath: sourcePath };
+
+    try {
+      const first = await startWorkflow(
+        ref,
+        { prId: "PR-source-version" },
+        {
+          runsRoot: runRoot,
+          tools: demoTools,
+          runId: "source-version-run",
+        },
+      );
+      expect("result" in first && first.result).toEqual({
+        approved: true,
+        mergedSha: "sha-PR-source-version",
+      });
+      NodeFS.appendFileSync(sourcePath, "\n// source version changed\n");
+
+      const error = await resumeWorkflow(
+        "source-version-run",
+        ref,
+        { prId: "PR-source-version" },
+        { runsRoot: runRoot, tools: demoTools },
+      ).catch((cause: unknown) => cause);
+      expect(error).toBeInstanceOf(ReplayDriftError);
+      expect((error as ReplayDriftError).reason).toBe("workflow");
+      expect((error as ReplayDriftError).seq).toBe(0);
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

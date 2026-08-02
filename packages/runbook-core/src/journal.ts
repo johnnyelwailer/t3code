@@ -3,10 +3,11 @@
  * Journal path helpers + run-metadata persistence for the durable workflow engine.
  *
  * The on-disk shape is `<runs-root>/<run-id>/journal.jsonl` (one JSONL line per journaled
- * primitive call) plus a sibling `runMeta.json` that records the workflow's inputs hash
- * at start, so a resume that supplies different args is caught at the input boundary
- * (drift at `seq 0`) before the body re-runs. The reader and writer that touch the
- * JSONL file live in separate files so this one stays focused on paths and run metadata.
+ * primitive call) plus a sibling `runMeta.json` that records the workflow's inputs hash and, when
+ * the host supplies one, the executable content/version hash at start. A resume that supplies
+ * different args or points at changed workflow source is caught at `seq 0` before the body
+ * re-runs. The reader and writer that touch the JSONL file live in separate files so this one
+ * stays focused on paths and run metadata.
  *
  * Spec doc 25 §Open question 2 leaves the long-term home open (SQL-backed local cache);
  * `<runs-root>/<run-id>/journal.jsonl` is the MVP on-disk shape.
@@ -35,6 +36,8 @@ const path = nodeRequire("node:path") as NodePathModule;
 /** Per-run inputs, recorded once at start so a resume can detect input-args divergence. */
 export const RunMetaSchema = Schema.Struct({
   workflowPath: Schema.String,
+  /** Optional content/version identity; absent on runs written before version checks existed. */
+  workflowVersion: Schema.optional(Schema.String),
   argsHash: Schema.String,
   createdAt: Schema.String,
 });

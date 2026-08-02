@@ -9,6 +9,7 @@ export {
   createDurableWorkflowRuntime,
   resumeWorkflow,
   startWorkflow,
+  workflowSourceVersion,
 } from "./t3team-sdk.engine.ts";
 export {
   CancelledError,
@@ -120,6 +121,7 @@ export type {
   SuspendedResult,
   WorkflowRunOptions,
   WorkflowRunResult,
+  WorkflowVersionPolicy,
 } from "./t3team-sdk.engine.ts";
 export type { AskAffordance, AskFormField } from "./t3team-sdk.affordance.ts";
 export type { AgentAttachment, NamedAttachment } from "./t3team-sdk.askAttachments.ts";
