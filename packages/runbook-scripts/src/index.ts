@@ -2,6 +2,8 @@ import * as Schema from "effect/Schema";
 
 import { decodeWithSchema } from "@runbook/core/schema";
 
+export { createScriptCalls, type ScriptCallsDeps } from "./durableCalls.ts";
+
 export type ScriptCall = (ref: unknown, args: unknown) => Promise<unknown>;
 
 export interface ScriptHandlerContext<Call extends ScriptCall = ScriptCall> {

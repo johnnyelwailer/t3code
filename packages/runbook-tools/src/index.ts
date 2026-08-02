@@ -2,6 +2,8 @@ import * as Schema from "effect/Schema";
 
 import { decodeWithSchema } from "@runbook/core/schema";
 
+export { createToolCalls, type ToolCallsDeps } from "./durableCalls.ts";
+
 export interface ToolGroupRef<Id extends string = string> {
   readonly kind: "tool-group";
   readonly id: Id;

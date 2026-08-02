@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./durableCalls": {
+      "types": "./src/durableCalls.ts",
+      "import": "./src/durableCalls.ts"
     }
   },
   "scripts": {
