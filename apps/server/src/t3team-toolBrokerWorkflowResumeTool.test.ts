@@ -8,8 +8,9 @@
  *     source against a non-ephemeral (recipe) run.
  *   • Paused: restores the parked pending ask (mirroring the HTTP control route).
  *   • Failed + corrected source (the full round trip, real engine + real SQLite journal):
- *     an ephemeral run fails after a journaled step; resuming with corrected source
- *     re-drives `resumeWorkflow` — same-prefix replay — and the run completes.
+ *     an ephemeral run fails after a journaled step; replacing the source on disk and resuming
+ *     without an inline source preserves the old T3Team behavior, re-drives `resumeWorkflow`
+ *     — same-prefix replay — and the run completes.
  */
 
 import * as NodeFS from "node:fs";
@@ -262,7 +263,11 @@ it.live(
       assert.strictEqual(launched.status, "failed");
       assert.strictEqual(Option.getOrThrow(yield* repo.getById({ runId })).status, "failed");
 
-      const value = yield* handlers.resumeWorkflowRun({ runId, source: correctedSource });
+      // The old T3Team route resumed the current file even when the caller did not provide an
+      // inline replacement. This is the compatibility path that must remain accepted after the
+      // generic engine gained optional content-version checks.
+      NodeFS.writeFileSync(workflowPath, correctedSource);
+      const value = yield* handlers.resumeWorkflowRun({ runId });
       assert.strictEqual(value.status, "accepted");
 
       // The re-drive runs detached; the durable row is the observable outcome.
