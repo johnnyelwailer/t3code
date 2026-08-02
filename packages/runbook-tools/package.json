@@ -1,9 +1,7 @@
 {
   "name": "@runbook/tools",
   "version": "0.0.1",
-  "files": [
-    "dist"
-  ],
+  "private": true,
   "type": "module",
   "exports": {
     ".": {
