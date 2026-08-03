@@ -58,7 +58,6 @@ export function GitHubRepositoryDiscoveryAuthFields({
 }) {
   return (
     <div className="space-y-3">
-      <GitHubAuthHostPicker discovery={discovery} />
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
