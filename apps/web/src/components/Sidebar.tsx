@@ -3426,11 +3426,12 @@ export default function Sidebar() {
                     );
                   }
                   // t3team: Backlog / My work entry points, scoped by the project selector above.
+                  // `.id` is the group's REPRESENTATIVE project — the same one the header names
+                  // and the one every other control here acts on. `memberProjectRefs[0]` is a
+                  // different selection (array order, not preferred environment), so using it can
+                  // open a different physical project than the header says.
                   items.push(
-                    <InboxWorkNav
-                      key="t3team-inbox-work-nav"
-                      projectId={scopedProjectGroup?.memberProjectRefs[0]?.projectId ?? null}
-                    />,
+                    <InboxWorkNav key="t3team-inbox-work-nav" projectId={scopedProjectGroup?.id ?? null} />,
                   );
                   // t3team: assigned/pinned work items as peers in the same stream.
                   items.push(<InboxWorkItemSection key="t3team-inbox-work-items" />);

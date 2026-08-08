@@ -7,17 +7,17 @@
  * IS the view. "My work" is `assignee = currentUser()`, which is meaningful with or without a
  * project in hand.
  *
- * Composed by REUSING the per-project view once per bound project rather than by building a second
- * my-work implementation. That is not just cheaper — each project carries its own Atlassian account
- * and site binding, so its items are only interpretable next to the project they came from. A flat
- * merged list would have to drop or duplicate that context.
+ * Grouped by project rather than flattened: each project carries its own Atlassian account and site
+ * binding, so its items are only interpretable next to the project they came from.
+ *
+ * Each section is a read-only slice built on the fetch-only hook (see
+ * `t3team-AllProjectsMyWorkSection.tsx` for why it does NOT reuse `ProjectDashboardMyWorkView`).
  */
 import { useMemo } from "react";
 
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
-import { AppProjectIcon } from "~/t3team/t3team-AppStatusBits";
-import { ProjectDashboardMyWorkView } from "~/t3team/t3team-ProjectDashboardMyWorkView";
+import { AllProjectsMyWorkSection } from "~/t3team/t3team-AllProjectsMyWorkSection";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 /**
@@ -35,11 +35,13 @@ export function AllProjectsMyWorkView({
 }: {
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  // Reads the store directly rather than taking projects/tickets as props: this is a leaf surface,
-  // and threading two more props through the shell for one view is the kind of plumbing that makes
-  // the next upstream merge harder.
-  const { projects, getTicketsForProject } = useProjectStore();
-  const boundProjects = useMemo(() => selectBoundProjects(projects), [projects]);
+  // Reads the store directly rather than taking projects as a prop: this is a leaf surface, and
+  // threading it through the shell for one view is the kind of plumbing that makes the next
+  // upstream merge harder. `allProjects`, not `projects`: the latter omits loose workspace
+  // projects, which can be Jira-bound and would then be missing from the roll-up while the sidebar
+  // still lists them.
+  const { allProjects } = useProjectStore();
+  const boundProjects = useMemo(() => selectBoundProjects(allProjects), [allProjects]);
 
   if (boundProjects.length === 0) {
     return (
@@ -56,17 +58,11 @@ export function AllProjectsMyWorkView({
     <ScrollArea className="h-full min-h-0 flex-1">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6">
         {boundProjects.map((project) => (
-          <section key={project.id} className="flex min-w-0 flex-col gap-3">
-            <header className="flex min-w-0 items-center gap-2">
-              <AppProjectIcon project={project} />
-              <h2 className="min-w-0 truncate font-medium text-sm">{project.title}</h2>
-            </header>
-            <ProjectDashboardMyWorkView
-              project={project}
-              fallbackTickets={getTicketsForProject(project.id)}
-              onOpenTicket={onOpenTicket}
-            />
-          </section>
+          <AllProjectsMyWorkSection
+            key={project.id}
+            project={project}
+            onOpenTicket={onOpenTicket}
+          />
         ))}
       </div>
     </ScrollArea>

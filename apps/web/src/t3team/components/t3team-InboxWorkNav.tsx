@@ -36,7 +36,11 @@ export function InboxWorkNav({ projectId }: InboxWorkNavProps): ReactNode {
   }
 
   return (
-    <div className="mx-1 mt-1 mb-1.5 flex w-full flex-col gap-0.5 overflow-hidden px-1.5 py-0.5">
+    // An <li>, not a <div>: this is pushed into upstream's `<ul role="list">` alongside the
+    // thread rows and shelf headers, all of which are `<li className="list-none">`.
+    <li
+      data-thread-selection-safe
+      className="mx-1 mt-1 mb-1.5 flex w-full list-none flex-col gap-0.5 overflow-hidden px-1.5 py-0.5">
       {projectId === null ? null : (
         <SidebarMenuSubButton
           size="sm"
@@ -67,6 +71,6 @@ export function InboxWorkNav({ projectId }: InboxWorkNavProps): ReactNode {
       >
         <span className="truncate">My work</span>
       </SidebarMenuSubButton>
-    </div>
+    </li>
   );
 }
