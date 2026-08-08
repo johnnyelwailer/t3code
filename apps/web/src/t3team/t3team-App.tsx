@@ -6,7 +6,7 @@ import { AppSidebarLens } from "~/t3team/components/t3team-AppSidebarLens";
 import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarState";
 import { useT3TeamMacosTitlebarInsetStyle } from "~/t3team/hooks/t3team-useMacosTitlebarInset";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
-import type { ViewState } from "~/t3team/t3team-types";
+import { readProjectIdFromView, type ViewState } from "~/t3team/t3team-types";
 import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
@@ -70,7 +70,7 @@ export function App({
     [activeView, store.resolveProjectId],
   );
   const activeDashboardMode = dashboardMode ?? "my-work";
-  const selectedProjectId = resolvedView?.projectId ?? store.selectedProjectId;
+  const selectedProjectId = readProjectIdFromView(resolvedView ?? null) ?? store.selectedProjectId;
   const manageRepositoriesProject = manageRepositoriesProjectId
     ? (store.projects.find((candidate) => candidate.id === manageRepositoriesProjectId) ?? null)
     : null;

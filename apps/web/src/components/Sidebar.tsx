@@ -186,6 +186,7 @@ import {
   InboxThreadAttribution,
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
+import { InboxWorkNav } from "~/t3team/components/t3team-InboxWorkNav";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -3424,6 +3425,13 @@ export default function Sidebar() {
                       />,
                     );
                   }
+                  // t3team: Backlog / My work entry points, scoped by the project selector above.
+                  items.push(
+                    <InboxWorkNav
+                      key="t3team-inbox-work-nav"
+                      projectId={scopedProjectGroup?.memberProjectRefs[0]?.projectId ?? null}
+                    />,
+                  );
                   // t3team: assigned/pinned work items as peers in the same stream.
                   items.push(<InboxWorkItemSection key="t3team-inbox-work-items" />);
                   for (const thread of activeThreads) {

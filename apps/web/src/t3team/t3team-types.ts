@@ -133,6 +133,10 @@ export type ProjectBacklogSubtaskCreateInput = {
 };
 
 export type ViewState =
+  // "My work" across every bound project, reached from the Work lens when the sidebar's project
+  // selector is on "All projects". Project-less by definition — it is the one Team surface whose
+  // subject is the viewer rather than a project.
+  | { type: "all-my-work" }
   | { type: "dashboard"; projectId: string; embeddedThreadId?: string }
   | { type: "ticket"; projectId: string; ticketId: string; embeddedThreadId?: string }
   | {
@@ -159,7 +163,31 @@ export function readActiveThreadIdFromView(view: ViewState | null): string | nul
     return view.threadId;
   }
 
+  if (view.type === "all-my-work") {
+    return null;
+  }
+
   return view.embeddedThreadId ?? null;
+}
+
+/**
+ * The project a view is about, or `null` when it is about none.
+ *
+ * Most views carry a `projectId`, but not all: a draft's project lives in the composer draft
+ * store, and `all-my-work` is deliberately project-less (its subject is the viewer). Reaching for
+ * `view.projectId` directly is therefore a type error by design — go through this instead, so a
+ * future project-less view forces the same decision at every call site rather than none of them.
+ */
+export function readProjectIdFromView(view: ViewState | null): string | null {
+  if (!view) {
+    return null;
+  }
+
+  if (view.type === "all-my-work") {
+    return null;
+  }
+
+  return view.projectId ?? null;
 }
 
 export type ProjectSortOrder = "updated_at" | "created_at";

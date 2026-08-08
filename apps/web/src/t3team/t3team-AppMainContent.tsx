@@ -8,6 +8,7 @@ import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeS
 import type { ProjectThreadDisplayMode, ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { AppDashboardPane } from "~/t3team/t3team-AppDashboardPane";
 import { AppMainContentHomeBrowser } from "~/t3team/t3team-AppMainContentHomeBrowser";
+import { AllProjectsMyWorkView } from "~/t3team/t3team-AllProjectsMyWorkView";
 import { AppDraftPane } from "~/t3team/t3team-AppDraftPane";
 import { AppThreadPane } from "~/t3team/t3team-AppThreadPane";
 import { useHomeProjectChat } from "./t3team-AppMainContentShell";
@@ -136,6 +137,12 @@ export function AppMainContent({
     }
 
     return homeBrowser;
+  }
+
+  // Like a draft, this resolves no project — its subject is the viewer, not a project — so it has
+  // to be handled before any project lookup.
+  if (view.type === "all-my-work") {
+    return <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />;
   }
 
   // A draft has no project or thread of its own yet, so it resolves nothing

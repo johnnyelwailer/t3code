@@ -8,6 +8,7 @@ import {
 } from "~/t3team/t3team-appMainContentResolution";
 import { readActiveThreadIdFromView, type ProjectThread, type ViewState } from "~/t3team/t3team-types";
 import { useThreadResolutionDebug } from "~/t3team/t3team-useThreadResolutionDebug";
+import { readProjectIdFromView } from "~/t3team/t3team-types";
 
 /**
  * Resolves the active thread/project for the current route view and keeps the
@@ -47,7 +48,7 @@ export function useAppMainContentThreadResolution(input: {
     : null;
   const embeddedThread = resolveEmbeddedThread(view, threadProjectThreads);
   const viewProject = view
-    ? (allProjects.find((candidate) => candidate.id === view.projectId) ?? null)
+    ? (allProjects.find((candidate) => candidate.id === readProjectIdFromView(view)) ?? null)
     : null;
   const workspaceSyncProject = threadProject ?? viewProject ?? homeProject;
   const workspaceSyncProjectThreads = workspaceSyncProject
@@ -60,7 +61,7 @@ export function useAppMainContentThreadResolution(input: {
   });
 
   useThreadResolutionDebug({
-    routeProjectId: view?.projectId ?? null,
+    routeProjectId: readProjectIdFromView(view ?? null),
     routeThreadId: activeThreadId,
     resolvedProjectId: threadProject?.id ?? null,
     resolvedProjectWorkspaceRoot: threadProject?.workspace?.rootPath ?? null,

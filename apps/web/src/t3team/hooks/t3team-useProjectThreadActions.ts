@@ -112,6 +112,11 @@ export function useProjectThreadActions(input: {
           return prev.threadId === threadId ? null : prev;
         }
 
+        // all-my-work has no project and no embedded thread; deleting a thread cannot affect it.
+        if (prev.type === "all-my-work") {
+          return prev;
+        }
+
         if (prev.embeddedThreadId !== threadId) {
           return prev;
         }

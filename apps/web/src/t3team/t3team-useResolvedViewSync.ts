@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import type { ViewState } from "~/t3team/t3team-types";
+import { readProjectIdFromView } from "~/t3team/t3team-types";
 
 export function useResolvedViewSync({
   activeDashboardMode,
@@ -40,7 +41,13 @@ export function useResolvedViewSync({
       return;
     }
 
-    if (resolvedView.projectId === view.projectId) {
+    // all-my-work spans every project, so there is no project id to reconcile — and no dashboard
+    // to fall through to without throwing the user off the view they opened.
+    if (view.type === "all-my-work" || resolvedView.type === "all-my-work") {
+      return;
+    }
+
+    if (readProjectIdFromView(resolvedView) === readProjectIdFromView(view)) {
       return;
     }
 

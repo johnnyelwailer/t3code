@@ -17,6 +17,7 @@ import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as T3teamNewRouteImport } from './routes/t3team.new'
+import { Route as T3teamMyWorkRouteImport } from './routes/t3team.my-work'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
 import { Route as SettingsProvidersRouteImport } from './routes/settings.providers'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
@@ -72,6 +73,11 @@ const ChatIndexRoute = ChatIndexRouteImport.update({
 const T3teamNewRoute = T3teamNewRouteImport.update({
   id: '/new',
   path: '/new',
+  getParentRoute: () => T3teamRoute,
+} as any)
+const T3teamMyWorkRoute = T3teamMyWorkRouteImport.update({
+  id: '/my-work',
+  path: '/my-work',
   getParentRoute: () => T3teamRoute,
 } as any)
 const SettingsSourceControlRoute = SettingsSourceControlRouteImport.update({
@@ -181,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
+  '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -206,6 +213,7 @@ export interface FileRoutesByTo {
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
+  '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -234,6 +242,7 @@ export interface FileRoutesById {
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
+  '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -263,6 +272,7 @@ export interface FileRouteTypes {
     | '/settings/keybindings'
     | '/settings/providers'
     | '/settings/source-control'
+    | '/t3team/my-work'
     | '/t3team/new'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/settings/keybindings'
     | '/settings/providers'
     | '/settings/source-control'
+    | '/t3team/my-work'
     | '/t3team/new'
     | '/'
     | '/$environmentId/$threadId'
@@ -315,6 +326,7 @@ export interface FileRouteTypes {
     | '/settings/keybindings'
     | '/settings/providers'
     | '/settings/source-control'
+    | '/t3team/my-work'
     | '/t3team/new'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
@@ -392,6 +404,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/t3team/new'
       preLoaderRoute: typeof T3teamNewRouteImport
+      parentRoute: typeof T3teamRoute
+    }
+    '/t3team/my-work': {
+      id: '/t3team/my-work'
+      path: '/my-work'
+      fullPath: '/t3team/my-work'
+      preLoaderRoute: typeof T3teamMyWorkRouteImport
       parentRoute: typeof T3teamRoute
     }
     '/settings/source-control': {
@@ -577,12 +596,14 @@ const T3teamProjectsProjectIdRouteWithChildren =
   )
 
 interface T3teamRouteChildren {
+  T3teamMyWorkRoute: typeof T3teamMyWorkRoute
   T3teamNewRoute: typeof T3teamNewRoute
   T3teamDraftsDraftIdRoute: typeof T3teamDraftsDraftIdRoute
   T3teamProjectsProjectIdRoute: typeof T3teamProjectsProjectIdRouteWithChildren
 }
 
 const T3teamRouteChildren: T3teamRouteChildren = {
+  T3teamMyWorkRoute: T3teamMyWorkRoute,
   T3teamNewRoute: T3teamNewRoute,
   T3teamDraftsDraftIdRoute: T3teamDraftsDraftIdRoute,
   T3teamProjectsProjectIdRoute: T3teamProjectsProjectIdRouteWithChildren,

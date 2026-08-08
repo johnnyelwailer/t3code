@@ -3,6 +3,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import { isWorkProject } from "~/t3team/t3team-isWorkProject";
 import { isHomeProjectId } from "~/t3team/t3team-homeProject";
 import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
+import { readProjectIdFromView } from "~/t3team/t3team-types";
 
 export function resolveWorkHomeProject(input: {
   readonly allProjects: readonly ProjectShellProject[];
@@ -26,7 +27,9 @@ export function resolveViewStoredProject(
   view: ViewState | null,
   resolveProjectId: (projectId: string) => string,
 ): ViewState | null {
-  if (!view || view.type === "draft") return view;
+  // A draft's project comes from the composer store, and all-my-work has no project — neither has
+  // a stored project id to resolve.
+  if (!view || view.type === "draft" || view.type === "all-my-work") return view;
   const resolvedProjectId = resolveProjectId(view.projectId);
   return resolvedProjectId === view.projectId ? view : { ...view, projectId: resolvedProjectId };
 }
@@ -47,7 +50,7 @@ export function resolveThreadProject(input: {
 }): ProjectShellProject | null {
   if (!input.activeThreadId || !input.view) return null;
   return (
-    input.allProjects.find((project) => project.id === input.view?.projectId) ??
+    input.allProjects.find((project) => project.id === readProjectIdFromView(input.view ?? null)) ??
     (input.view.type === "thread" && isHomeProjectId(input.view.projectId)
       ? input.homeChatProject
       : null)

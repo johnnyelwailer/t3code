@@ -51,9 +51,9 @@ export function useSyncActiveChatTarget(input: {
   const setActiveChatTarget = useT3TeamActiveChatStore((state) => state.setTarget);
 
   useEffect(() => {
-    // A draft has no project and no server thread yet, so there is no chat
-    // target to publish for it.
-    if (!view || view.type === "draft") {
+    // A draft has no project and no server thread yet, and all-my-work has no project at all, so
+    // neither has a chat target to publish.
+    if (!view || view.type === "draft" || view.type === "all-my-work") {
       setActiveChatTarget(null);
       return;
     }
