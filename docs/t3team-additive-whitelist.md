@@ -92,6 +92,22 @@ Prefix policy:
 - `bun.lock`
   - Lockfile drift due workspace/package updates.
 
+- `docs/README.md`
+  - Append a `## This fork (t3team)` section linking the fork's own docs (MVP spec, this whitelist, runbook engine). Purely additive tail; upstream's own index above it is untouched.
+
+## Allowed Unprefixed New Files
+
+Whole trees the fork owns outright. The `t3team-` prefix exists so a file added by
+the fork can never collide with a file upstream adds later; a directory that upstream
+does not have — and whose npm scope is the fork's own — already carries that guarantee,
+so prefixing every file inside it adds noise without adding safety. This mirrors the
+existing `docs/t3team-mvp/**` and `.claude/**` entries.
+
+- `packages/runbook-core/**`, `packages/runbook-scripts/**`, `packages/runbook-threads/**`, `packages/runbook-tools/**`, `packages/runbook-ts/**`
+  - The reusable runbook engine: five fork-authored packages under the `@runbook/*` npm scope, none of which exist upstream. 76 files consume them, and they are the subject of in-flight work (draft PR #9), so per-file renaming would be churn against active branches.
+- `docs/runbook/**`
+  - Design docs for the above.
+
 ## Rules
 
 - Keep this list minimal.
