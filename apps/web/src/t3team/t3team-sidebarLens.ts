@@ -5,9 +5,10 @@ import { useClientSettings } from "~/hooks/useSettings";
  *
  * T3 Team is the permanent shell; the lens only changes sidebar presentation.
  * The fork deliberately ships **no** control of its own — upstream owns the
- * switch. Today that switch is upstream's `sidebarV2Enabled` client setting
- * (Settings → Beta); when upstream replaces it with a first-class Code/Work
- * toggle, `useT3TeamSidebarLens` is the single place to re-point.
+ * switch. Today that switch is upstream's `legacySidebarEnabled` client setting
+ * (Settings → Appearance), the inverted successor to the retired
+ * `sidebarV2Enabled` beta flag; when upstream replaces it again,
+ * `useT3TeamSidebarLens` is the single place to re-point.
  */
 export type T3TeamSidebarLens = "code" | "work";
 
@@ -19,6 +20,6 @@ export function resolveT3TeamSidebarLens(input: {
 }
 
 export function useT3TeamSidebarLens(): T3TeamSidebarLens {
-  const inboxSidebarEnabled = useClientSettings((settings) => settings.sidebarV2Enabled);
+  const inboxSidebarEnabled = useClientSettings((settings) => !settings.legacySidebarEnabled);
   return resolveT3TeamSidebarLens({ inboxSidebarEnabled });
 }

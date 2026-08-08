@@ -25,7 +25,7 @@ import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
 import { ProviderSessionRuntimeRepositoryLive } from "./persistence/Layers/ProviderSessionRuntime.ts";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry.ts";
-import { ProviderEventLoggersLive } from "./provider/Layers/ProviderEventLoggers.ts";
+import * as ProviderEventLoggers from "./provider/Layers/ProviderEventLoggers.ts";
 import { ProviderServiceLive } from "./provider/Layers/ProviderService.ts";
 import { ProviderSessionReaperLive } from "./provider/Layers/ProviderSessionReaper.ts";
 import { OpenCodeRuntimeLive } from "./provider/opencodeRuntime.ts";
@@ -85,6 +85,15 @@ import { connectHttpApiLayer } from "./cloud/http.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
+import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
+import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
+import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
+import * as DesktopTelemetryReceiver from "./resourceTelemetry/DesktopTelemetryReceiver.ts";
+import * as NativeTelemetryClient from "./resourceTelemetry/NativeTelemetryClient.ts";
+import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts";
+import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinary.ts";
+import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
+import * as UsageService from "./usage/UsageService.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -392,7 +401,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   // `ProviderService` (canonical stream, written after event normalization).
   // Provided once at the runtime level so every consumer sees the same
   // logger instances.
-  Layer.provideMerge(ProviderEventLoggersLive),
+  Layer.provideMerge(ProviderEventLoggers.layer),
   // `OpenCodeDriver.create()` yields `OpenCodeRuntime`; previously the old
   // `ProviderRegistryLive` pulled `OpenCodeRuntimeLive` in for itself, but
   // the rewritten registry reads snapshots off the instance registry and
@@ -424,10 +433,49 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   ),
 );
 
+// Upstream (2026-08 sync) split resource telemetry out of the diagnostics services and added
+// background policy + usage. `server.ts` composes these as BackgroundLayerLive /
+// ResourceDiagnosticsLayerLive / UsageLayerLive; this file is the t3team binary's parallel
+// composition and has to carry them too, or `runT3TeamServer` leaks their requirements out to
+// the CLI layer (which by contract supplies only ServerConfig).
+// TODO: this file duplicates server.ts wholesale and drifts on every upstream sync — it should
+// reuse server.ts's layer composition instead. Tracked separately.
+const T3TeamServerSettingsLayerLive = ServerSettings.layer.pipe(
+  Layer.provide(ServerSecretStoreLive),
+);
+const T3TeamNativeTelemetryLayerLive = NativeTelemetryClient.layer.pipe(
+  Layer.provide(ResourceMonitorBinary.layer),
+);
+const T3TeamDesktopTelemetryReceiverLayerLive = DesktopTelemetryReceiver.layer.pipe(
+  Layer.provideMerge(T3TeamServerSettingsLayerLive),
+);
+const T3TeamResourceTelemetryLayerLive = ResourceTelemetry.layer.pipe(
+  Layer.provideMerge(T3TeamNativeTelemetryLayerLive),
+  Layer.provideMerge(T3TeamDesktopTelemetryReceiverLayerLive),
+);
+const T3TeamHostPowerMonitorLayerLive = HostPowerMonitor.layer.pipe(
+  Layer.provide(T3TeamDesktopTelemetryReceiverLayerLive),
+);
+const T3TeamBackgroundLayerLive = BackgroundPolicy.layer.pipe(
+  Layer.provide(T3TeamHostPowerMonitorLayerLive),
+  Layer.provideMerge(T3TeamServerSettingsLayerLive),
+);
+const T3TeamUsageLayerLive = UsageService.layer.pipe(Layer.provide(T3TeamServerSettingsLayerLive));
+const T3TeamResourceDiagnosticsLayerLive = Layer.mergeAll(
+  T3TeamResourceTelemetryLayerLive,
+  ProcessDiagnostics.layer.pipe(Layer.provide(T3TeamResourceTelemetryLayerLive)),
+  ProcessResourceMonitor.layer.pipe(Layer.provide(T3TeamResourceTelemetryLayerLive)),
+);
+const T3TeamApplicationObservabilityLive = ObservabilityLive.pipe(
+  Layer.provideMerge(ResourceAttribution.layer),
+);
+
 const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
   // Misc.
-  Layer.provideMerge(ProcessDiagnostics.layer),
-  Layer.provideMerge(ProcessResourceMonitor.layer),
+  Layer.provideMerge(T3TeamBackgroundLayerLive),
+  Layer.provideMerge(T3TeamResourceDiagnosticsLayerLive),
+  Layer.provideMerge(T3TeamUsageLayerLive),
+  Layer.provideMerge(ServiceLauncherClient.layer),
   Layer.provideMerge(TraceDiagnostics.layer),
   Layer.provideMerge(AnalyticsService.layer),
   Layer.provideMerge(ExternalLauncher.layer),
@@ -592,7 +640,7 @@ export const makeT3TeamServerLayer = Layer.unwrap(
     return serverApplicationLayer.pipe(
       Layer.provideMerge(RuntimeServicesLive),
       Layer.provideMerge(HttpServerLive),
-      Layer.provide(ObservabilityLive),
+      Layer.provide(T3TeamApplicationObservabilityLive),
       Layer.provideMerge(FetchHttpClient.layer),
       Layer.provideMerge(VcsProcess.layer),
       Layer.provideMerge(PlatformServicesLive),

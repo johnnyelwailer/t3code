@@ -48,6 +48,8 @@ import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
+import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiveness.ts";
+import * as ThreadPlanProgress from "./orchestration/ThreadPlanProgress.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
@@ -121,7 +123,14 @@ const StubProviderLive = (messages: ReadonlyArray<ReadonlyArray<string>>) =>
 const EngineLive = OrchestrationEngineLive.pipe(
   // `provideMerge` (not `provide`): the test body reads the PROJECTED thread detail — the same
   // source the client snapshot is built from — to assert what a client can actually see.
-  Layer.provideMerge(OrchestrationProjectionSnapshotQueryLive),
+  // Upstream's shell mapper reads background liveness + plan progress per thread;
+  // both are provided INTO the snapshot query so the requirement is discharged here.
+  Layer.provideMerge(
+    OrchestrationProjectionSnapshotQueryLive.pipe(
+      Layer.provide(ThreadBackgroundLiveness.layer),
+      Layer.provide(ThreadPlanProgress.layer),
+    ),
+  ),
   Layer.provide(OrchestrationProjectionPipelineLive),
   Layer.provide(OrchestrationEventStoreLive),
   Layer.provide(OrchestrationCommandReceiptRepositoryLive),

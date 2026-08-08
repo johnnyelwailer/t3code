@@ -58,6 +58,8 @@ import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
+import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiveness.ts";
+import * as ThreadPlanProgress from "./orchestration/ThreadPlanProgress.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import { ServerConfig } from "./config.ts";
@@ -115,7 +117,14 @@ const StubProviderDriverLive = Layer.effectDiscard(
 );
 
 const EngineLive = OrchestrationEngineLive.pipe(
-  Layer.provide(OrchestrationProjectionSnapshotQueryLive),
+  // Upstream's shell mapper reads background liveness + plan progress per thread;
+  // both are provided INTO the snapshot query so the requirement is discharged here.
+  Layer.provide(
+    OrchestrationProjectionSnapshotQueryLive.pipe(
+      Layer.provide(ThreadBackgroundLiveness.layer),
+      Layer.provide(ThreadPlanProgress.layer),
+    ),
+  ),
   Layer.provide(OrchestrationProjectionPipelineLive),
   Layer.provide(OrchestrationEventStoreLive),
   Layer.provide(OrchestrationCommandReceiptRepositoryLive),

@@ -41,6 +41,7 @@ apps/server/~/.t3code/
 .showcase/
 apps/mobile/.showcase/
 artifacts/app-store/screenshots/
+native/**/target/
 node_modules/
 .alchemy/
 .nexi-dev/

@@ -1,10 +1,13 @@
+import * as NodeZlib from "node:zlib";
+
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import compression from "compression";
 import { defineProject, type TestProjectInlineConfiguration } from "vite-plus/test/config";
 import "vite-plus/test/config";
-import type { ViteUserConfig } from "vite-plus";
+import type { Connect, Plugin, ViteUserConfig } from "vite-plus";
 import pkg from "./package.json" with { type: "json" };
 
 import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
@@ -70,6 +73,8 @@ const sourcemapEnv = process.env.T3CODE_WEB_SOURCEMAP?.trim().toLowerCase();
 // Vite 8.1's experimental bundled dev mode: serves rolldown-bundled chunks in
 // dev for much faster startup/reload on large module graphs, with HMR served
 // as hot patches. Opt-in while experimental: T3CODE_BUNDLED_DEV=1 pnpm dev:web
+// The dev runner defaults this on for --share runs (remote browsers pay a
+// round trip per import level in unbundled dev); T3CODE_BUNDLED_DEV=0 opts out.
 const bundledDevEnv = process.env.T3CODE_BUNDLED_DEV?.trim().toLowerCase();
 const bundledDev = bundledDevEnv === "1" || bundledDevEnv === "true";
 
@@ -129,6 +134,28 @@ function resolveDevProxyTarget(
 
 const devProxyTarget = resolveDevProxyTarget(process.env.T3CODE_PORT, configuredWsUrl);
 
+// Vite's dev server sends JS uncompressed. On localhost that is free; over a
+// shared origin (tailnet, LAN) it is the whole cold-start: bundled dev serves
+// one ~25 MB chunk, and a typical uplink moves that in about a minute while
+// both machines sit idle. Compressing turns it into a few seconds of CPU.
+// Brotli quality 5 keeps encode time in the hundreds of ms; the default
+// (quality 11) would trade the transfer stall for an equally long encode stall.
+function devCompressionPlugin(): Plugin {
+  return {
+    name: "t3code:dev-compression",
+    apply: "serve",
+    configureServer(server) {
+      // compression() is typed against Express's req/res, which extend the
+      // node http objects Connect actually passes — safe to narrow.
+      server.middlewares.use(
+        compression({
+          brotli: { params: { [NodeZlib.constants.BROTLI_PARAM_QUALITY]: 5 } },
+        }) as unknown as Connect.NextHandleFunction,
+      );
+    },
+  };
+}
+
 // Vite rejects requests whose Host header isn't localhost, which blocks sharing
 // a dev server over Tailscale/LAN. Tailnet names are safe to allow wholesale:
 // the DNS is controlled by tailscale, so they can't be rebound by an attacker.
@@ -139,8 +166,15 @@ const configuredAllowedHosts = (process.env.T3CODE_DEV_ALLOWED_HOSTS ?? "")
   .filter((entry) => entry.length > 0);
 const allowedHosts = [".ts.net", ...configuredAllowedHosts];
 
-const config: ViteUserConfig = {
+// `defineConfig(config)` trips tsgo's instantiation-depth limit with vite-plus-core 0.2.2's
+// overloads (both function and object form), and after the 2026-08 upstream sync the plain
+// `: ViteUserConfig` annotation trips it too — the config object grew past what the checker
+// will compare structurally. `satisfies` on the narrow parts that matter keeps the useful
+// checking without instantiating the whole union: vite accepts a plain object default export.
+const config = {
+  assetsInclude: ["**/*.wasm"],
   plugins: [
+    devCompressionPlugin(),
     tanstackRouter(),
     react(),
     babel({
@@ -201,6 +235,13 @@ const config: ViteUserConfig = {
     port,
     strictPort: true,
     allowedHosts,
+    // Transform the whole module graph at server start instead of on the
+    // first request. Without this, a cold worktree discovers and transforms
+    // modules one import-level at a time while the browser waits — which
+    // over a tailnet origin turns into minutes of waterfall.
+    warmup: {
+      clientFiles: ["./src/main.tsx"],
+    },
     ...(devProxyTarget
       ? {
           // One entry per shared prefix; the server's dev catch-all 404s the
@@ -256,8 +297,4 @@ const config: ViteUserConfig = {
   },
 };
 
-// `defineConfig(config)` trips tsgo's instantiation-depth limit with
-// vite-plus-core 0.2.2's overloads (both function and object form). The
-// annotation on `config` gives the same type safety; vite accepts a plain
-// object default export.
 export default config;

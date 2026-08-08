@@ -1,6 +1,6 @@
 /**
  * First-run application of a pack theme's `appearanceDefaults` onto the client appearance settings
- * a USER owns (`sidebarV2Enabled`, `glassOpacity`).
+ * a USER owns (`legacySidebarEnabled`, `glassOpacity`).
  *
  * These are preferences, not theme tokens, so the rule is NOT the one the setup profile uses
  * ("pack default outranks nothing-stored"). Applied that way, every page load would re-assert the
@@ -21,7 +21,7 @@ export type T3TeamPackAppearanceDefaults = {
 
 /** The client-settings patch to write. */
 export type T3TeamAppearanceDefaultsPatch = {
-  readonly sidebarV2Enabled?: boolean;
+  readonly legacySidebarEnabled?: boolean;
   readonly glassOpacity?: number;
 };
 
@@ -55,11 +55,12 @@ export function resolveT3TeamAppearanceDefaults(input: {
   }
   const defaults = input.defaults;
   const patch: T3TeamAppearanceDefaultsPatch = {
-    // The lens is stored as upstream's beta flag. This is the single mapping on the WRITE side,
-    // mirroring `useT3TeamSidebarLens` on the read side.
+    // The lens is stored as upstream's sidebar switch, which is now the INVERTED
+    // `legacySidebarEnabled`. This is the single mapping on the WRITE side, mirroring
+    // `useT3TeamSidebarLens` on the read side.
     ...(defaults.sidebarLens === undefined
       ? {}
-      : { sidebarV2Enabled: defaults.sidebarLens === "work" }),
+      : { legacySidebarEnabled: defaults.sidebarLens !== "work" }),
     ...(defaults.glassOpacity === undefined ? {} : { glassOpacity: defaults.glassOpacity }),
   };
   // A defaults block that declares nothing is still "handled": recording the marker stops this
