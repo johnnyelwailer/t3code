@@ -170,3 +170,7 @@ export function useGitHubRepositoryDiscovery({
     toggleSuggestion,
   };
 }
+
+/** The hook's resolved shape, named here so the components that render it need not import
+ * the section that happens to call it. */
+export type GitHubDiscoveryState = ReturnType<typeof useGitHubRepositoryDiscovery>;

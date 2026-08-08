@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/t3team/components/ui/t3team-select";
-import type { GitHubDiscoveryState } from "~/t3team/components/t3team-GitHubRepositoryDiscoverySection";
+import type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 
 /**
  * Host picker shown only when the user is authenticated to more than one `gh` host (e.g.

@@ -20,7 +20,8 @@ import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 import { githubAuthTone } from "~/t3team/components/t3team-GitHubRepositoryDiscoveryAuthFields";
 
-export type GitHubDiscoveryState = ReturnType<typeof useGitHubRepositoryDiscovery>;
+// Re-exported: this was its original home, and other modules import it from here.
+export type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 
 export function GitHubRepositoryDiscoverySection({
   enabled = true,
