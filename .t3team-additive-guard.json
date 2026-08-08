@@ -41,6 +41,7 @@
     "apps/server/src/persistence/Layers/ProjectionThreadMessages.ts",
     "apps/server/src/persistence/Layers/ProjectionThreads.ts",
     "apps/server/src/persistence/Migrations.ts",
+    "apps/server/src/persistence/Migrations/035_ProjectionThreadTitleRegeneration.test.ts",
     "apps/server/src/persistence/Services/ProjectionThreadMessages.ts",
     "apps/server/src/persistence/Services/ProjectionThreads.ts",
     "apps/server/src/project/ProjectSetupScriptRunner.test.ts",
