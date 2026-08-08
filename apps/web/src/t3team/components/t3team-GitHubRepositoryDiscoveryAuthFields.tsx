@@ -1,3 +1,4 @@
+import { CheckCircle2, ShieldAlert } from "lucide-react";
 import { Input } from "~/t3team/components/ui/t3team-input";
 import {
   Select,
@@ -13,6 +14,29 @@ import type { GitHubDiscoveryState } from "~/t3team/components/t3team-GitHubRepo
  * `github.com` and a GitHub Enterprise host). Single-host users keep the plain manual "Host" input
  * below with no added picker noise.
  */
+/**
+ * The connected/sign-in-required badge treatment for a discovery auth status.
+ *
+ * Lives beside the auth fields rather than in the section that renders it: this is auth
+ * presentation, and the section was over the fork LOC ceiling carrying it.
+ */
+export function githubAuthTone(
+  status: "checking" | "authenticated" | "unauthenticated" | "unknown",
+) {
+  if (status === "authenticated") {
+    return {
+      badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      label: "Connected",
+      icon: CheckCircle2,
+    };
+  }
+  return {
+    badge: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    label: status === "checking" ? "Checking" : "Sign in required",
+    icon: ShieldAlert,
+  };
+}
+
 export function GitHubAuthHostPicker({ discovery }: { discovery: GitHubDiscoveryState }) {
   if (discovery.authenticatedHosts.length <= 1) {
     return null;
