@@ -17,27 +17,18 @@
  */
 import type { EnvironmentAppearance } from "@t3tools/contracts";
 
-import {
-  readAppearanceModePreference,
-  readThemeHalves,
-  readThemePreference,
-  writeThemePreference,
-} from "~/hooks/useTheme";
-import {
-  applyThemePalette,
-  getCustomThemes,
-  installCustomTheme,
-  resolveThemeAppearance,
-  resolveThemeHalf,
-  THEME_APPEARANCE_MODE_STORAGE_KEY,
-  updateCustomTheme,
-} from "~/themePalette";
+import { readThemePreference, writeThemePreference } from "~/hooks/useTheme";
+import { getCustomThemes, installCustomTheme, updateCustomTheme } from "~/themePalette";
 
 import {
   isT3TeamPackThemeId,
   t3teamPackThemeDefinition,
   t3teamPackThemeId,
 } from "./t3team-packThemeDefinition";
+import {
+  applyT3TeamSelectedTheme,
+  seedT3TeamPackAppearanceMode,
+} from "./t3team-packThemePaint";
 
 export const T3TEAM_PACK_THEME_APPLIED_STORAGE_KEY = "t3team:pack-theme-applied";
 
@@ -110,56 +101,12 @@ export function installT3TeamPackTheme(appearance: EnvironmentAppearance | undef
   writeAppliedMarker(marker);
   try {
     writeThemePreference(definition.id);
-    seedAppearanceMode(appearance.defaultMode);
+    seedT3TeamPackAppearanceMode(appearance.defaultMode);
   } catch {
     // A storage-blocked browser must not throw out of the appearance effect; the palette is still
     // painted below, it just won't be remembered across loads.
   }
-  applySelectedPackTheme(definition.id);
-}
-
-/**
- * Carry the pack's `defaultMode` into upstream's appearance-mode preference, once.
- *
- * Without this the pack's declared mode is simply ignored: `readAppearanceModePreference` falls
- * back to `getThemePreferenceMode(theme) ?? "light"`, and a custom theme's nominal appearance is
- * "light" — so a pack asking for `system` would never follow the OS. Written only when the user
- * has no stored mode, because this is a user-owned preference the distribution may only seed.
- */
-function seedAppearanceMode(defaultMode: EnvironmentAppearance["defaultMode"]): void {
-  if (defaultMode === undefined) return;
-  if (window.localStorage.getItem(THEME_APPEARANCE_MODE_STORAGE_KEY) !== null) return;
-  window.localStorage.setItem(THEME_APPEARANCE_MODE_STORAGE_KEY, defaultMode);
-}
-
-/**
- * Paint the selected theme the way upstream's own `applyTheme` does.
- *
- * `applyThemePalette(id)` ALONE is not enough and the difference is invisible in tests: with no
- * appearance argument it falls back to the definition's nominal appearance ("light" for a pack
- * whose `defaultMode` is "system"), and it does not touch the `dark` class. On a machine in dark
- * mode that paints the light palette while `<html>` still carries `.dark`, so every `dark:`
- * utility and `color-scheme` rule renders its dark variant over light colors.
- *
- * Upstream's `applyTheme` is module-private, so this mirrors it with the exported resolvers.
- */
-function applySelectedPackTheme(themeId: string): void {
-  const appearanceMode = readAppearanceModePreference(themeId);
-  const followSystem = appearanceMode === "system";
-  const systemDark =
-    followSystem && typeof window.matchMedia === "function"
-      ? window.matchMedia("(prefers-color-scheme: dark)").matches
-      : false;
-  const halves = readThemeHalves();
-  const appearance = resolveThemeAppearance(
-    themeId,
-    systemDark,
-    followSystem,
-    appearanceMode,
-    halves,
-  );
-  applyThemePalette(resolveThemeHalf(themeId, halves, appearance), appearance);
-  document.documentElement.classList.toggle("dark", appearance === "dark");
+  applyT3TeamSelectedTheme(definition.id);
 }
 
 /** True when the user is currently wearing a pack-provided theme. */
