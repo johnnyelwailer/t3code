@@ -165,7 +165,7 @@ This project vendors external repositories under `.repos/` as read-only referenc
 
 ## Session-learned gotchas (friction-optimizer, 2026-07-07)
 
-- `vp run dev:desktop` hot-reloads **web + desktop only**; the backend runs from the prebuilt `apps/server/dist/bin.mjs`. After server-source changes: `pnpm -C apps/server build:bundle` + restart, or use `dev:server` for a watched backend. **New HTTP routes must be registered in BOTH registries** — `makeT3TeamRoutesLayer` _and_ the route-merge list in `server.ts`. Verify a new endpoint against the actually-running server/port before claiming done.
+- `vp run dev:desktop` hot-reloads **web + desktop only**; the backend runs from the prebuilt `apps/server/dist/bin.mjs`. After server-source changes: `pnpm -C apps/server build:bundle` + restart, or use `dev:server` for a watched backend. **New HTTP routes are registered once**, in the route-merge list in `server.ts` — the former `makeT3TeamRoutesLayer` duplicate registry (and the whole `t3team-server.ts` copy of `server.ts`) was removed in the 2026-08 upstream sync, because it drifted on every sync. Verify a new endpoint against the actually-running server/port before claiming done.
 - Run vitest packages **serially** — full concurrent runs die with exit 137 (OOM SIGKILL). A 137 is a kill, not a test failure; re-run that package serially before triaging.
 - Pre-commit hook duplicates lint/test; bypass with `--no-verify` only when test+typecheck already ran green in-session, and say so.
 - Live testing = the **real user path**: never mint tokens, scan storage for credentials, or shim past auth/UI ("NO SHIMS"). If blocked, report the blocker.

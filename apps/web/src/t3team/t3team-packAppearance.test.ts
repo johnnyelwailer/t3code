@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import { readThemePreference, writeThemePreference } from "~/hooks/useTheme";
+import { getCustomThemes } from "~/themePalette";
+
 import { applyT3TeamPackAppearance } from "./t3team-packAppearance";
+import { t3teamPackThemeId } from "./t3team-packThemeDefinition";
 
 describe("pack appearance", () => {
-  afterEach(() => applyT3TeamPackAppearance(undefined));
+  afterEach(() => {
+    applyT3TeamPackAppearance(undefined);
+    localStorage.clear();
+  });
 
-  it("installs scoped light, dark, typography, shape and density CSS", () => {
+  it("installs typography, shape and density CSS, and leaves color to the theme library", () => {
     applyT3TeamPackAppearance({
       themeId: "nexplore",
       name: "Nexplore",
@@ -16,11 +23,38 @@ describe("pack appearance", () => {
       typography: { sans: "Inter, sans-serif", mono: "DM Mono, monospace" },
       shape: { radius: "0.5rem" },
     });
-    const css = document.getElementById("t3team-pack-theme")?.textContent;
-    expect(css).toContain(":root{--primary:#f05a00");
-    expect(css).toContain(":root.dark{--primary:#ff6a0a");
+    const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
+    expect(css).toContain("--t3team-font-sans:Inter, sans-serif");
     expect(css).toContain("--radius:0.5rem");
+    expect(css).toContain("font-size:96%");
     expect(document.documentElement.dataset.t3teamTheme).toBe("nexplore");
+
+    // The whole point of the unification: colors upstream owns are NOT painted here any more.
+    // `primary` now reaches the app as the theme library's `messageAction` role.
+    expect(css).not.toContain("--primary:");
+    expect(document.documentElement.dataset.themeId).toBe(t3teamPackThemeId("nexplore"));
+    const installed = getCustomThemes().find((theme) => theme.id === t3teamPackThemeId("nexplore"));
+    expect(installed?.variants?.light.messageAction).toBe("#f05a00");
+    expect(installed?.variants?.dark.messageAction).toBe("#ff6a0a");
+  });
+
+  it("keeps the pack theme selectable rather than locking it in", () => {
+    applyT3TeamPackAppearance({
+      themeId: "nexplore",
+      name: "Nexplore",
+      colors: { light: { primary: "#f05a00" }, dark: { primary: "#ff6a0a" } },
+    });
+    expect(document.documentElement.dataset.themeId).toBe(t3teamPackThemeId("nexplore"));
+
+    // A user switches to a built-in…
+    writeThemePreference("grove");
+    // …and re-applying the SAME pack palette must not drag them back.
+    applyT3TeamPackAppearance({
+      themeId: "nexplore",
+      name: "Nexplore",
+      colors: { light: { primary: "#f05a00" }, dark: { primary: "#ff6a0a" } },
+    });
+    expect(readThemePreference()).toBe("grove");
   });
 
   it("emits a heading-only display font with @font-face from the brand asset", () => {
@@ -39,7 +73,7 @@ describe("pack appearance", () => {
     expect(css).not.toContain("body{font-family:var(--t3team-font-display)");
   });
 
-  it("maps sidebar tokens and a raw header background value onto CSS variables", () => {
+  it("routes sidebar colors through the theme library and keeps fork-only tokens local", () => {
     applyT3TeamPackAppearance({
       themeId: "nexplore",
       name: "Nexplore",
@@ -47,6 +81,7 @@ describe("pack appearance", () => {
         light: {
           sidebar: "#fafafa",
           sidebarRowHover: "#eeeeee",
+          success: "#0a7f2e",
           sidebarHeaderBackground: "linear-gradient(90deg, #f05a00, #ff8a3d)",
         },
         dark: {
@@ -55,11 +90,20 @@ describe("pack appearance", () => {
         },
       },
     });
+
+    // Sidebar colors have upstream roles, so they travel with the theme…
+    const installed = getCustomThemes().find((theme) => theme.id === t3teamPackThemeId("nexplore"));
+    expect(installed?.variants?.light.sidebar).toBe("#fafafa");
+    expect(installed?.variants?.light.sidebarRowHover).toBe("#eeeeee");
+    expect(installed?.variants?.dark.sidebar).toBe("#111111");
+
+    // …while the tokens upstream deliberately leaves independent stay on the fork's element.
     const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
-    expect(css).toContain(":root{--sidebar:#fafafa");
-    expect(css).toContain("--sidebar-row-hover:#eeeeee");
-    expect(css).toContain("--t3team-sidebar-header-background:linear-gradient(90deg, #f05a00, #ff8a3d)");
-    expect(css).toContain(":root.dark{--sidebar:#111111");
+    expect(css).not.toContain("--sidebar:");
+    expect(css).toContain("--success:#0a7f2e");
+    expect(css).toContain(
+      "--t3team-sidebar-header-background:linear-gradient(90deg, #f05a00, #ff8a3d)",
+    );
     expect(css).toContain(
       "--t3team-sidebar-header-background:url(https://packs.example/header.png)",
     );

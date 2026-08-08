@@ -166,11 +166,15 @@ const configuredAllowedHosts = (process.env.T3CODE_DEV_ALLOWED_HOSTS ?? "")
   .filter((entry) => entry.length > 0);
 const allowedHosts = [".ts.net", ...configuredAllowedHosts];
 
-// `defineConfig(config)` trips tsgo's instantiation-depth limit with vite-plus-core 0.2.2's
-// overloads (both function and object form), and after the 2026-08 upstream sync the plain
-// `: ViteUserConfig` annotation trips it too — the config object grew past what the checker
-// will compare structurally. `satisfies` on the narrow parts that matter keeps the useful
-// checking without instantiating the whole union: vite accepts a plain object default export.
+// Typing this config is a standing fight with the checker, and every option loses differently:
+//   - `defineConfig(config)` trips tsgo's instantiation-depth limit (vite-plus-core 0.2.2
+//     overloads, both function and object form).
+//   - `const config: ViteUserConfig` trips the same limit after the 2026-08 upstream sync grew
+//     the object (assetsInclude / devCompressionPlugin / server.warmup).
+//   - leaving it inferred makes the default export unnameable (TS2883), because the plugin array
+//     element type resolves into rolldown's own `Plugin` under a pnpm-hashed path.
+// So: infer locally (cheap), and widen once at the export boundary. The individual option values
+// are still checked where they are constructed; only the whole-object comparison is skipped.
 const config = {
   assetsInclude: ["**/*.wasm"],
   plugins: [
@@ -297,4 +301,4 @@ const config = {
   },
 };
 
-export default config;
+export default config as unknown as ViteUserConfig;

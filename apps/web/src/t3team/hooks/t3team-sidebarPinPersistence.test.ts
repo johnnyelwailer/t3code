@@ -2,12 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DEFAULT_CLIENT_SETTINGS, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 
-const { mockReadLocalApi } = vi.hoisted(() => ({
-  mockReadLocalApi: vi.fn(),
-}));
+const { mockReadLocalApi, mockReadPrimaryServerSettings, mockUpdatePrimaryServerSettings } =
+  vi.hoisted(() => ({
+    mockReadLocalApi: vi.fn(),
+    mockReadPrimaryServerSettings: vi.fn(),
+    mockUpdatePrimaryServerSettings: vi.fn(),
+  }));
 
 vi.mock("~/localApi", () => ({
   readLocalApi: mockReadLocalApi,
+}));
+
+// Server settings no longer hang off `LocalApi` (upstream retired `LocalApi.server` in the
+// 2026-08 sync); they are reached through the environment RPC via this adapter.
+vi.mock("~/t3team/hooks/t3team-serverSettingsAccess", () => ({
+  readPrimaryServerSettings: mockReadPrimaryServerSettings,
+  updatePrimaryServerSettings: mockUpdatePrimaryServerSettings,
 }));
 
 import {
@@ -25,6 +35,8 @@ describe("sidebar pin persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadLocalApi.mockReturnValue(null);
+    mockReadPrimaryServerSettings.mockReturnValue(null);
+    mockUpdatePrimaryServerSettings.mockResolvedValue(undefined);
   });
 
   it("reads persisted sidebar pins from server settings", () => {
@@ -93,9 +105,9 @@ describe("sidebar pin persistence", () => {
       ticketId: "ticket-9",
       pinnedAt: "2026-05-23T12:00:00.000Z",
     });
-    const updateSettings = vi.fn().mockResolvedValue(undefined);
     const setClientSettings = vi.fn().mockResolvedValue(undefined);
 
+    mockReadPrimaryServerSettings.mockReturnValue(DEFAULT_SERVER_SETTINGS);
     mockReadLocalApi.mockReturnValue({
       persistence: {
         getClientSettings: vi.fn().mockResolvedValue({
@@ -104,14 +116,10 @@ describe("sidebar pin persistence", () => {
         }),
         setClientSettings,
       },
-      server: {
-        getSettings: vi.fn().mockResolvedValue(DEFAULT_SERVER_SETTINGS),
-        updateSettings,
-      },
     });
 
     await expect(migrateLegacyStoredSidebarPinsToServer()).resolves.toEqual([jiraPin]);
-    expect(updateSettings).toHaveBeenCalledWith({
+    expect(mockUpdatePrimaryServerSettings).toHaveBeenCalledWith({
       t3teamStoredSidebarPinsJson: JSON.stringify([jiraPin]),
     });
     expect(setClientSettings).toHaveBeenCalledWith({
@@ -126,19 +134,10 @@ describe("sidebar pin persistence", () => {
       ticketId: "ticket-9",
       pinnedAt: "2026-05-23T12:00:00.000Z",
     });
-    const updateSettings = vi.fn().mockResolvedValue(undefined);
-
-    mockReadLocalApi.mockReturnValue({
-      persistence: {},
-      server: {
-        updateSettings,
-      },
-    });
-
     persistStoredSidebarPins([jiraPin]);
 
     await vi.waitFor(() => {
-      expect(updateSettings).toHaveBeenCalledWith({
+      expect(mockUpdatePrimaryServerSettings).toHaveBeenCalledWith({
         t3teamStoredSidebarPinsJson: JSON.stringify([jiraPin]),
       });
     });

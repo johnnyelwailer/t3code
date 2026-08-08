@@ -840,6 +840,10 @@ const buildAppUnderTest = (options?: {
               updatedAt: "1970-01-01T00:00:00.000Z",
             }),
           searchThreads: () => Effect.succeed({ matches: [] }),
+          // t3team addition to the service; defaulted here so upstream tests that only override
+          // the members they care about (e.g. the subscribeThread resume-gap cases) don't hit
+          // `Unimplemented method "threadExists"` when ws.ts checks liveness.
+          threadExists: () => Effect.succeed(true),
           getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
           getProjectShellById: () => Effect.succeed(Option.none()),
           getThreadShellById: () => Effect.succeed(Option.none()),

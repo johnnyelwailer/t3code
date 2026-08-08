@@ -2,48 +2,24 @@ import type { EnvironmentAppearance } from "@t3tools/contracts";
 import { useSyncExternalStore } from "react";
 
 import { applyT3TeamPackFavicon, pickT3TeamPackBrandAsset } from "./t3team-packBrand";
+import { installT3TeamPackTheme } from "./t3team-packThemeInstall";
+import { T3TEAM_PACK_ONLY_COLOR_TOKENS } from "./t3team-packThemeRoles";
 
-const COLOR_VARIABLES: Readonly<Record<string, string>> = {
-  background: "--background",
-  foreground: "--foreground",
-  card: "--card",
-  cardForeground: "--card-foreground",
-  popover: "--popover",
-  popoverForeground: "--popover-foreground",
-  primary: "--primary",
-  primaryForeground: "--primary-foreground",
-  secondary: "--secondary",
-  secondaryForeground: "--secondary-foreground",
-  muted: "--muted",
-  mutedForeground: "--muted-foreground",
-  accent: "--accent",
-  accentForeground: "--accent-foreground",
-  destructive: "--destructive",
-  destructiveForeground: "--destructive-foreground",
-  border: "--border",
-  input: "--input",
-  ring: "--ring",
-  info: "--info",
-  infoForeground: "--info-foreground",
-  success: "--success",
-  successForeground: "--success-foreground",
-  warning: "--warning",
-  warningForeground: "--warning-foreground",
-  appChromeBackground: "--app-chrome-background",
-  sidebar: "--sidebar",
-  sidebarForeground: "--sidebar-foreground",
-  sidebarMutedForeground: "--sidebar-muted-foreground",
-  sidebarControlSurface: "--sidebar-control-surface",
-  sidebarRowHover: "--sidebar-row-hover",
-  sidebarRowActive: "--sidebar-row-active",
-  sidebarRowSelected: "--sidebar-row-selected",
-  sidebarBorder: "--sidebar-border",
-  sidebarStageFade: "--sidebar-stage-fade",
-  // Raw CSS value (color, gradient, or url(...)) applied via `background` on the
-  // Team sidebar header's background layer; unset falls back to transparent so
-  // the stage backdrop (or bare header) still shows through unchanged.
-  sidebarHeaderBackground: "--t3team-sidebar-header-background",
-};
+/**
+ * Colors are NOT painted here any more.
+ *
+ * Upstream's theme engine owns color: a pack's palette is converted to an upstream
+ * `ThemeDefinition` and installed in the theme library (see `t3team-packThemeInstall.ts`), so it
+ * is painted by `applyThemePalette` through the `--app-theme-*` roles exactly like T3 Chat or
+ * Grove. Writing the derived shadcn variables from here — which is what this file used to do —
+ * sat downstream of that derivation and silently defeated the library.
+ *
+ * What remains here is everything upstream's `ThemeDefinition` cannot express: typography (incl.
+ * the brand display face), corner radius, density, and the handful of color tokens upstream
+ * deliberately leaves independent (info/success, the sidebar stage fade, the Team header
+ * background). `T3TEAM_PACK_ONLY_COLOR_TOKENS` is the authoritative list.
+ */
+const COLOR_VARIABLES = T3TEAM_PACK_ONLY_COLOR_TOKENS;
 const STYLE_ID = "t3team-pack-theme";
 let activeAppearance: EnvironmentAppearance | undefined;
 let listeners: Array<() => void> = [];
@@ -76,8 +52,10 @@ function themeCss(appearance: EnvironmentAppearance): string {
     : "";
   const radius = appearance.shape?.radius ? `--radius:${appearance.shape.radius};` : "";
   const density = appearance.density ? `font-size:${appearance.density * 100}%;` : "";
-  return `:root{${declarations(appearance.colors.light)};${sans}${mono}${display}${radius}${density}}
-    :root.dark{${declarations(appearance.colors.dark)}}
+  const light = declarations(appearance.colors.light);
+  const dark = declarations(appearance.colors.dark);
+  return `:root{${light ? `${light};` : ""}${sans}${mono}${display}${radius}${density}}
+    :root.dark{${dark}}
     body{font-family:var(--t3team-font-sans,"DM Sans Variable",sans-serif)}
     code,kbd,pre,samp{font-family:var(--t3team-font-mono,"DM Mono",monospace)}
     ${displayFontCss(appearance)}`;
@@ -87,6 +65,8 @@ export function applyT3TeamPackAppearance(appearance: EnvironmentAppearance | un
   activeAppearance = appearance;
   if (typeof document === "undefined") return;
   applyT3TeamPackFavicon(pickT3TeamPackBrandAsset(appearance?.brand, "mark", "light"));
+  // Colors go through upstream's theme library; this only paints what it has no role for.
+  installT3TeamPackTheme(appearance);
   let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
   if (!appearance) style?.remove();
   else {

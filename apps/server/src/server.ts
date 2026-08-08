@@ -553,8 +553,9 @@ export const makeRoutesLayer = Layer.mergeAll(
     staticAndDevRouteLayer,
     websocketRpcRouteLayer,
   ),
-  // t3team routes. New HTTP routes must ALSO be registered in `makeT3TeamRoutesLayer`
-  // (see AGENTS.md) — the two registries are separate and silently drift otherwise.
+  // t3team routes. This is now the ONLY route registry: the parallel `makeT3TeamRoutesLayer`
+  // in `t3team-server.ts` was deleted in the 2026-08 upstream sync, since the two copies drifted
+  // every time upstream moved. The `t3team` binary launches this same layer (cli/t3team-server.ts).
   Layer.mergeAll(
     t3teamAtlassianAccountsRouteLayer,
     t3teamAtlassianAssetRouteLayer,

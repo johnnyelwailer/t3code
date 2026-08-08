@@ -5,11 +5,11 @@
 /**
  * The description-apply route: that it is REACHABLE, and that it stays reachable.
  *
- * A route in this repo has to be registered in TWO places — `makeT3TeamRoutesLayer` in
- * `t3team-server.ts` AND the merge list in `server.ts` — and forgetting the second is a documented
- * trap that produces a silent 404 in the running app while every unit test stays green. This route
- * avoids the trap by joining `t3teamAtlassianBacklogRouteLayer`, which both registries already list;
- * the parity test below is what keeps that true for it and for every sibling.
+ * A route used to need registering in TWO places — `makeT3TeamRoutesLayer` in `t3team-server.ts`
+ * AND the merge list in `server.ts` — and forgetting the second produced a silent 404 in the
+ * running app while every unit test stayed green. The duplicate registry is gone (2026-08 upstream
+ * sync collapsed the two servers), so `server.ts` is the single registry; this route joins
+ * `t3teamAtlassianBacklogRouteLayer`, and the parity test below still guards reachability.
  */
 
 import * as NodeFS from "node:fs";

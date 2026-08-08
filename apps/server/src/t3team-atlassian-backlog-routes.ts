@@ -139,8 +139,8 @@ const t3teamAtlassianIssueStatusRouteLayer = HttpRouter.add(
 /**
  * The apply side of a `description` draft — deliberately the fourth sibling of update-assignee /
  * update-estimate / update-status rather than a new species: same POST-JSON shape, same account
- * plumbing, same `errorResponse` mapping. It joins the merged layer below, which both route
- * registries (`makeT3TeamRoutesLayer` and the merge list in `server.ts`) already include, so there
+ * plumbing, same `errorResponse` mapping. It joins the merged layer below, which the route registry
+ * (the merge list in `server.ts`, the only one since the 2026-08 sync) already includes, so there
  * is no second place to remember.
  */
 const t3teamAtlassianIssueDescriptionRouteLayer = HttpRouter.add(
