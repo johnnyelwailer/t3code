@@ -37,18 +37,12 @@ import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStor
 import { type WorkflowRun, WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
-import { makeWorkflowRunLifecycle } from "./t3team-workflowEngineDurability.ts";
-import {
-  createWorkflowRunController,
-  launchWorkflowRecipe,
-} from "./t3team-workflowEngineLaunch.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScripts.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
-import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeWorkflowRunRehydrator } from "./t3team-workflowRehydrateRun.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
@@ -69,16 +63,6 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     // let a restart quietly upgrade a parked run's powers. So the GRANT decides, never the shape of
     // the row: `host_tool_grant` is NULL exactly when the launch wired no bridge (migration 047).
     const toolBroker = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamToolBroker));
-    const hostToolClientFor = (run: WorkflowRun) => {
-      const grant = run.hostToolGrant;
-      if (toolBroker === undefined || grant === undefined || grant === null) return undefined;
-      return makeT3TeamWorkflowHostDraftToolClient({
-        broker: toolBroker,
-        launchThreadId: run.launchThreadId ?? undefined,
-        ...(grant.toolGroups === null ? {} : { allowedToolGroups: grant.toolGroups }),
-      });
-    };
-
     const suspended = yield* repo.listByStatus({ status: "suspended" });
     const sleeping = yield* repo.listByStatus({ status: "sleeping" });
     const paused = yield* repo.listByStatus({ status: "paused" });
@@ -116,97 +100,21 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     // for tool scratch files; the server cwd matches the bootstrapped project's workspace.
     const runsRoot = `${serverConfig.cwd}/.t3team-runs`;
 
-    // Rebuild the resume closure (CODE from layers) over the persisted DATA. Shared by both wake
-    // sources — the reactor (suspended) and the scheduler (sleeping) — so a restored run drives
-    // forward identically. `onSleep` re-arms the scheduler whenever a rebuilt run parks on a new
-    // `waitUntil` after resuming.
-    const rebuildController = (
-      run: (typeof suspended)[number],
-      scripts: Readonly<Record<string, import("@t3team/sdk").AnyScriptRef>>,
-    ): void => {
-      const lifecycle = makeWorkflowRunLifecycle({
-        repo,
-        row: run,
-        nowIso,
-        onSleep: () => {
-          void scheduler.rearm();
-        },
-        dispatch,
-        newId: () => t3teamRandomUUID(),
-      });
-      const hostToolClient = hostToolClientFor(run);
-      createWorkflowRunController({
-        runId: run.runId,
-        workflowPath: run.workflowPath,
-        args: run.args,
-        ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
-        ...(hostToolClient === undefined ? {} : { hostToolClient }),
-        runsRoot,
-        launchThreadId: run.launchThreadId ?? undefined,
-        projectId: run.projectId,
-        modelSelection: run.modelSelection,
-        defaultAgentModelSelection: resolveWorkflowAgentModel(run.modelSelection),
-        runtimeMode: run.runtimeMode,
-        interactionMode: run.interactionMode,
-        registry,
-        dispatch,
-        newId: () => t3teamRandomUUID(),
-        nowIso,
-        store,
-        lifecycle,
-      });
-      registry.registerMasterStop(run.runId, () =>
-        Effect.runPromise(
-          repo.clearPending({ runId: run.runId, status: "cancelled", updatedAt: nowIso() }),
-        ),
-      );
-    };
+    const { rebuildController, restartQueuedRun } = makeWorkflowRunRehydrator({
+      repo,
+      store,
+      registry,
+      runsRoot,
+      dispatch,
+      rearmScheduler: () => scheduler.rearm(),
+      toolBroker,
+      nowIso,
+    });
 
     // Durable queued rows preserve FIFO order (`listByStatus` sorts by creation time). Each
     // detached starter waits on the same fair permit queue used by fresh launches.
     for (const run of queued) {
-      const lifecycle = makeWorkflowRunLifecycle({
-        repo,
-        row: run,
-        nowIso,
-        onSleep: () => {
-          void scheduler.rearm();
-        },
-        dispatch,
-        newId: () => t3teamRandomUUID(),
-      });
-      registry.registerOwnership(run.runId, run.launchThreadId ?? undefined);
-      registry.registerMasterStop(run.runId, () =>
-        Effect.runPromise(
-          repo.clearPending({ runId: run.runId, status: "cancelled", updatedAt: nowIso() }),
-        ),
-      );
-      const scripts = yield* resolveRehydratedWorkflowScripts(run);
-      const hostToolClient = hostToolClientFor(run);
-      yield* Effect.promise(async () => {
-        if (!(await lifecycle.recordActive())) return;
-        await launchWorkflowRecipe({
-          runId: run.runId,
-          workflowPath: run.workflowPath,
-          args: run.args,
-          ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
-          ...(hostToolClient === undefined ? {} : { hostToolClient }),
-          runsRoot,
-          launchThreadId: run.launchThreadId ?? undefined,
-          projectId: run.projectId,
-          modelSelection: run.modelSelection,
-          defaultAgentModelSelection: resolveWorkflowAgentModel(run.modelSelection),
-          runtimeMode: run.runtimeMode,
-          interactionMode: run.interactionMode,
-          registry,
-          dispatch,
-          newId: () => t3teamRandomUUID(),
-          nowIso,
-          store,
-          lifecycle,
-          lifecycleAlreadyRunning: true,
-        });
-      }).pipe(Effect.forkDetach({ startImmediately: true }));
+      yield* restartQueuedRun(run, resolveRehydratedWorkflowScripts(run));
     }
 
     let restored = 0;
