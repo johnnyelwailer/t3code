@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { readThemePreference, writeThemePreference } from "~/hooks/useTheme";
-import { getCustomThemes } from "~/themePalette";
+import { getCustomThemes, getThemeColorsForMode, invalidateCustomThemes } from "~/themePalette";
 
 import { applyT3TeamPackAppearance } from "./t3team-packAppearance";
 import { t3teamPackThemeId } from "./t3team-packThemeDefinition";
@@ -13,7 +13,7 @@ describe("pack appearance", () => {
     localStorage.clear();
   });
 
-  it("installs typography, shape and density CSS, and leaves color to the theme library", () => {
+  it("installs typography and shape CSS, and leaves color to the theme library", () => {
     applyT3TeamPackAppearance({
       themeId: "nexplore",
       name: "Nexplore",
@@ -24,9 +24,17 @@ describe("pack appearance", () => {
       shape: { radius: "0.5rem" },
     });
     const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
-    expect(css).toContain("--t3team-font-sans:Inter, sans-serif");
+    // Pack fonts declare UPSTREAM's variables from a stylesheet, so a user's inline font choice
+    // still outranks them; the old fork-private `--t3team-font-*` + blanket `body{}` rule made
+    // Settings → Appearance → Font a no-op under a pack.
+    expect(css).toContain("--font-sans:Inter, sans-serif");
+    expect(css).toContain("--font-mono:DM Mono, monospace");
+    expect(css).not.toContain("--t3team-font-sans");
+    expect(css).not.toContain("body{font-family:");
     expect(css).toContain("--radius:0.5rem");
-    expect(css).toContain("font-size:96%");
+    // Density is no longer emitted as CSS: upstream sets `root.style.fontSize` inline and
+    // unconditionally, so a stylesheet percentage never applied. It seeds the preference instead.
+    expect(css).not.toContain("font-size:");
     expect(document.documentElement.dataset.t3teamTheme).toBe("nexplore");
 
     // The whole point of the unification: colors upstream owns are NOT painted here any more.
@@ -34,8 +42,59 @@ describe("pack appearance", () => {
     expect(css).not.toContain("--primary:");
     expect(document.documentElement.dataset.themeId).toBe(t3teamPackThemeId("nexplore"));
     const installed = getCustomThemes().find((theme) => theme.id === t3teamPackThemeId("nexplore"));
-    expect(installed?.variants?.light.messageAction).toBe("#f05a00");
-    expect(installed?.variants?.dark.messageAction).toBe("#ff6a0a");
+    expect(installed?.variants?.light?.messageAction).toBe("#f05a00");
+    expect(installed?.variants?.dark?.messageAction).toBe("#ff6a0a");
+  });
+
+  // Regression: the pack theme must SURVIVE a storage round-trip. Upstream re-validates stored
+  // theme ids with `isThemeId` (`/^[a-z0-9](?:[a-z0-9-]{0,47})$/`) on every load, but
+  // `installCustomTheme` does not — so an id upstream rejects installs fine, works in memory, and
+  // then vanishes on the next load, taking the distribution's whole palette with it. Asserting via
+  // `getCustomThemes()` alone cannot catch this: it returns the in-memory snapshot. Dropping the
+  // snapshot first forces the real parse.
+  it("survives a storage round-trip, so the palette is not lost on reload", () => {
+    applyT3TeamPackAppearance({
+      themeId: "nexplore",
+      name: "Nexplore",
+      colors: { light: { primary: "#f05a00" }, dark: { primary: "#ff6a0a" } },
+    });
+
+    invalidateCustomThemes();
+    const reloaded = getCustomThemes().find((theme) => theme.id === t3teamPackThemeId("nexplore"));
+    expect(reloaded).toBeDefined();
+    // Assert through the resolver, not the stored shape: upstream drops the variant that matches
+    // the base appearance (the base `colors` already carries that half), so checking
+    // `variants.light` directly would fail on a theme that is perfectly intact.
+    expect(getThemeColorsForMode(reloaded!, "light")?.messageAction).toBe("#f05a00");
+    expect(getThemeColorsForMode(reloaded!, "dark")?.messageAction).toBe("#ff6a0a");
+  });
+
+  // Regression: selecting the pack theme must resolve the appearance, not default to the
+  // definition's nominal half. A pack with `defaultMode: "system"` is nominally "light"; painting
+  // that on a dark-mode machine leaves `.dark` on <html> over a light palette, so every `dark:`
+  // utility renders its dark variant against light colors.
+  it("resolves the appearance and toggles the dark class when selecting the pack theme", () => {
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("dark"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+
+    try {
+      applyT3TeamPackAppearance({
+        themeId: "nexplore",
+        name: "Nexplore",
+        defaultMode: "system",
+        colors: { light: { background: "#ffffff" }, dark: { background: "#000000" } },
+      });
+      expect(document.documentElement.classList.contains("dark")).toBe(true);
+      expect(document.documentElement.style.getPropertyValue("--app-theme-canvas")).toBe("#000000");
+    } finally {
+      window.matchMedia = matchMedia;
+      document.documentElement.classList.remove("dark");
+    }
   });
 
   it("keeps the pack theme selectable rather than locking it in", () => {
@@ -93,14 +152,19 @@ describe("pack appearance", () => {
 
     // Sidebar colors have upstream roles, so they travel with the theme…
     const installed = getCustomThemes().find((theme) => theme.id === t3teamPackThemeId("nexplore"));
-    expect(installed?.variants?.light.sidebar).toBe("#fafafa");
-    expect(installed?.variants?.light.sidebarRowHover).toBe("#eeeeee");
-    expect(installed?.variants?.dark.sidebar).toBe("#111111");
+    expect(installed?.variants?.light?.sidebar).toBe("#fafafa");
+    expect(installed?.variants?.light?.sidebarRowHover).toBe("#eeeeee");
+    expect(installed?.variants?.dark?.sidebar).toBe("#111111");
 
     // …while the tokens upstream deliberately leaves independent stay on the fork's element.
     const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
     expect(css).not.toContain("--sidebar:");
     expect(css).toContain("--success:#0a7f2e");
+    // Tokens upstream DERIVES inside `html[data-theme-id]` must be emitted at that specificity or
+    // they lose the cascade silently: `:root` is (0,1,0) against the theme block's (0,1,1), and
+    // `data-theme-id` is always present once a theme is selected.
+    expect(css).toContain("html[data-theme-id]{");
+    expect(css).not.toMatch(/:root\{[^}]*--card-foreground/);
     expect(css).toContain(
       "--t3team-sidebar-header-background:linear-gradient(90deg, #f05a00, #ff8a3d)",
     );

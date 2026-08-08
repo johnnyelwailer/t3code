@@ -1262,6 +1262,11 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
+          -- t3team: the row decoder (ProjectionThreadMessageDbRowSchema) requires this key, so a
+          -- SELECT that omits it fails the whole page with "Missing key" rather than degrading.
+          -- Upstream added this windowed query without it; every message-selecting query here has
+          -- to carry the column.
+          t3team_ext_json AS "t3teamExt",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"

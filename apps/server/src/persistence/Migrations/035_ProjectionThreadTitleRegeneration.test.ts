@@ -13,8 +13,12 @@ layer("035_ProjectionThreadTitleRegeneration", (it) => {
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      yield* runMigrations({ toMigrationInclusive: 34 });
-      yield* runMigrations({ toMigrationInclusive: 35 });
+      // This migration keeps its upstream FILENAME but is registered as id 49 in this fork:
+      // ids 33-48 were already taken by t3team migrations when upstream landed 035-038, and the
+      // runner only applies ids above the last applied one, so re-using 35 would skip it forever
+      // on every existing fork database. See the numbering note in `Migrations.ts`.
+      yield* runMigrations({ toMigrationInclusive: 48 });
+      yield* runMigrations({ toMigrationInclusive: 49 });
 
       const columns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)

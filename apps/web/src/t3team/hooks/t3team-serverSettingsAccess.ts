@@ -17,12 +17,21 @@ import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
-import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
+import { primaryServerConfigAtom, serverEnvironment } from "~/state/server";
 
-/** Current primary-environment server settings, or `null` before an environment is connected. */
+/**
+ * Current primary-environment server settings, or `null` when they have not loaded yet.
+ *
+ * Reads `primaryServerConfigAtom` rather than `primaryServerSettingsAtom` ON PURPOSE. The latter
+ * falls back to `DEFAULT_SERVER_SETTINGS` when the config is absent, which makes "still loading"
+ * indistinguishable from "loaded, and the user has nothing stored". Callers here act on that
+ * difference destructively: the legacy pin migration treats empty server settings as proof the
+ * server has no pins and then overwrites them from local storage — so reading defaults mid-load
+ * would delete a user's real pins. `null` means "don't decide yet".
+ */
 export function readPrimaryServerSettings(): ServerSettings | null {
   if (appAtomRegistry.get(primaryEnvironmentIdAtom) === null) return null;
-  return appAtomRegistry.get(primaryServerSettingsAtom);
+  return appAtomRegistry.get(primaryServerConfigAtom)?.settings ?? null;
 }
 
 /**

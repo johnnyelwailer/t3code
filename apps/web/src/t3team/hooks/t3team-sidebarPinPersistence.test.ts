@@ -128,6 +128,31 @@ describe("sidebar pin persistence", () => {
     });
   });
 
+  // Regression: `readPrimaryServerSettings` must report "not loaded" as null rather than as
+  // DEFAULT_SERVER_SETTINGS. Reading defaults mid-load makes the migration below conclude the
+  // server has no pins and overwrite the user's real, already-synced pins from stale local state.
+  it("does not migrate while server settings are still loading", async () => {
+    const jiraPin = buildTicketSidebarPinnedItem({
+      projectId: "project-1",
+      ticketId: "ticket-9",
+      pinnedAt: "2026-05-23T12:00:00.000Z",
+    });
+
+    mockReadPrimaryServerSettings.mockReturnValue(null);
+    mockReadLocalApi.mockReturnValue({
+      persistence: {
+        getClientSettings: vi.fn().mockResolvedValue({
+          ...DEFAULT_CLIENT_SETTINGS,
+          t3teamStoredSidebarPinsJson: JSON.stringify([jiraPin]),
+        }),
+        setClientSettings: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    await expect(migrateLegacyStoredSidebarPinsToServer()).resolves.toBeNull();
+    expect(mockUpdatePrimaryServerSettings).not.toHaveBeenCalled();
+  });
+
   it("persists sidebar pins through server settings", async () => {
     const jiraPin = buildTicketSidebarPinnedItem({
       projectId: "project-1",

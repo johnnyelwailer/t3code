@@ -75,8 +75,8 @@ describe("t3teamPackThemeDefinition", () => {
       },
     });
 
-    expect(definition.variants?.light.canvas).toBe("#ffffff");
-    expect(definition.variants?.dark.canvas).toBe("#000000");
+    expect(definition.variants?.light?.canvas).toBe("#ffffff");
+    expect(definition.variants?.dark?.canvas).toBe("#000000");
   });
 
   it("opens in the pack's declared default mode", () => {
@@ -102,7 +102,7 @@ describe("t3teamPackThemeDefinition", () => {
       },
     });
     expect(system.appearance).toBe("light");
-    expect(system.variants?.dark.canvas).toBe("#000000");
+    expect(system.variants?.dark?.canvas).toBe("#000000");
   });
 
   it("namespaces pack theme ids so they cannot collide with built-ins", () => {

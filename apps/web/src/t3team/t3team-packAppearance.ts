@@ -3,7 +3,10 @@ import { useSyncExternalStore } from "react";
 
 import { applyT3TeamPackFavicon, pickT3TeamPackBrandAsset } from "./t3team-packBrand";
 import { installT3TeamPackTheme } from "./t3team-packThemeInstall";
-import { T3TEAM_PACK_ONLY_COLOR_TOKENS } from "./t3team-packThemeRoles";
+import {
+  T3TEAM_PACK_DERIVED_OVERRIDE_TOKENS,
+  T3TEAM_PACK_ONLY_COLOR_TOKENS,
+} from "./t3team-packThemeRoles";
 
 /**
  * Colors are NOT painted here any more.
@@ -15,19 +18,26 @@ import { T3TEAM_PACK_ONLY_COLOR_TOKENS } from "./t3team-packThemeRoles";
  * sat downstream of that derivation and silently defeated the library.
  *
  * What remains here is everything upstream's `ThemeDefinition` cannot express: typography (incl.
- * the brand display face), corner radius, density, and the handful of color tokens upstream
- * deliberately leaves independent (info/success, the sidebar stage fade, the Team header
- * background). `T3TEAM_PACK_ONLY_COLOR_TOKENS` is the authoritative list.
+ * the brand display face), corner radius, and two groups of colors — the ones upstream leaves
+ * independent, and the few it derives from a role the pack cannot address separately. The two
+ * groups need DIFFERENT selectors (see `t3team-packThemeRoles.ts`), which is why they are emitted
+ * as separate rules rather than one block.
  */
-const COLOR_VARIABLES = T3TEAM_PACK_ONLY_COLOR_TOKENS;
 const STYLE_ID = "t3team-pack-theme";
 let activeAppearance: EnvironmentAppearance | undefined;
 let listeners: Array<() => void> = [];
 
-const declarations = (colors: Readonly<Record<string, string>>): string =>
-  Object.entries(colors)
-    .flatMap(([key, value]) => (COLOR_VARIABLES[key] ? [`${COLOR_VARIABLES[key]}:${value}`] : []))
-    .join(";");
+const declarationsFor =
+  (variables: Readonly<Record<string, string>>) =>
+  (colors: Readonly<Record<string, string>>): string =>
+    Object.entries(colors)
+      .flatMap(([key, value]) => (variables[key] ? [`${variables[key]}:${value}`] : []))
+      .join(";");
+
+/** Independent tokens: `:root` is enough, nothing downstream re-derives them. */
+const declarations = declarationsFor(T3TEAM_PACK_ONLY_COLOR_TOKENS);
+/** Derived tokens: need the theme block's specificity to beat `html[data-theme-id]`. */
+const overrideDeclarations = declarationsFor(T3TEAM_PACK_DERIVED_OVERRIDE_TOKENS);
 
 function displayFontCss(appearance: EnvironmentAppearance): string {
   const stack = appearance.typography?.display;
@@ -41,23 +51,30 @@ function displayFontCss(appearance: EnvironmentAppearance): string {
 }
 
 function themeCss(appearance: EnvironmentAppearance): string {
-  const sans = appearance.typography?.sans
-    ? `--t3team-font-sans:${appearance.typography.sans};`
-    : "";
-  const mono = appearance.typography?.mono
-    ? `--t3team-font-mono:${appearance.typography.mono};`
-    : "";
+  // Pack fonts declare upstream's OWN variables, and do it from a stylesheet on purpose.
+  // `applyAppearanceFontVariables` writes `--font-sans`/`--font-mono` as INLINE styles on <html>
+  // only when the user picked a font, and removes them otherwise — so an inline (user) value
+  // outranks this stylesheet automatically, and the pack supplies the brand default when the user
+  // has not chosen. Declaring fork-private `--t3team-font-*` and then forcing them onto `body`
+  // (what this used to do) inverted that: Settings → Appearance → Font became a no-op under a pack.
+  const sans = appearance.typography?.sans ? `--font-sans:${appearance.typography.sans};` : "";
+  const mono = appearance.typography?.mono ? `--font-mono:${appearance.typography.mono};` : "";
   const display = appearance.typography?.display
     ? `--t3team-font-display:${appearance.typography.display};`
     : "";
   const radius = appearance.shape?.radius ? `--radius:${appearance.shape.radius};` : "";
-  const density = appearance.density ? `font-size:${appearance.density * 100}%;` : "";
+  // NOTE: `density` is deliberately NOT emitted as `font-size:%` any more. Upstream sets
+  // `root.style.fontSize` inline and unconditionally, so a stylesheet percentage never won —
+  // pack density was silently dead. It now seeds the user's interface font size once, via
+  // `appearanceDefaults` (see t3team-packAppearanceDefaults.ts).
   const light = declarations(appearance.colors.light);
   const dark = declarations(appearance.colors.dark);
-  return `:root{${light ? `${light};` : ""}${sans}${mono}${display}${radius}${density}}
+  const lightOverride = overrideDeclarations(appearance.colors.light);
+  const darkOverride = overrideDeclarations(appearance.colors.dark);
+  return `:root{${light ? `${light};` : ""}${sans}${mono}${display}${radius}}
     :root.dark{${dark}}
-    body{font-family:var(--t3team-font-sans,"DM Sans Variable",sans-serif)}
-    code,kbd,pre,samp{font-family:var(--t3team-font-mono,"DM Mono",monospace)}
+    html[data-theme-id]{${lightOverride}}
+    html.dark[data-theme-id]{${darkOverride}}
     ${displayFontCss(appearance)}`;
 }
 

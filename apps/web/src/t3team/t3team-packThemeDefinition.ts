@@ -39,8 +39,15 @@ const RESERVED_PREFIXES = ["system", "light", "dark"];
 /**
  * Pack theme ids are namespaced so a pack can never collide with (or be mistaken for) a built-in
  * or a user-authored theme, and so the "is the current theme the pack's?" check is a prefix test.
+ *
+ * The separator is a HYPHEN, not a colon: upstream validates stored theme ids with
+ * `/^[a-z0-9](?:[a-z0-9-]{0,47})$/` (`themePalette.ts` `isThemeId`) when re-reading them from
+ * localStorage. A colon passes `installCustomTheme` (which only checks reserved ids) and works
+ * in-memory, then fails `parseStoredTheme` on the NEXT load — the theme is silently dropped from
+ * the library, the preference falls back to "system", and the distribution's palette disappears
+ * after first run. Keep this matching `isThemeId`.
  */
-export const T3TEAM_PACK_THEME_ID_PREFIX = "t3team-pack:";
+export const T3TEAM_PACK_THEME_ID_PREFIX = "t3team-pack-";
 
 export function t3teamPackThemeId(packThemeId: string): string {
   return `${T3TEAM_PACK_THEME_ID_PREFIX}${packThemeId}`;

@@ -17,13 +17,47 @@
 export type T3TeamPackAppearanceDefaults = {
   readonly sidebarLens?: "code" | "work";
   readonly glassOpacity?: number;
+  /**
+   * The theme's `density` multiplier (0.875–1.125), carried here rather than applied as CSS.
+   * Upstream owns interface font size and writes it inline on <html> unconditionally, so a
+   * stylesheet `font-size:%` from the pack never took effect; seeding the user's preference once
+   * is the only way a distribution can move it without fighting the control that owns it.
+   */
+  readonly density?: number;
 };
 
 /** The client-settings patch to write. */
 export type T3TeamAppearanceDefaultsPatch = {
   readonly legacySidebarEnabled?: boolean;
   readonly glassOpacity?: number;
+  readonly fontSizeInterface?: number;
 };
+
+/** Upstream's default interface font size, and the bounds it clamps to. */
+const DEFAULT_INTERFACE_FONT_SIZE = 16;
+const MIN_INTERFACE_FONT_SIZE = 12;
+const MAX_INTERFACE_FONT_SIZE = 20;
+
+/** A density multiplier expressed as the interface font size upstream actually applies. */
+export function t3teamInterfaceFontSizeForDensity(density: number): number {
+  const scaled = Math.round(DEFAULT_INTERFACE_FONT_SIZE * density);
+  return Math.min(MAX_INTERFACE_FONT_SIZE, Math.max(MIN_INTERFACE_FONT_SIZE, scaled));
+}
+
+/** The density seeding decision, markered independently of lens/glass. */
+export function resolveT3TeamDensityDefault(input: {
+  readonly density: number | undefined;
+  readonly marker: string;
+  readonly appliedMarker: string | null;
+}): { readonly patch?: { readonly fontSizeInterface: number }; readonly appliedMarker?: string } {
+  if (input.density === undefined || input.appliedMarker === input.marker) {
+    return {};
+  }
+  return {
+    patch: { fontSizeInterface: t3teamInterfaceFontSizeForDensity(input.density) },
+    appliedMarker: input.marker,
+  };
+}
 
 export type T3TeamAppearanceDefaultsDecision = {
   /** Absent when nothing should be written. */
@@ -41,8 +75,22 @@ export function t3teamAppearanceDefaultsMarker(input: {
 }): string {
   const lens = input.defaults.sidebarLens ?? "-";
   const glass = input.defaults.glassOpacity ?? "-";
+  // Density is deliberately NOT part of this string. The marker is compared for equality, so
+  // adding a segment invalidates every marker already in the wild — which would re-assert lens and
+  // glass over the choices of every existing user exactly once, the failure this file exists to
+  // prevent. Density seeding carries its own marker instead (`t3teamDensityDefaultMarker`).
   return `${input.themeId}|lens=${lens}|glass=${glass}`;
 }
+
+/** Separate identity for the density seeding, so it can be added without invalidating the above. */
+export function t3teamDensityDefaultMarker(input: {
+  readonly themeId: string;
+  readonly density: number | undefined;
+}): string {
+  return `${input.themeId}|density=${input.density ?? "-"}`;
+}
+
+export const T3TEAM_DENSITY_DEFAULT_STORAGE_KEY = "t3team:pack-density-applied";
 
 export function resolveT3TeamAppearanceDefaults(input: {
   readonly defaults: T3TeamPackAppearanceDefaults | undefined;

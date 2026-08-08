@@ -41,9 +41,22 @@ const serverSourcePath = (file: string) =>
   NodePath.join(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), file);
 
 /** The route-layer identifiers a registry merges, in order. */
+/**
+ * The t3team route layers actually merged into `makeRoutesLayer`.
+ *
+ * Scoped to that declaration on purpose: matching the whole file would also match the import
+ * list, and then "is this route registered?" would pass for a route that is merely IMPORTED —
+ * exactly the silent 404 this test exists to prevent. Indentation is not asserted either, since
+ * the entries sit inside nested `Layer.mergeAll(...)` groups (the merge helper is arity-capped).
+ */
 function mergedRouteLayers(file: string): ReadonlyArray<string> {
   const source = NodeFS.readFileSync(serverSourcePath(file), "utf8");
-  return [...source.matchAll(/^ {2}(t3team[A-Za-z]*RouteLayer),$/gm)].map((match) => match[1]!);
+  const start = source.indexOf("export const makeRoutesLayer");
+  if (start === -1) throw new Error(`${file}: makeRoutesLayer declaration not found`);
+  const end = source.indexOf("\n).pipe(", start);
+  if (end === -1) throw new Error(`${file}: end of makeRoutesLayer not found`);
+  const registry = source.slice(start, end);
+  return [...registry.matchAll(/^\s*(t3team[A-Za-z]*RouteLayer),$/gm)].map((match) => match[1]!);
 }
 
 describe("POST /api/t3team/atlassian/issue/update-description", () => {
@@ -69,13 +82,19 @@ describe("POST /api/t3team/atlassian/issue/update-description", () => {
     );
   });
 
-  it("rides a route layer BOTH registries merge, so it cannot 404 in the running app", () => {
-    const forkRegistry = mergedRouteLayers("t3team-server.ts");
-    const upstreamRegistry = mergedRouteLayers("server.ts");
+  it("rides a route layer the registry merges, so it cannot 404 in the running app", () => {
+    // There is ONE registry now. The parity half of this test (fork registry vs upstream registry)
+    // went away with `t3team-server.ts` in the 2026-08 upstream sync — that file was a copy of
+    // `server.ts`, and the two drifting apart was the very failure this guarded. What still needs
+    // guarding is that the layer this route joins is actually merged into the running app.
+    const registry = mergedRouteLayers("server.ts");
 
-    expect(forkRegistry).toContain("t3teamAtlassianBacklogRouteLayer");
-    // Same set in both, so a future route added to one registry alone fails HERE instead of in
-    // production. Order is not asserted — merge order is not behaviour.
-    expect([...forkRegistry].sort()).toEqual([...upstreamRegistry].sort());
+    expect(registry).toContain("t3teamAtlassianBacklogRouteLayer");
+    // Canary that the extraction still sees the registry: if a refactor changes how route layers
+    // are listed, this drops toward 0 and fails here rather than passing vacuously.
+    expect(registry.length).toBeGreaterThan(20);
+    // And that it is the REGISTRY, not the import list: imports are `import { x } from "y";`,
+    // never a bare `x,` entry, so a stray import cannot satisfy the check above.
+    expect(registry).not.toContain("t3teamAtlassianRouteLayerThatDoesNotExist");
   });
 });

@@ -613,7 +613,9 @@ describe("EventNdjsonLogger", () => {
         yield* logger.write({ id: "evt-idle-again" }, ThreadId.make("thread-idle"));
         yield* logger.close();
 
-        const idleContent = NodeFS.readFileSync(NodePath.join(tempDir, "thread-idle.log"), "utf8");
+        // Eviction must be invisible in the file: the re-created sink appends to the same path,
+        // so both the pre-eviction and post-eviction events are present and in order.
+        const idleContent = NodeFS.readFileSync(ownedLogPath(basePath, "thread-idle"), "utf8");
         assert.include(idleContent, "evt-idle");
         assert.include(idleContent, "evt-idle-again");
       } finally {
