@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   generatePkce,
   buildAuthorizeUrl,
-  type AtlassianAccessibleResource,
   type AtlassianOAuthConfig,
-  type TokenExchangeResult,
 } from "@t3tools/integrations-atlassian";
 import { isElectron } from "~/env";
 import { randomUUID } from "~/lib/utils";

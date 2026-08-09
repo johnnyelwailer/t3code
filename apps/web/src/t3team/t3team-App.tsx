@@ -1,16 +1,14 @@
 import { useMemo, useState } from "react";
-import type { ProjectShellProject } from "@t3tools/project-context";
 import { Sidebar, SidebarProvider, SidebarRail } from "~/t3team/components/ui/t3team-sidebar";
 import { AppContentPane } from "~/t3team/t3team-AppContentPane";
 import { AppSidebarLens } from "~/t3team/components/t3team-AppSidebarLens";
 import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarState";
 import { useT3TeamMacosTitlebarInsetStyle } from "~/t3team/hooks/t3team-useMacosTitlebarInset";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
-import { readProjectIdFromView, type ViewState } from "~/t3team/t3team-types";
+import { readProjectIdFromView } from "~/t3team/t3team-types";
 import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
-import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
 import { useResolvedViewSync } from "~/t3team/t3team-useResolvedViewSync";
 import { useHydratePinnedSidebarItems } from "~/t3team/hooks/t3team-useHydratePinnedSidebarItems";

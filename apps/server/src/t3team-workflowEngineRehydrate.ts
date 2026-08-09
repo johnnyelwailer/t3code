@@ -34,7 +34,7 @@ import * as Option from "effect/Option";
 import { ServerConfig } from "./config.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
-import { type WorkflowRun, WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";

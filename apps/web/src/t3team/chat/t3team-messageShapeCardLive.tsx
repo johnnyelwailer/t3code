@@ -23,17 +23,9 @@ import {
   T3TeamWorkflowRunControls,
   T3TeamWorkflowRunControlStatus,
 } from "~/t3team/chat/t3team-workflowRunControls";
-import { T3TeamShapeStepRow } from "~/t3team/chat/t3team-messageShapeCard";
 import { T3TeamWorkflowShapeStepRows } from "~/t3team/chat/t3team-WorkflowShapeStepRows";
 import { T3TeamShapeCapabilityChips } from "~/t3team/chat/t3team-messageShapeCardCapabilities";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
-import { T3TeamWorkflowStepDetails } from "~/t3team/chat/t3team-WorkflowStepDetails";
-import {
-  displayedStepStatus,
-  RuntimeStepRow,
-  StepStatusIcon,
-  StepTrailing,
-} from "~/t3team/chat/t3team-workflowRunStepRow";
 import { RepairStatusStrip, RunStatusBanner } from "~/t3team/chat/t3team-workflowRunBanner";
 export { formatWorkflowStepDue } from "~/t3team/chat/t3team-workflowRunLabels";
 import {

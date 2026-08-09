@@ -26,8 +26,8 @@ import { workflowTurnAuthor } from "./t3team-workflowTurnAuthor.ts";
 import { workflowTurnText } from "./t3team-workflowTurnText.ts";
 
 export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Promise<boolean> {
-  const { deps, enqueue, enqueueOneWay, runPrimitive, step } = core;
-  const { correlationId, kind, payload, resolver, isLiveCompositionAsk, makeLiveSettlement } = s;
+  const { deps, enqueue, runPrimitive, step } = core;
+  const { correlationId, kind, payload, isLiveCompositionAsk, makeLiveSettlement } = s;
   if (kind === "thread.turn") {
     const p = payload as ThreadTurnPayload;
     // Resolve BEFORE recording pending state (registry + durable recordPending): an invalid

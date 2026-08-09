@@ -1,4 +1,3 @@
-import { CommandId, MessageId, ThreadId } from "@t3tools/contracts";
 import { resumeWorkflow } from "@t3team/sdk";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -7,10 +6,7 @@ import type {
   LaunchWorkflowRecipeInput,
   WorkflowRunController,
 } from "./t3team-workflowEngineLaunch.ts";
-import {
-  coordinateWorkflowRepair,
-  parseWorkflowRepairChildResult,
-} from "./t3team-workflowSelfHeal.ts";
+import { coordinateWorkflowRepair } from "./t3team-workflowSelfHeal.ts";
 import { validateWorkflowRepairCandidate } from "./t3team-workflowRepairGuardrails.ts";
 import { makeWorkflowRepairGenerator } from "./t3team-workflowRepairGenerate.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";

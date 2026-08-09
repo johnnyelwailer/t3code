@@ -16,14 +16,9 @@ import {
 } from "@t3team/sdk";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
-import type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
-import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import { makeControllerFail, makeControllerResume } from "./t3team-workflowEngineResume.ts";
 import { createWorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import { deliverWorkflowCompletion } from "./t3team-workflowCompletionMessage.ts";
-import { settleWorkflowRunFailure } from "./t3team-workflowRunFailure.ts";
-import type { WorkflowRepairIntent } from "./t3team-workflowSelfHeal.ts";
-import { tryWorkflowRepair } from "./t3team-workflowEngineRepair.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostDraftTools.ts";
 

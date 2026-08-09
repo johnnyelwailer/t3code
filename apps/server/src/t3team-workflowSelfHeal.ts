@@ -9,15 +9,10 @@
 // Moved to the guardrails module; re-exported so existing importers keep resolving.
 export * from "./t3team-workflowRepairGuardrails.ts";
 import {
-  T3TEAM_WORKFLOW_REPAIR_LIMIT,
-  T3TEAM_WORKFLOW_REPAIR_HARD_LIMIT,
-  parseWorkflowRepairChildResult,
-  isRepairableWorkflowFailure,
   validateRepairedWorkflowSource,
   canAttemptWorkflowRepair,
   type WorkflowRepairIntent,
   type WorkflowRepairAudit,
-  type WorkflowRepairChildResult,
 } from "./t3team-workflowRepairGuardrails.ts";
 
 export type WorkflowRepairPhase = "analysing" | "repairing" | "resuming" | "recovered" | "failed";

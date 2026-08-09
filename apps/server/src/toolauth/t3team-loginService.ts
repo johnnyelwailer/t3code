@@ -19,7 +19,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as PtyAdapter from "../terminal/PtyAdapter.ts";
 import { getAdapter } from "./t3team-adapters.ts";
-import { assemblePtyRead, foldPtyRead, stripAnsi } from "./t3team-advance.ts";
+import { assemblePtyRead, foldPtyRead } from "./t3team-advance.ts";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";
 import type { ToolSingleFlight } from "./t3team-singleFlight.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";

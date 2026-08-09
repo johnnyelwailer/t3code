@@ -14,10 +14,7 @@ import {
   T3TeamWorkflowCardBody,
 } from "~/t3team/chat/t3team-messageExtViews";
 import { T3TeamWidgetBlock } from "~/t3team/chat/t3team-widgetBlock";
-import {
-  getT3TeamWorkflowShapeAttachment,
-  T3TeamWorkflowShapeCard,
-} from "~/t3team/chat/t3team-messageShapeCard";
+import { getT3TeamWorkflowShapeAttachment } from "~/t3team/chat/t3team-messageShapeCard";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { useOpenT3TeamWorkItemDraft } from "~/t3team/chat/t3team-useOpenWorkItemDraft";
 import { T3TeamSystemTimelineShapeRow } from "~/t3team/chat/t3team-SystemTimelineShapeRow";

@@ -10,7 +10,6 @@ import * as DateTime from "effect/DateTime";
 
 import type { BrokerCore, BrokerSend } from "./t3team-workflowEngineBrokerContext.ts";
 import {
-  isMessageResourceRef,
   TRUSTED_HTML_FRAGMENT,
   workflowWidgetAttachment,
 } from "./t3team-workflowEngineBrokerContext.ts";

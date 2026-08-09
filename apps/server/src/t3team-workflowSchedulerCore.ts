@@ -10,11 +10,8 @@
  * construction (`Cannot read properties of undefined (reading 'key')`). Depending only downward
  * keeps that impossible.
  */
-import * as NodeTimers from "node:timers";
 
 import * as DateTime from "effect/DateTime";
-
-import { t3teamRandomUUID } from "./t3team-random.ts";
 
 const MIN_DUE_DELAY_MS = 1000;
 

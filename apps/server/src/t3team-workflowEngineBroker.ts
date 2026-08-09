@@ -15,26 +15,11 @@
  * it precedes (turn-on-a-missing-thread would otherwise race).
  */
 
-import {
-  CommandId,
-  MessageId,
-  T3TeamMessageExternalResourceRef,
-  ThreadId,
-} from "@t3tools/contracts";
-import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION } from "@t3tools/project-recipes";
-import * as DateTime from "effect/DateTime";
-import * as Schema from "effect/Schema";
-
 import type { MessageBroker, MessageEnvelope } from "@t3team/sdk";
 
 import {
-  messageUpsert,
   type ModelResolvePayload,
   type ThreadCreatePayload,
-  type ThreadMessagePayload,
-  type ThreadTurnPayload,
-  type UserInputPayload,
-  type WaitUntilPayload,
   type WorkflowEngineBrokerDeps,
 } from "./t3team-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities.ts";
@@ -52,23 +37,12 @@ import type {
   BrokerSend,
   ReplyResolver,
 } from "./t3team-workflowEngineBrokerContext.ts";
-import { workflowTurnText } from "./t3team-workflowTurnText.ts";
-import {
-  buildT3TeamWidgetAttachment,
-  parseT3TeamWidgetShowInput,
-} from "./t3team-widgetShowCore.ts";
 
 export type {
   WorkflowEngineBrokerDeps,
   WorkflowEnginePendingAsk,
   WorkflowEngineSleep,
 } from "./t3team-workflowEngineBrokerTypes.ts";
-
-import {
-  isMessageResourceRef,
-  TRUSTED_HTML_FRAGMENT,
-  workflowWidgetAttachment,
-} from "./t3team-workflowEngineBrokerContext.ts";
 
 export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): MessageBroker {
   // Serialize dispatches so a floated `thread.create` lands before the `thread.turn` it precedes.

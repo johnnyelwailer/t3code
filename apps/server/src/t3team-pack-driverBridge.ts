@@ -15,11 +15,7 @@
  *
  * @module t3team-pack-driverBridge
  */
-import {
-  ProviderDriverKind,
-  TextGenerationError,
-  type ProviderInstanceEnvironment,
-} from "@t3tools/contracts";
+import { ProviderDriverKind, type ProviderInstanceEnvironment } from "@t3tools/contracts";
 import type { PackHostCapabilities, PackProviderDriverDefinition } from "@t3team/packs";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -32,14 +28,10 @@ import {
   type ProviderDriver,
   type ProviderInstance,
 } from "./provider/ProviderDriver.ts";
-import type { TextGeneration } from "./textGeneration/TextGeneration.ts";
 import { makePackProviderAdapter } from "./t3team-pack-driverAdapter.ts";
 import { makeOpenCodeHarnessCapability } from "./t3team-pack-driverHarness.ts";
 import { makePackProviderSnapshot } from "./t3team-pack-driverSnapshot.ts";
-import {
-  bridgePackTextGeneration,
-  unsupportedTextGeneration,
-} from "./t3team-pack-textGenerationBridge.ts";
+import { bridgePackTextGeneration } from "./t3team-pack-textGenerationBridge.ts";
 
 const errorDetail = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
