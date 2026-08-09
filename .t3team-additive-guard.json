@@ -6,6 +6,7 @@
   "locFailThreshold": 200,
   "allowedModifiedFiles": [
     ".agents/skills/test-t3-app/SKILL.md",
+    ".github/workflows/ci.yml",
     ".gitignore",
     ".t3team-additive-guard.json",
     "AGENTS.md",

@@ -94,6 +94,8 @@ Prefix policy:
 
 - `docs/README.md`
   - Append a `## This fork (t3team)` section linking the fork's own docs (MVP spec, this whitelist, runbook engine). Purely additive tail; upstream's own index above it is untouched.
+- `.github/workflows/ci.yml`
+  - Point the three Linux jobs at `ubuntu-latest` instead of `blacksmith-8vcpu-ubuntu-2404`, and raise their timeouts to suit a 4-vCPU hosted runner. This fork has no Blacksmith runners, so CI had NEVER completed here — 20 sampled runs were 10 queued and 10 cancelled, zero pass or fail, which is why every fork PR sat at `mergeStateStatus: UNSTABLE`. The mobile job is gated to the upstream owner rather than repointed: it needs macOS plus `brew bundle` for native toolchains this fork does not build, and hosted macOS bills at 10x. Upstream runner names are kept in trailing comments so a future sync reads cleanly.
 
 ## Allowed Unprefixed New Files
 
