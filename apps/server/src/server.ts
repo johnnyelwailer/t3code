@@ -30,6 +30,8 @@ import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRe
 import * as ProviderEventLoggers from "./provider/Layers/ProviderEventLoggers.ts";
 import { ProviderServiceLive } from "./provider/Layers/ProviderService.ts";
 import { ProviderSessionReaperLive } from "./provider/Layers/ProviderSessionReaper.ts";
+import { localProviderSessionsRouteLayer } from "./t3team-localProviderSessions-routes.ts";
+import { LocalProviderSessionsWatcherLive } from "./t3team-localProviderSessionsWatcher.ts";
 import * as OpenCodeRuntime from "./provider/opencodeRuntime.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as CheckpointStore from "./checkpointing/CheckpointStore.ts";
@@ -418,10 +420,17 @@ const CloudManagedEndpointRuntimeLive = Layer.mergeAll(
   ),
 );
 
-const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
-  Layer.provideMerge(ProviderLayerLive),
-  Layer.provideMerge(OrchestrationLayerLive),
+// The session watcher is a provider-runtime daemon like the reaper. Its sync path reads
+// ProviderSessionDirectory, so it is given the composed directory layer here rather than leaving
+// that requirement to leak into every consumer of the app layer.
+const LocalProviderSessionsWatcherMounted = LocalProviderSessionsWatcherLive.pipe(
+  Layer.provide(ProviderSessionDirectoryLayerLive),
 );
+
+const ProviderRuntimeLayerLive = Layer.mergeAll(
+  ProviderSessionReaperLive,
+  LocalProviderSessionsWatcherMounted,
+).pipe(Layer.provideMerge(ProviderLayerLive), Layer.provideMerge(OrchestrationLayerLive));
 
 // The workflow-engine singletons share one provideMerge slot (the `pipe` arity is capped):
 // the in-memory run registry (reactor's hot index) + the durable run record + the SQLite
@@ -577,6 +586,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamGitHubAssetRouteLayer,
     t3teamGitHubInboxRouteLayer,
     t3teamGitHubPullRequestContextRouteLayer,
+    localProviderSessionsRouteLayer,
     t3teamProjectWorkspaceBootstrapRouteLayer,
     t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
     t3teamProjectWorkspaceWriteContextFilesRouteLayer,
