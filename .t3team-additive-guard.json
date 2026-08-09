@@ -25,6 +25,7 @@
     "apps/server/src/checkpointing/CheckpointDiffQuery.test.ts",
     "apps/server/src/environment/ServerEnvironment.ts",
     "apps/server/src/mcp/McpHttpServer.ts",
+    "apps/server/src/orchestration/Layers/CheckpointReactor.ts",
     "apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts",
     "apps/server/src/orchestration/Layers/ProjectionPipeline.test.ts",
     "apps/server/src/orchestration/Layers/ProjectionPipeline.ts",

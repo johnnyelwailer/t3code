@@ -102,6 +102,8 @@ const collectQueueUntil = Effect.fn("TransferBudget.collectQueueUntil")(function
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as ServerConfig from "./config.ts";
 import { makeRoutesLayer } from "./server.ts";
+import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
+import * as ProviderSessionRuntime from "./persistence/ProviderSessionRuntime.ts";
 import { isThreadDetailEvent, resolveAvailableEditorsForConfig } from "./ws.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as GitManager from "./git/GitManager.ts";
@@ -474,6 +476,10 @@ const buildAppUnderTest = (options?: {
     const layerConfig = ServerConfig.layer(config);
     const t3teamRouterSupportLayer = Layer.mergeAll(
       SqlitePersistenceMemory,
+      // localProviderSessionsRouteLayer's sync handler reads the session directory.
+      ProviderSessionDirectoryLive.pipe(
+        Layer.provide(ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistenceMemory))),
+      ),
       T3TeamWorkflowEngineRegistryLive,
       T3TeamThreadToolContextStoreLive,
       T3TeamWidgetRegistryLive,
