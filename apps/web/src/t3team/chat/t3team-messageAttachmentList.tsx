@@ -129,17 +129,26 @@ function renderAttachmentBody(
           {renderAttachmentMeta(["Widget", attachment.widget.format])}
         </>
       );
-    case "draft-mutation":
-      // Draft carriers ride hidden messages and are consumed by the work item's review surface;
-      // this is the metadata fallback if one ever lands in the generic list.
+    case "draft-mutation": {
+      // Metadata fallback only (the dedicated review surface renders the real card); narrowed by
+      // `draft.kind` since a Jira draft and a change-request review draft carry different fields.
+      // The review draft's `target.provider` is a real `SourceControlProviderKind` (github /
+      // gitlab / azure-devops / bitbucket / unknown) resolved by the host, never assumed.
+      const draft = attachment.draft;
+      const label =
+        draft.summary ??
+        (draft.kind === "jira-work-item-draft"
+          ? `Proposed ${draft.field} change`
+          : "Proposed change-request review");
+      const detail =
+        draft.kind === "jira-work-item-draft" ? draft.target.issueIdOrKey : draft.target.provider;
       return (
         <>
-          <span className="font-medium text-foreground">
-            {attachment.draft.summary ?? `Proposed ${attachment.draft.field} change`}
-          </span>
-          {renderAttachmentMeta(["Pending review", attachment.draft.target.issueIdOrKey])}
+          <span className="font-medium text-foreground">{label}</span>
+          {renderAttachmentMeta(["Pending review", detail])}
         </>
       );
+    }
   }
 }
 

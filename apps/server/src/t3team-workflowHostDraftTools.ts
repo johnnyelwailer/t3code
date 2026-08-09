@@ -21,7 +21,11 @@
  * @module t3team-workflowHostDraftTools
  */
 
-import { ThreadId } from "@t3tools/contracts";
+import {
+  ThreadId,
+  type OrchestrationCommand,
+  type SourceControlProviderKind,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -37,6 +41,10 @@ import {
   type T3TeamToolBrokerShape,
   type T3TeamToolCallResult,
 } from "./t3team-toolBroker.ts";
+import {
+  makeT3TeamChangeRequestReviewDraftMethod,
+  T3TEAM_WORKFLOW_CHANGE_REQUEST_REVIEW_DRAFT_TOOL_REFS,
+} from "./t3team-workflowChangeRequestReviewDraftTool.ts";
 
 /**
  * Reuses the id of the broker-side draft classification (`PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP`)
@@ -110,8 +118,25 @@ export function makeT3TeamWorkflowHostDraftToolClient(input: {
   readonly broker: T3TeamToolBrokerShape;
   readonly launchThreadId: string | undefined;
   readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
+  /** Raw command dispatch, needed only by `draftChangeRequestReview`
+   * (`t3team-workflowChangeRequestReviewDraftTool.ts`) to publish its carrier message directly —
+   * that seam does not go through `broker.bindSession` at all (see that module's doc comment for
+   * why), so it cannot reuse `callHostTool` below. Absent ⇒ `draftChangeRequestReview` stays
+   * unset, and the SDK tool reports its own clear error ("requires a t3team change-request review
+   * client") instead of silently doing nothing. */
+  readonly dispatch?: ((command: OrchestrationCommand) => Promise<void>) | undefined;
+  /** Resolves the `SourceControlProviderKind` for the repository this launch is bound to, passed
+   * straight through to `draftChangeRequestReview` (see that method's own doc comment for the
+   * fallback-to-`"unknown"` behavior when this is absent or rejects). Kept OPTIONAL rather than
+   * required so a caller with no repository context (or no `SourceControlProviderRegistry`
+   * available, e.g. most unit tests) still gets a working bridge, just with an honest `"unknown"`
+   * target instead of a resolved one. */
+  readonly resolveSourceControlProviderKind?:
+    | (() => Promise<SourceControlProviderKind>)
+    | undefined;
 }): T3TeamToolHandlerClient | undefined {
-  const { broker, launchThreadId, allowedToolGroups } = input;
+  const { broker, launchThreadId, allowedToolGroups, dispatch, resolveSourceControlProviderKind } =
+    input;
   if (launchThreadId === undefined || launchThreadId.trim().length === 0) return undefined;
 
   return {
@@ -119,6 +144,15 @@ export function makeT3TeamWorkflowHostDraftToolClient(input: {
     renameThread: async () => {
       throw new Error("t3team.thread.rename is not reachable through workflow host tools.");
     },
+    ...(dispatch === undefined
+      ? {}
+      : {
+          draftChangeRequestReview: makeT3TeamChangeRequestReviewDraftMethod({
+            threadId: launchThreadId,
+            dispatch,
+            resolveProviderKind: resolveSourceControlProviderKind,
+          }),
+        }),
     callHostTool: async ({ tool, args }) => {
       // Defence in depth: the tool tree already limits WHICH ids exist, and this keeps the
       // transport from widening if a future ref is registered against the same client.
@@ -152,6 +186,15 @@ export function makeT3TeamWorkflowHostDraftToolClient(input: {
   };
 }
 
+/** Every host-bridged tool ref a workflow body's `getTools()` can resolve: the work-item draft
+ * family plus the change-request review draft tool
+ * (`t3team-workflowChangeRequestReviewDraftTool.ts`) — additive, so a future host-bridged tool
+ * joins this same list rather than growing a second one. */
+const T3TEAM_WORKFLOW_HOST_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> = [
+  ...T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS,
+  ...T3TEAM_WORKFLOW_CHANGE_REQUEST_REVIEW_DRAFT_TOOL_REFS,
+];
+
 /** The run-option fragment for a launch. The refs are bound even with NO client, so a body that
  * calls one on a headless run fails at the CALL with a sentence naming the cause instead of
  * `Cannot read properties of undefined` — the same reasoning as the SDK's `defaultBroker` stand-in
@@ -162,6 +205,6 @@ export function t3teamWorkflowHostToolRunOptions(client: T3TeamToolHandlerClient
   readonly t3team?: T3TeamToolHandlerClient;
 } {
   return client === undefined
-    ? { tools: T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS }
-    : { tools: T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS, t3team: client };
+    ? { tools: T3TEAM_WORKFLOW_HOST_TOOL_REFS }
+    : { tools: T3TEAM_WORKFLOW_HOST_TOOL_REFS, t3team: client };
 }

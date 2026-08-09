@@ -116,10 +116,17 @@ function describeAgentVisibleAttachment(attachment: T3TeamMessageAttachment): st
     }
     case "draft-mutation": {
       // Draft carriers are `visibleToAgent: false`, so this is only reached if a draft ever rides
-      // a message the agent can see; describe the proposal, never the raw patch.
-      return `Proposed change awaiting review: ${attachment.draft.field} on ${attachment.draft.target.issueIdOrKey}${formatAttachmentDetails(
-        [attachment.draft.summary],
-      )}`;
+      // a message the agent can see; describe the proposal, never the raw patch. Narrowed by
+      // `draft.kind` because a Jira work-item draft and a change-request review draft describe
+      // their target differently (see `packages/contracts/src/t3team-draft-mutation.ts`). The
+      // review draft's `target.provider` is a real `SourceControlProviderKind` (never assumed to
+      // be GitHub), so it is named plainly rather than guessed at.
+      const draft = attachment.draft;
+      const subject =
+        draft.kind === "jira-work-item-draft"
+          ? `${draft.field} on ${draft.target.issueIdOrKey}`
+          : `a ${draft.event === "REQUEST_CHANGES" ? "change-requesting" : "commenting"} ${draft.target.provider} change-request review`;
+      return `Proposed change awaiting review: ${subject}${formatAttachmentDetails([draft.summary])}`;
     }
     case "work-item-draft": {
       // A run's completion card: a POINTER to a proposal, not the patch. Told to the agent so a

@@ -20,21 +20,25 @@ export const githubWrite = defineToolGroup({
 });
 
 /**
- * Preparing a review a human then approves is NOT the same authority as changing GitHub, and this
- * group exists so the two cannot be conflated. `githubWrite` grants merging, pushing and editing;
- * a workflow that only wants to hand a reviewer a draft must not have to ask for any of that to
- * get it — that is precisely the least-privilege split `githubWrite`'s own doc comment above
- * describes, applied one level further.
+ * Preparing a review a human then approves is NOT the same authority as writing to source
+ * control, and this group exists so the two cannot be conflated. `githubWrite` (GitHub's own write
+ * group; every other provider configured in this codebase has no write group of its own yet)
+ * grants merging, pushing and editing; a workflow that only wants to hand a reviewer a draft must
+ * not have to ask for any of that to get it — that is precisely the least-privilege split
+ * `githubWrite`'s own doc comment above describes, applied one level further and made
+ * provider-neutral: the tool this group classifies drafts a review for WHICHEVER source-control
+ * provider the repository is on (`SourceControlProviderKind`), not only GitHub.
  *
- * Nothing in this group reaches GitHub. A tool here produces a draft; the host holds the token and
- * posts only what the user approved, so the grant a user is being asked for is "let this workflow
- * put a review in front of me", not "let this workflow write to the repository".
+ * Nothing in this group reaches a source-control provider. A tool here produces a draft; the host
+ * holds the provider's credential and posts only what the user approved, so the grant a user is
+ * being asked for is "let this workflow put a review in front of me", not "let this workflow write
+ * to the repository".
  */
-export const githubReviewDraft = defineToolGroup({
-  id: "github.review.draft",
-  label: "Draft a pull-request review",
+export const changeRequestReviewDraft = defineToolGroup({
+  id: "change-request.review.draft",
+  label: "Draft a change-request review",
   description:
-    "Prepare a pull-request review — a verdict, a summary, and inline comments — for you to read and approve. Nothing is posted to GitHub without your approval.",
+    "Prepare a change-request review — a verdict, a summary, and inline comments — for you to read and approve. Nothing is posted to your source-control provider without your approval.",
 });
 
 export const jiraRead = defineToolGroup({
@@ -85,7 +89,7 @@ export const releaseNotesWrite = defineToolGroup({
 export const builtinToolGroups = [
   githubRead,
   githubWrite,
-  githubReviewDraft,
+  changeRequestReviewDraft,
   jiraRead,
   jiraWrite,
   t3teamRecipeRead,

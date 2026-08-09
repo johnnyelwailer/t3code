@@ -7,9 +7,9 @@ import {
   type ToolWorkspace,
 } from "../t3team-sdk.index.ts";
 import {
-  createGithubReviewDraftTool,
-  type GithubReviewDraftInput,
-} from "./t3team-sdk.githubReview.ts";
+  createChangeRequestReviewDraftTool,
+  type ChangeRequestReviewDraftInput,
+} from "./t3team-sdk.changeRequestReview.ts";
 
 const unsupportedFetch: FetchLike = async () => {
   throw new Error("Fetch is not available in this test context.");
@@ -41,7 +41,7 @@ function createToolCtx(overrides: Partial<ToolHandlerCtx> = {}): ToolHandlerCtx 
 }
 
 /** A minimal successful host response, echoing back the normalized input as the "draft". */
-function stubDraft(input: GithubReviewDraftInput) {
+function stubDraft(input: ChangeRequestReviewDraftInput) {
   return {
     ok: true as const,
     draftId: "draft-1",
@@ -51,11 +51,11 @@ function stubDraft(input: GithubReviewDraftInput) {
   };
 }
 
-describe("t3team.github.review.draft_create", () => {
+describe("t3team.change_request.review.draft_create", () => {
   it("accepts a single-line comment anchor", async () => {
-    const received: Array<GithubReviewDraftInput> = [];
+    const received: Array<ChangeRequestReviewDraftInput> = [];
     const result = await executeRegisteredTool(
-      createGithubReviewDraftTool.id,
+      createChangeRequestReviewDraftTool.id,
       {
         event: "COMMENT",
         body: "Looks good overall.",
@@ -64,7 +64,7 @@ describe("t3team.github.review.draft_create", () => {
       createToolCtx({
         t3team: {
           renameThread: async () => ({ ok: true, title: "" }),
-          draftGithubReview: async (input) => {
+          draftChangeRequestReview: async (input) => {
             received.push(input);
             return stubDraft(input);
           },
@@ -84,9 +84,9 @@ describe("t3team.github.review.draft_create", () => {
   });
 
   it("accepts a start_line..line range anchor", async () => {
-    const received: Array<GithubReviewDraftInput> = [];
+    const received: Array<ChangeRequestReviewDraftInput> = [];
     await executeRegisteredTool(
-      createGithubReviewDraftTool.id,
+      createChangeRequestReviewDraftTool.id,
       {
         event: "REQUEST_CHANGES",
         body: "One blocking issue.",
@@ -103,7 +103,7 @@ describe("t3team.github.review.draft_create", () => {
       createToolCtx({
         t3team: {
           renameThread: async () => ({ ok: true, title: "" }),
-          draftGithubReview: async (input) => {
+          draftChangeRequestReview: async (input) => {
             received.push(input);
             return stubDraft(input);
           },
@@ -118,7 +118,7 @@ describe("t3team.github.review.draft_create", () => {
   it("rejects a range anchor whose start is after its end", async () => {
     await expect(
       executeRegisteredTool(
-        createGithubReviewDraftTool.id,
+        createChangeRequestReviewDraftTool.id,
         {
           event: "COMMENT",
           body: "x",
@@ -128,13 +128,13 @@ describe("t3team.github.review.draft_create", () => {
         },
         createToolCtx({ t3team: { renameThread: async () => ({ ok: true, title: "" }) } }),
       ),
-    ).rejects.toThrow(`Invalid arguments for tool '${createGithubReviewDraftTool.id}'`);
+    ).rejects.toThrow(`Invalid arguments for tool '${createChangeRequestReviewDraftTool.id}'`);
   });
 
   it("rejects a comment with an empty path", async () => {
     await expect(
       executeRegisteredTool(
-        createGithubReviewDraftTool.id,
+        createChangeRequestReviewDraftTool.id,
         {
           event: "COMMENT",
           body: "x",
@@ -142,13 +142,13 @@ describe("t3team.github.review.draft_create", () => {
         },
         createToolCtx({ t3team: { renameThread: async () => ({ ok: true, title: "" }) } }),
       ),
-    ).rejects.toThrow(`Invalid arguments for tool '${createGithubReviewDraftTool.id}'`);
+    ).rejects.toThrow(`Invalid arguments for tool '${createChangeRequestReviewDraftTool.id}'`);
   });
 
   it("rejects a suggestion on a comment with no anchor", async () => {
     await expect(
       executeRegisteredTool(
-        createGithubReviewDraftTool.id,
+        createChangeRequestReviewDraftTool.id,
         {
           event: "COMMENT",
           body: "x",
@@ -157,7 +157,7 @@ describe("t3team.github.review.draft_create", () => {
         createToolCtx({
           t3team: {
             renameThread: async () => ({ ok: true, title: "" }),
-            draftGithubReview: async (input) => stubDraft(input),
+            draftChangeRequestReview: async (input) => stubDraft(input),
           },
         }),
       ),
@@ -167,29 +167,29 @@ describe("t3team.github.review.draft_create", () => {
   it("rejects an empty review with no body and no comments", async () => {
     await expect(
       executeRegisteredTool(
-        createGithubReviewDraftTool.id,
+        createChangeRequestReviewDraftTool.id,
         { event: "COMMENT", body: "   ", comments: [] },
         createToolCtx({
           t3team: {
             renameThread: async () => ({ ok: true, title: "" }),
-            draftGithubReview: async (input) => stubDraft(input),
+            draftChangeRequestReview: async (input) => stubDraft(input),
           },
         }),
       ),
     ).rejects.toThrow(
-      "t3team.github.review.draft_create requires a non-empty 'body' or at least one comment",
+      "t3team.change_request.review.draft_create requires a non-empty 'body' or at least one comment",
     );
   });
 
-  it("throws a clear error when no t3team GitHub review client is wired up", async () => {
+  it("throws a clear error when no t3team change-request review client is wired up", async () => {
     await expect(
       executeRegisteredTool(
-        createGithubReviewDraftTool.id,
+        createChangeRequestReviewDraftTool.id,
         { event: "COMMENT", body: "Looks fine.", comments: [] },
         createToolCtx(),
       ),
     ).rejects.toThrow(
-      "t3team.github.review.draft_create requires a t3team GitHub review client in ToolHandlerCtx.",
+      "t3team.change_request.review.draft_create requires a t3team change-request review client in ToolHandlerCtx.",
     );
   });
 });

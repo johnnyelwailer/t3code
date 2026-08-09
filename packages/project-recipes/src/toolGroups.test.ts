@@ -46,10 +46,11 @@ describe("toolGroups", () => {
   });
 
   // A review draft is a DRAFT: it sits next to `issue_comment.draft_create` in the same group,
-  // rather than in an execute/write group, because nothing reaches GitHub until the user approves
-  // the exact payload. Pinned here so a future edit cannot quietly reclassify it upward.
-  it("classifies 't3team.github.review.draft_create' as a draft, alongside the issue-comment draft", () => {
-    expect(getProjectRecipeToolGroupForToolId("t3team.github.review.draft_create")).toBe(
+  // rather than in an execute/write group, because nothing reaches the source-control provider
+  // until the user approves the exact payload. Pinned here so a future edit cannot quietly
+  // reclassify it upward.
+  it("classifies 't3team.change_request.review.draft_create' as a draft, alongside the issue-comment draft", () => {
+    expect(getProjectRecipeToolGroupForToolId("t3team.change_request.review.draft_create")).toBe(
       PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,
     );
     expect(getProjectRecipeToolGroupForToolId("t3team.github.issue_comment.draft_create")).toBe(

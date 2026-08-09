@@ -14,14 +14,14 @@ export type {
 } from "./tools/t3team-sdk.workflow.ts";
 export { runWorkflowTool } from "./tools/t3team-sdk.workflow.ts";
 export type {
-  CreateGithubReviewDraftToolArgs,
-  CreateGithubReviewDraftToolResult,
-  GithubReviewCommentAnchor,
-  GithubReviewDraftComment,
-  GithubReviewDraftEvent,
-  GithubReviewDraftInput,
-} from "./tools/t3team-sdk.githubReview.ts";
-export { createGithubReviewDraftTool } from "./tools/t3team-sdk.githubReview.ts";
+  CreateChangeRequestReviewDraftToolArgs,
+  CreateChangeRequestReviewDraftToolResult,
+  ChangeRequestReviewCommentAnchor,
+  ChangeRequestReviewDraftComment,
+  ChangeRequestReviewDraftEvent,
+  ChangeRequestReviewDraftInput,
+} from "./tools/t3team-sdk.changeRequestReview.ts";
+export { createChangeRequestReviewDraftTool } from "./tools/t3team-sdk.changeRequestReview.ts";
 export type { RenameThreadToolArgs, RenameThreadToolResult } from "./tools/t3team-sdk.t3team.ts";
 export type {
   ListRecipesToolResult,

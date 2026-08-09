@@ -61,6 +61,18 @@ export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
       broker: toolBroker,
       launchThreadId: run.launchThreadId ?? undefined,
       ...(grant.toolGroups === null ? {} : { allowedToolGroups: grant.toolGroups }),
+      // Same `dispatch` the rest of this rehydrator already drives the restored run with;
+      // `draftChangeRequestReview` reuses it to publish its own carrier message on restart, same
+      // as a fresh launch (t3team-workflowChangeRequestReviewDraftTool.ts).
+      dispatch,
+      // KNOWN GAP, stated rather than papered over: no `resolveSourceControlProviderKind` here.
+      // The launch route resolves it from `project.workspaceRoot`
+      // (`t3team-thread-recipe-workflow-routes.ts`), but `WorkflowRun` persists no workspace cwd
+      // for a restored run to re-derive one from, and adding a column for it is a schema change
+      // outside this rehydrator's scope (it must not acquire services of its own — see the module
+      // doc comment above). A change-request review drafted by a run that restarted after a crash
+      // therefore carries `target.provider: "unknown"` rather than a resolved kind — honest, and
+      // never a silently wrong "github" guess; nothing about draft delivery itself is affected.
     });
   };
 

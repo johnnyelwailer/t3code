@@ -29,15 +29,16 @@ import { t3teamRandomUUID } from "./t3team-random.ts";
 import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
 import {
+  buildSourceControlProviderKindResolver,
   isProviderInteractionMode,
   isRuntimeMode,
   loadThreadProjectContext,
+  resolveHostToolBridge,
 } from "./t3team-thread-recipe-workflow-routes-shared.ts";
 import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
 import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
 
 export { t3teamThreadWorkflowResolveInputRouteLayer } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
@@ -160,16 +161,16 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         reason: hostToolScope.reason,
       });
     }
-    const hostToolGrant =
-      hostToolScope.kind === "granted" ? { toolGroups: hostToolScope.toolGroups } : undefined;
-    const hostToolClient =
-      hostToolScope.kind === "granted"
-        ? makeT3TeamWorkflowHostDraftToolClient({
-            broker: toolBroker,
-            launchThreadId: threadIdInput,
-            allowedToolGroups: hostToolScope.toolGroups,
-          })
-        : undefined;
+    const resolveSourceControlProviderKind = yield* buildSourceControlProviderKindResolver(
+      project.workspaceRoot,
+    );
+    const { hostToolClient, hostToolGrant } = resolveHostToolBridge({
+      toolBroker,
+      launchThreadId: threadIdInput,
+      hostToolScope,
+      dispatch,
+      resolveSourceControlProviderKind,
+    });
 
     // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
     // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral

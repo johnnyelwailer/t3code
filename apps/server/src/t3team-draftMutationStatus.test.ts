@@ -64,7 +64,8 @@ describe("withDraftMutationStatus", () => {
     expect(updated?.visibleToAgent).toBe(false);
     expect(updated?.author).toEqual({ kind: "system" });
     // A verdict never rewrites the proposal it settles.
-    expect(attachment?.kind === "draft-mutation" ? attachment.draft.patch : undefined).toEqual({
+    const draft = attachment?.kind === "draft-mutation" ? attachment.draft : undefined;
+    expect(draft?.kind === "jira-work-item-draft" ? draft.patch : undefined).toEqual({
       description: "## Goal\nRound to two decimals.",
     });
     expect(decodeExt(updated)).toEqual(updated);

@@ -9,7 +9,7 @@ import type { ModelSelection } from "@runbook/threads/models";
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
 import type { ToolGroupRef } from "./t3team-sdk.capabilityVocabulary.ts";
 import type { AnyRecipeRef } from "./t3team-sdk.recipeTypes.ts";
-import type { GithubReviewDraftInput } from "./tools/t3team-sdk.githubReview.ts";
+import type { ChangeRequestReviewDraftInput } from "./tools/t3team-sdk.changeRequestReview.ts";
 import type { WorkflowRunIntent } from "./tools/t3team-sdk.workflow.ts";
 
 export type {
@@ -95,9 +95,9 @@ export interface T3TeamToolHandlerClient {
     readonly tool: string;
     readonly args: unknown;
   }) => Promise<unknown>;
-  /** Host-provided GitHub review draft preparation; result is validated against the tool result
-   * schema. Never posts — see the INVARIANT in `tools/t3team-sdk.githubReview.ts`. */
-  readonly draftGithubReview?: (input: GithubReviewDraftInput) => Promise<unknown>;
+  /** Host-provided change-request review draft preparation; result is validated against the tool
+   * result schema. Never posts — see the INVARIANT in `tools/t3team-sdk.changeRequestReview.ts`. */
+  readonly draftChangeRequestReview?: (input: ChangeRequestReviewDraftInput) => Promise<unknown>;
 }
 
 export interface WorkflowRef<Inputs = unknown, Outputs = unknown, Path extends string = string> {

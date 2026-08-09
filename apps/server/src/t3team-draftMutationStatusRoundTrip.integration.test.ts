@@ -178,7 +178,10 @@ it("records a verdict on the carrier so a re-read stops presenting it as pending
       assert.strictEqual(settled.draft?.status, "applied");
       assert.strictEqual(settled.draft?.id, draftId);
       // A verdict never rewrites the proposal it settles.
-      assert.deepStrictEqual(settled.draft?.patch, PATCH);
+      assert.deepStrictEqual(
+        settled.draft?.kind === "jira-work-item-draft" ? settled.draft.patch : undefined,
+        PATCH,
+      );
       // Still ONE hidden carrier, not a new visible chat message.
       assert.strictEqual(settled.thread.messages.length, messageCount);
       assert.strictEqual(settled.carrier?.id, published.carrier?.id);

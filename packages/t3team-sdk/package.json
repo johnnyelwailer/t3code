@@ -39,9 +39,9 @@
       "types": "./src/tools/t3team-sdk.workflow.ts",
       "import": "./src/tools/t3team-sdk.workflow.ts"
     },
-    "./tools/t3teamGithubReview": {
-      "types": "./src/tools/t3team-sdk.githubReview.ts",
-      "import": "./src/tools/t3team-sdk.githubReview.ts"
+    "./tools/t3teamChangeRequestReview": {
+      "types": "./src/tools/t3team-sdk.changeRequestReview.ts",
+      "import": "./src/tools/t3team-sdk.changeRequestReview.ts"
     }
   },
   "scripts": {
