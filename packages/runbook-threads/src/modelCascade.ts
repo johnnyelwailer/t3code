@@ -73,8 +73,11 @@ export function createModelCascadeResolver(deps: {
       args: payload,
       fire: async (cid: string, resolver: ReplyResolver) => {
         let settled = false;
+        // `once` guards the "no host cascade resolver" fallback below from double-settling; it
+        // must forward `provenance` untouched, or an intercepted `model.resolve` (Epic:
+        // sub-workflow effect interception) would silently lose its `by` on the way through.
         const once: ReplyResolver = {
-          resolve: (reply) => ((settled = true), resolver.resolve(reply)),
+          resolve: (reply, provenance) => ((settled = true), resolver.resolve(reply, provenance)),
           reject: () => ((settled = true), resolver.reject()),
         };
         await deps.broker.send({ correlationId: cid, kind: "model.resolve", payload }, once);

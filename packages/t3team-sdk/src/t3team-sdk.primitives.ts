@@ -12,7 +12,7 @@ import {
 import type * as T from "./t3team-sdk.types.ts";
 
 export type { PipelineStage };
-export type WorkflowPrimitives = GenericWorkflowPrimitives<T.WorkflowRef>;
+export type WorkflowPrimitives = GenericWorkflowPrimitives<T.WorkflowRef, T.WorkflowInvokeOpts>;
 
 export interface WorkflowPrimitivesDeps {
   readonly callPrimitive: <R>(call: T.PrimitiveCall<R>) => Promise<R>;
@@ -22,13 +22,19 @@ export interface WorkflowPrimitivesDeps {
   readonly budgetTotal: number;
   readonly onPhase: (title: string) => void;
   readonly onLog: (message: string) => void;
-  readonly runSubWorkflow?: (ref: T.WorkflowRef, args: unknown) => Promise<unknown>;
+  readonly runSubWorkflow?: (
+    ref: T.WorkflowRef,
+    args: unknown,
+    opts?: T.WorkflowInvokeOpts,
+  ) => Promise<unknown>;
 }
 
 export function createWorkflowPrimitives(deps: WorkflowPrimitivesDeps): WorkflowPrimitives {
-  return createGenericWorkflowPrimitives<T.WorkflowRef>({
-    callPrimitive:
-      deps.callPrimitive as GenericWorkflowPrimitivesDeps<T.WorkflowRef>["callPrimitive"],
+  return createGenericWorkflowPrimitives<T.WorkflowRef, T.WorkflowInvokeOpts>({
+    callPrimitive: deps.callPrimitive as GenericWorkflowPrimitivesDeps<
+      T.WorkflowRef,
+      T.WorkflowInvokeOpts
+    >["callPrimitive"],
     runBlackBoxed: deps.runBlackBoxed,
     sleep: (durationMs) => NodeTimersPromises.setTimeout(durationMs).then(() => undefined),
     spent: deps.spentAgentTokens,

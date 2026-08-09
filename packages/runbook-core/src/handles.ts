@@ -19,7 +19,15 @@ import type { PrimitiveKind } from "./runtimeTypes.ts";
 
 /** Settles a fired handle synchronously — the broker calls this when a reply is immediate. */
 export interface ReplyResolver {
-  resolve(reply: unknown): void;
+  /**
+   * `provenance` names WHO answered when it was not the real host — a composed broker
+   * (`createInterceptingBroker` in `@runbook/threads/broker`) passes its handler's `by` here so
+   * the `resolved` journal entry records it (see {@link import("./handlesDispatch.ts")}'s
+   * `recordResolved`). Absent (the mock broker, the real host broker) means the real host
+   * answered; that absence must stay the default so an existing caller that never intercepts
+   * anything sees no change in its journal.
+   */
+  resolve(reply: unknown, provenance?: { readonly by: string }): void;
   /** Terminal rejection — `.response` rejects and a later real reply is ignored. */
   reject(error?: unknown): void;
 }
