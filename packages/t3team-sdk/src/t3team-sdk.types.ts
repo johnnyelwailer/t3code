@@ -79,6 +79,15 @@ export interface T3TeamToolHandlerClient {
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
   }) => Promise<unknown>;
+  /** Host-provided sandboxed checkout + command execution; result is validated against the tool
+   * result schema. No credential ever flows through this call — the host resolves `ref` into a
+   * real checkout using whatever access it already holds, and that access never crosses into the
+   * agent-visible args or result. */
+  readonly runSandbox?: (input: {
+    readonly ref: string;
+    readonly command: string;
+    readonly timeoutMs?: number;
+  }) => Promise<unknown>;
   /** Dispatch a broker-owned host tool by id. Present only on a thread-bound run; the HOST decides
    * which ids it will accept, so this is a transport, not a widening of the tool surface. */
   readonly callHostTool?: (input: {
