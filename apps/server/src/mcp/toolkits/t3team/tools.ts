@@ -285,7 +285,11 @@ export const T3TeamRecipeListTool = Tool.make("t3team_recipe_list", {
     "shipped by installed packs. Each entry carries {id, title, recipePath, workflowPath?, " +
     'source} where source is "project-local" or "pack"; pass recipePath to run or validate ' +
     "it. Prefer an existing recipe over re-authoring one. Read-only.",
-  parameters: Schema.Struct({}),
+  // `parameters` is OMITTED, not `Schema.Struct({})`. An empty TS object type means "any
+  // non-null", so effect renders that struct as `{anyOf:[{object},{array}]}` — and MCP clients
+  // reject a non-object tool inputSchema on tools/list, which drops the WHOLE t3team toolkit for
+  // that client, not just this tool. Omitting it picks up `Tool.EmptyParams`, which renders as
+  // `{type:"object",additionalProperties:false}`. Guarded by t3team-mcpToolInputSchema.test.ts.
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
