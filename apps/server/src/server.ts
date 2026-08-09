@@ -430,10 +430,7 @@ const LocalProviderSessionsWatcherMounted = LocalProviderSessionsWatcherLive.pip
 const ProviderRuntimeLayerLive = Layer.mergeAll(
   ProviderSessionReaperLive,
   LocalProviderSessionsWatcherMounted,
-).pipe(
-  Layer.provideMerge(ProviderLayerLive),
-  Layer.provideMerge(OrchestrationLayerLive),
-);
+).pipe(Layer.provideMerge(ProviderLayerLive), Layer.provideMerge(OrchestrationLayerLive));
 
 // The workflow-engine singletons share one provideMerge slot (the `pipe` arity is capped):
 // the in-memory run registry (reactor's hot index) + the durable run record + the SQLite

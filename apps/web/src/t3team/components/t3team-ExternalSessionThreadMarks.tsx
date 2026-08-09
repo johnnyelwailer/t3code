@@ -8,7 +8,7 @@
  * from ever disagreeing about it.
  */
 import { LockIcon } from "lucide-react";
-import { ProviderDriverKind } from "@t3tools/contracts";
+import { ProviderDriverKind, localProviderDisplayName } from "@t3tools/contracts";
 
 import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";
 import { EXTERNAL_SESSION_ACTIVE_WINDOW_MS } from "~/t3team/chat/t3team-externalSessionState";
@@ -26,8 +26,6 @@ export function isExternalSessionActive(input: {
   return age >= 0 && age < EXTERNAL_SESSION_ACTIVE_WINDOW_MS;
 }
 
-const providerLabel = (providerKind: string) => (providerKind === "codex" ? "Codex" : "Claude");
-
 export function ExternalSessionProviderMark({
   providerKind,
   active,
@@ -38,11 +36,11 @@ export function ExternalSessionProviderMark({
   if (!providerKind) return null;
   return (
     <span
-      title={`External ${providerLabel(providerKind)} session${active ? " · active · read-only" : ""}`}
+      title={`External ${localProviderDisplayName(providerKind)} session${active ? " · active · read-only" : ""}`}
     >
       <ProviderInstanceIcon
         driverKind={ProviderDriverKind.make(providerKind)}
-        displayName={providerLabel(providerKind)}
+        displayName={localProviderDisplayName(providerKind)}
         className="size-3.5"
         iconClassName="size-3.5"
       />

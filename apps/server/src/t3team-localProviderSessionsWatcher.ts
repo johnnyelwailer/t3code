@@ -1,4 +1,4 @@
-import { homedir } from "node:os";
+import * as NodeOS from "node:os";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -39,8 +39,8 @@ export const LocalProviderSessionsWatcherLive = Layer.effectDiscard(
     );
 
     const roots: ReadonlyArray<{ readonly provider: LocalProviderKind; readonly root: string }> = [
-      { provider: "codex", root: path.join(homedir(), ".codex", "sessions") },
-      { provider: "claudeAgent", root: path.join(homedir(), ".claude", "projects") },
+      { provider: "codex", root: path.join(NodeOS.homedir(), ".codex", "sessions") },
+      { provider: "claudeAgent", root: path.join(NodeOS.homedir(), ".claude", "projects") },
     ];
     for (const { provider, root } of roots) {
       if (!(yield* fileSystem.exists(root).pipe(Effect.orElseSucceed(() => false)))) continue;

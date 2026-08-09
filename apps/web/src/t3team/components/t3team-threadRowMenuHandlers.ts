@@ -7,9 +7,7 @@ import { useCallback } from "react";
  * Extracted from the row purely so it stays under the fork's LOC ceiling — the positioning rule is
  * the only thing here, and it is easier to see on its own.
  */
-export function useThreadRowMenuHandlers(
-  openThreadMenu: (x: number, y: number) => Promise<void>,
-) {
+export function useThreadRowMenuHandlers(openThreadMenu: (x: number, y: number) => Promise<void>) {
   const handleContextMenu = useCallback(
     async (e: React.MouseEvent) => {
       e.preventDefault();

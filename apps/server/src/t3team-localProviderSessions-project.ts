@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import { workspacePathsMatch } from "./t3team-localProviderSessions.ts";
@@ -12,7 +13,12 @@ export const findLocalProviderProject = <T extends LocalProviderProject>(
   projects: ReadonlyArray<T>,
 ): Effect.Effect<T | undefined, never, RepositoryIdentityResolver.RepositoryIdentityResolver> =>
   Effect.gen(function* () {
-    const exact = projects.find((project) => workspacePathsMatch(project.workspaceRoot, cwd));
+    // Injected rather than read from process.platform: path comparison is case- and
+    // separator-sensitive on Windows, and tests must be able to exercise both.
+    const hostPlatform = yield* HostProcessPlatform;
+    const exact = projects.find((project) =>
+      workspacePathsMatch(project.workspaceRoot, cwd, hostPlatform),
+    );
     if (exact) return exact;
 
     const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;

@@ -1,3 +1,5 @@
+import { findLocalProviderKindByInstanceId, localProviderDisplayName } from "@t3tools/contracts";
+
 import type { Thread } from "~/types";
 
 export type ExternalSession = {
@@ -6,8 +8,12 @@ export type ExternalSession = {
   readonly updatedAt: string;
 };
 
-export const CODEX_EXTERNAL_SESSION_ACTIVE_WINDOW_MS = 5 * 60_000;
-export const CLAUDE_EXTERNAL_SESSION_FALLBACK_WINDOW_MS = 90_000;
+// Sourced from the shared LOCAL_PROVIDER_KINDS table so the server and this app cannot drift on
+// how long a native session counts as open.
+export const CODEX_EXTERNAL_SESSION_ACTIVE_WINDOW_MS =
+  findLocalProviderKindByInstanceId("codex")!.activeWindowMs;
+export const CLAUDE_EXTERNAL_SESSION_FALLBACK_WINDOW_MS =
+  findLocalProviderKindByInstanceId("claudeAgent")!.activeWindowMs;
 // Legacy project-sidebar rows have no native session id for the Claude check.
 export const EXTERNAL_SESSION_ACTIVE_WINDOW_MS = CODEX_EXTERNAL_SESSION_ACTIVE_WINDOW_MS;
 
@@ -33,12 +39,11 @@ export function readExternalSession(thread: Thread | null): ExternalSession | nu
 export function isExternalSessionActive(session: ExternalSession, now = Date.now()): boolean {
   const updatedAt = Date.parse(session.updatedAt);
   const windowMs =
-    session.provider === "codex"
-      ? CODEX_EXTERNAL_SESSION_ACTIVE_WINDOW_MS
-      : CLAUDE_EXTERNAL_SESSION_FALLBACK_WINDOW_MS;
+    findLocalProviderKindByInstanceId(session.provider)?.activeWindowMs ??
+    CLAUDE_EXTERNAL_SESSION_FALLBACK_WINDOW_MS;
   return Number.isFinite(updatedAt) && now - updatedAt >= 0 && now - updatedAt < windowMs;
 }
 
 export function externalProviderName(provider: ExternalSession["provider"]): string {
-  return provider === "codex" ? "Codex" : "Claude";
+  return localProviderDisplayName(provider);
 }

@@ -111,10 +111,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
       onClick={onSelect}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-        <ExternalSessionProviderMark
-          providerKind={thread.providerKind}
-          active={externalActive}
-        />
+        <ExternalSessionProviderMark providerKind={thread.providerKind} active={externalActive} />
         {variant === "issue" ? (
           <MessageSquareIcon className="size-3 shrink-0 text-muted-foreground/70" />
         ) : null}

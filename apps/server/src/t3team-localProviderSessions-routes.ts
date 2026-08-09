@@ -1,4 +1,6 @@
 import * as Effect from "effect/Effect";
+import { localProviderDisplayName } from "@t3tools/contracts";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Schema from "effect/Schema";
 import { HttpRouter } from "effect/unstable/http";
 
@@ -61,11 +63,14 @@ const workspaceRoute = HttpRouter.route(
           new T3TeamAtlassianError({ message: "Could not discover local workspaces.", cause }),
       ),
     );
+    // Injected, not read from process.platform: workspace paths compare case- and
+    // separator-insensitively on Windows only.
+    const hostPlatform = yield* HostProcessPlatform;
     const workspaces = new Map<string, { cwd: string; providers: Set<string> }>();
     for (const session of sessions) {
-      const key = normalizeWorkspacePath(session.cwd);
+      const key = normalizeWorkspacePath(session.cwd, hostPlatform);
       const workspace = workspaces.get(key) ?? { cwd: session.cwd, providers: new Set<string>() };
-      workspace.providers.add(session.provider === "codex" ? "Codex" : "Claude");
+      workspace.providers.add(localProviderDisplayName(session.provider));
       workspaces.set(key, workspace);
     }
     return okJson({

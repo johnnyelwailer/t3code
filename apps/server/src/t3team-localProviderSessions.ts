@@ -1,4 +1,4 @@
-import { homedir, platform } from "node:os";
+import * as NodeOS from "node:os";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -21,23 +21,20 @@ const MAX_CACHED_SESSIONS = 500;
 // Keep each provider independently bounded. A global newest-only cap hides
 // one provider when its matching session is older than another provider's.
 const MAX_SESSIONS_PER_PROVIDER = 100;
-const parsedSessionCache = new Map<string, { modifiedAt: number; session: LocalProviderSession | null }>();
+const parsedSessionCache = new Map<
+  string,
+  { modifiedAt: number; session: LocalProviderSession | null }
+>();
 
-export const normalizeWorkspacePath = (
-  value: string,
-  hostPlatform: string = platform(),
-): string => {
+export const normalizeWorkspacePath = (value: string, hostPlatform: string): string => {
   const normalized = value.trim().replace(/[\\/]+$/u, "");
   return hostPlatform === "win32"
     ? normalized.replaceAll("/", "\\").toLocaleLowerCase()
     : normalized;
 };
 
-export const workspacePathsMatch = (
-  left: string,
-  right: string,
-  hostPlatform: string = platform(),
-): boolean => normalizeWorkspacePath(left, hostPlatform) === normalizeWorkspacePath(right, hostPlatform);
+export const workspacePathsMatch = (left: string, right: string, hostPlatform: string): boolean =>
+  normalizeWorkspacePath(left, hostPlatform) === normalizeWorkspacePath(right, hostPlatform);
 
 const filesBelow: (
   root: string,
@@ -65,9 +62,10 @@ const filesBelow: (
   return paths;
 });
 
-export const readLocalProviderSessionFile = Effect.fn(
-  "readLocalProviderSessionFile",
-)(function* (provider: LocalProviderSession["provider"], filePath: string) {
+export const readLocalProviderSessionFile = Effect.fn("readLocalProviderSessionFile")(function* (
+  provider: LocalProviderSession["provider"],
+  filePath: string,
+) {
   const fileSystem = yield* FileSystem.FileSystem;
   const info = yield* fileSystem.stat(filePath).pipe(Effect.orElseSucceed(() => null));
   if (!info) return null;
@@ -87,7 +85,7 @@ export const readLocalProviderSessionFile = Effect.fn(
 export const listLocalProviderSessions = Effect.fn("listLocalProviderSessions")(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const home = homedir();
+  const home = NodeOS.homedir();
   const [codexPaths, claudePaths] = yield* Effect.all([
     filesBelow(path.join(home, ".codex", "sessions"), 3),
     filesBelow(path.join(home, ".claude", "projects"), 2),
@@ -114,14 +112,14 @@ export const listLocalProviderSessions = Effect.fn("listLocalProviderSessions")(
   const recentSessions = (["codex", "claudeAgent"] as const).flatMap((provider) =>
     recentPaths
       .filter(
-        (value): value is NonNullable<typeof value> => value !== null && value.provider === provider,
+        (value): value is NonNullable<typeof value> =>
+          value !== null && value.provider === provider,
       )
       .sort((left, right) => right.modifiedAt - left.modifiedAt)
       .slice(0, MAX_SESSIONS_PER_PROVIDER),
   );
-  const sessions = yield* Effect.forEach(
-    recentSessions,
-    ({ provider, filePath }) => readLocalProviderSessionFile(provider, filePath),
+  const sessions = yield* Effect.forEach(recentSessions, ({ provider, filePath }) =>
+    readLocalProviderSessionFile(provider, filePath),
   );
   return sessions
     .filter((value): value is LocalProviderSession => value !== null)

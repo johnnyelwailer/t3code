@@ -5,10 +5,12 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
+  findLocalProviderKind,
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 
 import {
   listLocalProviderSessions,
@@ -23,15 +25,19 @@ import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDir
 import { ServerSettingsService } from "./serverSettings.ts";
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
 
+// Both read the LOCAL_PROVIDER_KINDS table rather than branching on "codex": the resume shape and
+// the instance a thread lands on are per-provider facts, and they belong next to each other.
 const resumeCursor = (session: LocalProviderSession) =>
-  session.provider === "codex"
-    ? { threadId: session.nativeId }
-    : { resume: session.nativeId, threadId: session.nativeId };
+  findLocalProviderKind(session.provider)?.buildResumeCursor(session.nativeId) ?? {
+    threadId: session.nativeId,
+  };
 
 const modelFor = (session: LocalProviderSession) => {
   const provider = ProviderDriverKind.make(session.provider);
   return {
-    instanceId: ProviderInstanceId.make(session.provider === "codex" ? "codex" : "claudeAgent"),
+    instanceId:
+      findLocalProviderKind(session.provider)?.instanceId ??
+      ProviderInstanceId.make(session.provider),
     model: session.model ?? DEFAULT_MODEL_BY_PROVIDER[provider]!,
   };
 };
@@ -59,10 +65,14 @@ export function syncLocalProviderSession(session: LocalProviderSession) {
         message: "Local provider sessions are disabled in Settings.",
       });
     }
+    // Injected, not read from process.platform: workspace paths compare case- and
+    // separator-insensitively on Windows only.
+    const hostPlatform = yield* HostProcessPlatform;
     const snapshot = yield* (yield* ProjectionSnapshotQuery).getSnapshot();
     const existingThread = snapshot.threads.find(
       (thread) =>
-        thread.worktreePath !== null && workspacePathsMatch(thread.worktreePath, session.cwd),
+        thread.worktreePath !== null &&
+        workspacePathsMatch(thread.worktreePath, session.cwd, hostPlatform),
     );
     const project =
       snapshot.projects.find((entry) => entry.id === existingThread?.projectId) ??
