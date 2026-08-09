@@ -5,7 +5,9 @@ import * as NodePath from "node:path";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import type * as Grandparent from "./__fixtures__/t3team-sdk.subAskUserGrandparent.workflow.ts";
+import type * as ParallelSiblings from "./__fixtures__/t3team-sdk.subParallelSiblings.workflow.ts";
 import type * as Recursive from "./__fixtures__/t3team-sdk.subRecursive.workflow.ts";
+import { demoScripts } from "./t3team-sdk.engineFixtures.ts";
 import {
   appendResolvedEntry,
   createMockBroker,
@@ -32,6 +34,9 @@ const grandparent = defineWorkflow<typeof Grandparent>(
 );
 const recursive = defineWorkflow<typeof Recursive>(
   "./__fixtures__/t3team-sdk.subRecursive.workflow.ts",
+);
+const parallelSiblings = defineWorkflow<typeof ParallelSiblings>(
+  "./__fixtures__/t3team-sdk.subParallelSiblings.workflow.ts",
 );
 const alwaysDefer = (): MockBrokerOutcome => ({ kind: "defer" });
 
@@ -91,6 +96,21 @@ describe("first-class sub-workflows", () => {
     // The answer travelled back out through BOTH levels, which is only possible because each level
     // is a real body whose result is decoded against its own `meta.outputs`.
     expect(resumed).toMatchObject({ result: { answer: "yes, ship it" } });
+  });
+
+  // Regression: an adversarial review of the first revision found that the cycle guard used one
+  // push/pop stack shared by the whole run, which cannot model CONCURRENT siblings. Two `parallel`
+  // thunks invoking the same sub-workflow made the second see the first's entry and refuse a legal
+  // composition as recursion — and `pop()` removed whichever entry happened to be last rather than
+  // the one that call had pushed, so the chain was wrong mid-flight even for different refs. The
+  // guard is an immutable chain threaded by value now; siblings cannot see each other at all.
+  it("allows the same sub-workflow to run twice concurrently as parallel siblings", async () => {
+    const result = await startWorkflow(
+      parallelSiblings,
+      {},
+      { runsRoot, tools: [], scripts: demoScripts },
+    );
+    expect(result).toMatchObject({ result: { first: "hi eins", second: "hi zwei" } });
   });
 
   it("refuses a recursive sub-workflow by name rather than blowing the stack", async () => {
