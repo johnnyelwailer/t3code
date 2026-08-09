@@ -91,6 +91,7 @@ import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import { cn, isMacPlatform, isWindowsPlatform, newProjectId } from "../lib/utils";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { buildThreadRouteParams, resolveThreadRouteTarget } from "../threadRoutes";
+import { ExternalWorkspaceProviderIcons } from "~/t3team/components/t3team-ExternalWorkspaceProviderIcons";
 import {
   applyWslEnvironmentConfiguration,
   parseWslUncPath,
@@ -150,6 +151,7 @@ function projectFavicon(project: Project) {
     <ProjectFavicon
       environmentId={project.environmentId}
       cwd={project.workspaceRoot}
+      faviconPath={project.faviconPath}
       className={ITEM_ICON_CLASS}
     />
   );
@@ -184,6 +186,11 @@ interface AddProjectEnvironmentOption {
   readonly isPrimary: boolean;
   readonly isConnected: boolean;
   readonly status: string;
+}
+
+interface LocalProviderWorkspace {
+  readonly cwd: string;
+  readonly providers: ReadonlyArray<string>;
 }
 
 type AddProjectRemoteProviderKind = Extract<
@@ -618,12 +625,37 @@ function OpenCommandPaletteDialog(props: {
   );
   const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
   const [addProjectCloneFlow, setAddProjectCloneFlow] = useState<AddProjectCloneFlow | null>(null);
+  const [localProviderWorkspaces, setLocalProviderWorkspaces] = useState<
+    ReadonlyArray<LocalProviderWorkspace>
+  >([]);
   const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
   const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
   const projectGroupingSettings = useMemo(
     () => selectProjectGroupingSettings(clientSettings),
     [clientSettings],
   );
+
+  useEffect(() => {
+    if (addProjectEnvironmentId !== primaryEnvironmentId) return;
+    let cancelled = false;
+    void fetch("/api/local-provider-sessions/workspaces")
+      .then(async (response) => {
+        if (!response.ok) return [];
+        const payload = (await response.json()) as {
+          workspaces?: ReadonlyArray<LocalProviderWorkspace>;
+        };
+        return payload.workspaces ?? [];
+      })
+      .then((workspaces) => {
+        if (!cancelled) setLocalProviderWorkspaces(workspaces);
+      })
+      .catch(() => {
+        if (!cancelled) setLocalProviderWorkspaces([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addProjectEnvironmentId, primaryEnvironmentId]);
 
   const environmentLabelById = useMemo(
     () =>
@@ -1223,9 +1255,68 @@ function OpenCommandPaletteDialog(props: {
         });
       }
 
-      return [{ value: `sources:${environmentId}`, label: "Sources", items: sourceItems }];
+      const localWorkspaceItems =
+        environmentId === primaryEnvironmentId
+          ? localProviderWorkspaces
+              .filter(
+                (workspace) =>
+                  !findProjectByPath(
+                    projects.filter((project) => project.environmentId === environmentId),
+                    workspace.cwd,
+                  ),
+              )
+              .map((workspace) => ({
+                kind: "action" as const,
+                value: `action:add-project:${environmentId}:provider-workspace:${workspace.cwd}`,
+                // Keep matching by workspace name. Including cwd makes a search
+                // for a parent directory return every nested worktree.
+                searchTerms: [
+                  inferProjectTitleFromPath(workspace.cwd),
+                  "workspace",
+                  "local",
+                  "codex",
+                  "claude",
+                ],
+                title: inferProjectTitleFromPath(workspace.cwd),
+                description: `External workspace · ${workspace.cwd}`,
+                icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+                titleTrailingContent: (
+                  <ExternalWorkspaceProviderIcons
+                    providers={workspace.providers.filter(
+                      (provider): provider is "Codex" | "Claude" =>
+                        provider === "Codex" || provider === "Claude",
+                    )}
+                  />
+                ),
+                keepOpen: true,
+                run: async () => {
+                  startAddProjectBrowse(environmentId);
+                  setQuery(workspace.cwd);
+                  setBrowseGeneration((generation) => generation + 1);
+                },
+              }))
+          : [];
+      return [
+        { value: `sources:${environmentId}`, label: "Sources", items: sourceItems },
+        ...(localWorkspaceItems.length > 0
+          ? [
+              {
+                value: `local-provider-workspaces:${environmentId}`,
+                label: "External workspaces",
+                items: localWorkspaceItems,
+              },
+            ]
+          : []),
+      ];
     },
-    [openSourceControlSettings, startAddProjectBrowse, startAddProjectClone],
+    [
+      localProviderWorkspaces,
+      openSourceControlSettings,
+      primaryEnvironmentId,
+      projects,
+      startAddProjectBrowse,
+      startAddProjectClone,
+    ],
   );
 
   const startAddProjectSourceSelection = useCallback(
@@ -1511,6 +1602,17 @@ function OpenCommandPaletteDialog(props: {
     },
   });
 
+  actionItems.push({
+    kind: "action",
+    value: "action:project-settings",
+    searchTerms: ["project", "settings", "scripts", "model", "grouping", "checkout"],
+    title: "Project settings",
+    icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/settings/projects" });
+    },
+  });
+
   const rootGroups = buildRootGroups({ actionItems, recentThreadItems });
   const sourceSelectionViewValue =
     addProjectEnvironmentId === null ? null : `sources:${addProjectEnvironmentId}`;
@@ -1642,6 +1744,11 @@ function OpenCommandPaletteDialog(props: {
         }
         return;
       }
+
+      // The watcher covers later profile changes. A newly added workspace must
+      // also import matching native sessions immediately.
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      await fetch("/api/local-provider-sessions/sync", { method: "POST" }).catch(() => undefined);
 
       const navigationResult = await settlePromise(() =>
         handleNewThread(scopeProjectRef(input.environmentId, projectId)),

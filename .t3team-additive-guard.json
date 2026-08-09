@@ -7,6 +7,7 @@
   "allowedModifiedFiles": [
     ".agents/skills/test-t3-app/SKILL.md",
     ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
     ".gitignore",
     ".t3team-additive-guard.json",
     "AGENTS.md",
@@ -25,6 +26,7 @@
     "apps/server/src/checkpointing/CheckpointDiffQuery.test.ts",
     "apps/server/src/environment/ServerEnvironment.ts",
     "apps/server/src/mcp/McpHttpServer.ts",
+    "apps/server/src/orchestration/Layers/CheckpointReactor.ts",
     "apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts",
     "apps/server/src/orchestration/Layers/ProjectionPipeline.test.ts",
     "apps/server/src/orchestration/Layers/ProjectionPipeline.ts",
@@ -39,6 +41,7 @@
     "apps/server/src/persistence/Layers/ProjectionThreadMessages.ts",
     "apps/server/src/persistence/Layers/ProjectionThreads.ts",
     "apps/server/src/persistence/Migrations.ts",
+    "apps/server/src/persistence/Migrations/040_ProjectionProjectFaviconPath.test.ts",
     "apps/server/src/persistence/Migrations/035_ProjectionThreadTitleRegeneration.test.ts",
     "apps/server/src/persistence/Services/ProjectionThreadMessages.ts",
     "apps/server/src/persistence/Services/ProjectionThreads.ts",
