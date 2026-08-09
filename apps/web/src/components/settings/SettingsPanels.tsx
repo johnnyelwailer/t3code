@@ -127,6 +127,7 @@ import {
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
 import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
+import { T3TeamLocalProviderSessionsSetting } from "./t3team-LocalProviderSessionsSetting";
 import {
   buildProviderInstanceUpdatePatch,
   backgroundActivityOverrideSettings,
@@ -971,6 +972,7 @@ export function AppearanceSettingsPanel() {
 
         {/* T3Team settings insertion seam: keep this mount stable to minimize merge conflicts. */}
         <T3TeamProjectSetupSetting />
+        <T3TeamLocalProviderSessionsSetting />
 
         <SettingsRow
           {...searchableSetting("setting-glass-opacity")}
@@ -2272,6 +2274,7 @@ export function ArchivedThreadsPanel() {
                 environmentId,
                 name: project.title,
                 cwd: project.workspaceRoot,
+                faviconPath: project.faviconPath,
               },
             ] as const,
         ),
@@ -2393,7 +2396,13 @@ export function ArchivedThreadsPanel() {
             key={project.id}
             id={index === 0 ? searchableSetting("archive").id : undefined}
             title={project.name}
-            icon={<ProjectFavicon environmentId={project.environmentId} cwd={project.cwd} />}
+            icon={
+              <ProjectFavicon
+                environmentId={project.environmentId}
+                cwd={project.cwd}
+                faviconPath={project.faviconPath}
+              />
+            }
           >
             {projectThreads.map((thread) => (
               <SettingsRow

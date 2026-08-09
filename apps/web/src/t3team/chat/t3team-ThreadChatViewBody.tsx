@@ -12,6 +12,8 @@ import type { ChatMessage } from "~/types";
 type ThreadChatComposerState = ReturnType<typeof useThreadChatComposerState>;
 
 export interface ThreadChatViewBodyProps {
+  /** Covers the composer when an external Codex/Claude session still owns this thread. */
+  composerReadOnlyOverlay?: React.ReactNode;
   environmentId: EnvironmentId;
   threadId: string;
   projectId: string;
@@ -35,6 +37,7 @@ export interface ThreadChatViewBodyProps {
 
 /** Presentational body for {@link ThreadChatView}: kickoff placeholder + ChatView/pending-chat split. */
 export function ThreadChatViewBody({
+  composerReadOnlyOverlay,
   environmentId,
   threadId,
   projectId,
@@ -109,7 +112,16 @@ export function ThreadChatViewBody({
             dispatchTurnStartOverride={dispatchTurnStartOverride}
             composerContextAttachmentSlot={contextAttachmentSlot}
             composerContainerProps={composerDropTarget.composerContainerProps}
-            composerContainerOverlay={composerDropTarget.composerContainerOverlay}
+            composerContainerOverlay={
+              composerReadOnlyOverlay ? (
+                <>
+                  {composerDropTarget.composerContainerOverlay}
+                  {composerReadOnlyOverlay}
+                </>
+              ) : (
+                composerDropTarget.composerContainerOverlay
+              )
+            }
             composerContextAttachments={contextAttachments}
             prepareComposerContextAttachments={prepareComposerContextAttachments}
             onComposerContextAttachmentsConsumed={clearThreadAttachments}
