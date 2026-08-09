@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
 
 import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { Input } from "~/t3team/components/ui/t3team-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/t3team/components/ui/t3team-popover";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -29,7 +30,7 @@ export function ProjectBacklogRowAssigneeCell({
     [],
   );
   const [assigneeLoading, setAssigneeLoading] = useState(false);
-  const [assigneeError, setAssigneeError] = useState<string | null>(null);
+  const [assigneeError, setAssigneeError] = useState<unknown>(null);
   const deferredAssigneeQuery = useDeferredValue(assigneeQuery);
 
   useEffect(() => {
@@ -45,7 +46,7 @@ export function ProjectBacklogRowAssigneeCell({
       })
       .catch((cause) => {
         if (cancelled) return;
-        setAssigneeError(cause instanceof Error ? cause.message : "Failed to load users.");
+        setAssigneeError(cause);
       })
       .finally(() => {
         if (cancelled) return;
@@ -123,7 +124,9 @@ export function ProjectBacklogRowAssigneeCell({
                 <div className="px-2 py-1.5 text-xs text-muted-foreground">No matches.</div>
               ) : null}
             </div>
-            {assigneeError ? <div className="text-xs text-destructive">{assigneeError}</div> : null}
+            {assigneeError ? (
+              <T3TeamErrorState error={assigneeError} action="loading assignees" variant="inline" />
+            ) : null}
           </div>
         </PopoverPopup>
       </Popover>

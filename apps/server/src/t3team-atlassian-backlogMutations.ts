@@ -15,6 +15,8 @@ import type {
   T3TeamAtlassianBacklogAssigneeUpdateInput,
   T3TeamAtlassianBacklogCreateSubtaskInput,
   T3TeamAtlassianBacklogEstimateUpdateInput,
+  T3TeamAtlassianChildIssueTypesInput,
+  T3TeamAtlassianIssueDescriptionUpdateInput,
   T3TeamAtlassianIssueStatusUpdateInput,
 } from "./t3team-atlassian-backlogTypes.ts";
 
@@ -113,6 +115,38 @@ export function updateT3TeamAtlassianIssueStatus(input: T3TeamAtlassianIssueStat
   });
 }
 
+/**
+ * Apply a `description` draft to Jira — the fourth sibling of the assignee / estimate / status
+ * writes above, with the same account resolution and the same error mapping.
+ *
+ * A missing live connection is an ERROR here, not a silent no-op: this is the commit step of a
+ * proposal a human just accepted, so pretending it succeeded would leave them believing Jira holds
+ * text it never received. (Assignee/estimate return quietly because they also run against the local
+ * backlog cache; a description has no cached write to fall back on.)
+ */
+export function updateT3TeamAtlassianIssueDescription(
+  input: T3TeamAtlassianIssueDescriptionUpdateInput,
+) {
+  return Effect.gen(function* () {
+    if (input.description.trim().length === 0) {
+      return yield* new T3TeamAtlassianError({
+        message: "Refusing to write an empty description.",
+      });
+    }
+    const provider = yield* providerForAccount(input.accountId);
+    if (!(provider instanceof AtlassianIntegrationProvider)) {
+      return yield* new T3TeamAtlassianError({
+        message: "Applying a description draft requires a live Atlassian connection.",
+      });
+    }
+
+    yield* tryAtlassianPromise(
+      () => provider.updateIssueDescription(input.accountId, input.issueIdOrKey, input.description),
+      "Failed to update the Jira description.",
+    );
+  });
+}
+
 export function createT3TeamAtlassianBacklogSubtask(
   input: T3TeamAtlassianBacklogCreateSubtaskInput,
 ) {
@@ -158,5 +192,18 @@ export function createT3TeamAtlassianBacklogSubtask(
     }
 
     return { ...created, ...(item ? { item } : {}) };
+  });
+}
+
+export function listT3TeamAtlassianChildIssueTypes(input: T3TeamAtlassianChildIssueTypesInput) {
+  return Effect.gen(function* () {
+    const provider = yield* providerForAccount(input.accountId);
+    if (!(provider instanceof AtlassianIntegrationProvider)) {
+      return [];
+    }
+    return yield* tryAtlassianPromise(
+      () => provider.getChildIssueTypes(input),
+      "Failed to load Jira child issue types.",
+    );
   });
 }

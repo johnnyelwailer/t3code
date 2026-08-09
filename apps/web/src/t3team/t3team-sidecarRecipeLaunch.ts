@@ -3,12 +3,11 @@ import { getBundledT3TeamRecipe } from "@t3tools/t3team-skill-packs";
 
 import { runThreadBootstrapKickoff } from "~/t3team/chat/t3team-runThreadBootstrapKickoff";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import type { T3TeamKickoffLaunchConfig } from "~/t3team/t3team-kickoffLaunchConfig";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
-const WORKFLOW_BACKED_BUNDLED_RECIPE_IDS = new Set(["create-recipe", "edit-plugin-module"]);
-
-type BundledRecipeWorkflow = Extract<T3TeamKickoffWorkflow, { kind: "recipe" }>;
+export type BundledRecipeWorkflow = Extract<T3TeamKickoffWorkflow, { kind: "recipe" }>;
 
 export function buildBundledSidecarRecipeWorkflowLaunch(input: {
   readonly recipeId: string;

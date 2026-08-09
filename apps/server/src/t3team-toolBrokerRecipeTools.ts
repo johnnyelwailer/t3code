@@ -9,8 +9,11 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
+import type { ValidateRecipeToolResult } from "@t3team/sdk";
+
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
 import { validateProjectRecipeWorkflowForAgent } from "./t3team-recipeAgentValidate.ts";
+import { validateInlineWorkflowSourceForAgent } from "./t3team-recipeAgentValidateStatic.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -37,13 +40,39 @@ export function makeRecipeToolHandlers<E>(deps: {
     );
 
   return (threadId) => {
+    const validateRecipe = (args: {
+      readonly path?: string;
+      readonly source?: string;
+    }): Effect.Effect<ValidateRecipeToolResult, string> => {
+      if (typeof args.source === "string" && args.source.trim().length > 0) {
+        return Effect.sync(() => validateInlineWorkflowSourceForAgent(args.source!));
+      }
+      if (!fileSystem || !path) {
+        return Effect.fail(
+          "Filesystem services are not available for t3team recipe tools in this runtime.",
+        );
+      }
+      if (typeof args.path !== "string" || args.path.trim().length === 0) {
+        return Effect.fail("t3team.recipe.validate requires a non-empty 'path' or 'source'.");
+      }
+      const requestedPath = args.path;
+      return workspaceRoot(threadId).pipe(
+        Effect.flatMap((root) =>
+          validateProjectRecipeWorkflowForAgent({ workspaceRoot: root, path: requestedPath }).pipe(
+            Effect.mapError(errorMessage),
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+          ),
+        ),
+      );
+    };
+
     if (!fileSystem || !path) {
       const unavailable = Effect.fail(
         "Filesystem services are not available for t3team recipe tools in this runtime.",
       );
-      return { listRecipes: () => unavailable, validateRecipe: () => unavailable };
+      return { listRecipes: () => unavailable, validateRecipe };
     }
-
     const provide = <A, E>(
       effect: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
     ): Effect.Effect<A, string> =>
@@ -58,14 +87,7 @@ export function makeRecipeToolHandlers<E>(deps: {
         workspaceRoot(threadId).pipe(
           Effect.flatMap((root) => provide(listProjectRecipesForAgent({ workspaceRoot: root }))),
         ),
-      validateRecipe: (args) =>
-        workspaceRoot(threadId).pipe(
-          Effect.flatMap((root) =>
-            provide(
-              validateProjectRecipeWorkflowForAgent({ workspaceRoot: root, path: args.path }),
-            ),
-          ),
-        ),
+      validateRecipe,
     };
   };
 }

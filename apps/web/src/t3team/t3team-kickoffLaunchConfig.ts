@@ -18,7 +18,7 @@ import { usePrimarySettings } from "~/hooks/useSettings";
 import { DEFAULT_T3TEAM_THREAD_TOOL_IDS } from "~/t3team/t3team-threadToolContext";
 import { runtimeModeConfig } from "~/t3team/t3team-ticketKickoffRuntimeConfig";
 import type { T3TeamThreadToolId } from "~/t3team/t3team-types";
-import { getConfiguredDefaultModelSelection } from "~/configuredDefaultModelSelection";
+import { getConfiguredDefaultModelSelection } from "~/t3team-configuredDefaultModelSelection";
 
 type ProviderSettingsSnapshot = {
   readonly providerInstances: Record<string, { readonly enabled?: boolean } | undefined>;

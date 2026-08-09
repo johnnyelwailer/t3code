@@ -3,6 +3,7 @@
 // correlationId. If the reply is not yet present the body suspends, and a resume replays to
 // the same await once the reply has been appended.
 import { Schema } from "effect";
+import { getArgs, getThread } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ question: Schema.String });
 
@@ -16,12 +17,17 @@ export const meta = {
   capabilities: ["user"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const thread = getThread();
 
-if (thread === undefined) throw new Error("fixtures.ask-response requires a launching thread");
+  const input = Schema.decodeSync(Inputs)(args);
 
-// A plain-string (freeform) ask: the schema implies a `text` affordance, so the user.input
-// payload carries no affordance/attachments key — byte-identical to a pre-decision-card journal.
-const reply = await thread.askUser(input.question, { schema: Schema.String });
+  if (thread === undefined) throw new Error("fixtures.ask-response requires a launching thread");
 
-return { answer: reply };
+  // A plain-string (freeform) ask: the schema implies a `text` affordance, so the user.input
+  // payload carries no affordance/attachments key — byte-identical to a pre-decision-card journal.
+  const reply = await thread.askUser(input.question, { schema: Schema.String });
+
+  return { answer: reply };
+}

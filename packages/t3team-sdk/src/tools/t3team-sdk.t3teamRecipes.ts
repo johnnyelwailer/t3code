@@ -11,7 +11,18 @@ import { defineTool } from "../t3team-sdk.ts";
 /** One structured, agent-actionable problem found while discovering/loading/validating. */
 export const RecipeToolIssue = Schema.Struct({
   path: Schema.String,
-  phase: Schema.Literals(["discover", "load", "meta", "shape"]),
+  /** `determinism` / `capability` are the phase-25.5 load-time static audits; `types` is the real
+   * TypeScript checker (`t3team-sdk.typeCheck.ts`). These mirror `WorkflowAuditFacet` — a facet
+   * missing here cannot be reported, and the tool result fails to encode. */
+  phase: Schema.Literals([
+    "discover",
+    "load",
+    "meta",
+    "shape",
+    "determinism",
+    "capability",
+    "types",
+  ]),
   message: Schema.String,
 });
 export type RecipeToolIssue = typeof RecipeToolIssue.Type;
@@ -28,6 +39,32 @@ export const RecipeListEntry = Schema.Struct({
   authoring: Schema.Literals(["recipe-ts", "recipe-json"]),
   recipePath: Schema.String,
   workflowPath: Schema.optional(Schema.String),
+  /**
+   * Named actions besides the default one (Epic 16 §Plugin Modules: one recipe, several actions).
+   * A launch may name one of these instead of running `workflowPath`; the agent needs the names to
+   * pick. Absent when the recipe declares no extra actions.
+   */
+  actions: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        name: Schema.String,
+        /** Absent when the action is a prompt (`definePrompt`) rather than a workflow. */
+        workflowPath: Schema.optional(Schema.String),
+        promptPath: Schema.optional(Schema.String),
+        promptText: Schema.optional(Schema.String),
+      }),
+    ),
+  ),
+  /**
+   * Where the recipe came from (Epic 16 §Recipe Sources And Precedence). `pack` recipes are the
+   * shipped library — runnable by `recipePath` exactly like a project-local one; the label only
+   * tells the agent whether editing it would mean editing the project or a distribution.
+   */
+  source: Schema.Literals(["project-local", "pack"]),
+  /** Pack that contributed the recipe. Present only when `source === "pack"`. */
+  packId: Schema.optional(Schema.String),
+  /** Pack scope the recipe inherits its precedence from. Present only when `source === "pack"`. */
+  packScope: Schema.optional(Schema.String),
 });
 export type RecipeListEntry = typeof RecipeListEntry.Type;
 
@@ -36,11 +73,20 @@ export const ListRecipesToolResult = Schema.Struct({
   workspaceRoot: Schema.String,
   recipes: Schema.Array(RecipeListEntry),
   errors: Schema.Array(RecipeToolIssue),
+  /**
+   * Non-fatal source-level notes: a pack that declared recipes it cannot deliver, a recipe id
+   * shadowed by a higher-precedence source. Populated by discovery and worth telling the agent —
+   * a recipe that silently failed to load looks identical to a recipe that never existed.
+   */
+  diagnostics: Schema.optional(Schema.Array(Schema.String)),
 });
 export type ListRecipesToolResult = typeof ListRecipesToolResult.Type;
 
 export const ValidateRecipeToolArgs = Schema.Struct({
-  path: Schema.String,
+  /** An existing `.workflow.ts` file or recipe directory in the project workspace. */
+  path: Schema.optional(Schema.String),
+  /** Inline workflow TypeScript to validate statically; nothing is written or executed. */
+  source: Schema.optional(Schema.String),
 });
 export type ValidateRecipeToolArgs = typeof ValidateRecipeToolArgs.Type;
 
@@ -99,14 +145,19 @@ export const validateRecipeTool = defineTool({
   args: ValidateRecipeToolArgs,
   result: ValidateRecipeToolResult,
   handler: async (args, ctx) => {
-    const path = args.path.trim();
-    if (path.length === 0) {
-      throw new Error("t3team.recipe.validate requires a non-empty 'path'.");
+    const path = args.path?.trim() ?? "";
+    const source = args.source?.trim() ?? "";
+    if ((path.length === 0) === (source.length === 0)) {
+      throw new Error(
+        "t3team.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+      );
     }
     if (!ctx.t3team?.validateRecipe) {
       throw new Error("t3team.recipe.validate requires a t3team recipe client in ToolHandlerCtx.");
     }
     // The host result is re-validated against ValidateRecipeToolResult by executeToolHandler.
-    return (await ctx.t3team.validateRecipe({ path })) as ValidateRecipeToolResult;
+    return (await ctx.t3team.validateRecipe(
+      path.length > 0 ? { path } : { source },
+    )) as ValidateRecipeToolResult;
   },
 });

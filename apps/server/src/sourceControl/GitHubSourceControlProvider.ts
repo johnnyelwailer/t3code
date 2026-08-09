@@ -6,10 +6,17 @@ import {
   SourceControlProviderError,
   type ChangeRequest,
   type ChangeRequestState,
+  type SourceControlProviderAuth,
+  type SourceControlProviderAuthAccount,
 } from "@t3tools/contracts";
 
 import * as GitHubCli from "./GitHubCli.ts";
-import { findAuthenticatedGitHubAccount, parseGitHubAuthStatus } from "./gitHubAuthStatus.ts";
+import {
+  findAuthenticatedGitHubAccount,
+  findAuthenticatedGitHubAccounts,
+  parseGitHubAuthStatus,
+  type GitHubAuthStatusAccount,
+} from "./gitHubAuthStatus.ts";
 import { decodeGitHubPullRequestListJson } from "./gitHubPullRequests.ts";
 import * as SourceControlProvider from "./SourceControlProvider.ts";
 import {
@@ -42,44 +49,74 @@ function toChangeRequest(summary: GitHubCli.GitHubPullRequestSummary): ChangeReq
   };
 }
 
+function toAuthAccounts(
+  accounts: ReadonlyArray<GitHubAuthStatusAccount>,
+): ReadonlyArray<SourceControlProviderAuthAccount> {
+  return findAuthenticatedGitHubAccounts(accounts).map((account) => ({
+    host: account.host,
+    account: Option.some(account.account),
+    active: account.active,
+  }));
+}
+
+function withAuthAccounts(
+  auth: SourceControlProviderAuth,
+  accounts: ReadonlyArray<SourceControlProviderAuthAccount>,
+): SourceControlProviderAuth {
+  return accounts.length > 0 ? { ...auth, accounts } : auth;
+}
+
 function parseGitHubAuth(input: SourceControlAuthProbeInput) {
   const output = combinedAuthOutput(input);
   const authStatus = parseGitHubAuthStatus(input.stdout);
   const authenticatedAccount = findAuthenticatedGitHubAccount(authStatus.accounts);
+  const authAccounts = toAuthAccounts(authStatus.accounts);
   const host = authenticatedAccount?.host;
 
   if (authenticatedAccount) {
-    return providerAuth({
-      status: "authenticated",
-      account: authenticatedAccount.account,
-      host,
-    });
+    return withAuthAccounts(
+      providerAuth({
+        status: "authenticated",
+        account: authenticatedAccount.account,
+        host,
+      }),
+      authAccounts,
+    );
   }
 
   const failedAccount = authStatus.accounts.find((entry) => entry.active) ?? authStatus.accounts[0];
   if (authStatus.parsed) {
-    return providerAuth({
-      status: "unauthenticated",
-      host: failedAccount?.host,
-      detail:
-        failedAccount?.error ??
-        "Run `gh auth login` to authenticate GitHub CLI with an active account.",
-    });
+    return withAuthAccounts(
+      providerAuth({
+        status: "unauthenticated",
+        host: failedAccount?.host,
+        detail:
+          failedAccount?.error ??
+          "Run `gh auth login` to authenticate GitHub CLI with an active account.",
+      }),
+      authAccounts,
+    );
   }
 
   if (input.exitCode !== 0) {
-    return providerAuth({
-      status: "unauthenticated",
-      host,
-      detail: firstSafeAuthLine(output) ?? "Run `gh auth login` to authenticate GitHub CLI.",
-    });
+    return withAuthAccounts(
+      providerAuth({
+        status: "unauthenticated",
+        host,
+        detail: firstSafeAuthLine(output) ?? "Run `gh auth login` to authenticate GitHub CLI.",
+      }),
+      authAccounts,
+    );
   }
 
-  return providerAuth({
-    status: "unknown",
-    host,
-    detail: firstSafeAuthLine(output) ?? "GitHub CLI auth status could not be parsed.",
-  });
+  return withAuthAccounts(
+    providerAuth({
+      status: "unknown",
+      host,
+      detail: firstSafeAuthLine(output) ?? "GitHub CLI auth status could not be parsed.",
+    }),
+    authAccounts,
+  );
 }
 
 export const discovery = {

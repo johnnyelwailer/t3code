@@ -7,8 +7,13 @@ import { createHomeProject } from "~/t3team/t3team-homeProject";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 import type { ProjectDashboardKickoffAsideProps } from "~/t3team/t3team-ProjectDashboardKickoffAsideTypes";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
+import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import { T3TeamSetupWelcomeSurface } from "~/t3team/t3team-SetupWelcomeSurface";
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
+import {
+  T3TEAM_FIRST_PROJECT_SETUP_REASON,
+  type T3TeamSetupSurfaceReason,
+} from "~/t3team/t3team-setupSurfaceReason";
 import {
   readActiveThreadIdFromView,
   type ProjectThread,
@@ -46,7 +51,9 @@ export function useSyncActiveChatTarget(input: {
   const setActiveChatTarget = useT3TeamActiveChatStore((state) => state.setTarget);
 
   useEffect(() => {
-    if (!view) {
+    // A draft has no project and no server thread yet, and all-my-work has no project at all, so
+    // neither has a chat target to publish.
+    if (!view || view.type === "draft" || view.type === "all-my-work") {
       setActiveChatTarget(null);
       return;
     }
@@ -77,14 +84,28 @@ export function useSyncActiveChatTarget(input: {
 function ProjectBrowserEmpty({
   onCreate,
   content,
+  setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
   showInlineCreateWizard = false,
   shouldInsetDesktopHeader = false,
 }: {
   onCreate: () => void;
   content?: ReactNode;
+  setupSurfaceReason?: T3TeamSetupSurfaceReason;
   showInlineCreateWizard?: boolean;
   shouldInsetDesktopHeader?: boolean;
 }) {
+  // The welcome surface beside this header already titles itself with the pack's
+  // `labels.appName`; hardcoding the product name here made the distribution read
+  // "Set up t3team" next to "Bring your Jira work into Nexi Work".
+  const appearance = useT3TeamPackAppearance();
+  const productName = appearance?.labels?.appName ?? "t3team";
+  // Projects already exist but none is bound to a work source: this is not a
+  // first-run setup, so the header must not claim it is one.
+  const headerLabel =
+    setupSurfaceReason.kind === "no-work-project"
+      ? "Connect a work source"
+      : `Set up ${productName}`;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header
@@ -93,14 +114,16 @@ function ProjectBrowserEmpty({
         })}
       >
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-        <span className="text-sm font-medium text-muted-foreground/70">Set up t3team</span>
+        <span className="text-sm font-medium text-muted-foreground/70">{headerLabel}</span>
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
         <div
           key={showInlineCreateWizard ? "wizard" : "welcome"}
           className="flex h-full min-h-0 [view-transition-name:t3team-create-project-entry-surface]"
         >
-          {content ?? <T3TeamSetupWelcomeSurface onCreate={onCreate} />}
+          {content ?? (
+            <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />
+          )}
         </div>
       </div>
     </div>
@@ -117,6 +140,7 @@ export function ProjectBrowserEmptyWithChat({
   onKickoffThread,
   showAside = true,
   emptyContent,
+  setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
   showInlineCreateWizard = false,
   shouldInsetDesktopHeader = false,
 }: {
@@ -129,6 +153,7 @@ export function ProjectBrowserEmptyWithChat({
   onKickoffThread: ProjectDashboardKickoffAsideProps["onKickoffThread"];
   showAside?: boolean;
   emptyContent?: ReactNode;
+  setupSurfaceReason?: T3TeamSetupSurfaceReason;
   showInlineCreateWizard?: boolean;
   shouldInsetDesktopHeader?: boolean;
 }) {
@@ -137,6 +162,7 @@ export function ProjectBrowserEmptyWithChat({
       <ProjectBrowserEmpty
         onCreate={onCreate}
         content={emptyContent}
+        setupSurfaceReason={setupSurfaceReason}
         showInlineCreateWizard={showInlineCreateWizard}
         shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       />
@@ -154,6 +180,7 @@ export function ProjectBrowserEmptyWithChat({
         <ProjectBrowserEmpty
           onCreate={onCreate}
           content={emptyContent}
+          setupSurfaceReason={setupSurfaceReason}
           showInlineCreateWizard={showInlineCreateWizard}
           shouldInsetDesktopHeader={shouldInsetDesktopHeader}
         />

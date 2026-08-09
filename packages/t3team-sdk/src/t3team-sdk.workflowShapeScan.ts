@@ -10,6 +10,11 @@
 import type * as TsApi from "typescript";
 
 import { findMetaStatement } from "./t3team-sdk.transpile.ts";
+import {
+  collectWorkflowBodyBindings,
+  resolveVerb,
+  type WorkflowBodyBindings,
+} from "./t3team-sdk.workflowShapeBindings.ts";
 import type { WorkflowShapeStep, WorkflowStepKind } from "./t3team-sdk.workflowShape.ts";
 
 const MAX_LABEL = 100;
@@ -111,22 +116,28 @@ function classifyCall(
   call: TsApi.CallExpression,
   sf: TsApi.SourceFile,
   sink: CallSink,
+  bindings: WorkflowBodyBindings,
 ): void {
   const callee = call.expression;
   const arg0 = call.arguments[0];
 
-  if (ts.isIdentifier(callee)) {
-    if (callee.text === "phase") {
-      const title = staticStringLabel(ts, arg0, sf);
-      if (title !== null) sink.onPhase(title);
-    } else if (callee.text === "agent") {
-      sink.onStep(
-        "agent",
-        explicitCallLabel(ts, call, sf) ?? staticStringLabel(ts, arg0, sf) ?? "Agent turn",
-      );
-    }
+  // Resolved by IMPORTED BINDING where the body imports the SDK, so `import { agent as ask }` is
+  // seen and a local `const agent = …` is not. Legacy injected-globals bodies fall back to the bare
+  // name inside resolveVerb.
+  const verb = resolveVerb(ts, callee, bindings);
+  if (verb === "phase") {
+    const title = staticStringLabel(ts, arg0, sf);
+    if (title !== null) sink.onPhase(title);
     return;
   }
+  if (verb === "agent") {
+    sink.onStep(
+      "agent",
+      explicitCallLabel(ts, call, sf) ?? staticStringLabel(ts, arg0, sf) ?? "Agent turn",
+    );
+    return;
+  }
+  if (verb !== null) return;
 
   if (!ts.isPropertyAccessExpression(callee)) return;
   const name = callee.name.text;
@@ -145,7 +156,11 @@ function classifyCall(
     return;
   }
   const root = rootIdentifier(ts, callee);
-  if (root === "tools" || root === "scripts") {
+  if (root === null) return;
+  // `tools`/`scripts` by convention, plus whatever the author named the accessor result
+  // (`const s = getScripts()` → `s.computeStats()` is still a script step).
+  const rootKind = root === "tools" || root === "scripts" ? root : bindings.roots.get(root);
+  if (rootKind !== undefined) {
     sink.onStep(classifyToolScript(name), truncate(callee.getText(sf).slice(root.length + 1)));
   }
 }
@@ -159,6 +174,7 @@ export function scanSteps(
   const phaseTitles: string[] = [];
   let currentPhase: string | null = null;
   const startPos = findMetaStatement(ts, sf)?.end ?? 0;
+  const bindings = collectWorkflowBodyBindings(ts, sf);
 
   const sink: CallSink = {
     onPhase: (title) => {
@@ -169,7 +185,7 @@ export function scanSteps(
   };
 
   const visit = (node: TsApi.Node): void => {
-    if (ts.isCallExpression(node)) classifyCall(ts, node, sf, sink);
+    if (ts.isCallExpression(node)) classifyCall(ts, node, sf, sink, bindings);
     ts.forEachChild(node, visit);
   };
   for (const statement of sf.statements) {

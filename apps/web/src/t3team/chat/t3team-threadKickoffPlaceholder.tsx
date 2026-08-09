@@ -4,6 +4,13 @@ import { Badge } from "~/components/ui/badge";
 import { hasGuidedKickoffInputStep } from "~/t3team/t3team-recipeKickoffProgram";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
+/** Human label for a recipe's source (Epic 16 §Recipe Sources And Precedence). */
+export function recipeSourceLabel(source: T3TeamKickoffWorkflow["source"]): string {
+  if (source === "project-local") return "Project recipe";
+  if (source === "pack") return "Pack recipe";
+  return "Bundled recipe";
+}
+
 type ThreadKickoffPlaceholderProps = {
   message: string;
   kickoffPending?: boolean;
@@ -94,9 +101,7 @@ function renderRecipeWorkflowCard(input: {
           <p className="text-sm leading-6 text-muted-foreground">{input.workflow.description}</p>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <Badge variant="secondary">
-            {input.workflow.source === "project-local" ? "Project recipe" : "Bundled recipe"}
-          </Badge>
+          <Badge variant="secondary">{recipeSourceLabel(input.workflow.source)}</Badge>
           {input.workflow.reason ? <Badge variant="outline">{input.workflow.reason}</Badge> : null}
         </div>
       </div>

@@ -59,6 +59,8 @@ export {
   loadWorkspacePackDirectory,
 } from "./t3team-packs.localLoader.ts";
 export { packScopeOrder, resolveWorkspacePacks } from "./t3team-packs.resolve.ts";
+export { resolvePackAssetPath } from "./t3team-packs.assetPath.ts";
+export { canonicalizePath, isWithinCanonicalRoot } from "./t3team-packs.pathCanonical.ts";
 export type { PackDiscoveryIssue, PackDiscoveryResult } from "./t3team-packs.localLoader.ts";
 export type {
   LoadedWorkspacePack,

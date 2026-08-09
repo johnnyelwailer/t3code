@@ -13,6 +13,8 @@ import type {
   AtlassianOAuthExchangeInput,
   AtlassianOAuthExchangeResult,
 } from "./t3team-atlassianBackendAuthTypes";
+import type { AtlassianChildIssueBackendApi } from "./t3team-atlassianBackendChildIssueTypes";
+import type { AtlassianIssueContentBackendApi } from "./t3team-atlassianBackendIssueContentTypes";
 
 export type {
   AtlassianBasicConnectInput,
@@ -20,6 +22,8 @@ export type {
   AtlassianOAuthExchangeInput,
   AtlassianOAuthExchangeResult,
 };
+export type { AtlassianIssueLinkType } from "./t3team-atlassianBackendIssueContentTypes";
+export type { AtlassianChildIssueType } from "./t3team-atlassianBackendChildIssueTypes";
 
 export type AtlassianDownloadedAsset = {
   readonly base64Contents: string;
@@ -27,93 +31,26 @@ export type AtlassianDownloadedAsset = {
   readonly sizeBytes: number;
 };
 
-export type AtlassianBacklogCapabilities = {
-  readonly estimateFieldLabel?: string;
-  readonly canCreateSubtasks: boolean;
-};
-
-export type AtlassianBacklogBoard = {
-  readonly id: string;
-  readonly name: string;
-  readonly type?: string;
-};
-
-export type AtlassianBacklogBoardColumnStatus = {
-  readonly id?: string;
-  readonly name: string;
-};
-
-export type AtlassianBacklogBoardColumn = {
-  readonly name: string;
-  readonly statuses: ReadonlyArray<AtlassianBacklogBoardColumnStatus>;
-};
-
-export type AtlassianBacklogSprint = {
-  readonly id: string;
-  readonly name: string;
-  readonly state?: string;
-  readonly boardId?: string;
-  readonly goal?: string;
-  readonly startDate?: string;
-  readonly endDate?: string;
-  readonly completeDate?: string;
-};
-
-export type AtlassianBacklogSavedFilter = {
-  readonly id: string;
-  readonly name: string;
-  readonly jql: string;
-  readonly ownerDisplayName?: string;
-  readonly favourite?: boolean;
-};
-
-export type AtlassianBacklogQuickFilter = {
-  readonly id: string;
-  readonly name: string;
-  readonly jql: string;
-};
-
-export type AtlassianBacklogCacheMetadata = {
-  readonly source: "live" | "persisted" | "stale-fallback";
-  readonly updatedAt: number;
-  readonly fingerprint: string;
-};
-
-export type AtlassianBacklogResponse = {
-  readonly page: ResourcePage;
-  readonly capabilities: AtlassianBacklogCapabilities;
-  readonly boards: ReadonlyArray<AtlassianBacklogBoard>;
-  readonly sprints: ReadonlyArray<AtlassianBacklogSprint>;
-  readonly savedFilters: ReadonlyArray<AtlassianBacklogSavedFilter>;
-  readonly quickFilters: ReadonlyArray<AtlassianBacklogQuickFilter>;
-  readonly selectedBoardId?: string;
-  readonly selectedSprintId?: string;
-  readonly selectedFilterId?: string;
-  readonly cache?: AtlassianBacklogCacheMetadata;
-};
-
-export type AtlassianBacklogSearchInput = {
-  readonly account: IntegrationAccountRef;
-  readonly externalProjectId: string;
-  readonly query: string;
-  readonly mode: "offline" | "live";
-  readonly boardId?: string;
-  readonly sprintId?: string;
-  readonly filterId?: string;
-  readonly quickFilterIds?: ReadonlyArray<string>;
-  readonly limit?: number;
-};
-
-export type AtlassianBacklogSearchResult = {
-  readonly mode: "offline" | "live";
-  readonly items: ResourcePage["items"];
-};
-
-export type AtlassianBoardColumnsResponse = {
-  readonly selectedBoardId?: string;
-  readonly boardColumns: ReadonlyArray<AtlassianBacklogBoardColumn>;
-  readonly availableStatuses: ReadonlyArray<AtlassianBacklogBoardColumnStatus>;
-};
+export type {
+  AtlassianBacklogCapabilities,
+  AtlassianBacklogBoard,
+  AtlassianBacklogBoardColumnStatus,
+  AtlassianBacklogBoardColumn,
+  AtlassianBacklogSprint,
+  AtlassianBacklogSavedFilter,
+  AtlassianBacklogQuickFilter,
+  AtlassianBacklogCacheMetadata,
+  AtlassianBacklogResponse,
+  AtlassianBacklogSearchInput,
+  AtlassianBacklogSearchResult,
+  AtlassianBoardColumnsResponse,
+} from "./t3team-atlassianBackendBacklogTypes";
+import type {
+  AtlassianBacklogResponse,
+  AtlassianBacklogSearchInput,
+  AtlassianBacklogSearchResult,
+  AtlassianBoardColumnsResponse,
+} from "./t3team-atlassianBackendBacklogTypes";
 
 export type AtlassianAssignableUser = {
   readonly accountId: string;
@@ -125,7 +62,9 @@ export type AtlassianIssueStatusLane = "todo" | "inProgress" | "review" | "done"
 
 export type { TempoCapacityResponse, TempoUserCapacity } from "./t3team-atlassianTempoTypes";
 
-export interface AtlassianBackendApi {
+export interface AtlassianBackendApi
+  extends AtlassianIssueContentBackendApi,
+    AtlassianChildIssueBackendApi {
   readonly getTempoCapacity: (input: {
     readonly accountIds: ReadonlyArray<string>;
     readonly from: string;
@@ -197,6 +136,13 @@ export interface AtlassianBackendApi {
     readonly issueIdOrKey: string;
     readonly targetStatus: string;
   }) => Promise<{ status: string }>;
+  /** `description` is MARKDOWN, sent as authored: the server runs the same markdown→ADF converter comments
+   * use. Pre-rendering or flattening it here would write the lossy projection back to Jira. */
+  readonly updateIssueDescription: (input: {
+    readonly accountId: string;
+    readonly issueIdOrKey: string;
+    readonly description: string;
+  }) => Promise<void>;
   readonly createSubtask: (input: {
     readonly accountId: string;
     readonly projectId: string;
@@ -204,6 +150,8 @@ export interface AtlassianBackendApi {
     readonly summary: string;
     readonly description?: string;
     readonly estimateHours?: number;
+    readonly issueTypeId?: string;
+    readonly assigneeAccountId?: string | null;
   }) => Promise<{ id: string; key: string; item?: ResourcePage["items"][number] }>;
   readonly downloadAsset: (input: {
     readonly accountId: string;

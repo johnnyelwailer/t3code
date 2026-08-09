@@ -165,10 +165,9 @@ export function ProjectSidebarProjectsSection({
           );
         })}
 
+        {/* Left-aligned to sit on the same edge as the section label and the rows it replaces. */}
         {projects.length === 0 ? (
-          <div className="px-2 pt-4 text-center text-xs text-muted-foreground/60">
-            No projects yet
-          </div>
+          <div className="pl-2 pr-2 pt-1 text-xs text-muted-foreground/60">No projects yet</div>
         ) : null}
       </SidebarMenu>
     </SidebarGroup>

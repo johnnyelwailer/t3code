@@ -45,7 +45,6 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
-  TurnId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Duration from "effect/Duration";
@@ -59,6 +58,8 @@ import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
+import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiveness.ts";
+import * as ThreadPlanProgress from "./orchestration/ThreadPlanProgress.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import { ServerConfig } from "./config.ts";
@@ -68,6 +69,7 @@ import {
   T3TeamWorkflowEngineRegistry,
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
+import { stubAgentTurnCommands } from "./t3team-workflowStubAgentTurn.ts";
 
 const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3team-exampleReview.workflow.ts", import.meta.url),
@@ -83,10 +85,12 @@ const ISO = "2026-06-09T00:00:00.000Z";
 
 /**
  * The stub provider adapter. A real provider, on the engine's `thread.turn-start-requested`
- * event, runs a turn and streams an assistant message back; `ProviderRuntimeIngestion` turns
- * that into `thread.message.assistant.delta` (streaming) + `thread.message.assistant.complete`
- * commands. We emit exactly those — splitting the JSON reply across two deltas so the reactor's
- * delta-concatenation path is exercised — for every turn the workflow starts.
+ * event, starts a turn, streams an assistant message back, and ends the turn;
+ * `ProviderRuntimeIngestion` turns that into a `thread.session.set` with the turn active, the
+ * `thread.message.assistant.delta` (streaming) + `thread.message.assistant.complete` pair, and a
+ * `thread.session.set` with no active turn. We emit exactly those (see
+ * `t3team-workflowStubAgentTurn.ts`) — splitting the JSON reply across two deltas so the
+ * reactor's delta-concatenation path is exercised — for every turn the workflow starts.
  */
 const StubProviderDriverLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -95,31 +99,17 @@ const StubProviderDriverLive = Layer.effectDiscard(
       Stream.runForEach(orchestration.streamDomainEvents, (event) => {
         if (event.type !== "thread.turn-start-requested") return Effect.void;
         const { threadId, messageId: turnMessageId } = event.payload;
-        const assistantMessageId = MessageId.make(`stub-assistant:${turnMessageId}`);
-        const turnId = TurnId.make(`stub-turn:${turnMessageId}`);
         // A real assistant reply for the `agent(..., { schema: Summary })` call, streamed in two
         // chunks; concatenated they form the JSON the SDK parses + validates.
-        const chunks = ['{"summary":"Low risk;', ' well tested."}'];
-        return Effect.gen(function* () {
-          for (let i = 0; i < chunks.length; i += 1) {
-            yield* orchestration.dispatch({
-              type: "thread.message.assistant.delta",
-              commandId: CommandId.make(`stub:delta:${turnMessageId}:${i}`),
-              threadId,
-              messageId: assistantMessageId,
-              delta: chunks[i]!,
-              turnId,
-              createdAt: ISO,
-            });
-          }
-          yield* orchestration.dispatch({
-            type: "thread.message.assistant.complete",
-            commandId: CommandId.make(`stub:complete:${turnMessageId}`),
-            threadId,
-            messageId: assistantMessageId,
-            turnId,
-            createdAt: ISO,
-          });
+        const commands = stubAgentTurnCommands({
+          threadId,
+          idPrefix: `stub:${turnMessageId}`,
+          messages: [['{"summary":"Low risk;', ' well tested."}']],
+          createdAt: ISO,
+        });
+        return Effect.forEach(commands, (command) => orchestration.dispatch(command), {
+          concurrency: 1,
+          discard: true,
         }).pipe(Effect.orDie);
       }),
     );
@@ -127,7 +117,14 @@ const StubProviderDriverLive = Layer.effectDiscard(
 );
 
 const EngineLive = OrchestrationEngineLive.pipe(
-  Layer.provide(OrchestrationProjectionSnapshotQueryLive),
+  // Upstream's shell mapper reads background liveness + plan progress per thread;
+  // both are provided INTO the snapshot query so the requirement is discharged here.
+  Layer.provide(
+    OrchestrationProjectionSnapshotQueryLive.pipe(
+      Layer.provide(ThreadBackgroundLiveness.layer),
+      Layer.provide(ThreadPlanProgress.layer),
+    ),
+  ),
   Layer.provide(OrchestrationProjectionPipelineLive),
   Layer.provide(OrchestrationEventStoreLive),
   Layer.provide(OrchestrationCommandReceiptRepositoryLive),

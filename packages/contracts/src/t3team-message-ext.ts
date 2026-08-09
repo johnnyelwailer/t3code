@@ -1,6 +1,20 @@
 import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  T3TeamMessageDraftMutationAttachment,
+  T3TeamMessageWorkItemDraftRefAttachment,
+} from "./t3team-draft-mutation.ts";
+// WHO wrote a message lives in its own module (see t3team-message-author.ts); re-exported here so
+// `T3TeamMessageExt`'s neighbours keep resolving from one place.
+import { T3TeamMessageAuthor } from "./t3team-message-author.ts";
+
+export {
+  T3TeamMessageActorAuthor,
+  T3TeamMessageAuthor,
+  T3TeamMessageSystemAuthor,
+  T3TeamMessageWorkflowAuthor,
+} from "./t3team-message-author.ts";
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
 const T3TeamMessageResourceKind = Schema.Literals([
@@ -125,36 +139,10 @@ export const T3TeamMessageAttachment = Schema.Union([
   T3TeamMessageArtifactAttachment,
   T3TeamMessageViewAttachment,
   T3TeamMessageWidgetAttachment,
+  T3TeamMessageDraftMutationAttachment,
+  T3TeamMessageWorkItemDraftRefAttachment,
 ]);
 export type T3TeamMessageAttachment = typeof T3TeamMessageAttachment.Type;
-
-export const T3TeamMessageSystemAuthor = Schema.Struct({
-  kind: Schema.Literal("system"),
-  workflowRunId: Schema.optional(TrimmedNonEmptyString),
-  recipeId: Schema.optional(TrimmedNonEmptyString),
-  stepId: Schema.optional(TrimmedNonEmptyString),
-});
-export type T3TeamMessageSystemAuthor = typeof T3TeamMessageSystemAuthor.Type;
-
-/**
- * Author of an inter-agent `actor`-role message: the sending thread (actor),
- * identified by its thread id + human title so the receiver and the UI can
- * attribute and navigate to it. `projectId` powers the "open sender thread"
- * navigation (actors share a project).
- */
-export const T3TeamMessageActorAuthor = Schema.Struct({
-  kind: Schema.Literal("actor"),
-  threadId: Schema.String,
-  projectId: Schema.String,
-  title: Schema.String,
-});
-export type T3TeamMessageActorAuthor = typeof T3TeamMessageActorAuthor.Type;
-
-export const T3TeamMessageAuthor = Schema.Union([
-  T3TeamMessageSystemAuthor,
-  T3TeamMessageActorAuthor,
-]);
-export type T3TeamMessageAuthor = typeof T3TeamMessageAuthor.Type;
 
 export const T3TeamActorMessageUrgency = Schema.Literals(["normal", "urgent"]);
 export type T3TeamActorMessageUrgency = typeof T3TeamActorMessageUrgency.Type;

@@ -9,7 +9,7 @@ import { buildTicketSidebarPinnedItemId } from "~/t3team/t3team-sidebarPinningTy
 import { useT3TeamSidebarNavPreferencesStore } from "~/t3team/t3team-sidebarNavPreferencesStore";
 import {
   JiraTicketEntryHarness,
-  createNativeApiMock,
+  createDesktopBridgeMock,
   findDraggableRow,
   project,
   readRowOrder,
@@ -23,7 +23,7 @@ vi.mock("~/t3team/hooks/t3team-useAddToChat", () => ({
 
 afterEach(async () => {
   document.body.innerHTML = "";
-  delete window.nativeApi;
+  delete window.desktopBridge;
   localStorage.clear();
   useT3TeamSidebarNavPreferencesStore.setState({ hydrated: true, preferencesByProjectId: {} });
   await __resetLocalApiForTests();
@@ -33,7 +33,7 @@ describe("ProjectSidebarTicketEntry browser", () => {
   it("shows an Unpin action for Jira work items rendered in the left nav", async () => {
     const showContextMenu = vi.fn(async () => null);
     await __resetLocalApiForTests();
-    window.nativeApi = createNativeApiMock({ showContextMenu });
+    window.desktopBridge = createDesktopBridgeMock({ showContextMenu });
 
     const host = document.createElement("div");
     document.body.append(host);
@@ -70,7 +70,7 @@ describe("ProjectSidebarTicketEntry browser", () => {
   it("renders Jira work items in stored order and persists sidebar order updates", async () => {
     const setClientSettings = vi.fn(async () => undefined);
     await __resetLocalApiForTests();
-    window.nativeApi = createNativeApiMock({ setClientSettings });
+    window.desktopBridge = createDesktopBridgeMock({ setClientSettings });
 
     const host = document.createElement("div");
     document.body.append(host);

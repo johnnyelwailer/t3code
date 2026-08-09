@@ -45,6 +45,13 @@ export interface WorkflowStepActivityEmitter {
   ) => Promise<void>;
   /** Emit the run-level terminal activity (stepId `run:<runId>`). */
   readonly emitRun: (phase: "completed" | "failed", error?: string) => Promise<void>;
+  /**
+   * `<stepKind>` (plus its human label) of the most recent step that was SENT and never
+   * resolved — the primitive in flight. Used to say WHERE a run failed. `undefined` after a
+   * restart (the map is process-local) or when nothing is outstanding; optional so existing
+   * emitter stand-ins keep type-checking.
+   */
+  readonly describePendingStep?: () => string | undefined;
 }
 
 /** Trim a prompt/question to a one-line human label. */
@@ -143,6 +150,14 @@ export function createWorkflowStepActivityEmitter(opts: {
         `Workflow step ${phase}: ${sent?.detail ?? sent?.stepKind ?? correlationId}`,
         sent?.createdAt ?? opts.nowIso(),
       );
+    },
+    describePendingStep: () => {
+      // Insertion order == send order, so the last entry is the primitive still in flight.
+      const outstanding = [...sentByCorrelation.values()].at(-1);
+      if (outstanding === undefined) return undefined;
+      return outstanding.detail === undefined
+        ? outstanding.stepKind
+        : `${outstanding.stepKind} (${outstanding.detail})`;
     },
     emitRun: (phase, error) =>
       append(

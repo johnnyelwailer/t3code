@@ -8,14 +8,6 @@ import {
 import type { ThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import { randomUUID } from "~/lib/utils";
 
-const DUPLICATE_THREAD_CREATE_ERROR_FRAGMENT = "already exists and cannot be created twice.";
-
-export function isDuplicateThreadCreateError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
-
-  return message.includes(DUPLICATE_THREAD_CREATE_ERROR_FRAGMENT);
-}
-
 export async function ensureThreadBootstrapProject(input: {
   backend: BackendApi;
   projectWorkspaceRoot: string | undefined;
@@ -54,6 +46,7 @@ export async function ensureThreadBootstrapProject(input: {
       createWorkspaceRootIfMissing: true,
       defaultModelSelection: input.kickoffModelSelection,
       createdAt: input.createdAt,
+      source: { provider: "local" },
     });
     recordThreadBootstrapEvent("thread-bootstrap.project-create.success", {
       threadId: input.threadId,

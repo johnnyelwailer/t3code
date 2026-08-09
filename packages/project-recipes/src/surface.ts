@@ -1,12 +1,7 @@
-import * as Schema from "effect/Schema";
-
-export const RecipeSurface = Schema.Literals([
-  "project.dashboard.backlog",
-  "project.dashboard.myWork",
-  "workitem.detail.sidepanel",
-  "thread.context",
-  "github.pull_request.detail.sidepanel",
-  "github.pull_request.diff.selection",
-  "github.review.comment",
-]);
-export type RecipeSurface = typeof RecipeSurface.Type;
+/**
+ * The placement surface vocabulary is owned by `@t3team/sdk` (the public authoring surface,
+ * Epic 10 §Package Boundaries). Re-exported here so the many in-package importers
+ * (`recipe.ts`, `runtime.ts`, `discovery.ts`) and the `@t3tools/project-recipes` barrel keep
+ * working unchanged.
+ */
+export { RecipeSurface } from "@t3team/sdk/surface";

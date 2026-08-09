@@ -7,6 +7,7 @@ import {
   type OrchestrationEvent,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import { it as effectIt } from "@effect/vitest";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
@@ -961,4 +962,38 @@ describe("orchestration projector", () => {
     expect(thread?.checkpoints[0]?.turnId).toBe("turn-100");
     expect(thread?.checkpoints.at(-1)?.turnId).toBe("turn-599");
   });
+
+  effectIt.effect("projects a project.created event with no `source` key (replay compat)", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const model = createEmptyReadModel(now);
+
+      const next = yield* projectEvent(
+        model,
+        makeEvent({
+          sequence: 1,
+          type: "project.created",
+          aggregateKind: "project",
+          aggregateId: "project-1",
+          occurredAt: now,
+          commandId: "cmd-project-create",
+          payload: {
+            // Historical `project.created` events predate the `source`
+            // field entirely — this payload has no `source` key at all,
+            // not `source: undefined`.
+            projectId: "project-1",
+            title: "demo",
+            workspaceRoot: "/tmp/demo",
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        }),
+      );
+
+      expect(next.projects).toHaveLength(1);
+      expect(next.projects[0]?.source).toBeUndefined();
+    }),
+  );
 });

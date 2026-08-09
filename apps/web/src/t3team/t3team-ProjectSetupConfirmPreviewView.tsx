@@ -3,7 +3,20 @@ import { useMemo } from "react";
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
 
 import { buildT3TeamProjectSetupConfirmPreview } from "~/t3team/t3team-projectSetupConfirmPreview";
+import {
+  WorkItemPropertyChips,
+  WorkItemPropertyRow,
+} from "~/t3team/workitem/t3team-WorkItemPropertyRow";
 
+/**
+ * The "Turns on" rows: which skill packs the selected profile enables, and which starter recipes
+ * will already be usable. Both come from the same builder the previous single-line summary used
+ * (`buildT3TeamProjectSetupConfirmPreview`) — this only changes how the result is laid out, not
+ * what it computes, so what is shown here can never drift from what actually gets created.
+ *
+ * Returns bare rows (no `<dl>` of its own) so the review step can lay these out inside the same
+ * list as `CreateProjectDialogReviewDetails`'s rows.
+ */
 export function T3TeamProjectSetupConfirmPreviewView({
   profileId,
   customProfile,
@@ -19,51 +32,22 @@ export function T3TeamProjectSetupConfirmPreviewView({
       }),
     [profileId, customProfile],
   );
+  const recipeCount = preview.topRecipes.length;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-border/65 bg-muted/15 p-4">
-      <div className="space-y-1">
-        <h4 className="text-sm font-semibold">Setup preview</h4>
-        <p className="text-xs text-muted-foreground">
-          Skill packs and starter recipes ranked from profile preferences — not profile id alone.
-        </p>
-      </div>
+    <>
+      <WorkItemPropertyRow label="Skill packs" values={preview.skillPacks}>
+        <WorkItemPropertyChips values={preview.skillPacks.map((pack) => pack.title)} />
+      </WorkItemPropertyRow>
 
-      <div className="space-y-2">
-        <div className="text-xs font-medium text-muted-foreground">Enabled skill packs</div>
-        <div className="flex flex-wrap gap-2">
-          {preview.skillPacks.map((pack) => (
-            <span
-              key={pack.id}
-              className="rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-xs font-medium"
-            >
-              {pack.title}
-            </span>
-          ))}
+      <WorkItemPropertyRow label="Starter recipes" values={preview.topRecipes}>
+        <div className="space-y-1">
+          <span className="text-muted-foreground">
+            {recipeCount} recipe{recipeCount === 1 ? "" : "s"} ready to use
+          </span>
+          <WorkItemPropertyChips values={preview.topRecipes.map((recipe) => recipe.title)} />
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="text-xs font-medium text-muted-foreground">
-          Top recipes for this profile
-        </div>
-        <ul className="space-y-2">
-          {preview.topRecipes.map((recipe) => (
-            <li
-              key={recipe.id}
-              className="rounded-lg border border-border/60 bg-background/60 px-3 py-2"
-            >
-              <div className="text-sm font-medium">{recipe.title}</div>
-              <div className="text-xs text-muted-foreground">{recipe.reason}</div>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <p className="text-[11px] text-muted-foreground">
-        Mutation safety: project setup writes managed files with refresh hashes; local edits are
-        preserved unless you choose to overwrite.
-      </p>
-    </div>
+      </WorkItemPropertyRow>
+    </>
   );
 }

@@ -68,7 +68,7 @@ For recipe-driven launches, creating the thread does not necessarily mean the fi
 starts immediately. Kickoff is the first phase of the recipe's workflow: the workflow may create
 the thread, render guided kickoff state in the embedded chat panel via a `collect-input` step, and
 wait for user input before advancing to the first `agent` step. See
-[Epic 16](./16-action-recipes.md#workflows) for the unified step model.
+[Epic 16 — Orchestrations](./16-action-recipes.md#orchestrations) for the unified step model.
 
 A conversation has three message authors — `user`, `agent`, and `system` (workflow- or
 host-emitted) — with independent `visibleToUser`/`visibleToAgent` flags and an optional

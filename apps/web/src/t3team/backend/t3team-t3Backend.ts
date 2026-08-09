@@ -13,6 +13,7 @@ import {
   createAtlassianPollingBackendApi,
   createGitHubPollingBackendApi,
 } from "./t3team-pollingBackend";
+import { createAtlassianProjectIssuesBackendApi } from "./t3team-projectIssuesBackend";
 import { postJson, resolveHttpBaseUrl, resolveWsUrl } from "./t3team-t3BackendHttp";
 import type {
   LaunchProjectRecipeWorkflowRequest,
@@ -113,6 +114,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
   const atlassian = {
     ...createAtlassianBackendApi(httpBaseUrl),
     ...createAtlassianPollingBackendApi(httpBaseUrl),
+    ...createAtlassianProjectIssuesBackendApi(httpBaseUrl),
   };
   const github = {
     ...createGitHubBackendApi(httpBaseUrl),

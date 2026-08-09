@@ -5,7 +5,6 @@ import {
   type TokenExchangeResult,
   refreshAccessToken,
 } from "@t3tools/integrations-atlassian";
-import { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
@@ -15,6 +14,11 @@ import {
   savePersistedAtlassianAuthsPayload,
 } from "./t3team-atlassian-auth-persistence.ts";
 import { invalidateT3TeamAtlassianAuthDependents } from "./t3team-atlassian-auth-changeHooks.ts";
+import {
+  readAtlassianOAuthClientId,
+  readAtlassianOAuthClientSecret,
+} from "./t3team-atlassian-oauthEnv.ts";
+import { t3teamFixtureOrMockProvider } from "./t3team-fixtureProjectRegistry.ts";
 
 export type BasicConnectInput = {
   readonly auth: {
@@ -33,7 +37,6 @@ export type OAuthConnectInput = {
   };
 };
 
-const mockProvider = new MockIntegrationProvider();
 const atlassianAuths = new Map<string, JiraApiAuth>();
 const OAUTH_REFRESH_SKEW_MS = 60_000;
 
@@ -108,11 +111,8 @@ function missingRefreshTokenError() {
 }
 
 function atlassianOAuthClientConfig(): { clientId: string; clientSecret?: string } {
-  const clientId =
-    process.env.T3TEAM_ATLASSIAN_CLIENT_ID?.trim() ??
-    process.env.VITE_ATLASSIAN_CLIENT_ID?.trim() ??
-    "";
-  const clientSecret = process.env.T3TEAM_ATLASSIAN_CLIENT_SECRET?.trim();
+  const clientId = readAtlassianOAuthClientId();
+  const clientSecret = readAtlassianOAuthClientSecret() || undefined;
   return {
     clientId,
     ...(clientSecret ? { clientSecret } : {}),
@@ -165,7 +165,7 @@ export function providerForAccount(accountId: string) {
       ? new AtlassianIntegrationProvider(
           yield* refreshOAuthAuthIfNeeded(resolved.accountId, resolved.auth),
         )
-      : mockProvider;
+      : yield* t3teamFixtureOrMockProvider(accountId);
   });
 }
 

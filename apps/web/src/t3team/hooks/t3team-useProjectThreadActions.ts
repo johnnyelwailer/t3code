@@ -102,8 +102,19 @@ export function useProjectThreadActions(input: {
           return prev;
         }
 
+        // A draft view owns no server thread and has no project to fall back
+        // to, so a thread deletion never changes it.
+        if (prev.type === "draft") {
+          return prev;
+        }
+
         if (prev.type === "thread") {
           return prev.threadId === threadId ? null : prev;
+        }
+
+        // all-my-work has no project and no embedded thread; deleting a thread cannot affect it.
+        if (prev.type === "all-my-work") {
+          return prev;
         }
 
         if (prev.embeddedThreadId !== threadId) {

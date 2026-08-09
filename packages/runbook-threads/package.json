@@ -1,0 +1,82 @@
+{
+  "name": "@runbook/threads",
+  "version": "0.0.1",
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./models": {
+      "types": "./src/models.ts",
+      "import": "./src/models.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "import": "./src/types.ts"
+    },
+    "./capabilities": {
+      "types": "./src/capabilities.ts",
+      "import": "./src/capabilities.ts"
+    },
+    "./defaults": {
+      "types": "./src/defaults.ts",
+      "import": "./src/defaults.ts"
+    },
+    "./attachments": {
+      "types": "./src/attachments.ts",
+      "import": "./src/attachments.ts"
+    },
+    "./affordance": {
+      "types": "./src/affordance.ts",
+      "import": "./src/affordance.ts"
+    },
+    "./schemaSketch": {
+      "types": "./src/schemaSketch.ts",
+      "import": "./src/schemaSketch.ts"
+    },
+    "./schemaDescribe": {
+      "types": "./src/schemaDescribe.ts",
+      "import": "./src/schemaDescribe.ts"
+    },
+    "./askRender": {
+      "types": "./src/askRender.ts",
+      "import": "./src/askRender.ts"
+    },
+    "./askVerb": {
+      "types": "./src/askVerb.ts",
+      "import": "./src/askVerb.ts"
+    },
+    "./modelCascade": {
+      "types": "./src/modelCascade.ts",
+      "import": "./src/modelCascade.ts"
+    },
+    "./broker": {
+      "types": "./src/broker.ts",
+      "import": "./src/broker.ts"
+    },
+    "./primitives": {
+      "types": "./src/primitives.ts",
+      "import": "./src/primitives.ts"
+    },
+    "./titles": {
+      "types": "./src/titles.ts",
+      "import": "./src/titles.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@runbook/core": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

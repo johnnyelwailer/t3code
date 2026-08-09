@@ -23,7 +23,6 @@ export interface WorkflowShapePreviewInput {
   /** The `.workflow.ts` source, read by the caller (the route, via Effect `FileSystem`). */
   readonly sourceText: string;
   readonly runId: string;
-  readonly newId: () => string;
   readonly nowIso: string;
 }
 
@@ -53,6 +52,10 @@ export function buildWorkflowShapePreviewCommand(
     derived = null;
   }
 
+  // Capabilities are kept even when the shape falls back to the minimal card: an
+  // empty-bodied workflow that declares elevated capabilities must still disclose them
+  // before execution (spec 25 §Capability gating — the pre-execution permission surface).
+  const capabilities = derived?.capabilities ?? [];
   const shape =
     derived === null || (derived.phases.length === 0 && derived.steps.length === 0)
       ? {
@@ -68,7 +71,9 @@ export function buildWorkflowShapePreviewCommand(
     commandId: CommandId.make(`t3team-wf:shape:${input.runId}`),
     threadId: ThreadId.make(input.threadId),
     message: {
-      messageId: MessageId.make(input.newId()),
+      // Run-stable id: any re-emission for the same run (repair relaunch, duplicate launch
+      // surface) UPSERTS the one plan card in place instead of appending another "Plan:" card.
+      messageId: MessageId.make(`t3team-wf-shape:${input.runId}`),
       role: "system",
       text: `Plan: ${shape.name}`,
       turnId: null,
@@ -85,6 +90,7 @@ export function buildWorkflowShapePreviewCommand(
               ...(shape.description === undefined ? {} : { description: shape.description }),
               phases: shape.phases,
               steps: shape.steps,
+              ...(capabilities.length === 0 ? {} : { capabilities }),
               workflowRunId: input.runId,
             },
           },

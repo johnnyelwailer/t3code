@@ -76,6 +76,7 @@ const input = Schema.decodeSync(Inputs)(args);
 const Summary = Schema.Struct({ summary: Schema.String });
 const review = await agent(\`Review this pull request and summarize the risk: \${input.prTitle}\`, {
   schema: Summary,
+  capabilities: "inherit",
 });
 
 if (thread === undefined)
@@ -165,6 +166,8 @@ describe("recipe.ts discovery + engine launch", () => {
       displayName: "Review a pull request",
       shortDescription: "Summarize a PR, then ask whether to merge.",
       icon: "git-pull-request",
+      // Epic 16: the recipe's composer `/` alias reaches the client verbatim.
+      slashAlias: "pr-review",
       allowedToolGroups: ["integration.read"],
     });
     expect(recipe!.rank).toBeGreaterThan(0);

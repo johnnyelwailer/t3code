@@ -9,8 +9,8 @@
  */
 
 import * as Migrator from "effect/unstable/sql/Migrator";
-import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 // Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
@@ -62,6 +62,20 @@ import Migration0042 from "./Migrations/t3team-042_ProjectionThreadChildStatus.t
 // above the fork's current maximum id instead of renumbering fork migrations.
 import Migration0043 from "./Migrations/033_ProjectionThreadsSettled.ts";
 import Migration0044 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
+// This branch's own migrations. They were authored as 043/044 before main took those ids; by
+// main's rule above the ESTABLISHED ids win and the newcomer appends, so they moved to 045/046.
+// Safe here because they had only ever been applied on this branch's throwaway dev databases —
+// both are plain ADD COLUMN and would fail if re-applied to a database that ran them as 043/044.
+import Migration0045 from "./Migrations/t3team-045_WorkflowRecipePath.ts";
+import Migration0046 from "./Migrations/t3team-046_WorkflowFailureReason.ts";
+import Migration0047 from "./Migrations/t3team-047_WorkflowHostToolGrant.ts";
+import Migration0048 from "./Migrations/t3team-048_ProjectSourceBindings.ts";
+// Same rule again for the 2026-08 sync: upstream landed 035-038, but 35-38 are already taken on
+// every fork database, so these keep their upstream filenames and append above the fork's maximum.
+import Migration0049 from "./Migrations/035_ProjectionThreadTitleRegeneration.ts";
+import Migration0050 from "./Migrations/036_ProjectionThreadsPinned.ts";
+import Migration0051 from "./Migrations/037_ProjectionTurnsKeysetIndex.ts";
+import Migration0052 from "./Migrations/038_ProjectionThreadsPinOrderKey.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -118,7 +132,17 @@ export const migrationEntries = [
   [42, "ProjectionThreadChildStatus", Migration0042],
   [43, "ProjectionThreadsSettled", Migration0043],
   [44, "ProjectionThreadsSnoozed", Migration0044],
+  [45, "WorkflowRecipePath", Migration0045],
+  [46, "WorkflowFailureReason", Migration0046],
+  [47, "WorkflowHostToolGrant", Migration0047],
+  [48, "ProjectSourceBindings", Migration0048],
+  [49, "ProjectionThreadTitleRegeneration", Migration0049],
+  [50, "ProjectionThreadsPinned", Migration0050],
+  [51, "ProjectionTurnsKeysetIndex", Migration0051],
+  [52, "ProjectionThreadsPinOrderKey", Migration0052],
 ] as const;
+
+export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
 
 export const makeMigrationLoader = (throughId?: number) =>
   Migrator.fromRecord(

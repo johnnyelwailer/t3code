@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 
 /**
@@ -24,7 +25,7 @@ export function ProjectDashboardBacklogViewLayout({
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto flex w-full max-w-6xl flex-col space-y-2 p-4 sm:p-6">
           {overview}
-          {error ? <div className="text-sm text-destructive">{error}</div> : null}
+          {error ? <T3TeamErrorState error={error} variant="inline" /> : null}
           {content}
         </div>
       </ScrollArea>
@@ -34,7 +35,11 @@ export function ProjectDashboardBacklogViewLayout({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">{overview}</div>
-      {error ? <div className="shrink-0 px-4 text-sm text-destructive sm:px-6">{error}</div> : null}
+      {error ? (
+        <div className="shrink-0 px-4 sm:px-6">
+          <T3TeamErrorState error={error} variant="inline" />
+        </div>
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{content}</div>
     </div>
   );

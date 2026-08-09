@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import type { ViewState } from "~/t3team/t3team-types";
+import { readProjectIdFromView } from "~/t3team/t3team-types";
 
 export function useResolvedViewSync({
   activeDashboardMode,
@@ -29,7 +30,24 @@ export function useResolvedViewSync({
   view: ViewState | null | undefined;
 }) {
   useEffect(() => {
-    if (!view || !resolvedView || resolvedView.projectId === view.projectId) {
+    if (!view || !resolvedView) {
+      return;
+    }
+
+    // A draft view is routed by draft id and has no project of its own, so
+    // there is nothing to reconcile here — falling through would push the user
+    // onto a dashboard and abandon the draft they just opened.
+    if (view.type === "draft" || resolvedView.type === "draft") {
+      return;
+    }
+
+    // all-my-work spans every project, so there is no project id to reconcile — and no dashboard
+    // to fall through to without throwing the user off the view they opened.
+    if (view.type === "all-my-work" || resolvedView.type === "all-my-work") {
+      return;
+    }
+
+    if (readProjectIdFromView(resolvedView) === readProjectIdFromView(view)) {
       return;
     }
 

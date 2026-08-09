@@ -213,6 +213,8 @@ function createEvalHarness() {
         }),
       );
     },
+    threadExists: () => Effect.die("unused"),
+    searchThreads: () => Effect.succeed({ matches: [] }),
   };
 
   const gitVcsLayer = GitVcsDriver.layer.pipe(

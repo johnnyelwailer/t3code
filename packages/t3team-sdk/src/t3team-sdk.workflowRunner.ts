@@ -1,23 +1,21 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
- * Per-run plumbing: read the journal, build the tool/script handler contexts, run the
- * workflow body, and persist/verify the recorded inputs hash. The {@link executeRun}
- * entry point is shared by {@link startWorkflow} and {@link resumeWorkflow}.
+ * T3Code's body-execution adapter. The reusable run loop, suspension funnel, and journal
+ * durability barrier live in @runbook/core; this module retains registries, contexts, and the
+ * .workflow.ts body binding.
  */
 
 import * as DateTime from "effect/DateTime";
 
+import type { ExecuteBodyRequest } from "@runbook/core/runEngine";
+
 import { buildWorkflowPrimitives, runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
-import { hashArgs, hashPrefix } from "./t3team-sdk.canonicalJson.ts";
 import {
   createDurableWorkflowRuntime,
   type DurableWorkflowRuntime,
 } from "./t3team-sdk.durableRuntime.ts";
-import { ReplayDriftError, WorkflowError } from "./t3team-sdk.errors.ts";
-import { WorkflowSuspended } from "./t3team-sdk.handles.ts";
-import type { RunMeta } from "./t3team-sdk.journal.ts";
+import { WorkflowError } from "./t3team-sdk.errors.ts";
 import { runDirPath } from "./t3team-sdk.journal.ts";
-import { createStoreSink, type JournalStore } from "./t3team-sdk.journalStore.ts";
 import { executeToolHandler, listRegisteredTools } from "./t3team-sdk.ts";
 import type * as T from "./t3team-sdk.types.ts";
 
@@ -56,28 +54,20 @@ function buildRunContexts(opts: {
   let toolCtxRef!: T.ToolHandlerCtx;
   const callTool = <I, R>(ref: T.ToolRef<I, R>, args: I) =>
     executeToolHandler(ref, args, toolCtxRef);
-  toolCtxRef = { ...shared, callTool };
+  // Host-backed tool refs are registered globally (the engine executes a tool by id), so their
+  // per-run wiring has to arrive through the ctx rather than a closure — this is that seat.
+  toolCtxRef = {
+    ...shared,
+    callTool,
+    ...(opts.options.t3team === undefined ? {} : { t3team: opts.options.t3team }),
+  };
   return { toolCtx: toolCtxRef, scriptCtx: { ...shared, callTool } };
 }
 
-/** The result of one body execution: a completed value, or a durable suspension awaiting a
- * Handle reply. {@link startWorkflow}/{@link resumeWorkflow} map this onto their public union. */
-export type RunOutcome<O> =
-  | { readonly kind: "completed"; readonly output: O }
-  | { readonly kind: "suspended"; readonly correlationId: string };
-
-export async function executeRun<O>(opts: {
-  readonly runId: string;
-  readonly ref: T.WorkflowRef<unknown, O>;
-  readonly args: unknown;
-  readonly runsRoot: string;
-  readonly store: JournalStore;
-  readonly options: T.WorkflowRunOptions;
-}): Promise<RunOutcome<O>> {
+export async function executeWorkflowBody(
+  opts: ExecuteBodyRequest<T.WorkflowRef, T.WorkflowRunOptions>,
+): Promise<unknown> {
   const runDir = runDirPath(opts.runsRoot, opts.runId);
-  const log = opts.options.log ?? noopLogger;
-  const { bySeq, byCorrelation } = await opts.store.readEntries(opts.runId);
-  const sink = createStoreSink(opts.store, opts.runId);
   const toolRefs = opts.options.tools ?? listRegisteredTools();
   const scripts = opts.options.scripts ?? {};
   const scriptNames = new Map<T.AnyScriptRef, string>(
@@ -89,15 +79,15 @@ export async function executeRun<O>(opts: {
     options: opts.options,
   });
   const runtime: DurableWorkflowRuntime = createDurableWorkflowRuntime({
-    journal: bySeq,
-    writer: sink,
+    journal: opts.journal.bySeq,
+    writer: opts.sink,
     toolCtx,
     scriptCtx,
     scriptNames,
     filePath: opts.ref.absolutePath,
     nowIso,
     runId: opts.runId,
-    resolved: byCorrelation,
+    resolved: opts.journal.byCorrelation,
     ...(opts.options.beforePrimitive === undefined
       ? {}
       : { beforePrimitive: opts.options.beforePrimitive }),
@@ -105,61 +95,26 @@ export async function executeRun<O>(opts: {
       ? {}
       : { afterPrimitive: opts.options.afterPrimitive }),
   });
-  try {
-    const primitives = buildWorkflowPrimitives({
-      runtime,
-      options: opts.options,
-      toolRefs,
-      scripts,
-    });
-    const result = await runPreparedBody({
-      runtime,
-      ref: opts.ref,
-      args: opts.args,
-      toolRefs,
-      scripts,
-      primitives,
-      handleDispatch: runtime.handles,
-      ...(opts.options.broker === undefined ? {} : { broker: opts.options.broker }),
-      ...(opts.options.launchThreadId === undefined
-        ? {}
-        : { launchThreadId: opts.options.launchThreadId }),
-      ...(opts.options.defaultModel === undefined
-        ? {}
-        : { defaultModel: opts.options.defaultModel }),
-    });
-    return { kind: "completed", output: result as O };
-  } catch (error) {
-    // A genuine durable suspension (awaiting a Handle reply) is not a failure — the host
-    // parks the run and resumes it when the reply lands.
-    if (error instanceof WorkflowSuspended) {
-      return { kind: "suspended", correlationId: error.correlationId };
-    }
-    throw error;
-  } finally {
-    // The durability barrier: await every enqueued append (re-throwing a deferred store
-    // error) before the outcome is returned, so the host never parks/completes a run over a
-    // journal write that did not land.
-    await sink.flush();
-    sink.dispose();
-  }
-}
-
-/** Verify a resume's args hash matches the recorded runMeta; seq-0 drift boundary. */
-export function assertInputArgsMatch(opts: {
-  readonly meta: RunMeta | undefined;
-  readonly args: unknown;
-  readonly absolutePath: string;
-}): void {
-  if (opts.meta === undefined) return; // pre-this-version run, no recorded inputs to compare
-  const suppliedHash = hashArgs(opts.args);
-  if (opts.meta.argsHash !== suppliedHash) {
-    throw new ReplayDriftError({
-      seq: 0,
-      reason: "args",
-      expected: { argsHash: hashPrefix(opts.meta.argsHash) },
-      observed: { argsHash: hashPrefix(suppliedHash) },
-      filePath: opts.absolutePath,
-    });
-  }
+  const { primitives, captureCapabilities } = buildWorkflowPrimitives({
+    runtime,
+    options: opts.options,
+    toolRefs,
+    scripts,
+  });
+  return await runPreparedBody({
+    runtime,
+    ref: opts.ref,
+    args: opts.args,
+    toolRefs,
+    scripts,
+    primitives,
+    // Feed the body's capability set back so workflow() children intersect against it.
+    onCapabilities: captureCapabilities,
+    handleDispatch: runtime.handles,
+    ...(opts.options.broker === undefined ? {} : { broker: opts.options.broker }),
+    ...(opts.options.launchThreadId === undefined
+      ? {}
+      : { launchThreadId: opts.options.launchThreadId }),
+    ...(opts.options.defaultModel === undefined ? {} : { defaultModel: opts.options.defaultModel }),
+  });
 }

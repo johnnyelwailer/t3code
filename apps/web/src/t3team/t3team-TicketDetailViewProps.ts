@@ -11,98 +11,14 @@ import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import type { TicketKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import type { RelationshipKeyGroups } from "~/t3team/t3team-ticketRelationshipKeys";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import type { TicketDetailMainColumnProps } from "~/t3team/t3team-TicketDetailMainColumn.types";
 import type { TicketDetailKickoffAsideProps } from "~/t3team/t3team-TicketDetailKickoffAside";
 
-type TicketDetailBodyMainColumnProps = TicketDetailMainColumnProps;
 type TicketDetailBodyKickoffAsideProps = TicketDetailKickoffAsideProps;
 type TicketDetailSnapshot = ReturnType<typeof useTicketDetail>["snapshot"];
 type TicketDetailError = ReturnType<typeof useTicketDetail>["error"];
 type TicketRelatedTickets = ReturnType<typeof useRelatedTickets>["relatedTickets"];
 type ProjectGitHubActivityState = ReturnType<typeof useProjectGitHubActivity>;
 type BackendState = ReturnType<typeof useBackendState>;
-
-export function buildTicketDetailMainColumnProps(input: {
-  snapshot: TicketDetailSnapshot;
-  displayId: string;
-  title: string;
-  status: string;
-  priority: string | undefined;
-  assignee: string | undefined;
-  project: ProjectShellProject;
-  projectTickets: TicketRelatedTickets;
-  resolvedTicketId: string;
-  ticketParentId: string | undefined;
-  loading: boolean;
-  error: TicketDetailError;
-  descriptionMarkdown: string | undefined;
-  descriptionHtml: string | undefined;
-  htmlBaseUrl: string | undefined;
-  attachments: ReadonlyArray<Record<string, unknown>>;
-  sortedComments: ReadonlyArray<Record<string, unknown>>;
-  jiraLastCheckedAt: number | undefined;
-  matchedGitHubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
-  githubActivity: ProjectGitHubActivityState;
-  onOpenTicket: (projectId: string, ticketId: string) => void;
-}): TicketDetailBodyMainColumnProps {
-  const {
-    snapshot,
-    displayId,
-    title,
-    status,
-    priority,
-    assignee,
-    project,
-    projectTickets,
-    resolvedTicketId,
-    ticketParentId,
-    loading,
-    error,
-    descriptionMarkdown,
-    descriptionHtml,
-    htmlBaseUrl,
-    attachments,
-    sortedComments,
-    jiraLastCheckedAt,
-    matchedGitHubActivityItems,
-    githubActivity,
-    onOpenTicket,
-  } = input;
-
-  return {
-    snapshot,
-    displayId,
-    title,
-    status,
-    priority,
-    assignee,
-    projectId: project.id,
-    project,
-    projectTickets,
-    ticketId: resolvedTicketId,
-    ticketParentId,
-    snapshotParentId:
-      typeof snapshot?.ref.parentId === "string" ? snapshot.ref.parentId : undefined,
-    snapshotRaw: snapshot?.raw,
-    onOpenTicket,
-    loading,
-    error,
-    descriptionMarkdown,
-    descriptionHtml,
-    htmlBaseUrl,
-    attachments: [...attachments],
-    sortedComments: [...sortedComments],
-    ...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {}),
-    githubActivityItems: matchedGitHubActivityItems,
-    ...(githubActivity.lastCheckedAt !== undefined
-      ? { githubActivityLastCheckedAt: githubActivity.lastCheckedAt }
-      : {}),
-    githubActivityLoading: githubActivity.loading,
-    ...(githubActivity.warning ? { githubActivityWarning: githubActivity.warning } : {}),
-    ...(githubActivity.host ? { githubHost: githubActivity.host } : {}),
-    ...(githubActivity.account ? { githubAccount: githubActivity.account } : {}),
-  };
-}
 
 export function buildTicketDetailKickoffAsideProps(input: {
   project: ProjectShellProject;

@@ -57,6 +57,36 @@ describe("translateUpstreamPath", () => {
     });
   });
 
+  it("maps upstream's draft route onto the team draft route", () => {
+    // Regression: `/draft/<id>` also matches the two-segment thread shape, so it
+    // used to resolve as thread "<id>" in environment "draft", fail, and bounce
+    // the whole new-thread action back to the dashboard.
+    expect(translateUpstreamPath("/draft/draft-9", deps(null))).toEqual({
+      kind: "target",
+      target: { to: "/t3team/drafts/$draftId", params: { draftId: "draft-9" } },
+    });
+  });
+
+  it("prefers a real thread over the draft shape when an environment is named 'draft'", () => {
+    // `environmentId` is an opaque non-empty string, so "draft" is a legal
+    // environment name. Resolving the thread first keeps that thread reachable
+    // instead of hijacking it into a draft that does not exist.
+    expect(translateUpstreamPath("/draft/thread-7", deps("project-3"))).toEqual({
+      kind: "target",
+      target: {
+        to: "/t3team/projects/$projectId/threads/$threadId",
+        params: { projectId: "project-3", threadId: "thread-7" },
+      },
+    });
+  });
+
+  it("decodes escaped draft ids", () => {
+    expect(translateUpstreamPath("/draft/draft%2F9", deps(null))).toEqual({
+      kind: "target",
+      target: { to: "/t3team/drafts/$draftId", params: { draftId: "draft/9" } },
+    });
+  });
+
   it("reports unhandled when the thread's project is unknown", () => {
     expect(translateUpstreamPath("/local/thread-7", deps(null))).toEqual({ kind: "unhandled" });
   });

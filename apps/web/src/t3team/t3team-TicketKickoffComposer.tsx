@@ -1,16 +1,12 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import type {
-  ModelSelection,
-  ProviderInteractionMode,
-  RuntimeMode,
-  ServerProvider,
-} from "@t3tools/contracts";
-
-import {
-  ComposerPromptEditor,
-  type ComposerPromptEditorHandle,
-} from "~/components/ComposerPromptEditor";
+import { forwardRef, useCallback, useImperativeHandle } from "react";
 import { cn } from "~/lib/utils";
+import { KickoffComposerEditor } from "~/t3team/composer/t3team-KickoffComposerEditor";
+import type {
+  T3TeamKickoffComposerHandle,
+  T3TeamKickoffComposerProps,
+} from "~/t3team/composer/t3team-kickoffComposerProps";
+import { useT3TeamKickoffComposerMenu } from "~/t3team/composer/t3team-useKickoffComposerMenu";
+import { useT3TeamKickoffComposerText } from "~/t3team/composer/t3team-useKickoffComposerText";
 import { useAddToChatComposerDropTarget } from "~/t3team/hooks/t3team-useAddToChatComposerDropTarget";
 import {
   createDefaultT3TeamKickoffLaunchConfig,
@@ -20,41 +16,29 @@ import {
 } from "~/t3team/t3team-kickoffLaunchConfig";
 import { TicketKickoffComposerControls } from "~/t3team/t3team-TicketKickoffComposerControls";
 import { TicketKickoffComposerSelectedRecipe } from "~/t3team/t3team-TicketKickoffComposerSelectedRecipe";
-import {
-  getT3TeamSelectedRecipeComposerPlaceholder,
-  type T3TeamSelectedRecipeQuickStart,
-} from "~/t3team/t3team-recipeQuickStartLaunch";
+import { getT3TeamSelectedRecipeComposerPlaceholder } from "~/t3team/t3team-recipeQuickStartLaunch";
 import { runtimeModeConfig, runtimeModeOptions } from "~/t3team/t3team-ticketKickoffRuntimeConfig";
-import type { T3TeamThreadToolId } from "~/t3team/t3team-types";
-
-type TicketKickoffComposerProps = {
-  prefillText?: string;
-  selectedRecipe?: T3TeamSelectedRecipeQuickStart;
-  onClearSelectedRecipe?: () => void;
-  providers: ReadonlyArray<ServerProvider>;
-  isConnected: boolean;
-  onSubmit: (
-    text: string,
-    selection: ModelSelection,
-    runtimeMode: RuntimeMode,
-    interactionMode: ProviderInteractionMode,
-    selectedToolIds: ReadonlyArray<T3TeamThreadToolId>,
-  ) => void;
-};
-
-export type T3TeamKickoffComposerHandle = {
-  getLaunchConfig: () => T3TeamKickoffLaunchConfig;
-};
 
 export { createDefaultT3TeamKickoffLaunchConfig };
 export type { T3TeamKickoffLaunchConfig };
+export type { T3TeamKickoffComposerHandle };
 
 export const TicketKickoffComposer = forwardRef<
   T3TeamKickoffComposerHandle,
-  TicketKickoffComposerProps
+  T3TeamKickoffComposerProps
 >(
   (
-    { prefillText, selectedRecipe, onClearSelectedRecipe, providers, isConnected, onSubmit },
+    {
+      prefillText,
+      selectedRecipe,
+      onClearSelectedRecipe,
+      providers,
+      isConnected,
+      workspaceRoot,
+      slashRecipes,
+      onSelectSlashRecipe,
+      onSubmit,
+    },
     ref,
   ) => {
     const {
@@ -75,22 +59,23 @@ export const TicketKickoffComposer = forwardRef<
       setSelectedInstanceId,
       setSelectedModel,
     } = useT3TeamKickoffComposerState(providers);
-    const [text, setText] = useState(prefillText ?? "");
-    const [cursor, setCursor] = useState((prefillText ?? "").length);
-    const editorRef = useRef<ComposerPromptEditorHandle | null>(null);
+    const { text, cursor, editorRef, setText, setCursor } = useT3TeamKickoffComposerText({
+      prefillText,
+      hasSelectedRecipe: Boolean(selectedRecipe),
+    });
 
-    useEffect(() => {
-      if (prefillText !== undefined) {
-        setText(prefillText);
-        setCursor(prefillText.length);
-      }
-    }, [prefillText]);
-
-    useEffect(() => {
-      if (selectedRecipe) {
-        editorRef.current?.focusAtEnd();
-      }
-    }, [selectedRecipe]);
+    const commandMenu = useT3TeamKickoffComposerMenu({
+      selectedProvider,
+      workspaceRoot: workspaceRoot ?? null,
+      editorRef,
+      text,
+      cursor,
+      setText,
+      setCursor,
+      setInteractionMode,
+      ...(slashRecipes ? { slashRecipes } : {}),
+      ...(onSelectSlashRecipe ? { onSelectRecipe: onSelectSlashRecipe } : {}),
+    });
 
     const composerDropTarget = useAddToChatComposerDropTarget();
 
@@ -114,7 +99,8 @@ export const TicketKickoffComposer = forwardRef<
       );
       setText("");
       setCursor(0);
-    }, [isConnected, launchConfig, onSubmit, selectedRecipe, text]);
+      commandMenu.resetTrigger();
+    }, [commandMenu, isConnected, launchConfig, onSubmit, selectedRecipe, text]);
 
     const providerStatusMessage = getT3TeamKickoffProviderBlocker({
       isConnected,
@@ -150,29 +136,25 @@ export const TicketKickoffComposer = forwardRef<
                 {...(onClearSelectedRecipe ? { onClearSelectedRecipe } : {})}
               />
             ) : null}
-            <div className="relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4">
-              <ComposerPromptEditor
-                editorRef={editorRef}
-                value={text}
-                cursor={cursor}
-                terminalContexts={[]}
-                skills={selectedProvider?.skills ?? []}
-                onRemoveTerminalContext={() => {}}
-                onChange={(nextValue, nextCursor) => {
-                  setText(nextValue);
-                  setCursor(nextCursor);
-                }}
-                onPaste={() => {}}
-                placeholder={
-                  isConnected
-                    ? selectedRecipe
-                      ? getT3TeamSelectedRecipeComposerPlaceholder(selectedRecipe)
-                      : "Ask anything, @tag files/folders, $use skills, or / for commands"
-                    : "Server is disconnected"
-                }
-                disabled={!isConnected}
-              />
-            </div>
+            <KickoffComposerEditor
+              editorRef={editorRef}
+              text={text}
+              cursor={cursor}
+              skills={selectedProvider?.skills ?? []}
+              commandMenu={commandMenu}
+              placeholder={
+                isConnected
+                  ? selectedRecipe
+                    ? getT3TeamSelectedRecipeComposerPlaceholder(selectedRecipe)
+                    : "Ask anything, @tag files/folders, $use skills, or / for commands"
+                  : "Server is disconnected"
+              }
+              disabled={!isConnected}
+              onChangeText={(nextValue, nextCursor) => {
+                setText(nextValue);
+                setCursor(nextCursor);
+              }}
+            />
             <TicketKickoffComposerControls
               selectedInstanceId={selectedInstanceId}
               selectedModel={selectedModel}

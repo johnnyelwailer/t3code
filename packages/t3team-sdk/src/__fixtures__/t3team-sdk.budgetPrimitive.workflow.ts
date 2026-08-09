@@ -2,6 +2,7 @@
 // turns is deferred (Epic 25 §Out of scope), so spent() is 0 and remaining() equals total;
 // the reads replay identically on resume.
 import { Schema } from "effect";
+import { getBudget } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({});
 
@@ -18,4 +19,8 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-return { total: budget.total, spent: budget.spent(), remaining: budget.remaining() };
+export default async function run() {
+  const budget = getBudget();
+
+  return { total: budget.total, spent: budget.spent(), remaining: budget.remaining() };
+}

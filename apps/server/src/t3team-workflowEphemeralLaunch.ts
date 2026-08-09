@@ -5,7 +5,7 @@
  * launch drive through identical durability wiring:
  *   • the HTTP recipe-launch route (`t3team-thread-recipe-workflow-routes.ts`), which stamps the
  *     recipe-launch activity BEFORE calling in (composer-override disarm — recipe-only concern);
- *   • the `t3team.workflow.run` tool handler (`t3team-toolBrokerWorkflowRunTools.ts`), which
+ *   • the `t3team.orchestration.run` tool handler (`t3team-toolBrokerWorkflowRunTools.ts`), which
  *     skips the stamp (no composer override to disarm) and passes origin `ephemeral`.
  * It builds the SQLite-backed lifecycle row (with `origin`), emits the best-effort play-as-shape
  * preview into the launch thread (observability — an unreadable source skips it), then launches
@@ -18,28 +18,24 @@ import type {
   ProviderInteractionMode,
   RuntimeMode,
 } from "@t3tools/contracts";
-import type { JournalStore, WorkflowRunIntent } from "@t3team/sdk";
+import type { AnyScriptRef, JournalStore, WorkflowRunIntent } from "@t3team/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 import type {
+  WorkflowRun,
   WorkflowRunOrigin,
   WorkflowRunRepositoryShape,
 } from "./persistence/Services/WorkflowRuns.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
-import {
-  buildRunningWorkflowRunRow,
-  makeWorkflowRunLifecycle,
-} from "./t3team-workflowEngineDurability.ts";
 import {
   launchWorkflowRecipe,
   type LaunchWorkflowRecipeInput,
   type LaunchWorkflowRecipeResult,
 } from "./t3team-workflowEngineLaunch.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
-import { buildWorkflowShapePreviewCommand } from "./t3team-workflowShapePreview.ts";
 import {
   replaceEphemeralWorkflowSourceAtomically,
   writeEphemeralWorkflowRepairAudit,
@@ -47,49 +43,22 @@ import {
 import { getWorkflowRepairPolicy } from "./t3team-workflowRepairPolicy.ts";
 import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
+import { emitWorkflowShapePreview } from "./t3team-workflowShapePreviewEmit.ts";
+import { buildPreparedWorkflowLifecycle } from "./t3team-workflowEphemeralLifecycle.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
 }
 
-export interface PreparedWorkflowLaunchDeps {
-  readonly registry: T3TeamWorkflowEngineRegistryShape;
-  readonly runRepository: WorkflowRunRepositoryShape;
-  readonly journalStore: JournalStore;
-  /** Scheduler poke re-arming the soonest-deadline timer after a `waitUntil` park (Epic 27). */
-  readonly rearmScheduler: () => Promise<void>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
-  /** Backs the best-effort shape preview; absent = preview skipped, launch unchanged. */
-  readonly fileSystem?: FileSystem.FileSystem | undefined;
-  /** Needed only to verify and atomically replace an ephemeral workflow source. */
-  readonly path?: Path.Path | undefined;
-  /** Distribution policy. Omitted uses Nexi's default of three bounded attempts. */
-  readonly repairMaxAttempts?: number;
-  readonly repairModelSelection?: "inherit" | ModelSelection;
-  readonly repairTotalTimeBudgetMs?: number;
-  readonly generateRepairStructured?: LaunchWorkflowRecipeInput["generateRepairStructured"];
-}
-
-export interface PreparedWorkflowLaunchInput {
-  readonly runId: string;
-  readonly workflowPath: string;
-  readonly args: unknown;
-  /** Agent-supplied contract; present for ephemeral workflow-tool launches. */
-  readonly intent?: WorkflowRunIntent;
-  /** Bounded host repair attempts; zero disables repair. */
-  readonly repairMaxAttempts?: number;
-  readonly workspaceRoot: string;
-  readonly launchThreadId: string | undefined;
-  readonly projectId: ProjectId;
-  readonly modelSelection: ModelSelection;
-  readonly runtimeMode: RuntimeMode;
-  readonly interactionMode: ProviderInteractionMode;
-  readonly origin: WorkflowRunOrigin;
-  readonly onComplete?: (output: unknown) => Promise<void>;
-  readonly onError?: (error: unknown) => Promise<void>;
-  /** Resolves only after the run row and its visible shape card have been committed. */
-  readonly onAdmitted?: () => Promise<void>;
-}
+// Contract types live in the types module (LOC cap); re-exported so importers stay valid.
+export type {
+  PreparedWorkflowLaunchDeps,
+  PreparedWorkflowLaunchInput,
+} from "./t3team-workflowEphemeralLaunchTypes.ts";
+import type {
+  PreparedWorkflowLaunchDeps,
+  PreparedWorkflowLaunchInput,
+} from "./t3team-workflowEphemeralLaunchTypes.ts";
 
 /** Launch a prepared workflow through the durable engine; never fails (a run failure settles
  * as `status: "failed"` inside `launchWorkflowRecipe`). */
@@ -104,30 +73,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       ? undefined
       : pathService.join(input.workspaceRoot, ".t3team-runs", input.runId, "workflow.ts");
   const canReplaceEphemeralSource = input.workflowPath === ephemeralWorkflowPath;
-  const lifecycle = makeWorkflowRunLifecycle({
-    repo: deps.runRepository,
-    row: {
-      ...buildRunningWorkflowRunRow({
-        runId: input.runId,
-        workflowPath: input.workflowPath,
-        args: input.args,
-        launchThreadId: input.launchThreadId,
-        projectId: input.projectId,
-        modelSelection: input.modelSelection,
-        runtimeMode: input.runtimeMode,
-        interactionMode: input.interactionMode,
-        origin: input.origin,
-        nowIso: nowIso(),
-      }),
-      ...(input.origin === "ephemeral" ? { status: "queued" as const } : {}),
-    },
-    nowIso,
-    onSleep: () => {
-      void deps.rearmScheduler();
-    },
-    dispatch: deps.dispatch,
-    newId: () => t3teamRandomUUID(),
-  });
+  const lifecycle = buildPreparedWorkflowLifecycle({ deps, run: input, nowIso });
   // Admission is durable before any detached execution starts. A request disconnect after this
   // point leaves a recoverable run row, never an invisible source-only orphan.
   yield* Effect.promise(() => lifecycle.recordRunning());
@@ -143,28 +89,15 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
     );
   });
 
-  // Best-effort play-as-shape "plan" so the user sees WHAT THE WORKFLOW WILL DO while it spins
-  // up. An unreadable source / underivable shape / headless launch skips the preview.
-  if (deps.fileSystem !== undefined && input.launchThreadId !== undefined) {
-    const launchThreadId = input.launchThreadId;
-    const shapeSource = yield* deps.fileSystem
-      .readFileString(input.workflowPath)
-      .pipe(Effect.orElseSucceed(() => null));
-    const shapeCommand =
-      shapeSource === null
-        ? null
-        : buildWorkflowShapePreviewCommand({
-            threadId: launchThreadId,
-            workflowPath: input.workflowPath,
-            sourceText: shapeSource,
-            runId: input.runId,
-            newId: () => t3teamRandomUUID(),
-            nowIso: nowIso(),
-          });
-    if (shapeCommand) {
-      yield* Effect.promise(() => deps.dispatch(shapeCommand));
-    }
-  }
+  // Best-effort play-as-shape "plan" so the user sees WHAT THE WORKFLOW WILL DO while it spins up.
+  yield* emitWorkflowShapePreview({
+    fileSystem: deps.fileSystem,
+    launchThreadId: input.launchThreadId,
+    workflowPath: input.workflowPath,
+    runId: input.runId,
+    nowIso,
+    dispatch: deps.dispatch,
+  });
   if (input.onAdmitted !== undefined) {
     yield* Effect.promise(input.onAdmitted);
   }
@@ -182,6 +115,8 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       runId: input.runId,
       workflowPath: input.workflowPath,
       args: input.args,
+      ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
+      ...(input.hostToolClient === undefined ? {} : { hostToolClient: input.hostToolClient }),
       runsRoot: `${input.workspaceRoot}/.t3team-runs`,
       launchThreadId: input.launchThreadId,
       projectId: input.projectId,

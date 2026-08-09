@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { buildRecipeMatchSignalsFromRenderContext, matchRecipes } from "@t3tools/project-recipes";
+import { matchRecipes } from "@t3tools/project-recipes";
 import {
   getBundledT3TeamRecipe,
   getT3TeamProfile,
@@ -10,6 +10,7 @@ import {
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { buildT3TeamActionRecipeLaunchContext } from "~/t3team/t3team-actionRecipeLaunchContext";
+import { QUICK_START_WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import { buildAvailableContextKeys } from "~/t3team/t3team-sidecarRecipeContextKeys";
 import {
   buildPinnedQuickStartSelection,
@@ -54,7 +55,6 @@ export function buildT3TeamSidecarRecipeQuickStarts(
   const availableContextKeys = buildAvailableContextKeys(input);
   const templateValues = buildBundledRecipeTemplateValues(input);
   const launchContext = buildT3TeamActionRecipeLaunchContext(renderContext);
-  const signals = buildRecipeMatchSignalsFromRenderContext(renderContext);
   const matches = matchRecipes(listBundledT3TeamRecipes(), {
     activeProject: input.project,
     selectedResource: null,
@@ -67,14 +67,14 @@ export function buildT3TeamSidecarRecipeQuickStarts(
     enabledSkillPacks,
     profile: toRecipeProfileContext(profile),
     availableContextKeys,
-    signals,
+    renderContext,
   }).filter((result) => result.missingContext.length === 0);
 
   return buildPinnedQuickStartSelection(matches, input.limit ?? 5).map((result) => {
     const bundledRecipe = getBundledT3TeamRecipe(result.recipe.id);
     const localBundledRecipePath =
-      result.recipe.id === "create-recipe" && projectWorkspaceRoot
-        ? `${projectWorkspaceRoot}/.t3team/recipes/create-recipe`
+      QUICK_START_WORKFLOW_BACKED_BUNDLED_RECIPE_IDS.has(result.recipe.id) && projectWorkspaceRoot
+        ? `${projectWorkspaceRoot}/.t3team/recipes/${result.recipe.id}`
         : undefined;
     const renderedTitle = renderPromptTemplate(
       bundledRecipe?.manifestDisplayName ?? result.recipe.title,
@@ -113,6 +113,7 @@ export function buildT3TeamSidecarRecipeQuickStarts(
       title: renderedTitle,
       description: renderedDescription,
       prompt: renderedPrompt,
+      ...(result.recipe.slashAlias ? { slashAlias: result.recipe.slashAlias } : {}),
       ...(workflow ? { workflow } : {}),
     };
 
@@ -181,7 +182,9 @@ export function useT3TeamSidecarRecipeQuickStarts(
         if (cancelled) {
           return;
         }
-        if (!response.hasProjectLocalRecipes) {
+        // Gate on what was DISCOVERED, not on `hasProjectLocalRecipes` — pack-shipped recipes are a
+        // legitimate source that reports that flag false. Empty list still means bundled fallback.
+        if (response.recipes.length === 0) {
           setQuickStartsIfChanged(fallbackQuickStarts);
           return;
         }

@@ -12,22 +12,11 @@ import {
   parseWorkflowRepairChildResult,
 } from "./t3team-workflowSelfHeal.ts";
 import { validateWorkflowRepairCandidate } from "./t3team-workflowRepairGuardrails.ts";
-import { buildWorkflowRepairPrompt } from "./t3team-workflowRepairPrompt.ts";
+import { makeWorkflowRepairGenerator } from "./t3team-workflowRepairGenerate.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 
 /** Race one hidden repair reply against its remaining shared deadline. */
-export const awaitWorkflowRepairChildReply = (input: {
-  readonly reply: Promise<string>;
-  readonly timeoutMs: number;
-  readonly onTimeout: () => void;
-}): Promise<string> =>
-  Promise.race([
-    input.reply,
-    Effect.runPromise(Effect.sleep(input.timeoutMs)).then(() => {
-      input.onTimeout();
-      throw new Error(`Repair child timed out after ${input.timeoutMs}ms.`);
-    }),
-  ]);
+export { awaitWorkflowRepairChildReply } from "./t3team-workflowRepairGenerate.ts";
 
 export const remainingWorkflowRepairBudget = (deadlineMs: number, nowMs: number): number =>
   Math.max(0, deadlineMs - nowMs);
@@ -71,7 +60,6 @@ export async function tryWorkflowRepair(
     if (timeoutMs <= 0) return false;
     const source = await input.readWorkflowSource?.().catch(() => null);
     if (source === null || source === undefined) return false;
-    let repairReason: string | undefined;
     let repairChildId: string | undefined;
     const result = await coordinateWorkflowRepair({
       origin: "ephemeral",
@@ -82,130 +70,17 @@ export async function tryWorkflowRepair(
       intent: input.repairIntent,
       args: input.args,
       workspaceRoot: input.runsRoot,
-      generateRepair: async ({ source, failure, intent, args, workspaceRoot }) => {
-        if (stopped()) throw new Error("Workflow was stopped");
-        const prompt = buildWorkflowRepairPrompt({
-          intent,
-          failure,
-          priorReasons,
-          args,
-          workspaceRoot,
-          source,
-        });
-        if (input.generateRepairStructured !== undefined) {
-          try {
-            const generated = await input.generateRepairStructured({
-              prompt,
-              modelSelection: repairModelSelection,
-            });
-            const parsed = parseWorkflowRepairChildResult(JSON.stringify(generated));
-            if (parsed?.outcome === "fixed")
-              return {
-                kind: "replacement" as const,
-                source: parsed.updatedSource,
-                summary: parsed.summary,
-              };
-            return {
-              kind: "cannotRepair" as const,
-              reason:
-                parsed?.outcome === "cannot-fix"
-                  ? parsed.reason
-                  : "Repair generator returned invalid structured output.",
-            };
-          } catch (cause) {
-            return {
-              kind: "cannotRepair" as const,
-              reason: cause instanceof Error ? cause.message : String(cause),
-            };
-          }
-        }
-
-        if (input.allowRepairThreadFallback === false)
-          return {
-            kind: "cannotRepair" as const,
-            reason: "Structured repair generation is unavailable.",
-          };
-
-        // Compatibility fallback. Production wiring uses structured generation above, which
-        // exposes no shell, file, browser, or other tools to the repair model.
-        const childId = `${input.runId}:repair:${attempt + 1}`;
-        repairChildId = childId;
-        input.registry.registerChildThread(input.runId, childId);
-        const replyPromise = new Promise<string>((resolve, reject) => {
-          void (async () => {
-            if (stopped()) throw new Error("Workflow was stopped");
-            // Wait until the create command has committed its ephemeral
-            // retention before publishing a pending repair turn. This prevents
-            // a fast provider reply from racing the shell's create event.
-            await input.dispatch({
-              type: "thread.create",
-              commandId: CommandId.make(`t3team-wf:repair:create:${input.newId()}`),
-              threadId: ThreadId.make(childId),
-              projectId: input.projectId,
-              title: "Workflow repair",
-              modelSelection: repairModelSelection,
-              runtimeMode: input.runtimeMode,
-              interactionMode: input.interactionMode,
-              branch: null,
-              worktreePath: null,
-              createdAt: input.nowIso(),
-              retention: "ephemeral",
-            });
-            if (stopped()) throw new Error("Workflow was stopped");
-            input.registry.setPending(childId, {
-              runId: input.runId,
-              correlationId: `${input.runId}:repair:${attempt + 1}`,
-              kind: "thread.turn",
-              resolveLive: async (value) => {
-                resolve(typeof value === "string" ? value : JSON.stringify(value));
-              },
-              cancelLive: () => reject(new Error("Workflow was stopped")),
-            });
-            await input.dispatch({
-              type: "thread.turn.start",
-              commandId: CommandId.make(`t3team-wf:repair:turn:${input.newId()}`),
-              threadId: ThreadId.make(childId),
-              message: {
-                messageId: MessageId.make(input.newId()),
-                role: "user",
-                text: prompt,
-                attachments: [],
-                // Marks this as an automated start for decider turn admission.
-                t3teamExt: { author: { kind: "system" } },
-              },
-              modelSelection: repairModelSelection,
-              runtimeMode: input.runtimeMode,
-              interactionMode: input.interactionMode,
-              createdAt: input.nowIso(),
-            });
-          })().catch(reject);
-        });
-        const reply = await awaitWorkflowRepairChildReply({
-          reply: replyPromise,
-          timeoutMs,
-          onTimeout: () => {
-            input.registry.takePending(childId);
-          },
-        }).catch((cause: unknown) => {
-          repairReason = cause instanceof Error ? cause.message : String(cause);
-          return "";
-        });
-        const parsed = parseWorkflowRepairChildResult(reply);
-        if (parsed?.outcome === "fixed")
-          return {
-            kind: "replacement" as const,
-            source: parsed.updatedSource,
-            summary: parsed.summary,
-          };
-        return {
-          kind: "cannotRepair" as const,
-          reason:
-            repairReason ??
-            (parsed?.outcome === "cannot-fix"
-              ? parsed.reason
-              : "Repair child returned invalid JSON."),
-        };
-      },
+      generateRepair: makeWorkflowRepairGenerator({
+        input,
+        stopped,
+        priorReasons,
+        repairModelSelection,
+        attempt,
+        timeoutMs,
+        onRepairChildId: (childId) => {
+          repairChildId = childId;
+        },
+      }),
       validateSource: (replacement, original) =>
         validateWorkflowRepairCandidate({
           originalSource: original,
@@ -222,7 +97,10 @@ export async function tryWorkflowRepair(
         if (stopped()) return false;
         try {
           await controller.settle(
-            await resumeWorkflow(input.runId, controller.ref, input.args, controller.options),
+            await resumeWorkflow(input.runId, controller.ref, input.args, {
+              ...controller.options,
+              workflowVersionPolicy: "allow-change",
+            }),
           );
           return true;
         } catch {

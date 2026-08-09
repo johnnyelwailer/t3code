@@ -10,6 +10,8 @@ export type T3TeamSidecarRecipeQuickStart = {
   readonly id: string;
   readonly title: string;
   readonly description: string;
+  /** Composer `/` alias (without the leading slash), when the recipe declares one. */
+  readonly slashAlias?: string;
   readonly composerGuidance?: T3TeamRecipeComposerGuidance;
   readonly prompt: string;
   readonly workflow?: T3TeamKickoffWorkflow;

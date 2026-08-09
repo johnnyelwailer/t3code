@@ -30,7 +30,11 @@ describe("renderTypedWorkflowModuleStarter", () => {
     expect(source).toContain("export const Inputs = Schema.Struct({");
     expect(source).toContain("export const Outputs = Schema.Struct({");
     expect(source).toContain('capabilities: ["user"]');
-    expect(source).toContain("await agent(input.prompt, { schema: Summary })");
+    // `capabilities` is required on a subagent, so the starter must carry it — a scaffolded
+    // recipe that omitted it would throw the moment it ran, and nothing executes this string.
+    expect(source).toContain(
+      'await agent(input.prompt, { schema: Summary, capabilities: "inherit" })',
+    );
   });
 });
 

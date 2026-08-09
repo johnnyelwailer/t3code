@@ -14,6 +14,10 @@ import {
   useT3TeamProjectSetupProfile,
   writeT3TeamProjectSetupProfile,
 } from "~/t3team/t3team-projectSetupProfile";
+import {
+  T3TEAM_FIRST_PROJECT_SETUP_REASON,
+  type T3TeamSetupSurfaceReason,
+} from "~/t3team/t3team-setupSurfaceReason";
 
 const SETUP_STEPS = [
   {
@@ -36,19 +40,37 @@ const SETUP_STEPS = [
 export function T3TeamSetupWelcomeSurface({
   onCreate,
   profilesOverride,
+  reason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
 }: {
   onCreate: () => void;
   /** Storybook/preview escape hatch to supply pack profiles without a live server. */
   profilesOverride?: readonly EnvironmentSetupProfile[] | undefined;
+  /** Why this surface is showing — first-run setup vs. an existing project with no work source. */
+  reason?: T3TeamSetupSurfaceReason;
 }) {
   const appearance = useT3TeamPackAppearance();
   const productName = appearance?.labels?.appName ?? "t3team";
   const livePackProfiles = useT3TeamPackSetupProfiles();
   const packProfiles = profilesOverride ?? livePackProfiles;
   const setupProfileId = useT3TeamProjectSetupProfile();
-  const selectedProfile = listT3TeamProjectSetupCardOptions(packProfiles).find(
-    (option) => option.id === setupProfileId,
-  );
+  const cardOptions = listT3TeamProjectSetupCardOptions(packProfiles);
+  // Never label the chip with a profile that is not in the rendered catalog.
+  const selectedProfile =
+    cardOptions.find((option) => option.id === setupProfileId) ?? cardOptions[0];
+
+  const chipLabel =
+    reason.kind === "no-work-project" ? "No work source connected yet" : "First project setup";
+  // The heading stays an invitation in both cases. A local workspace is a
+  // legitimate place to be, not a defective project — so the "why you landed
+  // here" detail belongs in the muted subline, named as a workspace, never
+  // shouted as the page title.
+  const headingText = `Bring your Jira work into ${productName} in a few clicks.`;
+  const sublineText =
+    reason.kind === "no-work-project"
+      ? (reason.projectTitle
+          ? `My work shows tickets and backlog from a connected Jira project. “${reason.projectTitle}” is a local workspace and keeps working as one — connecting a Jira project here adds the work views alongside it.`
+          : `My work shows tickets and backlog from a connected Jira project. Your local workspaces keep working as they are — connecting a Jira project adds the work views alongside them.`)
+      : `Pick how you want ${productName} to communicate, connect a Jira project, and start from a workspace that feels ready out of the box.`;
 
   // `align-items: safe center` rather than `items-center`: once the card is taller
   // than the viewport, plain centering overflows the *start* edge, and that overflow
@@ -73,7 +95,7 @@ export function T3TeamSetupWelcomeSurface({
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-medium text-foreground/80 shadow-sm backdrop-blur-sm">
               <Sparkles className="size-3.5 text-sky-500" />
-              First project setup
+              {chipLabel}
             </div>
 
             <div className="max-w-2xl space-y-3">
@@ -84,11 +106,10 @@ export function T3TeamSetupWelcomeSurface({
                 className="h-6 w-auto"
               />
               <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                Bring your Jira work into {productName} in a few clicks.
+                {headingText}
               </h1>
               <p className="max-w-xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
-                Pick how you want {productName} to communicate, connect a Jira project, and start
-                from a workspace that feels ready out of the box.
+                {sublineText}
               </p>
             </div>
 

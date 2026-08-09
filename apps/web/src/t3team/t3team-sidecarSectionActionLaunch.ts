@@ -1,4 +1,4 @@
-import type { SidecarSectionAction } from "@t3tools/project-recipes";
+import type { ProjectRecipeLaunchSource, SidecarSectionAction } from "@t3tools/project-recipes";
 
 import type { T3TeamDeterministicWorkflowLaunch } from "~/t3team/t3team-inlineRecipeLaunch";
 
@@ -9,7 +9,7 @@ export function buildT3TeamSidecarDeclaredActionLaunch(input: {
   readonly action: SidecarSectionAction;
   readonly itemId?: string | undefined;
   readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
-  readonly source?: "bundled" | "project-local" | undefined;
+  readonly source?: ProjectRecipeLaunchSource | undefined;
 }): T3TeamDeterministicWorkflowLaunch {
   const step =
     input.action.run.kind === "tool"

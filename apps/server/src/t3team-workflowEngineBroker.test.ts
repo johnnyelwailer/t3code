@@ -114,6 +114,50 @@ describe("createWorkflowEngineBroker", () => {
     expect(dispatched).toHaveLength(3);
   });
 
+  it("attributes the turn prompt to the workflow step that authored it", async () => {
+    const dispatched: OrchestrationCommand[] = [];
+    const broker = createWorkflowEngineBroker({
+      runId: "run-attr",
+      launchThreadId: "parent-attr",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry: makeWorkflowEngineRegistry(),
+      dispatch: async (command) => {
+        dispatched.push(command);
+      },
+      newId: () => "id-1",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+    await broker.send(
+      {
+        correlationId: "run-attr:4",
+        kind: "thread.turn",
+        payload: {
+          threadId: "parent-attr",
+          prompt: "Rewrite the description of T3-42.\n\nRead the work item first.",
+          label: "Rewrite the description of T3-42",
+        },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+
+    // The prompt is a `user`-role message (that is how a provider takes turn input), so the author
+    // is the ONLY thing telling a client it was machine-written — and it carries the summary line a
+    // collapsed row renders, plus the step id the live plan card is keyed by.
+    const turn = dispatched.find((command) => command.type === "thread.turn.start");
+    expect(turn?.type === "thread.turn.start" ? turn.message.role : undefined).toBe("user");
+    expect(turn?.type === "thread.turn.start" ? turn.message.t3teamExt?.author : undefined).toEqual(
+      {
+        kind: "workflow",
+        workflowRunId: "run-attr",
+        stepId: "run-attr:4",
+        label: "Rewrite the description of T3-42",
+      },
+    );
+  });
+
   it("persists an ask continuation before dispatching the child turn", async () => {
     const events: string[] = [];
     const broker = createWorkflowEngineBroker({
@@ -285,5 +329,89 @@ describe("createWorkflowEngineBroker", () => {
     await send;
 
     expect(resolved).toEqual([{ summary: "Looks good" }]);
+  });
+
+  it("emits BOTH placement halves for a retained child so the sidebar nests it immediately", async () => {
+    const dispatched: OrchestrationCommand[] = [];
+    let id = 0;
+    const broker = createWorkflowEngineBroker({
+      runId: "run-nest",
+      launchThreadId: "parent-1",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry: makeWorkflowEngineRegistry(),
+      dispatch: async (command) => void dispatched.push(command),
+      newId: () => `id-${++id}`,
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+
+    await broker.send(
+      {
+        correlationId: "run-nest:1",
+        kind: "thread.create",
+        payload: { threadId: "child-1", name: "Risk analysis", retention: "retained" },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+
+    const placements = dispatched.filter(
+      (command) => command.type === "thread.activity.append",
+    ) as Array<Extract<OrchestrationCommand, { type: "thread.activity.append" }>>;
+    // handoff.created lands on the CHILD (placement route + child-side reads)...
+    const created = placements.find((c) => c.activity.kind === "t3team.handoff.created");
+    expect(created).toMatchObject({
+      threadId: "child-1",
+      activity: {
+        payload: {
+          parentThreadId: "parent-1",
+          childThreadId: "child-1",
+          workflowRunId: "run-nest",
+        },
+      },
+    });
+    // ...and handoff.started on the PARENT (what indexT3TeamChildParentThreads reads, so the
+    // child nests before its own thread detail is ever opened).
+    const started = placements.find((c) => c.activity.kind === "t3team.handoff.started");
+    expect(started).toMatchObject({
+      threadId: "parent-1",
+      activity: {
+        payload: {
+          parentThreadId: "parent-1",
+          childThreadId: "child-1",
+          childTitle: "Risk analysis",
+          workflowRunId: "run-nest",
+        },
+      },
+    });
+  });
+
+  it("emits NO placement for a default (ephemeral) child — one-shots never become navigation", async () => {
+    const dispatched: OrchestrationCommand[] = [];
+    let id = 0;
+    const broker = createWorkflowEngineBroker({
+      runId: "run-eph",
+      launchThreadId: "parent-1",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry: makeWorkflowEngineRegistry(),
+      dispatch: async (command) => void dispatched.push(command),
+      newId: () => `id-${++id}`,
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+
+    await broker.send(
+      {
+        correlationId: "run-eph:1",
+        kind: "thread.create",
+        payload: { threadId: "child-1", name: "One shot" },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+
+    expect(dispatched.some((command) => command.type === "thread.activity.append")).toBe(false);
   });
 });

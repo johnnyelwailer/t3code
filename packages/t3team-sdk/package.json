@@ -11,6 +11,14 @@
       "types": "./src/t3team-sdk.index.ts",
       "import": "./src/t3team-sdk.index.ts"
     },
+    "./placements": {
+      "types": "./src/t3team-sdk.placements.ts",
+      "import": "./src/t3team-sdk.placements.ts"
+    },
+    "./surface": {
+      "types": "./src/t3team-sdk.surface.ts",
+      "import": "./src/t3team-sdk.surface.ts"
+    },
     "./groups": {
       "types": "./src/t3team-sdk.groups.ts",
       "import": "./src/t3team-sdk.groups.ts"
@@ -37,6 +45,11 @@
     "test": "vp test run"
   },
   "dependencies": {
+    "@runbook/core": "workspace:*",
+    "@runbook/scripts": "workspace:*",
+    "@runbook/threads": "workspace:*",
+    "@runbook/tools": "workspace:*",
+    "@runbook/ts": "workspace:*",
     "effect": "catalog:",
     "typescript": "catalog:"
   },

@@ -85,7 +85,11 @@ export function useHydrateThreadPlacements(input: {
       }),
     [liveThreads, threads],
   );
-  const candidateThreadIdsKey = candidateThreadIds.join("\n");
+  // JSON.stringify (not `.join`) so an embedded delimiter inside a thread id
+  // can't collide two distinct candidate sets onto the same dependency key —
+  // e.g. `["a\nb", "c"]` vs `["a", "b\nc"]` would otherwise both join to
+  // "a\nb\nc".
+  const candidateThreadIdsKey = JSON.stringify(candidateThreadIds);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,10 +126,17 @@ export function useHydrateThreadPlacements(input: {
     return () => {
       cancelled = true;
     };
+    // `candidateThreadIds` is intentionally omitted: it is a freshly derived
+    // array on every render (new identity each time even when its contents
+    // are unchanged), so including it would re-run this effect — and refetch
+    // placements — on every re-render instead of only when the actual set of
+    // candidate ids changes. `candidateThreadIdsKey` is the stable,
+    // content-based dependency; the effect body still reads the up-to-date
+    // `candidateThreadIds` value via closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     backend,
     backendState.connectionStatus,
-    candidateThreadIds,
     candidateThreadIdsKey,
     liveProjects,
     liveThreads,

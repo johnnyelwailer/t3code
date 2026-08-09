@@ -3,6 +3,7 @@
 // keeps a stable seq. Pairs with neverMarkerRemoved to prove removing the never-script
 // surfaces as ReplayDriftError. Exercises reviewer finding C1.
 import { Schema } from "effect";
+import { getArgs, getScripts } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ name: Schema.String });
 
@@ -17,12 +18,18 @@ export const meta = {
   description: "greet (journaled) → freshTicket (replay:never) → farewell (journaled).",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["script"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const scripts = getScripts();
 
-const greeting = await scripts.greet({ name: input.name });
-const ticket = await scripts.freshTicket({});
-const farewell = await scripts.farewell({ name: input.name });
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { greeting: greeting.text, ticket: ticket.id, farewell: farewell.text };
+  const greeting = await scripts.greet({ name: input.name });
+  const ticket = await scripts.freshTicket({});
+  const farewell = await scripts.farewell({ name: input.name });
+
+  return { greeting: greeting.text, ticket: ticket.id, farewell: farewell.text };
+}

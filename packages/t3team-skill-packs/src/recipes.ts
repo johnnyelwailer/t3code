@@ -1,6 +1,7 @@
 import type { Recipe } from "@t3tools/project-recipes";
-import { recipeSignalPredicates } from "@t3tools/project-recipes";
+import type { ActionDefinition } from "@t3team/sdk/placements";
 
+import { buildBundledActionPlacement } from "./actionPlacements.ts";
 import {
   CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
   EXPLAIN_SELECTED_WORK_ACTION_VIEW,
@@ -20,7 +21,14 @@ export type BundledT3TeamRecipe = Recipe & {
   readonly version: string;
   readonly manifestDisplayName: string;
   readonly allowedToolGroups: ReadonlyArray<string>;
+  /** The launcher view source, taken from the gated {@link actionPlacement} when present. */
   readonly actionViewTemplate?: string;
+  /**
+   * The `action`-placement contribution for this recipe's launcher (Epic 19 §Plugin SDK
+   * Surface), produced by the SDK's `defineAction` gate — present exactly when the recipe
+   * declares an action view.
+   */
+  readonly actionPlacement?: ActionDefinition;
   readonly composerGuidance?: {
     readonly helperText?: string;
     readonly placeholder?: string;
@@ -36,16 +44,32 @@ const DASHBOARD_AND_WORKITEM_SURFACES = [
 const BACKLOG_DASHBOARD_SURFACE = ["project.dashboard.backlog"] as const;
 const MY_WORK_DASHBOARD_SURFACE = ["project.dashboard.myWork"] as const;
 
+const BUNDLED_RECIPE_VERSION = "0.1.0";
+
 function createBundledRecipe(
-  recipe: Omit<BundledT3TeamRecipe, "version" | "allowedToolGroups"> & {
+  recipe: Omit<BundledT3TeamRecipe, "version" | "allowedToolGroups" | "actionPlacement"> & {
     readonly allowedToolGroups?: ReadonlyArray<string>;
   },
 ): BundledT3TeamRecipe {
-  return {
-    version: "0.1.0",
+  const base = {
+    version: BUNDLED_RECIPE_VERSION,
     allowedToolGroups: recipe.allowedToolGroups ?? DEFAULT_ALLOWED_TOOL_GROUPS,
     ...recipe,
   };
+  if (base.actionViewTemplate === undefined) {
+    return base;
+  }
+  // Gate the launcher view through the SDK `action` placement; `view` is the single source for
+  // the template the web layer compiles.
+  const actionPlacement = buildBundledActionPlacement({
+    id: base.id,
+    version: base.version,
+    surfaces: base.surfaces,
+    view: base.actionViewTemplate,
+    ...(base.shortDescription === undefined ? {} : { shortDescription: base.shortDescription }),
+    ...(base.rankHint === undefined ? {} : { rankHint: base.rankHint }),
+  });
+  return { ...base, actionPlacement, actionViewTemplate: actionPlacement.view };
 }
 
 const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
@@ -251,6 +275,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
   createBundledRecipe({
     id: "explain-selected-work",
     title: "Explain this simply",
+    slashAlias: "explain",
     manifestDisplayName: "Explain this simply",
     shortDescription: "Summarize the selected work with user impact, checks, and open questions.",
     actionViewTemplate: EXPLAIN_SELECTED_WORK_ACTION_VIEW,
@@ -265,6 +290,29 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
     artifactKinds: ["summary", "open-questions"],
     actionFamilies: ["summary", "product"],
     rankHint: 16,
+  }),
+  createBundledRecipe({
+    // Backs the description section-header "Rewrite" control. Workflow-backed (not prompt-backed):
+    // the body owns the draft-tool call so the agent can only ever supply prose — see
+    // apps/server/src/t3team-projectSetupDescriptionRewriteRecipe.ts.
+    id: "describe-rewrite",
+    title: "Rewrite description",
+    manifestDisplayName: "Rewrite description",
+    shortDescription:
+      "Rewrite this work item's description and propose it as a draft you review before anything is saved.",
+    surfaces: ["workitem.detail.sidepanel"],
+    promptTemplate:
+      "Rewrite the description of {{selectedWorkLabel}} and propose it as a reviewable draft.",
+    icon: "pencil",
+    appliesTo: { resourceKinds: ["ticket"] },
+    requiredContext: [{ key: "ticket.summary", description: "Ticket summary" }],
+    // Only the draft family: the workflow proposes, a human commits.
+    allowedToolGroups: ["integration.read", "mutation.draft"],
+    skillRef: { id: "description.rewrite" },
+    outputPreference: "markdown",
+    artifactKinds: ["summary"],
+    actionFamilies: ["product", "delivery"],
+    rankHint: 21,
   }),
   createBundledRecipe({
     id: "review-acceptance-criteria",
@@ -296,6 +344,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
   createBundledRecipe({
     id: "create-qa-test-plan",
     title: "Create QA test plan",
+    slashAlias: "qa-plan",
     manifestDisplayName: "Create QA test plan",
     shortDescription: "Build a test matrix with regression, smoke, and edge-case coverage.",
     surfaces: ["workitem.detail.sidepanel"],
@@ -764,10 +813,12 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
     promptTemplate:
       "T-shirt-size the epic {{selectedWorkLabel}} as a multi-source estimate. First confirm the selected epic/story details (key, title, status, owner, acceptance criteria, and any existing children). Then inspect all available evidence before sizing: child stories/subtasks, linked or precedent stories and epics, attached Jira context, related GitHub/PR activity, and the current codebase implementation state where the workspace or linked repositories are available. Produce one size (XS, S, M, L, or XL) with confidence (low/medium/high), an evidence table grouped by Jira scope, code/implementation status, precedent comparisons, and unknowns, plus the main risk drivers that could move the size up. Call out missing acceptance criteria or data you could not inspect. If the epic has no stories or subtasks yet, recommend running the shape-next-backlog-slice recipe to decompose it before implementation. Persist the estimate as a durable estimation-notes artifact.",
     icon: "ruler",
-    appliesTo: {
-      jiraIssueTypes: ["Epic"],
-      // Prefer epics with no child stories yet; unknown child signals wait for enrichment.
-      visiblePredicates: recipeSignalPredicates.workitemHasNoChildren,
+    appliesTo: { jiraIssueTypes: ["Epic"] },
+    // A real filter function, not a data DSL: sizing only helps before the epic is decomposed.
+    // Unknown relationships (host has not enriched yet) hide it, so it waits instead of flashing.
+    visible: (context) => {
+      const relationships = context.workitem?.relationships;
+      return relationships ? relationships.childKeys.length === 0 : false;
     },
     requiredContext: [
       { key: "ticket.summary", description: "Epic summary" },

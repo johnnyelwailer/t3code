@@ -17,7 +17,9 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const id1 = crypto.randomUUID();
-const id2 = crypto.randomUUID();
+export default async function run() {
+  const id1 = crypto.randomUUID();
+  const id2 = crypto.randomUUID();
 
-return { id1, id2 };
+  return { id1, id2 };
+}

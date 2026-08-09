@@ -6,6 +6,26 @@ import type {
 import type { ExternalResourceRef, ResourceSnapshot } from "@t3tools/project-context";
 import * as DateTime from "effect/DateTime";
 import type { JiraComment, JiraIssue, JiraIssueSearchResponse, JiraProject } from "./client.ts";
+import { extractAdfText } from "./adf/traverse.ts";
+import { readJiraEstimateValue, readJiraSprints, type JiraEstimateField, type JiraSprintField } from "./planning.ts";
+import {
+  extractAdfDocument,
+  extractAffectsVersions,
+  extractComponents,
+  extractCreated,
+  extractDueDate,
+  extractFixVersions,
+  extractHasVoted,
+  extractIsWatching,
+  extractParentSummary,
+  extractResolutionName,
+  extractResolvedAt,
+  extractStatusCategory,
+  extractTimeTracking,
+  extractVoteCount,
+  extractWatchCount,
+  pickAvatarUrl,
+} from "./normalizeIssueFields.ts";
 
 type AdfMark = {
   readonly type?: string;
@@ -27,20 +47,14 @@ type JiraAttachment = {
   readonly content?: string;
   readonly thumbnail?: string;
   readonly size?: number;
+  readonly author?: {
+    readonly accountId?: string;
+    readonly avatarUrls?: Record<string, string>;
+  };
 };
 
 function isoNow(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
-}
-
-function pickAvatarUrl(avatarUrls: Record<string, string> | undefined): string | undefined {
-  if (!avatarUrls) return undefined;
-  return (
-    avatarUrls["48x48"] ??
-    avatarUrls["32x32"] ??
-    avatarUrls["24x24"] ??
-    Object.values(avatarUrls)[0]
-  );
 }
 
 export function normalizeAccount(
@@ -81,23 +95,9 @@ export function normalizeProject(project: JiraProject, siteUrl: string): Externa
   };
 }
 
-function extractTextFromADF(node: unknown): string {
-  if (node === null || node === undefined) return "";
-  if (typeof node === "string") return node;
-  if (typeof node !== "object") return "";
-
-  const obj = node as Record<string, unknown>;
-
-  if (obj.text && typeof obj.text === "string") {
-    return obj.text;
-  }
-
-  if (Array.isArray(obj.content)) {
-    return obj.content.map(extractTextFromADF).join("");
-  }
-
-  return "";
-}
+// Plain-text flattening of an ADF node/document. Delegates to the shared
+// implementation in ./adf/traverse.ts — keep exactly one implementation.
+const extractTextFromADF = extractAdfText;
 
 function applyMarkdownMarks(text: string, marks: ReadonlyArray<AdfMark> | undefined): string {
   if (!marks || marks.length === 0 || text.length === 0) return text;
@@ -342,7 +342,23 @@ function extractDescriptionText(description: unknown): string | undefined {
   return typeof text === "string" && text.trim().length > 0 ? text.trim() : undefined;
 }
 
-export function normalizeIssue(issue: JiraIssue, siteUrl: string): ResourceSnapshot {
+function extractEnvironmentText(environment: unknown): string | undefined {
+  const text =
+    typeof environment === "string"
+      ? environment
+      : convertAdfToMarkdown(environment) || extractTextFromADF(environment);
+
+  return typeof text === "string" && text.trim().length > 0 ? text.trim() : undefined;
+}
+
+export function normalizeIssue(
+  issue: JiraIssue,
+  siteUrl: string,
+  options?: {
+    readonly estimateField?: JiraEstimateField | null;
+    readonly sprintField?: JiraSprintField | null;
+  },
+): ResourceSnapshot {
   const fields = issue.fields;
   const key = issue.key;
   const summary = typeof fields.summary === "string" ? fields.summary : key;
@@ -362,45 +378,61 @@ export function normalizeIssue(issue: JiraIssue, siteUrl: string): ResourceSnaps
   const labels = Array.isArray(fields.labels) ? (fields.labels as ReadonlyArray<string>) : [];
   const updated = typeof fields.updated === "string" ? fields.updated : isoNow();
   const attachments = Array.isArray(fields.attachment)
-    ? (fields.attachment as ReadonlyArray<JiraAttachment>).map((attachment) => ({
-        id: attachment.id,
-        filename: attachment.filename,
-        mimeType: attachment.mimeType,
-        content: attachment.content,
-        thumbnail: attachment.thumbnail,
-        size: attachment.size,
-      }))
+    ? (fields.attachment as ReadonlyArray<JiraAttachment>).map((attachment) => {
+        const authorAccountId = attachment.author?.accountId;
+        const avatarUrl = pickAvatarUrl(attachment.author?.avatarUrls);
+        return {
+          id: attachment.id,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          content: attachment.content,
+          thumbnail: attachment.thumbnail,
+          size: attachment.size,
+          ...(authorAccountId ? { authorAccountId } : {}),
+          ...(avatarUrl ? { avatarUrl } : {}),
+        };
+      })
     : [];
 
-  const normalizedComments = comments.map((comment) => ({
-    id: comment.id,
-    author: comment.author?.displayName ?? "Unknown",
-    created: comment.created,
-    updated: comment.updated,
-    bodyMarkdown:
-      typeof comment.body === "string"
-        ? comment.body
-        : convertAdfToMarkdown(comment.body) || extractTextFromADF(comment.body),
-    bodyHtml: (() => {
-      if (
-        !renderedFields ||
-        typeof renderedFields.comment !== "object" ||
-        !renderedFields.comment
-      ) {
-        return undefined;
-      }
-      const renderedComments = (renderedFields.comment as Record<string, unknown>).comments;
-      if (!Array.isArray(renderedComments)) return undefined;
-      const renderedEntry = renderedComments.find(
-        (entry) =>
-          entry &&
-          typeof entry === "object" &&
-          typeof (entry as Record<string, unknown>).id === "string" &&
-          (entry as Record<string, unknown>).id === comment.id,
-      ) as Record<string, unknown> | undefined;
-      return typeof renderedEntry?.body === "string" ? renderedEntry.body : undefined;
-    })(),
-  }));
+  const normalizedComments = comments.map((comment) => {
+    const authorAccountId = comment.author?.accountId;
+    const authorAvatarUrl = pickAvatarUrl(comment.author?.avatarUrls);
+    const bodyAdf = extractAdfDocument(comment.body);
+    const isInternal = typeof comment.jsdPublic === "boolean" ? !comment.jsdPublic : undefined;
+    return {
+      id: comment.id,
+      author: comment.author?.displayName ?? "Unknown",
+      created: comment.created,
+      updated: comment.updated,
+      bodyMarkdown:
+        typeof comment.body === "string"
+          ? comment.body
+          : convertAdfToMarkdown(comment.body) || extractTextFromADF(comment.body),
+      bodyHtml: (() => {
+        if (
+          !renderedFields ||
+          typeof renderedFields.comment !== "object" ||
+          !renderedFields.comment
+        ) {
+          return undefined;
+        }
+        const renderedComments = (renderedFields.comment as Record<string, unknown>).comments;
+        if (!Array.isArray(renderedComments)) return undefined;
+        const renderedEntry = renderedComments.find(
+          (entry) =>
+            entry &&
+            typeof entry === "object" &&
+            typeof (entry as Record<string, unknown>).id === "string" &&
+            (entry as Record<string, unknown>).id === comment.id,
+        ) as Record<string, unknown> | undefined;
+        return typeof renderedEntry?.body === "string" ? renderedEntry.body : undefined;
+      })(),
+      ...(authorAccountId ? { authorAccountId } : {}),
+      ...(authorAvatarUrl ? { authorAvatarUrl } : {}),
+      ...(bodyAdf ? { bodyAdf } : {}),
+      ...(isInternal !== undefined ? { isInternal } : {}),
+    };
+  });
 
   const commentsText = comments.length > 0 ? formatComments(comments) : "";
 
@@ -411,6 +443,25 @@ export function normalizeIssue(issue: JiraIssue, siteUrl: string): ResourceSnaps
   if (commentsText) {
     textParts.push("Comments:", commentsText);
   }
+
+  const parentSummary = extractParentSummary(fields.parent);
+  const storyPoints = readJiraEstimateValue(issue, options?.estimateField ?? null);
+  const sprints = readJiraSprints(issue, options?.sprintField ?? null);
+  const statusCategory = extractStatusCategory(fields.status);
+  const descriptionAdf = extractAdfDocument(fields.description);
+  const timeTracking = extractTimeTracking(fields);
+  const watchCount = extractWatchCount(fields);
+  const isWatching = extractIsWatching(fields);
+  const voteCount = extractVoteCount(fields);
+  const hasVoted = extractHasVoted(fields);
+  const created = extractCreated(fields);
+  const dueDate = extractDueDate(fields);
+  const resolution = extractResolutionName(fields);
+  const resolvedAt = extractResolvedAt(fields);
+  const components = extractComponents(fields);
+  const fixVersions = extractFixVersions(fields);
+  const affectsVersions = extractAffectsVersions(fields);
+  const environment = extractEnvironmentText(fields.environment);
 
   return {
     ref: {
@@ -446,6 +497,24 @@ export function normalizeIssue(issue: JiraIssue, siteUrl: string): ResourceSnaps
       commentItems: normalizedComments,
       attachments,
       updated,
+      ...(created !== undefined ? { created } : {}),
+      ...(dueDate !== undefined ? { dueDate } : {}),
+      ...(resolution !== undefined ? { resolution } : {}),
+      ...(resolvedAt !== undefined ? { resolvedAt } : {}),
+      ...(components !== undefined ? { components } : {}),
+      ...(fixVersions !== undefined ? { fixVersions } : {}),
+      ...(affectsVersions !== undefined ? { affectsVersions } : {}),
+      ...(environment !== undefined ? { environment } : {}),
+      ...(watchCount !== undefined ? { watchCount } : {}),
+      ...(isWatching !== undefined ? { isWatching } : {}),
+      ...(voteCount !== undefined ? { voteCount } : {}),
+      ...(hasVoted !== undefined ? { hasVoted } : {}),
+      ...(timeTracking !== undefined ? { timeTracking } : {}),
+      ...(storyPoints !== undefined ? { storyPoints } : {}),
+      ...(sprints.length > 0 ? { sprints } : {}),
+      ...(statusCategory !== undefined ? { statusCategory } : {}),
+      ...(descriptionAdf !== undefined ? { descriptionAdf } : {}),
+      ...(parentSummary !== undefined ? { parentSummary } : {}),
     },
     text: textParts.join("\n\n"),
     raw: issue,

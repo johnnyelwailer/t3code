@@ -11,27 +11,17 @@ import {
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { cn } from "~/lib/utils";
-import { GitHubRepositoryDiscoveryAuthFields } from "~/t3team/components/t3team-GitHubRepositoryDiscoveryAuthFields";
+import {
+  GitHubAuthHostPicker,
+  GitHubRepositoryDiscoveryAuthFields,
+} from "~/t3team/components/t3team-GitHubRepositoryDiscoveryAuthFields";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
+import { githubAuthTone } from "~/t3team/components/t3team-GitHubRepositoryDiscoveryAuthFields";
 
-function authTone(status: "checking" | "authenticated" | "unauthenticated" | "unknown") {
-  if (status === "authenticated") {
-    return {
-      badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-      label: "Connected",
-      icon: CheckCircle2,
-    };
-  }
-  return {
-    badge: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    label: status === "checking" ? "Checking" : "Sign in required",
-    icon: ShieldAlert,
-  };
-}
-
-export type GitHubDiscoveryState = ReturnType<typeof useGitHubRepositoryDiscovery>;
+// Re-exported: this was its original home, and other modules import it from here.
+export type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 
 export function GitHubRepositoryDiscoverySection({
   enabled = true,
@@ -63,7 +53,7 @@ export function GitHubRepositoryDiscoverySection({
     onVisibleSuggestionsChange?.(discovery.visibleSuggestedUrls);
   }, [discovery.visibleSuggestedUrls, onVisibleSuggestionsChange]);
 
-  const status = authTone(discovery.authStatus);
+  const status = githubAuthTone(discovery.authStatus);
   const StatusIcon = status.icon;
   const showAuthSkeleton = discovery.authStatus === "checking" || discovery.loadingAuth;
   const isAuthenticated = discovery.authStatus === "authenticated";
@@ -114,31 +104,37 @@ export function GitHubRepositoryDiscoverySection({
           <Skeleton className="h-9 w-full rounded-md" />
         </div>
       ) : isAuthenticated ? (
-        <Collapsible open={showAuthDetails} onOpenChange={setShowAuthDetails}>
-          <CollapsibleTrigger className="w-full">
-            <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm">
-              <div className="flex min-w-0 items-center gap-2">
-                <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>Connected</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {discovery.githubHost || "github.com"}
-                </span>
+        <>
+          {/* More than one authenticated gh host (e.g. github.com + a GHE host) is a real
+              choice — buried inside the collapsed "Connected" disclosure nobody finds it,
+              and the wizard silently lists repos for whichever host gh names first. */}
+          <GitHubAuthHostPicker discovery={discovery} />
+          <Collapsible open={showAuthDetails} onOpenChange={setShowAuthDetails}>
+            <CollapsibleTrigger className="w-full">
+              <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm">
+                <div className="flex min-w-0 items-center gap-2">
+                  <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Connected</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {discovery.githubHost || "github.com"}
+                  </span>
+                </div>
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 text-muted-foreground transition-transform",
+                    showAuthDetails && "rotate-180",
+                  )}
+                />
               </div>
-              <ChevronDown
-                className={cn(
-                  "size-3.5 text-muted-foreground transition-transform",
-                  showAuthDetails && "rotate-180",
-                )}
-              />
-            </div>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2">
-            <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
-            {discovery.authDetail ? (
-              <div className="mt-2 text-xs text-muted-foreground">{discovery.authDetail}</div>
-            ) : null}
-          </CollapsibleContent>
-        </Collapsible>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
+              {discovery.authDetail ? (
+                <div className="mt-2 text-xs text-muted-foreground">{discovery.authDetail}</div>
+              ) : null}
+            </CollapsibleContent>
+          </Collapsible>
+        </>
       ) : (
         <>
           <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />

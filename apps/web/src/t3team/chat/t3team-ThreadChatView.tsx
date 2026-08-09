@@ -1,20 +1,20 @@
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
-import ChatView from "~/components/ChatView";
+import type { ProjectSource } from "@t3tools/project-context";
 import { useBackend } from "~/t3team/backend/t3team-index";
-import { ThreadPendingChat } from "~/t3team/chat/t3team-threadPendingChat";
+import { ThreadChatViewBody } from "~/t3team/chat/t3team-ThreadChatViewBody";
 import { useThreadBootstrap } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
+import { useT3TeamDraftMutationIngest } from "~/t3team/chat/t3team-useDraftMutationIngest";
 import { useThreadChatDebug } from "~/t3team/chat/t3team-useThreadChatDebug";
 import { useThreadChatServerState } from "~/t3team/chat/t3team-useThreadChatServerState";
 import { useThreadChatTurnToolContext } from "~/t3team/chat/t3team-useThreadChatTurnToolContext";
-import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
-import { ContextAttachmentStrip } from "~/t3team/components/t3team-ContextAttachmentChip";
 import type { T3TeamKickoffWorkflow, T3TeamThreadToolId } from "~/t3team/t3team-types";
 
 export interface ThreadChatViewProps {
   threadId: string;
   projectId: string;
   projectTitle: string;
+  projectSource?: Pick<ProjectSource, "provider">;
   projectWorkspaceRoot?: string;
   title: string;
   onBack?: () => void;
@@ -38,6 +38,7 @@ export function ThreadChatView({
   threadId,
   projectId,
   projectTitle,
+  projectSource,
   projectWorkspaceRoot,
   title,
   onBack,
@@ -79,6 +80,7 @@ export function ThreadChatView({
     embeddedMode,
     projectId,
     projectTitle,
+    projectSource,
     projectWorkspaceRoot,
     kickoffMessage,
     kickoffPending,
@@ -109,6 +111,8 @@ export function ThreadChatView({
     serverThread,
   });
 
+  useT3TeamDraftMutationIngest({ environmentId, threadId });
+
   useThreadChatDebug({
     environmentId,
     projectId,
@@ -120,18 +124,7 @@ export function ThreadChatView({
     hasServerThread,
     serverThreadSummary,
   });
-  const {
-    clearThreadAttachments,
-    composerDropTarget,
-    contextAttachments,
-    dispatchTurnStartOverride,
-    prepareComposerContextAttachments,
-    prepareTurnStart,
-    removeContextAttachment,
-    resolveWorkflowDecision,
-    submitRecipeCardAction,
-    onOpenThread,
-  } = useThreadChatComposerState({
+  const composerState = useThreadChatComposerState({
     backend,
     projectId,
     threadId,
@@ -142,71 +135,30 @@ export function ThreadChatView({
     hasServerLaunchActivity,
   });
 
-  const contextAttachmentSlot =
-    contextAttachments.length > 0 ? (
-      <ContextAttachmentStrip attachments={contextAttachments} onRemove={removeContextAttachment} />
-    ) : null;
-  const controlWorkflow = backend?.controlWorkflow
-    ? ({ workflowRunId, action }: { workflowRunId: string; action: "pause" | "resume" | "stop" }) =>
-        backend.controlWorkflow!({ threadId, workflowRunId, action })
-    : undefined;
-
   if (!environmentId) {
     return <div className="flex h-full min-h-0 flex-1 bg-background" />;
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
-      {hasServerThread ? (
-        <>
-          {showKickoffPlaceholder && kickoffMessage ? (
-            <ThreadKickoffPlaceholder
-              message={kickoffMessage}
-              hasServerThread={hasServerThread}
-              {...(kickoffPending !== undefined ? { kickoffPending } : {})}
-              {...(kickoffWorkflow ? { workflow: kickoffWorkflow } : {})}
-            />
-          ) : null}
-          <ChatView
-            environmentId={environmentId}
-            threadId={threadId as never}
-            routeKind="server"
-            {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
-            {...(onBack ? { onBack } : {})}
-            {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
-            hideHeader={hideHeader || embeddedMode}
-            hideBranchToolbar={embeddedMode}
-            minimalComposer={embeddedMode}
-            beforeDispatchTurnStart={prepareTurnStart}
-            dispatchTurnStartOverride={dispatchTurnStartOverride}
-            composerContextAttachmentSlot={contextAttachmentSlot}
-            composerContainerProps={composerDropTarget.composerContainerProps}
-            composerContainerOverlay={composerDropTarget.composerContainerOverlay}
-            composerContextAttachments={contextAttachments}
-            prepareComposerContextAttachments={prepareComposerContextAttachments}
-            onComposerContextAttachmentsConsumed={clearThreadAttachments}
-            onSubmitRecipeCardAction={submitRecipeCardAction}
-            dispatchWorkflowDecision={resolveWorkflowDecision}
-            {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
-            onOpenThread={onOpenThread}
-          />
-        </>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {showKickoffPlaceholder && kickoffMessage ? (
-            <ThreadKickoffPlaceholder
-              message={kickoffMessage}
-              hasServerThread={hasServerThread}
-              {...(kickoffPending !== undefined ? { kickoffPending } : {})}
-              {...(kickoffWorkflow ? { workflow: kickoffWorkflow } : {})}
-            />
-          ) : null}
-          <ThreadPendingChat
-            bootstrapStatus={bootstrapStatus}
-            onRetryLaunch={retryThreadBootstrap}
-          />
-        </div>
-      )}
-    </div>
+    <ThreadChatViewBody
+      environmentId={environmentId}
+      threadId={threadId}
+      projectId={projectId}
+      {...(ticketId ? { ticketId } : {})}
+      hasServerThread={hasServerThread}
+      showKickoffPlaceholder={showKickoffPlaceholder}
+      kickoffMessage={kickoffMessage}
+      kickoffPending={kickoffPending}
+      kickoffWorkflow={kickoffWorkflow}
+      kickoffHistoryMessage={kickoffHistoryMessage}
+      onBack={onBack}
+      titleBarControlsAccessory={titleBarControlsAccessory}
+      hideHeader={hideHeader}
+      embeddedMode={embeddedMode}
+      backend={backend}
+      bootstrapStatus={bootstrapStatus}
+      retryThreadBootstrap={retryThreadBootstrap}
+      composerState={composerState}
+    />
   );
 }

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowLeft, Loader2, X } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Card } from "~/t3team/components/ui/t3team-card";
@@ -16,11 +16,11 @@ export function CreateProjectWizardStepTransition({
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-x-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden">
       <div
         key={step}
         data-step={step}
-        className="[view-transition-name:t3team-create-project-step-panel]"
+        className="flex min-h-0 flex-1 flex-col [view-transition-name:t3team-create-project-step-panel]"
       >
         {children}
       </div>
@@ -33,29 +33,33 @@ export function CreateProjectWizardFrame({
   onClose,
   children,
   footer,
+  heading,
 }: {
   variant: CreateProjectWizardVariant;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Overrides the default step-agnostic title, e.g. to name the project being added. */
+  heading?: ReactNode;
 }) {
   const content = (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(30rem_10rem_at_top,color-mix(in_srgb,var(--color-sky-400)_18%,transparent),transparent)] opacity-90" />
 
       <div className="relative flex shrink-0 items-start justify-between gap-3 px-3 pt-3 sm:px-4 sm:pt-4">
-        {variant === "inline" ? (
-          <div className="space-y-1 px-1">
-            <div className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-              Project setup wizard
+        {heading ??
+          (variant === "inline" ? (
+            <div className="space-y-1 px-1">
+              <div className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+                Project setup wizard
+              </div>
+              <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                Create your first project
+              </h2>
             </div>
-            <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
-              Create your first project
-            </h2>
-          </div>
-        ) : (
-          <div />
-        )}
+          ) : (
+            <div />
+          ))}
 
         {variant === "inline" ? (
           <Button variant="ghost" onClick={onClose} className="gap-2 self-start">
@@ -83,7 +87,9 @@ export function CreateProjectWizardFrame({
         <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-[radial-gradient(44rem_22rem_at_top,color-mix(in_srgb,var(--color-sky-400)_18%,transparent),transparent)] opacity-80" />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_88%,white)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-amber-100))_100%)] dark:bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_92%,black)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-sky-950))_100%)]" />
 
-        <Card className="relative flex h-[min(48rem,calc(100dvh-1.5rem))] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border-border/70 bg-card/95 shadow-2xl shadow-black/10 sm:h-[min(48rem,calc(100dvh-3rem))]">
+        {/* Same content-fit-with-cap treatment as the dialog variant below, for the same reason:
+            a short step (review, creating) should not carry the tall steps' void along with it. */}
+        <Card className="relative flex max-h-[calc(100dvh-1.5rem)] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border-border/70 bg-card/95 shadow-2xl shadow-black/10 sm:max-h-[calc(100dvh-3rem)]">
           {content}
         </Card>
       </div>
@@ -91,105 +97,18 @@ export function CreateProjectWizardFrame({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 p-2 sm:items-center sm:p-4">
-      <Card className="relative flex h-full w-full max-w-3xl flex-col overflow-hidden bg-card/95 sm:h-[min(40rem,calc(100dvh-2rem))]">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-2 sm:items-center sm:p-4">
+      {/*
+        No fixed height: the card fits its content (a short step like "review" or "creating" no
+        longer leaves a void), capped by a max-height so it never grows past the viewport. Tall
+        steps ("project" with a long Jira list, "profile" with the card grid) still hit that cap and
+        scroll internally via the `ScrollArea` below — `overflow-hidden` plus the scroll area's
+        `min-h-0 flex-1` is what makes the cap win over the content instead of pushing the card
+        taller than the screen.
+      */}
+      <Card className="relative flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden bg-card/95 sm:max-h-[calc(100dvh-2rem)]">
         {content}
       </Card>
     </div>
-  );
-}
-
-export function CreateProjectWizardFooter({
-  step,
-  canConnectBasic,
-  canContinueAccount,
-  canContinueProject,
-  canCreateProject,
-  loadingSource,
-  loadingProjects,
-  oauthLoading,
-  onConnectBasic,
-  onConnectOAuth,
-  onBack,
-  onContinueAccount,
-  onContinueProject,
-  onCreateProject,
-}: {
-  step: CreateProjectStep;
-  canConnectBasic?: boolean;
-  canContinueAccount: boolean;
-  canContinueProject: boolean;
-  canCreateProject: boolean;
-  loadingSource?: boolean;
-  loadingProjects: boolean;
-  oauthLoading?: boolean;
-  onConnectBasic?: () => void;
-  onConnectOAuth?: () => void;
-  onBack: () => void;
-  onContinueAccount: () => void;
-  onContinueProject: () => void;
-  onCreateProject: () => void;
-}) {
-  if (step === "creating") {
-    return null;
-  }
-
-  return (
-    <footer className="shrink-0 border-t border-border bg-card px-4 py-3">
-      {step === "source" ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button
-            className="w-full justify-center gap-2 sm:w-auto"
-            variant="outline"
-            onClick={onConnectOAuth}
-            disabled={loadingSource || oauthLoading || !onConnectOAuth}
-          >
-            {oauthLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-            Connect with OAuth
-          </Button>
-          <Button
-            className="w-full sm:w-auto"
-            onClick={onConnectBasic}
-            disabled={loadingSource || !canConnectBasic || !onConnectBasic}
-          >
-            Connect with API token
-          </Button>
-        </div>
-      ) : (
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Button className="w-full sm:w-auto" variant="outline" onClick={onBack}>
-            Back
-          </Button>
-          {step === "account" ? (
-            <Button
-              className="w-full justify-center gap-2 sm:min-w-[11rem] sm:w-auto"
-              onClick={onContinueAccount}
-              disabled={!canContinueAccount || loadingProjects}
-            >
-              {loadingProjects ? <Loader2 className="size-4 animate-spin" /> : null}
-              Continue
-            </Button>
-          ) : null}
-          {step === "project" ? (
-            <Button
-              className="w-full sm:w-auto"
-              onClick={onContinueProject}
-              disabled={!canContinueProject}
-            >
-              Continue
-            </Button>
-          ) : null}
-          {step === "confirm" ? (
-            <Button
-              className="w-full sm:w-auto"
-              onClick={onCreateProject}
-              disabled={!canCreateProject}
-            >
-              Add project
-            </Button>
-          ) : null}
-        </div>
-      )}
-    </footer>
   );
 }

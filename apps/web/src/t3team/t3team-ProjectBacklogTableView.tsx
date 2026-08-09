@@ -7,7 +7,7 @@ import { useProjectBacklogTableGroupState } from "~/t3team/hooks/t3team-useProje
 import { ProjectBacklogTableColGroup } from "~/t3team/t3team-ProjectBacklogTableColGroup";
 import { ProjectBacklogTableHeader } from "~/t3team/t3team-ProjectBacklogTableHeader";
 import { ProjectBacklogTableVirtualBody } from "~/t3team/t3team-ProjectBacklogTableVirtualBody";
-import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
+import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
 import type { ProjectBacklogTicketContext } from "~/t3team/t3team-projectBacklogPresentation";
 import {
   buildProjectBacklogTableGroups,
@@ -41,6 +41,7 @@ export const ProjectBacklogTableView = memo(function ProjectBacklogTableView({
   getTicketAgentContext,
   onOpenTicket,
   onSearchAssignableUsers,
+  onListChildIssueTypes,
   onUpdateAssignee,
   onUpdateEstimate,
   onCreateSubtask,
@@ -65,6 +66,7 @@ export const ProjectBacklogTableView = memo(function ProjectBacklogTableView({
     ticket: ProjectTicket,
     query?: string,
   ) => Promise<ReadonlyArray<AtlassianAssignableUser>>;
+  onListChildIssueTypes?: () => Promise<ReadonlyArray<AtlassianChildIssueType>>;
   onUpdateAssignee: (
     ticket: ProjectTicket,
     assignee: AtlassianAssignableUser | null,
@@ -166,6 +168,7 @@ export const ProjectBacklogTableView = memo(function ProjectBacklogTableView({
             onToggleTicket={toggleTicket}
             onOpenTicket={onOpenTicket}
             onSearchAssignableUsers={onSearchAssignableUsers}
+            {...(onListChildIssueTypes ? { onListChildIssueTypes } : {})}
             onUpdateAssignee={onUpdateAssignee}
             onUpdateEstimate={onUpdateEstimate}
             onCreateSubtask={onCreateSubtask}

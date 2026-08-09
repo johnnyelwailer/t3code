@@ -24,6 +24,9 @@ export function buildT3TeamMessagesTimelineTestProps() {
     workspaceRoot: undefined,
     anchorMessageId: null,
     contentInsetEndAdjustment: 0,
+    // Upstream (2026-08) made live-follow an explicit prop rather than an internal default;
+    // these snapshots assert rendered content, so following the live edge is the neutral value.
+    liveFollowEnabled: true,
     onIsAtEndChange: () => {},
     onAnchorReady: () => {},
     onAnchorSizeChanged: () => {},

@@ -2,15 +2,20 @@
 // `thread.askUser` is bound to a thrower — calling it raises PermissionDeniedError at the call
 // site, before the broker is ever touched.
 import { Schema } from "effect";
+import { getThread } from "@t3team/sdk";
 
 export const meta = {
   name: "fixtures.user-ask-denied",
   description: "Calls thread.askUser without declaring the 'user' capability.",
 } as const;
 
-if (thread === undefined) throw new Error("fixtures.user-ask-denied requires a launching thread");
+export default async function run() {
+  const thread = getThread();
 
-const Answer = Schema.Struct({ answer: Schema.String });
-await thread.askUser("are you sure?", { schema: Answer });
+  if (thread === undefined) throw new Error("fixtures.user-ask-denied requires a launching thread");
 
-return { ok: true };
+  const Answer = Schema.Struct({ answer: Schema.String });
+  await thread.askUser("are you sure?", { schema: Answer });
+
+  return { ok: true };
+}

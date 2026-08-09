@@ -18,6 +18,7 @@ import { readActiveThreadIdFromView } from "~/t3team/t3team-types";
 import { Route as RootRoute } from "~/routes/__root";
 
 import "~/t3team/t3team-index.css";
+import { readProjectIdFromView } from "~/t3team/t3team-types";
 
 function resolveWsBaseUrl(): string {
   const wsUrl = import.meta.env.VITE_WS_URL?.trim();
@@ -64,7 +65,7 @@ export function T3TeamRouteSurface() {
   const view = parseT3TeamViewFromPath(pathname, search);
   const isCreateRoute = pathname === T3TEAM_CREATE_PATH;
   const viewType = view?.type ?? null;
-  const viewProjectId = view?.projectId ?? null;
+  const viewProjectId = readProjectIdFromView(view ?? null);
   const viewThreadId = readActiveThreadIdFromView(view);
   const viewTicketId = view?.type === "ticket" ? view.ticketId : null;
   // Upstream replaced the add-project context with a window event bus, so the palette no

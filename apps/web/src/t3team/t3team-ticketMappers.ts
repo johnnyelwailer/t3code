@@ -1,5 +1,6 @@
 import type { ExternalResourceRef, ResourceSnapshot } from "@t3tools/project-context";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+import { proxyAtlassianAssetUrl } from "~/t3team/t3team-atlassianAssetUrls";
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
@@ -44,6 +45,7 @@ function readLabels(value: unknown): ReadonlyArray<string> | undefined {
 export function resourceRefToProjectTicket(
   projectId: string,
   ref: ExternalResourceRef,
+  accountId?: string,
 ): ProjectTicket {
   const resourceWithParent = ref as ExternalResourceRef & {
     parentId?: unknown;
@@ -91,6 +93,10 @@ export function resourceRefToProjectTicket(
   const sprintEndDate = readOptionalString(resourceWithParent.sprintEndDate);
   const sprintCompleteDate = readOptionalString(resourceWithParent.sprintCompleteDate);
   const labels = readLabels(ref.labels);
+  // Proxied once here so every consumer of `ProjectTicket`/`ref.issueTypeIconUrl` downstream
+  // (backlog rows, breadcrumbs, the detail view) gets a URL the browser can actually load, instead
+  // of each `JiraIssueTypeIcon` call site bypassing the server's authenticated asset proxy.
+  const issueTypeIconUrl = proxyAtlassianAssetUrl({ url: ref.issueTypeIconUrl, accountId });
 
   return {
     id: ref.id,
@@ -108,11 +114,11 @@ export function resourceRefToProjectTicket(
       url: ref.url ?? "",
       projectId: ref.projectId ?? "",
       ...(ref.type !== undefined ? { type: ref.type } : {}),
-      ...(ref.issueTypeIconUrl !== undefined ? { issueTypeIconUrl: ref.issueTypeIconUrl } : {}),
+      ...(issueTypeIconUrl !== undefined ? { issueTypeIconUrl } : {}),
     },
     ...(ref.type !== undefined ? { issueType: ref.type } : {}),
     ...(issueTypeIsSubtask ? { issueTypeIsSubtask: true } : {}),
-    ...(ref.issueTypeIconUrl !== undefined ? { issueTypeIconUrl: ref.issueTypeIconUrl } : {}),
+    ...(issueTypeIconUrl !== undefined ? { issueTypeIconUrl } : {}),
     status: ref.status ?? "Unknown",
     ...(ref.assignee !== undefined ? { assignee: ref.assignee } : {}),
     ...(assigneeAccountId ? { assigneeAccountId } : {}),
@@ -143,16 +149,19 @@ export function resourceRefToProjectTicket(
 export function snapshotToProjectTicket(
   projectId: string,
   snapshot: ResourceSnapshot,
+  accountId?: string,
 ): ProjectTicket {
-  const base = resourceRefToProjectTicket(projectId, snapshot.ref);
+  const base = resourceRefToProjectTicket(projectId, snapshot.ref, accountId);
   const fields = snapshot.fields as Record<string, unknown>;
 
   const status = readNamedField(fields.status);
   const priority = readNamedField(fields.priority);
   const assignee = readAssignee(fields.assignee);
   const issueType = readIssueType(fields.type) ?? readIssueType(fields.issuetype);
-  const issueTypeIconUrl =
-    readIssueTypeIconUrl(fields.typeIconUrl) ?? readIssueTypeIconUrl(fields.issuetype);
+  const issueTypeIconUrl = proxyAtlassianAssetUrl({
+    url: readIssueTypeIconUrl(fields.typeIconUrl) ?? readIssueTypeIconUrl(fields.issuetype),
+    accountId,
+  });
   const description = readOptionalString(fields.description);
   const labels = readLabels(fields.labels);
 
