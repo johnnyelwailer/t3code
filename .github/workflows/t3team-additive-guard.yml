@@ -49,7 +49,17 @@ jobs:
           # every upstream file since then reads as "modified by this PR" — 1402 of them on PR #36.
           # Measuring every ref against main's sync point asks the right question: what does THIS
           # change add on top of the upstream we are actually based on.
-          echo "SYNC_POINT=$(git merge-base origin/main upstream/main)" >> "$GITHUB_ENV"
+          SYNC_POINT="$(git merge-base origin/main upstream/main)"
+          # ...except on a sync PR, whose entire purpose is to move that point forward. Its own
+          # merge-base is AHEAD of main's, and pinning to main's would read every upstream commit it
+          # merges as a fork change (21 commits' worth of "new file must use prefix t3team-" on
+          # PR #60). Take whichever point is further along, which is main's for every ordinary
+          # branch — a stale branch's own merge-base is behind main's and is correctly ignored.
+          OWN_SYNC_POINT="$(git merge-base HEAD upstream/main)"
+          if git merge-base --is-ancestor "$SYNC_POINT" "$OWN_SYNC_POINT"; then
+            SYNC_POINT="$OWN_SYNC_POINT"
+          fi
+          echo "SYNC_POINT=$SYNC_POINT" >> "$GITHUB_ENV"
 
       # ── Blocking ────────────────────────────────────────────────────────────────────────────────
       # Pins upstream/main to the commit this branch is SYNCED TO, so the guard measures our own
