@@ -29,7 +29,13 @@ permissions:
 jobs:
   check_changes:
     name: Check for changes since last nightly
-    if: github.event_name == 'schedule'
+    # The nightly cron fires every 3 hours on forks too, and every job here runs on
+    # `blacksmith-*` runners that only upstream has — so on this fork it queues forever and
+    # never starts. One perpetually-queued run per 3 hours is exactly the noise that made
+    # main's CI unreadable before. Gating the entry job stops the whole chain, since
+    # everything downstream needs it. Tag pushes and workflow_dispatch are untouched:
+    # those are deliberate acts, not background noise.
+    if: github.event_name == 'schedule' && github.repository_owner == 'pingdotgg'
     runs-on: blacksmith-8vcpu-ubuntu-2404
     outputs:
       has_changes: ${{ steps.check.outputs.has_changes }}
