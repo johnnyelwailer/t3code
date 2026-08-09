@@ -13,6 +13,8 @@ export const T3TEAM_CREATE_PATH = "/t3team/new";
 const T3TEAM_PATH_SEGMENT = "projects";
 const T3TEAM_TICKET_SEGMENT = "tickets";
 const T3TEAM_THREAD_SEGMENT = "threads";
+const T3TEAM_DRAFT_SEGMENT = "drafts";
+const T3TEAM_ALL_MY_WORK_SEGMENT = "my-work";
 const T3TEAM_CHAT_THREAD_SEARCH_KEY = "chatThreadId";
 const T3TEAM_SETUP_SEARCH_KEY = "setup";
 const T3TEAM_SETUP_WELCOME_VALUE = "welcome";
@@ -27,7 +29,9 @@ export type T3TeamRouteSearch = ProjectDashboardBacklogRouteSearch &
 
 export type T3TeamRouteSearchTarget =
   | { to: "/t3team" }
+  | { to: "/t3team/my-work" }
   | { to: "/t3team/new" }
+  | { to: "/t3team/drafts/$draftId"; params: { draftId: string } }
   | { to: "/t3team/projects/$projectId"; params: { projectId: string } }
   | {
       to: "/t3team/projects/$projectId/tickets/$ticketId";
@@ -72,6 +76,18 @@ export function parseT3TeamViewFromPath(
   }
 
   const segments = suffix.split("/").map((part) => decodeURIComponent(part));
+
+  // The only project-less Team view: "my work" spanning every bound project.
+  if (segments.length === 1 && segments[0] === T3TEAM_ALL_MY_WORK_SEGMENT) {
+    return { type: "all-my-work" };
+  }
+
+  // Draft threads are routed by draft id alone; the project comes from the
+  // composer draft store, which is the only place that knows it.
+  if (segments.length === 2 && segments[0] === T3TEAM_DRAFT_SEGMENT && segments[1]) {
+    return { type: "draft", draftId: segments[1] };
+  }
+
   if (segments.length < 2 || segments[0] !== T3TEAM_PATH_SEGMENT || !segments[1]) {
     return null;
   }
@@ -120,6 +136,17 @@ export function resolveT3TeamRouteSearchTarget(pathname: string): T3TeamRouteSea
   const view = parseT3TeamViewFromPath(pathname);
   if (!view) {
     return null;
+  }
+
+  if (view.type === "all-my-work") {
+    return { to: "/t3team/my-work" };
+  }
+
+  if (view.type === "draft") {
+    return {
+      to: "/t3team/drafts/$draftId",
+      params: { draftId: view.draftId },
+    };
   }
 
   if (view.type === "dashboard") {

@@ -1,6 +1,17 @@
 /* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
-import { BoxIcon, FileImageIcon, FileTextIcon, LinkIcon, PanelsTopLeftIcon } from "lucide-react";
+import {
+  BoxIcon,
+  FileImageIcon,
+  FileTextIcon,
+  LinkIcon,
+  PanelsTopLeftIcon,
+  SquarePenIcon,
+} from "lucide-react";
 import type { T3TeamMessageAttachment } from "@t3tools/contracts";
+import {
+  T3TeamWorkItemDraftRefCard,
+  type T3TeamWorkItemDraftRefOpenHandler,
+} from "~/t3team/chat/t3team-WorkItemDraftRefCard";
 
 function AttachmentLink(props: { label: string; url: string | undefined }) {
   if (!props.url) {
@@ -43,8 +54,22 @@ function renderAttachmentMeta(parts: ReadonlyArray<string | null | undefined>) {
   return <p className="text-xs text-muted-foreground">{values.join(" • ")}</p>;
 }
 
-function renderAttachmentBody(attachment: T3TeamMessageAttachment) {
+function renderAttachmentBody(
+  attachment: T3TeamMessageAttachment,
+  context: {
+    readonly fallbackText?: string | undefined;
+    readonly onOpenWorkItemDraft?: T3TeamWorkItemDraftRefOpenHandler | undefined;
+  },
+) {
   switch (attachment.kind) {
+    case "work-item-draft":
+      return (
+        <T3TeamWorkItemDraftRefCard
+          attachment={attachment}
+          {...(context.fallbackText ? { fallbackText: context.fallbackText } : {})}
+          {...(context.onOpenWorkItemDraft ? { onOpen: context.onOpenWorkItemDraft } : {})}
+        />
+      );
     case "file":
       return (
         <>
@@ -104,6 +129,17 @@ function renderAttachmentBody(attachment: T3TeamMessageAttachment) {
           {renderAttachmentMeta(["Widget", attachment.widget.format])}
         </>
       );
+    case "draft-mutation":
+      // Draft carriers ride hidden messages and are consumed by the work item's review surface;
+      // this is the metadata fallback if one ever lands in the generic list.
+      return (
+        <>
+          <span className="font-medium text-foreground">
+            {attachment.draft.summary ?? `Proposed ${attachment.draft.field} change`}
+          </span>
+          {renderAttachmentMeta(["Pending review", attachment.draft.target.issueIdOrKey])}
+        </>
+      );
   }
 }
 
@@ -120,11 +156,17 @@ function attachmentIcon(attachment: T3TeamMessageAttachment) {
     case "view":
     case "widget":
       return PanelsTopLeftIcon;
+    case "draft-mutation":
+    case "work-item-draft":
+      return SquarePenIcon;
   }
 }
 
 export function T3TeamMessageAttachmentList(props: {
   attachments: ReadonlyArray<T3TeamMessageAttachment>;
+  /** The message body, so a draft-ref card can borrow its first sentence when it carries no summary. */
+  fallbackText?: string | undefined;
+  onOpenWorkItemDraft?: T3TeamWorkItemDraftRefOpenHandler | undefined;
 }) {
   if (props.attachments.length === 0) {
     return null;
@@ -142,7 +184,14 @@ export function T3TeamMessageAttachmentList(props: {
             <div className="mt-0.5 rounded-md border border-border/60 p-1 text-muted-foreground">
               <Icon className="size-3.5" />
             </div>
-            <div className="min-w-0 space-y-1">{renderAttachmentBody(attachment)}</div>
+            <div className="min-w-0 flex-1 space-y-1">
+              {renderAttachmentBody(attachment, {
+                ...(props.fallbackText ? { fallbackText: props.fallbackText } : {}),
+                ...(props.onOpenWorkItemDraft
+                  ? { onOpenWorkItemDraft: props.onOpenWorkItemDraft }
+                  : {}),
+              })}
+            </div>
           </div>
         );
       })}

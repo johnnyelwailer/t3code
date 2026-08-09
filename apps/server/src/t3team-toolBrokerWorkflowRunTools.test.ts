@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - test asserts persisted run files on local disk.
 /**
- * `t3team.workflow.run` (ephemeral workflows, slice 1) — handler-level acceptance against the
+ * `t3team.orchestration.run` (ephemeral workflows, slice 1) — handler-level acceptance against the
  * REAL durable engine seams: an in-memory SQLite run repo + journal store (post-039 schema with
  * `origin`), the real launch funnel, and a captured orchestration dispatch standing in for the
  * live engine. Covers: argument validation (exactly one of source/workflowPath), pure-compute
@@ -9,7 +9,7 @@
  */
 
 import * as NodeFS from "node:fs";
-import { setTimeout as sleep } from "node:timers/promises";
+import * as NodeTimersPromises from "node:timers/promises";
 
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -89,7 +89,7 @@ const waitForRunStatus = Effect.fn("waitForRunStatus")(function* (
     if (Option.isSome(row) && row.value.status === status) return row.value;
     // Detached workflow fibers run on the live runtime. Poll with a real timer rather than the
     // @effect/vitest virtual clock, which does not advance while this test waits.
-    yield* Effect.promise(() => sleep(10));
+    yield* Effect.promise(() => NodeTimersPromises.setTimeout(10));
   }
   return yield* Effect.fail(`workflow ${runId} did not reach ${status}`);
 });
@@ -141,7 +141,7 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
   return { handlers, dispatched, workspaceRoot, repo, registry };
 });
 
-testLayer("t3team.workflow.run — ephemeral workflow tool", (it) => {
+testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
   it.effect("returns an explicit workflow-UI handoff through the broker result", () =>
     Effect.gen(function* () {
       const result = yield* callT3TeamWorkflowRunTool({

@@ -65,3 +65,127 @@ export const validateWorkflowRepairCandidate = (input: {
   }
   return input.replacementSource;
 };
+
+/**
+ * Attempt ceilings and failure/source admissibility, moved here from `t3team-workflowSelfHeal.ts`.
+ *
+ * Same concern as `validateWorkflowRepairCandidate` above: what the host will allow a repair to
+ * be spent on and to write back. Keeping the decision rules together — and away from the effectful
+ * orchestration — means no caller can weaken them by construction.
+ */
+export const T3TEAM_WORKFLOW_REPAIR_LIMIT = 3;
+export const T3TEAM_WORKFLOW_REPAIR_HARD_LIMIT = 5;
+
+export type WorkflowRepairIntent = {
+  readonly goal: string;
+  readonly expectedOutcome: string;
+  readonly guardrails: readonly string[];
+};
+
+export type WorkflowRepairAudit = {
+  readonly originalSource: string;
+  readonly failure: string;
+  readonly outcome: "recovered" | "failed";
+  readonly replacementSource?: string;
+  readonly summary?: string;
+  readonly reason?: string;
+};
+
+export type WorkflowRepairChildResult =
+  | { readonly outcome: "fixed"; readonly updatedSource: string; readonly summary: string }
+  | { readonly outcome: "cannot-fix"; readonly reason: string };
+
+/** Strict child protocol: only the discriminated fields cross from agent text into host writes. */
+export const parseWorkflowRepairChildResult = (
+  value: unknown,
+): WorkflowRepairChildResult | null => {
+  if (typeof value !== "string") return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const record = parsed as Record<string, unknown>;
+    // Current protocol. `safeToResume` is an explicit host gate: a model must never cause a
+    // same-run resume merely by returning source-shaped text. `correctedWorkflow` is the full
+    // replacement (not a patch), so the atomic writer has one unambiguous target.
+    if (record.safeToResume === true) {
+      if (
+        Object.keys(record).length !== 3 ||
+        typeof record.correctedWorkflow !== "string" ||
+        typeof record.summary !== "string" ||
+        !record.correctedWorkflow.trim() ||
+        !record.summary.trim()
+      )
+        return null;
+      return { outcome: "fixed", updatedSource: record.correctedWorkflow, summary: record.summary };
+    }
+    if (record.safeToResume === false) {
+      if (
+        Object.keys(record).length !== 2 ||
+        typeof record.cancelReason !== "string" ||
+        !record.cancelReason.trim()
+      )
+        return null;
+      return { outcome: "cannot-fix", reason: record.cancelReason };
+    }
+    // Compatibility for already-running repair children. New children receive the protocol above.
+    if (record.outcome === "fixed") {
+      if (
+        Object.keys(record).length !== 3 ||
+        typeof record.updatedSource !== "string" ||
+        typeof record.summary !== "string"
+      )
+        return null;
+      if (!record.updatedSource.trim() || !record.summary.trim()) return null;
+      return { outcome: "fixed", updatedSource: record.updatedSource, summary: record.summary };
+    }
+    if (record.outcome === "cannot-fix") {
+      if (
+        Object.keys(record).length !== 2 ||
+        typeof record.reason !== "string" ||
+        !record.reason.trim()
+      )
+        return null;
+      return { outcome: "cannot-fix", reason: record.reason };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const unsafeFailure =
+  /\b(?:cancel(?:led|ed|ation)?|abort(?:ed|ing)?|auth(?:entication|orization)?|unauthori[sz]ed|forbidden|policy|capabilit(?:y|ies)|permission|approval|user[ _-]?input)\b/i;
+
+/** Only compiler/runtime defects can be repaired. Human, auth, and policy failures must surface. */
+export const isRepairableWorkflowFailure = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.trim().length > 0 && !unsafeFailure.test(message);
+};
+
+/** Reject empty and script-like provider output before it can overwrite the durable source. */
+export const validateRepairedWorkflowSource = (source: unknown): string | null => {
+  if (typeof source !== "string") return null;
+  const trimmed = source.trim();
+  if (!trimmed || trimmed.length > 200_000) return null;
+  // Workflow bodies must use the SDK workflow primitives. This is deliberately
+  // conservative: a bad repair leaves the audited original source intact.
+  if (!/\b(?:agent|thread|workflow)\s*\./.test(trimmed)) return null;
+  return source;
+};
+
+export const canAttemptWorkflowRepair = (input: {
+  readonly origin: "recipe" | "ephemeral";
+  readonly repairAttempts: number;
+  readonly maxAttempts?: number;
+  readonly error: unknown;
+}): boolean =>
+  input.origin === "ephemeral" &&
+  input.repairAttempts <
+    Math.max(
+      0,
+      Math.min(
+        T3TEAM_WORKFLOW_REPAIR_HARD_LIMIT,
+        input.maxAttempts ?? T3TEAM_WORKFLOW_REPAIR_LIMIT,
+      ),
+    ) &&
+  isRepairableWorkflowFailure(input.error);

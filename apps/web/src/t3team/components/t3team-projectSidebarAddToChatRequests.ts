@@ -2,7 +2,9 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import type { AddToChatPayloadInput, AddToChatRequest } from "~/t3team/t3team-addToChatUtils";
+import { buildT3TeamWorkItemDedupeKey } from "~/t3team/t3team-contextAttachmentDedupeKey";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
+import { isWorkProject } from "~/t3team/t3team-isWorkProject";
 import { buildJiraWorkItemSummary } from "~/t3team/t3team-jiraContextMetadata";
 import { buildProjectContextBundle } from "~/t3team/t3team-projectContextBundle";
 import { refreshWorkItemContextBundle } from "~/t3team/t3team-refreshWorkItemContextBundle";
@@ -43,10 +45,35 @@ export function buildTicketSidebarAddToChatRequest(input: {
     targetLabel: `${ticket.ref.displayId} ${ticket.ref.title}`,
     targetType: "work-item",
     kind: "jira-work-item",
-    dedupeKey: `${project.id}:${ticket.ref.displayId}:work-item`,
+    // Identity-based, from the one builder, so any path attaching this work item collides with it.
+    dedupeKey: buildT3TeamWorkItemDedupeKey({
+      projectId: project.id,
+      workItemKey: ticket.ref.displayId,
+    }),
     ...jiraSummary,
     payload: buildWorkItemAddToChatPayload({ backend, project, ticket }),
   };
+}
+
+/**
+ * The project-context bundle a new thread starts with, or `null` when there is
+ * nothing worth attaching.
+ *
+ * A loose local workspace has no work source behind it: no backlog, no work
+ * items, no linked-issue metadata. Auto-attaching its "project context" on every
+ * new thread produced an empty badge the user then had to dismiss — context that
+ * costs prompt space and says nothing. Explicit add-to-chat is unaffected; this
+ * only decides what a thread is *born* with.
+ */
+export function buildNewThreadProjectContextRequest(input: {
+  project: ProjectShellProject;
+  projectTickets: ReadonlyArray<ProjectTicket>;
+  linkedRepositoryUrls: ReadonlyArray<string>;
+}): AddToChatRequest | null {
+  if (!isWorkProject(input.project)) {
+    return null;
+  }
+  return buildProjectSidebarAddToChatRequest(input);
 }
 
 export function buildProjectSidebarAddToChatRequest(input: {

@@ -5,6 +5,7 @@ import {
   deleteRecordEntry,
   hasQueuedAttachmentDuplicate,
   hasThreadAttachmentDuplicate,
+  dedupeThreadAttachmentsByKey,
   removeThreadAttachmentList,
   replaceQueuedAttachment,
   replaceThreadAttachmentList,
@@ -48,7 +49,7 @@ export const useT3TeamAddToChatStore = create<T3TeamAddToChatState>((set, get) =
       return {
         threadAttachmentsByThreadId: {
           ...state.threadAttachmentsByThreadId,
-          [threadId]: [...current, attachment],
+          [threadId]: dedupeThreadAttachmentsByKey([...current, attachment]),
         },
       };
     });
@@ -124,7 +125,7 @@ export const useT3TeamAddToChatStore = create<T3TeamAddToChatState>((set, get) =
       return {
         threadAttachmentsByThreadId: {
           ...state.threadAttachmentsByThreadId,
-          [threadId]: nextForThread.items,
+          [threadId]: dedupeThreadAttachmentsByKey(nextForThread.items),
         },
       };
     });

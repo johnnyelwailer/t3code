@@ -13,6 +13,7 @@ import { buildProjectDashboardSelectedRecipe } from "~/t3team/t3team-dashboardRe
 import { buildT3TeamSelectedRecipeKickoffLaunch } from "~/t3team/t3team-recipeQuickStartLaunch";
 import { useT3TeamDashboardRecipeViewSummary } from "~/t3team/t3team-dashboardRecipeViewContext";
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
+import { useT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
 import { useBundledSidecarRecipeLaunch } from "~/t3team/t3team-useBundledSidecarRecipeLaunch";
 
 export function ProjectDashboardKickoffAside({
@@ -80,7 +81,8 @@ export function ProjectDashboardKickoffAside({
       quickStartContextKeys,
     ],
   );
-  const { clearSelectedRecipe, composerRef, selectedRecipe, sidecarHost } =
+  const slashRecipes = useT3TeamSidecarRecipeQuickStarts(quickStartRecipeInput);
+  const { clearSelectedRecipe, composerRef, selectedRecipe, sidecarHost, stageRecipeKickoff } =
     useBundledSidecarRecipeLaunch({
       backend,
       environmentId,
@@ -119,6 +121,7 @@ export function ProjectDashboardKickoffAside({
         thread={activeThread}
         projectId={project.id}
         projectTitle={project.title}
+        projectSource={project.source}
         {...(project.workspace?.rootPath
           ? { projectWorkspaceRoot: project.workspace.rootPath }
           : {})}
@@ -139,6 +142,9 @@ export function ProjectDashboardKickoffAside({
             if (sectionId === "quick-starts") {
               return {
                 recipeInput: quickStartRecipeInput,
+                // Reuse the catalog already resolved for the composer slash menu:
+                // one `discoverRecipes` round-trip per dashboard mount, not two.
+                quickStarts: slashRecipes,
                 ...(selectedRecipe?.recipe.id
                   ? { selectedRecipeId: selectedRecipe.recipe.id }
                   : {}),
@@ -160,6 +166,9 @@ export function ProjectDashboardKickoffAside({
         onClearSelectedRecipe={clearSelectedRecipe}
         providers={providers}
         isConnected={isConnected}
+        {...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {})}
+        slashRecipes={slashRecipes}
+        onSelectSlashRecipe={stageRecipeKickoff}
         injectedContextAttachments={injectedContextAttachments}
         onRemoveContextAttachment={removeContextAttachment}
         onSubmit={(text, selection, runtimeMode, interactionMode, selectedToolIds) => {

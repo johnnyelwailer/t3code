@@ -4,6 +4,7 @@ import { defineConfig, mergeConfig } from "vite-plus";
 import baseConfig from "../../vite.config.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 import packageJson from "./package.json" with { type: "json" };
+import { t3teamRawTextPackPlugin } from "./scripts/t3team-rawTextPackPlugin.ts";
 
 const bundledPackagePrefixes = [
   "@pierre/diffs",
@@ -33,6 +34,9 @@ export default mergeConfig(
     },
     pack: {
       entry: ["src/bin.ts", "src/t3team-bin.ts"],
+      // `?raw` is a vite feature; pack is tsdown/rolldown and has no asset pipeline of its own.
+      // Without this, source that ships as TEXT could not be authored as a typechecked module.
+      plugins: [t3teamRawTextPackPlugin()],
       outDir: "dist",
       sourcemap: true,
       clean: true,

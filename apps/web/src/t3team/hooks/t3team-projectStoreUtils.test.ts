@@ -51,13 +51,41 @@ describe("deriveLooseWorkspaceProjects", () => {
     expect(looseWorkspaceProjects[0]).toMatchObject({
       id: ProjectId.make("live-project"),
       title: "Loose workspace",
+      // Defect 1 (fix/t3team-wizard-binding-invariant): a loose live project with no server
+      // binding must NOT get a fabricated externalProjectId/externalProjectKey — that fake local
+      // binding is what previously masked a missing real one and broke every Jira read.
       source: {
         provider: "local",
-        externalProjectId: ProjectId.make("live-project"),
       },
       workspace: {
         rootPath: "/workspace/loose",
       },
+    });
+    expect(looseWorkspaceProjects[0]?.source.externalProjectId).toBeUndefined();
+    expect(looseWorkspaceProjects[0]?.source.externalProjectKey).toBeUndefined();
+  });
+
+  it("inherits a real work-source binding when the live project already has one", () => {
+    const looseWorkspaceProjects = deriveLooseWorkspaceProjects(
+      [makeStoredProject()],
+      [
+        makeLiveProject({
+          source: {
+            provider: "atlassian",
+            accountId: "acc-1",
+            externalProjectId: "10001",
+            externalProjectKey: "INT",
+          },
+        }),
+      ],
+    );
+
+    expect(looseWorkspaceProjects).toHaveLength(1);
+    expect(looseWorkspaceProjects[0]?.source).toMatchObject({
+      provider: "atlassian",
+      accountId: "acc-1",
+      externalProjectId: "10001",
+      externalProjectKey: "INT",
     });
   });
 

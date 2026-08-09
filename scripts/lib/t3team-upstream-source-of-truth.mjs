@@ -3,6 +3,23 @@ export const UPSTREAM_REPO_SLUG = "pingdotgg/t3code";
 export const UPSTREAM_BASE_BRANCH = "main";
 export const UPSTREAM_BASE_REF = `${UPSTREAM_REMOTE_NAME}/${UPSTREAM_BASE_BRANCH}`;
 
+/**
+ * The canonical upstream URL. This never changes, so nothing should ever ask a
+ * human to type it — tooling that needs the remote configures it from here.
+ */
+export const UPSTREAM_REMOTE_URL = `https://github.com/${UPSTREAM_REPO_SLUG}.git`;
+
+/**
+ * Deliberately unpushable push URL for the upstream remote.
+ *
+ * AGENTS.md's hard rule is that we NEVER push or open PRs against upstream.
+ * Since tooling now adds this remote automatically, the remote existing must
+ * not quietly create a way to push to it — so its push URL is pointed at this
+ * sentinel, and `git push upstream` fails loudly instead of reaching
+ * `pingdotgg`. Fetch still works, which is all the guard needs.
+ */
+export const UPSTREAM_REMOTE_PUSH_DISABLED = "DISABLED-never-push-to-upstream-see-AGENTS.md";
+
 function stripDotGitSuffix(value) {
   return value.endsWith(".git") ? value.slice(0, -4) : value;
 }
@@ -40,5 +57,5 @@ export function isExpectedUpstreamRemoteUrl(remoteUrl) {
 }
 
 export function expectedUpstreamRemoteHint() {
-  return `git remote add ${UPSTREAM_REMOTE_NAME} https://github.com/${UPSTREAM_REPO_SLUG}.git`;
+  return `git remote add ${UPSTREAM_REMOTE_NAME} ${UPSTREAM_REMOTE_URL}`;
 }

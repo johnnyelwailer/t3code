@@ -3,6 +3,7 @@
 // message must carry the `workflow.decision` view with a `form` affordance, and the run completes
 // with the submitted, schema-validated object.
 import { Schema } from "effect";
+import { getArgs, getThread } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ question: Schema.String });
 
@@ -22,10 +23,15 @@ export const meta = {
   capabilities: ["user"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const thread = getThread();
 
-if (thread === undefined) throw new Error("fixtures.decision-form requires a launching thread");
+  const input = Schema.decodeSync(Inputs)(args);
 
-const triage = await thread.askUser(input.question, { schema: Triage });
+  if (thread === undefined) throw new Error("fixtures.decision-form requires a launching thread");
 
-return triage;
+  const triage = await thread.askUser(input.question, { schema: Triage });
+
+  return triage;
+}

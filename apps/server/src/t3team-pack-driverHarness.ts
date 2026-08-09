@@ -1,19 +1,26 @@
 /**
- * `createOpenCodeHarness` host capability.
+ * `createOpenCodeHarness` host capability, plus the first-class pack-driver
+ * identity built on top of it.
  *
- * Lets a pack driver compose the reviewed host OpenCode harness: it runs the
- * real `OpenCodeDriver.create` under the ambient runtime context captured by
- * the bridge, ties the harness resources to a child of the instance scope,
- * and hands the pack a `PackProviderInstance` (Promise / AsyncIterable) it can
- * decorate. Outer half of the accepted-for-v1 Effect -> Promise -> Effect
- * double bridge.
+ * `makeOpenCodeHarnessCapability` lets a pack driver compose the reviewed host
+ * OpenCode harness (real `OpenCodeDriver.create` under the ambient runtime
+ * context, harness resources tied to a child of the instance scope), handing
+ * back a `PackProviderInstance` the pack can decorate. Outer half of the
+ * accepted-for-v1 Effect -> Promise -> Effect double bridge.
+ *
+ * `makeOpenCodeHarnessDriver` / `adaptOpenCodeHarnessSnapshot` expose that
+ * same OpenCode runtime as a standalone `ProviderDriver` under a pack-defined
+ * identity, restamping snapshot/adapter payloads and hiding built-in models.
  *
  * @module t3team-pack-driverHarness
  */
 import {
   OpenCodeSettings,
   ProviderInstanceId,
+  type ProviderDriverKind,
   type ProviderInstanceEnvironment,
+  type ProviderSessionStartInput,
+  type ServerProvider,
 } from "@t3tools/contracts";
 import type { PackHostCapabilities } from "@t3team/packs";
 import * as Context from "effect/Context";
@@ -21,7 +28,13 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
+import {
+  defaultProviderContinuationIdentity,
+  type ProviderDriver,
+  type ProviderInstance,
+} from "./provider/ProviderDriver.ts";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "./provider/Drivers/OpenCodeDriver.ts";
 import { openCodeUpstreamConfigContent } from "./t3team-pack-aiProvider.ts";
 import { providerInstanceToPack } from "./t3team-pack-driverHarnessWrap.ts";
@@ -74,3 +87,73 @@ export const makeOpenCodeHarnessCapability = (input: {
     );
   };
 };
+
+/**
+ * Exposes the reviewed OpenCode runtime behind a pack-defined provider identity.
+ * The pack supplies data only; executable driver code remains owned by the host.
+ */
+export function makeOpenCodeHarnessDriver(input: {
+  readonly driverKind: ProviderDriverKind;
+  readonly displayName: string;
+}): ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv> {
+  const stampSnapshot = (snapshot: ServerProvider): ServerProvider =>
+    adaptOpenCodeHarnessSnapshot(snapshot, input.driverKind);
+
+  return {
+    ...OpenCodeDriver,
+    driverKind: input.driverKind,
+    metadata: { ...OpenCodeDriver.metadata, displayName: input.displayName },
+    create: (createInput) =>
+      OpenCodeDriver.create(createInput).pipe(
+        Effect.map((instance) => {
+          const continuationIdentity = defaultProviderContinuationIdentity({
+            driverKind: input.driverKind,
+            instanceId: instance.instanceId,
+          });
+          const snapshot = {
+            ...instance.snapshot,
+            getSnapshot: instance.snapshot.getSnapshot.pipe(Effect.map(stampSnapshot)),
+            refresh: instance.snapshot.refresh.pipe(Effect.map(stampSnapshot)),
+            streamChanges: instance.snapshot.streamChanges.pipe(Stream.map(stampSnapshot)),
+          };
+          const adapter = {
+            ...instance.adapter,
+            provider: input.driverKind,
+            startSession: (startInput: ProviderSessionStartInput) =>
+              instance.adapter
+                .startSession(startInput)
+                .pipe(Effect.map((session) => ({ ...session, provider: input.driverKind }))),
+            listSessions: () =>
+              instance.adapter
+                .listSessions()
+                .pipe(
+                  Effect.map((sessions) =>
+                    sessions.map((session) => ({ ...session, provider: input.driverKind })),
+                  ),
+                ),
+            streamEvents: instance.adapter.streamEvents.pipe(
+              Stream.map((event) => ({ ...event, provider: input.driverKind })),
+            ),
+          };
+          return {
+            ...instance,
+            driverKind: input.driverKind,
+            continuationIdentity,
+            snapshot,
+            adapter,
+          } satisfies ProviderInstance;
+        }),
+      ),
+  };
+}
+
+export function adaptOpenCodeHarnessSnapshot(
+  snapshot: ServerProvider,
+  driverKind: ProviderDriverKind,
+): ServerProvider {
+  return {
+    ...snapshot,
+    driver: driverKind,
+    models: snapshot.models.filter((model) => model.isCustom),
+  };
+}

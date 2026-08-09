@@ -1,0 +1,68 @@
+# The fork's additive guard, enforced.
+#
+# Why this file exists: the guard was previously reachable only from a Claude Code PostToolUse hook,
+# and only its FAST variant (new files, capped at 80). `.githooks/pre-commit` does run the full
+# guard, but `core.hooksPath` is repointed at vite-plus's `.vite-hooks/_` by `prepare`, so it never
+# fires. Codex, Cursor, Copilot, humans and CI therefore never ran it, and 94 violations reached
+# main under a rule everyone believed was hard. CI is the one place that cannot be repointed.
+#
+# Standalone rather than a job in ci.yml: the guard imports only Node builtins, so it needs no
+# install, no Rust and no Electron — it runs in seconds, and a slow or broken main CI cannot mask a
+# guard regression.
+name: T3Team Additive Guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: t3team-additive-guard-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  additive-guard:
+    name: Additive guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # The guard resolves `merge-base HEAD upstream/main`, so it needs real history.
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        # baseRef is `upstream/main` and the guard REFUSES any other value (enforceCanonicalBaseRef
+        # throws), so the remote must exist. Without it the guard silently falls back to origin/main,
+        # which on this fork compares main against itself and passes vacuously.
+        # Full, not shallow: a grafted shallow boundary can yield the wrong merge-base, which changes
+        # what counts as "changed" instead of failing loudly.
+        run: |
+          git remote add upstream https://github.com/pingdotgg/t3code.git
+          git fetch --no-tags upstream main
+          echo "UPSTREAM_HEAD=$(git rev-parse upstream/main)" >> "$GITHUB_ENV"
+          echo "SYNC_POINT=$(git merge-base HEAD upstream/main)" >> "$GITHUB_ENV"
+
+      # ── Blocking ────────────────────────────────────────────────────────────────────────────────
+      # Pins upstream/main to the commit this branch is SYNCED TO, so the guard measures our own
+      # additive discipline — prefixes, unwhitelisted edits to upstream files, LOC ceilings — all of
+      # which the author controls. Left pointing at live upstream, every run would also fail the
+      # "whitelisted file has upstream changes" check the moment upstream touches any of our ~130
+      # whitelisted files, turning main red for reasons no PR can fix. That drift is real and worth
+      # knowing about, which is what the next step is for — it just must not gate merges.
+      - name: Additive guard (this branch vs its upstream base)
+        run: |
+          git update-ref refs/remotes/upstream/main "$SYNC_POINT"
+          node t3team-additive-guard.mjs
+
+      # ── Informational ───────────────────────────────────────────────────────────────────────────
+      - name: Upstream drift (informational)
+        continue-on-error: true
+        run: |
+          git update-ref refs/remotes/upstream/main "$UPSTREAM_HEAD"
+          echo "Synced to $SYNC_POINT; upstream/main is $UPSTREAM_HEAD."
+          echo "Upstream commits since sync: $(git rev-list --count "$SYNC_POINT..upstream/main")"
+          node t3team-additive-guard.mjs || true
+          echo "A failure here means upstream changed files this fork also changed — run a sync."

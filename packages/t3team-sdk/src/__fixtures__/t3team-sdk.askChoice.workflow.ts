@@ -2,6 +2,7 @@
 // The `user.input` payload must carry the derived affordance descriptor and the attachment
 // refs so the host can render the decision card; the chosen literal resolves the ask.
 import { Schema } from "effect";
+import { getArgs, getThread, now } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ question: Schema.String });
 
@@ -15,24 +16,29 @@ export const meta = {
   capabilities: ["user"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const thread = getThread();
 
-if (thread === undefined) throw new Error("fixtures.ask-choice requires a launching thread");
+  const input = Schema.decodeSync(Inputs)(args);
 
-const Decision = Schema.Literals(["ship-now", "hold", "rollback"]);
-const decision = await thread.askUser(input.question, {
-  schema: Decision,
-  attachments: [
-    {
-      provider: "jira",
-      kind: "issue",
-      id: "BUG-7",
-      displayId: "BUG-7",
-      title: "Checkout rounding error",
-      url: "https://example.atlassian.net/browse/BUG-7",
-      status: "Open",
-    },
-  ],
-});
+  if (thread === undefined) throw new Error("fixtures.ask-choice requires a launching thread");
 
-return { decision };
+  const Decision = Schema.Literals(["ship-now", "hold", "rollback"]);
+  const decision = await thread.askUser(input.question, {
+    schema: Decision,
+    attachments: [
+      {
+        provider: "jira",
+        kind: "issue",
+        id: "BUG-7",
+        displayId: "BUG-7",
+        title: "Checkout rounding error",
+        url: "https://example.atlassian.net/browse/BUG-7",
+        status: "Open",
+      },
+    ],
+  });
+
+  return { decision };
+}

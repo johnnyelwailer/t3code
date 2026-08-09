@@ -34,14 +34,14 @@ describe("renderT3TeamProjectSetupFiles", () => {
     const statusSkill = files.find(
       (file) => file.relativePath === ".t3team/skills/status-and-context-summary/SKILL.md",
     );
-    const starterRecipeManifest = files.find(
-      (file) => file.relativePath === ".t3team/recipes/explain-selected-work/recipe.json",
+    const starterRecipeModule = files.find(
+      (file) => file.relativePath === ".t3team/recipes/explain-selected-work/recipe.ts",
     );
     const starterRecipePrompt = files.find(
       (file) => file.relativePath === ".t3team/recipes/explain-selected-work/prompt.md",
     );
-    const createRecipeManifest = files.find(
-      (file) => file.relativePath === ".t3team/recipes/create-recipe/recipe.json",
+    const createRecipeModule = files.find(
+      (file) => file.relativePath === ".t3team/recipes/create-recipe/recipe.ts",
     );
     const createRecipeWorkflow = files.find(
       (file) => file.relativePath === ".t3team/recipes/create-recipe/workflow.ts",
@@ -49,8 +49,8 @@ describe("renderT3TeamProjectSetupFiles", () => {
     const createRecipeScript = files.find(
       (file) => file.relativePath === ".t3team/recipes/create-recipe/recipe-script.ts",
     );
-    const editRecipeManifest = files.find(
-      (file) => file.relativePath === ".t3team/recipes/edit-plugin-module/recipe.json",
+    const editRecipeModule = files.find(
+      (file) => file.relativePath === ".t3team/recipes/edit-plugin-module/recipe.ts",
     );
     const editRecipePrompt = files.find(
       (file) => file.relativePath === ".t3team/recipes/edit-plugin-module/prompt.md",
@@ -104,16 +104,23 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(entrypoint?.contents).toContain("pending-sync");
     expect(statusSkill?.contents).toContain("name: t3team-status-and-context-summary");
     expect(statusSkill?.contents).toContain("Do not narrate file exploration");
-    expect(starterRecipeManifest?.contents).toContain('"scope": "project"');
+    // A prompt-only starter: its default action is the prompt.md beside it.
+    expect(starterRecipeModule?.contents).toContain("import { definePrompt, defineRecipe }");
+    expect(starterRecipeModule?.contents).toContain('defaultAction: definePrompt("./prompt.md")');
+    expect(starterRecipeModule?.contents).toContain('scope: "project"');
     expect(starterRecipePrompt?.contents).toContain("Explain this simply");
-    expect(createRecipeManifest?.contents).toContain('"workflow": "./workflow.ts"');
+    expect(createRecipeModule?.contents).toContain(
+      'defaultAction: defineWorkflow<typeof Workflow>("./workflow.ts")',
+    );
     expect(createRecipeWorkflow?.contents).toContain('kind: "script"');
     expect(createRecipeWorkflow?.contents).toContain('kind: "agent"');
     expect(createRecipeScript?.contents).toContain("prepareAuthoringWorkspace");
     expect(createRecipeScript?.contents).toContain("starter/recipe.ts");
     expect(createRecipeScript?.contents).toContain("starter/example-recipe.workflow.ts");
     expect(createRecipeScript?.contents).toContain("defineRecipe");
-    expect(editRecipeManifest?.contents).toContain('"workflow": "./workflow.ts"');
+    expect(editRecipeModule?.contents).toContain(
+      'defaultAction: defineWorkflow<typeof Workflow>("./workflow.ts")',
+    );
     expect(editRecipePrompt?.contents).toContain("## bundled-recipe");
     expect(editRecipePrompt?.contents).toContain("./prompts/edit-recipe.md");
     expect(editRecipeWorkflow?.contents).toContain('promptPath: "./draft-prompt.md"');
@@ -133,7 +140,9 @@ describe("renderT3TeamProjectSetupFiles", () => {
     );
     expect(recipesAuthoringGuide?.contents).toContain("Make the run visible");
     expect(recipesAuthoringGuide?.contents).toContain("## Patterns");
-    expect(recipesAuthoringGuide?.contents).toContain("workflow doesn't need to be a saved recipe");
+    expect(recipesAuthoringGuide?.contents).toContain(
+      "orchestration doesn't need to be a saved recipe",
+    );
   });
 
   it("includes managed file hashes in the profile manifest when provided", () => {

@@ -107,6 +107,7 @@ export function TicketDetailKickoffAside({
         thread={activeThread}
         projectId={projectId}
         projectTitle={projectTitle}
+        projectSource={project.source}
         {...(projectWorkspaceRoot ? { projectWorkspaceRoot } : {})}
         ticketId={ticketId}
         {...(onOpenFullThread
@@ -123,6 +124,7 @@ export function TicketDetailKickoffAside({
         profileId={profileId}
         issueThreads={issueThreads}
         projectId={projectId}
+        ticketId={ticketId}
         quickStartRecipeInput={quickStartRecipeInput}
         injectedContextAttachments={injectedContextAttachments}
         onOpenThread={(threadId) =>
@@ -169,6 +171,7 @@ export function TicketDetailKickoffAside({
             {...(onClearSelectedRecipe ? { onClearSelectedRecipe } : {})}
             providers={providers}
             isConnected={isConnected}
+            {...(project.workspace?.rootPath ? { workspaceRoot: project.workspace.rootPath } : {})}
             onSubmit={onSubmit}
           />
         )}

@@ -5,7 +5,12 @@ import * as Option from "effect/Option";
 import { Command, GlobalFlag } from "effect/unstable/cli";
 
 import { ServerConfig, type StartupPresentation } from "../config.ts";
-import { runT3TeamServer } from "../t3team-server.ts";
+// One server layer, two binaries. `server.ts` already composes every t3team route and reactor,
+// so the `t3team` binary differs from `t3` only in the pack bootstrapping this CLI file does
+// before launch. The former `t3team-server.ts` was a hand-maintained copy of `server.ts` and
+// silently drifted on every upstream sync (it lost BackgroundPolicy/ResourceTelemetry/Usage in
+// the 2026-08 sync); it is gone, and with it the "register the route in BOTH registries" trap.
+import { runServer } from "../server.ts";
 import {
   inspectConfiguredWorkspacePacks,
   loadPackAppearanceOverlay,
@@ -20,6 +25,7 @@ import {
   setPackSetupProfileOverlay,
 } from "../t3team-pack-setupProfileOverlay.ts";
 import { setPackProviderOverlay } from "../t3team-pack-providerOverlay.ts";
+import { loadPackRecipeSources, setPackRecipeSources } from "../t3team-packRecipeSources.ts";
 import { setWorkflowRepairPolicy } from "../t3team-workflowRepairPolicy.ts";
 import { setWorkflowAgentModelPolicy } from "../t3team-workflowAgentModelPolicy.ts";
 import {
@@ -48,6 +54,13 @@ export const runT3TeamServerCommand = (
       inspectConfiguredWorkspacePacks(Option.getOrUndefined(workspacePacksDir)),
     );
     if (packDiagnostic.enabled) {
+      // Pack recipe roots (Epic 16 §Recipe Sources And Precedence). Pure resolution — the recipes
+      // themselves load lazily through the shared discovery pipeline on each discover request.
+      const recipeSources = loadPackRecipeSources(packDiagnostic);
+      setPackRecipeSources(recipeSources);
+      for (const diagnostic of recipeSources.diagnostics) {
+        yield* Effect.logWarning("Workspace pack recipe source skipped", { diagnostic });
+      }
       const appearanceOverlay = yield* Effect.tryPromise({
         try: () => loadPackAppearanceOverlay(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),
@@ -136,7 +149,7 @@ export const runT3TeamServerCommand = (
         setupProfiles: setupProfileOverlay?.map((profile) => profile.id) ?? [],
       });
     }
-    return yield* runT3TeamServer.pipe(Effect.provideService(ServerConfig, config));
+    return yield* runServer.pipe(Effect.provideService(ServerConfig, config));
   });
 
 export const t3teamStartCommand = Command.make("start", { ...sharedServerCommandFlags }).pipe(

@@ -3,6 +3,7 @@
 // excluded from the journal and re-runs on every resume — yielding a different ticket each
 // time while the greeting replays unchanged.
 import { Schema } from "effect";
+import { getArgs, getScripts } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({
   name: Schema.String,
@@ -18,11 +19,17 @@ export const meta = {
   description: "Greet via a journaled script and mint a fresh (never-replayed) ticket.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["script"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const scripts = getScripts();
 
-const greeting = await scripts.greet({ name: input.name });
-const ticket = await scripts.freshTicket({});
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { greeting: greeting.text, ticket: ticket.id };
+  const greeting = await scripts.greet({ name: input.name });
+  const ticket = await scripts.freshTicket({});
+
+  return { greeting: greeting.text, ticket: ticket.id };
+}

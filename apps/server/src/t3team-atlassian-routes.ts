@@ -1,7 +1,6 @@
-import { AtlassianIntegrationProvider, type JiraApiAuth } from "@t3tools/integrations-atlassian";
+import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
 import type { IntegrationAccountRef } from "@t3tools/integrations-core";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { HttpRouter } from "effect/unstable/http";
 import {
@@ -14,15 +13,16 @@ import {
   savePersistedAuths,
 } from "./t3team-atlassian-auth-store.ts";
 import {
-  T3TeamAtlassianError,
   errorResponse,
   okJson,
   readJsonBody,
   tryAtlassianPromise,
 } from "./t3team-atlassian-http.ts";
+import { persistAtlassianOAuthAccounts } from "./t3team-atlassian-oauth-accountPersist.ts";
 export { t3teamAtlassianAssetContentRouteLayer } from "./t3team-atlassian-asset-content-route.ts";
 export { t3teamAtlassianBacklogRouteLayer } from "./t3team-atlassian-backlog-routes.ts";
 export { t3teamAtlassianMyWorkRouteLayer } from "./t3team-atlassian-myWork-routes.ts";
+export { t3teamAtlassianProjectIssuesRouteLayer } from "./t3team-atlassian-projectIssues-routes.ts";
 export { t3teamAtlassianResourcesRouteLayer } from "./t3team-atlassian-resources-routes.ts";
 
 type ResourceGetInput = {
@@ -84,48 +84,13 @@ export const t3teamAtlassianConnectOAuthRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/atlassian/connect/oauth",
   Effect.gen(function* () {
-    yield* loadPersistedAuths;
     const input = yield* readJsonBody<OAuthConnectInput>();
-    if (!input.auth.token.refreshToken?.trim()) {
-      return yield* new T3TeamAtlassianError({
-        message:
-          "Atlassian OAuth did not return a refresh token. Reconnect Atlassian and approve offline access.",
-      });
-    }
-    const now = yield* Clock.currentTimeMillis;
-    const expiresAt = now + input.auth.token.expiresIn * 1000;
-    const auths: ReadonlyArray<JiraApiAuth> = input.auth.sites.map((site) => ({
-      kind: "oauth",
-      cloudId: site.id,
-      siteUrl: site.url,
-      accessToken: input.auth.token.accessToken,
-      refreshToken: input.auth.token.refreshToken,
-      expiresAt,
-    }));
-
-    if (auths.length === 0) {
-      return okJson({
-        accounts: yield* tryAtlassianPromise(
-          () => mockProvider.listAccounts(),
-          "Failed to load preview Atlassian accounts.",
-        ),
-      });
-    }
-
-    const provider = AtlassianIntegrationProvider.fromMultipleAuths(auths);
-    const accounts = yield* tryAtlassianPromise(
-      () => provider.listAccounts(),
-      "Failed to connect to Atlassian.",
-    );
-    replaceAtlassianAuths(
-      accounts.flatMap((account) => {
-        const auth = auths.find(
-          (candidate) => candidate.kind === "oauth" && candidate.cloudId === account.id,
-        );
-        return auth ? [{ accountId: account.id, auth }] : [];
-      }),
-    );
-    yield* savePersistedAuths;
+    // Same persistence path the server-owned flow (`oauth/complete`) uses; see
+    // t3team-atlassian-oauth-accountPersist.ts.
+    const accounts = yield* persistAtlassianOAuthAccounts({
+      sites: input.auth.sites,
+      token: input.auth.token,
+    });
     return okJson({ accounts });
   }).pipe(Effect.catch(errorResponse)),
 );

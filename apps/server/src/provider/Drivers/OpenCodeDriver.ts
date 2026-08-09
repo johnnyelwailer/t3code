@@ -12,23 +12,17 @@
  *
  * @module provider/Drivers/OpenCodeDriver
  */
-import {
-  OpenCodeSettings,
-  ProviderDriverKind,
-  type ProviderSessionStartInput,
-  type ServerProvider,
-} from "@t3tools/contracts";
-import * as Duration from "effect/Duration";
+import { OpenCodeSettings, ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import { makeOpenCodeTextGeneration } from "../../textGeneration/OpenCodeTextGeneration.ts";
+import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderDriverError } from "../Errors.ts";
@@ -61,7 +55,6 @@ import {
 const decodeOpenCodeSettings = Schema.decodeSync(OpenCodeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("opencode");
-const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 
 function isOpenCodeNativeCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
@@ -84,6 +77,7 @@ const UPDATE = makePackageManagedProviderMaintenanceResolver({
 });
 
 export type OpenCodeDriverEnv =
+  | BackgroundPolicy.BackgroundPolicy
   | ChildProcessSpawner.ChildProcessSpawner
   | Crypto.Crypto
   | FileSystem.FileSystem
@@ -187,7 +181,6 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
               Effect.provideService(HttpClient.HttpClient, httpClient),
               Effect.flatMap((enrichedSnapshot) => publishSnapshot(enrichedSnapshot)),
             ),
-          refreshInterval: SNAPSHOT_REFRESH_INTERVAL,
         },
       ).pipe(
         Effect.mapError(
@@ -216,73 +209,3 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
       } satisfies ProviderInstance;
     }),
 };
-
-/**
- * Exposes the reviewed OpenCode runtime behind a pack-defined provider identity.
- * The pack supplies data only; executable driver code remains owned by the host.
- */
-export function makeOpenCodeHarnessDriver(input: {
-  readonly driverKind: ProviderDriverKind;
-  readonly displayName: string;
-}): ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv> {
-  const stampSnapshot = (snapshot: ServerProvider): ServerProvider =>
-    adaptOpenCodeHarnessSnapshot(snapshot, input.driverKind);
-
-  return {
-    ...OpenCodeDriver,
-    driverKind: input.driverKind,
-    metadata: { ...OpenCodeDriver.metadata, displayName: input.displayName },
-    create: (createInput) =>
-      OpenCodeDriver.create(createInput).pipe(
-        Effect.map((instance) => {
-          const continuationIdentity = defaultProviderContinuationIdentity({
-            driverKind: input.driverKind,
-            instanceId: instance.instanceId,
-          });
-          const snapshot = {
-            ...instance.snapshot,
-            getSnapshot: instance.snapshot.getSnapshot.pipe(Effect.map(stampSnapshot)),
-            refresh: instance.snapshot.refresh.pipe(Effect.map(stampSnapshot)),
-            streamChanges: instance.snapshot.streamChanges.pipe(Stream.map(stampSnapshot)),
-          };
-          const adapter = {
-            ...instance.adapter,
-            provider: input.driverKind,
-            startSession: (startInput: ProviderSessionStartInput) =>
-              instance.adapter
-                .startSession(startInput)
-                .pipe(Effect.map((session) => ({ ...session, provider: input.driverKind }))),
-            listSessions: () =>
-              instance.adapter
-                .listSessions()
-                .pipe(
-                  Effect.map((sessions) =>
-                    sessions.map((session) => ({ ...session, provider: input.driverKind })),
-                  ),
-                ),
-            streamEvents: instance.adapter.streamEvents.pipe(
-              Stream.map((event) => ({ ...event, provider: input.driverKind })),
-            ),
-          };
-          return {
-            ...instance,
-            driverKind: input.driverKind,
-            continuationIdentity,
-            snapshot,
-            adapter,
-          } satisfies ProviderInstance;
-        }),
-      ),
-  };
-}
-
-export function adaptOpenCodeHarnessSnapshot(
-  snapshot: ServerProvider,
-  driverKind: ProviderDriverKind,
-): ServerProvider {
-  return {
-    ...snapshot,
-    driver: driverKind,
-    models: snapshot.models.filter((model) => model.isCustom),
-  };
-}

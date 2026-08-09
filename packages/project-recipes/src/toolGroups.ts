@@ -109,7 +109,7 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.github.refresh_activity_context": PROJECT_RECIPE_ARTIFACT_RW_TOOL_GROUP.id,
   "t3team.github.issue_comment.draft_create": PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,
   "t3team.recipe.list": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
-  "t3team.workflow.run": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
+  "t3team.orchestration.run": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.recipe.validate": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.read_current": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.rename": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,

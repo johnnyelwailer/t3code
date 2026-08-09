@@ -80,12 +80,19 @@ export const ProjectRecipeWorkflowLaunch = Schema.Struct({
   kickoff: Schema.optional(ProjectRecipeWorkflowDocument),
   title: Schema.String,
   description: Schema.String,
-  source: Schema.Literals(["bundled", "project-local"]),
+  source: Schema.Literals(["bundled", "project-local", "pack"]),
   surface: RecipeSurface,
   reason: Schema.optional(Schema.String),
   recipePath: Schema.optional(Schema.String),
   promptPath: Schema.optional(Schema.String),
   workflowPath: Schema.optional(Schema.String),
+  /**
+   * Which of the recipe's actions to run (Epic 16 §Plugin Modules — one recipe, several actions).
+   * Omitted / `"default"` ⇒ `defaultAction`, exactly as before actions existed. When present, the
+   * host resolves the name against the recipe module itself, so what runs is always a workflow the
+   * recipe declares — a client cannot smuggle an arbitrary path in under an action name.
+   */
+  actionName: Schema.optional(Schema.String),
   allowedToolGroups: Schema.optional(Schema.Array(Schema.String)),
 });
 export type ProjectRecipeWorkflowLaunch = typeof ProjectRecipeWorkflowLaunch.Type;
@@ -117,7 +124,7 @@ export const ProjectRecipeLaunchActivityPayload = Schema.Struct({
   workflowRunId: Schema.String,
   title: Schema.String,
   description: Schema.String,
-  source: Schema.Literals(["bundled", "project-local"]),
+  source: Schema.Literals(["bundled", "project-local", "pack"]),
   surface: RecipeSurface,
   phase: ProjectRecipeLaunchPhase,
   reason: Schema.optional(Schema.String),

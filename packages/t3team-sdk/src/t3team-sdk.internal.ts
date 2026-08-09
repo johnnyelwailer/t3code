@@ -4,7 +4,7 @@ import * as NodeModule from "node:module";
 import * as NodeProcess from "node:process";
 import * as NodeURL from "node:url";
 
-import * as Schema from "effect/Schema";
+export { decodeWithSchema } from "@runbook/core/schema";
 
 import type { WorkflowRuntime, WorkflowSdkRegistry } from "./t3team-sdk.types.ts";
 
@@ -24,6 +24,14 @@ type NodeFsModule = {
 
 export const runtimeStorage = new NodeAsyncHooks.AsyncLocalStorage<WorkflowRuntime>();
 
+/**
+ * The active body's engine surface, so IMPORTED verbs can find their run (Epic 25 §The engine API —
+ * imported, not injected). Same mechanism `defineTool` handlers already use via `runtimeStorage`;
+ * this store carries the per-run record (`agent`, `phase`, `args`, `thread`, …) that used to be
+ * reachable only as injected globals.
+ */
+export const bodyApiStorage = new NodeAsyncHooks.AsyncLocalStorage<Record<string, unknown>>();
+
 export function getRegistry(): WorkflowSdkRegistry {
   const scope = globalThis as typeof globalThis & {
     [REGISTRY_SYMBOL]?: WorkflowSdkRegistry;
@@ -38,22 +46,6 @@ export function getRegistry(): WorkflowSdkRegistry {
   }
 
   return scope[REGISTRY_SYMBOL];
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-export async function decodeWithSchema<Value>(
-  schema: Schema.Schema<Value>,
-  input: unknown,
-  message: string,
-): Promise<Value> {
-  try {
-    return await (Schema.decodeUnknownPromise(schema as never)(input) as Promise<Value>);
-  } catch (error) {
-    throw new Error(`${message}: ${formatError(error)}`, { cause: error });
-  }
 }
 
 export function duplicateRegistrationError(kind: string, id: string): Error {

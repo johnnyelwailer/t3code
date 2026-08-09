@@ -20,7 +20,10 @@ async function loadPackAppearance(): Promise<EnvironmentAppearance | undefined> 
   };
   const reference = manifest.contents?.themes?.[0];
   if (!reference) return undefined;
-  const theme = (await (await fetch(`/pack/${reference.path}`)).json()) as Record<string, unknown> & {
+  const theme = (await (await fetch(`/pack/${reference.path}`)).json()) as Record<
+    string,
+    unknown
+  > & {
     id: string;
     brand?: Record<string, string>;
   };
@@ -60,7 +63,10 @@ async function loadPackSetupProfiles(): Promise<readonly EnvironmentSetupProfile
 function PaletteTile({ name, value }: { name: string; value: string }) {
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5">
-      <span className="size-5 shrink-0 rounded-sm border border-border/60" style={{ background: value }} />
+      <span
+        className="size-5 shrink-0 rounded-sm border border-border/60"
+        style={{ background: value }}
+      />
       <span className="truncate text-[11px] text-muted-foreground">{name}</span>
       <span className="ml-auto font-mono text-[10px] text-foreground/70">{value}</span>
     </div>

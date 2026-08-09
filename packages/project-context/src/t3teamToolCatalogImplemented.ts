@@ -40,8 +40,15 @@ const START_CHILD_INPUT_SCHEMA = {
     },
     reasoning_effort: {
       type: "string",
-      description: "Optional reasoning effort override for the child session.",
+      description:
+        "Optional PROVIDER-SPECIFIC reasoning effort override for the child session. Prefer the provider-agnostic 'effort' unless you need this exact value; 'reasoning_effort' wins when both are given.",
       enum: ["low", "medium", "high"],
+    },
+    effort: {
+      type: "string",
+      description:
+        "Optional provider-agnostic thinking tier for the child session. Ask for a tier without naming a provider or model: it is mapped onto whatever reasoning control the resolved provider/model exposes, and is ignored when it exposes none.",
+      enum: ["light", "standard", "high"],
     },
     repo_full_name: {
       type: "string",
@@ -85,7 +92,7 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
     widget_code: {
       type: "string",
       description:
-        "Raw SVG (starting with <svg>) or an HTML fragment. Do NOT include <!DOCTYPE>, <html>, <head>, or <body> tags. The widget renders in a sandboxed iframe with the live app theme. Use the provided variables for ALL colors: var(--background), var(--foreground), var(--card), var(--card-foreground), var(--muted), var(--muted-foreground), var(--border), var(--primary), var(--primary-foreground), var(--secondary), var(--secondary-foreground), var(--accent), var(--accent-foreground), var(--destructive), and var(--ring). Use var(--font-sans) / var(--font-mono) for typography. Never hard-code light or dark palette colors; the same markup must remain readable in both modes. Build mobile-first and fluid: use width:100% and the available host width, avoid fixed card widths/max-widths that leave a narrow mobile card on desktop, and adapt dense layouts with container or media queries. Keep content compact and use progressive disclosure/collapsible details; the host auto-sizes to content so chat owns scrolling. Use internal scrolling only for intrinsically large tables or logs. Keep the outer background transparent and add no top-level padding. Prefer accessible inline SVG icons using currentColor and consistent 16px or 20px sizing; do not use emoji or Unicode pictograms except as a fallback, and do not depend on external icon libraries. Scripts are allowed, but a strict CSP blocks ALL external network access (no fetch/XHR/WebSockets, no CDN scripts, no remote images/fonts) — inline all CSS/JS and embed assets as data: URIs. Globals inside the widget: sendPrompt(text) starts a hidden, agent-visible turn from a real user gesture (it does not answer workflow askUser prompts and is rate-limited); window.host.callTool(name, args) returns a Promise with a broker tool result, but only for tools declared in capabilities.tools.",
+        'Raw SVG (starting with <svg>) or an HTML fragment. Do NOT include <!DOCTYPE>, <html>, <head>, or <body> tags. The widget renders in a sandboxed iframe with the live app theme. Use the provided variables for ALL colors: var(--background), var(--foreground), var(--card), var(--card-foreground), var(--muted), var(--muted-foreground), var(--border), var(--primary), var(--primary-foreground), var(--secondary), var(--secondary-foreground), var(--accent), var(--accent-foreground), var(--destructive), var(--ring), var(--popover), var(--input), and the status tokens var(--info), var(--success), var(--warning) (each with a matching -foreground). Use var(--font-sans) / var(--font-mono) for typography and var(--radius) for corners. Never hard-code light or dark palette colors; the same markup must remain readable in both modes. Build mobile-first and fluid: use width:100% and the available host width, avoid fixed card widths/max-widths that leave a narrow mobile card on desktop, and adapt dense layouts with container or media queries. Keep content compact and use progressive disclosure/collapsible details; the host auto-sizes to content so chat owns scrolling. Use internal scrolling only for intrinsically large tables or logs. Keep the outer background transparent and add no top-level padding. For icons, use the host-injected sprite instead of emoji or Unicode pictograms: <svg class="t3w-icon" aria-hidden="true"><use href="#t3w-icon-NAME" /></svg>, adding class t3w-icon-lg for 20px. Available NAME values: arrow-right, ban, calendar, check, chevron-down, chevron-right, circle-alert, circle-check, circle-dot, circle-x, clock, external-link, file-text, git-pull-request, info, list, loader-circle, minus, plus, search, shield, sparkles, trending-down, trending-up, triangle-alert, user, x. They draw in currentColor, so set color (e.g. color: var(--success)) on the icon or its container — use circle-check/triangle-alert/circle-x instead of the check, warning and blocked emoji. Hand-written inline SVG using currentColor at 16px or 20px is fine for anything the sprite lacks; never depend on an external icon library. Scripts are allowed, but a strict CSP blocks ALL external network access (no fetch/XHR/WebSockets, no CDN scripts, no remote images/fonts) — inline all CSS/JS and embed assets as data: URIs. Globals inside the widget: sendPrompt(text) starts a hidden, agent-visible turn from a real user gesture (it does not answer workflow askUser prompts and is rate-limited); window.host.callTool(name, args) returns a Promise with a broker tool result, but only for tools declared in capabilities.tools.',
       minLength: 1,
     },
     format: {
@@ -118,7 +125,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Show widget",
     title: "Show an inline widget in the chat timeline",
     description:
-      "Show a widget inline in the current thread's chat timeline. Single entry point for all widget fidelities, selected via 'format': html/svg render instantly in a sandboxed iframe with live light/dark theme CSS variables plus the sendPrompt/callTool bridge; mdx (future) renders trusted whitelisted first-party components inline; tsx (future) composes a full design-system-native React view (slower). The widget body is persisted as a durable artifact. Use only provided theme variables for colors. Make the widget fluid and responsive across mobile and wide panes, keep it compact with progressive disclosure, keep the background transparent, and avoid top-level padding. Prefer inline currentColor SVG icons over emoji or external icon dependencies.",
+      "Show a widget inline in the current thread's chat timeline. Single entry point for all widget fidelities, selected via 'format': html/svg render instantly in a sandboxed iframe with live light/dark theme CSS variables plus the sendPrompt/callTool bridge; mdx (future) renders trusted whitelisted first-party components inline; tsx (future) composes a full design-system-native React view (slower). The widget body is persisted as a durable artifact. Use only provided theme variables for colors. Make the widget fluid and responsive across mobile and wide panes, keep it compact with progressive disclosure, keep the background transparent, and avoid top-level padding. Render icons from the host-injected sprite (<use href=\"#t3w-icon-NAME\">, class t3w-icon) rather than emoji or an external icon dependency.",
     capabilities: ["write"],
     kind: "view-state",
     surfaces: ["thread"],
@@ -188,12 +195,12 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["path"],
     },
   },
-  "t3team.workflow.run": {
-    id: "t3team.workflow.run",
-    label: "Run ephemeral workflow",
-    title: "Run a temporary t3team workflow in this conversation",
+  "t3team.orchestration.run": {
+    id: "t3team.orchestration.run",
+    label: "Run ephemeral orchestration",
+    title: "Run a temporary agent orchestration in this conversation",
     description:
-      "Run a temporary t3team workflow immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline workflow TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: .t3team/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the workflow card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the workflow on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.",
+      "Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: .t3team/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -206,7 +213,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         source: {
           type: "string",
           description:
-            "Inline workflow TypeScript (meta + top-level body). Exactly one of source/workflowPath.",
+            "Inline orchestration TypeScript (meta + top-level body). Exactly one of source/workflowPath.",
           minLength: 1,
         },
         workflowPath: {
@@ -216,7 +223,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
           minLength: 1,
         },
         args: {
-          description: "Launch arguments decoded by the workflow's meta.inputs schema.",
+          description: "Launch arguments decoded by the orchestration's meta.inputs schema.",
         },
       },
     },

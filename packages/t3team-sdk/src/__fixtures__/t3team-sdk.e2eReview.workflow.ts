@@ -5,6 +5,7 @@
 // Each ask suspends; a test orchestration harness drives suspend → resume by appending the
 // resolved reply and calling resumeWorkflow, the same loop the production reactor runs.
 import { Schema } from "effect";
+import { agent, getArgs, getThread } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ change: Schema.String });
 
@@ -22,21 +23,34 @@ export const meta = {
   capabilities: ["user"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const thread = getThread();
 
-if (thread === undefined) throw new Error("fixtures.e2e-review requires a launching thread");
+  const input = Schema.decodeSync(Inputs)(args);
 
-const Risk = Schema.Struct({ risk: Schema.String });
-const classified = await agent(`classify the risk of: ${input.change}`, { schema: Risk });
+  if (thread === undefined) throw new Error("fixtures.e2e-review requires a launching thread");
 
-const Plan = Schema.Struct({ plan: Schema.String });
-const planned = await thread.askAgent(`draft a rollout plan for a ${classified.risk}-risk change`, {
-  schema: Plan,
-});
+  const Risk = Schema.Struct({ risk: Schema.String });
+  // The isolated child inherits this body's grant (`["user"]`); the two launching-thread asks below
+  // take no `capabilities` — that thread's grant is the run's own, decided at launch.
+  const classified = await agent(`classify the risk of: ${input.change}`, {
+    schema: Risk,
+    capabilities: "inherit",
+  });
 
-const Decision = Schema.Struct({ approved: Schema.Boolean });
-const decision = await thread.askUser(`Approve this plan?\n\n${planned.plan}`, {
-  schema: Decision,
-});
+  const Plan = Schema.Struct({ plan: Schema.String });
+  const planned = await thread.askAgent(
+    `draft a rollout plan for a ${classified.risk}-risk change`,
+    {
+      schema: Plan,
+    },
+  );
 
-return { risk: classified.risk, plan: planned.plan, approved: decision.approved };
+  const Decision = Schema.Struct({ approved: Schema.Boolean });
+  const decision = await thread.askUser(`Approve this plan?\n\n${planned.plan}`, {
+    schema: Decision,
+  });
+
+  return { risk: classified.risk, plan: planned.plan, approved: decision.approved };
+}

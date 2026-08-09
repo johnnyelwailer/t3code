@@ -1,40 +1,23 @@
 import { useMemo, useState } from "react";
-import type { ProjectShellProject } from "@t3tools/project-context";
 import { Sidebar, SidebarProvider, SidebarRail } from "~/t3team/components/ui/t3team-sidebar";
 import { AppContentPane } from "~/t3team/t3team-AppContentPane";
 import { AppSidebarLens } from "~/t3team/components/t3team-AppSidebarLens";
 import { useProjectSidebarState } from "~/t3team/hooks/t3team-useProjectSidebarState";
+import { useT3TeamMacosTitlebarInsetStyle } from "~/t3team/hooks/t3team-useMacosTitlebarInset";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
-import type { ViewState } from "~/t3team/t3team-types";
+import { readProjectIdFromView } from "~/t3team/t3team-types";
+import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
-import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
 import { useResolvedViewSync } from "~/t3team/t3team-useResolvedViewSync";
 import { useHydratePinnedSidebarItems } from "~/t3team/hooks/t3team-useHydratePinnedSidebarItems";
-
-type AppProps = {
-  view?: ViewState | null;
-  dashboardMode?: ProjectDashboardMode;
-  showCreate?: boolean;
-  reopenInitialSetup?: boolean;
-  onCreateOpenChange?: (open: boolean) => void;
-  onOpenHome?: () => void;
-  onOpenSettings?: () => void;
-  onOpenDashboard?: (
-    projectId: string,
-    dashboardMode?: ProjectDashboardMode,
-    embeddedThreadId?: string | null,
-  ) => void;
-  onOpenTicket?: (projectId: string, ticketId: string, embeddedThreadId?: string | null) => void;
-  onOpenThread?: (projectId: string, threadId: string) => void;
-  onCloseEmbeddedThread?: () => void;
-  onProjectCreated?: (project: ProjectShellProject) => void;
-};
-
-const T3TEAM_LEFT_SIDEBAR_WIDTH_STORAGE_KEY = "t3team_left_sidebar_width";
-const T3TEAM_LEFT_SIDEBAR_MIN_WIDTH = 16 * 16;
-const T3TEAM_MAIN_CONTENT_MIN_WIDTH = 44 * 16;
+import {
+  T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
+  T3TEAM_LEFT_SIDEBAR_WIDTH_STORAGE_KEY,
+  T3TEAM_MAIN_CONTENT_MIN_WIDTH,
+  type AppProps,
+} from "~/t3team/t3team-AppProps";
 
 export function App({
   view,
@@ -51,6 +34,7 @@ export function App({
   onProjectCreated,
 }: AppProps = {}) {
   const store = useProjectStore();
+  const macosTitlebarInsetStyle = useT3TeamMacosTitlebarInsetStyle();
   useHydratePinnedSidebarItems();
   const { state: sidebarState, setState: setSidebarState } = useProjectSidebarState();
   const [showCreateInternal, setShowCreateInternal] = useState(false);
@@ -62,18 +46,12 @@ export function App({
   const showCreate = showCreateProp ?? showCreateInternal;
   const setShowCreate = onCreateOpenChange ?? setShowCreateInternal;
   const activeView = view ?? store.view;
-  const resolvedView = useMemo(() => {
-    if (!activeView) {
-      return activeView;
-    }
-
-    const resolvedProjectId = store.resolveProjectId(activeView.projectId);
-    return resolvedProjectId === activeView.projectId
-      ? activeView
-      : { ...activeView, projectId: resolvedProjectId };
-  }, [activeView, store]);
+  const resolvedView = useMemo(
+    () => resolveViewStoredProject(activeView, store.resolveProjectId),
+    [activeView, store.resolveProjectId],
+  );
   const activeDashboardMode = dashboardMode ?? "my-work";
-  const selectedProjectId = resolvedView?.projectId ?? store.selectedProjectId;
+  const selectedProjectId = readProjectIdFromView(resolvedView ?? null) ?? store.selectedProjectId;
   const manageRepositoriesProject = manageRepositoriesProjectId
     ? (store.projects.find((candidate) => candidate.id === manageRepositoriesProjectId) ?? null)
     : null;
@@ -111,7 +89,11 @@ export function App({
   });
 
   return (
-    <SidebarProvider className="h-dvh! min-h-0! overflow-hidden!" defaultOpen>
+    <SidebarProvider
+      className="h-dvh! min-h-0! overflow-hidden!"
+      defaultOpen
+      style={macosTitlebarInsetStyle}
+    >
       <Sidebar
         side="left"
         collapsible="offcanvas"

@@ -6,6 +6,7 @@ import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { navigateBackWithFallback } from "~/t3team/t3team-historyBack";
+import { useFinalizePromotedDraft } from "~/t3team/t3team-useFinalizePromotedDraft";
 import { runT3TeamViewTransition } from "~/t3team/t3team-runViewTransition";
 
 export function AppThreadPane({
@@ -33,6 +34,9 @@ export function AppThreadPane({
 }) {
   const canGoBack = useCanGoBack();
   const canOpenEmbedded = Boolean(resolvedThread?.ticketId || resolvedThread?.dashboardMode);
+  // Upstream retires the draft behind a promoted thread on its own thread
+  // route; the Team shell owns this route instead, so it has to do it here.
+  useFinalizePromotedDraft(view.threadId);
 
   useEffect(() => {
     if (!resolvedThread) {
@@ -61,6 +65,7 @@ export function AppThreadPane({
       threadId={view.threadId}
       projectId={view.projectId}
       projectTitle={threadProject?.title ?? view.projectId}
+      {...(threadProject?.source ? { projectSource: threadProject.source } : {})}
       {...(threadProject?.workspace?.rootPath
         ? { projectWorkspaceRoot: threadProject.workspace.rootPath }
         : {})}
@@ -121,7 +126,11 @@ export function AppThreadPane({
   );
 
   const embeddedThreadId = embeddedThread?.id ?? view.embeddedThreadId;
-  if (!embeddedThreadId) {
+  // A thread is never its own side-by-side companion. Rendering it twice gives one conversation two
+  // timelines and two composers, and a suspended `askUser` two places to answer it — answering in one
+  // leaves the other stale and it is ambiguous which is real. The navigation helper refuses to
+  // produce this route; this is the invariant that holds regardless of how the route was reached.
+  if (!embeddedThreadId || embeddedThreadId === view.threadId) {
     return parentChat;
   }
 
@@ -147,10 +156,11 @@ export function AppThreadPane({
           threadId={embeddedThreadId}
           projectId={view.projectId}
           projectTitle={threadProject?.title ?? view.projectId}
+          {...(threadProject?.source ? { projectSource: threadProject.source } : {})}
           {...(threadProject?.workspace?.rootPath
             ? { projectWorkspaceRoot: threadProject.workspace.rootPath }
             : {})}
-          title={embeddedThread?.title ?? "Workflow thread"}
+          title={embeddedThread?.title ?? "Orchestration thread"}
           hideHeader
           embeddedMode
           {...(embeddedThread?.ticketId ? { ticketId: embeddedThread.ticketId } : {})}

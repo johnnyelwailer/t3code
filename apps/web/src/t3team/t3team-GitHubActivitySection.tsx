@@ -133,8 +133,13 @@ export function GitHubActivitySection({
           {account ? <span> · {account}</span> : null}
         </div>
       </div>
+      {/*
+        Semantic tokens, not palette colours. This was `amber-500`/`amber-200`, which ignores the
+        active theme entirely — a workspace pack can rebind `--warning`, and `text-amber-200` is
+        unreadable on a light background regardless.
+      */}
       {warning ? (
-        <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+        <div className="mb-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] text-warning-foreground">
           {warning}
         </div>
       ) : null}

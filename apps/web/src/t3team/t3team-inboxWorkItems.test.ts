@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  resolveInboxAttribution,
-  selectInboxWorkItems,
-} from "./t3team-inboxWorkItems.ts";
+import { resolveInboxAttribution, selectInboxWorkItems } from "./t3team-inboxWorkItems.ts";
 import type { ProjectThread, ProjectTicket } from "./t3team-types.ts";
 
 const ticket = (over: Partial<ProjectTicket> & { id: string }): ProjectTicket =>
@@ -77,7 +74,10 @@ describe("selectInboxWorkItems", () => {
 
   it("includes nothing when a work item is neither assigned nor pinned", () => {
     expect(
-      selectInboxWorkItems({ ...base, tickets: [ticket({ id: "t-1", assigneeAccountId: "other" })] }),
+      selectInboxWorkItems({
+        ...base,
+        tickets: [ticket({ id: "t-1", assigneeAccountId: "other" })],
+      }),
     ).toEqual([]);
   });
 
@@ -128,5 +128,47 @@ describe("selectInboxWorkItems", () => {
     });
 
     expect(rows.map((row) => row.ticketId)).toEqual(["t-live", "t-a", "t-b"]);
+  });
+});
+
+/**
+ * The regression: the Code lens stores "hide from sidebar" and "show at top" per project and reads
+ * them back in `ProjectSidebarPinnedItems`. A distribution shipping `sidebarLens: "work"` never
+ * mounts that component, so those preferences were written by the agent-context actions and then
+ * silently ignored — the item stayed visible, in activity order, however the user arranged it.
+ */
+describe("selectInboxWorkItems honours sidebar-nav preferences", () => {
+  const base = {
+    threads: [] as ReadonlyArray<ProjectThread>,
+    viewerAccountId: null,
+    threadHasPullRequest: () => false,
+  };
+  const tickets = [ticket({ id: "t-1" }), ticket({ id: "t-2" }), ticket({ id: "t-3" })];
+  const pinnedTicketIds = new Set(["t-1", "t-2", "t-3"]);
+  const itemId = (ticketId: string) => `project-1:jira-work-item:${ticketId}`;
+
+  it("drops items hidden from the sidebar", () => {
+    const rows = selectInboxWorkItems({
+      ...base,
+      tickets,
+      pinnedTicketIds,
+      hiddenSidebarItemIds: [itemId("t-2")],
+    });
+    expect(rows.map((row) => row.ticketId)).toEqual(["t-1", "t-3"]);
+  });
+
+  it("floats explicitly ordered items above the activity order", () => {
+    const rows = selectInboxWorkItems({
+      ...base,
+      tickets,
+      pinnedTicketIds,
+      orderedSidebarItemIds: [itemId("t-3")],
+    });
+    expect(rows[0]?.ticketId).toBe("t-3");
+  });
+
+  it("leaves ordering untouched when no preferences are stored", () => {
+    const rows = selectInboxWorkItems({ ...base, tickets, pinnedTicketIds });
+    expect(rows.map((row) => row.ticketId)).toEqual(["t-1", "t-2", "t-3"]);
   });
 });

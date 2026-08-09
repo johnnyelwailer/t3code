@@ -20,22 +20,24 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const workflowErrorIsError = new WorkflowError("we") instanceof Error;
+export default async function run() {
+  const workflowErrorIsError = new WorkflowError("we") instanceof Error;
 
-let cancelledIsCancelled = false;
-let cancelledIsError = false;
-try {
-  throw new CancelledError("cancelled");
-} catch (e) {
-  cancelledIsCancelled = e instanceof CancelledError;
-  cancelledIsError = e instanceof Error;
+  let cancelledIsCancelled = false;
+  let cancelledIsError = false;
+  try {
+    throw new CancelledError("cancelled");
+  } catch (e) {
+    cancelledIsCancelled = e instanceof CancelledError;
+    cancelledIsError = e instanceof Error;
+  }
+
+  let plainThrowIsError = false;
+  try {
+    throw new Error("plain");
+  } catch (e) {
+    plainThrowIsError = e instanceof Error;
+  }
+
+  return { workflowErrorIsError, cancelledIsCancelled, cancelledIsError, plainThrowIsError };
 }
-
-let plainThrowIsError = false;
-try {
-  throw new Error("plain");
-} catch (e) {
-  plainThrowIsError = e instanceof Error;
-}
-
-return { workflowErrorIsError, cancelledIsCancelled, cancelledIsError, plainThrowIsError };

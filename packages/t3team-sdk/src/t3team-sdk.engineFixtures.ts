@@ -20,10 +20,16 @@ import type * as BudgetWorkflow from "./__fixtures__/t3team-sdk.budgetPrimitive.
 import type * as ChildSpawnWorkflow from "./__fixtures__/t3team-sdk.childSpawn.workflow.ts";
 import type * as E2eReviewWorkflow from "./__fixtures__/t3team-sdk.e2eReview.workflow.ts";
 import type * as FireForgetWorkflow from "./__fixtures__/t3team-sdk.handleFireForget.workflow.ts";
+import type * as ModelCascadeWorkflow from "./__fixtures__/t3team-sdk.modelCascade.workflow.ts";
+import type * as ModelCascadeAbsentWorkflow from "./__fixtures__/t3team-sdk.modelCascadeAbsent.workflow.ts";
+import type * as ModelCascadePrecedenceWorkflow from "./__fixtures__/t3team-sdk.modelCascadePrecedence.workflow.ts";
 import type * as UserAskDeniedWorkflow from "./__fixtures__/t3team-sdk.userAskDenied.workflow.ts";
 import type * as ParallelWorkflow from "./__fixtures__/t3team-sdk.parallelPrimitive.workflow.ts";
 import type * as PipelineWorkflow from "./__fixtures__/t3team-sdk.pipelinePrimitive.workflow.ts";
 import type * as SubParentWorkflow from "./__fixtures__/t3team-sdk.subParent.workflow.ts";
+import type * as SubParentNoCapsWorkflow from "./__fixtures__/t3team-sdk.subParentNoCaps.workflow.ts";
+import type * as ToolGroupObjectCapWorkflow from "./__fixtures__/t3team-sdk.toolGroupObjectCap.workflow.ts";
+import type * as ToolNoCapabilityWorkflow from "./__fixtures__/t3team-sdk.toolNoCapability.workflow.ts";
 import type * as WaitWorkflow from "./__fixtures__/t3team-sdk.waitPrimitive.workflow.ts";
 import type * as InsertedWorkflow from "./__fixtures__/t3team-sdk.journalInserted.workflow.ts";
 import type * as BigintResultWorkflow from "./__fixtures__/t3team-sdk.bigintResult.workflow.ts";
@@ -33,6 +39,7 @@ import type * as NeverRemovedWorkflow from "./__fixtures__/t3team-sdk.neverMarke
 import type * as NowWorkflow from "./__fixtures__/t3team-sdk.journalNow.workflow.ts";
 import type * as RandomWorkflow from "./__fixtures__/t3team-sdk.journalRandom.workflow.ts";
 import type * as ScriptWorkflow from "./__fixtures__/t3team-sdk.journalScript.workflow.ts";
+import type * as ScriptNoCapabilityWorkflow from "./__fixtures__/t3team-sdk.scriptNoCapability.workflow.ts";
 import type * as TwoToolsWorkflow from "./__fixtures__/t3team-sdk.journalTwoTools.workflow.ts";
 import type * as UuidWorkflow from "./__fixtures__/t3team-sdk.journalUuid.workflow.ts";
 import type * as VoidResultWorkflow from "./__fixtures__/t3team-sdk.voidResult.workflow.ts";
@@ -187,6 +194,9 @@ export const insertedWorkflow = defineWorkflow<typeof InsertedWorkflow>(
 export const scriptWorkflow = defineWorkflow<typeof ScriptWorkflow>(
   "./__fixtures__/t3team-sdk.journalScript.workflow.ts",
 );
+export const scriptNoCapabilityWorkflow = defineWorkflow<typeof ScriptNoCapabilityWorkflow>(
+  "./__fixtures__/t3team-sdk.scriptNoCapability.workflow.ts",
+);
 export const voidResultWorkflow = defineWorkflow<typeof VoidResultWorkflow>(
   "./__fixtures__/t3team-sdk.voidResult.workflow.ts",
 );
@@ -226,6 +236,15 @@ export const pipelineWorkflow = defineWorkflow<typeof PipelineWorkflow>(
 export const subParentWorkflow = defineWorkflow<typeof SubParentWorkflow>(
   "./__fixtures__/t3team-sdk.subParent.workflow.ts",
 );
+export const subParentNoCapsWorkflow = defineWorkflow<typeof SubParentNoCapsWorkflow>(
+  "./__fixtures__/t3team-sdk.subParentNoCaps.workflow.ts",
+);
+export const toolNoCapabilityWorkflow = defineWorkflow<typeof ToolNoCapabilityWorkflow>(
+  "./__fixtures__/t3team-sdk.toolNoCapability.workflow.ts",
+);
+export const toolGroupObjectCapWorkflow = defineWorkflow<typeof ToolGroupObjectCapWorkflow>(
+  "./__fixtures__/t3team-sdk.toolGroupObjectCap.workflow.ts",
+);
 export const waitWorkflow = defineWorkflow<typeof WaitWorkflow>(
   "./__fixtures__/t3team-sdk.waitPrimitive.workflow.ts",
 );
@@ -249,6 +268,15 @@ export const childSpawnWorkflow = defineWorkflow<typeof ChildSpawnWorkflow>(
 );
 export const e2eReviewWorkflow = defineWorkflow<typeof E2eReviewWorkflow>(
   "./__fixtures__/t3team-sdk.e2eReview.workflow.ts",
+);
+export const modelCascadeWorkflow = defineWorkflow<typeof ModelCascadeWorkflow>(
+  "./__fixtures__/t3team-sdk.modelCascade.workflow.ts",
+);
+export const modelCascadeAbsentWorkflow = defineWorkflow<typeof ModelCascadeAbsentWorkflow>(
+  "./__fixtures__/t3team-sdk.modelCascadeAbsent.workflow.ts",
+);
+export const modelCascadePrecedenceWorkflow = defineWorkflow<typeof ModelCascadePrecedenceWorkflow>(
+  "./__fixtures__/t3team-sdk.modelCascadePrecedence.workflow.ts",
 );
 
 export const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-engine-"));

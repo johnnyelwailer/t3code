@@ -25,7 +25,7 @@ describe("buildServerOwnedWorkItemContextBundle", () => {
         relativePath: ".t3team/context/jira/project-alpha/items/proj-7/entrypoint.json",
       },
     ]);
-    expect(bundle.dedupeKey).toBe("project-alpha:PROJ-7:work-item");
+    expect(bundle.dedupeKey).toBe("work-item:project-alpha:PROJ-7");
   });
 });
 

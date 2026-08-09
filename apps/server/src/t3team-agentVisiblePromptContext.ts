@@ -114,6 +114,21 @@ function describeAgentVisibleAttachment(attachment: T3TeamMessageAttachment): st
     case "widget": {
       return `Widget attachment: ${attachment.widget.title} (${attachment.widget.format})`;
     }
+    case "draft-mutation": {
+      // Draft carriers are `visibleToAgent: false`, so this is only reached if a draft ever rides
+      // a message the agent can see; describe the proposal, never the raw patch.
+      return `Proposed change awaiting review: ${attachment.draft.field} on ${attachment.draft.target.issueIdOrKey}${formatAttachmentDetails(
+        [attachment.draft.summary],
+      )}`;
+    }
+    case "work-item-draft": {
+      // A run's completion card: a POINTER to a proposal, not the patch. Told to the agent so a
+      // follow-up turn knows a review is outstanding and does not re-propose the same change.
+      return `Draft awaiting review on ${attachment.issueIdOrKey}${formatAttachmentDetails([
+        attachment.field,
+        attachment.summary,
+      ])}`;
+    }
   }
 }
 

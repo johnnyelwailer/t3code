@@ -5,6 +5,7 @@ import type {
 } from "@t3tools/integrations-core";
 import type { ResourcePage, ResourceSnapshot } from "@t3tools/project-context";
 
+import { createAtlassianIssueContentOpsApi } from "./t3team-atlassianBackendApiIssueContentOps";
 import { createAtlassianIssueOpsApi } from "./t3team-atlassianBackendApiIssueOps";
 import type {
   AtlassianBackendApi,
@@ -158,5 +159,6 @@ export function createAtlassianBackendApi(httpBaseUrl: string): AtlassianBackend
     },
 
     ...createAtlassianIssueOpsApi(post),
+    ...createAtlassianIssueContentOpsApi(post),
   };
 }

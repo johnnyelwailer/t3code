@@ -13,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import { HttpRouter } from "effect/unstable/http";
 
+import { expandHomePath } from "./pathExpansion.ts";
 import {
   errorResponse,
   okJson,
@@ -23,7 +24,9 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
+import { resolveLaunchWorkflowPath } from "./t3team-projectRecipeActionLaunch.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
+import { resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
 import {
   isProviderInteractionMode,
@@ -33,6 +36,9 @@ import {
 import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
+import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
+import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
 
 export { t3teamThreadWorkflowResolveInputRouteLayer } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 
@@ -51,6 +57,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     const runRepository = yield* WorkflowRunRepository;
     const journalStore = yield* WorkflowJournalStore;
     const scheduler = yield* T3TeamWorkflowScheduler;
+    const toolBroker = yield* T3TeamToolBroker;
     const input = yield* readJsonBody<LaunchProjectRecipeWorkflowRequest>();
 
     const threadIdInput = input.threadId?.trim() ?? "";
@@ -59,12 +66,23 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     if (!input.launch || typeof input.launch !== "object") {
       return yield* new T3TeamAtlassianError({ message: "launch is required." });
     }
-    const workflowPath = input.launch.workflowPath?.trim() ?? "";
-    if (workflowPath.length === 0) {
+    const defaultWorkflowPath = input.launch.workflowPath?.trim() ?? "";
+    const actionName = input.launch.actionName?.trim() ?? "";
+    if (defaultWorkflowPath.length === 0 && actionName.length === 0) {
       return yield* new T3TeamAtlassianError({
         message: "launch.workflowPath is required: this recipe has no .workflow.ts to run.",
       });
     }
+    // Single expansion point (pathExpansion.ts): a workspace-root recipePath may carry a literal
+    // `~`; expand it ONCE so every downstream use below — plus the persisted run row — agrees.
+    const recipePath = input.launch.recipePath && expandHomePath(input.launch.recipePath);
+    // One recipe, several actions (Epic 16): a named action is resolved from the recipe's own
+    // module, so it can only select a workflow the recipe declares. No name ⇒ defaultAction.
+    const workflowPath = yield* resolveLaunchWorkflowPath({
+      recipePath,
+      workflowPath: defaultWorkflowPath,
+      actionName,
+    });
     if (threadIdInput.length === 0) {
       return yield* new T3TeamAtlassianError({
         message:
@@ -119,9 +137,43 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       }),
     );
 
+    // The launching recipe's private scripts (Epic 25 §Scripts): a `recipe.ts` recipe module's
+    // `scripts` registration becomes the body's `scripts.*` tree. recipe.json recipes (no
+    // module) resolve to an empty record and the engine keeps its `scripts: {}` default.
+    const scripts = yield* resolveRecipeWorkflowScripts({
+      recipePath,
+      workflowPath,
+    });
+
+    // The body's `getTools()` bridge to the broker's work-item DRAFT tools, bound to THIS thread so
+    // a proposal lands where the user launched it. Scope comes from the RECIPE MODULE, never from
+    // the client-supplied `input.launch.allowedToolGroups` (a caller that omitted it would be
+    // handed unrestricted scope); unresolvable ⇒ no bridge at all, and the resolved scope is what
+    // is persisted as the grant, so a restart restores this rather than the request.
+    const hostToolScope = yield* resolveRecipeHostToolScope({
+      recipePath,
+      workflowPath,
+    });
+    if (hostToolScope.kind === "denied") {
+      yield* Effect.logDebug("workflow launch runs without host tools", {
+        runId,
+        reason: hostToolScope.reason,
+      });
+    }
+    const hostToolGrant =
+      hostToolScope.kind === "granted" ? { toolGroups: hostToolScope.toolGroups } : undefined;
+    const hostToolClient =
+      hostToolScope.kind === "granted"
+        ? makeT3TeamWorkflowHostDraftToolClient({
+            broker: toolBroker,
+            launchThreadId: threadIdInput,
+            allowedToolGroups: hostToolScope.toolGroups,
+          })
+        : undefined;
+
     // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
     // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral
-    // `t3team.workflow.run` tool drives through.
+    // `t3team.orchestration.run` tool drives through.
     const fileSystem = yield* FileSystem.FileSystem;
     const result = yield* launchPreparedWorkflow(
       {
@@ -136,6 +188,12 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         runId,
         workflowPath,
         args,
+        // Persist the recipe dir alongside the resolved scripts so a restart can re-resolve
+        // them during rehydration (a scriptless launch needs neither).
+        ...(Object.keys(scripts).length === 0 ? {} : { scripts, recipePath }),
+        ...(hostToolClient === undefined || hostToolGrant === undefined
+          ? {}
+          : { hostToolClient, hostToolGrant }),
         workspaceRoot: project.workspaceRoot,
         launchThreadId: threadIdInput,
         projectId: thread.projectId,

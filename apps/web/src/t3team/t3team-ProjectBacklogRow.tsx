@@ -1,5 +1,8 @@
 import type { MouseEvent } from "react";
-import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+} from "~/t3team/backend/t3team-types";
 
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
@@ -29,6 +32,7 @@ export function ProjectBacklogRow({
   canCreateSubtasks,
   onOpen,
   onSearchAssignableUsers,
+  onListChildIssueTypes,
   onUpdateAssignee,
   onUpdateEstimate,
   onCreateSubtask,
@@ -48,6 +52,7 @@ export function ProjectBacklogRow({
     ticket: ProjectTicket,
     query?: string,
   ) => Promise<ReadonlyArray<AtlassianAssignableUser>>;
+  onListChildIssueTypes?: () => Promise<ReadonlyArray<AtlassianChildIssueType>>;
   onUpdateAssignee: (
     ticket: ProjectTicket,
     assignee: AtlassianAssignableUser | null,
@@ -165,6 +170,8 @@ export function ProjectBacklogRow({
             ticket={ticket}
             canCreateSubtasks={canCreateSubtasks}
             onCreateSubtask={onCreateSubtask}
+            onSearchAssignableUsers={onSearchAssignableUsers}
+            {...(onListChildIssueTypes ? { onListChildIssueTypes } : {})}
           />
         </div>
       </T3SurfacePanel>

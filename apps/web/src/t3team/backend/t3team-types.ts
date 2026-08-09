@@ -86,24 +86,6 @@ export type LinkedRepositorySyncResult = {
   readonly error?: string;
 };
 
-export type ProjectWorkspaceBootstrapResult = {
-  readonly workspaceRoot: string;
-  readonly workspaceRepositoryInitialized: boolean;
-  readonly referencesRoot: string;
-  readonly linkedRepositories: ReadonlyArray<LinkedRepositorySyncResult>;
-};
-
-export type ProjectWorkspaceContextFile = {
-  readonly relativePath: string;
-  readonly contents: string;
-  readonly encoding?: "utf8" | "base64";
-};
-
-export type ProjectWorkspaceWriteContextFilesResult = {
-  readonly workspaceRoot: string;
-  readonly writtenFiles: ReadonlyArray<string>;
-};
-
 export type ProjectWorkspaceRefreshWorkItemContextResult = {
   readonly ok: boolean;
   readonly status: "already_synced" | "synced";
@@ -187,6 +169,8 @@ export type {
   AtlassianOAuthConnectInput,
   AtlassianOAuthExchangeInput,
   AtlassianOAuthExchangeResult,
+  AtlassianChildIssueType,
+  AtlassianIssueLinkType,
 } from "./t3team-atlassianBackendTypes";
 
 export interface T3TeamEnvironmentConnection {
@@ -215,3 +199,15 @@ export interface T3TeamBackendProviderProps {
 export interface T3TeamAuthProviderProps {
   readonly children: React.ReactNode;
 }
+
+// Workspace bootstrap shapes live in their own module; re-exported so importers are unaffected.
+import type {
+  ProjectWorkspaceBootstrapResult,
+  ProjectWorkspaceContextFile,
+  ProjectWorkspaceWriteContextFilesResult,
+} from "~/t3team/backend/t3team-projectWorkspaceTypes";
+export type {
+  ProjectWorkspaceBootstrapResult,
+  ProjectWorkspaceContextFile,
+  ProjectWorkspaceWriteContextFilesResult,
+} from "~/t3team/backend/t3team-projectWorkspaceTypes";

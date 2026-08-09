@@ -1,6 +1,7 @@
-import { Component, useId, useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+import { T3TeamErrorBoundary } from "~/t3team/components/error/t3team-ErrorBoundary";
 import { Menu } from "~/t3team/components/ui/t3team-menu";
 import {
   T3TeamSidecarMenuContent,
@@ -8,23 +9,18 @@ import {
 } from "~/t3team/t3team-sidecarSectionMenu";
 import type { T3TeamSidecarMenuEntry } from "~/t3team/t3team-sidecarSectionMenuActions";
 
-export class T3TeamSidecarSectionErrorBoundary extends Component<
-  { readonly children: ReactNode; readonly fallback: ReactNode },
-  { readonly hasError: boolean }
-> {
-  override state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  override render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-
-    return this.props.children;
-  }
+/**
+ * Thin adapter over the generic `T3TeamErrorBoundary`: kept so existing sidecar
+ * section callers can keep passing a plain `fallback` node without change.
+ */
+export function T3TeamSidecarSectionErrorBoundary({
+  children,
+  fallback,
+}: {
+  readonly children: ReactNode;
+  readonly fallback: ReactNode;
+}) {
+  return <T3TeamErrorBoundary fallback={() => fallback}>{children}</T3TeamErrorBoundary>;
 }
 
 export function T3TeamSidecarSectionFrame({

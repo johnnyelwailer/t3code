@@ -140,6 +140,171 @@ describe("normalizeIssue", () => {
   });
 });
 
+describe("normalizeIssue Slice A field widening", () => {
+  it("surfaces the new read-parity fields, comment/attachment additions, and resolved story points/sprints", () => {
+    const issue: JiraIssue = {
+      id: "10099",
+      key: "TEST-9",
+      self: "https://test.atlassian.net/rest/api/3/issue/10099",
+      fields: {
+        summary: "Widen the read model",
+        created: "2026-01-01T00:00:00.000Z",
+        updated: "2026-01-05T00:00:00.000Z",
+        duedate: "2026-02-01",
+        resolution: { name: "Fixed" },
+        resolutiondate: "2026-01-06T00:00:00.000Z",
+        status: {
+          name: "In Progress",
+          statusCategory: { key: "indeterminate", name: "In Progress", colorName: "yellow" },
+        },
+        components: [{ name: "Backend" }],
+        fixVersions: [{ name: "1.2.0" }],
+        versions: [{ name: "1.0.0" }],
+        environment: "Production, us-east-1",
+        watches: { watchCount: 4, isWatching: true },
+        votes: { votes: 2, hasVoted: false },
+        timetracking: {
+          originalEstimateSeconds: 7200,
+          remainingEstimateSeconds: 3600,
+          timeSpentSeconds: 3600,
+        },
+        customfield_10016: 5,
+        description: {
+          type: "doc",
+          version: 1,
+          content: [{ type: "paragraph", content: [{ type: "text", text: "Body." }] }],
+        },
+        parent: {
+          key: "TEST-1",
+          fields: {
+            summary: "Parent epic",
+            issuetype: { name: "Epic", iconUrl: "https://example.com/epic.svg" },
+            status: { name: "Done" },
+          },
+        },
+        comment: {
+          comments: [
+            {
+              id: "20001",
+              author: {
+                displayName: "Charlie",
+                accountId: "acc-charlie",
+                avatarUrls: { "48x48": "https://example.com/charlie.png" },
+              },
+              body: {
+                type: "doc",
+                version: 1,
+                content: [
+                  { type: "paragraph", content: [{ type: "text", text: "Looking into it." }] },
+                ],
+              },
+              created: "2026-01-02T00:00:00.000Z",
+              jsdPublic: false,
+            },
+          ],
+        },
+        attachment: [
+          {
+            id: "30001",
+            filename: "trace.log",
+            author: {
+              accountId: "acc-dana",
+              avatarUrls: { "48x48": "https://example.com/dana.png" },
+            },
+          },
+        ],
+      },
+    };
+
+    const result = normalizeIssue(issue, "https://test.atlassian.net", {
+      estimateField: { id: "customfield_10016", label: "Story point estimate" },
+      sprintField: null,
+    });
+
+    expect(result.fields.created).toBe("2026-01-01T00:00:00.000Z");
+    expect(result.fields.dueDate).toBe("2026-02-01");
+    expect(result.fields.resolution).toBe("Fixed");
+    expect(result.fields.resolvedAt).toBe("2026-01-06T00:00:00.000Z");
+    expect(result.fields.components).toEqual(["Backend"]);
+    expect(result.fields.fixVersions).toEqual(["1.2.0"]);
+    expect(result.fields.affectsVersions).toEqual(["1.0.0"]);
+    expect(result.fields.environment).toBe("Production, us-east-1");
+    expect(result.fields.watchCount).toBe(4);
+    expect(result.fields.isWatching).toBe(true);
+    expect(result.fields.voteCount).toBe(2);
+    expect(result.fields.hasVoted).toBe(false);
+    expect(result.fields.timeTracking).toEqual({
+      originalEstimateSeconds: 7200,
+      remainingEstimateSeconds: 3600,
+      timeSpentSeconds: 3600,
+    });
+    expect(result.fields.storyPoints).toBe(5);
+    expect(result.fields.sprints).toBeUndefined();
+    expect(result.fields.statusCategory).toEqual({
+      key: "indeterminate",
+      name: "In Progress",
+      colorName: "yellow",
+    });
+    expect(result.fields.descriptionAdf).toEqual(issue.fields.description);
+    expect(result.fields.parentSummary).toEqual({
+      key: "TEST-1",
+      summary: "Parent epic",
+      issueType: "Epic",
+      issueTypeIconUrl: "https://example.com/epic.svg",
+      statusName: "Done",
+    });
+
+    const commentItems = result.fields.commentItems as ReadonlyArray<Record<string, unknown>>;
+    expect(commentItems[0]?.authorAccountId).toBe("acc-charlie");
+    expect(commentItems[0]?.authorAvatarUrl).toBe("https://example.com/charlie.png");
+    expect(commentItems[0]?.bodyAdf).toEqual(
+      (issue.fields.comment as { comments: Array<{ body: unknown }> }).comments[0]?.body,
+    );
+    expect(commentItems[0]?.isInternal).toBe(true);
+
+    const attachments = result.fields.attachments as ReadonlyArray<Record<string, unknown>>;
+    expect(attachments[0]?.authorAccountId).toBe("acc-dana");
+    expect(attachments[0]?.avatarUrl).toBe("https://example.com/dana.png");
+  });
+
+  it("omits new fields entirely when Jira returns nothing for them", () => {
+    const issue: JiraIssue = {
+      id: "10100",
+      key: "TEST-10",
+      self: "https://test.atlassian.net/rest/api/3/issue/10100",
+      fields: {
+        summary: "Bare issue",
+        updated: "2026-01-05T00:00:00.000Z",
+      },
+    };
+
+    const result = normalizeIssue(issue, "https://test.atlassian.net");
+
+    for (const key of [
+      "created",
+      "dueDate",
+      "resolution",
+      "resolvedAt",
+      "components",
+      "fixVersions",
+      "affectsVersions",
+      "environment",
+      "watchCount",
+      "isWatching",
+      "voteCount",
+      "hasVoted",
+      "timeTracking",
+      "storyPoints",
+      "sprints",
+      "statusCategory",
+      "descriptionAdf",
+      "parentSummary",
+    ]) {
+      expect(Object.hasOwn(result.fields, key)).toBe(false);
+    }
+  });
+});
+
 describe("normalizeIssueSearch", () => {
   it("should normalize a Jira search response into resource refs", () => {
     const response: JiraIssueSearchResponse = {

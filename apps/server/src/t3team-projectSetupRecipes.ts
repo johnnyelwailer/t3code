@@ -15,30 +15,11 @@ import {
   renderTypedRecipeStarterReadme,
   renderTypedWorkflowModuleStarter,
 } from "./t3team-projectSetupRecipeScaffolding.ts";
-
-function jsonFile(value: unknown): string {
-  return `${JSON.stringify(value, null, 2)}\n`;
-}
-
-function renderBundledRecipeManifest(
-  recipe: ReturnType<typeof listBundledT3TeamRecipes>[number],
-): string {
-  return jsonFile({
-    id: recipe.id,
-    version: recipe.version,
-    scope: "project",
-    displayName: recipe.manifestDisplayName,
-    shortDescription: recipe.shortDescription,
-    ...(recipe.icon ? { icon: recipe.icon } : {}),
-    surfaces: recipe.surfaces,
-    prompt: "./prompt.md",
-    ...(recipe.id === "create-recipe" || recipe.id === EDIT_PLUGIN_MODULE_RECIPE_ID
-      ? { workflow: "./workflow.ts" }
-      : {}),
-    allowedToolGroups: recipe.allowedToolGroups,
-    outputPreference: recipe.outputPreference,
-  });
-}
+import { renderBundledRecipeModule } from "./t3team-projectSetupRecipeModule.ts";
+import {
+  DESCRIPTION_REWRITE_RECIPE_ID,
+  descriptionRewriteSetupFiles,
+} from "./t3team-projectSetupDescriptionRewriteRecipe.ts";
 
 function renderBundledRecipePrompt(
   recipe: ReturnType<typeof listBundledT3TeamRecipes>[number],
@@ -121,8 +102,15 @@ export function renderBundledRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetu
   return listBundledT3TeamRecipes().flatMap((recipe) => {
     const files: Array<T3TeamProjectSetupFile> = [
       {
-        relativePath: `${T3TEAM_PROJECT_RECIPES_ROOT}/${recipe.id}/recipe.json`,
-        contents: renderBundledRecipeManifest(recipe),
+        relativePath: `${T3TEAM_PROJECT_RECIPES_ROOT}/${recipe.id}/recipe.ts`,
+        contents: renderBundledRecipeModule(
+          recipe,
+          recipe.id === "create-recipe" ||
+            recipe.id === EDIT_PLUGIN_MODULE_RECIPE_ID ||
+            recipe.id === DESCRIPTION_REWRITE_RECIPE_ID
+            ? "./workflow.ts"
+            : undefined,
+        ),
         writeMode: "if-missing",
       },
       {
@@ -161,6 +149,8 @@ export function renderBundledRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetu
         },
       );
     }
+
+    files.push(...descriptionRewriteSetupFiles(recipe.id));
 
     return files;
   });

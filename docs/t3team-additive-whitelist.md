@@ -79,8 +79,38 @@ Prefix policy:
   - Add optional `t3teamExt` and `thread.message.upsert` to the orchestration contract so first-class system messages flow through the existing command/event channel.
 - `packages/project-context/src/index.ts`
   - Export additive action-recipe context helpers from the shared package entrypoint so runtime and UI code can share one canonical launch-context schema.
+- `packages/contracts/src/sourceControl.ts`
+  - Carry every authenticated source-control host, additively. `SourceControlProviderAuth` exposes a single `host`, so a user signed in to both `github.com` and a GitHub Enterprise host (e.g. `nexplore.ghe.com`) can only ever see one of them. The existing `host` field stays untouched; a new optional list is added alongside it.
+- `packages/shared/src/sourceControl.ts`
+  - Fix `isGitHubHost`, which classified hosts with `host.includes("github")`. That is `false` for `nexplore.ghe.com`, so GitHub Enterprise remotes resolved to provider `"unknown"` and every PR operation failed with "No unknown source control provider is registered."
+- `apps/server/src/sourceControl/gitHubAuthStatus.ts`
+  - Surface the full authenticated-host list already parsed from `gh auth status --json hosts` instead of collapsing it to the single active host. Existing single-host selection is preserved for backwards compatibility.
+- `apps/server/src/sourceControl/GitHubSourceControlProvider.ts`
+  - Populate the additive multi-host auth field from the probe result.
+- `apps/server/src/sourceControl/SourceControlProviderRegistry.ts`
+  - Pass the multi-host auth data through provider resolution.
 - `bun.lock`
   - Lockfile drift due workspace/package updates.
+
+- `docs/README.md`
+  - Append a `## This fork (t3team)` section linking the fork's own docs (MVP spec, this whitelist, runbook engine). Purely additive tail; upstream's own index above it is untouched.
+- `.github/workflows/ci.yml`
+  - Point the three Linux jobs at `ubuntu-latest` instead of `blacksmith-8vcpu-ubuntu-2404`, and raise their timeouts to suit a 4-vCPU hosted runner. This fork has no Blacksmith runners, so CI had NEVER completed here — 20 sampled runs were 10 queued and 10 cancelled, zero pass or fail, which is why every fork PR sat at `mergeStateStatus: UNSTABLE`. The mobile job is gated to the upstream owner rather than repointed: it needs macOS plus `brew bundle` for native toolchains this fork does not build, and hosted macOS bills at 10x. Upstream runner names are kept in trailing comments so a future sync reads cleanly.
+- `scripts/release-smoke.ts`
+  - Add the three fork package manifests the smoke workspace needs. `apps/desktop` depends on `@t3tools/integrations-atlassian` (which pulls `integrations-core` and `project-context`); without them the temp workspace fails with `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND` before exercising any release step. Additive list entries only.
+
+## Allowed Unprefixed New Files
+
+Whole trees the fork owns outright. The `t3team-` prefix exists so a file added by
+the fork can never collide with a file upstream adds later; a directory that upstream
+does not have — and whose npm scope is the fork's own — already carries that guarantee,
+so prefixing every file inside it adds noise without adding safety. This mirrors the
+existing `docs/t3team-mvp/**` and `.claude/**` entries.
+
+- `packages/runbook-core/**`, `packages/runbook-scripts/**`, `packages/runbook-threads/**`, `packages/runbook-tools/**`, `packages/runbook-ts/**`
+  - The reusable runbook engine: five fork-authored packages under the `@runbook/*` npm scope, none of which exist upstream. 76 files consume them, and they are the subject of in-flight work (draft PR #9), so per-file renaming would be churn against active branches.
+- `docs/runbook/**`
+  - Design docs for the above.
 
 ## Rules
 

@@ -452,6 +452,8 @@ t3team.work_item.estimate.draft_update
 t3team.work_item.priority.draft_update
 t3team.work_item.labels.draft_update
 t3team.work_item.link.draft_create
+t3team.work_item.link.draft_remove
+t3team.work_item.subtask.draft_create
 t3team.work_item.attachment.draft_add
 ```
 
@@ -580,7 +582,7 @@ Useful tools:
 t3team.view.read
 t3team.recipe.list
 t3team.recipe.validate
-t3team.workflow.run
+t3team.orchestration.run
 t3team.widget.show
 t3team.thread.rename
 t3team.thread.read_current

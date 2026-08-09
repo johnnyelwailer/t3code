@@ -18,7 +18,9 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const a = Math.random();
-const b = Math.random();
+export default async function run() {
+  const a = Math.random();
+  const b = Math.random();
 
-return { a, b, scaled: Math.floor(a * 1000) };
+  return { a, b, scaled: Math.floor(a * 1000) };
+}

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { RecipeSurface } from "@t3tools/project-recipes";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
@@ -52,20 +52,34 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
   const composerRef = useRef<T3TeamKickoffComposerHandle | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<T3TeamSelectedRecipeQuickStart | null>(null);
 
+  const buildSelectedRecipe = input.buildSelectedRecipe;
+  /**
+   * Stages a recipe as the composer's pre-submit chip. Shared by the Quick
+   * Starts card click and the composer `/<slashAlias>` selection so both entry
+   * points reach the one launch path (Epic 16, "Selection semantics").
+   */
+  const stageRecipeKickoff = useCallback(
+    (
+      recipe: T3TeamSidecarRecipeQuickStart,
+      customization?: T3TeamRecipeQuickStartLaunchCustomization,
+    ) => {
+      const nextSelectedRecipe = buildSelectedRecipe(recipe, customization);
+      if (!nextSelectedRecipe) {
+        return;
+      }
+
+      setSelectedRecipe((current) => preserveSelectedRecipe(current, nextSelectedRecipe));
+    },
+    [buildSelectedRecipe],
+  );
+
   const sidecarHost = useMemo(
     () =>
       buildSidecarSectionHost({
         placement: "sidecar.section",
         surface: input.surface,
         projectId: input.projectId,
-        stageKickoff: (recipe, customization) => {
-          const nextSelectedRecipe = input.buildSelectedRecipe(recipe, customization);
-          if (!nextSelectedRecipe) {
-            return;
-          }
-
-          setSelectedRecipe((current) => preserveSelectedRecipe(current, nextSelectedRecipe));
-        },
+        stageKickoff: stageRecipeKickoff,
         launchRecipe: (recipeId, parameters) => {
           void launchBundledSidecarRecipeThread({
             backend: input.backend,
@@ -91,7 +105,6 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
       }),
     [
       input.backend,
-      input.buildSelectedRecipe,
       input.createThread,
       input.environmentId,
       input.onLaunched,
@@ -99,12 +112,14 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
       input.projectId,
       input.projectWorkspaceRoot,
       input.surface,
+      stageRecipeKickoff,
     ],
   );
 
   return {
     composerRef,
     selectedRecipe,
+    stageRecipeKickoff,
     clearSelectedRecipe: () => setSelectedRecipe(null),
     sidecarHost,
   };

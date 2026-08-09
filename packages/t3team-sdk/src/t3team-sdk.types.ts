@@ -1,21 +1,42 @@
 import * as Schema from "effect/Schema";
 
+import type { WorkflowVersionPolicy } from "@runbook/core/engine";
+
+import type { ToolRef as GenericToolRef } from "@runbook/tools";
+import type { ScriptRef as GenericScriptRef } from "@runbook/scripts";
+import type { ModelSelection } from "@runbook/threads/models";
+
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
+import type { ToolGroupRef } from "./t3team-sdk.capabilityVocabulary.ts";
 import type { AnyRecipeRef } from "./t3team-sdk.recipeTypes.ts";
 import type { WorkflowRunIntent } from "./tools/t3team-sdk.workflow.ts";
 
 export type {
+  AnyActionRef,
   AnyRecipeRef,
+  RecipeContextRequirementSpec,
+  AnyWorkflowRef,
   RecipeApplicabilitySpec,
   RecipeBrevity,
+  RecipeDerived,
   RecipeDetailDensity,
   RecipeGuidanceStyle,
   RecipeRef,
   RecipeTechnicalDepth,
+  RecipeVisiblePredicate,
 } from "./t3team-sdk.recipeTypes.ts";
 export type { PrimitiveCall, PrimitiveKind, WorkflowRuntime } from "./t3team-sdk.runtimeTypes.ts";
+// The capability vocabulary lives in ONE module; re-exported here because this file is the `T.`
+// namespace the whole SDK reads types through.
+export type {
+  EngineCapability,
+  ToolGroupId,
+  ToolGroupRef,
+  WorkflowCapability,
+  WorkflowChildCapabilities,
+} from "./t3team-sdk.capabilityVocabulary.ts";
+export type { ModelRef, ModelSelection } from "@runbook/threads/models";
 
-export type EngineCapability = "thread" | "child" | "user" | "script" | "ui" | "workflow";
 export type IntegrationMethod = (...args: ReadonlyArray<unknown>) => Promise<unknown>;
 
 export interface IntegrationClient {
@@ -47,7 +68,10 @@ export interface T3TeamToolHandlerClient {
   /** Host-provided project-recipe listing; result is validated against the tool result schema. */
   readonly listRecipes?: () => Promise<unknown>;
   /** Host-provided static workflow validation; result is validated against the tool result schema. */
-  readonly validateRecipe?: (input: { readonly path: string }) => Promise<unknown>;
+  readonly validateRecipe?: (input: {
+    readonly path?: string;
+    readonly source?: string;
+  }) => Promise<unknown>;
   /** Host-provided ephemeral workflow launch; result is validated against the tool result schema. */
   readonly runWorkflow?: (input: {
     readonly source?: string;
@@ -55,27 +79,12 @@ export interface T3TeamToolHandlerClient {
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
   }) => Promise<unknown>;
-}
-
-export interface ToolGroupRef<Id extends string = string> {
-  readonly kind: "tool-group";
-  readonly id: Id;
-  readonly label: string;
-  readonly description: string;
-}
-
-export type WorkflowCapability = EngineCapability | ToolGroupRef;
-
-export interface ModelRef<Id extends string = string, Provider extends string = string> {
-  readonly kind: "model";
-  readonly id: Id;
-  readonly provider: Provider;
-}
-
-/** A per-call model choice: a project-configured provider-instance id + a typed `ModelRef`. */
-export interface ModelSelection {
-  readonly provider: string;
-  readonly model: ModelRef;
+  /** Dispatch a broker-owned host tool by id. Present only on a thread-bound run; the HOST decides
+   * which ids it will accept, so this is a transport, not a widening of the tool surface. */
+  readonly callHostTool?: (input: {
+    readonly tool: string;
+    readonly args: unknown;
+  }) => Promise<unknown>;
 }
 
 export interface WorkflowRef<Inputs = unknown, Outputs = unknown, Path extends string = string> {
@@ -110,61 +119,21 @@ export interface ScriptHandlerCtx {
   readonly callTool: <I, R>(ref: ToolRef<I, R>, args: I) => Promise<R>;
 }
 
-export interface ToolRef<
+export type ToolRef<
   I,
   R,
   Id extends string = string,
   Group extends ToolGroupRef = ToolGroupRef,
-> {
-  (args: I): Promise<R>;
-  readonly kind: "tool";
-  readonly id: Id;
-  readonly group: Group;
-  readonly args: Schema.Schema<I>;
-  readonly result: Schema.Schema<R>;
-  readonly handler: (args: I, ctx: ToolHandlerCtx) => Promise<R>;
-}
+> = GenericToolRef<I, R, Id, Group, ToolHandlerCtx>;
 
-export interface ScriptRef<I, O> {
-  (args: I): Promise<O>;
-  readonly kind: "script";
-  readonly replay: "default" | "never";
-  readonly inputs: Schema.Schema<I>;
-  readonly outputs: Schema.Schema<O>;
-  readonly handler: (args: I, ctx: ScriptHandlerCtx) => Promise<O>;
-}
+export type ScriptRef<I, O> = GenericScriptRef<I, O, ScriptHandlerCtx>;
 
 export interface RegisteredWorkflowToolsTree {}
 export interface RegisteredWorkflowScriptsTree {}
 
-type Simplify<T> = { [K in keyof T]: T[K] } & {};
-type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
-  value: infer I,
-) => void
-  ? I
-  : never;
-type SnakeToCamelCase<Value extends string> = Value extends `${infer Head}_${infer Tail}`
-  ? `${Head}${Capitalize<SnakeToCamelCase<Tail>>}`
-  : Value;
-type DotPathTree<Path extends string, Value> = Path extends `${infer Head}.${infer Tail}`
-  ? { [K in SnakeToCamelCase<Head>]: DotPathTree<Tail, Value> }
-  : { [K in SnakeToCamelCase<Path>]: Value };
-
-export type ToolTreeFromRefs<TRefs extends readonly unknown[]> = [TRefs[number]] extends [never]
-  ? {}
-  : Simplify<
-      UnionToIntersection<
-        TRefs[number] extends infer TRef
-          ? TRef extends { readonly id: infer Id extends string }
-            ? DotPathTree<Id, TRef>
-            : never
-          : never
-      >
-    >;
-
-export type ScriptTreeFromRecord<TScripts extends Record<string, AnyScriptRef>> = {
-  readonly [K in keyof TScripts]: TScripts[K];
-};
+// The dotted-id → nested-tree derivation lives in its own module; re-exported so importers of this
+// file (which is the namespace `T.` everywhere in the SDK) keep seeing both names.
+export type { ScriptTreeFromRecord, ToolTreeFromRefs } from "./t3team-sdk.typeTrees.ts";
 
 export type WorkflowInputs<TModule> = TModule extends { Inputs: Schema.Schema<infer V> }
   ? V
@@ -188,6 +157,8 @@ export interface WorkflowRunOptions {
   readonly runsRoot?: string;
   // Durable journal storage (default fs at `runsRoot`); host injects SQLite for restart durability (§OQ2).
   readonly store?: import("./t3team-sdk.journalStore.ts").JournalStore;
+  /** T3Team preserves legacy current-source resumes by default; pass `strict` to enforce identity. */
+  readonly workflowVersionPolicy?: WorkflowVersionPolicy;
   readonly tools?: ReadonlyArray<AnyToolRef>;
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
   readonly fetch?: FetchLike;
@@ -204,6 +175,9 @@ export interface WorkflowRunOptions {
   readonly broker?: MessageBroker;
   readonly launchThreadId?: string;
   readonly defaultModel?: ModelSelection;
+  /** Host client handed to tool handlers as `ToolHandlerCtx.t3team` — the per-run half of a
+   * host-tool ref, whose handler is registered globally and so cannot close over the run. */
+  readonly t3team?: T3TeamToolHandlerClient;
   /** Host fairness hooks around live tool/script primitives. Replayed entries do not call them. */
   readonly beforePrimitive?: () => Promise<boolean>;
   readonly afterPrimitive?: () => void;

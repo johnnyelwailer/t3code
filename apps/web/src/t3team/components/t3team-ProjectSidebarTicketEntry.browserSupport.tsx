@@ -110,20 +110,18 @@ export function findDraggableRow(host: HTMLElement, displayId: string): HTMLElem
   );
 }
 
-export function createNativeApiMock(input?: {
+/**
+ * Stands in for the Electron preload bridge. Upstream retired `window.nativeApi` (which mirrored
+ * `LocalApi`) in the 2026-08 sync — the browser `LocalApi` now delegates to `window.desktopBridge`
+ * for context menus and client settings, so that is what these browser tests install.
+ */
+export function createDesktopBridgeMock(input?: {
   showContextMenu?: ReturnType<typeof import("vite-plus/test").vi.fn>;
   setClientSettings?: ReturnType<typeof import("vite-plus/test").vi.fn>;
-}): NonNullable<Window["nativeApi"]> {
+}): NonNullable<Window["desktopBridge"]> {
   return {
-    contextMenu: {
-      show: input?.showContextMenu,
-    },
-    persistence: {
-      getClientSettings: async () => null,
-      setClientSettings: input?.setClientSettings ?? (async () => undefined),
-    },
-    dialogs: {} as LocalApi["dialogs"],
-    shell: {} as LocalApi["shell"],
-    server: {} as LocalApi["server"],
-  } as unknown as NonNullable<Window["nativeApi"]>;
+    showContextMenu: input?.showContextMenu ?? (async () => null),
+    getClientSettings: async () => null,
+    setClientSettings: input?.setClientSettings ?? (async () => undefined),
+  } as unknown as NonNullable<Window["desktopBridge"]>;
 }

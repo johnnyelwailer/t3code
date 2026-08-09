@@ -1,39 +1,26 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback } from "react";
 import { useCanGoBack } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { useBackend, useBackendState } from "~/t3team/backend/t3team-index";
-import {
-  readIssueTypeFromSnapshotFields,
-  readIssueTypeIconUrlFromSnapshotFields,
-} from "~/t3team/components/ticket/t3team-JiraIssueType";
-import { readLinkedRepositoryUrlsFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
-import { useAddToChat } from "~/t3team/hooks/t3team-useAddToChat";
-import { useProjectGitHubActivity } from "~/t3team/hooks/t3team-useProjectGitHubActivity";
-import { useProjectResources } from "~/t3team/hooks/t3team-useProjectResources";
-import { useRelatedTickets } from "~/t3team/hooks/t3team-useRelatedTickets";
-import { drainQueuedWorkItemContextSyncRequests } from "~/t3team/hooks/t3team-useWorkItemContextSyncQueue";
-import { useTicketDetail } from "~/t3team/hooks/t3team-useTicketDetail";
+
+import { useAgentContext } from "~/t3team/hooks/t3team-useAgentContext";
+import { useWorkItemDetailViewModel } from "~/t3team/hooks/t3team-useWorkItemDetailViewModel";
 import type { TicketKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import { TicketDetailBody } from "~/t3team/t3team-TicketDetailBody";
-import { TicketDetailHeader } from "~/t3team/t3team-TicketDetailHeader";
-import {
-  buildTicketDetailKickoffAsideProps,
-  buildTicketDetailMainColumnProps,
-} from "~/t3team/t3team-TicketDetailViewProps";
+import { buildTicketDetailKickoffAsideProps } from "~/t3team/t3team-TicketDetailViewProps";
 import { navigateBackWithFallback } from "~/t3team/t3team-historyBack";
-import {
-  asRecordArray,
-  resolveHtmlBaseUrl,
-  sortCommentItems,
-} from "~/t3team/t3team-ticketDetailUtils";
-import { extractRelationshipKeys } from "~/t3team/t3team-ticketRelationshipKeys";
-import {
-  buildProjectTicketLookup,
-  resolveCanonicalProjectTicketId,
-} from "~/t3team/t3team-ticketLookup";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { useTicketDetailEmbeddedThreadEffects } from "~/t3team/t3team-useTicketDetailEmbeddedThreadEffects";
+import { WorkItemDetailHeader } from "~/t3team/workitem/t3team-WorkItemDetailHeader";
+import { WorkItemAgentRewriteControl } from "~/t3team/workitem/t3team-WorkItemAgentRewriteControl";
+import { useWorkItemDrafts } from "~/t3team/workitem/t3team-useWorkItemDrafts";
+import { buildWorkItemDetailMainProps } from "~/t3team/workitem/t3team-buildWorkItemDetailMainProps";
+import { WorkItemDetailMain } from "~/t3team/workitem/t3team-WorkItemDetailMain";
 
+/**
+ * The work item detail route.
+ *
+ * Data resolution lives in `useWorkItemDetailViewModel`; this component is composition only —
+ * chrome, the content column, and the agent panel beside it.
+ */
 export function TicketDetailView({
   project,
   ticketId,
@@ -61,146 +48,96 @@ export function TicketDetailView({
   onRememberEmbeddedThread: (threadId: string) => void;
   onBack: () => void;
 }) {
-  const backend = useBackend();
-  const backendState = useBackendState();
-  const { addToChatFromRequest } = useAddToChat();
   const canGoBack = useCanGoBack();
-  const { tickets: projectTickets, lastCheckedAt: jiraLastCheckedAt } =
-    useProjectResources(project);
-  const ticketLookup = useMemo(() => buildProjectTicketLookup(projectTickets), [projectTickets]);
-  const canonicalTicketId = resolveCanonicalProjectTicketId(ticketId, ticketLookup) ?? ticketId;
-  const ticket = ticketLookup.get(ticketId);
-  const resourceId = ticket?.ref.id ?? canonicalTicketId;
-  const { snapshot, loading, error, reload } = useTicketDetail(project, resourceId);
-  const issueType =
-    ticket?.issueType ?? ticket?.ref.type ?? readIssueTypeFromSnapshotFields(snapshot?.fields);
-  const issueTypeIconUrl =
-    ticket?.issueTypeIconUrl ??
-    ticket?.ref.issueTypeIconUrl ??
-    readIssueTypeIconUrlFromSnapshotFields(snapshot?.fields);
-  const displayId = ticket?.ref.displayId ?? snapshot?.ref.displayId ?? ticketId;
-  const title = ticket?.ref.title ?? snapshot?.ref.title ?? "Ticket";
-  const { relatedTickets, ticketsWithRelated } = useRelatedTickets({
+  const { showAgentContextMenu } = useAgentContext();
+  const view = useWorkItemDetailViewModel({
     project,
-    snapshot,
-    projectTickets,
-    currentTicketId: ticket?.id ?? ticketId,
-    currentDisplayId: displayId,
-  });
-  const relationshipKeys = useMemo(() => extractRelationshipKeys(snapshot?.raw), [snapshot?.raw]);
-  const status = ticket?.status ?? (snapshot?.fields.status as string | undefined) ?? "Unknown";
-  const priority =
-    ticket?.priority ?? (snapshot?.fields.priority as string | undefined) ?? undefined;
-  const assignee =
-    ticket?.assignee ?? (snapshot?.fields.assignee as string | undefined) ?? undefined;
-  const ticketUrl = ticket?.ref.url || snapshot?.ref.url || undefined;
-  const htmlBaseUrl = useMemo(() => resolveHtmlBaseUrl(ticketUrl), [ticketUrl]);
-  const descriptionMarkdown =
-    (snapshot?.fields.description as string | undefined) ?? snapshot?.text;
-  const descriptionHtml = snapshot?.fields.descriptionHtml as string | undefined;
-  const attachments = asRecordArray(snapshot?.fields.attachments);
-  const sortedComments = useMemo(
-    () => sortCommentItems(asRecordArray(snapshot?.fields.commentItems)),
-    [snapshot?.fields.commentItems],
-  );
-  const issueThreads = projectThreads.filter(
-    (thread) =>
-      resolveCanonicalProjectTicketId(thread.ticketId, ticketLookup) === canonicalTicketId,
-  );
-  const activeThread = activeThreadId
-    ? (projectThreads.find((candidate) => candidate.id === activeThreadId) ?? null)
-    : null;
-  const githubActivity = useProjectGitHubActivity({
-    project,
-    linkedRepositoryUrls: readLinkedRepositoryUrlsFromProject(project),
-    enabled: true,
-  });
-  const matchedGitHubActivityItems = githubActivity.activityByWorkItem.get(displayId) ?? [];
-
-  useEffect(() => {
-    if (!backend || projectTickets.length === 0) {
-      return;
-    }
-
-    void drainQueuedWorkItemContextSyncRequests({
-      addToChatFromRequest,
-      backend,
-      project,
-      projectTickets,
-    });
-  }, [addToChatFromRequest, backend, project, projectTickets]);
-
-  useTicketDetailEmbeddedThreadEffects({
-    activeThread,
-    addToChatFromRequest,
-    backend,
-    githubActivityItems: matchedGitHubActivityItems,
+    ticketId,
+    ...(activeThreadId !== undefined ? { activeThreadId } : {}),
+    projectThreads,
     onRememberEmbeddedThread,
-    project,
-    projectTickets,
-    ticket,
   });
 
   const handleBack = useCallback(() => {
     navigateBackWithFallback({ canGoBack, onFallback: onBack });
   }, [canGoBack, onBack]);
 
+  const handleOpenTicket = useCallback(
+    (nextTicketId: string) => onOpenTicket(project.id, nextTicketId),
+    [onOpenTicket, project.id],
+  );
+
+  // Same resolution `buildTicketDetailKickoffAsideProps` below uses for its own `resolvedTicketId` —
+  // kept in sync rather than recomputed differently, since both target the same ticket.
+  const resolvedTicketId = view.ticket?.id ?? view.canonicalTicketId;
+  const descriptionDrafts = useWorkItemDrafts({ issueIdOrKey: view.fieldModel.key });
+  // `view.title` falls back to the literal string "Ticket" once nothing has loaded — real ticket/
+  // snapshot data or nothing, never that fallback, so the workflow's `summary` input never claims
+  // a title the work item doesn't have.
+  const realTicketTitle = view.ticket?.ref.title ?? view.snapshot?.ref.title;
+  // No backend, no thread id, no kickoff callback: the control preselects the rewrite on the aside's
+  // composer and can therefore not launch anything by itself. The composer owns the launch.
+  const descriptionAction = (
+    <WorkItemAgentRewriteControl
+      projectId={project.id}
+      ticketId={resolvedTicketId}
+      issueIdOrKey={view.fieldModel.key}
+      {...(project.workspace?.rootPath ? { projectWorkspaceRoot: project.workspace.rootPath } : {})}
+      {...(view.fieldModel.descriptionText
+        ? { descriptionText: view.fieldModel.descriptionText }
+        : {})}
+      {...(realTicketTitle ? { summary: realTicketTitle } : {})}
+      hasPendingDescriptionDraft={descriptionDrafts.description !== undefined}
+      hasLoadedWorkItem={Boolean(view.ticket) || Boolean(view.snapshot)}
+    />
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <TicketDetailHeader
-        displayId={displayId}
-        status={status}
-        title={title}
-        issueType={issueType}
-        issueTypeIconUrl={issueTypeIconUrl}
+      <WorkItemDetailHeader
+        breadcrumb={{
+          projectTitle: project.title,
+          itemKey: view.displayId,
+          ...(view.fieldModel.parent ? { parent: view.fieldModel.parent } : {}),
+          onOpenParent: handleOpenTicket,
+        }}
+        {...(view.ticketUrl ? { externalUrl: view.ticketUrl } : {})}
+        isRefreshing={view.loading}
         shouldInsetDesktopHeader={shouldInsetDesktopHeader}
         onBack={handleBack}
-        onReload={() => void reload()}
-        ticketUrl={ticketUrl}
+        onRefresh={() => void view.reload()}
       />
 
       <TicketDetailBody
         projectId={project.id}
         ticketId={ticketId}
         activeThreadId={activeThreadId}
-        mainColumnProps={buildTicketDetailMainColumnProps({
-          snapshot,
-          displayId,
-          title,
-          status,
-          priority,
-          assignee,
-          project,
-          projectTickets: ticketsWithRelated,
-          resolvedTicketId: ticket?.id ?? canonicalTicketId,
-          ticketParentId: ticket?.parentId,
-          loading,
-          error,
-          descriptionMarkdown,
-          descriptionHtml,
-          htmlBaseUrl,
-          attachments,
-          sortedComments,
-          jiraLastCheckedAt,
-          matchedGitHubActivityItems,
-          githubActivity,
-          onOpenTicket,
-        })}
+        main={
+          <WorkItemDetailMain
+            {...buildWorkItemDetailMainProps({
+              view,
+              project,
+              onOpenTicket: handleOpenTicket,
+              showAgentContextMenu,
+              descriptionAction,
+            })}
+          />
+        }
         kickoffAsideProps={buildTicketDetailKickoffAsideProps({
           project,
-          displayId,
-          title,
-          ticket,
-          status,
-          relationshipKeys,
-          relatedTickets,
-          issueType,
-          priority,
-          issueThreads,
-          resolvedTicketId: ticket?.id ?? canonicalTicketId,
-          activeThread,
-          matchedGitHubActivityItems,
-          backendState,
+          displayId: view.displayId,
+          title: view.title,
+          ticket: view.ticket,
+          status: view.status,
+          relationshipKeys: view.relationshipKeys,
+          relatedTickets: view.relatedTickets,
+          issueType: view.issueType,
+          priority: view.priority,
+          issueThreads: view.issueThreads,
+          resolvedTicketId,
+          activeThread: view.activeThread,
+          matchedGitHubActivityItems: view.matchedGitHubActivityItems,
+          backendState: view.backendState,
           onOpenThread,
           onOpenFullThread,
           onThreadKickoffConsumed,

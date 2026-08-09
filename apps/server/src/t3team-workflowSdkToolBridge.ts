@@ -15,7 +15,7 @@ import type {
   ValidateRecipeToolResult,
 } from "@t3team/sdk/tools/t3teamRecipes";
 import type { RunWorkflowToolResult, WorkflowRunIntent } from "@t3team/sdk/tools/t3teamWorkflow";
-// Importing the tool modules registers `t3team.recipe.*` / `t3team.workflow.run` in the SDK
+// Importing the tool modules registers `t3team.recipe.*` / `t3team.orchestration.run` in the SDK
 // tool registry.
 import "@t3team/sdk/tools/t3teamRecipes";
 import "@t3team/sdk/tools/t3teamWorkflow";
@@ -98,7 +98,7 @@ export function executeWorkflowSdkThreadRename(input: {
   });
 }
 
-/** Execute `t3team.workflow.run` through the SDK tool registry (arg decode + result check). */
+/** Execute `t3team.orchestration.run` through the SDK tool registry (arg decode + result check). */
 export function executeWorkflowSdkWorkflowRunTool(input: {
   readonly toolArgs: unknown;
   readonly runWorkflow: (args: {
@@ -111,7 +111,7 @@ export function executeWorkflowSdkWorkflowRunTool(input: {
   return Effect.tryPromise({
     try: () =>
       executeRegisteredTool(
-        "t3team.workflow.run",
+        "t3team.orchestration.run",
         input.toolArgs,
         baseToolHandlerCtx({
           renameThread: unsupportedRenameThread,
@@ -130,7 +130,8 @@ export function executeWorkflowSdkRecipeTool(input: {
   readonly toolArgs: unknown;
   readonly listRecipes: () => Effect.Effect<ListRecipesToolResult, WorkflowSdkBridgeError>;
   readonly validateRecipe: (args: {
-    readonly path: string;
+    readonly path?: string;
+    readonly source?: string;
   }) => Effect.Effect<ValidateRecipeToolResult, WorkflowSdkBridgeError>;
 }): Effect.Effect<WorkflowSdkRecipeToolResult, WorkflowSdkBridgeError> {
   return Effect.tryPromise({

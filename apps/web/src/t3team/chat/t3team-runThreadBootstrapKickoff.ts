@@ -1,10 +1,8 @@
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import {
-  dispatchThreadBootstrapCreate,
-  isDuplicateThreadCreateError,
-} from "~/t3team/chat/t3team-runThreadBootstrapHelpers";
+import { isDuplicateThreadCreateError } from "~/t3team/chat/t3team-duplicateThreadCreateError";
+import { dispatchThreadBootstrapCreate } from "~/t3team/chat/t3team-runThreadBootstrapHelpers";
 import {
   appendContextAttachmentsToPrompt,
   prepareThreadContextAttachments,
@@ -101,6 +99,30 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
     title: input.title,
   });
 
+  // The durable thread comes FIRST on the workflow path.
+  //
+  // Everything between here and the launch — the context-attachment sync, the tool-context sync — is
+  // enrichment, and all of it talks to the network. Creating the thread behind those meant one slow
+  // or never-settling attachment sync left the user on "Creating conversation…" with no thread, no
+  // run, and nothing thrown: the two calls sit before the create, so a hang there is indistinguishable
+  // from a launch that is merely slow. On the turn path there is nothing to hoist — the create rides
+  // inside `thread.turn.start`'s own `bootstrap.createThread`.
+  if (hasWorkflowLaunchPath(input.kickoffWorkflow)) {
+    await dispatchThreadBootstrapCreateWithRecovery({
+      backend: input.backend,
+      action: input.action,
+      state: input.state,
+      environmentId: input.environmentId,
+      threadId: input.threadId,
+      canonicalProjectId: input.canonicalProjectId,
+      title: input.title,
+      kickoffModelSelection: input.kickoffModelSelection,
+      kickoffRuntimeMode: input.kickoffRuntimeMode,
+      kickoffInteractionMode: input.kickoffInteractionMode,
+      createdAt: input.createdAt,
+    });
+  }
+
   const preparedContextAttachments = await prepareThreadContextAttachments({
     threadId: input.threadId,
     backend: input.backend,
@@ -118,20 +140,6 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
   });
 
   if (hasWorkflowLaunchPath(input.kickoffWorkflow)) {
-    await dispatchThreadBootstrapCreateWithRecovery({
-      backend: input.backend,
-      action: input.action,
-      state: input.state,
-      environmentId: input.environmentId,
-      threadId: input.threadId,
-      canonicalProjectId: input.canonicalProjectId,
-      title: input.title,
-      kickoffModelSelection: input.kickoffModelSelection,
-      kickoffRuntimeMode: input.kickoffRuntimeMode,
-      kickoffInteractionMode: input.kickoffInteractionMode,
-      createdAt: input.createdAt,
-    });
-
     // Claim the launch so a single Quick Start send can't spawn two runs (the composer's
     // turn-start override can reach launchRecipeWorkflow for the same thread). First claim wins.
     if (tryClaimRecipeWorkflowLaunch(input.threadId)) {

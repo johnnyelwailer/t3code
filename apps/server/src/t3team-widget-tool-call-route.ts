@@ -22,7 +22,7 @@ const TOOL_CALL_TIMEOUT_MILLIS = 30_000;
 const MAX_ARGS_BYTES = 32 * 1024;
 
 const decodeBody = Schema.decodeUnknownEffect(T3TeamWidgetToolCallRequest);
-const encodeArgs = Schema.encodeSync(Schema.UnknownFromJsonString);
+const encodeArgs = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 const denied = (error: string) => okJson({ ok: false, error });
 

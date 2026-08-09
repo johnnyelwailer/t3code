@@ -29,6 +29,7 @@ import {
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import { T3TeamShapeCapabilityChips } from "~/t3team/chat/t3team-messageShapeCardCapabilities";
 import type { ChatMessage } from "~/types";
 
 export function getT3TeamWorkflowShapeAttachment(
@@ -95,6 +96,7 @@ export function T3TeamShapeStepRow({
   leading,
   trailing,
   hideKindLabel = false,
+  muted = false,
 }: {
   step: ProjectRecipeWorkflowShapePayload["steps"][number];
   /** Optional live-status slot (spinner/check/clock/error) rendered before the kind icon. */
@@ -103,6 +105,8 @@ export function T3TeamShapeStepRow({
   trailing?: ReactNode;
   /** Live metadata may replace the redundant kind badge to keep the row compact. */
   hideKindLabel?: boolean;
+  /** A step the settled run never reached — struck through, so the plan reads as history. */
+  muted?: boolean;
 }) {
   const meta = KIND_META[step.kind];
   return (
@@ -114,7 +118,14 @@ export function T3TeamShapeStepRow({
       >
         <meta.Icon className="size-3.5" />
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">{step.label}</span>
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate text-sm",
+          muted ? "text-muted-foreground/60 line-through" : "text-foreground/90",
+        )}
+      >
+        {step.label}
+      </span>
       {trailing}
       {!hideKindLabel && step.kind !== "agent" ? (
         <span
@@ -143,6 +154,7 @@ export function T3TeamWorkflowShapeCard({ shape }: { shape: ProjectRecipeWorkflo
       {shape.description ? (
         <p className="text-sm leading-6 text-muted-foreground">{shape.description}</p>
       ) : null}
+      <T3TeamShapeCapabilityChips capabilities={shape.capabilities} />
 
       {shape.steps.length > 0 ? (
         <div className="mt-3 space-y-3">

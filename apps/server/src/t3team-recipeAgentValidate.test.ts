@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import { describe, expect, it } from "vite-plus/test";
 
 import { validateProjectRecipeWorkflowForAgent } from "./t3team-recipeAgentValidate.ts";
+import { validateInlineWorkflowSourceForAgent } from "./t3team-recipeAgentValidateStatic.ts";
 
 // Temp workspaces live under `__fixtures__` (not the OS tmpdir) so a typed `recipe.ts`'s
 // `import("@t3team/sdk")` resolves via the monorepo's node_modules chain, the same way
@@ -141,7 +142,7 @@ describe("validateProjectRecipeWorkflowForAgent", () => {
           expect(result.errors).toHaveLength(1);
           expect(result.errors[0]).toMatchObject({
             phase: "discover",
-            message: expect.stringContaining("Paths must stay inside the project workspace root."),
+            message: expect.stringContaining("Paths must stay inside the project workspace root"),
           });
         }).pipe(Effect.provide(NodeServices.layer)),
       ),
@@ -163,7 +164,7 @@ describe("validateProjectRecipeWorkflowForAgent", () => {
           expect(result.errors).toHaveLength(1);
           expect(result.errors[0]).toMatchObject({
             phase: "discover",
-            message: expect.stringContaining("Paths must stay inside the project workspace root."),
+            message: expect.stringContaining("Paths must stay inside the project workspace root"),
           });
         }).pipe(Effect.provide(NodeServices.layer)),
       ),
@@ -285,5 +286,97 @@ describe("validateProjectRecipeWorkflowForAgent", () => {
         }).pipe(Effect.provide(NodeServices.layer)),
       ),
     );
+  });
+
+  // A prompt-only recipe (definePrompt) has no workflow, so validate must say that plainly rather
+  // than report a missing file for a path that was never supposed to exist.
+  it("reports that a prompt-only recipe directory has no workflow to validate", async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const workspaceRoot = yield* makeTempWorkspace();
+          yield* writeWorkspaceFile({
+            workspaceRoot,
+            relativePath: ".t3team/recipes/prompt-dir/prompt.md",
+            content: "Do the thing.",
+          });
+          yield* writeWorkspaceFile({
+            workspaceRoot,
+            relativePath: ".t3team/recipes/prompt-dir/recipe.ts",
+            content: [
+              `import { definePrompt, defineRecipe } from "@t3team/sdk";`,
+              `export default defineRecipe({`,
+              `  id: "prompt-dir",`,
+              `  version: "0.1.0",`,
+              `  scope: "project",`,
+              `  title: "Prompt dir recipe",`,
+              `  shortDescription: "A prompt-only recipe directory.",`,
+              `  surfaces: ["project.dashboard.backlog"],`,
+              `  defaultAction: definePrompt("./prompt.md"),`,
+              `});`,
+            ].join("\n"),
+          });
+
+          const result = yield* validateProjectRecipeWorkflowForAgent({
+            workspaceRoot,
+            path: ".t3team/recipes/prompt-dir",
+          });
+
+          expect(result.ok).toBe(false);
+          expect(result.errors[0]).toMatchObject({
+            phase: "discover",
+            message: expect.stringContaining("prompt action"),
+          });
+        }).pipe(Effect.provide(NodeServices.layer)),
+      ),
+    );
+  });
+});
+
+describe("validateInlineWorkflowSourceForAgent", () => {
+  it("validates a well-formed inline workflow source with meta and shape populated", () => {
+    const result = validateInlineWorkflowSourceForAgent(VALID_WORKFLOW);
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.workflowPath).toBe("<inline>");
+    expect(result.meta).toMatchObject({
+      name: "agent-validate.valid",
+      description: "Summarize a PR title.",
+      capabilities: ["user"],
+      inputFields: ["prTitle"],
+      outputFields: ["summary"],
+      phases: [{ title: "Review" }],
+    });
+    expect(result.shape).toMatchObject({
+      name: "agent-validate.valid",
+      phases: [{ title: "Review" }],
+      steps: [{ phase: "Review", kind: "agent" }],
+    });
+  });
+
+  it("bounds hostile meta-head execution instead of hanging (vm timeout)", () => {
+    const source = ["while (true) {}", 'export const meta = { name: "hostile" };'].join("\n");
+
+    // @effect-diagnostics-next-line globalDate:off - Asserts a REAL vm timeout bounds hostile source; a test Clock would defeat the assertion.
+    const start = Date.now();
+    const result = validateInlineWorkflowSourceForAgent(source);
+    // @effect-diagnostics-next-line globalDate:off - Asserts a REAL vm timeout bounds hostile source; a test Clock would defeat the assertion.
+    const elapsed = Date.now() - start;
+
+    expect(result.ok).toBe(false);
+    expect(elapsed).toBeLessThan(10_000);
+    expect(result.errors.some((error) => error.phase === "meta")).toBe(true);
+  });
+
+  it("reports a structured 'meta' issue for inline source with garbage/missing meta", () => {
+    const result = validateInlineWorkflowSourceForAgent(BROKEN_META_WORKFLOW);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({
+      phase: "meta",
+      message: expect.stringContaining("meta.name"),
+    });
   });
 });

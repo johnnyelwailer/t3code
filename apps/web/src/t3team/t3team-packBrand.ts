@@ -22,7 +22,10 @@ export function applyT3TeamPackFavicon(markDataUrl: string | undefined): void {
     (link) => link.id !== FAVICON_ID,
   );
   if (markDataUrl) {
-    replacedFavicons ??= links.map((element) => ({ element, href: element.getAttribute("href") ?? "" }));
+    replacedFavicons ??= links.map((element) => ({
+      element,
+      href: element.getAttribute("href") ?? "",
+    }));
     for (const link of links) link.remove();
     let link = document.getElementById(FAVICON_ID) as HTMLLinkElement | null;
     link ??= Object.assign(document.createElement("link"), { id: FAVICON_ID, rel: "icon" });

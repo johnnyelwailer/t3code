@@ -1,6 +1,10 @@
 import type { T3TeamActionRecipeContext } from "@t3tools/project-context";
 import type { T3TeamToolId } from "@t3tools/project-context/t3teamToolCatalog";
-import type { ProjectRecipeKickoffProgram, RecipeSurface } from "@t3tools/project-recipes";
+import type {
+  ProjectRecipeKickoffProgram,
+  ProjectRecipeLaunchSource,
+  RecipeSurface,
+} from "@t3tools/project-recipes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 
 export type T3TeamThreadToolId = T3TeamToolId;
@@ -15,7 +19,7 @@ export type T3TeamKickoffWorkflow = {
   readonly kickoff?: ProjectRecipeKickoffProgram;
   readonly title: string;
   readonly description: string;
-  readonly source: "bundled" | "project-local";
+  readonly source: ProjectRecipeLaunchSource;
   readonly surface: RecipeSurface;
   readonly reason?: string;
   readonly recipePath?: string;
@@ -125,15 +129,29 @@ export type ProjectBacklogSubtaskCreateInput = {
   readonly summary: string;
   readonly description?: string;
   readonly estimateHours?: number;
+  readonly issueTypeId?: string;
+  readonly assigneeAccountId?: string | null;
 };
 
 export type ViewState =
+  // "My work" across every bound project, reached from the Work lens when the sidebar's project
+  // selector is on "All projects". Project-less by definition — it is the one Team surface whose
+  // subject is the viewer rather than a project.
+  | { type: "all-my-work" }
   | { type: "dashboard"; projectId: string; embeddedThreadId?: string }
   | { type: "ticket"; projectId: string; ticketId: string; embeddedThreadId?: string }
   | {
       type: "thread";
       projectId: string;
       threadId: string;
+      embeddedThreadId?: string;
+    }
+  // A draft thread is not a server thread yet, so it has no threadId and its
+  // project is derived from the composer draft store rather than the route.
+  | {
+      type: "draft";
+      draftId: string;
+      projectId?: string;
       embeddedThreadId?: string;
     };
 
@@ -146,7 +164,31 @@ export function readActiveThreadIdFromView(view: ViewState | null): string | nul
     return view.threadId;
   }
 
+  if (view.type === "all-my-work") {
+    return null;
+  }
+
   return view.embeddedThreadId ?? null;
+}
+
+/**
+ * The project a view is about, or `null` when it is about none.
+ *
+ * Most views carry a `projectId`, but not all: a draft's project lives in the composer draft
+ * store, and `all-my-work` is deliberately project-less (its subject is the viewer). Reaching for
+ * `view.projectId` directly is therefore a type error by design — go through this instead, so a
+ * future project-less view forces the same decision at every call site rather than none of them.
+ */
+export function readProjectIdFromView(view: ViewState | null): string | null {
+  if (!view) {
+    return null;
+  }
+
+  if (view.type === "all-my-work") {
+    return null;
+  }
+
+  return view.projectId ?? null;
 }
 
 export type ProjectSortOrder = "updated_at" | "created_at";

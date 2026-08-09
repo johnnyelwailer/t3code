@@ -3,7 +3,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { buildExistingProjectThreadViewState } from "~/t3team/t3team-projectThreadViewState";
 import { upsertProjectThreadLocalState } from "~/t3team/t3team-threadToolContext";
-import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
+import { readProjectIdFromView, type ProjectThread, type ViewState } from "~/t3team/t3team-types";
 import { isWorkProject } from "~/t3team/t3team-isWorkProject";
 
 import { persistStoredProjects } from "./t3team-projectStorePersistence";
@@ -53,7 +53,7 @@ export function useProjectStoreActions(input: {
       });
       setThreads((prev) => prev.filter((thread) => thread.projectId !== id));
       setSelectedProjectId((prev) => (prev === id ? null : prev));
-      setView((prev) => (prev && prev.projectId === id ? null : prev));
+      setView((prev) => (readProjectIdFromView(prev) === id ? null : prev));
       setExpandedProjectIds((prev) => {
         const next = new Set(prev);
         next.delete(id);

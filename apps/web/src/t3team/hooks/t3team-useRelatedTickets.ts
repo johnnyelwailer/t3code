@@ -86,7 +86,7 @@ export function useRelatedTickets({
         return;
       }
 
-      const loaded: ProjectTicket[] = [];
+      const fromCache: ProjectTicket[] = [];
       const unresolvedKeys: string[] = [];
 
       for (const key of missingKeys) {
@@ -98,14 +98,16 @@ export function useRelatedTickets({
           unresolvedKeys.push(key);
           continue;
         }
-        loaded.push(snapshotToProjectTicket(project.id, cachedSnapshot));
+        fromCache.push(
+          snapshotToProjectTicket(project.id, cachedSnapshot, project.source.accountId),
+        );
       }
 
       if (!cancelled) {
-        setRelatedTickets(loaded);
+        setRelatedTickets(fromCache);
       }
 
-      await Promise.all(
+      const fetched = await Promise.all(
         unresolvedKeys.map(async (key) => {
           try {
             const result = await fetchAtlassianResourceSnapshot({
@@ -113,15 +115,21 @@ export function useRelatedTickets({
               project,
               key,
             });
-            loaded.push(snapshotToProjectTicket(project.id, result));
+            return snapshotToProjectTicket(project.id, result, project.source.accountId);
           } catch {
             // Ignore unavailable keys; unresolved entries are still rendered by key.
+            return null;
           }
         }),
       );
 
-      if (!cancelled) {
-        setRelatedTickets(loaded);
+      // A NEW array, never the one already handed to `setRelatedTickets` above.
+      // Mutating that array and setting it again is an identity no-op: React
+      // bails out on `Object.is`, so the fetched tickets never reached the view
+      // until some unrelated re-render happened to re-run this effect.
+      const resolved = fetched.filter((ticket) => ticket !== null);
+      if (!cancelled && resolved.length > 0) {
+        setRelatedTickets([...fromCache, ...resolved]);
       }
     };
 

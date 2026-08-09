@@ -5,7 +5,6 @@ import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExten
 import {
   findActiveWorkflowInputMessageId,
   getT3TeamWorkflowDecisionAttachment,
-  T3TeamWorkflowDecisionCard,
 } from "~/t3team/chat/t3team-messageDecisionCard";
 import {
   getT3TeamRenderableAttachments,
@@ -15,42 +14,12 @@ import {
   T3TeamWorkflowCardBody,
 } from "~/t3team/chat/t3team-messageExtViews";
 import { T3TeamWidgetBlock } from "~/t3team/chat/t3team-widgetBlock";
-import {
-  getT3TeamWorkflowShapeAttachment,
-  T3TeamWorkflowShapeCard,
-} from "~/t3team/chat/t3team-messageShapeCard";
-import { T3TeamWorkflowShapeLiveCard } from "~/t3team/chat/t3team-messageShapeCardLive";
+import { getT3TeamWorkflowShapeAttachment } from "~/t3team/chat/t3team-messageShapeCard";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
-import { useMergedThreads } from "~/t3team/t3team-mergedThreads";
-
-const TERMINAL_WORKFLOW_STATUSES = new Set(["completed", "failed", "cancelled"]);
-
-function workflowDecisionUnavailableMessage(
-  decision: ReturnType<typeof getT3TeamWorkflowDecisionAttachment>,
-  workflowRunStatus: import("@t3tools/contracts").OrchestrationWorkflowRunStatus | undefined,
-  workflowRunProgress: T3TeamWorkflowRunProgress | undefined,
-): string | undefined {
-  if (!decision) {
-    return undefined;
-  }
-  const historicalTerminalPhase = workflowRunProgress?.run?.phase;
-  const currentRunTerminalStatus =
-    workflowRunStatus !== undefined &&
-    workflowRunStatus.runId === decision.workflowRunId &&
-    TERMINAL_WORKFLOW_STATUSES.has(workflowRunStatus.status)
-      ? workflowRunStatus.status
-      : undefined;
-  const terminalStatus =
-    historicalTerminalPhase !== undefined && TERMINAL_WORKFLOW_STATUSES.has(historicalTerminalPhase)
-      ? historicalTerminalPhase
-      : currentRunTerminalStatus;
-  if (terminalStatus === undefined) {
-    return undefined;
-  }
-  return terminalStatus === "cancelled"
-    ? "This question is no longer available because the workflow was stopped."
-    : "This question is no longer available because the workflow has ended.";
-}
+import { useOpenT3TeamWorkItemDraft } from "~/t3team/chat/t3team-useOpenWorkItemDraft";
+import { T3TeamSystemTimelineShapeRow } from "~/t3team/chat/t3team-SystemTimelineShapeRow";
+import { T3TeamSystemTimelineDecisionRow } from "~/t3team/chat/t3team-SystemTimelineDecisionRow";
+import { workflowDecisionUnavailableMessage } from "~/t3team/chat/t3team-workflowDecisionAvailability";
 
 export function T3TeamSystemTimelineRow(props: {
   readonly message: ChatMessage;
@@ -64,12 +33,7 @@ export function T3TeamSystemTimelineRow(props: {
   readonly onControlWorkflow?: ChatViewT3TeamExtensionProps["onControlWorkflow"];
   readonly onOpenThread?: ChatViewT3TeamExtensionProps["onOpenThread"];
 }) {
-  const mergedThreads = useMergedThreads();
-  const childStatuses = Object.fromEntries(
-    mergedThreads.flatMap((thread) =>
-      thread.childStatus ? [[thread.id, thread.childStatus] as const] : [],
-    ),
-  );
+  const openWorkItemDraft = useOpenT3TeamWorkItemDraft();
   const {
     message,
     threadRef,
@@ -92,10 +56,6 @@ export function T3TeamSystemTimelineRow(props: {
       : undefined,
   );
   const workflowShape = getT3TeamWorkflowShapeAttachment(message);
-  const workflowShapeProgress =
-    workflowShape?.workflowRunId !== undefined
-      ? (workflowStepRuns?.get(workflowShape.workflowRunId) ?? null)
-      : null;
   const genericAttachments = getT3TeamRenderableAttachments(message);
   const widgetAttachments = getT3TeamWidgetAttachments(message);
   const showMessageText =
@@ -105,67 +65,28 @@ export function T3TeamSystemTimelineRow(props: {
 
   if (workflowShape) {
     return (
-      <div className="max-w-[92%]">
-        {workflowShapeProgress ? (
-          <T3TeamWorkflowShapeLiveCard
-            shape={workflowShape}
-            progress={workflowShapeProgress}
-            {...(workflowRunStatus?.runId === workflowShape.workflowRunId
-              ? { workflowRunStatus }
-              : {})}
-            {...(onControlWorkflow ? { onControlWorkflow } : {})}
-            {...(onOpenThread ? { onOpenThread } : {})}
-            childStatuses={childStatuses}
-          />
-        ) : (
-          <T3TeamWorkflowShapeCard shape={workflowShape} />
-        )}
-      </div>
+      <T3TeamSystemTimelineShapeRow
+        workflowShape={workflowShape}
+        threadRef={threadRef}
+        {...(workflowStepRuns ? { workflowStepRuns } : {})}
+        {...(workflowRunStatus ? { workflowRunStatus } : {})}
+        {...(onControlWorkflow ? { onControlWorkflow } : {})}
+        {...(onOpenThread ? { onOpenThread } : {})}
+      />
     );
   }
 
   if (workflowDecision) {
     return (
-      <div className="flex max-w-[92%] flex-col items-start gap-2">
-        {workflowCard ? (
-          <T3TeamWorkflowCardBody
-            workflowCard={workflowCard}
-            {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
-          />
-        ) : null}
-        {widgetAttachments.map((attachment) => (
-          <T3TeamWidgetBlock
-            key={`t3team-widget:${attachment.widget.widgetId}`}
-            widget={attachment.widget}
-            threadRef={threadRef}
-          />
-        ))}
-        <T3TeamWorkflowDecisionCard
-          decision={workflowDecision}
-          active={
-            activeWorkflowInputMessageId === message.id && decisionUnavailableMessage === undefined
-          }
-          {...(decisionUnavailableMessage
-            ? { unavailableMessage: decisionUnavailableMessage }
-            : {})}
-          onChoose={
-            dispatchWorkflowDecision && threadRef
-              ? async ({ choice, value, correlationId }) => {
-                  await dispatchWorkflowDecision({
-                    threadId: threadRef.threadId,
-                    messageId: message.id,
-                    text: choice,
-                    value,
-                    correlationId,
-                  });
-                }
-              : undefined
-          }
-        />
-        {genericAttachments.length > 0 ? (
-          <T3TeamMessageAttachmentList attachments={genericAttachments} />
-        ) : null}
-      </div>
+      <T3TeamSystemTimelineDecisionRow
+        message={message}
+        threadRef={threadRef}
+        workflowDecision={workflowDecision}
+        activeWorkflowInputMessageId={activeWorkflowInputMessageId}
+        decisionUnavailableMessage={decisionUnavailableMessage}
+        {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
+        {...(dispatchWorkflowDecision ? { dispatchWorkflowDecision } : {})}
+      />
     );
   }
 
@@ -250,7 +171,11 @@ export function T3TeamSystemTimelineRow(props: {
           </div>
         ))}
         {genericAttachments.length > 0 ? (
-          <T3TeamMessageAttachmentList attachments={genericAttachments} />
+          <T3TeamMessageAttachmentList
+            attachments={genericAttachments}
+            {...(message.text ? { fallbackText: message.text } : {})}
+            onOpenWorkItemDraft={openWorkItemDraft}
+          />
         ) : null}
       </div>
     </div>

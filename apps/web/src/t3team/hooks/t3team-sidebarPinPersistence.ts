@@ -5,6 +5,10 @@ import {
 } from "@t3tools/contracts";
 
 import { readLocalApi } from "~/localApi";
+import {
+  readPrimaryServerSettings,
+  updatePrimaryServerSettings,
+} from "~/t3team/hooks/t3team-serverSettingsAccess";
 import type { T3TeamSidebarPinnedItem } from "~/t3team/t3team-sidebarPinningTypes";
 
 const SIDEBAR_PIN_PERSISTENCE_ERROR_SCOPE = "[SIDEBAR_PINS]";
@@ -49,19 +53,18 @@ export function readStoredSidebarPinsFromServerSettings(
 }
 
 export async function hydrateStoredSidebarPins(): Promise<T3TeamSidebarPinnedItem[]> {
-  const localApi = readLocalApi();
-  if (!localApi) {
+  const serverSettings = readPrimaryServerSettings();
+  if (!serverSettings) {
     return [];
   }
 
   try {
-    const serverSettings = await localApi.server.getSettings();
     const pinnedItems = readStoredSidebarPinsFromServerSettings(serverSettings);
     const nextJson = encodePinnedItems(pinnedItems);
     const currentJson = serverSettings.t3teamStoredSidebarPinsJson ?? "";
 
     if (currentJson !== nextJson && (currentJson.length > 0 || pinnedItems.length > 0)) {
-      await localApi.server.updateSettings({
+      await updatePrimaryServerSettings({
         t3teamStoredSidebarPinsJson: nextJson,
       });
     }
@@ -81,10 +84,11 @@ export async function migrateLegacyStoredSidebarPinsToServer(): Promise<
   }
 
   try {
-    const [serverSettings, clientSettings] = await Promise.all([
-      localApi.server.getSettings(),
-      localApi.persistence.getClientSettings(),
-    ]);
+    const serverSettings = readPrimaryServerSettings();
+    if (!serverSettings) {
+      return null;
+    }
+    const clientSettings = await localApi.persistence.getClientSettings();
     const serverPinnedItems = readStoredSidebarPinsFromServerSettings(serverSettings);
     if (
       serverPinnedItems.length > 0 ||
@@ -99,7 +103,7 @@ export async function migrateLegacyStoredSidebarPinsToServer(): Promise<
     }
 
     const nextJson = encodePinnedItems(legacyPinnedItems);
-    await localApi.server.updateSettings({
+    await updatePrimaryServerSettings({
       t3teamStoredSidebarPinsJson: nextJson,
     });
 
@@ -120,16 +124,11 @@ export async function migrateLegacyStoredSidebarPinsToServer(): Promise<
 let persistStoredSidebarPinsQueue: Promise<void> = Promise.resolve();
 
 export function persistStoredSidebarPins(items: ReadonlyArray<T3TeamSidebarPinnedItem>): void {
-  const localApi = readLocalApi();
-  if (!localApi) {
-    return;
-  }
-
   const nextJson = encodePinnedItems(items);
   persistStoredSidebarPinsQueue = persistStoredSidebarPinsQueue
     .catch(() => undefined)
     .then(async () => {
-      await localApi.server.updateSettings({ t3teamStoredSidebarPinsJson: nextJson });
+      await updatePrimaryServerSettings({ t3teamStoredSidebarPinsJson: nextJson });
     })
     .catch((error) => {
       console.error(`${SIDEBAR_PIN_PERSISTENCE_ERROR_SCOPE} persist failed`, error);

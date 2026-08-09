@@ -76,7 +76,6 @@ describe("createTicketKickoffThread", () => {
     const onOpenTicket = vi.fn();
 
     await createTicketKickoffThread({
-      addToChatFromRequest: vi.fn(),
       backend: null as never,
       onOpenTicket,
       store: {
@@ -140,8 +139,7 @@ describe("createTicketKickoffThread", () => {
       workspace: { rootPath: "/tmp/project-one" },
     } as never;
 
-    await createTicketKickoffThread({
-      addToChatFromRequest,
+    createTicketKickoffThread({
       backend,
       onOpenTicket: vi.fn(),
       store: {
@@ -212,12 +210,10 @@ describe("createTicketKickoffThread", () => {
     expect(readQueuedWorkItemContextSyncRequests()).toHaveLength(0);
   });
 
-  it("queues generated ticket context directly on the created kickoff thread", async () => {
+  it("does not attach the work item itself — the ticket aside's auto-attach owns that", async () => {
     const thread = createProjectThread();
-    const addToChatFromRequest = vi.fn(async () => undefined);
 
-    await createTicketKickoffThread({
-      addToChatFromRequest,
+    createTicketKickoffThread({
       backend: {} as never,
       onOpenTicket: vi.fn(),
       store: {
@@ -256,14 +252,9 @@ describe("createTicketKickoffThread", () => {
       },
     });
 
-    expect(addToChatFromRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        projectId: "project-1",
-        targetLabel: "PROJ-9 Investigate context sync",
-        projectWorkspaceRoot: "/tmp/project-one",
-      }),
-      { type: "thread", threadId: "thread-1" },
-    );
+    // The work item IS loaded, so nothing is queued for later either: the only attach path is the
+    // ticket aside's auto-attach, which carries the identity dedupeKey this one lacked.
+    expect(readQueuedWorkItemContextSyncRequests()).toHaveLength(0);
   });
 });
 

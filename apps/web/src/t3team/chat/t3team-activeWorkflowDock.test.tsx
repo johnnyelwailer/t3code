@@ -178,7 +178,9 @@ describe("active workflow dock", () => {
 
     expect(container.textContent).toContain("First workflow");
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[aria-label="Next active workflow"]')!.click();
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Next active orchestration"]')!
+        .click();
     });
     expect(container.textContent).toContain("Second workflow");
     await act(async () => {

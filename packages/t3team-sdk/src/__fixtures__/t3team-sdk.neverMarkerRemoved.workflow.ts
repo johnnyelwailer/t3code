@@ -2,6 +2,7 @@
 // `freshTicket` call removed. Resuming a base-run journal with this body lands `farewell`
 // on the seq the never-marker occupies → ReplayDriftError instead of a silent re-execute.
 import { Schema } from "effect";
+import { getArgs, getScripts } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ name: Schema.String });
 
@@ -15,11 +16,17 @@ export const meta = {
   description: "greet (journaled) → farewell (journaled); freshTicket removed (drift fixture).",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["script"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const scripts = getScripts();
 
-const greeting = await scripts.greet({ name: input.name });
-const farewell = await scripts.farewell({ name: input.name });
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { greeting: greeting.text, farewell: farewell.text };
+  const greeting = await scripts.greet({ name: input.name });
+  const farewell = await scripts.farewell({ name: input.name });
+
+  return { greeting: greeting.text, farewell: farewell.text };
+}

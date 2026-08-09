@@ -7,6 +7,8 @@ export type {
   T3TeamAtlassianBacklogCreateSubtaskInput,
   T3TeamAtlassianBacklogEstimateUpdateInput,
   T3TeamAtlassianBacklogInput,
+  T3TeamAtlassianChildIssueTypesInput,
+  T3TeamAtlassianIssueDescriptionUpdateInput,
   T3TeamAtlassianIssueStatusUpdateInput,
   T3TeamAtlassianBacklogResponse,
 } from "./t3team-atlassian-backlogTypes.ts";
@@ -16,8 +18,10 @@ export {
 } from "./t3team-atlassian-backlogLoad.ts";
 export {
   createT3TeamAtlassianBacklogSubtask,
+  listT3TeamAtlassianChildIssueTypes,
   searchT3TeamAtlassianAssignableUsers,
   updateT3TeamAtlassianBacklogAssignee,
   updateT3TeamAtlassianBacklogEstimate,
+  updateT3TeamAtlassianIssueDescription,
   updateT3TeamAtlassianIssueStatus,
 } from "./t3team-atlassian-backlogMutations.ts";

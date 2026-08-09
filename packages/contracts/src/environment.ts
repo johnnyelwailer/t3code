@@ -2,6 +2,9 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { EnvironmentId, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { EnvironmentAppearance, EnvironmentSetupProfile } from "./t3team-packAppearance.ts";
+
+export { EnvironmentAppearance, EnvironmentSetupProfile } from "./t3team-packAppearance.ts";
 
 export const ExecutionEnvironmentPlatformOs = Schema.Literals([
   "darwin",
@@ -20,9 +23,9 @@ export const ExecutionEnvironmentPlatform = Schema.Struct({
 });
 export type ExecutionEnvironmentPlatform = typeof ExecutionEnvironmentPlatform.Type;
 
-/** How a server can replace itself with another version when asked over RPC:
-    "boot-service" rewrites the systemd user unit and restarts it; "respawn"
-    installs the target version and respawns the foreground process. */
+/** How a server can replace itself with another version when asked over RPC.
+    New servers only advertise the stable launcher-backed "boot-service" path;
+    "respawn" remains decodable for compatibility with older servers. */
 export const ServerSelfUpdateMethod = Schema.Literals(["boot-service", "respawn"]);
 export type ServerSelfUpdateMethod = typeof ServerSelfUpdateMethod.Type;
 
@@ -47,65 +50,24 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Server understands thread.snooze / thread.unsnooze commands. Same
       version-skew contract as threadSettlement. */
   threadSnooze: Schema.optionalKey(Schema.Boolean),
+  /** Server understands thread.pin / thread.unpin commands. Same
+      version-skew contract as threadSettlement. */
+  threadPinning: Schema.optionalKey(Schema.Boolean),
+  /** Server understands thread.pin.reorder (and orderKey on thread.pin).
+      Same version-skew contract as threadSettlement. */
+  threadPinReorder: Schema.optionalKey(Schema.Boolean),
+  /** Server understands regenerateTitle on thread.meta.update. Absent on
+      older servers, so clients hide the action instead of sending it. */
+  threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),
   /** The update path clients should offer for this server. Absent on
       servers that must be relaunched manually (dev checkouts, Windows
       foreground runs, pre-update servers). */
   serverSelfUpdate: Schema.optionalKey(ServerSelfUpdateCapability),
+  /** Server can stream self-update progress before acknowledging the
+      restart. Clients fall back to server.updateServer when absent. */
+  serverSelfUpdateProgress: Schema.optionalKey(Schema.Boolean),
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
-
-export const EnvironmentAppearance = Schema.Struct({
-  themeId: TrimmedNonEmptyString,
-  name: TrimmedNonEmptyString,
-  productName: Schema.optionalKey(TrimmedNonEmptyString),
-  publisher: Schema.optionalKey(TrimmedNonEmptyString),
-  labels: Schema.optionalKey(
-    Schema.Struct({
-      appName: Schema.optionalKey(TrimmedNonEmptyString),
-    }),
-  ),
-  defaultMode: Schema.optionalKey(Schema.Literals(["light", "dark", "system"])),
-  brand: Schema.optionalKey(
-    Schema.Struct({
-      mark: Schema.optionalKey(TrimmedNonEmptyString),
-      markDark: Schema.optionalKey(TrimmedNonEmptyString),
-      wordmark: Schema.optionalKey(TrimmedNonEmptyString),
-      wordmarkDark: Schema.optionalKey(TrimmedNonEmptyString),
-      displayFont: Schema.optionalKey(TrimmedNonEmptyString),
-    }),
-  ),
-  colors: Schema.Struct({
-    light: Schema.Record(Schema.String, Schema.String),
-    dark: Schema.Record(Schema.String, Schema.String),
-  }),
-  typography: Schema.optionalKey(
-    Schema.Struct({
-      sans: Schema.optionalKey(Schema.String),
-      mono: Schema.optionalKey(Schema.String),
-      display: Schema.optionalKey(Schema.String),
-    }),
-  ),
-  shape: Schema.optionalKey(Schema.Struct({ radius: Schema.optionalKey(Schema.String) })),
-  density: Schema.optionalKey(Schema.Number),
-});
-export type EnvironmentAppearance = typeof EnvironmentAppearance.Type;
-
-/**
- * Presentation view of a pack-contributed project-setup profile ("role"),
- * surfaced to the first-run setup wizard. Behavior (recipe weights, communication
- * style) stays server-side and is not part of this client-facing payload.
- */
-export const EnvironmentSetupProfile = Schema.Struct({
-  id: TrimmedNonEmptyString,
-  title: TrimmedNonEmptyString,
-  description: TrimmedNonEmptyString,
-  badge: TrimmedNonEmptyString,
-  bullets: Schema.Array(TrimmedNonEmptyString),
-  category: Schema.Literals(["product", "delivery", "engineering", "operations", "security"]),
-  iconDataUrl: Schema.optionalKey(TrimmedNonEmptyString),
-  default: Schema.optionalKey(Schema.Boolean),
-});
-export type EnvironmentSetupProfile = typeof EnvironmentSetupProfile.Type;
 
 export const ExecutionEnvironmentDescriptor = Schema.Struct({
   environmentId: EnvironmentId,

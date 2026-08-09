@@ -2,6 +2,7 @@
 // the validated reply, then post a fire-and-forget follow-up to the same thread. Exercises
 // thread.create (one-way) + thread.turn (ask) + thread.message (one-way) in one body.
 import { Schema } from "effect";
+import { getThread, spawnThread } from "@t3team/sdk";
 
 export const Outputs = Schema.Struct({ summary: Schema.String });
 
@@ -11,9 +12,17 @@ export const meta = {
   outputs: Outputs,
 } as const;
 
-const Summary = Schema.Struct({ summary: Schema.String });
-const worker = spawnThread({ name: "summarize", retention: "retained" });
-const reply = await worker.askAgent("summarize the thread", { schema: Summary });
-worker.notifyAgent("thanks");
+export default async function run() {
+  const thread = getThread();
 
-return { summary: reply.summary };
+  const Summary = Schema.Struct({ summary: Schema.String });
+  const worker = spawnThread({
+    name: "summarize",
+    retention: "retained",
+    capabilities: "inherit",
+  });
+  const reply = await worker.askAgent("summarize the thread", { schema: Summary });
+  worker.notifyAgent("thanks");
+
+  return { summary: reply.summary };
+}

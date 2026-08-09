@@ -1,5 +1,8 @@
 import type { MouseEvent } from "react";
-import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+} from "~/t3team/backend/t3team-types";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { ProjectBacklogRow } from "~/t3team/t3team-ProjectBacklogRow";
@@ -31,6 +34,7 @@ export function ProjectBacklogHierarchyView({
   getTicketAgentContext,
   onOpenTicket,
   onSearchAssignableUsers,
+  onListChildIssueTypes,
   onUpdateAssignee,
   onUpdateEstimate,
   onCreateSubtask,
@@ -48,6 +52,7 @@ export function ProjectBacklogHierarchyView({
     ticket: ProjectTicket,
     query?: string,
   ) => Promise<ReadonlyArray<AtlassianAssignableUser>>;
+  onListChildIssueTypes?: () => Promise<ReadonlyArray<AtlassianChildIssueType>>;
   onUpdateAssignee: (
     ticket: ProjectTicket,
     assignee: AtlassianAssignableUser | null,
@@ -79,6 +84,7 @@ export function ProjectBacklogHierarchyView({
                 canCreateSubtasks={canCreateSubtasks}
                 onOpen={() => onOpenTicket(projectId, ticket.id)}
                 onSearchAssignableUsers={onSearchAssignableUsers}
+                {...(onListChildIssueTypes ? { onListChildIssueTypes } : {})}
                 onUpdateAssignee={onUpdateAssignee}
                 onUpdateEstimate={onUpdateEstimate}
                 onCreateSubtask={onCreateSubtask}
@@ -134,6 +140,7 @@ export function ProjectBacklogHierarchyView({
                   canCreateSubtasks={canCreateSubtasks}
                   onOpen={() => onOpenTicket(projectId, ticket.id)}
                   onSearchAssignableUsers={onSearchAssignableUsers}
+                  {...(onListChildIssueTypes ? { onListChildIssueTypes } : {})}
                   onUpdateAssignee={onUpdateAssignee}
                   onUpdateEstimate={onUpdateEstimate}
                   onCreateSubtask={onCreateSubtask}

@@ -51,6 +51,9 @@ layer("t3team-034_WorkflowDurability", (it) => {
         "args_hash",
         "args_json",
         "created_at",
+        "failure_reason", // added by t3team-046 (failure diagnostics)
+        "failure_step", // added by t3team-046 (failure diagnostics)
+        "host_tool_grant", // added by t3team-047 (host tool grant)
         "interaction_mode",
         "launch_thread_id",
         "model_json",
@@ -59,6 +62,7 @@ layer("t3team-034_WorkflowDurability", (it) => {
         "pending_kind",
         "pending_thread_id",
         "project_id",
+        "recipe_path", // added by t3team-045 (recipe path)
         "run_id",
         "runtime_mode",
         "status",

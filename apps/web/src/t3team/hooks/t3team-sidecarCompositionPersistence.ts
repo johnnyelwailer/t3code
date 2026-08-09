@@ -13,6 +13,10 @@ import {
 } from "@t3tools/project-recipes";
 
 import { readLocalApi } from "~/localApi";
+import {
+  readPrimaryServerSettings,
+  updatePrimaryServerSettings,
+} from "~/t3team/hooks/t3team-serverSettingsAccess";
 
 const SIDECAR_COMPOSITION_PERSISTENCE_ERROR_SCOPE = "[SIDECAR_COMPOSITION]";
 
@@ -127,19 +131,18 @@ export function readStoredSidecarPersonalizationFromServerSettings(
 }
 
 export async function hydrateStoredSidecarComposition(): Promise<SidecarPersonalization> {
-  const localApi = readLocalApi();
-  if (!localApi) {
+  const serverSettings = readPrimaryServerSettings();
+  if (!serverSettings) {
     return EMPTY_SIDECAR_PERSONALIZATION;
   }
 
   try {
-    const serverSettings = await localApi.server.getSettings();
     const personalization = readStoredSidecarPersonalizationFromServerSettings(serverSettings);
     const nextJson = encodeSidecarPersonalization(personalization);
     const currentJson = serverSettings.t3teamStoredSidecarCompositionJson ?? "";
 
     if (currentJson !== nextJson && (currentJson.length > 0 || nextJson !== "{}")) {
-      await localApi.server.updateSettings({
+      await updatePrimaryServerSettings({
         t3teamStoredSidecarCompositionJson: nextJson,
       });
     }

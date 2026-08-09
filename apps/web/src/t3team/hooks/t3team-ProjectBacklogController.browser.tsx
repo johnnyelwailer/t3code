@@ -171,6 +171,14 @@ function createBackend(input: {
     updateIssueStatus: vi.fn(async () => ({ status: "Done" })),
     createSubtask: vi.fn(async () => ({ id: "subtask-1", key: "PROJ-2" })),
     downloadAsset: vi.fn(async () => ({ base64Contents: "", sizeBytes: 0 })),
+    addIssueComment: vi.fn(async () => ({ id: "comment-1" })),
+    updateIssueComment: vi.fn(async () => undefined),
+    deleteIssueComment: vi.fn(async () => undefined),
+    createIssueLink: vi.fn(async () => undefined),
+    deleteIssueLink: vi.fn(async () => undefined),
+    listIssueLinkTypes: vi.fn(async () => []),
+    updateIssueDescription: vi.fn(async () => undefined),
+    listChildIssueTypes: vi.fn(async () => [{ id: "subtask-type-1", name: "Subtask" }]),
   } satisfies BackendApi["atlassian"] & Pick<T3TeamPollingBackend["atlassian"], "pollBacklog">;
 
   return {

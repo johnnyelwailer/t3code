@@ -92,7 +92,7 @@ export async function createProjectBacklogSubtask(
   // resolves immediately and the subtask shows up with full details; the
   // regular polling loop reconciles afterwards.
   const createdTicket = created.item
-    ? resourceRefToProjectTicket(input.projectId, created.item)
+    ? resourceRefToProjectTicket(input.projectId, created.item, input.connectedSource.accountId)
     : null;
   input.setBacklogState((current) => {
     const withCount = incrementProjectBacklogStateSubtaskCount(current, input.ticket.id);

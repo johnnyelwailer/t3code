@@ -1,5 +1,6 @@
 import { getT3TeamToolDefinition } from "@t3tools/project-context/t3teamToolCatalog";
 import type {
+  ProjectRecipeLaunchSource,
   ProjectRecipeWorkflowDocument,
   ProjectRecipeWorkflowLaunchToolContext,
   RecipeSurface,
@@ -63,7 +64,7 @@ export async function launchProjectDashboardBacklogDeterministicWorkflow(input: 
   readonly currentUserDisplayName: string | undefined;
   readonly setState: SetProjectDashboardBacklogState;
   readonly allowedToolGroups?: ReadonlyArray<string>;
-  readonly source?: "bundled" | "project-local";
+  readonly source?: ProjectRecipeLaunchSource;
 }): Promise<T3TeamInlineRecipeLaunchOutcome | null> {
   if (!input.workspaceRoot) {
     return null;

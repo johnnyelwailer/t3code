@@ -1,5 +1,6 @@
 import { CheckCircle2, FileText, Loader2, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import {
@@ -28,10 +29,10 @@ export function DraftDocumentReviewPanel({
 }: DraftDocumentReviewPanelProps) {
   const [mode, setMode] = useState<"rendered" | "compare">("rendered");
   const isBusy = draft.status === "applying";
-  const canApply = Boolean(onApply) && !isBusy && draft.status !== "error";
   const unavailableReason =
     draft.applyUnavailableReason ??
     (!onApply ? "No Jira description/comment write route is wired yet." : undefined);
+  const canApply = Boolean(onApply) && !isBusy && draft.status !== "error" && !unavailableReason;
 
   return (
     <T3SurfaceCard className="overflow-hidden border-primary/25 bg-primary/4">
@@ -99,7 +100,13 @@ export function DraftDocumentReviewPanel({
           </div>
         )}
 
-        {draft.error ? <p className="text-sm text-destructive">{draft.error}</p> : null}
+        {draft.error ? (
+          <T3TeamErrorState
+            error={draft.error}
+            variant="inline"
+            {...(onApply ? { onRetry: () => void onApply(draft) } : {})}
+          />
+        ) : null}
         {unavailableReason ? (
           <p className="text-xs text-muted-foreground">{unavailableReason}</p>
         ) : null}

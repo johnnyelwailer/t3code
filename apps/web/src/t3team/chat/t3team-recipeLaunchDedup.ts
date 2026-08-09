@@ -10,7 +10,10 @@
  * launch thread synchronously before dispatching; the first claim wins, the second no-ops.
  *
  * A recipe launch always opens a fresh thread, so a per-thread claim is launch-once by
- * construction and never needs releasing.
+ * construction — but it DOES need releasing on an explicit retry. A claim taken by an attempt that
+ * then failed (or never got as far as dispatching) is indistinguishable from a successful one, so
+ * without a release the retry recreates the thread and silently skips the launch: the user clicks
+ * "Retry launch", nothing is requested, and no run is ever created.
  */
 
 const claimedLaunchThreadIds = new Set<string>();
@@ -22,4 +25,9 @@ export function tryClaimRecipeWorkflowLaunch(threadId: string): boolean {
   }
   claimedLaunchThreadIds.add(threadId);
   return true;
+}
+
+/** Drops the claim so a user-driven retry can launch this thread's workflow again. */
+export function releaseRecipeWorkflowLaunchClaim(threadId: string): void {
+  claimedLaunchThreadIds.delete(threadId);
 }

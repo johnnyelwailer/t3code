@@ -1,3 +1,4 @@
+import { buildT3TeamWorkItemDedupeKey } from "~/t3team/t3team-contextAttachmentDedupeKey";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -34,7 +35,10 @@ describe("takeEmbeddedTicketThreadAutoAttach", () => {
       request: {
         projectId: PROJECT.id,
         targetLabel: `${ROOT_TICKET.ref.displayId} ${ROOT_TICKET.ref.title}`,
-        dedupeKey: `${PROJECT.id}:${ROOT_TICKET.ref.displayId}:work-item`,
+        dedupeKey: buildT3TeamWorkItemDedupeKey({
+          projectId: PROJECT.id,
+          workItemKey: ROOT_TICKET.ref.displayId,
+        }),
       },
     });
     expect(seenKeys).toEqual(
@@ -99,7 +103,10 @@ describe("takeEmbeddedTicketThreadAutoAttach", () => {
         threadId: "thread-1",
       },
       request: {
-        dedupeKey: `${PROJECT.id}:${siblingTicket.ref.displayId}:work-item`,
+        dedupeKey: buildT3TeamWorkItemDedupeKey({
+          projectId: PROJECT.id,
+          workItemKey: siblingTicket.ref.displayId,
+        }),
       },
     });
     expect(third).toMatchObject({
@@ -108,7 +115,10 @@ describe("takeEmbeddedTicketThreadAutoAttach", () => {
         threadId: "thread-2",
       },
       request: {
-        dedupeKey: `${PROJECT.id}:${ROOT_TICKET.ref.displayId}:work-item`,
+        dedupeKey: buildT3TeamWorkItemDedupeKey({
+          projectId: PROJECT.id,
+          workItemKey: ROOT_TICKET.ref.displayId,
+        }),
       },
     });
   });

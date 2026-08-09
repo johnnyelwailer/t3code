@@ -2,6 +2,7 @@
 // black-boxed inside the parent's `workflow` journal entry, so it is not individually
 // journaled and does not re-fire when the parent replays.
 import { Schema } from "effect";
+import { getArgs, getScripts } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ name: Schema.String });
 
@@ -12,10 +13,16 @@ export const meta = {
   description: "Greets a name via a script call; run as a sub-workflow.",
   inputs: Inputs,
   outputs: Outputs,
+  capabilities: ["script"],
 } as const;
 
-const input = Schema.decodeSync(Inputs)(args);
+export default async function run() {
+  const args = getArgs();
+  const scripts = getScripts();
 
-const greeted = await scripts.greet({ name: input.name });
+  const input = Schema.decodeSync(Inputs)(args);
 
-return { greeting: greeted.text };
+  const greeted = await scripts.greet({ name: input.name });
+
+  return { greeting: greeted.text };
+}

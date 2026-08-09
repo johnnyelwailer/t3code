@@ -1,7 +1,10 @@
 import { memo } from "react";
 import type { CSSProperties, MouseEvent } from "react";
 
-import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+} from "~/t3team/backend/t3team-types";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import { ProjectBacklogTableColGroup } from "~/t3team/t3team-ProjectBacklogTableColGroup";
 import { ProjectBacklogTableGroupHeaderRow } from "~/t3team/t3team-ProjectBacklogTableGroupHeaderRow";
@@ -34,6 +37,7 @@ type ProjectBacklogTableVirtualRowViewProps = {
     ticket: ProjectTicket,
     query?: string,
   ) => Promise<ReadonlyArray<AtlassianAssignableUser>>;
+  onListChildIssueTypes?: () => Promise<ReadonlyArray<AtlassianChildIssueType>>;
   onUpdateAssignee: (
     ticket: ProjectTicket,
     assignee: AtlassianAssignableUser | null,
@@ -65,6 +69,7 @@ export const ProjectBacklogTableVirtualRowView = memo(function ProjectBacklogTab
   onToggleTicket,
   onOpenTicket,
   onSearchAssignableUsers,
+  onListChildIssueTypes,
   onUpdateAssignee,
   onUpdateEstimate,
   onCreateSubtask,
@@ -108,6 +113,7 @@ export const ProjectBacklogTableVirtualRowView = memo(function ProjectBacklogTab
                   onToggleTicket={onToggleTicket}
                   onOpenTicket={onOpenTicket}
                   onSearchAssignableUsers={onSearchAssignableUsers}
+                  {...(onListChildIssueTypes ? { onListChildIssueTypes } : {})}
                   onUpdateAssignee={onUpdateAssignee}
                   onUpdateEstimate={onUpdateEstimate}
                   onCreateSubtask={onCreateSubtask}

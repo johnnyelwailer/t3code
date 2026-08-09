@@ -17,6 +17,17 @@ export function useT3TeamOpenSenderThread(
   const navigate = useNavigate();
   return useCallback(
     (input: { projectId: string; threadId: string }) => {
+      // Opening the thread you are already in is not navigation — it is a duplicate mount.
+      // This helper puts the target in `chatThreadId` beside the current thread, so a target equal
+      // to the current thread produced `{threadId: X, embeddedThreadId: X}` and `AppThreadPane`
+      // rendered X in BOTH panes: two timelines, two composers, one suspended ask with two places
+      // to answer it. Workflows whose steps run on the launch thread (the `describe-rewrite` body
+      // does this deliberately — a child thread has no tool context and is invisible) make every
+      // one of their step rows a link to the current thread, so this was one click away.
+      if (input.threadId === parentThreadId) {
+        return;
+      }
+
       void navigate({
         to: "/t3team/projects/$projectId/threads/$threadId",
         params: { projectId: input.projectId, threadId: parentThreadId },

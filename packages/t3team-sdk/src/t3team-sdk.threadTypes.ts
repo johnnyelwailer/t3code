@@ -1,86 +1,35 @@
-/**
- * The author-facing types of the Thread model (Epic 25 §The thread model) — the `Thread`
- * interface returned by `thread` / `spawnThread`, the ask/notify option shapes, and the
- * `WorkflowThreadPrimitives` bundle the runtime binds into the workflow body. The
- * implementations live in `t3team-sdk.threadPrimitives.ts`.
- */
+/** T3Team's authoring aliases over the host-neutral @runbook/threads contracts. */
 
-import type * as Schema from "effect/Schema";
+import type {
+  AgentEffort as GenericAgentEffort,
+  AgentOpts as GenericAgentOpts,
+  AnyAskOpts as GenericAnyAskOpts,
+  AskOpts as GenericAskOpts,
+  AskUserAttachment as GenericAskUserAttachment,
+  AskUserOpts as GenericAskUserOpts,
+  ModelCascade as GenericModelCascade,
+  ModelCascadeEntry as GenericModelCascadeEntry,
+  ShowWidgetInput as GenericShowWidgetInput,
+  SpawnThreadOpts as GenericSpawnThreadOpts,
+  Thread as GenericThread,
+  ThreadRef as GenericThreadRef,
+  WorkflowThreadPrimitives as GenericWorkflowThreadPrimitives,
+} from "@runbook/threads";
 
-import type { ModelSelection } from "./t3team-sdk.types.ts";
+import type { WorkflowChildCapabilities } from "./t3team-sdk.capabilityVocabulary.ts";
 
-/** A reference to a thread the workflow can drive. `id` is the thread's stable id. */
-export interface ThreadRef {
-  readonly kind: "thread-ref";
-  readonly id: string;
-}
+export type AgentEffort = GenericAgentEffort;
+export type ModelCascadeEntry = GenericModelCascadeEntry;
+export type ModelCascade = GenericModelCascade;
+export type ThreadRef = GenericThreadRef;
+export type AskOpts<R = string> = GenericAskOpts<R>;
+export type AskUserAttachment = GenericAskUserAttachment;
+export type AskUserOpts<R = string> = GenericAskUserOpts<R>;
+export type AnyAskOpts<R = string> = GenericAnyAskOpts<R>;
+export type SpawnThreadOpts = GenericSpawnThreadOpts<WorkflowChildCapabilities>;
+export type AgentOpts<R = string> = GenericAgentOpts<R, WorkflowChildCapabilities>;
+export type ShowWidgetInput = GenericShowWidgetInput;
+export type Thread = GenericThread;
+export type WorkflowThreadPrimitives = GenericWorkflowThreadPrimitives<WorkflowChildCapabilities>;
 
-/** Options for an ask verb (`agent` / `askAgent` / `askUser`). */
-export interface AskOpts<R = string> {
-  /** Short human-facing workflow label. Kept separate from the full agent/user prompt. */
-  readonly label?: string;
-  readonly schema?: Schema.Schema<R>;
-  readonly model?: ModelSelection;
-}
-
-/**
- * A serializable external-resource reference rendered as a clickable card on the `askUser`
- * decision message (e.g. the bug the user is being asked to decide on). Structurally a subset
- * of `ExternalResourceRef`, so refs from `context` queries can be passed straight through; the
- * SDK treats them as opaque payload (black-box rule) and the host validates against its message
- * contract — `kind` must be a known resource kind (`"issue"`, `"ticket"`, `"page"`,
- * `"pull-request"`, `"epic"`) for the card to render.
- */
-export interface AskUserAttachment {
-  readonly provider: string;
-  readonly kind: string;
-  readonly id: string;
-  readonly title: string;
-  readonly displayId?: string;
-  readonly description?: string;
-  readonly url?: string;
-  readonly status?: string;
-}
-
-/** Options for `askUser` — `AskOpts` plus resources to show on the decision card. */
-export interface AskUserOpts<R = string> extends AskOpts<R> {
-  readonly attachments?: ReadonlyArray<AskUserAttachment>;
-  /** Approve/reject button labels for a `Schema.Boolean` ask (the descriptor's `boolean`
-   * affordance). Absent → the card defaults to "Yes"/"No". Ignored for non-boolean schemas. */
-  readonly labels?: { readonly true: string; readonly false: string };
-}
-
-/** Options for `spawnThread`. */
-export interface SpawnThreadOpts {
-  readonly name?: string;
-  readonly model?: ModelSelection;
-  /** Ephemeral children stay out of the sidebar; retained children are durable and visible. */
-  readonly retention?: "ephemeral" | "retained";
-}
-
-/** Sandboxed inline widget shown in a thread. HTML/SVG must be a fragment. */
-export interface ShowWidgetInput {
-  readonly title: string;
-  readonly widgetCode: string;
-  readonly format?: "html" | "svg";
-  readonly loadingMessages?: ReadonlyArray<string>;
-}
-
-/** The one Thread type, shared by the ambient launching thread and any spawned one. */
-export interface Thread {
-  askAgent<R = string>(prompt: string, opts?: AskOpts<R>): Promise<R>;
-  notifyAgent(msg: string): void;
-  askUser<R = string>(question: string, opts?: AskUserOpts<R>): Promise<R>;
-  notifyUser(msg: string): void;
-  showWidget(input: ShowWidgetInput): void;
-  readonly id: ThreadRef;
-}
-
-/** The globals this module binds into the workflow body. */
-export interface WorkflowThreadPrimitives {
-  /** The thread the workflow runs in (the chat the user launched from); `undefined` if
-   * headless (cron/automation, no chat surface). */
-  readonly thread: Thread | undefined;
-  readonly spawnThread: (opts?: SpawnThreadOpts) => Thread;
-  readonly agent: <R = string>(prompt: string, opts?: AskOpts<R>) => Promise<R>;
-}
+export type { WorkflowChildCapabilities } from "./t3team-sdk.capabilityVocabulary.ts";

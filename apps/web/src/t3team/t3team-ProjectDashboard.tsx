@@ -7,6 +7,7 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/t3team/components/ui/t
 import { AppProjectIcon } from "~/t3team/t3team-AppStatusBits";
 import { useProjectDashboardModeState } from "~/t3team/hooks/t3team-useProjectDashboardModeState";
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
+import { ProjectBindingRepairBanner } from "~/t3team/t3team-ProjectBindingRepairBanner";
 import { ProjectDashboardBacklogView } from "~/t3team/t3team-ProjectDashboardBacklogView";
 import { ProjectDashboardMyWorkView } from "~/t3team/t3team-ProjectDashboardMyWorkView";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -17,12 +18,14 @@ export function ProjectDashboard({
   shouldInsetDesktopHeader = false,
   onOpenTicket,
   onManageRepositories,
+  onProjectUpdated,
 }: {
   project: ProjectShellProject;
   tickets: ProjectTicket[];
   shouldInsetDesktopHeader?: boolean;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onManageRepositories: (projectId: string) => void;
+  onProjectUpdated: (project: ProjectShellProject) => void;
 }) {
   const { state: dashboardState } = useProjectDashboardModeState(project.id);
   const dashboardMode = dashboardState.dashboardMode;
@@ -54,6 +57,8 @@ export function ProjectDashboard({
           </Menu>
         </div>
       </header>
+
+      <ProjectBindingRepairBanner project={project} onProjectUpdated={onProjectUpdated} />
 
       <section
         className={`flex min-h-0 flex-1 flex-col overflow-hidden ${t3SurfaceBackdrops.dashboardContent}`}

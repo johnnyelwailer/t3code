@@ -10,6 +10,7 @@ import { launchPendingRecipeWorkflowTurn } from "~/t3team/chat/t3team-recipeWork
 import { isThreadWaitingForRecipeInput } from "~/t3team/chat/t3team-recipeAwaitingInput";
 import { useT3TeamOpenSenderThread } from "~/t3team/chat/t3team-useOpenSenderThread";
 import { useAddToChatComposerDropTarget } from "~/t3team/hooks/t3team-useAddToChatComposerDropTarget";
+import { useThreadStagedComposerAction } from "~/t3team/chat/t3team-useThreadStagedComposerAction";
 import { useT3TeamAddToChatStore } from "~/t3team/t3team-addToChatStore";
 import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
@@ -34,6 +35,11 @@ export function useThreadChatComposerState(input: {
   );
   const serverThread = useThread(threadRef);
   const waitingForRecipeInput = isThreadWaitingForRecipeInput(serverThread ?? undefined);
+
+  const submitStagedAction = useThreadStagedComposerAction({
+    projectId: input.projectId,
+    ...(input.ticketId ? { ticketId: input.ticketId } : {}),
+  });
 
   const pendingProjectContextCount = useT3TeamAddToChatStore(
     (state) => (state.pendingByProjectId[input.projectId] ?? []).length,
@@ -155,6 +161,18 @@ export function useThreadChatComposerState(input: {
         return "resolved-input" as const;
       }
 
+      // An action preselected from the page (the Description header's `Rewrite`) runs on THIS send —
+      // that is the whole contract of staging, so it wins over a plain turn.
+      const staged = submitStagedAction({
+        backend: input.backend,
+        threadId: turnStart.threadId,
+        composerText: turnStart.messageText,
+        modelSelection: turnStart.modelSelection,
+        runtimeMode: turnStart.runtimeMode,
+        interactionMode: turnStart.interactionMode,
+      });
+      if (staged) return staged;
+
       return launchPendingRecipeWorkflowTurn({
         backend: input.backend,
         threadId: turnStart.threadId,
@@ -175,6 +193,7 @@ export function useThreadChatComposerState(input: {
       input.hasServerLaunchActivity,
       input.kickoffPending,
       input.kickoffWorkflow,
+      submitStagedAction,
       waitingForRecipeInput,
     ],
   );

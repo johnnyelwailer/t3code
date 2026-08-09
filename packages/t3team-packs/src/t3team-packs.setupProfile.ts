@@ -1,7 +1,9 @@
 import * as Schema from "effect/Schema";
 
 const Identifier = Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/));
-const DataUrl = Schema.String.check(Schema.isPattern(/^data:image\/[a-z0-9+.-]+;base64,[A-Za-z0-9+/=]+$/i));
+const DataUrl = Schema.String.check(
+  Schema.isPattern(/^data:image\/[a-z0-9+.-]+;base64,[A-Za-z0-9+/=]+$/i),
+);
 
 export const SetupProfileCommunicationStyle = Schema.Struct({
   technicalDepth: Schema.Literals(["low", "medium", "high"]),

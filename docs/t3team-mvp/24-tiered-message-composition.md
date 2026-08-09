@@ -791,6 +791,55 @@ call crosses), argument-size caps (32 KB, client + server), a concurrent-call ca
 gesture gate + rate limit on `sendPrompt`, and a 30s per-call timeout. First-party surfaces
 keep the typed-event contract via T2 views.
 
+### Widget theme-token and icon contract
+
+Two things widget authors kept getting wrong — hard-coded hex colours, and ✅/⚠️/⛔ glyphs
+standing in for icons — are host-side gaps, not author discipline problems. The mount is a
+**sandboxed, opaque-origin iframe**, so nothing inherits: neither the app's CSS custom
+properties nor its icon components cross that boundary unless the host puts them there.
+Both are now contracts the host guarantees, pinned by
+`apps/web/src/t3team/chat/t3team-widgetTheming.test.tsx`.
+
+**Theme tokens.** `collectT3TeamWidgetThemeCss()` snapshots the live document's custom
+properties into the srcdoc's own `:root`, together with an explicit
+`color-scheme: light|dark`. Widgets may therefore use the Epic 37 semantic vocabulary
+directly, and one markup stays readable in both modes:
+
+| group       | tokens                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------- |
+| surfaces    | `--background`, `--card` / `--card-foreground`, `--popover` / `--popover-foreground`              |
+| text        | `--foreground`, `--muted` / `--muted-foreground`                                                  |
+| interactive | `--primary`, `--secondary`, `--accent` (each with `-foreground`), `--border`, `--input`, `--ring` |
+| status      | `--destructive`, `--info`, `--success`, `--warning` (each with `-foreground`)                     |
+| typography  | `--font-sans`, `--font-mono`, `--radius`                                                          |
+
+The table is the _documented_ contract, mirrored by `T3TEAM_WIDGET_THEME_TOKENS`. The
+snapshot is not limited to it — a theme pack that introduces further tokens reaches widgets
+automatically, so a pack's palette needs no widget-side change.
+
+**Icons.** The host injects an inline `<symbol>` sprite (`t3team-widgetIconSprite.ts`) into
+every srcdoc, so an author renders a real icon with markup alone:
+
+```html
+<span style="color: var(--success)">
+  <svg class="t3w-icon" aria-hidden="true"><use href="#t3w-icon-circle-check" /></svg> Ready
+</span>
+<svg class="t3w-icon t3w-icon-lg" aria-hidden="true"><use href="#t3w-icon-triangle-alert" /></svg>
+```
+
+- `.t3w-icon` is 16px, `.t3w-icon-lg` 20px — the sizes the guidance already required — and
+  both draw in `currentColor`, so an icon is coloured by a theme token, never a literal.
+- The set is the Lucide 24×24 geometry the shell's own React UI uses (lucide-react, ISC;
+  portions from Feather, MIT), so a widget icon and a shell icon are the same drawing.
+- It is CSP-safe by construction: inline markup, no `xlink:href`, no external reference, no
+  script — nothing for `default-src 'none'` to block.
+- Because the **host** injects it, referencing icons costs the author nothing against the
+  128 KB `widget_code` cap (the whole sprite is under 8 KB regardless).
+
+Hand-written inline `currentColor` SVG remains fine for anything the sprite lacks; what is
+no longer acceptable is an emoji standing in for an icon, since there is now a first-class
+alternative.
+
 ### Trust gradient across formats
 
 `format` selects the tier pipeline, and the runtime posture tracks how much validation that

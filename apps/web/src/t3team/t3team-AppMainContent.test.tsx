@@ -23,6 +23,13 @@ vi.mock("~/t3team/t3team-AppThreadPane", () => ({
   AppThreadPane: () => <div>thread-pane</div>,
 }));
 
+// Stubbed for the same reason as the thread pane: the real pane renders upstream's
+// `ChatView`, which pulls a `?worker` module in through `DiffWorkerPoolProvider` and
+// fails to load outside a browser environment (`self is not defined`).
+vi.mock("~/t3team/t3team-AppDraftPane", () => ({
+  AppDraftPane: ({ draftId }: { draftId: string }) => <div>draft-pane:{draftId}</div>,
+}));
+
 vi.mock("~/t3team/t3team-AppMainContentHomeEmptyState", () => ({
   AppMainContentHomeEmptyState: ({ showAside }: { showAside: boolean }) => (
     <div>home-empty:{showAside ? "aside" : "no-aside"}</div>
@@ -155,6 +162,42 @@ describe("AppMainContent", () => {
     );
 
     expect(markup).toContain("ticket:project-loose:ticket-1:thread-loose");
+    expect(markup).not.toContain("home-empty");
+  });
+
+  it("renders the draft pane for a draft route, before any project lookup", () => {
+    // A draft has no project and no server thread yet, so it must be handled
+    // before the branches that resolve a project — otherwise it falls through to
+    // the home surface, which is the bug this route was added to fix.
+    const markup = renderToStaticMarkup(
+      <AppMainContent
+        view={{ type: "draft", draftId: "draft-9" }}
+        activeDashboardMode="my-work"
+        selectedProjectId={null}
+        projects={[]}
+        allProjects={[]}
+        getThreadsForProject={() => []}
+        onOpenTicket={() => {}}
+        onOpenThread={() => {}}
+        onOpenFullThread={() => {}}
+        onOpenEmbeddedThread={() => {}}
+        onKickoffProjectThread={() => {}}
+        onKickoffTicketThread={() => {}}
+        onThreadKickoffConsumed={() => {}}
+        onThreadDisplayModeChange={() => {}}
+        onBackToDashboard={() => {}}
+        onCreate={() => {}}
+        onInlineProjectCreated={() => {}}
+        renderDashboard={(project) => <div>dashboard:{project.title}</div>}
+        renderTicketDetail={(project, ticketId) => (
+          <div>
+            ticket:{project.id}:{ticketId}
+          </div>
+        )}
+      />,
+    );
+
+    expect(markup).toContain("draft-pane:draft-9");
     expect(markup).not.toContain("home-empty");
   });
 

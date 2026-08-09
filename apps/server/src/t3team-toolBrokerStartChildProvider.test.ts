@@ -4,6 +4,7 @@
  * inherit-vs-switch, model validity, and the unusable/unknown rejections.
  */
 import { ProviderDriverKind, type ModelSelection, type ServerProvider } from "@t3tools/contracts";
+import { it as effectIt } from "@effect/vitest";
 import { describe, expect, it } from "vite-plus/test";
 
 import * as Effect from "effect/Effect";
@@ -155,15 +156,19 @@ describe("resolveStartChildModelSelection", () => {
 });
 
 describe("resolveChildModel", () => {
-  it("fails distinctly when a provider is requested but the registry isn't wired", async () => {
-    const exit = await Effect.runPromiseExit(
-      resolveChildModel(parent, { provider: "codex" }, undefined),
-    );
-    expect(exit._tag).toBe("Failure");
-    if (exit._tag === "Failure") {
-      const message = String(exit.cause);
-      expect(message).toContain("Provider registry is not wired into this server build");
-      expect(message).toContain("codex");
-    }
-  });
+  effectIt.effect(
+    "fails distinctly when a provider is requested but the registry isn't wired",
+    () =>
+      Effect.gen(function* () {
+        const exit = yield* Effect.exit(
+          resolveChildModel(parent, { provider: "codex" }, undefined),
+        );
+        expect(exit._tag).toBe("Failure");
+        if (exit._tag === "Failure") {
+          const message = String(exit.cause);
+          expect(message).toContain("Provider registry is not wired into this server build");
+          expect(message).toContain("codex");
+        }
+      }),
+  );
 });
