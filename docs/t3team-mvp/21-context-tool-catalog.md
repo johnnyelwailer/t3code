@@ -452,6 +452,8 @@ t3team.work_item.estimate.draft_update
 t3team.work_item.priority.draft_update
 t3team.work_item.labels.draft_update
 t3team.work_item.link.draft_create
+t3team.work_item.link.draft_remove
+t3team.work_item.subtask.draft_create
 t3team.work_item.attachment.draft_add
 ```
 

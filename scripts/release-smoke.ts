@@ -31,6 +31,23 @@ const workspaceFiles = [
   "packages/tailscale/package.json",
   "packages/effect-acp/package.json",
   "packages/effect-codex-app-server/package.json",
+  // t3team: the fork's own packages, reachable as workspace dependencies from apps/server and
+  // apps/desktop. The smoke workspace copies manifests only, so any package missing here fails
+  // resolution with ERR_PNPM_WORKSPACE_PKG_NOT_FOUND before a single release step runs. This is
+  // the full transitive closure over the roots above — add to it when a new fork package becomes
+  // a dependency of one of them.
+  "packages/integrations-atlassian/package.json",
+  "packages/integrations-core/package.json",
+  "packages/project-context/package.json",
+  "packages/project-recipes/package.json",
+  "packages/runbook-core/package.json",
+  "packages/runbook-scripts/package.json",
+  "packages/runbook-threads/package.json",
+  "packages/runbook-tools/package.json",
+  "packages/runbook-ts/package.json",
+  "packages/t3team-packs/package.json",
+  "packages/t3team-sdk/package.json",
+  "packages/t3team-skill-packs/package.json",
   "scripts/package.json",
 ] as const;
 

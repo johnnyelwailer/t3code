@@ -136,6 +136,7 @@
     "pnpm-workspace.yaml",
     "scripts/lib/additive-guard-core.mjs",
     "scripts/lib/t3team-upstream-source-of-truth.mjs",
+    "scripts/release-smoke.ts",
     "tsconfig.base.json",
     "vitest.config.ts"
   ],

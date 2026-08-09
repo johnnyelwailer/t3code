@@ -41,6 +41,17 @@ describe("t3teamToolCatalog", () => {
       "t3team.thread.start_child",
       "t3team.work_item.refresh_context_bundle",
       "t3team.project.refresh_context_bundle",
+      "t3team.backlog.item.assignee.draft_update",
+      "t3team.backlog.item.estimate.draft_update",
+      "t3team.backlog.item.subtask.draft_create",
+      "t3team.work_item.assignee.draft_update",
+      "t3team.work_item.estimate.draft_update",
+      "t3team.work_item.status.draft_update",
+      "t3team.work_item.description.draft_update",
+      "t3team.work_item.comment.draft_create",
+      "t3team.work_item.subtask.draft_create",
+      "t3team.work_item.link.draft_create",
+      "t3team.work_item.link.draft_remove",
     ]);
   });
 

@@ -88,7 +88,7 @@ export function T3TeamErrorState({
       >
         <T3SurfaceCard tone="danger" className="w-full max-w-md">
           {/* Tighter than the default card padding — this is a strip in a section, not a panel. */}
-      <T3SurfaceCardContent className="p-2.5">{body}</T3SurfaceCardContent>
+          <T3SurfaceCardContent className="p-2.5">{body}</T3SurfaceCardContent>
         </T3SurfaceCard>
       </div>
     );
