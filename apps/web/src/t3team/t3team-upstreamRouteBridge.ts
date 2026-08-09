@@ -18,7 +18,9 @@ export type UpstreamRouteTranslation =
   | { readonly kind: "target"; readonly target: T3TeamRouteSearchTarget };
 
 /** Routes the Team shell deliberately leaves alone (they render outside it). */
-const PASSTHROUGH_PREFIXES = ["/t3team", "/settings", "/pair"] as const;
+// "/connect" and "/connect_" are the T3 Connect CLI-auth callback routes. They render outside
+// this shell, so the shell must not translate them — swallowing them breaks terminal-less login.
+const PASSTHROUGH_PREFIXES = ["/t3team", "/settings", "/pair", "/connect", "/connect_"] as const;
 
 export function isT3TeamShellPath(pathname: string): boolean {
   return pathname === "/t3team" || pathname.startsWith("/t3team/");

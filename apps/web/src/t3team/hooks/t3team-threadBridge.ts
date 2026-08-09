@@ -27,12 +27,18 @@ export function mapLiveThreadToProjectThread(
   projectIdOverride: string = thread.projectId,
 ): ProjectThread {
   const placement = readT3TeamThreadPlacementFromActivities(thread);
+  const providerKind = thread.messages.some((message) => message.id.startsWith("local:codex:"))
+    ? "codex"
+    : thread.messages.some((message) => message.id.startsWith("local:claudeAgent:"))
+      ? "claudeAgent"
+      : undefined;
 
   return {
     id: thread.id,
     projectId: projectIdOverride,
     ...placement,
     title: thread.title,
+    ...(providerKind ? { providerKind } : {}),
     messageCount: thread.messages.length,
     lastMessageAt: thread.latestTurn?.completedAt ?? thread.updatedAt ?? thread.createdAt,
     createdAt: thread.createdAt,
