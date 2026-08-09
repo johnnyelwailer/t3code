@@ -38,6 +38,7 @@ export type ProjectThread = {
   dashboardMode?: ProjectDashboardMode;
   displayMode?: ProjectThreadDisplayMode;
   title: string;
+  providerKind?: "codex" | "claudeAgent";
   messageCount: number;
   lastMessageAt: string;
   createdAt: string;

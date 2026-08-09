@@ -15,17 +15,13 @@ import { readLinkedRepositoryUrlsFromProject } from "~/t3team/hooks/t3team-creat
 import { SidebarMenuButton, SidebarMenuSub } from "~/t3team/components/ui/t3team-sidebar";
 import { LocalWorkspaceSidebarRowActions } from "./t3team-LocalWorkspaceSidebarRowActions";
 import { buildNewThreadProjectContextRequest } from "./t3team-projectSidebarAddToChatRequests";
-import { sortThreads } from "./t3team-projectSidebarShared";
 import { ProjectSidebarThreadTreeRows } from "./t3team-ProjectSidebarThreadTreeRows";
-import {
-  buildProjectSidebarThreadTree,
-  countProjectSidebarThreadBranches,
-} from "./t3team-projectSidebarThreadTree";
 import {
   getSidebarProjectState,
   getSidebarStandaloneButtonClassName,
 } from "./t3team-projectSidebarItemState";
 import { useLocalWorkspaceRowState } from "./t3team-useLocalWorkspaceRowState";
+import { useLocalWorkspaceThreadTree } from "./t3team-useLocalWorkspaceThreadTree";
 
 type LocalWorkspaceSidebarRowProps = {
   project: ProjectShellProject;
@@ -76,17 +72,14 @@ export function LocalWorkspaceSidebarRow({
     () => readLinkedRepositoryUrlsFromProject(project),
     [project],
   );
-  const sortedProjectThreads = useMemo(
-    () => sortThreads(projectThreads, threadSortOrder),
-    [projectThreads, threadSortOrder],
-  );
-  const threadTree = useMemo(
-    () => buildProjectSidebarThreadTree(sortedProjectThreads),
-    [sortedProjectThreads],
-  );
-  const visibleRootThreads = threadTree.rootThreads.slice(0, threadPreviewCount);
-  const visibleThreadCount = countProjectSidebarThreadBranches(visibleRootThreads, threadTree);
-  const hiddenThreadCount = Math.max(0, sortedProjectThreads.length - visibleThreadCount);
+  const {
+    sortedProjectThreads,
+    threadTree,
+    visibleRootThreads,
+    hiddenThreadCount,
+    showAllThreads,
+    toggleShowAllThreads,
+  } = useLocalWorkspaceThreadTree({ projectThreads, threadSortOrder, threadPreviewCount });
   const projectState = getSidebarProjectState({ view, projectId: project.id });
 
   const {
@@ -190,10 +183,14 @@ export function LocalWorkspaceSidebarRow({
             onDeleteThread={onDeleteThread}
             onRenameThread={onRenameThread}
           />
-          {hiddenThreadCount > 0 ? (
-            <div className="px-2 py-1 text-[10px] text-muted-foreground/60">
-              +{hiddenThreadCount} more
-            </div>
+          {hiddenThreadCount > 0 || showAllThreads ? (
+            <button
+              type="button"
+              className="w-full px-2 py-1 text-left text-[10px] text-muted-foreground/60 hover:text-foreground"
+              onClick={toggleShowAllThreads}
+            >
+              {showAllThreads ? "Show less" : `+${hiddenThreadCount} more`}
+            </button>
           ) : null}
           {sortedProjectThreads.length === 0 ? (
             <div className="px-2 py-1 text-[10px] text-muted-foreground/60">No threads yet</div>

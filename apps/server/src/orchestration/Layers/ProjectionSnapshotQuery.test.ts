@@ -275,6 +275,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             instanceId: ProviderInstanceId.make("codex"),
             model: "gpt-5-codex",
           },
+          faviconPath: null,
           scripts: [
             {
               id: "script-1",
@@ -284,6 +285,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               runOnWorktreeCreate: false,
             },
           ],
+          defaultThreadEnvMode: null,
           createdAt: "2026-02-24T00:00:00.000Z",
           updatedAt: "2026-02-24T00:00:01.000Z",
           deletedAt: null,
@@ -397,6 +399,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             instanceId: ProviderInstanceId.make("codex"),
             model: "gpt-5-codex",
           },
+          faviconPath: null,
           scripts: [
             {
               id: "script-1",
@@ -406,6 +409,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               runOnWorktreeCreate: false,
             },
           ],
+          defaultThreadEnvMode: null,
           createdAt: "2026-02-24T00:00:00.000Z",
           updatedAt: "2026-02-24T00:00:01.000Z",
         },

@@ -20,6 +20,7 @@ import { Route as T3teamNewRouteImport } from './routes/t3team.new'
 import { Route as T3teamMyWorkRouteImport } from './routes/t3team.my-work'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
 import { Route as SettingsProvidersRouteImport } from './routes/settings.providers'
+import { Route as SettingsProjectsRouteImport } from './routes/settings.projects'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
 import { Route as SettingsDiagnosticsRouteImport } from './routes/settings.diagnostics'
@@ -31,6 +32,7 @@ import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as ConnectCallbackRouteImport } from './routes/connect_.callback'
 import { Route as T3teamProjectsProjectIdRouteImport } from './routes/t3team.projects.$projectId'
 import { Route as T3teamDraftsDraftIdRouteImport } from './routes/t3team.drafts.$draftId'
+import { Route as SettingsProjectsProjectKeyRouteImport } from './routes/settings.projects_.$projectKey'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 import { Route as T3teamProjectsProjectIdTicketsTicketIdRouteImport } from './routes/t3team.projects.$projectId.tickets.$ticketId'
@@ -90,6 +92,11 @@ const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
   path: '/providers',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsProjectsRoute = SettingsProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsKeybindingsRoute = SettingsKeybindingsRouteImport.update({
   id: '/keybindings',
   path: '/keybindings',
@@ -145,6 +152,12 @@ const T3teamDraftsDraftIdRoute = T3teamDraftsDraftIdRouteImport.update({
   path: '/drafts/$draftId',
   getParentRoute: () => T3teamRoute,
 } as any)
+const SettingsProjectsProjectKeyRoute =
+  SettingsProjectsProjectKeyRouteImport.update({
+    id: '/projects_/$projectKey',
+    path: '/projects/$projectKey',
+    getParentRoute: () => SettingsRoute,
+  } as any)
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   id: '/draft/$draftId',
   path: '/draft/$draftId',
@@ -185,12 +198,14 @@ export interface FileRoutesByFullPath {
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/settings/projects/$projectKey': typeof SettingsProjectsProjectKeyRoute
   '/t3team/drafts/$draftId': typeof T3teamDraftsDraftIdRoute
   '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
   '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
@@ -211,6 +226,7 @@ export interface FileRoutesByTo {
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
@@ -218,6 +234,7 @@ export interface FileRoutesByTo {
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/settings/projects/$projectKey': typeof SettingsProjectsProjectKeyRoute
   '/t3team/drafts/$draftId': typeof T3teamDraftsDraftIdRoute
   '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
   '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
@@ -240,6 +257,7 @@ export interface FileRoutesById {
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
@@ -247,6 +265,7 @@ export interface FileRoutesById {
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/settings/projects_/$projectKey': typeof SettingsProjectsProjectKeyRoute
   '/t3team/drafts/$draftId': typeof T3teamDraftsDraftIdRoute
   '/t3team/projects/$projectId': typeof T3teamProjectsProjectIdRouteWithChildren
   '/t3team/projects/$projectId/threads/$threadId': typeof T3teamProjectsProjectIdThreadsThreadIdRoute
@@ -270,12 +289,14 @@ export interface FileRouteTypes {
     | '/settings/diagnostics'
     | '/settings/general'
     | '/settings/keybindings'
+    | '/settings/projects'
     | '/settings/providers'
     | '/settings/source-control'
     | '/t3team/my-work'
     | '/t3team/new'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/settings/projects/$projectKey'
     | '/t3team/drafts/$draftId'
     | '/t3team/projects/$projectId'
     | '/t3team/projects/$projectId/threads/$threadId'
@@ -296,6 +317,7 @@ export interface FileRouteTypes {
     | '/settings/diagnostics'
     | '/settings/general'
     | '/settings/keybindings'
+    | '/settings/projects'
     | '/settings/providers'
     | '/settings/source-control'
     | '/t3team/my-work'
@@ -303,6 +325,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/settings/projects/$projectKey'
     | '/t3team/drafts/$draftId'
     | '/t3team/projects/$projectId'
     | '/t3team/projects/$projectId/threads/$threadId'
@@ -324,6 +347,7 @@ export interface FileRouteTypes {
     | '/settings/diagnostics'
     | '/settings/general'
     | '/settings/keybindings'
+    | '/settings/projects'
     | '/settings/providers'
     | '/settings/source-control'
     | '/t3team/my-work'
@@ -331,6 +355,7 @@ export interface FileRouteTypes {
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/draft/$draftId'
+    | '/settings/projects_/$projectKey'
     | '/t3team/drafts/$draftId'
     | '/t3team/projects/$projectId'
     | '/t3team/projects/$projectId/threads/$threadId'
@@ -427,6 +452,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsProvidersRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/projects': {
+      id: '/settings/projects'
+      path: '/projects'
+      fullPath: '/settings/projects'
+      preLoaderRoute: typeof SettingsProjectsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/keybindings': {
       id: '/settings/keybindings'
       path: '/keybindings'
@@ -504,6 +536,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof T3teamDraftsDraftIdRouteImport
       parentRoute: typeof T3teamRoute
     }
+    '/settings/projects_/$projectKey': {
+      id: '/settings/projects_/$projectKey'
+      path: '/projects/$projectKey'
+      fullPath: '/settings/projects/$projectKey'
+      preLoaderRoute: typeof SettingsProjectsProjectKeyRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/_chat/draft/$draftId': {
       id: '/_chat/draft/$draftId'
       path: '/draft/$draftId'
@@ -557,8 +596,10 @@ interface SettingsRouteChildren {
   SettingsDiagnosticsRoute: typeof SettingsDiagnosticsRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute
+  SettingsProjectsRoute: typeof SettingsProjectsRoute
   SettingsProvidersRoute: typeof SettingsProvidersRoute
   SettingsSourceControlRoute: typeof SettingsSourceControlRoute
+  SettingsProjectsProjectKeyRoute: typeof SettingsProjectsProjectKeyRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
@@ -569,8 +610,10 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsDiagnosticsRoute: SettingsDiagnosticsRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,
+  SettingsProjectsRoute: SettingsProjectsRoute,
   SettingsProvidersRoute: SettingsProvidersRoute,
   SettingsSourceControlRoute: SettingsSourceControlRoute,
+  SettingsProjectsProjectKeyRoute: SettingsProjectsProjectKeyRoute,
 }
 
 const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
