@@ -11,10 +11,9 @@
  * or isolated-vm) is the real sandbox if/when untrusted workflows are in scope.
  */
 
-import * as NodeCrypto from "node:crypto";
-
-import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
+
+import { deterministicGlobals, hostSource, type DeterministicSource } from "@runbook/ts/globals";
 
 import {
   CancelledError,
@@ -31,80 +30,15 @@ import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { WorkflowThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 import { defineWorkflow } from "./t3team-sdk.ts";
 
-/** The journaled-entropy surface the deterministic globals route through (the durable
- * runtime supplies it live; {@link passthroughSource} supplies real values at load time). */
-export interface DeterministicSource {
-  readonly now: () => number;
-  readonly random: () => number;
-  readonly uuid: () => string;
-}
-
-/** Host error intrinsics — injected so `instanceof Error`/`TypeError`/… hold for both
- * engine-thrown errors (which extend the host Error) and author-thrown ones. */
-export function hostErrorGlobals(): Record<string, unknown> {
-  return { Error, TypeError, RangeError, SyntaxError };
-}
-
-/**
- * A `Date` whose zero-arg `new Date()` and `Date.now()` are journaled via `source.now()`;
- * `parse`/`UTC` and the prototype pass straight through to the real `Date`, so
- * `instanceof Date` and the instance methods behave normally. Multi-arg `new Date(…)` is
- * deterministic already (no wall-clock read), so it constructs a real Date verbatim.
- */
-export function makeJournaledDate(source: Pick<DeterministicSource, "now">): DateConstructor {
-  const RealDate = Date;
-  // `Reflect.construct` (not `new RealDate(...)`) so the host realm's date construction isn't
-  // flagged by the Effect language-service rule; the constructed value is a real Date.
-  const JournaledDate = function (this: unknown, ...args: ReadonlyArray<unknown>): unknown {
-    if (new.target === undefined)
-      return (Reflect.construct(RealDate, [source.now()]) as Date).toString();
-    if (args.length === 0) return Reflect.construct(RealDate, [source.now()]);
-    return Reflect.construct(RealDate, args as ReadonlyArray<never>);
-  } as ((...args: ReadonlyArray<unknown>) => unknown) & Record<string, unknown>;
-  JournaledDate["now"] = () => source.now();
-  JournaledDate["parse"] = RealDate.parse;
-  JournaledDate["UTC"] = RealDate.UTC;
-  JournaledDate["prototype"] = RealDate.prototype;
-  return JournaledDate as unknown as DateConstructor;
-}
-
-/** `Math` with a journaled `random()`; every other member resolves through the prototype
- * to the real `Math` (a plain `{ ...Math }` would drop the non-enumerable methods). */
-export function makeJournaledMath(source: Pick<DeterministicSource, "random">): typeof Math {
-  return Object.assign(Object.create(Math) as typeof Math, { random: () => source.random() });
-}
-
-/** `crypto` with a journaled `NodeCrypto.randomUUID()`. The override is what the determinism contract
- * needs; other host-crypto members pass through if the realm exposes them enumerably. */
-export function makeJournaledCrypto(
-  source: Pick<DeterministicSource, "uuid">,
-): Record<string, unknown> {
-  const hostCrypto = globalThis.crypto as unknown as Record<string, unknown>;
-  return { ...hostCrypto, randomUUID: () => source.uuid() };
-}
-
-/** The deterministic globals (journaled Date/Math/crypto + host Error intrinsics) shared by
- * the body context and the meta-extraction context. */
-export function deterministicGlobals(source: DeterministicSource): Record<string, unknown> {
-  return {
-    ...hostErrorGlobals(),
-    Date: makeJournaledDate(source),
-    Math: makeJournaledMath(source),
-    crypto: makeJournaledCrypto(source),
-  };
-}
-
-/** Real host wall-clock + entropy (unjournaled). Backs the durable runtime's live reads and
- * its nested-handler black box, and load-time meta extraction (where `meta` is pure anyway,
- * so the reads never actually fire). Routed through `DateTime`/`node:crypto` so the host
- * realm isn't flagged by the Effect language-service `globalDate`/`globalRandom` rules. */
-export function hostSource(): DeterministicSource {
-  return {
-    now: () => DateTime.nowUnsafe().epochMilliseconds,
-    random: () => NodeCrypto.randomInt(2 ** 32) / 2 ** 32,
-    uuid: () => NodeCrypto.randomUUID(),
-  };
-}
+export {
+  deterministicGlobals,
+  hostErrorGlobals,
+  hostSource,
+  makeJournaledCrypto,
+  makeJournaledDate,
+  makeJournaledMath,
+} from "@runbook/ts/globals";
+export type { DeterministicSource } from "@runbook/ts/globals";
 
 /**
  * Assemble the engine surface the loader binds into the body context: `args`, `Schema`, the

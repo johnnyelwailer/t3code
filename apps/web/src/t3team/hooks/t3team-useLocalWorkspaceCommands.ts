@@ -9,7 +9,7 @@ import {
 import { useAtomCommand } from "~/state/use-atom-command";
 import { projectEnvironment } from "~/state/projects";
 import { toastManager } from "~/components/ui/toast";
-import type { ViewState } from "~/t3team/t3team-types";
+import { readProjectIdFromView, type ViewState } from "~/t3team/t3team-types";
 import type { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
@@ -59,7 +59,7 @@ export function useLocalWorkspaceCommands(input: {
           if (!isAtomCommandInterrupted(result)) return;
         }
       }
-      const deletedWasActive = activeView?.projectId === projectId;
+      const deletedWasActive = readProjectIdFromView(activeView ?? null) === projectId;
       store.deleteProject(projectId);
       if (deletedWasActive) onOpenHome?.();
     },

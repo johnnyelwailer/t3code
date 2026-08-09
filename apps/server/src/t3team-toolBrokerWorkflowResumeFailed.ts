@@ -21,9 +21,20 @@ import { makeWorkflowRunLifecycle } from "./t3team-workflowEngineDurability.ts";
 import { resumeWorkflowRunFromJournal } from "./t3team-workflowEngineResumeFromJournal.ts";
 import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScripts.ts";
 
-/** Re-drive a failed run from its journal, detached (a resume can park again for hours). */
+/** Re-drive a failed run from its journal, detached (a resume can park again for hours).
+ *
+ * T3Team's existing orchestration-resume surface historically resumed the workflow currently
+ * present at its path. Keep that behavior here for v1: the reusable core remains strict by
+ * default, while this adapter accepts a changed source and records its identity as the new
+ * baseline. Callers that need strict checking can still pass it explicitly.
+ */
 export const makeResumeFailedRun =
-  <E>(deps: WorkflowResumeToolDeps<E>, threadId: ThreadId, newId: () => string) =>
+  <E>(
+    deps: WorkflowResumeToolDeps<E>,
+    threadId: ThreadId,
+    newId: () => string,
+    workflowVersionPolicy: "strict" | "allow-change" = "allow-change",
+  ) =>
   (run: WorkflowRun): Effect.Effect<WorkflowResumeToolValue, string> =>
     Effect.gen(function* () {
       if (!deps.path) {
@@ -70,6 +81,7 @@ export const makeResumeFailedRun =
           nowIso,
           store: deps.journalStore,
           lifecycle,
+          workflowVersionPolicy,
         }),
       ).pipe(Effect.forkDetach({ startImmediately: true }));
       // Echo the recorded cause of the PREVIOUS failure: the resume replays the executed prefix

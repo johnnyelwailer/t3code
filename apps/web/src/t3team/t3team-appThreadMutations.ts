@@ -15,6 +15,7 @@ import type { ViewState } from "~/t3team/t3team-types";
 import type { useBackend } from "~/t3team/backend/t3team-index";
 import type { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import type { useThreadActions } from "~/hooks/useThreadActions";
+import { readProjectIdFromView } from "~/t3team/t3team-types";
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
 type Backend = ReturnType<typeof useBackend>;
@@ -185,7 +186,9 @@ export async function deleteAppThread(input: {
   const deletedWasActive =
     activeView?.type === "thread"
       ? activeView.threadId === threadId
-      : activeView?.embeddedThreadId === threadId;
+      : activeView?.type === "all-my-work"
+        ? false
+        : activeView?.embeddedThreadId === threadId;
 
   if (environmentId) {
     await deleteLiveThread(scopeThreadRef(environmentId, threadId as never));
@@ -197,7 +200,7 @@ export async function deleteAppThread(input: {
     return;
   }
 
-  const projectId = activeView?.projectId ?? thread?.projectId;
+  const projectId = readProjectIdFromView(activeView ?? null) ?? thread?.projectId;
   const ticketId = activeView?.type === "ticket" ? activeView.ticketId : thread?.ticketId;
 
   if (projectId && ticketId) {

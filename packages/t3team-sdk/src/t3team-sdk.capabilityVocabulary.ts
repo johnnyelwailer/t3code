@@ -1,3 +1,7 @@
+import type { ToolGroupRef } from "@runbook/tools";
+
+export type { ToolGroupRef } from "@runbook/tools";
+
 /**
  * The tool-group HALF of the one capability vocabulary, as literal ids.
  *
@@ -63,13 +67,6 @@ export type EngineCapability =
  * A typed reference to a tool group, declared via `defineToolGroup`. Carries the `label` /
  * `description` the pre-execution permission UI renders (Epic 25 §Capability gating).
  */
-export interface ToolGroupRef<Id extends string = string> {
-  readonly kind: "tool-group";
-  readonly id: Id;
-  readonly label: string;
-  readonly description: string;
-}
-
 /**
  * ONE capability, in any of the three forms the surface accepts: an engine feature string, a tool
  * group as a typed ref, or that same group as its id string. This is the vocabulary shared by

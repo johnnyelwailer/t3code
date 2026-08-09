@@ -7,6 +7,7 @@ import {
   type ProjectTicket,
   type ViewState,
 } from "~/t3team/t3team-types";
+import { readProjectIdFromView } from "~/t3team/t3team-types";
 
 const SIDEBAR_SELECTED_CLASS_NAME =
   "bg-accent/85 text-foreground font-medium hover:bg-accent hover:text-foreground dark:bg-accent/55 dark:hover:bg-accent/70";
@@ -79,7 +80,7 @@ export function getSidebarProjectState(input: {
 }): SidebarItemState {
   return createSidebarItemState({
     isSelected: false,
-    isOpen: input.view?.projectId === input.projectId,
+    isOpen: readProjectIdFromView(input.view ?? null) === input.projectId,
   });
 }
 
@@ -89,7 +90,7 @@ export function getSidebarProjectSectionState(input: {
   projectId: string;
   view: ViewState | null;
 }): SidebarItemState {
-  const isProjectViewActive = input.view?.projectId === input.projectId;
+  const isProjectViewActive = readProjectIdFromView(input.view ?? null) === input.projectId;
   const isSelected =
     isProjectViewActive &&
     input.view?.type === "dashboard" &&

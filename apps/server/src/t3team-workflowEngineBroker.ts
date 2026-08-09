@@ -45,7 +45,13 @@ import {
 } from "./t3team-workflowChildModel.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
-import { workflowTurnAuthor } from "./t3team-workflowTurnAuthor.ts";
+import { handleBrokerAskVerb } from "./t3team-workflowEngineBrokerAsk.ts";
+import { handleBrokerNotifyVerb } from "./t3team-workflowEngineBrokerNotify.ts";
+import type {
+  BrokerCore,
+  BrokerSend,
+  ReplyResolver,
+} from "./t3team-workflowEngineBrokerContext.ts";
 import { workflowTurnText } from "./t3team-workflowTurnText.ts";
 import {
   buildT3TeamWidgetAttachment,
@@ -58,33 +64,11 @@ export type {
   WorkflowEngineSleep,
 } from "./t3team-workflowEngineBrokerTypes.ts";
 
-type ReplyResolver = Parameters<MessageBroker["send"]>[1];
-
-/** Attachment refs from the workflow are opaque payload (SDK black-box rule); only refs that
- * satisfy the message contract render as resource cards — anything else is dropped, never fatal. */
-const isMessageResourceRef = Schema.is(T3TeamMessageExternalResourceRef);
-const TRUSTED_HTML_FRAGMENT = /<\/?[a-z][^>]*>/i;
-
-function workflowWidgetAttachment(input: {
-  readonly widgetId: string;
-  readonly title: string;
-  readonly widgetCode: string;
-  readonly format?: "html" | "svg";
-  readonly loadingMessages?: ReadonlyArray<string>;
-}) {
-  const parsed = parseT3TeamWidgetShowInput({
-    title: input.title,
-    widget_code: input.widgetCode,
-    ...(input.format === undefined ? {} : { format: input.format }),
-    ...(input.loadingMessages === undefined ? {} : { loading_messages: input.loadingMessages }),
-  });
-  if ("error" in parsed) throw new Error(`Invalid workflow widget: ${parsed.error}`);
-  return buildT3TeamWidgetAttachment({
-    widgetId: input.widgetId,
-    parsed,
-    artifactRelativePath: undefined,
-  });
-}
+import {
+  isMessageResourceRef,
+  TRUSTED_HTML_FRAGMENT,
+  workflowWidgetAttachment,
+} from "./t3team-workflowEngineBrokerContext.ts";
 
 export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): MessageBroker {
   // Serialize dispatches so a floated `thread.create` lands before the `thread.turn` it precedes.
@@ -127,6 +111,8 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     });
   };
 
+  const core: BrokerCore = { deps, enqueue, enqueueOneWay, runPrimitive, step };
+
   const send = async (envelope: MessageEnvelope, resolver: ReplyResolver): Promise<void> => {
     const { correlationId, kind, payload } = envelope;
     const isLiveCompositionAsk = correlationId.startsWith(`${deps.runId}:blackbox:`);
@@ -136,6 +122,14 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
           deps.stepActivities?.emitResolved(correlationId, "completed") ?? Promise.resolve(),
         resolve: resolver.resolve,
       });
+    const sendCtx: BrokerSend = {
+      correlationId,
+      kind,
+      payload,
+      resolver,
+      isLiveCompositionAsk,
+      makeLiveSettlement,
+    };
     if (kind === "model.resolve") {
       // Walk the author's provider ladder against the LIVE registry and settle SYNCHRONOUSLY: the
       // chosen selection becomes this primitive's `resolved` journal line, so a replay reuses the
@@ -164,225 +158,8 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p, modelSelection)));
       return;
     }
-    if (kind === "thread.turn") {
-      const p = payload as ThreadTurnPayload;
-      // Resolve BEFORE recording pending state (registry + durable recordPending): an invalid
-      // provider/model must reject this ask cleanly, not park the run on an undispatched turn.
-      // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
-      // microtask before `setPending`, and callers observe the pending entry right after `send`.
-      const modelSelection =
-        p.model === undefined && p.effort === undefined
-          ? deps.modelSelection
-          : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
-      step(correlationId, kind, "started", p.label ?? p.prompt, p.threadId);
-      const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
-      // ONE author for the whole step: it rides the prompt below, and the reactor reuses it to
-      // attribute the assistant messages that answer it.
-      const author = workflowTurnAuthor(deps.runId, correlationId, p);
-      deps.registry.setPending(p.threadId, {
-        runId: deps.runId,
-        correlationId,
-        kind: "thread.turn",
-        author,
-        ...(liveSettlement ? { resolveLive: liveSettlement.resolve } : {}),
-      });
-      await runPrimitive(
-        () =>
-          enqueue(() =>
-            deps.dispatch({
-              type: "thread.turn.start",
-              commandId: CommandId.make(`t3team-wf:turn:${deps.newId()}`),
-              threadId: ThreadId.make(p.threadId),
-              message: {
-                messageId: MessageId.make(deps.newId()),
-                role: "user",
-                text: workflowTurnText(p),
-                attachments: [],
-                // `user` role because that is how a provider receives turn input — NOT because a
-                // person wrote it. The author says so: it marks the start as automated for decider
-                // turn admission AND is the only signal a client has for telling nine paragraphs of
-                // machine instructions apart from something the user typed.
-                t3teamExt: { author },
-              },
-              modelSelection,
-              runtimeMode: deps.runtimeMode,
-              interactionMode: deps.interactionMode,
-              createdAt: deps.nowIso(),
-            }),
-          ),
-        liveSettlement
-          ? undefined
-          : async () => {
-              await deps.recordPending?.({
-                threadId: p.threadId,
-                correlationId,
-                kind: "thread.turn",
-              });
-            },
-      );
-      await liveSettlement?.completed;
-      return;
-    }
-    if (kind === "user.input") {
-      const p = payload as UserInputPayload;
-      step(correlationId, kind, "waiting", p.label ?? p.question, p.threadId);
-      const affordance = p.affordance ?? { kind: "text" as const };
-      const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
-      deps.registry.setPending(p.threadId, {
-        runId: deps.runId,
-        correlationId,
-        kind: "user.input",
-        affordance,
-        ...(liveSettlement ? { resolveLive: liveSettlement.resolve } : {}),
-      });
-      // Tag the escalation message as awaiting the user's answer (with the owning run) so the UI
-      // can render it as a guided prompt and route the reply back to this run rather than a
-      // free-form chat turn. An ask that is renderable as a decision card (a choice affordance,
-      // or attached resources) additionally carries the `workflow.decision` view + the resource
-      // refs; a plain text ask keeps today's bare message + composer.
-      const resources = (p.attachments ?? []).filter(isMessageResourceRef);
-      const htmlContext = TRUSTED_HTML_FRAGMENT.test(p.question)
-        ? workflowWidgetAttachment({
-            widgetId: deps.newId(),
-            title: p.label?.trim() || "workflow_input",
-            widgetCode: p.question,
-          })
-        : undefined;
-      const visibleQuestion = htmlContext
-        ? p.label?.trim() || "Respond to this request"
-        : p.question;
-      const renderAsCard =
-        affordance.kind !== "text" || resources.length > 0 || htmlContext !== undefined;
-      await runPrimitive(
-        () =>
-          enqueue(() =>
-            deps.dispatch(
-              messageUpsert(deps, p.threadId, "system", visibleQuestion, {
-                author: { kind: "system", workflowRunId: deps.runId },
-                status: "waiting-for-input",
-                visibleToUser: true,
-                ...(renderAsCard
-                  ? {
-                      attachments: [
-                        {
-                          kind: "view" as const,
-                          miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
-                          props: {
-                            question: visibleQuestion,
-                            affordance,
-                            correlationId,
-                            workflowRunId: deps.runId,
-                          },
-                        },
-                        ...(htmlContext ? [htmlContext] : []),
-                        ...resources.map((resource) => ({ kind: "resource" as const, resource })),
-                      ],
-                    }
-                  : {}),
-              }),
-            ),
-          ),
-        liveSettlement
-          ? undefined
-          : async () => {
-              await deps.recordPending?.({
-                threadId: p.threadId,
-                correlationId,
-                kind: "user.input",
-              });
-            },
-      );
-      await liveSettlement?.completed;
-      return;
-    }
-    if (kind === "wait.until") {
-      // The clock park (Epic 27): record the wake deadline + this `waitUntil` correlation so
-      // the scheduler can arm a timer and resolve it on fire. No orchestration command (a timer
-      // has no message) and no resolver settle — the run suspends out of band until the
-      // scheduler appends the resolved entry at the deadline.
-      const p = payload as WaitUntilPayload;
-      step(
-        correlationId,
-        kind,
-        "waiting",
-        `Sleep until ${DateTime.formatIso(DateTime.makeUnsafe(p.deadline))}`,
-      );
-      await runPrimitive(async () => {
-        await deps.recordSleeping?.({ correlationId, deadline: p.deadline });
-      });
-      return;
-    }
-    // thread.message — one-way; agent-directed messages read as a user turn-input, user-directed
-    // ones as a system (user-visible) note. No turn.start, no pending.
-    const p = payload as ThreadMessagePayload;
-    if (p.widget !== undefined) {
-      // Workflow semantic adapter: reuse the canonical widget parser/attachment factory rather
-      // than duplicating validation or inventing a second rendering contract.
-      const attachment = workflowWidgetAttachment({
-        widgetId: deps.newId(),
-        title: p.widget.title,
-        widgetCode: p.widget.widgetCode,
-        ...(p.widget.format === undefined ? {} : { format: p.widget.format }),
-        ...(p.widget.loadingMessages === undefined
-          ? {}
-          : { loadingMessages: p.widget.loadingMessages }),
-      });
-      step(correlationId, kind, "completed", p.widget.title, p.threadId);
-      await runPrimitive(() =>
-        enqueueOneWay(() =>
-          deps.dispatch(
-            messageUpsert(deps, p.threadId, "system", "", {
-              author: { kind: "system", workflowRunId: deps.runId },
-              visibleToUser: true,
-              visibleToAgent: false,
-              attachments: [attachment],
-            }),
-          ),
-        ),
-      );
-      return;
-    }
-    if (p.recipient === "user" && TRUSTED_HTML_FRAGMENT.test(p.text)) {
-      const attachment = workflowWidgetAttachment({
-        widgetId: deps.newId(),
-        title: "workflow_notification",
-        widgetCode: p.text,
-      });
-      step(correlationId, kind, "completed", "Workflow notification", p.threadId);
-      await runPrimitive(() =>
-        enqueueOneWay(() =>
-          deps.dispatch(
-            messageUpsert(deps, p.threadId, "system", "", {
-              author: { kind: "system", workflowRunId: deps.runId },
-              visibleToUser: true,
-              visibleToAgent: false,
-              attachments: [attachment],
-            }),
-          ),
-        ),
-      );
-      return;
-    }
-    step(correlationId, kind, "completed", p.text, p.threadId);
-    await runPrimitive(() =>
-      enqueueOneWay(() =>
-        deps.dispatch(
-          messageUpsert(
-            deps,
-            p.threadId,
-            p.recipient === "agent" ? "user" : "system",
-            p.text,
-            p.recipient === "user"
-              ? {
-                  author: { kind: "system", workflowRunId: deps.runId },
-                  visibleToUser: true,
-                  visibleToAgent: false,
-                }
-              : undefined,
-          ),
-        ),
-      ),
-    );
+    if (await handleBrokerAskVerb(core, sendCtx)) return;
+    await handleBrokerNotifyVerb(core, sendCtx);
   };
 
   return { send };

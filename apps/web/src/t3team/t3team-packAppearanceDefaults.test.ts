@@ -11,23 +11,24 @@ const marker = t3teamAppearanceDefaultsMarker({
 });
 
 describe("resolveT3TeamAppearanceDefaults", () => {
-  it("maps the work lens onto upstream's beta flag and passes glass through", () => {
+  it("maps the work lens onto upstream's sidebar switch and passes glass through", () => {
     const decision = resolveT3TeamAppearanceDefaults({
       defaults: { sidebarLens: "work", glassOpacity: 90 },
       marker,
       appliedMarker: null,
     });
-    expect(decision.patch).toEqual({ sidebarV2Enabled: true, glassOpacity: 90 });
+    // `legacySidebarEnabled` is inverted: the work lens IS upstream's current sidebar.
+    expect(decision.patch).toEqual({ legacySidebarEnabled: false, glassOpacity: 90 });
     expect(decision.appliedMarker).toBe(marker);
   });
 
-  it("maps the code lens to the flag being off", () => {
+  it("maps the code lens onto the legacy sidebar", () => {
     const decision = resolveT3TeamAppearanceDefaults({
       defaults: { sidebarLens: "code" },
       marker: "x",
       appliedMarker: null,
     });
-    expect(decision.patch).toEqual({ sidebarV2Enabled: false });
+    expect(decision.patch).toEqual({ legacySidebarEnabled: true });
   });
 
   // The whole point: a user who turns glass down or switches the lens back must not be overridden
@@ -53,7 +54,7 @@ describe("resolveT3TeamAppearanceDefaults", () => {
       marker: next,
       appliedMarker: marker,
     });
-    expect(decision.patch).toEqual({ sidebarV2Enabled: true, glassOpacity: 70 });
+    expect(decision.patch).toEqual({ legacySidebarEnabled: false, glassOpacity: 70 });
   });
 
   it("does nothing when the theme declares no defaults", () => {

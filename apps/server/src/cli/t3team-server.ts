@@ -5,7 +5,12 @@ import * as Option from "effect/Option";
 import { Command, GlobalFlag } from "effect/unstable/cli";
 
 import { ServerConfig, type StartupPresentation } from "../config.ts";
-import { runT3TeamServer } from "../t3team-server.ts";
+// One server layer, two binaries. `server.ts` already composes every t3team route and reactor,
+// so the `t3team` binary differs from `t3` only in the pack bootstrapping this CLI file does
+// before launch. The former `t3team-server.ts` was a hand-maintained copy of `server.ts` and
+// silently drifted on every upstream sync (it lost BackgroundPolicy/ResourceTelemetry/Usage in
+// the 2026-08 sync); it is gone, and with it the "register the route in BOTH registries" trap.
+import { runServer } from "../server.ts";
 import {
   inspectConfiguredWorkspacePacks,
   loadPackAppearanceOverlay,
@@ -144,7 +149,7 @@ export const runT3TeamServerCommand = (
         setupProfiles: setupProfileOverlay?.map((profile) => profile.id) ?? [],
       });
     }
-    return yield* runT3TeamServer.pipe(Effect.provideService(ServerConfig, config));
+    return yield* runServer.pipe(Effect.provideService(ServerConfig, config));
   });
 
 export const t3teamStartCommand = Command.make("start", { ...sharedServerCommandFlags }).pipe(

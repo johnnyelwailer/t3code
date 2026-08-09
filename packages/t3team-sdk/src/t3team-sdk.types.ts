@@ -1,5 +1,11 @@
 import * as Schema from "effect/Schema";
 
+import type { WorkflowVersionPolicy } from "@runbook/core/engine";
+
+import type { ToolRef as GenericToolRef } from "@runbook/tools";
+import type { ScriptRef as GenericScriptRef } from "@runbook/scripts";
+import type { ModelSelection } from "@runbook/threads/models";
+
 import type { MessageBroker } from "./t3team-sdk.broker.ts";
 import type { ToolGroupRef } from "./t3team-sdk.capabilityVocabulary.ts";
 import type { AnyRecipeRef } from "./t3team-sdk.recipeTypes.ts";
@@ -29,6 +35,7 @@ export type {
   WorkflowCapability,
   WorkflowChildCapabilities,
 } from "./t3team-sdk.capabilityVocabulary.ts";
+export type { ModelRef, ModelSelection } from "@runbook/threads/models";
 
 export type IntegrationMethod = (...args: ReadonlyArray<unknown>) => Promise<unknown>;
 
@@ -80,18 +87,6 @@ export interface T3TeamToolHandlerClient {
   }) => Promise<unknown>;
 }
 
-export interface ModelRef<Id extends string = string, Provider extends string = string> {
-  readonly kind: "model";
-  readonly id: Id;
-  readonly provider: Provider;
-}
-
-/** A per-call model choice: a project-configured provider-instance id + a typed `ModelRef`. */
-export interface ModelSelection {
-  readonly provider: string;
-  readonly model: ModelRef;
-}
-
 export interface WorkflowRef<Inputs = unknown, Outputs = unknown, Path extends string = string> {
   readonly kind: "workflow";
   readonly path: Path;
@@ -124,44 +119,14 @@ export interface ScriptHandlerCtx {
   readonly callTool: <I, R>(ref: ToolRef<I, R>, args: I) => Promise<R>;
 }
 
-export interface ToolRef<
+export type ToolRef<
   I,
   R,
   Id extends string = string,
   Group extends ToolGroupRef = ToolGroupRef,
-> {
-  (args: I): Promise<R>;
-  readonly kind: "tool";
-  readonly id: Id;
-  readonly group: Group;
-  readonly args: Schema.Schema<I>;
-  readonly result: Schema.Schema<R>;
-  readonly handler: (args: I, ctx: ToolHandlerCtx) => Promise<R>;
-}
+> = GenericToolRef<I, R, Id, Group, ToolHandlerCtx>;
 
-/**
- * Bivariance for a standalone call signature: `strictFunctionTypes` exempts METHOD declarations from
- * contravariant parameter checks, so declaring the signature as a method and reading it back out
- * yields a call signature that is bivariant in its argument. (The same trick the TS lib itself uses
- * for callback parameters.)
- *
- * `ScriptRef` needs it because it is CALLABLE. With a plain `(args: I): Promise<O>` signature,
- * `ScriptRef<ConcreteInput, …>` is not assignable to `AnyScriptRef` (= `ScriptRef<unknown, unknown>`),
- * so every recipe declaring `scripts` was type-invalid — while `AnyScriptRef` has to keep `unknown`
- * as its input, because the engine internals that hold these refs must still be able to CALL them
- * with args decoded at runtime. Bivariance is the honest variance here: a holder of `AnyScriptRef`
- * only ever passes back args that came out of the same ref's own `inputs` schema.
- */
-type BivariantCall<I, O> = { call(args: I): Promise<O> }["call"];
-
-export type ScriptRef<I, O> = BivariantCall<I, O> & {
-  readonly kind: "script";
-  readonly replay: "default" | "never";
-  readonly inputs: Schema.Schema<I>;
-  readonly outputs: Schema.Schema<O>;
-  // Method syntax for the same reason as the call signature above.
-  handler(args: I, ctx: ScriptHandlerCtx): Promise<O>;
-};
+export type ScriptRef<I, O> = GenericScriptRef<I, O, ScriptHandlerCtx>;
 
 export interface RegisteredWorkflowToolsTree {}
 export interface RegisteredWorkflowScriptsTree {}
@@ -192,6 +157,8 @@ export interface WorkflowRunOptions {
   readonly runsRoot?: string;
   // Durable journal storage (default fs at `runsRoot`); host injects SQLite for restart durability (§OQ2).
   readonly store?: import("./t3team-sdk.journalStore.ts").JournalStore;
+  /** T3Team preserves legacy current-source resumes by default; pass `strict` to enforce identity. */
+  readonly workflowVersionPolicy?: WorkflowVersionPolicy;
   readonly tools?: ReadonlyArray<AnyToolRef>;
   readonly scripts?: Readonly<Record<string, AnyScriptRef>>;
   readonly fetch?: FetchLike;

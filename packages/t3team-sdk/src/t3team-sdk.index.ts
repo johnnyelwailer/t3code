@@ -9,6 +9,7 @@ export {
   createDurableWorkflowRuntime,
   resumeWorkflow,
   startWorkflow,
+  workflowSourceVersion,
 } from "./t3team-sdk.engine.ts";
 export {
   CancelledError,
@@ -88,14 +89,6 @@ export {
   withBodyApi,
   workflow,
 } from "./t3team-sdk.engineApi.ts";
-export { renameThreadTool } from "./tools/t3team-sdk.t3team.ts";
-export { listRecipesTool, validateRecipeTool } from "./tools/t3team-sdk.t3teamRecipes.ts";
-export type {
-  RunWorkflowToolArgs,
-  RunWorkflowToolResult,
-  WorkflowRunIntent,
-} from "./tools/t3team-sdk.workflow.ts";
-export { runWorkflowTool } from "./tools/t3team-sdk.workflow.ts";
 export { deriveWorkflowShape } from "./t3team-sdk.workflowShape.ts";
 export { extractMeta, prepareWorkflow } from "./t3team-sdk.loader.ts";
 // Load-time static audits (Epic 25 phase 25.5): determinism + capability, before any run.
@@ -120,6 +113,7 @@ export type {
   SuspendedResult,
   WorkflowRunOptions,
   WorkflowRunResult,
+  WorkflowVersionPolicy,
 } from "./t3team-sdk.engine.ts";
 export type { AskAffordance, AskFormField } from "./t3team-sdk.affordance.ts";
 export type { AgentAttachment, NamedAttachment } from "./t3team-sdk.askAttachments.ts";
@@ -189,13 +183,5 @@ export type {
   WorkflowCapability,
   WorkflowRef,
 } from "./t3team-sdk.ts";
-export type { RenameThreadToolArgs, RenameThreadToolResult } from "./tools/t3team-sdk.t3team.ts";
-export type {
-  ListRecipesToolResult,
-  RecipeListEntry,
-  RecipeToolIssue,
-  RecipeWorkflowMetaSummary,
-  RecipeWorkflowShapeSummary,
-  ValidateRecipeToolArgs,
-  ValidateRecipeToolResult,
-} from "./tools/t3team-sdk.t3teamRecipes.ts";
+
+export * from "./t3team-sdk.toolsIndex.ts";

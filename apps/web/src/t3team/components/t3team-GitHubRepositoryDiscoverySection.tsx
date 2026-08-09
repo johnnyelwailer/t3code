@@ -18,23 +18,10 @@ import {
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
+import { githubAuthTone } from "~/t3team/components/t3team-GitHubRepositoryDiscoveryAuthFields";
 
-function authTone(status: "checking" | "authenticated" | "unauthenticated" | "unknown") {
-  if (status === "authenticated") {
-    return {
-      badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-      label: "Connected",
-      icon: CheckCircle2,
-    };
-  }
-  return {
-    badge: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    label: status === "checking" ? "Checking" : "Sign in required",
-    icon: ShieldAlert,
-  };
-}
-
-export type GitHubDiscoveryState = ReturnType<typeof useGitHubRepositoryDiscovery>;
+// Re-exported: this was its original home, and other modules import it from here.
+export type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 
 export function GitHubRepositoryDiscoverySection({
   enabled = true,
@@ -66,7 +53,7 @@ export function GitHubRepositoryDiscoverySection({
     onVisibleSuggestionsChange?.(discovery.visibleSuggestedUrls);
   }, [discovery.visibleSuggestedUrls, onVisibleSuggestionsChange]);
 
-  const status = authTone(discovery.authStatus);
+  const status = githubAuthTone(discovery.authStatus);
   const StatusIcon = status.icon;
   const showAuthSkeleton = discovery.authStatus === "checking" || discovery.loadingAuth;
   const isAuthenticated = discovery.authStatus === "authenticated";

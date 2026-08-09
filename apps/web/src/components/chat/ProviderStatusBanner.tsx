@@ -51,12 +51,15 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
     <div className="pointer-events-auto mx-auto w-fit max-w-[calc(100%-2rem)] pt-3">
       <div
         className={cn(
-          "relative inline-flex items-center gap-3 rounded-xl border py-3 ps-3.5 pe-10 text-card-foreground text-sm",
-          severity === "warning" && "border-warning/32 bg-warning/4 [&_svg]:text-warning",
+          // `alert-glass` supplies the surface upstream used to set per-variant
+          // (`bg-warning/4` etc.), so only the border/icon tint stays here.
+          "alert-glass relative inline-flex items-center gap-3 rounded-xl border py-3 ps-3.5 pe-10 text-card-foreground text-sm",
+          severity === "warning" && "border-warning/32 [&_svg]:text-warning",
           severity === "error" &&
-            "border-destructive/32 bg-destructive/4 text-destructive-foreground [&_svg]:text-destructive",
-          severity === "info" && "border-border bg-muted/40 [&_svg]:text-muted-foreground",
+            "border-destructive/32 text-destructive-foreground [&_svg]:text-destructive",
+          severity === "info" && "border-border [&_svg]:text-muted-foreground",
         )}
+        data-variant={severity}
         data-provider-status-severity={severity}
         role={severity === "error" ? "alert" : "status"}
       >

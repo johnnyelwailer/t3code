@@ -10,20 +10,12 @@
  * (`askUser`). Safe to show before the user authorizes execution.
  */
 
-import * as NodeModule from "node:module";
-
 import * as Schema from "effect/Schema";
 import type * as TsApi from "typescript";
 
 import { extractMeta, prepareWorkflow, type WorkflowSource } from "./t3team-sdk.loader.ts";
 import { scanSteps } from "./t3team-sdk.workflowShapeScan.ts";
-
-const nodeRequire = NodeModule.createRequire(import.meta.url);
-let cachedTs: typeof TsApi | undefined;
-function loadTypescript(): typeof TsApi {
-  cachedTs ??= nodeRequire("typescript") as typeof TsApi;
-  return cachedTs;
-}
+import { loadTypeScript } from "@runbook/ts/typescript";
 
 export type WorkflowStepKind = "read" | "agent" | "ask" | "act";
 
@@ -88,7 +80,7 @@ function normalizeCapabilities(
  * distinct `phase()` titles encountered in the body.
  */
 export function deriveWorkflowShape(source: WorkflowSource): WorkflowShape {
-  const ts = loadTypescript();
+  const ts = loadTypeScript();
   const sf = ts.createSourceFile(
     source.absolutePath,
     source.sourceText,

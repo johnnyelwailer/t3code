@@ -1,7 +1,10 @@
 import * as Schema from "effect/Schema";
 
+import { createToolGroup, createToolRef, executeToolHandler } from "@runbook/tools";
+import { createScriptRef, executeScriptHandler } from "@runbook/scripts";
+import { defineModel as defineGenericModel } from "@runbook/threads/models";
+
 import {
-  decodeWithSchema,
   duplicateRegistrationError,
   ensureWorkflowPathExists,
   getRegistry,
@@ -50,12 +53,7 @@ export function defineToolGroup<const Id extends string>(opts: {
     throw duplicateRegistrationError("tool group", opts.id);
   }
 
-  const ref = Object.freeze({
-    kind: "tool-group" as const,
-    id: opts.id,
-    label: opts.label,
-    description: opts.description,
-  }) as T.ToolGroupRef<Id>;
+  const ref = createToolGroup(opts) as T.ToolGroupRef<Id>;
 
   registry.toolGroups.set(opts.id, ref as T.AnyToolGroupRef);
   return ref;
@@ -65,11 +63,7 @@ export function defineModel<const Provider extends string, const Id extends stri
   readonly provider: Provider;
   readonly id: Id;
 }): T.ModelRef<Id, Provider> {
-  return Object.freeze({
-    kind: "model" as const,
-    id: opts.id,
-    provider: opts.provider,
-  });
+  return defineGenericModel(opts);
 }
 
 export function defineTool<const Id extends string, Group extends T.ToolGroupRef, I, R>(opts: {
@@ -84,31 +78,22 @@ export function defineTool<const Id extends string, Group extends T.ToolGroupRef
     throw duplicateRegistrationError("tool", opts.id);
   }
 
-  let ref!: T.ToolRef<I, R, Id, Group>;
-  const callable = (args: I): Promise<R> => {
-    const runtime = runtimeStorage.getStore();
-    if (!runtime) {
-      throw new Error(
-        `Tool '${opts.id}' was called outside a workflow runtime. Use withWorkflowRuntime(...) or executeToolHandler(...).`,
-      );
-    }
+  const ref = createToolRef({
+    ...opts,
+    dispatch: (target, args) => {
+      const runtime = runtimeStorage.getStore();
+      if (!runtime) {
+        throw new Error(
+          `Tool '${opts.id}' was called outside a workflow runtime. Use withWorkflowRuntime(...) or executeToolHandler(...).`,
+        );
+      }
 
-    // Canonical dispatch: the engine's `runtime.callTool` validates args + result and
-    // journals exactly once. A directly-called ref forwards raw args (no decode here) so
-    // this path and the `tools.*` tree path are identical — same hash, no spurious drift.
-    return runtime.callTool(ref, args);
-  };
-
-  ref = Object.freeze(
-    Object.assign(callable, {
-      kind: "tool" as const,
-      id: opts.id,
-      group: opts.group,
-      args: opts.args,
-      result: opts.result,
-      handler: opts.handler,
-    }),
-  ) as T.ToolRef<I, R, Id, Group>;
+      // Canonical dispatch: the engine's `runtime.callTool` validates args + result and
+      // journals exactly once. A directly-called ref forwards raw args (no decode here) so
+      // this path and the `tools.*` tree path are identical — same hash, no spurious drift.
+      return runtime.callTool(target as T.ToolRef<I, R, Id, Group>, args);
+    },
+  }) as T.ToolRef<I, R, Id, Group>;
 
   registry.tools.set(opts.id, ref as T.AnyToolRef);
   return ref;
@@ -120,56 +105,26 @@ export function defineScript<I, O>(opts: {
   readonly handler: (args: I, ctx: T.ScriptHandlerCtx) => Promise<O>;
   readonly replay?: "default" | "never";
 }): T.ScriptRef<I, O> {
-  let ref!: T.ScriptRef<I, O>;
-  const callable = (args: I): Promise<O> => {
-    const runtime = runtimeStorage.getStore();
-    if (!runtime) {
-      throw new Error(
-        "Script refs require a workflow runtime dispatcher. Use withWorkflowRuntime(...) or executeScriptHandler(...).",
-      );
-    }
+  const ref = createScriptRef({
+    ...opts,
+    dispatch: (target, args) => {
+      const runtime = runtimeStorage.getStore();
+      if (!runtime) {
+        throw new Error(
+          "Script refs require a workflow runtime dispatcher. Use withWorkflowRuntime(...) or executeScriptHandler(...).",
+        );
+      }
 
-    // Canonical dispatch — see the note in defineTool's callable. The engine validates and
-    // journals; forwarding raw args keeps the direct-call and `scripts.*` tree paths aligned.
-    return runtime.callScript(ref, args);
-  };
-
-  ref = Object.freeze(
-    Object.assign(callable, {
-      kind: "script" as const,
-      replay: opts.replay ?? "default",
-      inputs: opts.inputs,
-      outputs: opts.outputs,
-      handler: opts.handler,
-    }),
-  ) as T.ScriptRef<I, O>;
+      // Canonical dispatch — see the note in defineTool's callable. The engine validates and
+      // journals; forwarding raw args keeps the direct-call and `scripts.*` tree paths aligned.
+      return runtime.callScript(target as T.ScriptRef<I, O>, args);
+    },
+  }) as T.ScriptRef<I, O>;
 
   return ref;
 }
 
-export async function executeToolHandler<I, R>(
-  ref: T.ToolRef<I, R>,
-  args: unknown,
-  ctx: T.ToolHandlerCtx,
-): Promise<R> {
-  const validatedArgs = await decodeWithSchema(
-    ref.args,
-    args,
-    `Invalid arguments for tool '${ref.id}'`,
-  );
-  const result = await ref.handler(validatedArgs, ctx);
-  return await decodeWithSchema(ref.result, result, `Invalid result for tool '${ref.id}'`);
-}
-
-export async function executeScriptHandler<I, O>(
-  ref: T.ScriptRef<I, O>,
-  args: unknown,
-  ctx: T.ScriptHandlerCtx,
-): Promise<O> {
-  const validatedArgs = await decodeWithSchema(ref.inputs, args, "Invalid arguments for script");
-  const result = await ref.handler(validatedArgs, ctx);
-  return await decodeWithSchema(ref.outputs, result, "Invalid result for script");
-}
+export { executeScriptHandler, executeToolHandler };
 
 export async function executeRegisteredTool(
   toolId: string,

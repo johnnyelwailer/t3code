@@ -1,3 +1,8 @@
+import {
+  filterHiddenSidebarItemsById,
+  sortSidebarItemsByStoredOrderById,
+} from "~/t3team/t3team-sidebarNavPreferences";
+import { buildTicketSidebarPinnedItemId } from "~/t3team/t3team-sidebarPinningTypes";
 import type { ProjectThread, ProjectTicket } from "~/t3team/t3team-types";
 
 /**
@@ -76,8 +81,23 @@ export function selectInboxWorkItems(input: {
   /** Atlassian account id of the viewer; `null` disables the assigned reason. */
   readonly viewerAccountId: string | null;
   readonly threadHasPullRequest: (threadId: string) => boolean;
+  /**
+   * Sidebar-nav preferences, flattened across projects. Item ids are already project-scoped
+   * (`<projectId>:jira-work-item:<ticketId>`), so a flat set cannot collide — which is what lets
+   * one cross-project stream honour preferences the Code lens stores per project.
+   */
+  readonly hiddenSidebarItemIds?: ReadonlyArray<string>;
+  readonly orderedSidebarItemIds?: ReadonlyArray<string>;
 }): ReadonlyArray<InboxWorkItemRow> {
-  const { tickets, threads, pinnedTicketIds, viewerAccountId, threadHasPullRequest } = input;
+  const {
+    tickets,
+    threads,
+    pinnedTicketIds,
+    viewerAccountId,
+    threadHasPullRequest,
+    hiddenSidebarItemIds = [],
+    orderedSidebarItemIds = [],
+  } = input;
 
   const threadsByTicketId = new Map<string, ProjectThread[]>();
   for (const thread of threads) {
@@ -111,9 +131,22 @@ export function selectInboxWorkItems(input: {
 
   // Most recent descendant activity first; work items with no activity yet sort last
   // but stay visible, and ties fall back to display id so ordering is stable.
-  return rows.sort(
+  rows.sort(
     (left, right) =>
       right.lastActivityAt.localeCompare(left.lastActivityAt) ||
       left.displayId.localeCompare(right.displayId),
+  );
+
+  // Then let the user's own arrangement win over recency. "Hide from sidebar" and "show at top"
+  // are explicit acts; activity ordering is only the default for items the user never touched.
+  // `sortSidebarItemsByStoredOrderById` is a stable sort that floats ordered ids to the front and
+  // leaves everything else in the activity order computed above.
+  const sidebarItemIdOf = (row: InboxWorkItemRow) =>
+    buildTicketSidebarPinnedItemId({ projectId: row.projectId, ticketId: row.ticketId });
+
+  return sortSidebarItemsByStoredOrderById(
+    filterHiddenSidebarItemsById(rows, hiddenSidebarItemIds, sidebarItemIdOf),
+    orderedSidebarItemIds,
+    sidebarItemIdOf,
   );
 }

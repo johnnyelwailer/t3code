@@ -7,10 +7,7 @@
  * errors BEFORE a run, rather than as a `PermissionDeniedError` mid-flight. The runtime gates stay
  * the backstop — this is the early-warning half.
  */
-import * as NodeModule from "node:module";
-
 import * as Schema from "effect/Schema";
-import type * as TsApi from "typescript";
 
 import { normalizeCapabilities } from "./t3team-sdk.capabilityGating.ts";
 import { scanCapabilities } from "./t3team-sdk.capabilityScan.ts";
@@ -19,13 +16,7 @@ import { extractMeta, prepareWorkflow, type WorkflowSource } from "./t3team-sdk.
 import type { WorkflowAuditFinding } from "./t3team-sdk.staticAuditTypes.ts";
 import { typeCheckWorkflowSource } from "./t3team-sdk.typeCheck.ts";
 import { getRegisteredTool } from "./t3team-sdk.ts";
-
-const nodeRequire = NodeModule.createRequire(import.meta.url);
-let cachedTs: typeof TsApi | undefined;
-function loadTypescript(): typeof TsApi {
-  cachedTs ??= nodeRequire("typescript") as typeof TsApi;
-  return cachedTs;
-}
+import { loadTypeScript } from "@runbook/ts/typescript";
 
 /** The default tool→group resolver: the SDK's `defineTool` registry. */
 export function registryToolGroupResolver(toolId: string): string | undefined {
@@ -58,7 +49,7 @@ export function auditWorkflowSourceStatic(
   source: WorkflowSource,
   options: WorkflowStaticAuditOptions = {},
 ): ReadonlyArray<WorkflowAuditFinding> {
-  const ts = loadTypescript();
+  const ts = loadTypeScript();
   const sf = ts.createSourceFile(
     source.absolutePath,
     source.sourceText,
