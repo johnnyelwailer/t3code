@@ -42,8 +42,14 @@ jobs:
         run: |
           git remote add upstream https://github.com/pingdotgg/t3code.git
           git fetch --no-tags upstream main
+          git fetch --no-tags origin main
           echo "UPSTREAM_HEAD=$(git rev-parse upstream/main)" >> "$GITHUB_ENV"
-          echo "SYNC_POINT=$(git merge-base HEAD upstream/main)" >> "$GITHUB_ENV"
+          # Pin to the point MAIN is synced to, not this ref's own merge-base. A long-lived branch
+          # forks from an older upstream, so `merge-base HEAD upstream/main` resolves years back and
+          # every upstream file since then reads as "modified by this PR" — 1402 of them on PR #36.
+          # Measuring every ref against main's sync point asks the right question: what does THIS
+          # change add on top of the upstream we are actually based on.
+          echo "SYNC_POINT=$(git merge-base origin/main upstream/main)" >> "$GITHUB_ENV"
 
       # ── Blocking ────────────────────────────────────────────────────────────────────────────────
       # Pins upstream/main to the commit this branch is SYNCED TO, so the guard measures our own
