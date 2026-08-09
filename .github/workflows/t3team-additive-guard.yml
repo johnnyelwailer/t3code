@@ -6,9 +6,9 @@
 # fires. Codex, Cursor, Copilot, humans and CI therefore never ran it, and 94 violations reached
 # main under a rule everyone believed was hard. CI is the one place that cannot be repointed.
 #
-# Deliberately standalone rather than a job in ci.yml: the guard imports only Node builtins, so it
-# needs no install, no Rust, and no Electron — it runs in seconds, and keeping it separate means a
-# slow or broken main CI never masks a guard regression.
+# Standalone rather than a job in ci.yml: the guard imports only Node builtins, so it needs no
+# install, no Rust and no Electron — it runs in seconds, and a slow or broken main CI cannot mask a
+# guard regression.
 name: T3Team Additive Guard
 
 on:
@@ -33,18 +33,36 @@ jobs:
           # The guard resolves `merge-base HEAD upstream/main`, so it needs real history.
           fetch-depth: 0
 
-      - name: Fetch upstream main
-        # baseRef in .t3team-additive-guard.json is `upstream/main`. Without this remote the guard
-        # falls back to origin/main, which on this fork compares main against itself and passes
-        # vacuously — the failure mode that makes a green check meaningless.
+      - name: Fetch upstream
+        # baseRef is `upstream/main` and the guard REFUSES any other value (enforceCanonicalBaseRef
+        # throws), so the remote must exist. Without it the guard silently falls back to origin/main,
+        # which on this fork compares main against itself and passes vacuously.
+        # Full, not shallow: a grafted shallow boundary can yield the wrong merge-base, which changes
+        # what counts as "changed" instead of failing loudly.
         run: |
           git remote add upstream https://github.com/pingdotgg/t3code.git
-          # Full, not shallow: the guard needs `merge-base HEAD upstream/main`, and a grafted
-          # shallow boundary can yield the wrong ancestor — which would quietly change what counts
-          # as "changed" rather than fail loudly.
           git fetch --no-tags upstream main
-          git rev-parse --verify upstream/main
-          echo "merge-base: $(git merge-base HEAD upstream/main)"
+          echo "UPSTREAM_HEAD=$(git rev-parse upstream/main)" >> "$GITHUB_ENV"
+          echo "SYNC_POINT=$(git merge-base HEAD upstream/main)" >> "$GITHUB_ENV"
 
-      - name: Run additive guard
-        run: node t3team-additive-guard.mjs
+      # ── Blocking ────────────────────────────────────────────────────────────────────────────────
+      # Pins upstream/main to the commit this branch is SYNCED TO, so the guard measures our own
+      # additive discipline — prefixes, unwhitelisted edits to upstream files, LOC ceilings — all of
+      # which the author controls. Left pointing at live upstream, every run would also fail the
+      # "whitelisted file has upstream changes" check the moment upstream touches any of our ~130
+      # whitelisted files, turning main red for reasons no PR can fix. That drift is real and worth
+      # knowing about, which is what the next step is for — it just must not gate merges.
+      - name: Additive guard (this branch vs its upstream base)
+        run: |
+          git update-ref refs/remotes/upstream/main "$SYNC_POINT"
+          node t3team-additive-guard.mjs
+
+      # ── Informational ───────────────────────────────────────────────────────────────────────────
+      - name: Upstream drift (informational)
+        continue-on-error: true
+        run: |
+          git update-ref refs/remotes/upstream/main "$UPSTREAM_HEAD"
+          echo "Synced to $SYNC_POINT; upstream/main is $UPSTREAM_HEAD."
+          echo "Upstream commits since sync: $(git rev-list --count "$SYNC_POINT..upstream/main")"
+          node t3team-additive-guard.mjs || true
+          echo "A failure here means upstream changed files this fork also changed — run a sync."
