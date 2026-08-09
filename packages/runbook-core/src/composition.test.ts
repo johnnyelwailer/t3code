@@ -54,10 +54,53 @@ describe("@runbook/core composition primitives", () => {
     expect(phases).toEqual(["review"]);
     expect(logs).toEqual(["started"]);
     expect(sleeps).toEqual([5]);
-    expect(calls.map((call) => call.kind)).toEqual(["parallel", "pipeline", "workflow", "wait"]);
+    // `workflow` is deliberately absent: a sub-run executes INLINE, in the caller's own journal
+    // sequence, so it takes no primitive seat of its own. `parallel` and `pipeline` still do,
+    // because their branches are concurrent and have to stay black-boxed to replay at all.
+    expect(calls.map((call) => call.kind)).toEqual(["parallel", "pipeline", "wait"]);
   });
 
-  it("retains the one-level nested-workflow guard", () => {
+  it("does not black-box a sub-workflow: the child's own primitive calls reach the seat", async () => {
+    const calls: PrimitiveCall<unknown>[] = [];
+    let blackBoxDepth = 0;
+    let depthSeenInsideChild = -1;
+    const primitives = createWorkflowPrimitives({
+      callPrimitive: async <R>(call: PrimitiveCall<R>): Promise<R> => {
+        calls.push(call as PrimitiveCall<unknown>);
+        return await call.exec();
+      },
+      runBlackBoxed: async (fn) => {
+        blackBoxDepth += 1;
+        try {
+          return await fn();
+        } finally {
+          blackBoxDepth -= 1;
+        }
+      },
+      sleep: async () => {},
+      spent: () => 0,
+      hostNow: () => 0,
+      budgetTotal: 0,
+      onPhase: () => {},
+      onLog: () => {},
+      // Stands in for a real child body: it makes one primitive call of its own, exactly as a
+      // sub-workflow's `agent`/`wait`/`askUser` would.
+      runSubWorkflow: async () => {
+        depthSeenInsideChild = blackBoxDepth;
+        await primitives.wait(1);
+        return "child-done";
+      },
+    });
+
+    await expect(primitives.workflow({ path: "./child.ts" })).resolves.toBe("child-done");
+
+    // The whole point: the child ran OUTSIDE any black box, so its `wait` was journaled and could
+    // have durably suspended. Sealed, it would have been depth 1 and invisible to the journal.
+    expect(depthSeenInsideChild).toBe(0);
+    expect(calls.map((call) => call.kind)).toEqual(["wait"]);
+  });
+
+  it("reports a missing sub-workflow executor rather than pretending nesting is capped", () => {
     const primitives = createWorkflowPrimitives({
       callPrimitive: async <R>(call: PrimitiveCall<R>) => call.exec(),
       runBlackBoxed: async (fn) => fn(),
@@ -69,6 +112,6 @@ describe("@runbook/core composition primitives", () => {
       onLog: () => {},
     });
 
-    expect(() => primitives.workflow({ path: "./nested.ts" })).toThrow("one level of nesting only");
+    expect(() => primitives.workflow({ path: "./nested.ts" })).toThrow("no sub-workflow executor");
   });
 });

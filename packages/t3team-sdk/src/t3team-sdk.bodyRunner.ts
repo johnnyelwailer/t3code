@@ -19,11 +19,9 @@ import {
   assertToolGroupDeclared,
   normalizeCapabilities,
 } from "./t3team-sdk.capabilityGating.ts";
-import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
-import { WorkflowError } from "./t3team-sdk.errors.ts";
 import type { HandleDispatch } from "./t3team-sdk.handles.ts";
 import { decodeWithSchema, setNestedValue } from "./t3team-sdk.internal.ts";
-import { createWorkflowPrimitives, type WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 import {
@@ -122,56 +120,4 @@ export async function runPreparedBody(opts: {
     output,
     `Invalid result from workflow '${meta.name}'`,
   );
-}
-
-/**
- * Build the workflow-body primitive set for a run: agent/wait/budget/etc. wired to the
- * durable runtime, plus a `workflow()` that runs a sub-workflow against a *nested* set whose
- * own `workflow()` throws (one level of nesting only). `captureCapabilities` must be fed the
- * top-level body's normalized capability set (runPreparedBody's `onCapabilities`) so a
- * `workflow()` child is intersected against the PARENT's declaration at invocation.
- */
-export function buildWorkflowPrimitives(opts: {
-  readonly runtime: DurableWorkflowRuntime;
-  readonly options: T.WorkflowRunOptions;
-  readonly toolRefs: ReadonlyArray<T.AnyToolRef>;
-  readonly scripts: Readonly<Record<string, T.AnyScriptRef>>;
-}): {
-  readonly primitives: WorkflowPrimitives;
-  readonly captureCapabilities: (capabilities: ReadonlySet<string>) => void;
-} {
-  const { runtime, options } = opts;
-  const broker = options.broker ?? defaultBroker;
-  const shared = {
-    callPrimitive: runtime.callPrimitive,
-    runBlackBoxed: runtime.runBlackBoxed,
-    spentAgentTokens: runtime.spentAgentTokens,
-    hostNow: runtime.hostNow,
-    budgetTotal: options.budget ?? 0,
-    onPhase: options.onPhase ?? (() => {}),
-    onLog: options.onLog ?? (() => {}),
-  };
-  // Filled by the top-level body's meta extraction, which always precedes any workflow() call.
-  let parentCapabilities: ReadonlySet<string> = new Set();
-  const nested = createWorkflowPrimitives(shared);
-  const runSubWorkflow = (ref: T.WorkflowRef, args: unknown): Promise<unknown> =>
-    runPreparedBody({
-      runtime,
-      ref,
-      args,
-      toolRefs: opts.toolRefs,
-      scripts: opts.scripts,
-      primitives: nested,
-      handleDispatch: runtime.handles,
-      broker,
-      parentCapabilities,
-      ...(options.launchThreadId === undefined ? {} : { launchThreadId: options.launchThreadId }),
-      ...(options.defaultModel === undefined ? {} : { defaultModel: options.defaultModel }),
-    });
-  return {
-    primitives: createWorkflowPrimitives({ ...shared, runSubWorkflow }),
-    captureCapabilities: (capabilities) => {
-      parentCapabilities = capabilities;
-    },
-  };
 }

@@ -388,29 +388,80 @@ The author's LLM surface is the **Thread model** (see [§The thread model](#the-
 there is **no** separate `agent.task` (deleted — "structured compute, no chat" is just
 `await agent("…", { schema })`). The composition primitives below are unchanged.
 
-| Import                   | Returns                       | Notes                                                                                                                                                                                                             |
-| ------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| `getThread()`            | `Thread \| undefined`         | The chat the user launched from; `undefined` when headless (cron/automation). An accessor, not a binding — see [§How an imported verb finds its run](#how-an-imported-verb-finds-its-run).                        |     |
-| `spawnThread(opts?)`     | `Thread`                      | Create a new isolated thread; returns a `Thread` bound to it.                                                                                                                                                     |
-| `agent(prompt, opts?)`   | `Promise<string \| T>`        | One-shot shortcut for `spawnThread(opts).askAgent(prompt, opts)`. With `schema: Schema<T>`, returns a validated `T`; the thread is not retained.                                                                  |
-| `parallel(thunks)`       | `Promise<R[]>`                | Concurrent fanout with a barrier. Failing thunks resolve to `null`.                                                                                                                                               |
-| `pipeline(items, …stgs)` | `Promise<R[]>`                | Per-item pipelined fanout — no barrier between stages.                                                                                                                                                            |
-| `workflow(ref, args?)`   | `Promise<O>`                  | Run another orchestration inline as a sub-step. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). One level of nesting; cycles refused.                                   |
-| `phase(title)`           | `void`                        | Start a progress group. `title` is typed as the union of `meta.phases[].title` literals when `meta.phases` is declared `as const` (recommended). Calling with a title outside that union is a compile-time error. |
-| `log(message)`           | `void`                        | Emit a narrator line above the progress tree.                                                                                                                                                                     |
-| `args`                   | `unknown`                     | The orchestration's input; validated against `meta.inputs` before the body runs.                                                                                                                                  |
-| `budget`                 | `{ total, spent, remaining }` | Token accumulator. Thread-turn token rollup is deferred (§Out of scope), so `spent()` currently reads 0.                                                                                                          |
+| Import                   | Returns                       | Notes                                                                                                                                                                                                                                                                                               |
+| ------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| `getThread()`            | `Thread \| undefined`         | The chat the user launched from; `undefined` when headless (cron/automation). An accessor, not a binding — see [§How an imported verb finds its run](#how-an-imported-verb-finds-its-run).                                                                                                          |     |
+| `spawnThread(opts?)`     | `Thread`                      | Create a new isolated thread; returns a `Thread` bound to it.                                                                                                                                                                                                                                       |
+| `agent(prompt, opts?)`   | `Promise<string \| T>`        | One-shot shortcut for `spawnThread(opts).askAgent(prompt, opts)`. With `schema: Schema<T>`, returns a validated `T`; the thread is not retained.                                                                                                                                                    |
+| `parallel(thunks)`       | `Promise<R[]>`                | Concurrent fanout with a barrier. Failing thunks resolve to `null`.                                                                                                                                                                                                                                 |
+| `pipeline(items, …stgs)` | `Promise<R[]>`                | Per-item pipelined fanout — no barrier between stages.                                                                                                                                                                                                                                              |
+| `workflow(ref, args?)`   | `Promise<O>`                  | Run another orchestration inline as a sub-step, in this run's own journal sequence. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). Any depth; recursion refused by name. See [§Sub-orchestrations are first class](#sub-orchestrations-are-first-class). |
+| `phase(title)`           | `void`                        | Start a progress group. `title` is typed as the union of `meta.phases[].title` literals when `meta.phases` is declared `as const` (recommended). Calling with a title outside that union is a compile-time error.                                                                                   |
+| `log(message)`           | `void`                        | Emit a narrator line above the progress tree.                                                                                                                                                                                                                                                       |
+| `args`                   | `unknown`                     | The orchestration's input; validated against `meta.inputs` before the body runs.                                                                                                                                                                                                                    |
+| `budget`                 | `{ total, spent, remaining }` | Token accumulator. Thread-turn token rollup is deferred (§Out of scope), so `spent()` currently reads 0.                                                                                                                                                                                            |
 
-> **Black-box journaling boundary (Stage-1).** `parallel`, `pipeline`, and `workflow`
-> are each journaled as **one** entry; primitive calls made inside their thunks/stages/
-> sub-orchestration body are **not** individually journaled — the composition primitive itself
-> is the journal boundary. On replay the recorded result is returned verbatim and the
-> thunks (and any LLM/tool/sub-orchestration calls inside them) do **not** re-execute. Two
-> consequences: (1) an author who needs fine-grained replay across N branches must refactor
-> those branches into sequential sub-orchestrations; (2) token accounting is the top-level journaled
-> calls only — work inside a `parallel`/`pipeline`/`workflow` thunk is invisible to the parent
-> budget. Per-thunk journaling would
-> require a deterministic event loop (the path Temporal takes) and is deferred past Stage-1.
+> **Black-box journaling boundary.** `parallel` and `pipeline` are each journaled as **one**
+> entry; primitive calls made inside their thunks/stages are **not** individually journaled —
+> the composition primitive itself is the journal boundary. On replay the recorded result is
+> returned verbatim and the thunks (and any LLM/tool calls inside them) do **not** re-execute.
+> Two consequences: (1) an author who needs fine-grained replay across N branches must refactor
+> those branches into sequential sub-orchestrations; (2) token accounting is the top-level
+> journaled calls only — work inside a `parallel`/`pipeline` thunk is invisible to the parent
+> budget. Per-thunk journaling would require a deterministic event loop (the path Temporal
+> takes) and is deferred.
+>
+> **`workflow()` is deliberately NOT in that list.** A sub-orchestration runs **inline, in the
+> caller's own journal sequence**: its primitive calls take their own `seq`, exactly as if the
+> author had written the child's body into the parent. That is what makes a sub-orchestration
+> first class — see [§Sub-orchestrations are first class](#sub-orchestrations-are-first-class).
+> The distinction is not stylistic: `parallel`/`pipeline` branches run _concurrently_, so their
+> calls would interleave differently on replay and the journal would mismatch; a `workflow()`
+> child is _sequential_, one at a time, in a deterministic order. Concurrency is the reason for
+> the black box, not composition.
+>
+> A `workflow()` called from inside a `parallel` thunk or a `pipeline` stage is still inside that
+> black box, with all the consequences above. Nesting a sub-orchestration under a concurrent
+> primitive gives up its journaling; that is inherent, not an oversight.
+
+### Sub-orchestrations are first class
+
+> **Status: implemented.** A sub-orchestration lacks nothing a root body has.
+
+An orchestration invoked with `workflow(ref, args)` is a real body, not a sealed side-quest:
+
+| it can                                                    | because                                                                                                                           |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **durably suspend** on `askUser` and resume days later    | its ask writes a real `sent` entry in the run's journal, so the reply has somewhere to land after a restart                       |
+| **reach the person who launched the run**, from any depth | the host passes `launchThreadId` straight down, so `getThread()` is the launching chat — not a nested context the user cannot see |
+| **replay deterministically**                              | `now`/`random`/`uuid` are journaled at every depth, so a resume replays the recorded draw                                         |
+| **resume part-way**                                       | its calls are individually journaled, so work already done is not redone                                                          |
+| **nest further**                                          | there is no depth cap                                                                                                             |
+| use `scripts.*`                                           | it shares the launching recipe's script tree                                                                                      |
+
+The one thing it cannot do is **widen its authority**: `meta.capabilities` is intersected against
+its immediate caller's, so authority only ever narrows going down.
+
+Three constraints follow from the design, and none of them is a special case for children:
+
+- **Recursion is refused**, by name, with the offending chain in the message. A recursive body
+  cannot replay: each iteration writes entries at a `seq` that depends on how many iterations ran
+  before it, so a resume re-entering with different data drifts. A loop in the caller's own body
+  has no such problem and covers every case this shape would.
+- **Editing a sub-orchestration's body shifts the caller's later `seq` values**, so a run already
+  suspended against the old body will not line up. The engine fails loudly (`assertJournalMatch` /
+  gap drift) rather than silently doing the wrong thing — the same contract that already governs
+  editing a root body.
+- **Under `parallel`/`pipeline`, a sub-orchestration is inside their black box** and gives up
+  everything in the table above. That is inherent to concurrency, not a limitation of nesting.
+
+> **History.** An earlier revision ran `workflow()` inside `runBlackBoxed` as one journal entry and
+> capped nesting at one level — the cap existed only because a child was handed a primitive set with
+> no sub-workflow executor. The cap was the visible symptom; the black box was the cause. Sealing a
+> child meant its asks got an in-memory resolver (they died with the process), its `now`/`random`
+> drew fresh values on replay, and the whole sub-run was replay-or-re-execute with nothing in
+> between. Removing the black box for sequential sub-runs fixed all three, and made the depth cap
+> pointless.
 
 ### The thread model
 
@@ -721,6 +772,8 @@ own label table. This is the one place declarative JSON beats TS-as-config — t
 needs to see the request _before_ executing the code that would ask for it.
 
 Nested orchestrations can declare a subset of the parent's capabilities but never a superset.
+The check runs against the **immediate** caller, not the root, so capabilities narrow monotonically
+down a chain of any depth: a grandchild cannot recover something its parent gave up.
 The engine intersects at invocation.
 
 ## Tools

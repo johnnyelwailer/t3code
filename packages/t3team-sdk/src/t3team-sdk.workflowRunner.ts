@@ -9,7 +9,8 @@ import * as DateTime from "effect/DateTime";
 
 import type { ExecuteBodyRequest } from "@runbook/core/runEngine";
 
-import { buildWorkflowPrimitives, runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
+import { runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
+import { buildWorkflowPrimitives } from "./t3team-sdk.subWorkflows.ts";
 import {
   createDurableWorkflowRuntime,
   type DurableWorkflowRuntime,
