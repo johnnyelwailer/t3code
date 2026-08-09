@@ -1,0 +1,50 @@
+# The fork's additive guard, enforced.
+#
+# Why this file exists: the guard was previously reachable only from a Claude Code PostToolUse hook,
+# and only its FAST variant (new files, capped at 80). `.githooks/pre-commit` does run the full
+# guard, but `core.hooksPath` is repointed at vite-plus's `.vite-hooks/_` by `prepare`, so it never
+# fires. Codex, Cursor, Copilot, humans and CI therefore never ran it, and 94 violations reached
+# main under a rule everyone believed was hard. CI is the one place that cannot be repointed.
+#
+# Deliberately standalone rather than a job in ci.yml: the guard imports only Node builtins, so it
+# needs no install, no Rust, and no Electron — it runs in seconds, and keeping it separate means a
+# slow or broken main CI never masks a guard regression.
+name: T3Team Additive Guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: t3team-additive-guard-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  additive-guard:
+    name: Additive guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # The guard resolves `merge-base HEAD upstream/main`, so it needs real history.
+          fetch-depth: 0
+
+      - name: Fetch upstream main
+        # baseRef in .t3team-additive-guard.json is `upstream/main`. Without this remote the guard
+        # falls back to origin/main, which on this fork compares main against itself and passes
+        # vacuously — the failure mode that makes a green check meaningless.
+        run: |
+          git remote add upstream https://github.com/pingdotgg/t3code.git
+          # Full, not shallow: the guard needs `merge-base HEAD upstream/main`, and a grafted
+          # shallow boundary can yield the wrong ancestor — which would quietly change what counts
+          # as "changed" rather than fail loudly.
+          git fetch --no-tags upstream main
+          git rev-parse --verify upstream/main
+          echo "merge-base: $(git merge-base HEAD upstream/main)"
+
+      - name: Run additive guard
+        run: node t3team-additive-guard.mjs
