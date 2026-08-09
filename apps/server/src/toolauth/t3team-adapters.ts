@@ -46,7 +46,8 @@ export const CLAUDE: ToolAuthAdapter = {
     // incidental prose like "Login successful; expired credentials removed",
     // which is a SUCCESS line. Success is matched first now, but a matcher this
     // loose would still mislabel any failure-free line that mentions expiry.
-    failure: /authentication failed|login failed|invalid code|(?:code|token|session|link) (?:has )?expired/i,
+    failure:
+      /authentication failed|login failed|invalid code|(?:code|token|session|link) (?:has )?expired/i,
   },
   status: {
     // A HINT, not authoritative (see `ToolAuthStatusConfig.credentialPath`):

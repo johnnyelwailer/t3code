@@ -1,6 +1,11 @@
 import { classifyMediaKind, type T3TeamMediaKind } from "~/t3team/lib/t3team-mediaKind";
 import { safeAdfHref } from "./t3team-adfLinkTargets";
-import { adfAttrNumber, adfAttrString, type AdfNode, type AdfRenderContext } from "./t3team-adfRendererTypes";
+import {
+  adfAttrNumber,
+  adfAttrString,
+  type AdfNode,
+  type AdfRenderContext,
+} from "./t3team-adfRendererTypes";
 
 /**
  * ADF media carries a Media Services id rather than a URL, so we hand the host resolver

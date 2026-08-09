@@ -59,7 +59,9 @@ function readNumber(value: unknown): number | undefined {
 
 function readNameList(value: unknown): ReadonlyArray<string> | undefined {
   if (!Array.isArray(value)) return undefined;
-  const names = value.map((entry) => readName(entry)).filter((name): name is string => name !== undefined);
+  const names = value
+    .map((entry) => readName(entry))
+    .filter((name): name is string => name !== undefined);
   return names.length > 0 ? names : undefined;
 }
 
@@ -79,16 +81,22 @@ export function extractResolvedAt(fields: Record<string, unknown>): string | und
   return readStringField(fields, "resolutiondate");
 }
 
-export function extractComponents(fields: Record<string, unknown>): ReadonlyArray<string> | undefined {
+export function extractComponents(
+  fields: Record<string, unknown>,
+): ReadonlyArray<string> | undefined {
   return readNameList(fields.components);
 }
 
-export function extractFixVersions(fields: Record<string, unknown>): ReadonlyArray<string> | undefined {
+export function extractFixVersions(
+  fields: Record<string, unknown>,
+): ReadonlyArray<string> | undefined {
   return readNameList(fields.fixVersions);
 }
 
 /** Jira's "versions" field is the issue's Affects Version/s. */
-export function extractAffectsVersions(fields: Record<string, unknown>): ReadonlyArray<string> | undefined {
+export function extractAffectsVersions(
+  fields: Record<string, unknown>,
+): ReadonlyArray<string> | undefined {
   return readNameList(fields.versions);
 }
 
@@ -170,10 +178,14 @@ export function extractParentSummary(parent: unknown): JiraParentSummary | undef
   if (!key) return undefined;
   const parentFields = obj.fields;
   const parentFieldsRecord =
-    parentFields && typeof parentFields === "object" ? (parentFields as Record<string, unknown>) : undefined;
+    parentFields && typeof parentFields === "object"
+      ? (parentFields as Record<string, unknown>)
+      : undefined;
   const summary = parentFieldsRecord ? readSummary(parentFieldsRecord) : undefined;
   const issueType = parentFieldsRecord ? readName(parentFieldsRecord.issuetype) : undefined;
-  const issueTypeIconUrl = parentFieldsRecord ? readIconUrl(parentFieldsRecord.issuetype) : undefined;
+  const issueTypeIconUrl = parentFieldsRecord
+    ? readIconUrl(parentFieldsRecord.issuetype)
+    : undefined;
   const statusName = parentFieldsRecord ? readName(parentFieldsRecord.status) : undefined;
 
   return {

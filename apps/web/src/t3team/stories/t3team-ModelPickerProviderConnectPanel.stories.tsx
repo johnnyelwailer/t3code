@@ -28,7 +28,11 @@ function provider(input: {
 }
 
 const CLAUDE_ENTRY = deriveProviderInstanceEntries([
-  provider({ driverKind: ProviderDriverKind.make("claudeAgent"), instanceId: "claudeAgent", displayName: "Claude Code" }),
+  provider({
+    driverKind: ProviderDriverKind.make("claudeAgent"),
+    instanceId: "claudeAgent",
+    displayName: "Claude Code",
+  }),
 ])[0]!;
 
 const CODEX_NOT_INSTALLED_ENTRY = deriveProviderInstanceEntries([
@@ -64,9 +68,7 @@ function PickerListAreaFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ConnectPanelStory(
-  props: React.ComponentProps<typeof ModelPickerProviderConnectPanel>,
-) {
+function ConnectPanelStory(props: React.ComponentProps<typeof ModelPickerProviderConnectPanel>) {
   return (
     <PickerListAreaFrame>
       <ModelPickerProviderConnectPanel {...props} />
@@ -110,7 +112,10 @@ const GALLERY_STATES: ReadonlyArray<{
   label: string;
   props: React.ComponentProps<typeof ModelPickerProviderConnectPanel>;
 }> = [
-  { label: "Needs auth — Claude", props: { entry: CLAUDE_ENTRY, tool: "claude", readiness: "needsAuth" } },
+  {
+    label: "Needs auth — Claude",
+    props: { entry: CLAUDE_ENTRY, tool: "claude", readiness: "needsAuth" },
+  },
   {
     label: "Needs install — Codex",
     props: { entry: CODEX_NOT_INSTALLED_ENTRY, tool: "codex", readiness: "needsInstall" },

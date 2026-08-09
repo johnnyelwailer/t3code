@@ -6,7 +6,11 @@ import {
   resolveEmbeddedThread,
   resolveThreadProject,
 } from "~/t3team/t3team-appMainContentResolution";
-import { readActiveThreadIdFromView, type ProjectThread, type ViewState } from "~/t3team/t3team-types";
+import {
+  readActiveThreadIdFromView,
+  type ProjectThread,
+  type ViewState,
+} from "~/t3team/t3team-types";
 import { useThreadResolutionDebug } from "~/t3team/t3team-useThreadResolutionDebug";
 import { readProjectIdFromView } from "~/t3team/t3team-types";
 
@@ -25,8 +29,14 @@ export function useAppMainContentThreadResolution(input: {
   homeChatThreadId: string | null;
   getThreadsForProject: (projectId: string) => ProjectThread[];
 }) {
-  const { view, allProjects, homeProject, homeChatProject, homeChatThreadId, getThreadsForProject } =
-    input;
+  const {
+    view,
+    allProjects,
+    homeProject,
+    homeChatProject,
+    homeChatThreadId,
+    getThreadsForProject,
+  } = input;
 
   useSyncActiveChatTarget({
     view,

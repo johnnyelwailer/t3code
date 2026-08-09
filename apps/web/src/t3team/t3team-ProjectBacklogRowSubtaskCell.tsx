@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 
-import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+} from "~/t3team/backend/t3team-types";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/t3team/components/ui/t3team-popover";

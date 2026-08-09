@@ -63,7 +63,8 @@ NodeFS.writeFileSync(
 // Plain string concatenation (not `path.join`) is load-bearing: joining "~" with a relative path
 // that starts with ".." would normalize the two away, silently defeating this fixture. This never
 // writes into the real `$HOME` — it only aliases the existing gitignored fixture path above.
-const toTildePath = (absolutePath: string) => `~/${NodePath.relative(NodeOS.homedir(), absolutePath)}`;
+const toTildePath = (absolutePath: string) =>
+  `~/${NodePath.relative(NodeOS.homedir(), absolutePath)}`;
 
 const TestLayer = Layer.mergeAll(WorkflowRunRepositoryLive, WorkflowJournalStoreLive).pipe(
   Layer.provide(SqlitePersistenceMemory),

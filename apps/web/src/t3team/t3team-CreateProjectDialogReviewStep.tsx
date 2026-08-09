@@ -37,19 +37,14 @@ export function ReviewStep({
     customProfile,
     packProfiles,
   });
-  const workspacePath = useMemo(
-    () => makeWorkspacePath(projectTitle ?? "Project"),
-    [projectTitle],
-  );
+  const workspacePath = useMemo(() => makeWorkspacePath(projectTitle ?? "Project"), [projectTitle]);
   const siteLabel = selectedAccount?.accountUrl
     ? (atlassianSiteHost(selectedAccount.accountUrl) ?? selectedAccount.accountUrl)
     : (selectedAccount?.label ?? "—");
 
   return (
     <section className="space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Review the setup below, then add the project.
-      </p>
+      <p className="text-xs text-muted-foreground">Review the setup below, then add the project.</p>
       <dl className="grid gap-y-3 rounded-xl border border-border/65 bg-muted/15 px-3 py-3">
         <CreateProjectDialogReviewDetails
           siteLabel={siteLabel}

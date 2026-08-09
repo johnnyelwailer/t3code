@@ -13,21 +13,23 @@ import {
 } from "./t3team-toolauthTestHarness.ts";
 
 describe("ToolAuthService", () => {
-  it.effect("start() spawns via the pty adapter with the adapter's command, in the starting phase", () =>
-    Effect.gen(function* () {
-      const homeDir = makeTempHome();
-      try {
-        const { service, ptyAdapter } = yield* makeService(homeDir);
-        const state = yield* service.start("fake");
-        expect(state.phase).toBe("starting");
-        expect(ptyAdapter.processes).toHaveLength(1);
-        expect(ptyAdapter.spawnInputs[0]?.shell).toBe(FAKE.command[0]);
-        expect(ptyAdapter.spawnInputs[0]?.args).toEqual(FAKE.command.slice(1));
-        expect(ptyAdapter.spawnInputs[0]?.cwd).toBe(homeDir);
-      } finally {
-        removeTempHome(homeDir);
-      }
-    }),
+  it.effect(
+    "start() spawns via the pty adapter with the adapter's command, in the starting phase",
+    () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          const { service, ptyAdapter } = yield* makeService(homeDir);
+          const state = yield* service.start("fake");
+          expect(state.phase).toBe("starting");
+          expect(ptyAdapter.processes).toHaveLength(1);
+          expect(ptyAdapter.spawnInputs[0]?.shell).toBe(FAKE.command[0]);
+          expect(ptyAdapter.spawnInputs[0]?.args).toEqual(FAKE.command.slice(1));
+          expect(ptyAdapter.spawnInputs[0]?.cwd).toBe(homeDir);
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
   );
 
   it.effect("returns the existing session instead of spawning twice", () =>
@@ -53,11 +55,15 @@ describe("ToolAuthService", () => {
         const process = ptyAdapter.processes[0]!;
 
         process.emitData("If it does not open, visit: https://example.invalid/device/AbC123\n");
-        yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-open")));
+        yield* waitFor(
+          firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-open")),
+        );
         expect((yield* firstFakeState(service))?.url).toBe("https://example.invalid/device/AbC123");
 
         process.emitData("Paste code here if prompted:");
-        yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-code")));
+        yield* waitFor(
+          firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-code")),
+        );
 
         process.emitData("Login successful\n");
         yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "connected")));
@@ -76,7 +82,9 @@ describe("ToolAuthService", () => {
         const process = ptyAdapter.processes[0]!;
         process.emitData("If it does not open, visit: https://example.invalid/device/AbC123\n");
         process.emitData("Paste code here if prompted:");
-        yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-code")));
+        yield* waitFor(
+          firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-code")),
+        );
 
         const state = yield* service.submitCode("fake", "  GOOD  ");
         expect(state.phase).toBe("verifying");
@@ -222,11 +230,10 @@ describe("ToolAuthService", () => {
         const process = ptyAdapter.processes[0]!;
         process.emitData("If it does not open, visit: https://example.invalid/device/AbC123\n");
         yield* waitFor(
-          Effect.sync(
-            () =>
-              events.some(
-                (event) => event.type === "update" && event.state.phase === "awaiting-open",
-              ),
+          Effect.sync(() =>
+            events.some(
+              (event) => event.type === "update" && event.state.phase === "awaiting-open",
+            ),
           ),
         );
 

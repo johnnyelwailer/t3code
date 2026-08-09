@@ -2,7 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ChildIssueCreateForm } from "./t3team-ChildIssueCreateForm";
-import { EMPTY_CHILD_ISSUE_CREATE_DRAFT, type ChildIssueCreateDraft } from "./t3team-childIssueCreateTypes";
+import {
+  EMPTY_CHILD_ISSUE_CREATE_DRAFT,
+  type ChildIssueCreateDraft,
+} from "./t3team-childIssueCreateTypes";
 
 describe("ChildIssueCreateForm", () => {
   it("renders issue type, summary, assignee, estimate and description fields", () => {

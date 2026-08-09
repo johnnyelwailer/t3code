@@ -9,7 +9,6 @@ import { describe, expect, it } from "vite-plus/test";
 import { buildBundledActionPlacement } from "./actionPlacements.js";
 import { getBundledT3TeamRecipe, listBundledT3TeamRecipes } from "./recipes.js";
 
-
 /** Minimal render context carrying relationship data a recipe's `visible` filter can read. */
 function contextWithChildren(childKeys: ReadonlyArray<string>) {
   return {
@@ -18,7 +17,12 @@ function contextWithChildren(childKeys: ReadonlyArray<string>) {
     workitem: {
       kind: "ticket",
       type: "Epic",
-      relationships: { childKeys: [...childKeys], referenceKeys: [], blockedByKeys: [], blockingKeys: [] },
+      relationships: {
+        childKeys: [...childKeys],
+        referenceKeys: [],
+        blockedByKeys: [],
+        blockingKeys: [],
+      },
     },
     // The filter under test reads only `workitem.relationships`; the rest is structural filler.
     profile: { technicalDepth: "medium", brevity: "balanced", guidanceStyle: "balanced" },
@@ -30,7 +34,10 @@ function contextWithChildren(childKeys: ReadonlyArray<string>) {
 /** Relationships absent entirely = host has not enriched them yet. */
 function contextWithoutRelationships() {
   const base = contextWithChildren([]) as { workitem?: Record<string, unknown> };
-  return { ...base, workitem: { kind: "ticket", type: "Epic" } } as unknown as ProjectRecipeRenderContext;
+  return {
+    ...base,
+    workitem: { kind: "ticket", type: "Epic" },
+  } as unknown as ProjectRecipeRenderContext;
 }
 
 function buildMatchInput(overrides: Partial<RecipeMatchInput> = {}): RecipeMatchInput {

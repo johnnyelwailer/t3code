@@ -41,7 +41,11 @@ describe("projectBindingState", () => {
 
   it("classifies a complete non-local binding as bound", () => {
     expect(
-      projectBindingState({ provider: "atlassian", accountId: "acc-1", externalProjectId: "10001" }),
+      projectBindingState({
+        provider: "atlassian",
+        accountId: "acc-1",
+        externalProjectId: "10001",
+      }),
     ).toBe("bound");
   });
 
@@ -117,7 +121,11 @@ describe("reconcileStoredProjectSource", () => {
       stored({ provider: "local" }),
       live({ provider: "atlassian", accountId: "acc-1", externalProjectId: "10001" }),
     );
-    expect(result.source).toEqual({ provider: "atlassian", accountId: "acc-1", externalProjectId: "10001" });
+    expect(result.source).toEqual({
+      provider: "atlassian",
+      accountId: "acc-1",
+      externalProjectId: "10001",
+    });
   });
 
   it("server absent but stored already bound -> keeps the stored binding", () => {

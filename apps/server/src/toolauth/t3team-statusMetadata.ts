@@ -38,7 +38,10 @@ export function normalizeExpiry(raw: unknown): number | undefined {
   return undefined;
 }
 
-export function parseCredentialExpiry(adapter: ToolAuthAdapter, fileText: string): number | undefined {
+export function parseCredentialExpiry(
+  adapter: ToolAuthAdapter,
+  fileText: string,
+): number | undefined {
   const dotPath = adapter.status.credentialExpiryPath;
   if (!dotPath) return undefined;
   try {

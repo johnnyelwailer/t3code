@@ -2528,9 +2528,9 @@ describe("AtlassianIntegrationProvider", () => {
       apiToken: "token",
     });
 
-    await expect(
-      provider.getIssueLinkTypes("https://test.atlassian.net"),
-    ).resolves.toEqual([{ id: "1", name: "Blocks", inward: "is blocked by", outward: "blocks" }]);
+    await expect(provider.getIssueLinkTypes("https://test.atlassian.net")).resolves.toEqual([
+      { id: "1", name: "Blocks", inward: "is blocked by", outward: "blocks" },
+    ]);
   });
 
   describe("backlog quick filter GraphQL fallback", () => {

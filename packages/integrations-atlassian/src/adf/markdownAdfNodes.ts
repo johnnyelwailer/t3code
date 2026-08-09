@@ -44,7 +44,10 @@ export function taskListNode(items: AdfNode[]): AdfNode {
 }
 
 function tableCellNode(text: string, isHeader: boolean): AdfNode {
-  return { type: isHeader ? "tableHeader" : "tableCell", content: [paragraphNode(parseInline(text))] };
+  return {
+    type: isHeader ? "tableHeader" : "tableCell",
+    content: [paragraphNode(parseInline(text))],
+  };
 }
 
 export function tableNode(rows: string[][]): AdfNode | undefined {
@@ -54,7 +57,10 @@ export function tableNode(rows: string[][]): AdfNode | undefined {
     type: "table",
     content: [
       { type: "tableRow", content: (head ?? []).map((c) => tableCellNode(c, true)) },
-      ...body.map((row) => ({ type: "tableRow", content: row.map((c) => tableCellNode(c, false)) })),
+      ...body.map((row) => ({
+        type: "tableRow",
+        content: row.map((c) => tableCellNode(c, false)),
+      })),
     ],
   };
 }

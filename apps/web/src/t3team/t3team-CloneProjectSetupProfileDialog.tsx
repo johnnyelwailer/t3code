@@ -65,7 +65,9 @@ export function T3TeamCloneProjectSetupProfileDialog({
         above it, not a second call to action competing with it.
       */}
       <DialogTrigger
-        render={<Button type="button" variant="ghost" size="sm" className="text-muted-foreground" />}
+        render={
+          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" />
+        }
       >
         Clone starter profile
       </DialogTrigger>

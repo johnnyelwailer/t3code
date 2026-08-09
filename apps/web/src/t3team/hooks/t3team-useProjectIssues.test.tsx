@@ -46,9 +46,7 @@ function createResourcePage(keys: ReadonlyArray<string>): ResourcePage {
   } as ResourcePage;
 }
 
-function createBackend(
-  listProjectIssues: () => Promise<T3TeamProjectIssuesResult>,
-): BackendApi {
+function createBackend(listProjectIssues: () => Promise<T3TeamProjectIssuesResult>): BackendApi {
   return {
     state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
     connect: async () => undefined,

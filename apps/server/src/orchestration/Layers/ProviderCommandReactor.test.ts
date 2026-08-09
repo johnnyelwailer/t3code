@@ -1,3 +1,7 @@
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- This suite is plain vite-plus
+   describe/it, not @effect/vitest, so the fork's added activity-append dispatches have to
+   bridge Effect by hand. Converting the whole file to it.effect is a much larger change to
+   an upstream test than the assertions warrant. */
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";

@@ -2,7 +2,10 @@ import type { Virtualizer } from "@tanstack/react-virtual";
 import { memo } from "react";
 import type { MouseEvent } from "react";
 
-import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+} from "~/t3team/backend/t3team-types";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import { ProjectBacklogTableVirtualRowView } from "~/t3team/t3team-ProjectBacklogTableVirtualRow";
 import type { ProjectBacklogTicketContext } from "~/t3team/t3team-projectBacklogPresentation";

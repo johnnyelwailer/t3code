@@ -50,7 +50,9 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
 
         {row.changeLine ? (
           <span className="flex min-w-0 flex-1 items-center gap-1.5">
-            <span className="truncate text-muted-foreground line-through">{row.changeLine.from}</span>
+            <span className="truncate text-muted-foreground line-through">
+              {row.changeLine.from}
+            </span>
             <ChevronRight className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="truncate font-medium text-foreground">{row.changeLine.to}</span>
           </span>
@@ -79,7 +81,12 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
         )}
 
         {row.reviewInPlace ? (
-          <Button size="xs" variant="ghost" className="shrink-0" onClick={row.reviewInPlace.onClick}>
+          <Button
+            size="xs"
+            variant="ghost"
+            className="shrink-0"
+            onClick={row.reviewInPlace.onClick}
+          >
             Review in place
             <ArrowRight className="size-3.5" />
           </Button>
@@ -116,7 +123,9 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
           </div>
         </div>
       ) : row.summary && !row.reviewInPlace ? (
-        <p className="mt-0.5 pl-[4.5rem] text-[11px] leading-4 text-muted-foreground">{row.summary}</p>
+        <p className="mt-0.5 pl-[4.5rem] text-[11px] leading-4 text-muted-foreground">
+          {row.summary}
+        </p>
       ) : null}
     </div>
   );

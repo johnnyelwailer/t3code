@@ -41,7 +41,9 @@ const stubProcessRunner = (
 ): ProcessRunner.ProcessRunner["Service"] => ProcessRunner.ProcessRunner.of({ run });
 
 /** Serializes internally so call sites never need a bare `JSON.stringify` of their own. */
-const okJsonResult = (payload: unknown): ReturnType<ProcessRunner.ProcessRunner["Service"]["run"]> =>
+const okJsonResult = (
+  payload: unknown,
+): ReturnType<ProcessRunner.ProcessRunner["Service"]["run"]> =>
   Effect.succeed({
     stdout: JSON.stringify(payload),
     stderr: "",
@@ -110,7 +112,11 @@ it.layer(NodeServices.layer)("toolauth status probe", (it) => {
           // the real authenticated shape has not been confirmed). This
           // exercises the extraction mechanism itself, not the real CLI shape.
           const state = yield* probe(CLAUDE, homeDir, () =>
-            okJsonResult({ loggedIn: true, account: "jane@example.com", organization: "Acme Corp" }),
+            okJsonResult({
+              loggedIn: true,
+              account: "jane@example.com",
+              organization: "Acme Corp",
+            }),
           );
           expect(state.phase).toBe("connected");
           expect(state.account).toBe("jane@example.com");
@@ -169,22 +175,24 @@ it.layer(NodeServices.layer)("toolauth status probe", (it) => {
       }),
     );
 
-    it.effect("downgrades a stale credential to expired regardless of what the probe reported", () =>
-      Effect.gen(function* () {
-        const homeDir = makeTempHome();
-        try {
-          yield* TestClock.setTime(realNowMs());
-          const now = yield* Clock.currentTimeMillis;
-          writeCredentialFile(homeDir, CLAUDE.status.credentialPath, { expiresAt: now - 60_000 });
-          const state = yield* probe(CLAUDE, homeDir, () =>
-            okJsonResult({ loggedIn: true, authMethod: "claudeai", apiProvider: "firstParty" }),
-          );
-          expect(state.phase).toBe("expired");
-          expect(state.message).toBeDefined();
-        } finally {
-          removeTempHome(homeDir);
-        }
-      }),
+    it.effect(
+      "downgrades a stale credential to expired regardless of what the probe reported",
+      () =>
+        Effect.gen(function* () {
+          const homeDir = makeTempHome();
+          try {
+            yield* TestClock.setTime(realNowMs());
+            const now = yield* Clock.currentTimeMillis;
+            writeCredentialFile(homeDir, CLAUDE.status.credentialPath, { expiresAt: now - 60_000 });
+            const state = yield* probe(CLAUDE, homeDir, () =>
+              okJsonResult({ loggedIn: true, authMethod: "claudeai", apiProvider: "firstParty" }),
+            );
+            expect(state.phase).toBe("expired");
+            expect(state.message).toBeDefined();
+          } finally {
+            removeTempHome(homeDir);
+          }
+        }),
     );
 
     it.effect("warns ahead of expiry rather than only after it", () =>

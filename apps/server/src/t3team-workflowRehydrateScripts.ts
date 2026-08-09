@@ -21,10 +21,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
-import {
-  NO_RECIPE_SCRIPTS,
-  resolveRecipeWorkflowScripts,
-} from "./t3team-recipeWorkflowScripts.ts";
+import { NO_RECIPE_SCRIPTS, resolveRecipeWorkflowScripts } from "./t3team-recipeWorkflowScripts.ts";
 
 export const resolveRehydratedWorkflowScripts = Effect.fn("resolveRehydratedWorkflowScripts")(
   function* (run: {

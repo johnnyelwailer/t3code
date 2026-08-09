@@ -1,6 +1,9 @@
 import { Check } from "lucide-react";
 
-import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+} from "~/t3team/backend/t3team-types";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { ProjectBacklogRowSubtaskCell } from "~/t3team/t3team-ProjectBacklogRowPlanningCells";
 import type { ProjectBacklogSubtaskCreateInput, ProjectTicket } from "~/t3team/t3team-types";

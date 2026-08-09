@@ -1,4 +1,7 @@
-import { AtlassianIntegrationProvider, type JiraIssueLinkType } from "@t3tools/integrations-atlassian";
+import {
+  AtlassianIntegrationProvider,
+  type JiraIssueLinkType,
+} from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
 
 import { providerForAccount } from "./t3team-atlassian-auth-store.ts";

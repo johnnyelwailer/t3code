@@ -82,9 +82,7 @@ export function TicketDetailView({
       projectId={project.id}
       ticketId={resolvedTicketId}
       issueIdOrKey={view.fieldModel.key}
-      {...(project.workspace?.rootPath
-        ? { projectWorkspaceRoot: project.workspace.rootPath }
-        : {})}
+      {...(project.workspace?.rootPath ? { projectWorkspaceRoot: project.workspace.rootPath } : {})}
       {...(view.fieldModel.descriptionText
         ? { descriptionText: view.fieldModel.descriptionText }
         : {})}

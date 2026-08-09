@@ -81,8 +81,11 @@ function backendSpy() {
     dispatchCommand,
     launchRecipeWorkflow,
     syncThreadToolContext,
-    backend: { dispatchCommand, launchRecipeWorkflow, syncThreadToolContext } as unknown as
-      BackendApi,
+    backend: {
+      dispatchCommand,
+      launchRecipeWorkflow,
+      syncThreadToolContext,
+    } as unknown as BackendApi,
   };
 }
 

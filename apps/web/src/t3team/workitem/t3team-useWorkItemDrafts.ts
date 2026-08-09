@@ -60,7 +60,8 @@ export function pickScalarDraft(
 /** Pending drafts for fields that have no other review surface (document drafts have their own). */
 export function countWorkItemScalarDrafts(byField: WorkItemDraftsByField): number {
   return Object.values(byField).filter(
-    (draft): draft is T3TeamScalarDraftMutation => draft !== undefined && !isT3TeamDocumentDraftMutation(draft),
+    (draft): draft is T3TeamScalarDraftMutation =>
+      draft !== undefined && !isT3TeamDocumentDraftMutation(draft),
   ).length;
 }
 

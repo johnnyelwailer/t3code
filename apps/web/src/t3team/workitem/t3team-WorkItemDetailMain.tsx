@@ -51,14 +51,15 @@ export function WorkItemDetailMain({
 }: WorkItemDetailMainProps) {
   // Built first: `mutations` is the one shared instance per field the chip and the strip both
   // commit through, so the content hook below can hand it to the strip.
-  const { statusControl, assigneeControl, estimateControl, mutations } = useWorkItemDetailMainControls({
-    model,
-    ...(accountId ? { accountId } : {}),
-    ...(backend ? { backend } : {}),
-    ...(externalProjectId ? { externalProjectId } : {}),
-    ...(currentUserName ? { currentUserName } : {}),
-    onReload,
-  });
+  const { statusControl, assigneeControl, estimateControl, mutations } =
+    useWorkItemDetailMainControls({
+      model,
+      ...(accountId ? { accountId } : {}),
+      ...(backend ? { backend } : {}),
+      ...(externalProjectId ? { externalProjectId } : {}),
+      ...(currentUserName ? { currentUserName } : {}),
+      onReload,
+    });
 
   const { resolveAssetUrl, anchors, sectionNav, sectionMenu, renderCommentBody } =
     useWorkItemDetailMainContent({

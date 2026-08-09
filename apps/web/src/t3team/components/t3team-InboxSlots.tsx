@@ -2,7 +2,10 @@ import type { ReactNode } from "react";
 
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
-import { useT3TeamInboxAttribution, useT3TeamInboxWorkItems } from "~/t3team/t3team-useInboxWorkItems";
+import {
+  useT3TeamInboxAttribution,
+  useT3TeamInboxWorkItems,
+} from "~/t3team/t3team-useInboxWorkItems";
 import { InboxWorkItemRows } from "~/t3team/components/t3team-InboxWorkItemRows";
 import { ProjectSidebarHeader } from "~/t3team/components/t3team-ProjectSidebarHeader";
 

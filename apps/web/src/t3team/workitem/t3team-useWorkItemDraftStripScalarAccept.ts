@@ -60,7 +60,13 @@ export function useWorkItemDraftStripScalarAccept(input: {
             await backend.deleteIssueLink({ accountId, linkId: link.linkId });
           } else {
             const { otherIssueIdOrKey, linkTypeName, direction } = link;
-            await backend.createIssueLink({ accountId, issueIdOrKey, otherIssueIdOrKey, linkTypeName, direction });
+            await backend.createIssueLink({
+              accountId,
+              issueIdOrKey,
+              otherIssueIdOrKey,
+              linkTypeName,
+              direction,
+            });
           }
           onReload();
         });
@@ -70,7 +76,12 @@ export function useWorkItemDraftStripScalarAccept(input: {
       if (!subtask) return undefined;
       return () =>
         acceptAction(draft, async () => {
-          await backend.createSubtask({ accountId, projectId, parentIssueIdOrKey: issueIdOrKey, ...subtask });
+          await backend.createSubtask({
+            accountId,
+            projectId,
+            parentIssueIdOrKey: issueIdOrKey,
+            ...subtask,
+          });
           onReload();
         });
     }

@@ -68,7 +68,10 @@ function parseUpstreamThreadPath(
   if (!environmentId || !threadId) {
     return null;
   }
-  return { environmentId: decodeURIComponent(environmentId), threadId: decodeURIComponent(threadId) };
+  return {
+    environmentId: decodeURIComponent(environmentId),
+    threadId: decodeURIComponent(threadId),
+  };
 }
 
 export interface UpstreamRouteBridgeDeps {

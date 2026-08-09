@@ -24,7 +24,8 @@ describe("proxyAtlassianAssetUrl", () => {
   });
 
   it("does not double-wrap a URL that is already proxied", () => {
-    const alreadyProxied = "/api/t3team/atlassian/asset/content?accountId=acct-1&url=https%3A%2F%2Fx";
+    const alreadyProxied =
+      "/api/t3team/atlassian/asset/content?accountId=acct-1&url=https%3A%2F%2Fx";
     expect(proxyAtlassianAssetUrl({ url: alreadyProxied, accountId: "acct-1" })).toBe(
       alreadyProxied,
     );

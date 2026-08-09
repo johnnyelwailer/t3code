@@ -105,7 +105,7 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(statusSkill?.contents).toContain("name: t3team-status-and-context-summary");
     expect(statusSkill?.contents).toContain("Do not narrate file exploration");
     // A prompt-only starter: its default action is the prompt.md beside it.
-    expect(starterRecipeModule?.contents).toContain('import { definePrompt, defineRecipe }');
+    expect(starterRecipeModule?.contents).toContain("import { definePrompt, defineRecipe }");
     expect(starterRecipeModule?.contents).toContain('defaultAction: definePrompt("./prompt.md")');
     expect(starterRecipeModule?.contents).toContain('scope: "project"');
     expect(starterRecipePrompt?.contents).toContain("Explain this simply");

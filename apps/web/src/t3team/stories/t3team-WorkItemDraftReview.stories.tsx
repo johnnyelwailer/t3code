@@ -23,9 +23,7 @@ import { WorkItemPriorityChip } from "~/t3team/workitem/t3team-WorkItemPriorityI
  */
 
 function Row({ children }: { readonly children: React.ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">{children}</div>
-  );
+  return <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">{children}</div>;
 }
 
 function AcceptDismiss({ compact = false }: { readonly compact?: boolean }) {
@@ -132,8 +130,7 @@ function VariantBatch() {
       <div className="overflow-hidden rounded-lg border border-primary/30 bg-primary/5">
         <div className="flex items-center justify-between gap-3 border-b border-primary/20 px-3 py-2">
           <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-            <Bot className="size-3.5 text-primary" aria-hidden="true" />
-            3 changes proposed
+            <Bot className="size-3.5 text-primary" aria-hidden="true" />3 changes proposed
           </span>
           <span className="flex gap-1.5">
             <Button size="xs" variant="ghost">
@@ -149,7 +146,10 @@ function VariantBatch() {
               <span className="w-16 shrink-0 text-muted-foreground">{change.field}</span>
               <span className="flex min-w-0 flex-1 items-center gap-1.5">
                 <span className="text-muted-foreground line-through">{change.from}</span>
-                <ChevronRight className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <ChevronRight
+                  className="size-3 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
                 <span className="font-medium text-foreground">{change.to}</span>
               </span>
               <span className="hidden min-w-0 flex-1 truncate text-muted-foreground @xl/draft:block">

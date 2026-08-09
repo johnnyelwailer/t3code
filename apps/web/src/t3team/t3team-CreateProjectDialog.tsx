@@ -130,7 +130,9 @@ export function CreateProjectDialog({
       variant={variant}
       onClose={onClose}
       heading={
-        setup.step === "review" ? <ConfirmStepHeading selectedProject={selectedProject} /> : undefined
+        setup.step === "review" ? (
+          <ConfirmStepHeading selectedProject={selectedProject} />
+        ) : undefined
       }
       footer={
         <CreateProjectDialogFooter

@@ -1,5 +1,8 @@
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
-import { createToolAuthEnvironmentAtoms, type ToolAuthStatesByTool } from "@t3tools/client-runtime/state/toolauth";
+import {
+  createToolAuthEnvironmentAtoms,
+  type ToolAuthStatesByTool,
+} from "@t3tools/client-runtime/state/toolauth";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,

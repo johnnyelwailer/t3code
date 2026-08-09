@@ -8,6 +8,7 @@
  *
  * @module toolauth/ToolAuthService
  */
+import { hasStateChanged } from "./t3team-advance.ts";
 import * as NodeOS from "node:os";
 
 import {
@@ -98,19 +99,6 @@ export interface ToolAuthServiceOptions {
   readonly installTimeout?: Duration.Input;
 }
 
-function hasStateChanged(previous: AuthState, next: AuthState): boolean {
-  return (
-    previous.phase !== next.phase ||
-    previous.url !== next.url ||
-    previous.displayCode !== next.displayCode ||
-    previous.message !== next.message ||
-    previous.account !== next.account ||
-    previous.organization !== next.organization ||
-    previous.expiresAt !== next.expiresAt ||
-    previous.installLog !== next.installLog
-  );
-}
-
 export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(function* (
   options: ToolAuthServiceOptions,
 ) {
@@ -121,7 +109,9 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
   const homeDir = options.homeDir ?? NodeOS.homedir();
   const env = options.env ?? process.env;
   const tools = options.tools ?? PRODUCTION_TOOLS;
-  const installTimeout = Duration.fromInputUnsafe(options.installTimeout ?? DEFAULT_INSTALL_TIMEOUT);
+  const installTimeout = Duration.fromInputUnsafe(
+    options.installTimeout ?? DEFAULT_INSTALL_TIMEOUT,
+  );
   const checkBinaryAvailable =
     options.checkBinaryAvailable ??
     ((binary: string) =>

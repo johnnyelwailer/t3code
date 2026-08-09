@@ -88,7 +88,9 @@ export function useWorkItemDetailMainContent({
   });
 
   const closeStrip = useWorkItemDraftReviewUiStore((state) => state.closeStrip);
-  const openDescriptionReview = useWorkItemDraftReviewUiStore((state) => state.openDescriptionReview);
+  const openDescriptionReview = useWorkItemDraftReviewUiStore(
+    (state) => state.openDescriptionReview,
+  );
 
   const sectionNav = (
     <WorkItemSectionNav

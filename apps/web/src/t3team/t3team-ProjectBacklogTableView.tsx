@@ -7,7 +7,10 @@ import { useProjectBacklogTableGroupState } from "~/t3team/hooks/t3team-useProje
 import { ProjectBacklogTableColGroup } from "~/t3team/t3team-ProjectBacklogTableColGroup";
 import { ProjectBacklogTableHeader } from "~/t3team/t3team-ProjectBacklogTableHeader";
 import { ProjectBacklogTableVirtualBody } from "~/t3team/t3team-ProjectBacklogTableVirtualBody";
-import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+} from "~/t3team/backend/t3team-types";
 import type { ProjectBacklogTicketContext } from "~/t3team/t3team-projectBacklogPresentation";
 import {
   buildProjectBacklogTableGroups,

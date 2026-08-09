@@ -26,12 +26,10 @@ describe("useWorkItemFieldMutation", () => {
     host = null;
   });
 
-  function mount<TValue>(
-    initialProps: {
-      readonly value: TValue;
-      readonly mutate: (nextValue: TValue) => Promise<void>;
-    },
-  ): {
+  function mount<TValue>(initialProps: {
+    readonly value: TValue;
+    readonly mutate: (nextValue: TValue) => Promise<void>;
+  }): {
     readonly latest: { result: WorkItemFieldMutationResult<TValue> | null };
     readonly render: (value: TValue) => Promise<void>;
   } {

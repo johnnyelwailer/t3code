@@ -22,10 +22,7 @@ import * as Path from "effect/Path";
 import type { AnyScriptRef } from "@t3team/sdk";
 
 import { expandHomePath } from "./pathExpansion.ts";
-import {
-  resolveRecipeActions,
-  resolveRecipeWorkflowPath,
-} from "./t3team-projectRecipeActions.ts";
+import { resolveRecipeActions, resolveRecipeWorkflowPath } from "./t3team-projectRecipeActions.ts";
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 
 /** The recipe module registered scripts but they cannot back this launch. */
@@ -91,7 +88,9 @@ export const resolveRecipeWorkflowScripts = Effect.fn("resolveRecipeWorkflowScri
       return yield* new T3TeamRecipeScriptResolutionError({
         message: `Recipe '${ref.id}' registers scripts for its declared actions (${owned
           .map((action) => `${action.name} -> ${action.workflowPath}`)
-          .join(", ")}), but this launch targets '${workflowPath}'. Scripts are recipe-owned; launch one of the recipe's own actions to use them.`,
+          .join(
+            ", ",
+          )}), but this launch targets '${workflowPath}'. Scripts are recipe-owned; launch one of the recipe's own actions to use them.`,
       });
     }
     return scripts;

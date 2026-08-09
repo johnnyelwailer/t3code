@@ -73,7 +73,8 @@ function scanScriptRefs(
       const chain = memberChain(ts, node);
       // The root is `scripts` by convention OR whatever the author named `getScripts()`'s result.
       const isScriptTree =
-        chain !== null && (chain.root === "scripts" || bindings.roots.get(chain.root) === "scripts");
+        chain !== null &&
+        (chain.root === "scripts" || bindings.roots.get(chain.root) === "scripts");
       if (chain !== null && isScriptTree && chain.path.length > 0) {
         into.push(missing(ts, sf, node, "script", `\`scripts.${chain.path.join(".")}\``));
         return;
@@ -107,7 +108,8 @@ function scanCallSites(
         } else {
           const chain = memberChain(ts, callee);
           const isToolTree =
-            chain !== null && (chain.root === "tools" || bindings.roots.get(chain.root) === "tools");
+            chain !== null &&
+            (chain.root === "tools" || bindings.roots.get(chain.root) === "tools");
           if (chain !== null && isToolTree && chain.path.length > 0) {
             const toolId = chain.path.join(".");
             const groupId = options.resolveToolGroupId?.(toolId);

@@ -7,11 +7,15 @@ describe("parseInline", () => {
   });
 
   it("parses bold, italic, code, strike, and links", () => {
-    expect(parseInline("**b**")).toEqual([{ type: "text", text: "b", marks: [{ type: "strong" }] }]);
+    expect(parseInline("**b**")).toEqual([
+      { type: "text", text: "b", marks: [{ type: "strong" }] },
+    ]);
     expect(parseInline("*i*")).toEqual([{ type: "text", text: "i", marks: [{ type: "em" }] }]);
     expect(parseInline("_i_")).toEqual([{ type: "text", text: "i", marks: [{ type: "em" }] }]);
     expect(parseInline("`c`")).toEqual([{ type: "text", text: "c", marks: [{ type: "code" }] }]);
-    expect(parseInline("~~s~~")).toEqual([{ type: "text", text: "s", marks: [{ type: "strike" }] }]);
+    expect(parseInline("~~s~~")).toEqual([
+      { type: "text", text: "s", marks: [{ type: "strike" }] },
+    ]);
     expect(parseInline("[t](https://x.example)")).toEqual([
       { type: "text", text: "t", marks: [{ type: "link", attrs: { href: "https://x.example" } }] },
     ]);
@@ -35,7 +39,9 @@ describe("parseInline", () => {
       {
         type: "text",
         text: "Foo",
-        marks: [{ type: "link", attrs: { href: "https://en.wikipedia.org/wiki/Foo_(disambiguation)" } }],
+        marks: [
+          { type: "link", attrs: { href: "https://en.wikipedia.org/wiki/Foo_(disambiguation)" } },
+        ],
       },
     ]);
   });

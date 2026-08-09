@@ -152,8 +152,7 @@ export const LINK_DRAFT_INPUT_SCHEMA = {
     },
     direction: {
       type: "string",
-      description:
-        "Whether the current issue is the inward or outward side of the link type.",
+      description: "Whether the current issue is the inward or outward side of the link type.",
       enum: ["inward", "outward"],
     },
   },

@@ -56,9 +56,9 @@ describe("resolveT3TeamComposerMenuKey", () => {
 
   it("closes on Escape even with no options", () => {
     expect(resolve("Escape", "one")).toEqual({ type: "close" });
-    expect(
-      resolveT3TeamComposerMenuKey({ key: "Escape", items: [], activeItemId: null }),
-    ).toEqual({ type: "close" });
+    expect(resolveT3TeamComposerMenuKey({ key: "Escape", items: [], activeItemId: null })).toEqual({
+      type: "close",
+    });
   });
 
   it("ignores navigation and accept keys with no options", () => {

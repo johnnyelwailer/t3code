@@ -2,7 +2,10 @@ import type { EnvironmentAppearance } from "@t3tools/contracts";
 
 import { isElectron } from "~/env";
 import { cn } from "~/lib/utils";
-import { SidebarStageBackdrop, useSidebarStageBackdropVariant } from "~/components/SidebarStageBackdrop";
+import {
+  SidebarStageBackdrop,
+  useSidebarStageBackdropVariant,
+} from "~/components/SidebarStageBackdrop";
 import { SidebarHeader, SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { T3TeamPackBrandImage } from "~/t3team/t3team-PackBrandImage";
 

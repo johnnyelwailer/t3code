@@ -77,7 +77,8 @@ export type UseWorkItemAgentRewriteResult = {
 export function useWorkItemAgentRewrite(
   input: UseWorkItemAgentRewriteInput,
 ): UseWorkItemAgentRewriteResult {
-  const { projectId, ticketId, issueIdOrKey, hasPendingDescriptionDraft, hasLoadedWorkItem } = input;
+  const { projectId, ticketId, issueIdOrKey, hasPendingDescriptionDraft, hasLoadedWorkItem } =
+    input;
   const [isComposing, setIsComposing] = useState(false);
   const [error, setError] = useState<T3TeamUserFacingError | null>(null);
 

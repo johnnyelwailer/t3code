@@ -7,7 +7,12 @@ import type { ExternalResourceRef, ResourceSnapshot } from "@t3tools/project-con
 import * as DateTime from "effect/DateTime";
 import type { JiraComment, JiraIssue, JiraIssueSearchResponse, JiraProject } from "./client.ts";
 import { extractAdfText } from "./adf/traverse.ts";
-import { readJiraEstimateValue, readJiraSprints, type JiraEstimateField, type JiraSprintField } from "./planning.ts";
+import {
+  readJiraEstimateValue,
+  readJiraSprints,
+  type JiraEstimateField,
+  type JiraSprintField,
+} from "./planning.ts";
 import {
   extractAdfDocument,
   extractAffectsVersions,

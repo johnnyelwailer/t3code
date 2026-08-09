@@ -194,7 +194,9 @@ describe("normalizeIssue Slice A field widening", () => {
               body: {
                 type: "doc",
                 version: 1,
-                content: [{ type: "paragraph", content: [{ type: "text", text: "Looking into it." }] }],
+                content: [
+                  { type: "paragraph", content: [{ type: "text", text: "Looking into it." }] },
+                ],
               },
               created: "2026-01-02T00:00:00.000Z",
               jsdPublic: false,

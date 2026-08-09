@@ -167,9 +167,7 @@ export function resolveStartChildModelSelection(
     value: withTier(
       buildStartChildModelSelection(
         base,
-        {
-          ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-        },
+        input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {},
         target,
       ),
     ),

@@ -37,7 +37,11 @@ export function ThreadPendingChat({
           <LoaderCircleIcon className="size-5 animate-spin text-primary" />
         )}
         <p className="mt-3 text-sm font-medium text-foreground">
-          {isFailed ? "Launch interrupted" : stalled ? "Launch never started" : "Creating thread..."}
+          {isFailed
+            ? "Launch interrupted"
+            : stalled
+              ? "Launch never started"
+              : "Creating thread..."}
         </p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {isFailed

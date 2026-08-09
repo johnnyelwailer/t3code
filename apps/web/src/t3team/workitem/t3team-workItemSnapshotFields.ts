@@ -56,7 +56,9 @@ export function readWorkItemFieldModel(input: {
   const proxyPerson = (person: WorkItemPerson | undefined): WorkItemPerson | undefined => {
     if (!person?.avatarUrl) return person;
     const avatarUrl = proxyAtlassianAssetUrl({ url: person.avatarUrl, accountId });
-    return avatarUrl === person.avatarUrl ? person : { ...person, ...(avatarUrl ? { avatarUrl } : {}) };
+    return avatarUrl === person.avatarUrl
+      ? person
+      : { ...person, ...(avatarUrl ? { avatarUrl } : {}) };
   };
 
   const draft = {

@@ -486,9 +486,7 @@ export class JiraApiClient {
    *
    * Takes `projectIdOrKey`, so a caller holding either a numeric id or a project key works.
    */
-  async getCreateMetaIssueTypes(
-    projectIdOrKey: string,
-  ): Promise<JiraCreateMetaIssueTypesResponse> {
+  async getCreateMetaIssueTypes(projectIdOrKey: string): Promise<JiraCreateMetaIssueTypesResponse> {
     const encoded = encodeURIComponent(projectIdOrKey);
     return this.fetchJson<JiraCreateMetaIssueTypesResponse>(
       `/rest/api/3/issue/createmeta/${encoded}/issuetypes`,
@@ -507,13 +505,10 @@ export class JiraApiClient {
   }
 
   async editIssueComment(issueIdOrKey: string, commentId: string, body: unknown): Promise<unknown> {
-    return this.fetchJson<unknown>(
-      `/rest/api/3/issue/${issueIdOrKey}/comment/${commentId}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({ body }),
-      },
-    );
+    return this.fetchJson<unknown>(`/rest/api/3/issue/${issueIdOrKey}/comment/${commentId}`, {
+      method: "PUT",
+      body: JSON.stringify({ body }),
+    });
   }
 
   async deleteIssueComment(issueIdOrKey: string, commentId: string): Promise<void> {

@@ -44,41 +44,44 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
  * disowning recipe is a policy answer ("no host tools"), not a launch-breaking error — the run
  * itself is still perfectly valid without them.
  */
-export const resolveRecipeHostToolScope = Effect.fn("resolveRecipeHostToolScope")(function* (input: {
-  readonly recipePath: string | undefined;
-  readonly workflowPath: string;
-}) {
-  const recipePath = expandHomePath(input.recipePath?.trim() ?? "");
-  if (recipePath.length === 0) {
-    return denied("the launch carries no recipePath, so no recipe declaration can be read");
-  }
-  // Workspace roots (and thus recipe/workflow launch paths derived from them) may legitimately
-  // carry a literal `~` — expand it here, once, so this fs.exists/import and the ownership
-  // compare below all operate on the real absolute path (see pathExpansion.ts).
-  const workflowPath = expandHomePath(input.workflowPath);
+export const resolveRecipeHostToolScope = Effect.fn("resolveRecipeHostToolScope")(
+  function* (input: { readonly recipePath: string | undefined; readonly workflowPath: string }) {
+    const recipePath = expandHomePath(input.recipePath?.trim() ?? "");
+    if (recipePath.length === 0) {
+      return denied("the launch carries no recipePath, so no recipe declaration can be read");
+    }
+    // Workspace roots (and thus recipe/workflow launch paths derived from them) may legitimately
+    // carry a literal `~` — expand it here, once, so this fs.exists/import and the ownership
+    // compare below all operate on the real absolute path (see pathExpansion.ts).
+    const workflowPath = expandHomePath(input.workflowPath);
 
-  const fileSystem = yield* FileSystem.FileSystem;
-  const pathService = yield* Path.Path;
-  const modulePath = pathService.join(recipePath, "recipe.ts");
-  if (!(yield* fileSystem.exists(modulePath).pipe(Effect.orElseSucceed(() => false)))) {
-    return denied(`no recipe.ts at '${recipePath}' (a recipe.json recipe declares no host scope)`);
-  }
+    const fileSystem = yield* FileSystem.FileSystem;
+    const pathService = yield* Path.Path;
+    const modulePath = pathService.join(recipePath, "recipe.ts");
+    if (!(yield* fileSystem.exists(modulePath).pipe(Effect.orElseSucceed(() => false)))) {
+      return denied(
+        `no recipe.ts at '${recipePath}' (a recipe.json recipe declares no host scope)`,
+      );
+    }
 
-  const loaded = yield* importRecipeModuleRef(modulePath).pipe(Effect.result);
-  if (loaded._tag === "Failure") {
-    return denied(`recipe module '${modulePath}' failed to load: ${errorMessage(loaded.failure)}`);
-  }
-  const ref = loaded.success;
+    const loaded = yield* importRecipeModuleRef(modulePath).pipe(Effect.result);
+    if (loaded._tag === "Failure") {
+      return denied(
+        `recipe module '${modulePath}' failed to load: ${errorMessage(loaded.failure)}`,
+      );
+    }
+    const ref = loaded.success;
 
-  // Ownership, mirroring the scripts resolver: the scope belongs to the recipe that DECLARES this
-  // workflow. A launch pointing at some other file must not inherit this recipe's grant.
-  // `resolveRecipeActions` swallows per-action resolution failures itself, so an unresolvable
-  // action simply never joins the owned set — which denies rather than grants.
-  const owned = resolveRecipeActions(pathService, recipePath, ref);
-  if (!owned.some((action) => action.workflowPath === workflowPath)) {
-    return denied(`recipe '${ref.id}' does not declare '${workflowPath}' as one of its actions`);
-  }
+    // Ownership, mirroring the scripts resolver: the scope belongs to the recipe that DECLARES this
+    // workflow. A launch pointing at some other file must not inherit this recipe's grant.
+    // `resolveRecipeActions` swallows per-action resolution failures itself, so an unresolvable
+    // action simply never joins the owned set — which denies rather than grants.
+    const owned = resolveRecipeActions(pathService, recipePath, ref);
+    if (!owned.some((action) => action.workflowPath === workflowPath)) {
+      return denied(`recipe '${ref.id}' does not declare '${workflowPath}' as one of its actions`);
+    }
 
-  // `?? []` is load-bearing: undefined would read as "unrestricted" downstream.
-  return { kind: "granted", toolGroups: ref.allowedToolGroups ?? [] } as const;
-});
+    // `?? []` is load-bearing: undefined would read as "unrestricted" downstream.
+    return { kind: "granted", toolGroups: ref.allowedToolGroups ?? [] } as const;
+  },
+);

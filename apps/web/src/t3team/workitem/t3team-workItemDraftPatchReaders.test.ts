@@ -20,7 +20,12 @@ function subtaskDraft(patch: Record<string, unknown>): T3TeamScalarDraftMutation
 describe("readLinkDraftPatch", () => {
   it("reads a create-link patch", () => {
     const patch = readLinkDraftPatch(
-      linkDraft({ action: "create", otherIssueIdOrKey: "ALPHA-2", linkTypeName: "Blocks", direction: "outward" }),
+      linkDraft({
+        action: "create",
+        otherIssueIdOrKey: "ALPHA-2",
+        linkTypeName: "Blocks",
+        direction: "outward",
+      }),
     );
     expect(patch).toEqual({
       action: "create",
@@ -38,13 +43,20 @@ describe("readLinkDraftPatch", () => {
   });
 
   it("is undefined when the create patch is missing a required field", () => {
-    expect(readLinkDraftPatch(linkDraft({ action: "create", otherIssueIdOrKey: "ALPHA-2" }))).toBeUndefined();
+    expect(
+      readLinkDraftPatch(linkDraft({ action: "create", otherIssueIdOrKey: "ALPHA-2" })),
+    ).toBeUndefined();
   });
 
   it("is undefined for an unrecognized direction", () => {
     expect(
       readLinkDraftPatch(
-        linkDraft({ action: "create", otherIssueIdOrKey: "ALPHA-2", linkTypeName: "Blocks", direction: "sideways" }),
+        linkDraft({
+          action: "create",
+          otherIssueIdOrKey: "ALPHA-2",
+          linkTypeName: "Blocks",
+          direction: "sideways",
+        }),
       ),
     ).toBeUndefined();
   });
@@ -60,7 +72,11 @@ describe("readSubtaskDraftPatch", () => {
   it("carries optional description and estimateHours when present", () => {
     expect(
       readSubtaskDraftPatch(
-        subtaskDraft({ summary: "Write the migration", description: "See RFC-9", estimateHours: 2 }),
+        subtaskDraft({
+          summary: "Write the migration",
+          description: "See RFC-9",
+          estimateHours: 2,
+        }),
       ),
     ).toEqual({ summary: "Write the migration", description: "See RFC-9", estimateHours: 2 });
   });

@@ -53,8 +53,7 @@ vi.mock("~/t3team/t3team-projectSetupProfile", () => ({
 // the same pack atoms, so it is stubbed too, but ConfirmStepHeading is left REAL (via
 // importOriginal) so the review-step heading assertion below means something.
 vi.mock("~/t3team/t3team-CreateProjectDialogConfirmStep", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("./t3team-CreateProjectDialogConfirmStep")>();
+  const actual = await importOriginal<typeof import("./t3team-CreateProjectDialogConfirmStep")>();
   return { ...actual, CreatingStep: () => <div>creating-step</div> };
 });
 vi.mock("~/t3team/t3team-CreateProjectDialogProfileStep", () => ({

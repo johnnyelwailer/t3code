@@ -52,7 +52,8 @@ export function useProjectBacklogEstimateCell(input: {
   }
 
   function focusAndSelectInput() {
-    const input_ = inputContainerRef.current?.querySelector<HTMLInputElement>('[data-slot="input"]');
+    const input_ =
+      inputContainerRef.current?.querySelector<HTMLInputElement>('[data-slot="input"]');
     if (!input_ || input_.disabled) return;
     input_.focus();
     input_.select();

@@ -43,7 +43,12 @@ export function useWorkItemDetailMainControls({
   });
 
   if (!backend || !accountId) {
-    return { statusControl: undefined, assigneeControl: undefined, estimateControl: undefined, mutations };
+    return {
+      statusControl: undefined,
+      assigneeControl: undefined,
+      estimateControl: undefined,
+      mutations,
+    };
   }
 
   return {

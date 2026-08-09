@@ -6,13 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createLucideReactMock } from "./t3team-createLucideReactMock";
 import { ProjectDashboardKickoffAside } from "./t3team-ProjectDashboardKickoffAside";
 
-const { mockUseSidecarComposition, mockUseQuickStarts, capturedComposerProps } = vi.hoisted(
-  () => ({
-    mockUseSidecarComposition: vi.fn(),
-    mockUseQuickStarts: vi.fn(),
-    capturedComposerProps: { current: null as Record<string, unknown> | null },
-  }),
-);
+const { mockUseSidecarComposition, mockUseQuickStarts, capturedComposerProps } = vi.hoisted(() => ({
+  mockUseSidecarComposition: vi.fn(),
+  mockUseQuickStarts: vi.fn(),
+  capturedComposerProps: { current: null as Record<string, unknown> | null },
+}));
 
 vi.mock("lucide-react", (importOriginal) => createLucideReactMock(importOriginal));
 

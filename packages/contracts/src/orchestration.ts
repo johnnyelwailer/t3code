@@ -255,12 +255,12 @@ export const OrchestrationProject = Schema.Struct({
 export type OrchestrationProject = typeof OrchestrationProject.Type;
 
 const OrchestrationMessageRoleKnown = Schema.Literals(["user", "assistant", "system", "actor"]);
-const ORCHESTRATION_MESSAGE_ROLE_VALUES: ReadonlyArray<string> = [
+const ORCHESTRATION_MESSAGE_ROLE_VALUES: ReadonlySet<string> = new Set([
   "user",
   "assistant",
   "system",
   "actor",
-];
+]);
 /**
  * Message role.
  *
@@ -279,7 +279,7 @@ export const OrchestrationMessageRole = Schema.String.pipe(
     SchemaTransformation.transformOrFail({
       decode: (raw: string) =>
         Effect.succeed(
-          (ORCHESTRATION_MESSAGE_ROLE_VALUES.includes(raw)
+          (ORCHESTRATION_MESSAGE_ROLE_VALUES.has(raw)
             ? raw
             : "system") as typeof OrchestrationMessageRoleKnown.Encoded,
         ),

@@ -88,7 +88,8 @@ export function WorkItemDetailHeader({
                 target="_blank"
                 rel="noreferrer"
                 onClick={(event) => {
-                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
+                    return;
                   const shell = readLocalApi()?.shell;
                   if (!shell) return;
                   event.preventDefault();

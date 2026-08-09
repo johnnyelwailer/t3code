@@ -34,7 +34,8 @@ export function useT3TeamImageLightbox(
   const isOpen = state.index !== undefined;
 
   const openAt = useCallback((index: number) => {
-    triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    triggerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dispatch({ type: "open", index });
   }, []);
   const close = useCallback(() => dispatch({ type: "close" }), []);

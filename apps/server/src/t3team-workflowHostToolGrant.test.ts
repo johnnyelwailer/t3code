@@ -298,14 +298,27 @@ it.effect(
       brokerDispatched.length = 0;
       const sql = yield* SqlClient.SqlClient;
 
-      const bad1 = { runId: "grant-malformed-string", thread: ThreadId.make("thread-malformed-string") };
-      const bad2 = { runId: "grant-malformed-shape", thread: ThreadId.make("thread-malformed-shape") };
-      const good = { runId: "grant-malformed-sibling-good", thread: ThreadId.make("thread-malformed-good") };
+      const bad1 = {
+        runId: "grant-malformed-string",
+        thread: ThreadId.make("thread-malformed-string"),
+      };
+      const bad2 = {
+        runId: "grant-malformed-shape",
+        thread: ThreadId.make("thread-malformed-shape"),
+      };
+      const good = {
+        runId: "grant-malformed-sibling-good",
+        thread: ThreadId.make("thread-malformed-good"),
+      };
 
       // Park all three, then bypass the repo's encoder (it would reject these) with a raw write.
       yield* parkProbe({ runId: bad1.runId, granted: false, launchThreadId: bad1.thread });
       yield* parkProbe({ runId: bad2.runId, granted: false, launchThreadId: bad2.thread });
-      const goodRow = yield* parkProbe({ runId: good.runId, granted: true, launchThreadId: good.thread });
+      const goodRow = yield* parkProbe({
+        runId: good.runId,
+        granted: true,
+        launchThreadId: good.thread,
+      });
       assert.deepStrictEqual(goodRow.hostToolGrant, { toolGroups: ["mutation.draft"] });
       yield* sql`UPDATE workflow_runs SET host_tool_grant = 'not-json' WHERE run_id = ${bad1.runId}`; // unparsable string
       yield* sql`UPDATE workflow_runs SET host_tool_grant = ${'{"toolGroups":123}'} WHERE run_id = ${bad2.runId}`; // valid JSON, wrong shape

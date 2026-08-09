@@ -18,8 +18,7 @@ export const UPSTREAM_REMOTE_URL = `https://github.com/${UPSTREAM_REPO_SLUG}.git
  * sentinel, and `git push upstream` fails loudly instead of reaching
  * `pingdotgg`. Fetch still works, which is all the guard needs.
  */
-export const UPSTREAM_REMOTE_PUSH_DISABLED =
-  "DISABLED-never-push-to-upstream-see-AGENTS.md";
+export const UPSTREAM_REMOTE_PUSH_DISABLED = "DISABLED-never-push-to-upstream-see-AGENTS.md";
 
 function stripDotGitSuffix(value) {
   return value.endsWith(".git") ? value.slice(0, -4) : value;

@@ -16,7 +16,10 @@ import { paragraph, heading } from "./builders.ts";
 
 describe("status", () => {
   it("builds a status lozenge with text/color", () => {
-    expect(status("CRITICAL", "red")).toEqual({ type: "status", attrs: { text: "CRITICAL", color: "red" } });
+    expect(status("CRITICAL", "red")).toEqual({
+      type: "status",
+      attrs: { text: "CRITICAL", color: "red" },
+    });
   });
 });
 
@@ -51,7 +54,10 @@ describe("date", () => {
 describe("mention", () => {
   it("builds a mention with accountId and optional text", () => {
     expect(mention("acc-1")).toEqual({ type: "mention", attrs: { id: "acc-1" } });
-    expect(mention("acc-1", "@Jane")).toEqual({ type: "mention", attrs: { id: "acc-1", text: "@Jane" } });
+    expect(mention("acc-1", "@Jane")).toEqual({
+      type: "mention",
+      attrs: { id: "acc-1", text: "@Jane" },
+    });
   });
 });
 

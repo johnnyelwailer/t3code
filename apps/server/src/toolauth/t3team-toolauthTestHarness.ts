@@ -62,7 +62,9 @@ export class FakePtyAdapterService {
   readonly processes: FakePtyProcess[] = [];
   readonly spawnInputs: PtyAdapter.PtySpawnInput[] = [];
 
-  spawn(input: PtyAdapter.PtySpawnInput): Effect.Effect<PtyAdapter.PtyProcess, PtyAdapter.PtySpawnError> {
+  spawn(
+    input: PtyAdapter.PtySpawnInput,
+  ): Effect.Effect<PtyAdapter.PtyProcess, PtyAdapter.PtySpawnError> {
     this.spawnInputs.push(input);
     const process = new FakePtyProcess();
     this.processes.push(process);
@@ -87,7 +89,8 @@ export const waitFor = <E, R>(
     Effect.timeoutOption(timeout),
     Effect.flatMap((result) =>
       Option.match(result, {
-        onNone: () => Effect.fail(new WaitForConditionError({ message: "Timed out waiting for condition" })),
+        onNone: () =>
+          Effect.fail(new WaitForConditionError({ message: "Timed out waiting for condition" })),
         onSome: () => Effect.void,
       }),
     ),
@@ -104,7 +107,10 @@ export function removeTempHome(homeDir: string): void {
 // FAKE declares no `status.probe`, so ProcessRunner is never actually
 // invoked by these tests — the real layer is provided anyway since it's
 // harmless and keeps the test setup simple.
-const testLayer = Layer.mergeAll(NodeServices.layer, ProcessRunner.layer.pipe(Layer.provide(NodeServices.layer)));
+const testLayer = Layer.mergeAll(
+  NodeServices.layer,
+  ProcessRunner.layer.pipe(Layer.provide(NodeServices.layer)),
+);
 
 export function makeService(
   homeDir: string,

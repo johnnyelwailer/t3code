@@ -68,7 +68,10 @@ describe("work item dedupe key", () => {
     // Path 2: the ticket aside's auto-attach, a moment later, with its own attachment id and label.
     useT3TeamAddToChatStore
       .getState()
-      .enqueueThreadAttachment(THREAD_ID, workItemAttachment({ label: "NXAI-8 Dev-Rolle (Story)" }));
+      .enqueueThreadAttachment(
+        THREAD_ID,
+        workItemAttachment({ label: "NXAI-8 Dev-Rolle (Story)" }),
+      );
 
     expect(threadAttachments()).toHaveLength(1);
   });
@@ -97,9 +100,15 @@ describe("work item dedupe key", () => {
     enqueueThreadKickoffAttachments(THREAD_ID, [workItemAttachment()]);
     useT3TeamAddToChatStore
       .getState()
-      .enqueueThreadAttachment(THREAD_ID, workItemAttachment({ label: "NXAI-8 Dev-Rolle (Story)" }));
+      .enqueueThreadAttachment(
+        THREAD_ID,
+        workItemAttachment({ label: "NXAI-8 Dev-Rolle (Story)" }),
+      );
 
-    const prompt = appendContextAttachmentsToPrompt("Rewrite the description.", threadAttachments());
+    const prompt = appendContextAttachmentsToPrompt(
+      "Rewrite the description.",
+      threadAttachments(),
+    );
 
     expect(prompt.split("NXAI-8 context bundle")).toHaveLength(2);
   });

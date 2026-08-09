@@ -20,7 +20,13 @@ import { applyLoadedAccounts, failWithStep } from "./t3team-useCreateProjectHelp
 import { loadPersistedAccountsStep } from "./t3team-useCreateProjectLoadPersisted";
 
 export type CreateProjectStep =
-  | "source" | "account" | "project" | "profile" | "repositories" | "review" | "creating";
+  | "source"
+  | "account"
+  | "project"
+  | "profile"
+  | "repositories"
+  | "review"
+  | "creating";
 export type AtlassianBasicCredentials = { siteUrl: string; email: string; apiToken: string };
 type CreateProjectOptions = {
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;

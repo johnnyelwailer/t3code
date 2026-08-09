@@ -85,12 +85,12 @@ describe("WorkItemChildren", () => {
       />,
     );
     // The chip's own popover trigger, not the read-only avatar `WorkItemIssueRow` falls back to.
-    expect(markup).toContain("data-slot=\"popover-trigger\"");
+    expect(markup).toContain('data-slot="popover-trigger"');
   });
 
   it("leaves the read-only avatar in place when the section cannot write", () => {
     const markup = renderToStaticMarkup(<WorkItemChildren items={[ticket("1", "To Do")]} />);
-    expect(markup).not.toContain("data-slot=\"popover-trigger\"");
+    expect(markup).not.toContain('data-slot="popover-trigger"');
   });
 
   it("never nests the assignee control's button inside the row's own open-issue overlay button", () => {

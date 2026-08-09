@@ -3,7 +3,7 @@
 ## Naming
 
 The concept is **agent orchestration**. "Workflow" and "runbook" were earlier names for the
-same thing; prose, headings, tool descriptions, and UI copy say *orchestration*.
+same thing; prose, headings, tool descriptions, and UI copy say _orchestration_.
 
 Three things deliberately keep the legacy spelling, and renaming them would be a breaking
 change, not a cleanup:
@@ -323,7 +323,7 @@ two reasons:
 The same way an imported tool handler already does. `withWorkflowRuntime(runtime, run)` binds the
 active run into the SDK's `AsyncLocalStorage` (`runtimeStorage`), and each exported verb reads it
 with `runtimeStorage.getStore()`. `defineTool` handlers have worked this way since Epic 25 landed —
-calling one outside a run throws *"was called outside a workflow runtime"* — so an imported `agent()`
+calling one outside a run throws _"was called outside a workflow runtime"_ — so an imported `agent()`
 needs no new machinery, just the same lookup.
 
 Consequences the engine must honour:
@@ -389,16 +389,16 @@ there is **no** separate `agent.task` (deleted — "structured compute, no chat"
 `await agent("…", { schema })`). The composition primitives below are unchanged.
 
 | Import                   | Returns                       | Notes                                                                                                                                                                                                             |
-| ------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getThread()`            | `Thread \| undefined`         | The chat the user launched from; `undefined` when headless (cron/automation). An accessor, not a binding — see [§How an imported verb finds its run](#how-an-imported-verb-finds-its-run). |                                                                                         |
+| ------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| `getThread()`            | `Thread \| undefined`         | The chat the user launched from; `undefined` when headless (cron/automation). An accessor, not a binding — see [§How an imported verb finds its run](#how-an-imported-verb-finds-its-run).                        |     |
 | `spawnThread(opts?)`     | `Thread`                      | Create a new isolated thread; returns a `Thread` bound to it.                                                                                                                                                     |
 | `agent(prompt, opts?)`   | `Promise<string \| T>`        | One-shot shortcut for `spawnThread(opts).askAgent(prompt, opts)`. With `schema: Schema<T>`, returns a validated `T`; the thread is not retained.                                                                  |
 | `parallel(thunks)`       | `Promise<R[]>`                | Concurrent fanout with a barrier. Failing thunks resolve to `null`.                                                                                                                                               |
 | `pipeline(items, …stgs)` | `Promise<R[]>`                | Per-item pipelined fanout — no barrier between stages.                                                                                                                                                            |
-| `workflow(ref, args?)`   | `Promise<O>`                  | Run another orchestration inline as a sub-step. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). One level of nesting; cycles refused.                                        |
+| `workflow(ref, args?)`   | `Promise<O>`                  | Run another orchestration inline as a sub-step. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). One level of nesting; cycles refused.                                   |
 | `phase(title)`           | `void`                        | Start a progress group. `title` is typed as the union of `meta.phases[].title` literals when `meta.phases` is declared `as const` (recommended). Calling with a title outside that union is a compile-time error. |
 | `log(message)`           | `void`                        | Emit a narrator line above the progress tree.                                                                                                                                                                     |
-| `args`                   | `unknown`                     | The orchestration's input; validated against `meta.inputs` before the body runs.                                                                                                                                       |
+| `args`                   | `unknown`                     | The orchestration's input; validated against `meta.inputs` before the body runs.                                                                                                                                  |
 | `budget`                 | `{ total, spent, remaining }` | Token accumulator. Thread-turn token rollup is deferred (§Out of scope), so `spent()` currently reads 0.                                                                                                          |
 
 > **Black-box journaling boundary (Stage-1).** `parallel`, `pipeline`, and `workflow`
@@ -435,7 +435,7 @@ The globals bound into the body:
 
 | Import               | Returns               | Purpose                                                                                                |
 | -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
-| `thread`             | `Thread \| undefined` | The thread the orchestration runs in (the launching chat); `undefined` if headless.                         |
+| `thread`             | `Thread \| undefined` | The thread the orchestration runs in (the launching chat); `undefined` if headless.                    |
 | `spawnThread(opts?)` | `Thread`              | A new isolated thread (`{ name?, model? }`).                                                           |
 | `agent(prompt, o?)`  | `Promise<R>`          | Shortcut for `spawnThread(o).askAgent(prompt, o)` — returns the result for one-shots; thread not kept. |
 
@@ -469,7 +469,7 @@ on the user's reply). See [§Agents vs. orchestrations](#agents-vs-orchestration
 | ---------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `scripts.<name>(args)`       | `Promise<T>`    | Call a recipe-registered script (typed). Result is journaled. See [§Scripts](#scripts). Gated by the `"script"` engine capability.     |
 | `tools.<group>.<name>(args)` | `Promise<T>`    | Call a broker tool. ToolRefs are typed; the ref's group is checked against `meta.capabilities` at the call site. See [§Tools](#tools). |
-| `wait(durationMs)`           | `Promise<void>` | Durable timer — suspends the orchestration if the deadline hasn't passed. Survives server restart.                                          |
+| `wait(durationMs)`           | `Promise<void>` | Durable timer — suspends the orchestration if the deadline hasn't passed. Survives server restart.                                     |
 | `Math.random()`              | `number`        | Deterministic `[0, 1)` — journaled. Call it as in any JS; a resume replays the recorded draw.                                          |
 | `Date.now()`, `new Date()`   | `number`/`Date` | Deterministic wall-clock — journaled. A resume replays the recorded epoch millis.                                                      |
 | `crypto.randomUUID()`        | `string`        | Deterministic UUIDv4 — journaled. A resume replays the recorded id.                                                                    |
@@ -621,7 +621,7 @@ determinism for everything downstream of it.
 | ------------------------------------------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------ |
 | Non-type runtime imports                                                                         | Lint                      | Flagged; the loader blanks the import (value is `undefined` in the body) |
 | Module-level mutable state                                                                       | Lint                      | Flagged by the linter                                                    |
-| `meta` referencing non-extractable values                                                        | Orchestration load time        | Orchestration refuses to load                                                 |
+| `meta` referencing non-extractable values                                                        | Orchestration load time   | Orchestration refuses to load                                            |
 | Mismatched `argsHash` on replay (including a journaled `Date`/`Math.random`/`uuid` call)         | Replay execution          | `ReplayDriftError` at the diverging site                                 |
 | Primitive call after `cancellation` aborted                                                      | Runtime                   | `CancelledError`                                                         |
 | Capability mismatch (call site references a tool whose `group` ref isn't in `meta.capabilities`) | Runtime, at the call site | `PermissionDeniedError` thrown and journaled                             |
@@ -695,7 +695,7 @@ The capability list is a mixed array of two kinds of entries:
 | `"user"`     | `user.ask`, `user.notify`                     |
 | `"script"`   | `scripts.*` — the recipe's registered scripts |
 | `"ui"`       | `ui.show` (auto-granted if recipe has views)  |
-| `"workflow"` | `workflow()` (sub-orchestration invocation)        |
+| `"workflow"` | `workflow()` (sub-orchestration invocation)   |
 
 **`ToolGroupRef`s** — typed references to tool groups declared via `defineToolGroup` (see
 [§Tools](#tools)). Each ref unlocks every tool registered under that group. Built-in
@@ -1088,7 +1088,7 @@ parks it cheaply and resumes it on the next external event.
 
 This asymmetry shapes the surface each side gets:
 
-| Capability                                              | Agent                     | Orchestration                   |
+| Capability                                              | Agent                     | Orchestration              |
 | ------------------------------------------------------- | ------------------------- | -------------------------- |
 | Spawn a child thread                                    | ✅                        | ✅                         |
 | Fire-and-forget message to another thread               | ✅                        | ✅                         |

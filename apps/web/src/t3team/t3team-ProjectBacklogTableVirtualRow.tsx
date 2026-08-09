@@ -1,7 +1,10 @@
 import { memo } from "react";
 import type { CSSProperties, MouseEvent } from "react";
 
-import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+} from "~/t3team/backend/t3team-types";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import { ProjectBacklogTableColGroup } from "~/t3team/t3team-ProjectBacklogTableColGroup";
 import { ProjectBacklogTableGroupHeaderRow } from "~/t3team/t3team-ProjectBacklogTableGroupHeaderRow";

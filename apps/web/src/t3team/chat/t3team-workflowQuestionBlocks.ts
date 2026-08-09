@@ -30,9 +30,7 @@ export type T3TeamQuestionBlock = {
   readonly lines: ReadonlyArray<string>;
 };
 
-export function parseT3TeamQuestionBlocks(
-  question: string,
-): ReadonlyArray<T3TeamQuestionBlock> {
+export function parseT3TeamQuestionBlocks(question: string): ReadonlyArray<T3TeamQuestionBlock> {
   const blocks = question
     .split(/\n[ \t]*\n+/)
     .map((block) =>

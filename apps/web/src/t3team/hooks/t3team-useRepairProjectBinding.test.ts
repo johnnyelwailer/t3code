@@ -16,8 +16,9 @@ vi.mock("~/t3team/backend/t3team-index", () => ({
 
 import { useRepairProjectBinding } from "./t3team-useRepairProjectBinding";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 type HookValue = ReturnType<typeof useRepairProjectBinding>;
 

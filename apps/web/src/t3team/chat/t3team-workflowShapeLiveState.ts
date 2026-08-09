@@ -19,7 +19,7 @@ import {
 } from "~/t3team/chat/t3team-workflowRunLabels";
 import { reconcileT3TeamWorkflowShapeProgress } from "./t3team-workflowShapeProgress";
 
-const TERMINAL = ["completed", "failed", "cancelled"];
+const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
 export function workflowControlErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -67,7 +67,7 @@ export function useT3TeamWorkflowShapeLiveState(input: {
 
   useEffect(() => {
     if (localStatus === undefined || workflowRunStatus === undefined) return;
-    if (workflowRunStatus.status === localStatus || TERMINAL.includes(workflowRunStatus.status)) {
+    if (workflowRunStatus.status === localStatus || TERMINAL.has(workflowRunStatus.status)) {
       setLocalStatus(undefined);
     }
   }, [localStatus, workflowRunStatus]);
@@ -79,7 +79,7 @@ export function useT3TeamWorkflowShapeLiveState(input: {
       : (localStatus ?? serverStatus ?? inferredRunStatus(progress));
   // Repair entries are historical workflow activity. Once a run is terminal, they must not
   // keep a stale spinner/"Getting orchestration ready" strip visible after Stop succeeds.
-  const repair = TERMINAL.includes(status) ? null : repairStatus(progress.steps);
+  const repair = TERMINAL.has(status) ? null : repairStatus(progress.steps);
   const liveLabel =
     status === "cancelled"
       ? "Stopped"

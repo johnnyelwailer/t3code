@@ -22,7 +22,11 @@ describe("advance", () => {
       const beforeUrl = advance(idle("claude"), "Paste code here if prompted:", CLAUDE);
       expect(beforeUrl.phase).toBe("idle");
 
-      const withUrl: AuthState = { tool: "claude", phase: "awaiting-open", url: "https://claude.ai/x" };
+      const withUrl: AuthState = {
+        tool: "claude",
+        phase: "awaiting-open",
+        url: "https://claude.ai/x",
+      };
       const next = advance(withUrl, "Paste code here if prompted:", CLAUDE);
       expect(next.phase).toBe("awaiting-code");
     });
@@ -82,7 +86,11 @@ describe("advance", () => {
     });
 
     it("moves to connected on success", () => {
-      const prev: AuthState = { tool: "codex", phase: "awaiting-open", url: "https://auth.openai.com/x" };
+      const prev: AuthState = {
+        tool: "codex",
+        phase: "awaiting-open",
+        url: "https://auth.openai.com/x",
+      };
       const next = advance(prev, "Successfully logged in", CODEX);
       expect(next.phase).toBe("connected");
     });
@@ -99,7 +107,11 @@ describe("advance", () => {
       state = advance(state, "Opening browser for sign-in…", FAKE);
       expect(state.phase).toBe("idle");
 
-      state = advance(state, "If it does not open, visit: https://example.invalid/device/AbC123", FAKE);
+      state = advance(
+        state,
+        "If it does not open, visit: https://example.invalid/device/AbC123",
+        FAKE,
+      );
       expect(state.phase).toBe("awaiting-open");
       expect(state.url).toBe("https://example.invalid/device/AbC123");
 
@@ -118,7 +130,11 @@ describe("advance", () => {
   });
 
   it("never regresses phase when a chunk carries no recognizable signal", () => {
-    const prev: AuthState = { tool: "fake", phase: "awaiting-code", url: "https://example.invalid/x" };
+    const prev: AuthState = {
+      tool: "fake",
+      phase: "awaiting-code",
+      url: "https://example.invalid/x",
+    };
     const next = advance(prev, "some unrelated noise\n", FAKE);
     expect(next.phase).toBe("awaiting-code");
     expect(next.url).toBe("https://example.invalid/x");
@@ -209,7 +225,11 @@ describe("success and failure patterns colliding on one line", () => {
   });
 
   it("still reports a genuine failure", () => {
-    const next = advance({ tool: "claude", phase: "verifying" }, "Login failed: invalid code", CLAUDE);
+    const next = advance(
+      { tool: "claude", phase: "verifying" },
+      "Login failed: invalid code",
+      CLAUDE,
+    );
     expect(next.phase).toBe("failed");
     expect(next.message).toContain("invalid code");
   });

@@ -117,7 +117,13 @@ export interface AwaitingCodePhaseProps {
 }
 
 /** The single auto-focused input, Verify, and the secondary "open sign-in page again" link. */
-export function AwaitingCodePhase({ label, url, code, onCodeChange, onSubmit }: AwaitingCodePhaseProps) {
+export function AwaitingCodePhase({
+  label,
+  url,
+  code,
+  onCodeChange,
+  onSubmit,
+}: AwaitingCodePhaseProps) {
   return (
     <div className="flex flex-col gap-2">
       {/* Secondary affordance, not a second field — a user who never

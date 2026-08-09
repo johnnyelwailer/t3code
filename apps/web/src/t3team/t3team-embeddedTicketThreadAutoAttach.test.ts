@@ -35,7 +35,10 @@ describe("takeEmbeddedTicketThreadAutoAttach", () => {
       request: {
         projectId: PROJECT.id,
         targetLabel: `${ROOT_TICKET.ref.displayId} ${ROOT_TICKET.ref.title}`,
-        dedupeKey: buildT3TeamWorkItemDedupeKey({ projectId: PROJECT.id, workItemKey: ROOT_TICKET.ref.displayId }),
+        dedupeKey: buildT3TeamWorkItemDedupeKey({
+          projectId: PROJECT.id,
+          workItemKey: ROOT_TICKET.ref.displayId,
+        }),
       },
     });
     expect(seenKeys).toEqual(
@@ -100,7 +103,10 @@ describe("takeEmbeddedTicketThreadAutoAttach", () => {
         threadId: "thread-1",
       },
       request: {
-        dedupeKey: buildT3TeamWorkItemDedupeKey({ projectId: PROJECT.id, workItemKey: siblingTicket.ref.displayId }),
+        dedupeKey: buildT3TeamWorkItemDedupeKey({
+          projectId: PROJECT.id,
+          workItemKey: siblingTicket.ref.displayId,
+        }),
       },
     });
     expect(third).toMatchObject({
@@ -109,7 +115,10 @@ describe("takeEmbeddedTicketThreadAutoAttach", () => {
         threadId: "thread-2",
       },
       request: {
-        dedupeKey: buildT3TeamWorkItemDedupeKey({ projectId: PROJECT.id, workItemKey: ROOT_TICKET.ref.displayId }),
+        dedupeKey: buildT3TeamWorkItemDedupeKey({
+          projectId: PROJECT.id,
+          workItemKey: ROOT_TICKET.ref.displayId,
+        }),
       },
     });
   });

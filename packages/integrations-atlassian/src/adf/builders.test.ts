@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vite-plus/test";
-import { bulletList, docFromBlocks, expand, heading, link, panel, paragraph, table } from "./builders.ts";
+import {
+  bulletList,
+  docFromBlocks,
+  expand,
+  heading,
+  link,
+  panel,
+  paragraph,
+  table,
+} from "./builders.ts";
 
 describe("adf-builders", () => {
   it("builds a panel node with type and content", () => {
     const node = panel("warning", [paragraph("careful")]);
-    expect(node).toEqual({ type: "panel", attrs: { panelType: "warning" }, content: [paragraph("careful")] });
+    expect(node).toEqual({
+      type: "panel",
+      attrs: { panelType: "warning" },
+      content: [paragraph("careful")],
+    });
   });
 
   it("builds an expand node with title and content", () => {
@@ -58,7 +71,11 @@ describe("adf-builders", () => {
       [{ content: [paragraph("c")], colspan: 2, rowspan: 1, colwidth: [120, 120] }],
     ])!;
     expect(node.content?.[0]?.content?.[0]?.attrs).toEqual({ background: "#deebff" });
-    expect(node.content?.[1]?.content?.[0]?.attrs).toEqual({ colspan: 2, rowspan: 1, colwidth: [120, 120] });
+    expect(node.content?.[1]?.content?.[0]?.attrs).toEqual({
+      colspan: 2,
+      rowspan: 1,
+      colwidth: [120, 120],
+    });
   });
 
   it("builds a bullet list from items, skipping empty strings (B2)", () => {

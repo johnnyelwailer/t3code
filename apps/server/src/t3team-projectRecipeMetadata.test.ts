@@ -155,7 +155,11 @@ describe("ctx-derived recipe metadata", () => {
         yield* writeRecipe({
           workspaceRoot,
           id: "kept",
-          body: [`  title: "Kept",`, `  shortDescription: "passes both gates",`, `  appliesTo: {},`],
+          body: [
+            `  title: "Kept",`,
+            `  shortDescription: "passes both gates",`,
+            `  appliesTo: {},`,
+          ],
         });
 
         const discovered = yield* discoverProjectRecipes({

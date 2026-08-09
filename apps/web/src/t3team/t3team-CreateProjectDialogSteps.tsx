@@ -94,7 +94,9 @@ export function ProjectStep({
                   key={project.id}
                   type="button"
                   onClick={() =>
-                    existing ? onOpenExistingProject?.(existing.projectId) : onSelectProject(project)
+                    existing
+                      ? onOpenExistingProject?.(existing.projectId)
+                      : onSelectProject(project)
                   }
                   aria-pressed={selectedProject?.id === project.id}
                   className={`flex w-full items-center justify-between rounded-md border p-3 text-left ${selectedProject?.id === project.id ? "border-primary bg-primary/5" : "border-border"}`}

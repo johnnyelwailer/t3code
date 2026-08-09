@@ -21,8 +21,14 @@ describe("walkAdf", () => {
 
 describe("collectAdfNodeTypes", () => {
   it("collects every distinct type present in the document", () => {
-    const doc = docFromBlocks([heading(1, "H"), paragraph("P"), panel("warning", [paragraph("in panel")])]);
-    expect(collectAdfNodeTypes(doc)).toEqual(new Set(["doc", "heading", "text", "paragraph", "panel"]));
+    const doc = docFromBlocks([
+      heading(1, "H"),
+      paragraph("P"),
+      panel("warning", [paragraph("in panel")]),
+    ]);
+    expect(collectAdfNodeTypes(doc)).toEqual(
+      new Set(["doc", "heading", "text", "paragraph", "panel"]),
+    );
   });
 
   it("returns a single-entry set for a doc with no content", () => {

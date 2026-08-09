@@ -805,15 +805,15 @@ properties into the srcdoc's own `:root`, together with an explicit
 `color-scheme: light|dark`. Widgets may therefore use the Epic 37 semantic vocabulary
 directly, and one markup stays readable in both modes:
 
-| group        | tokens                                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------------------------ |
-| surfaces     | `--background`, `--card` / `--card-foreground`, `--popover` / `--popover-foreground`                    |
-| text         | `--foreground`, `--muted` / `--muted-foreground`                                                       |
-| interactive  | `--primary`, `--secondary`, `--accent` (each with `-foreground`), `--border`, `--input`, `--ring`       |
-| status       | `--destructive`, `--info`, `--success`, `--warning` (each with `-foreground`)                           |
-| typography   | `--font-sans`, `--font-mono`, `--radius`                                                               |
+| group       | tokens                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------- |
+| surfaces    | `--background`, `--card` / `--card-foreground`, `--popover` / `--popover-foreground`              |
+| text        | `--foreground`, `--muted` / `--muted-foreground`                                                  |
+| interactive | `--primary`, `--secondary`, `--accent` (each with `-foreground`), `--border`, `--input`, `--ring` |
+| status      | `--destructive`, `--info`, `--success`, `--warning` (each with `-foreground`)                     |
+| typography  | `--font-sans`, `--font-mono`, `--radius`                                                          |
 
-The table is the *documented* contract, mirrored by `T3TEAM_WIDGET_THEME_TOKENS`. The
+The table is the _documented_ contract, mirrored by `T3TEAM_WIDGET_THEME_TOKENS`. The
 snapshot is not limited to it — a theme pack that introduces further tokens reaches widgets
 automatically, so a pack's palette needs no widget-side change.
 

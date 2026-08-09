@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ProjectShellProject, ProjectSource, ProjectSourceKind } from "@t3tools/project-context";
+import type {
+  ProjectShellProject,
+  ProjectSource,
+  ProjectSourceKind,
+} from "@t3tools/project-context";
 
 import { randomUUID } from "~/lib/utils";
 import { isDuplicateProjectBindingError } from "~/t3team/chat/t3team-duplicateThreadCreateError";

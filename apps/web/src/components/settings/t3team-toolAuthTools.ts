@@ -46,7 +46,9 @@ const TOOL_AUTH_TOOL_BY_DRIVER_KIND: ReadonlyMap<ProviderDriverKind, ToolAuthToo
   [ProviderDriverKind.make("codex"), "codex"],
 ]);
 
-export function toolAuthToolForDriverKind(driverKind: ProviderDriverKind): ToolAuthToolId | undefined {
+export function toolAuthToolForDriverKind(
+  driverKind: ProviderDriverKind,
+): ToolAuthToolId | undefined {
   return TOOL_AUTH_TOOL_BY_DRIVER_KIND.get(driverKind);
 }
 

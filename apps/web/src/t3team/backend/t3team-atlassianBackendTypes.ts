@@ -63,8 +63,7 @@ export type AtlassianIssueStatusLane = "todo" | "inProgress" | "review" | "done"
 export type { TempoCapacityResponse, TempoUserCapacity } from "./t3team-atlassianTempoTypes";
 
 export interface AtlassianBackendApi
-  extends AtlassianIssueContentBackendApi,
-    AtlassianChildIssueBackendApi {
+  extends AtlassianIssueContentBackendApi, AtlassianChildIssueBackendApi {
   readonly getTempoCapacity: (input: {
     readonly accountIds: ReadonlyArray<string>;
     readonly from: string;

@@ -45,11 +45,7 @@ export type RecipeMetadataOutcome =
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** Evaluate a `value | ((ctx) => value)` field. Throws with the field named, for one catch site. */
-function derive<T>(
-  field: string,
-  value: RecipeDerived<T>,
-  context: ProjectRecipeRenderContext,
-): T {
+function derive<T>(field: string, value: RecipeDerived<T>, context: ProjectRecipeRenderContext): T {
   if (typeof value !== "function") {
     return value;
   }

@@ -28,7 +28,10 @@ const MODEL: WorkItemFieldModel = {
   sprints: [],
 };
 
-function draft(field: T3TeamScalarDraftMutation["field"], patch: Record<string, unknown>): T3TeamScalarDraftMutation {
+function draft(
+  field: T3TeamScalarDraftMutation["field"],
+  patch: Record<string, unknown>,
+): T3TeamScalarDraftMutation {
   return {
     id: `${field}-1`,
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -107,7 +110,9 @@ describe("useWorkItemDraftStripScalarAccept", () => {
   });
 
   it("accepting from the strip sets lastChange on the SAME mutation instance the chip reads for its undo banner", async () => {
-    const latest = mount({ updateIssueStatus: async ({ targetStatus }) => ({ status: targetStatus }) });
+    const latest = mount({
+      updateIssueStatus: async ({ targetStatus }) => ({ status: targetStatus }),
+    });
     const d = draft("status", { targetStatus: "Done" });
     useT3TeamDraftMutationStore.setState({ drafts: [d] });
 
@@ -180,7 +185,12 @@ describe("useWorkItemDraftStripScalarAccept", () => {
       await Promise.resolve();
     });
     expect(calls).toEqual([
-      { accountId: "acct-1", projectId: "proj-1", parentIssueIdOrKey: "ALPHA-1", summary: "Write the migration" },
+      {
+        accountId: "acct-1",
+        projectId: "proj-1",
+        parentIssueIdOrKey: "ALPHA-1",
+        summary: "Write the migration",
+      },
     ]);
   });
 

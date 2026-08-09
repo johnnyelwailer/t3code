@@ -31,7 +31,9 @@ export function diffWords(
   for (let i = rows - 1; i >= 0; i -= 1) {
     for (let j = cols - 1; j >= 0; j -= 1) {
       lengths[i]![j] =
-        before[i] === after[j] ? lengths[i + 1]![j + 1]! + 1 : Math.max(lengths[i + 1]![j]!, lengths[i]![j + 1]!);
+        before[i] === after[j]
+          ? lengths[i + 1]![j + 1]! + 1
+          : Math.max(lengths[i + 1]![j]!, lengths[i]![j + 1]!);
     }
   }
 

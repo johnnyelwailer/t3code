@@ -17,9 +17,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "~/lib/utils";
-import type {
-  T3TeamWorkflowRunProgress,
-} from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { repairStatus } from "~/t3team/chat/t3team-workflowRunLabels";
 import { canOpenStepThread } from "~/t3team/chat/t3team-workflowRunStepRow";
 

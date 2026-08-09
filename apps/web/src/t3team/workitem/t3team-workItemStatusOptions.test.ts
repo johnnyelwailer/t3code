@@ -14,7 +14,10 @@ describe("buildWorkItemStatusOptions", () => {
 
   it("dedupes case-insensitively, keeping the first occurrence", () => {
     const options = buildWorkItemStatusOptions(
-      [{ name: "To Do", id: "1" }, { name: "TO DO", id: "2" }],
+      [
+        { name: "To Do", id: "1" },
+        { name: "TO DO", id: "2" },
+      ],
       undefined,
     );
 

@@ -17,7 +17,9 @@ export function WorkItemFieldOverlay({
   readonly className?: string | undefined;
 }) {
   return (
-    <span className={cn("relative inline-flex min-w-0 max-w-full items-center leading-none", className)}>
+    <span
+      className={cn("relative inline-flex min-w-0 max-w-full items-center leading-none", className)}
+    >
       {children}
       {overlay ? (
         <span className="absolute left-0 top-full z-20 mt-1 w-max max-w-64 text-nowrap rounded-md border border-border bg-popover px-2 py-1 text-popover-foreground shadow-md">

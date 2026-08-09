@@ -31,9 +31,7 @@ import * as NodeModule from "node:module";
 const RESOLVABLE_PACKAGES = ["@t3team/sdk", "effect"] as const;
 
 export function isResolvableFromHost(specifier: string): boolean {
-  return RESOLVABLE_PACKAGES.some(
-    (name) => specifier === name || specifier.startsWith(`${name}/`),
-  );
+  return RESOLVABLE_PACKAGES.some((name) => specifier === name || specifier.startsWith(`${name}/`));
 }
 
 let installed = false;

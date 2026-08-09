@@ -86,7 +86,13 @@ export function groupWorkItemIssueLinks(
     const linkId = readLabel(record.id);
     const linkTypeName = readLabel(type?.name);
     addIssue(readLabel(type?.inward), readKey(record.inwardIssue), linkId, linkTypeName, "inward");
-    addIssue(readLabel(type?.outward), readKey(record.outwardIssue), linkId, linkTypeName, "outward");
+    addIssue(
+      readLabel(type?.outward),
+      readKey(record.outwardIssue),
+      linkId,
+      linkTypeName,
+      "outward",
+    );
   }
 
   return order.map((label) => ({ label, issues: groups.get(label)! }));

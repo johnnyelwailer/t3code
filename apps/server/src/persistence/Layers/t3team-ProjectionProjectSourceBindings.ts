@@ -90,7 +90,9 @@ const makeProjectionProjectSourceBindingRepository = Effect.gen(function* () {
 
   const upsert: ProjectionProjectSourceBindingRepositoryShape["upsert"] = (row) =>
     upsertRow(row).pipe(
-      Effect.mapError(toPersistenceSqlError("ProjectionProjectSourceBindingRepository.upsert:query")),
+      Effect.mapError(
+        toPersistenceSqlError("ProjectionProjectSourceBindingRepository.upsert:query"),
+      ),
     );
 
   const deleteById: ProjectionProjectSourceBindingRepositoryShape["deleteById"] = (input) =>

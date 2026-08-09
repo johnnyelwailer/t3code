@@ -68,7 +68,12 @@ function Verbs({ onComment }: { readonly onComment: () => void }) {
         status picker, a person search, eventually an ADF editor. Saying what is wrong is cheaper for
         the reader and better for the agent, which can then propose the corrected value itself.
       */}
-      <Button size="icon-xs" variant="ghost" aria-label="Comment on this change" onClick={onComment}>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label="Comment on this change"
+        onClick={onComment}
+      >
         <MessageSquare className="size-3.5" />
       </Button>
       <Button size="icon-xs" variant="ghost" aria-label="Dismiss">

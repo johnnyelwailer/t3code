@@ -42,9 +42,7 @@ export type T3TeamComposerMenuSources = {
   readonly pathEntries: ReadonlyArray<T3TeamComposerPathEntry>;
 };
 
-function buildPathItems(
-  entries: ReadonlyArray<T3TeamComposerPathEntry>,
-): ComposerCommandItem[] {
+function buildPathItems(entries: ReadonlyArray<T3TeamComposerPathEntry>): ComposerCommandItem[] {
   return entries.map((entry) => ({
     id: `path:${entry.kind}:${entry.path}`,
     type: "path" as const,
@@ -85,10 +83,7 @@ function buildSlashCommandItems(
   return searchSlashCommandItems(slashCommandItems, normalizedQuery);
 }
 
-function buildSkillItems(
-  sources: T3TeamComposerMenuSources,
-  query: string,
-): ComposerCommandItem[] {
+function buildSkillItems(sources: T3TeamComposerMenuSources, query: string): ComposerCommandItem[] {
   const provider = sources.provider;
   if (!provider) {
     return [];

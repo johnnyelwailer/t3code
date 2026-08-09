@@ -33,7 +33,10 @@ export function scalarDraftChangeLine(
   if (draft.field === "estimate") {
     const proposed = readEstimatePointsDraftPatch(draft);
     if (proposed === undefined) return undefined;
-    return { from: model.storyPoints !== undefined ? String(model.storyPoints) : "—", to: String(proposed ?? "—") };
+    return {
+      from: model.storyPoints !== undefined ? String(model.storyPoints) : "—",
+      to: String(proposed ?? "—"),
+    };
   }
 
   return undefined;

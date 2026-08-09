@@ -182,3 +182,18 @@ export function foldPtyRead(
 }
 
 const MAX_PENDING_CHARS = 8_192;
+
+/** Whether an auth state differs in any field a subscriber would render. Lives beside the
+ * other pure auth-state helpers rather than in the service that publishes the updates. */
+export function hasStateChanged(previous: AuthState, next: AuthState): boolean {
+  return (
+    previous.phase !== next.phase ||
+    previous.url !== next.url ||
+    previous.displayCode !== next.displayCode ||
+    previous.message !== next.message ||
+    previous.account !== next.account ||
+    previous.organization !== next.organization ||
+    previous.expiresAt !== next.expiresAt ||
+    previous.installLog !== next.installLog
+  );
+}

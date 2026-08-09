@@ -56,7 +56,11 @@ describe("canOpenStepThread", () => {
 
   it("refuses when there is no thread or no handler", () => {
     expect(
-      canOpenStepThread({ step: step(undefined), currentThreadId: LAUNCH_THREAD, hasHandler: true }),
+      canOpenStepThread({
+        step: step(undefined),
+        currentThreadId: LAUNCH_THREAD,
+        hasHandler: true,
+      }),
     ).toBe(false);
     expect(
       canOpenStepThread({

@@ -89,9 +89,11 @@ describe("WorkItemChildAssigneeControl", () => {
     const updateIssueAssignee = vi.fn().mockResolvedValue(undefined);
     const onReload = vi.fn();
     const backend: Pick<AtlassianBackendApi, "searchAssignableUsers" | "updateIssueAssignee"> = {
-      searchAssignableUsers: vi.fn().mockResolvedValue([
-        { accountId: "acc-alan", displayName: "Alan Turing", emailAddress: "alan@example.test" },
-      ]),
+      searchAssignableUsers: vi
+        .fn()
+        .mockResolvedValue([
+          { accountId: "acc-alan", displayName: "Alan Turing", emailAddress: "alan@example.test" },
+        ]),
       updateIssueAssignee,
     };
 
@@ -133,9 +135,11 @@ describe("WorkItemChildAssigneeControl", () => {
   it("rolls back to the previous assignee locally when the backend call fails", async () => {
     const onReload = vi.fn();
     const backend: Pick<AtlassianBackendApi, "searchAssignableUsers" | "updateIssueAssignee"> = {
-      searchAssignableUsers: vi.fn().mockResolvedValue([
-        { accountId: "acc-alan", displayName: "Alan Turing", emailAddress: "alan@example.test" },
-      ]),
+      searchAssignableUsers: vi
+        .fn()
+        .mockResolvedValue([
+          { accountId: "acc-alan", displayName: "Alan Turing", emailAddress: "alan@example.test" },
+        ]),
       updateIssueAssignee: vi.fn().mockRejectedValue(new Error("Request failed with 500")),
     };
 

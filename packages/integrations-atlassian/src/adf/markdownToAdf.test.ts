@@ -89,7 +89,9 @@ describe("markdownToAdf", () => {
   });
 
   it("parses multi-node inline runs combining bold, code, and link on one line", () => {
-    const doc = markdownToAdf("**bold** then `code` then [link](https://x.example)") as unknown as DocNode;
+    const doc = markdownToAdf(
+      "**bold** then `code` then [link](https://x.example)",
+    ) as unknown as DocNode;
     const nodes = doc.content[0]?.content ?? [];
     expect(nodes.some((n) => n.marks?.[0]?.type === "strong")).toBe(true);
     expect(nodes.some((n) => n.marks?.[0]?.type === "code")).toBe(true);

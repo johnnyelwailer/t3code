@@ -19,7 +19,9 @@ export interface ProjectSourceBindingFlatRow {
   readonly externalProjectUrl: string | null;
 }
 
-export function toProjectSourceBindingDomain(row: ProjectSourceBindingFlatRow): ProjectSourceBinding {
+export function toProjectSourceBindingDomain(
+  row: ProjectSourceBindingFlatRow,
+): ProjectSourceBinding {
   if (row.provider === "local") {
     return { provider: "local" };
   }

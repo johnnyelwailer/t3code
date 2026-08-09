@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
-import type { JiraAttachment, JiraCommentItem } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
+import type {
+  JiraAttachment,
+  JiraCommentItem,
+} from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { WorkItemAttachments } from "~/t3team/workitem/t3team-WorkItemAttachments";
 import { WorkItemChildren } from "~/t3team/workitem/t3team-WorkItemChildren";

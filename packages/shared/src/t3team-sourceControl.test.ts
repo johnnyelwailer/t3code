@@ -29,8 +29,7 @@ describe("detectSourceControlProviderFromRemoteUrl (GitHub Enterprise)", () => {
       "github",
     );
     expect(
-      detectSourceControlProviderFromRemoteUrl("https://my-enterprise.github.com/owner/repo")
-        ?.kind,
+      detectSourceControlProviderFromRemoteUrl("https://my-enterprise.github.com/owner/repo")?.kind,
     ).toBe("github");
   });
 
@@ -45,9 +44,9 @@ describe("detectSourceControlProviderFromRemoteUrl (GitHub Enterprise)", () => {
     expect(
       detectSourceControlProviderFromRemoteUrl("https://github.enterprise.local/owner/repo")?.kind,
     ).toBe("github");
-    expect(detectSourceControlProviderFromRemoteUrl("git@ghe.acme.internal:owner/repo.git")?.kind).toBe(
-      "github",
-    );
+    expect(
+      detectSourceControlProviderFromRemoteUrl("git@ghe.acme.internal:owner/repo.git")?.kind,
+    ).toBe("github");
   });
 
   it("does not treat a github-like substring as a GitHub host", () => {

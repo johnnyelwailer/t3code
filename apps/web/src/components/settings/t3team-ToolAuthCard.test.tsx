@@ -42,11 +42,14 @@ describe("ToolAuthCard", () => {
   });
 
   it("installing: shows progress from the installer's own output and says sign-in follows automatically", () => {
-    const markup = renderCard({
-      tool: "codex",
-      phase: "installing",
-      installLog: "npm warn deprecated foo\nadded 42 packages in 3s\n",
-    }, CODEX_META);
+    const markup = renderCard(
+      {
+        tool: "codex",
+        phase: "installing",
+        installLog: "npm warn deprecated foo\nadded 42 packages in 3s\n",
+      },
+      CODEX_META,
+    );
     expect(markup).toContain(`Installing ${CODEX_META.label}`);
     // The tail line, so a long install doesn't look like a hang.
     expect(markup).toContain("added 42 packages in 3s");

@@ -98,7 +98,9 @@ describe("ToolAuthService.install — one click installs AND signs in", () => {
           yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "starting")));
 
           // The rest of the journey is the same three-beat flow proven above.
-          loginProcess.emitData("If it does not open, visit: https://example.invalid/device/AbC123\n");
+          loginProcess.emitData(
+            "If it does not open, visit: https://example.invalid/device/AbC123\n",
+          );
           yield* waitFor(
             firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-open")),
           );
@@ -280,28 +282,30 @@ describe("ToolAuthService.install — one click installs AND signs in", () => {
     }),
   );
 
-  it.effect("retrying after a failed install re-checks presence rather than replaying history", () =>
-    Effect.gen(function* () {
-      const homeDir = makeTempHome();
-      try {
-        const binaryCheck = makeControllableBinaryCheck(false);
-        const { service, ptyAdapter } = yield* makeService(homeDir, {
-          checkBinaryAvailable: binaryCheck.check,
-        });
+  it.effect(
+    "retrying after a failed install re-checks presence rather than replaying history",
+    () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          const binaryCheck = makeControllableBinaryCheck(false);
+          const { service, ptyAdapter } = yield* makeService(homeDir, {
+            checkBinaryAvailable: binaryCheck.check,
+          });
 
-        yield* service.install("fake");
-        ptyAdapter.processes[0]!.emitExit({ exitCode: 1, signal: null });
-        yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "failed")));
+          yield* service.install("fake");
+          ptyAdapter.processes[0]!.emitExit({ exitCode: 1, signal: null });
+          yield* waitFor(firstFakeState(service).pipe(Effect.map((s) => s?.phase === "failed")));
 
-        // Between attempts, imagine the human installed it by hand.
-        binaryCheck.setPresent(true);
-        const retried = yield* service.install("fake");
+          // Between attempts, imagine the human installed it by hand.
+          binaryCheck.setPresent(true);
+          const retried = yield* service.install("fake");
 
-        expect(retried.phase).toBe("starting");
-        expect(ptyAdapter.processes).toHaveLength(2);
-      } finally {
-        removeTempHome(homeDir);
-      }
-    }),
+          expect(retried.phase).toBe("starting");
+          expect(ptyAdapter.processes).toHaveLength(2);
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
   );
 });

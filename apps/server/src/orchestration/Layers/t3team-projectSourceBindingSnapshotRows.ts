@@ -52,7 +52,9 @@ export function queryProjectSourceBindingsByProjectId(
         new Map(rows.map((row) => [row.projectId, toProjectSourceBindingDomain(row)] as const)),
     ),
     Effect.mapError(
-      toPersistenceSqlError("t3team-projectSourceBindingSnapshotRows:queryProjectSourceBindingsByProjectId"),
+      toPersistenceSqlError(
+        "t3team-projectSourceBindingSnapshotRows:queryProjectSourceBindingsByProjectId",
+      ),
     ),
   );
 }

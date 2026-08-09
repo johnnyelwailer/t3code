@@ -70,7 +70,10 @@ export function T3TeamWorkflowDecisionAffordance({
             busy={submitting === option}
             disabled={locked}
             onClick={() =>
-              onChoose(option, affordance.field === undefined ? option : { [affordance.field]: option })
+              onChoose(
+                option,
+                affordance.field === undefined ? option : { [affordance.field]: option },
+              )
             }
           />
         ))}

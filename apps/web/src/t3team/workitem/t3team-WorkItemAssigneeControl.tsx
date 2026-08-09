@@ -1,3 +1,4 @@
+import { assigneeIdentity } from "~/t3team/workitem/t3team-assigneeIdentity";
 import { useEffect, useState, type KeyboardEvent } from "react";
 
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
@@ -23,10 +24,6 @@ import { WorkItemPersonChip } from "~/t3team/workitem/t3team-WorkItemPersonAvata
 import type { WorkItemPerson } from "~/t3team/workitem/t3team-workItemFieldReaders";
 
 type Assignee = WorkItemPerson | null;
-
-function assigneeIdentity(person: Assignee): string | null {
-  return person ? (person.accountId ?? person.displayName) : null;
-}
 
 /**
  * The assignee chip, made interactive: the chip itself is the trigger for a search popover — opening
@@ -100,11 +97,17 @@ export function WorkItemAssigneeControl({
     if (!currentUserName) return;
     setAssignToMeError(null);
     try {
-      const matches = results.length > 0
-        ? results
-        : await backend.searchAssignableUsers({ accountId, issueIdOrKey, query: currentUserName });
+      const matches =
+        results.length > 0
+          ? results
+          : await backend.searchAssignableUsers({
+              accountId,
+              issueIdOrKey,
+              query: currentUserName,
+            });
       const normalized = currentUserName.trim().toLowerCase();
-      const match = matches.find((u) => u.displayName.trim().toLowerCase() === normalized) ?? matches[0];
+      const match =
+        matches.find((u) => u.displayName.trim().toLowerCase() === normalized) ?? matches[0];
       if (!match) {
         setAssignToMeError(new Error(`No assignable Jira user matched "${currentUserName}".`));
         return;
@@ -138,7 +141,12 @@ export function WorkItemAssigneeControl({
   const proposedAssignee = draft ? readAssigneeDraftPatch(draft) : undefined;
   const proposedLabel =
     proposedAssignee === undefined ? undefined : (proposedAssignee?.displayName ?? "Unassigned");
-  const marker = useWorkItemFieldDraftMarker({ issueIdOrKey, field: "assignee", draft, proposedLabel });
+  const marker = useWorkItemFieldDraftMarker({
+    issueIdOrKey,
+    field: "assignee",
+    draft,
+    proposedLabel,
+  });
   const overlay = mutation.error ? (
     <T3TeamErrorStateInline userFacing={mutation.error} showRetry={false} />
   ) : mutation.lastChange ? (
@@ -191,7 +199,11 @@ export function WorkItemAssigneeControl({
 
           {assignToMeError ? (
             <div className="px-2 pb-1.5">
-              <T3TeamErrorState error={assignToMeError} action="assigning to you" variant="inline" />
+              <T3TeamErrorState
+                error={assignToMeError}
+                action="assigning to you"
+                variant="inline"
+              />
             </div>
           ) : null}
         </PopoverPopup>

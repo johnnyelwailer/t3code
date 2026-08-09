@@ -59,7 +59,12 @@ export function T3TeamImageLightboxToolbar({
         {zoom === "fit" ? <Maximize /> : <Minimize />}
         {zoom === "fit" ? "Actual size" : "Fit to screen"}
       </Button>
-      <Button type="button" variant="ghost" size="sm" render={<a href={originalHref} target="_blank" rel="noreferrer" />}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        render={<a href={originalHref} target="_blank" rel="noreferrer" />}
+      >
         <ExternalLink />
         Open original
       </Button>

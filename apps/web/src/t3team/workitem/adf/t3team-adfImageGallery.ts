@@ -1,6 +1,11 @@
 import type { T3TeamLightboxImage } from "~/t3team/components/media/t3team-imageLightboxState";
 import { classifyAdfMediaNode, resolveMediaSrc } from "./t3team-adfMediaResolution";
-import { adfAttrString, adfChildren, type AdfNode, type AdfRenderContext } from "./t3team-adfRendererTypes";
+import {
+  adfAttrString,
+  adfChildren,
+  type AdfNode,
+  type AdfRenderContext,
+} from "./t3team-adfRendererTypes";
 
 const MEDIA_NODE_TYPES = new Set(["media", "mediaInline"]);
 

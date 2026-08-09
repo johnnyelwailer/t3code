@@ -9,11 +9,7 @@ export function buildT3TeamKickoffState(input: {
   readonly kickoffPending?: boolean;
   readonly kickoffWorkflow?: T3TeamKickoffWorkflow;
 }): Readonly<Record<string, unknown>> | undefined {
-  if (
-    !input.kickoffMessage &&
-    !input.kickoffWorkflow &&
-    input.kickoffPending === undefined
-  ) {
+  if (!input.kickoffMessage && !input.kickoffWorkflow && input.kickoffPending === undefined) {
     return undefined;
   }
 
@@ -38,7 +34,9 @@ export function buildT3TeamKickoffState(input: {
             ...(workflow.recipePath ? { recipePath: workflow.recipePath } : {}),
             ...(workflow.promptPath ? { promptPath: workflow.promptPath } : {}),
             ...(workflow.workflowPath ? { workflowPath: workflow.workflowPath } : {}),
-            ...(workflow.allowedToolGroups ? { allowedToolGroups: workflow.allowedToolGroups } : {}),
+            ...(workflow.allowedToolGroups
+              ? { allowedToolGroups: workflow.allowedToolGroups }
+              : {}),
             ...(workflow.launchContext ? { launchContext: workflow.launchContext } : {}),
           },
         }

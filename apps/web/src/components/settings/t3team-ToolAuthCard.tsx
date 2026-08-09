@@ -169,9 +169,7 @@ export function ToolAuthCard({
               {expiryLabel(state?.expiresAt) ? (
                 <p className="text-[11px] text-muted-foreground">{expiryLabel(state?.expiresAt)}</p>
               ) : null}
-              {state?.message ? (
-                <p className="text-[11px] text-warning">{state.message}</p>
-              ) : null}
+              {state?.message ? <p className="text-[11px] text-warning">{state.message}</p> : null}
             </div>
             <Button size="sm" variant="outline" className="shrink-0" onClick={onConnect}>
               Reconnect

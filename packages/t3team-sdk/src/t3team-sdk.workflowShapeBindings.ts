@@ -19,7 +19,10 @@
 import type * as TsApi from "typescript";
 
 /** Value accessors whose RESULT is a call root — `const scripts = getScripts()` → root `scripts`. */
-const ROOT_ACCESSORS: Readonly<Record<string, string>> = { getScripts: "scripts", getTools: "tools" };
+const ROOT_ACCESSORS: Readonly<Record<string, string>> = {
+  getScripts: "scripts",
+  getTools: "tools",
+};
 
 export interface WorkflowBodyBindings {
   /** True when this body imports the SDK — i.e. binding resolution is meaningful for it. */

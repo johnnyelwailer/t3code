@@ -23,7 +23,8 @@ export default async function run() {
 
   const input = Schema.decodeSync(Inputs)(args);
 
-  if (thread === undefined) throw new Error("fixtures.decision-boolean requires a launching thread");
+  if (thread === undefined)
+    throw new Error("fixtures.decision-boolean requires a launching thread");
 
   const approved = await thread.askUser(input.question, {
     schema: Schema.Boolean,

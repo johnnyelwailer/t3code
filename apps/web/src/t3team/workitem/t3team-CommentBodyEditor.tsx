@@ -1,6 +1,9 @@
 import { useRef } from "react";
 
-import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
+import {
+  ComposerPromptEditor,
+  type ComposerPromptEditorHandle,
+} from "~/components/ComposerPromptEditor";
 
 /**
  * `ComposerPromptEditor` is built on Lexical's `PlainTextPlugin` with no default Enter handler

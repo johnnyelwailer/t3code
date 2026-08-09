@@ -42,7 +42,9 @@ describe("beginAtlassianOAuthServerFlow", () => {
 
     expect(started.shareUrl).toBe("http://localhost:5736/api/t3team/atlassian/oauth/begin/abc");
     // The desktop path needs the server's own origin — with an unroutable bind host made loopback.
-    expect(started.serverOriginUrl).toBe("http://127.0.0.1:13776/api/t3team/atlassian/oauth/begin/abc");
+    expect(started.serverOriginUrl).toBe(
+      "http://127.0.0.1:13776/api/t3team/atlassian/oauth/begin/abc",
+    );
     expect(started.state).toBe("abc");
     const [, init] = fetchMock.mock.calls[0] ?? [];
     expect(init).toMatchObject({ body: JSON.stringify({ redirectUri: CALLBACK }) });
@@ -88,9 +90,9 @@ describe("getAtlassianOAuthFlowStatus", () => {
   it("reads the status out of the route named by state", async () => {
     const fetchMock = stubJsonResponse({ status: "pending" });
 
-    await expect(
-      getAtlassianOAuthFlowStatus({ state: "s1", apiBaseUrl: API_BASE }),
-    ).resolves.toBe("pending");
+    await expect(getAtlassianOAuthFlowStatus({ state: "s1", apiBaseUrl: API_BASE })).resolves.toBe(
+      "pending",
+    );
 
     const [url] = fetchMock.mock.calls[0] ?? [];
     expect((url as URL).toString()).toBe(`${API_BASE}api/t3team/atlassian/oauth/status/s1`);
@@ -98,14 +100,14 @@ describe("getAtlassianOAuthFlowStatus", () => {
 
   it("passes completed and unknown through unchanged", async () => {
     stubJsonResponse({ status: "completed" });
-    await expect(
-      getAtlassianOAuthFlowStatus({ state: "s1", apiBaseUrl: API_BASE }),
-    ).resolves.toBe("completed");
+    await expect(getAtlassianOAuthFlowStatus({ state: "s1", apiBaseUrl: API_BASE })).resolves.toBe(
+      "completed",
+    );
 
     stubJsonResponse({ status: "unknown" });
-    await expect(
-      getAtlassianOAuthFlowStatus({ state: "s1", apiBaseUrl: API_BASE }),
-    ).resolves.toBe("unknown");
+    await expect(getAtlassianOAuthFlowStatus({ state: "s1", apiBaseUrl: API_BASE })).resolves.toBe(
+      "unknown",
+    );
   });
 });
 

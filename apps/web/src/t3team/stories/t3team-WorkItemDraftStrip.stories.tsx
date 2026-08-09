@@ -137,7 +137,11 @@ function DescriptionDiffDemo() {
 
   return (
     <div className="w-[640px]">
-      <WorkItemDescriptionDraftDiff issueIdOrKey={ISSUE_KEY} projectId={PROJECT_ID} currentText={CURRENT_TEXT} />
+      <WorkItemDescriptionDraftDiff
+        issueIdOrKey={ISSUE_KEY}
+        projectId={PROJECT_ID}
+        currentText={CURRENT_TEXT}
+      />
     </div>
   );
 }

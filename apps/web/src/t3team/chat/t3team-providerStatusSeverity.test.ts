@@ -12,7 +12,11 @@ import {
 } from "~/t3team/chat/t3team-providerStatusSeverity";
 
 /** How the Codex probe timeout actually arrives (CodexProvider.ts): error + auth unknown. */
-const PROBE_TIMEOUT = { status: "error", auth: { status: "unknown" }, instanceId: "codex" } as never;
+const PROBE_TIMEOUT = {
+  status: "error",
+  auth: { status: "unknown" },
+  instanceId: "codex",
+} as never;
 const UNAUTHENTICATED = {
   status: "error",
   auth: { status: "unauthenticated" },
@@ -23,7 +27,11 @@ const REAL_ERROR = {
   auth: { status: "authenticated" },
   instanceId: "codex",
 } as never;
-const LIMITED = { status: "warning", auth: { status: "authenticated" }, instanceId: "codex" } as never;
+const LIMITED = {
+  status: "warning",
+  auth: { status: "authenticated" },
+  instanceId: "codex",
+} as never;
 
 describe("classifyT3TeamProviderStatusSeverity", () => {
   it("treats a failed probe as informational, not as a provider failure", () => {
@@ -80,8 +88,8 @@ describe("shouldSuppressT3TeamProviderStatus", () => {
     expect(
       shouldSuppressT3TeamProviderStatus({ status: PROBE_TIMEOUT, isTurnInProgress: false }),
     ).toBe(false);
-    expect(
-      shouldSuppressT3TeamProviderStatus({ status: null, isTurnInProgress: true }),
-    ).toBe(false);
+    expect(shouldSuppressT3TeamProviderStatus({ status: null, isTurnInProgress: true })).toBe(
+      false,
+    );
   });
 });

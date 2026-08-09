@@ -97,7 +97,7 @@ user-controlled Snoozed behavior.
 - It is lower priority than active/actionable work but remains glanceable.
 - Rows use compact relative time where possible, such as `in 3h`.
 - If the workflow supplies a useful reason, show it, such as `Waiting for deploy window ·
-  in 3h`; otherwise do not invent a reason.
+in 3h`; otherwise do not invent a reason.
 - Earliest wake time is the provisional ordering.
 - Wake, promotion, unread, and lifecycle transitions follow upstream behavior rather than
   introducing a competing Team-specific lifecycle model.

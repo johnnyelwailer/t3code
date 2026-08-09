@@ -40,7 +40,8 @@ export function InboxWorkNav({ projectId }: InboxWorkNavProps): ReactNode {
     // thread rows and shelf headers, all of which are `<li className="list-none">`.
     <li
       data-thread-selection-safe
-      className="mx-1 mt-1 mb-1.5 flex w-full list-none flex-col gap-0.5 overflow-hidden px-1.5 py-0.5">
+      className="mx-1 mt-1 mb-1.5 flex w-full list-none flex-col gap-0.5 overflow-hidden px-1.5 py-0.5"
+    >
       {projectId === null ? null : (
         <SidebarMenuSubButton
           size="sm"

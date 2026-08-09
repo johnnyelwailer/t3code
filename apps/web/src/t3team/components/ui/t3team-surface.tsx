@@ -11,8 +11,7 @@ const cardToneClasses: Record<SurfaceTone, string> = {
   muted: "border-border/80 bg-muted/25",
   // Blur like the surfaces it sits on: at /8 opacity the wizard's hero art bleeds
   // straight through the banner and the text fights it without a backdrop filter.
-  danger:
-    "border-destructive/35 bg-destructive/8 supports-[backdrop-filter]:backdrop-blur",
+  danger: "border-destructive/35 bg-destructive/8 supports-[backdrop-filter]:backdrop-blur",
 };
 
 const panelToneClasses: Record<PanelTone, string> = {

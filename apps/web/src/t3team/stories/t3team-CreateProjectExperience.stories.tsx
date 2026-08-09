@@ -334,13 +334,7 @@ export const Mobile: Story = {
  * story rendered any of it at the height it actually gets. Splitting the step into three means each
  * one now needs to prove it fits on its own.
  */
-function StepInDialogFrame({
-  heading,
-  children,
-}: {
-  heading?: ReactNode;
-  children: ReactNode;
-}) {
+function StepInDialogFrame({ heading, children }: { heading?: ReactNode; children: ReactNode }) {
   return (
     <div className="flex h-dvh items-center justify-center bg-background p-6">
       <div className="flex h-[min(40rem,calc(100dvh-3rem))] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card">

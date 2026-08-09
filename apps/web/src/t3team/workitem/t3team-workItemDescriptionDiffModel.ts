@@ -61,7 +61,8 @@ export function buildDraftDiffParagraphs(
   for (const segment of segments) {
     if (segment.kind === "del") {
       // A deletion has no `after` token of its own; it belongs where the reader currently is.
-      const blockIndex = blockIndexByToken[Math.min(afterCursor, blockIndexByToken.length - 1)] ?? 0;
+      const blockIndex =
+        blockIndexByToken[Math.min(afterCursor, blockIndexByToken.length - 1)] ?? 0;
       perBlock[blockIndex]?.push(segment);
       continue;
     }
@@ -87,7 +88,9 @@ export function buildDraftDiffParagraphs(
   });
 }
 
-export function draftDiffMagnitude(paragraphs: ReadonlyArray<DraftDiffParagraph>): DraftDiffMagnitude {
+export function draftDiffMagnitude(
+  paragraphs: ReadonlyArray<DraftDiffParagraph>,
+): DraftDiffMagnitude {
   let added = 0;
   let removed = 0;
   for (const paragraph of paragraphs) {

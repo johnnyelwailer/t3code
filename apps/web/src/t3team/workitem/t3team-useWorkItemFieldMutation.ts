@@ -97,7 +97,10 @@ export function useWorkItemFieldMutation<TValue>({
           setLastChange({ from: previousValue, to: nextValue });
           // Cleared by the next `commit` too (see above); this timer only ever fires when nothing
           // superseded it, so it can clear unconditionally.
-          undoTimerRef.current = setTimeout(() => setLastChange(null), WORK_ITEM_FIELD_UNDO_WINDOW_MS);
+          undoTimerRef.current = setTimeout(
+            () => setLastChange(null),
+            WORK_ITEM_FIELD_UNDO_WINDOW_MS,
+          );
         })
         .catch((cause: unknown) => {
           if (sequenceRef.current !== requestId) return; // a newer edit already won

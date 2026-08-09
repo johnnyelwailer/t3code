@@ -25,7 +25,12 @@ import { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { defineTool, defineToolGroup, type T3TeamToolHandlerClient, type ToolRef } from "@t3team/sdk";
+import {
+  defineTool,
+  defineToolGroup,
+  type T3TeamToolHandlerClient,
+  type ToolRef,
+} from "@t3team/sdk";
 
 import {
   T3TEAM_MCP_SERVER_NAME,

@@ -34,7 +34,7 @@ export type T3TeamPackThemeInput = {
 };
 
 /** Theme ids a distribution may not claim — upstream reserves them for its own built-ins. */
-const RESERVED_PREFIXES = ["system", "light", "dark"];
+const RESERVED_PREFIXES = new Set(["system", "light", "dark"]);
 
 /**
  * Pack theme ids are namespaced so a pack can never collide with (or be mistaken for) a built-in
@@ -84,7 +84,7 @@ function nominalAppearance(defaultMode: T3TeamPackThemeInput["defaultMode"]): Th
 }
 
 export function t3teamPackThemeDefinition(pack: T3TeamPackThemeInput): ThemeDefinition {
-  if (RESERVED_PREFIXES.includes(pack.themeId)) {
+  if (RESERVED_PREFIXES.has(pack.themeId)) {
     throw new Error(`Pack theme id "${pack.themeId}" is reserved.`);
   }
   const light = packColorsForAppearance("light", pack.colors.light);

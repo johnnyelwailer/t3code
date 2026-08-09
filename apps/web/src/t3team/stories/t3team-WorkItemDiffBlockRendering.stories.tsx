@@ -35,7 +35,9 @@ function DiffBlock({
           className={cn(
             wholeBlock && "border-l-2 pl-3",
             wholeBlock && state === "add" && "border-success",
-            wholeBlock && state === "del" && "border-destructive text-muted-foreground line-through",
+            wholeBlock &&
+              state === "del" &&
+              "border-destructive text-muted-foreground line-through",
           )}
         >
           <T3TeamDiffText segments={wholeBlock ? flattenDiffSegmentKinds(segments) : segments} />

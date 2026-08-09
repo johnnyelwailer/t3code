@@ -98,7 +98,9 @@ export function useRelatedTickets({
           unresolvedKeys.push(key);
           continue;
         }
-        fromCache.push(snapshotToProjectTicket(project.id, cachedSnapshot, project.source.accountId));
+        fromCache.push(
+          snapshotToProjectTicket(project.id, cachedSnapshot, project.source.accountId),
+        );
       }
 
       if (!cancelled) {

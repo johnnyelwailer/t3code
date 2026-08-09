@@ -110,7 +110,12 @@ describe("JiraApiClient", () => {
 
   it("requests the widened issue field list with default expand", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      Response.json({ id: "1", key: "TEST-1", self: "https://test.atlassian.net/rest/api/3/issue/1", fields: {} }),
+      Response.json({
+        id: "1",
+        key: "TEST-1",
+        self: "https://test.atlassian.net/rest/api/3/issue/1",
+        fields: {},
+      }),
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
@@ -163,7 +168,12 @@ describe("JiraApiClient", () => {
 
   it("merges extraFields into the issue field list without duplicating them", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      Response.json({ id: "1", key: "TEST-1", self: "https://test.atlassian.net/rest/api/3/issue/1", fields: {} }),
+      Response.json({
+        id: "1",
+        key: "TEST-1",
+        self: "https://test.atlassian.net/rest/api/3/issue/1",
+        fields: {},
+      }),
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
@@ -184,7 +194,12 @@ describe("JiraApiClient", () => {
 
   it("adds changelog to expand only when expandChangelog is requested, leaving default behaviour unchanged", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      Response.json({ id: "1", key: "TEST-1", self: "https://test.atlassian.net/rest/api/3/issue/1", fields: {} }),
+      Response.json({
+        id: "1",
+        key: "TEST-1",
+        self: "https://test.atlassian.net/rest/api/3/issue/1",
+        fields: {},
+      }),
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 

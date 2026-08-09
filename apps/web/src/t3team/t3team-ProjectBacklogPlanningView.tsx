@@ -1,5 +1,8 @@
 import type { MouseEvent } from "react";
-import type { AtlassianAssignableUser, AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
+import type {
+  AtlassianAssignableUser,
+  AtlassianChildIssueType,
+} from "~/t3team/backend/t3team-types";
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { ProjectBacklogRow } from "~/t3team/t3team-ProjectBacklogRow";

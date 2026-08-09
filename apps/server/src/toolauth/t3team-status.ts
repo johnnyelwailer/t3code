@@ -96,9 +96,8 @@ export const probeStatus = Effect.fn("toolauth.probeStatus")(function* (
       .pipe(Effect.option);
 
     if (Option.isSome(probeResult) && !probeResult.value.timedOut) {
-      probeOutput = probeResult.value.stdout.length > 0
-        ? probeResult.value.stdout
-        : probeResult.value.stderr;
+      probeOutput =
+        probeResult.value.stdout.length > 0 ? probeResult.value.stdout : probeResult.value.stderr;
       // Empty output is NOT an answer. Every `parseProbe` ends in a defensive
       // `return "idle"`, so handing it "" yields a confident-looking "logged
       // out" that the CLI never actually said — and downstream logic that keys
@@ -170,9 +169,7 @@ export const probeStatus = Effect.fn("toolauth.probeStatus")(function* (
   // them together is exactly how an unrelated field (authMethod, apiProvider,
   // ...) ends up misread as part of an "account".
   const labelSourceText =
-    probeOutput.length > 0
-      ? probeOutput
-      : Option.getOrElse(credentialFileText, () => "");
+    probeOutput.length > 0 ? probeOutput : Option.getOrElse(credentialFileText, () => "");
   const account = extractLabel(adapter.status.account, labelSourceText);
   const organization = extractLabel(adapter.status.organization, labelSourceText);
 

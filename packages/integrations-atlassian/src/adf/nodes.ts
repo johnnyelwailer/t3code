@@ -54,7 +54,9 @@ export function panel(
 ): AdfNode {
   for (const node of content) {
     if (PANEL_FORBIDDEN.has(node.type)) {
-      throw new TypeError(`panel() cannot contain a ${node.type} node — only paragraph/heading/lists are allowed`);
+      throw new TypeError(
+        `panel() cannot contain a ${node.type} node — only paragraph/heading/lists are allowed`,
+      );
     }
   }
   return { type: "panel", attrs: { panelType }, content };
@@ -64,7 +66,9 @@ export function panel(
 export function expand(title: string, content: AdfNode[]): AdfNode {
   for (const node of content) {
     if (node.type === "expand") {
-      throw new TypeError("expand() cannot contain a nested expand — use nestedExpand inside table cells instead");
+      throw new TypeError(
+        "expand() cannot contain a nested expand — use nestedExpand inside table cells instead",
+      );
     }
   }
   return { type: "expand", attrs: { title }, content };
@@ -80,7 +84,9 @@ const NESTED_EXPAND_ALLOWED = new Set(["paragraph", "heading", "mediaGroup", "me
 export function nestedExpand(title: string, content: AdfNode[]): AdfNode {
   for (const node of content) {
     if (!NESTED_EXPAND_ALLOWED.has(node.type)) {
-      throw new TypeError(`nestedExpand() content must be paragraph/heading/media, got: ${node.type}`);
+      throw new TypeError(
+        `nestedExpand() content must be paragraph/heading/media, got: ${node.type}`,
+      );
     }
   }
   return { type: "nestedExpand", attrs: { title }, content };

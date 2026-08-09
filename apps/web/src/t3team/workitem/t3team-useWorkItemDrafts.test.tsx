@@ -16,7 +16,9 @@ import {
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-function draft(overrides: Partial<T3TeamDraftMutation> & { readonly id: string }): T3TeamDraftMutation {
+function draft(
+  overrides: Partial<T3TeamDraftMutation> & { readonly id: string },
+): T3TeamDraftMutation {
   return {
     createdAt: "2026-01-01T00:00:00.000Z",
     target: { provider: "jira", issueIdOrKey: "ALPHA-1" },
@@ -92,7 +94,11 @@ describe("useWorkItemDrafts", () => {
       drafts: [
         draft({ id: "gone-1", field: "status", status: "discarded" }),
         draft({ id: "gone-2", field: "assignee", status: "applied" }),
-        draft({ id: "elsewhere", field: "estimate", target: { provider: "jira", issueIdOrKey: "OTHER-9" } }),
+        draft({
+          id: "elsewhere",
+          field: "estimate",
+          target: { provider: "jira", issueIdOrKey: "OTHER-9" },
+        }),
       ],
     });
 

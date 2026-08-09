@@ -2,7 +2,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
 
-const localProject = { id: "local-1", title: "My Local Repo", source: { provider: "local" } } as const;
+const localProject = {
+  id: "local-1",
+  title: "My Local Repo",
+  source: { provider: "local" },
+} as const;
 const secondLocalProject = {
   id: "local-2",
   title: "Another Repo",

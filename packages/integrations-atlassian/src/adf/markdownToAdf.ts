@@ -59,8 +59,10 @@ export function markdownToAdf(markdown: string): AdfNode {
   const orderedItems: AdfNode[] = [];
   const taskItems: AdfNode[] = [];
   const flushLists = () => {
-    if (bulletItems.length) content.push(listNode(false, bulletItems.splice(0, bulletItems.length)));
-    if (orderedItems.length) content.push(listNode(true, orderedItems.splice(0, orderedItems.length)));
+    if (bulletItems.length)
+      content.push(listNode(false, bulletItems.splice(0, bulletItems.length)));
+    if (orderedItems.length)
+      content.push(listNode(true, orderedItems.splice(0, orderedItems.length)));
     if (taskItems.length) content.push(taskListNode(taskItems.splice(0, taskItems.length)));
   };
 
@@ -119,7 +121,9 @@ export function markdownToAdf(markdown: string): AdfNode {
     const taskMatch = line.match(/^[-*]\s+\[([ xX])\]\s+(.*)$/);
     if (taskMatch) {
       flushParagraph();
-      taskItems.push(taskItemNode(parseInline(taskMatch[2] ?? ""), taskMatch[1]?.toLowerCase() === "x"));
+      taskItems.push(
+        taskItemNode(parseInline(taskMatch[2] ?? ""), taskMatch[1]?.toLowerCase() === "x"),
+      );
       continue;
     }
     if (/^[-*]\s+/.test(line)) {

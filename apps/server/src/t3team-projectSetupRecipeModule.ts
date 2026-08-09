@@ -32,10 +32,7 @@ function recipeFields(recipe: BundledRecipe): ReadonlyArray<string> {
  * @param workflowFile Recipe-relative workflow path for the starters that ship one; when absent the
  * recipe's default action is its prompt.
  */
-export function renderBundledRecipeModule(
-  recipe: BundledRecipe,
-  workflowFile?: string,
-): string {
+export function renderBundledRecipeModule(recipe: BundledRecipe, workflowFile?: string): string {
   const imports = workflowFile
     ? [
         `import { defineRecipe, defineWorkflow } from "@t3team/sdk";`,

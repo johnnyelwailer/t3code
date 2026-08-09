@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { selectBoundProjects } from "~/t3team/t3team-AllProjectsMyWorkView";
-import { parseT3TeamViewFromPath, resolveT3TeamRouteSearchTarget } from "~/t3team/t3team-routeState";
+import {
+  parseT3TeamViewFromPath,
+  resolveT3TeamRouteSearchTarget,
+} from "~/t3team/t3team-routeState";
 import { readProjectIdFromView } from "~/t3team/t3team-types";
 
 const project = (id: string, provider: string) =>

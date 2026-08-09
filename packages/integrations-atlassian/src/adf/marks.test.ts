@@ -7,9 +7,17 @@ describe("text with marks", () => {
   });
 
   it("builds strong/em/strike/underline marks", () => {
-    expect(text("hi", { strong: true })).toEqual({ type: "text", text: "hi", marks: [{ type: "strong" }] });
+    expect(text("hi", { strong: true })).toEqual({
+      type: "text",
+      text: "hi",
+      marks: [{ type: "strong" }],
+    });
     expect(text("hi", { em: true })).toEqual({ type: "text", text: "hi", marks: [{ type: "em" }] });
-    expect(text("hi", { strike: true })).toEqual({ type: "text", text: "hi", marks: [{ type: "strike" }] });
+    expect(text("hi", { strike: true })).toEqual({
+      type: "text",
+      text: "hi",
+      marks: [{ type: "strike" }],
+    });
     expect(text("hi", { underline: true })).toEqual({
       type: "text",
       text: "hi",
@@ -48,7 +56,9 @@ describe("text with marks", () => {
   it("validates 6-digit hex for textColor/backgroundColor", () => {
     expect(() => text("x", { textColor: "#fff" })).toThrow(TypeError);
     expect(() => text("x", { backgroundColor: "red" })).toThrow(TypeError);
-    expect(text("x", { textColor: "#ff00ff" }).marks).toEqual([{ type: "textColor", attrs: { color: "#ff00ff" } }]);
+    expect(text("x", { textColor: "#ff00ff" }).marks).toEqual([
+      { type: "textColor", attrs: { color: "#ff00ff" } },
+    ]);
   });
 
   it("rejects empty text", () => {

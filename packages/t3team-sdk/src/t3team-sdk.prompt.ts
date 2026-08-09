@@ -27,7 +27,9 @@ export interface PromptRef {
  * `{ text }` for an inline prompt. Supplying both, or neither, is an authoring error — a
  * prompt action with no prompt would launch an empty thread.
  */
-export function definePrompt(input: string | { readonly path?: string; readonly text?: string }): PromptRef {
+export function definePrompt(
+  input: string | { readonly path?: string; readonly text?: string },
+): PromptRef {
   const spec = typeof input === "string" ? { path: input } : input;
   const path = spec.path?.trim();
   const text = spec.text?.trim();
@@ -52,8 +54,6 @@ export function definePrompt(input: string | { readonly path?: string; readonly 
 /** True for any `definePrompt(...)` result. Narrows an action ref to the prompt kind. */
 export function isPromptRef(value: unknown): value is PromptRef {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as { kind?: unknown }).kind === "prompt"
+    typeof value === "object" && value !== null && (value as { kind?: unknown }).kind === "prompt"
   );
 }

@@ -63,12 +63,14 @@ function isAllowlistedSchemaImport(ts: typeof TsApi, node: TsApi.ImportDeclarati
  * time. One rule, two body shapes, opposite verdicts; hence the branch rather than a blanket exemption.
  */
 export function isEsmShapedBody(ts: typeof TsApi, sf: TsApi.SourceFile): boolean {
-  return sf.statements.some(
-    (statement) =>
-      (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
-      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ===
-        true,
-  ) || sf.statements.some((statement) => ts.isExportAssignment(statement));
+  return (
+    sf.statements.some(
+      (statement) =>
+        (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+        statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ===
+          true,
+    ) || sf.statements.some((statement) => ts.isExportAssignment(statement))
+  );
 }
 
 /** The engine API itself — the one value import an ESM body is MEANT to have. */

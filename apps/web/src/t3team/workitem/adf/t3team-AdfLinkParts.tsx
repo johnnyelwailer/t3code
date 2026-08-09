@@ -95,7 +95,10 @@ export function T3TeamAdfCardChip({
   const content =
     issueKey === undefined ? (
       <T3TeamAdfLink href={safeHref} ctx={ctx} title={safeHref} className="max-w-full">
-        <Link2 className="mb-px inline size-3 shrink-0 align-middle opacity-70" aria-hidden="true" />{" "}
+        <Link2
+          className="mb-px inline size-3 shrink-0 align-middle opacity-70"
+          aria-hidden="true"
+        />{" "}
         <span className="align-middle">{text}</span>
       </T3TeamAdfLink>
     ) : (

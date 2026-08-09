@@ -24,10 +24,7 @@ type Story = StoryObj<typeof meta>;
 export const InTimeline: Story = {
   render: () => (
     <div className="max-w-xl">
-      <T3TeamMessageAttachmentList
-        attachments={[ATTACHMENT]}
-        onOpenWorkItemDraft={() => {}}
-      />
+      <T3TeamMessageAttachmentList attachments={[ATTACHMENT]} onOpenWorkItemDraft={() => {}} />
     </div>
   ),
 };

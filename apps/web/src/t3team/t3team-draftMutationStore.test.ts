@@ -20,7 +20,9 @@ function statusDraft(id: string): T3TeamDraftMutation {
 describe("returnDraftWithFeedback", () => {
   it("sets status to returned and records the feedback", () => {
     useT3TeamDraftMutationStore.setState({ drafts: [statusDraft("d1")] });
-    useT3TeamDraftMutationStore.getState().returnDraftWithFeedback("d1", "Wrong status — use In Review.");
+    useT3TeamDraftMutationStore
+      .getState()
+      .returnDraftWithFeedback("d1", "Wrong status — use In Review.");
 
     const draft = useT3TeamDraftMutationStore.getState().drafts[0];
     expect(draft?.status).toBe("returned");
@@ -40,10 +42,12 @@ describe("returnDraftWithFeedback", () => {
 
 describe("pending-draft selectors", () => {
   it("exclude a returned draft the same way they exclude discarded/applied", () => {
-    useT3TeamDraftMutationStore.setState({ drafts: [{ ...statusDraft("d1"), status: "returned" }] });
-    expect(selectWorkItemDrafts({ issueIdOrKey: "ALPHA-1" })(useT3TeamDraftMutationStore.getState())).toEqual(
-      [],
-    );
+    useT3TeamDraftMutationStore.setState({
+      drafts: [{ ...statusDraft("d1"), status: "returned" }],
+    });
+    expect(
+      selectWorkItemDrafts({ issueIdOrKey: "ALPHA-1" })(useT3TeamDraftMutationStore.getState()),
+    ).toEqual([]);
   });
 
   it("still exclude returned document drafts too", () => {

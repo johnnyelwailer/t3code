@@ -64,7 +64,10 @@ describe("parseT3TeamQuestionBlocks", () => {
 
 describe("describeT3TeamShapeCapability", () => {
   it("gives tool groups a human label instead of the raw permission id", () => {
-    const described = describeT3TeamShapeCapability({ kind: "group", id: "mutation.draft" } as never);
+    const described = describeT3TeamShapeCapability({
+      kind: "group",
+      id: "mutation.draft",
+    } as never);
 
     expect(described.label).toBe("Propose changes you review");
     expect(described.description).toContain("without your approval");

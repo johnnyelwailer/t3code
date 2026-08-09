@@ -136,7 +136,13 @@ export function WorkItemAttachmentTile({
   }
 
   return (
-    <a href={href || undefined} target="_blank" rel="noreferrer" title={name} className={tileClassName}>
+    <a
+      href={href || undefined}
+      target="_blank"
+      rel="noreferrer"
+      title={name}
+      className={tileClassName}
+    >
       {tileBody}
     </a>
   );

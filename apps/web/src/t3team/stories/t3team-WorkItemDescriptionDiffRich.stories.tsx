@@ -180,10 +180,7 @@ function BlockBody({
                   className={cn(row.state === "add" && "bg-success/5")}
                 >
                   {row.cells.map((cell, cellIndex) => (
-                    <td
-                      key={`${block.columns[cellIndex] ?? cellIndex}`}
-                      className="px-2.5 py-1.5"
-                    >
+                    <td key={`${block.columns[cellIndex] ?? cellIndex}`} className="px-2.5 py-1.5">
                       {cellIndex === 0 && row.state === "add" ? (
                         <span className="-ml-1.5 mr-1 select-none font-mono text-success-foreground">
                           +

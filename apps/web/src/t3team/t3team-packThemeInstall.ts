@@ -25,10 +25,7 @@ import {
   t3teamPackThemeDefinition,
   t3teamPackThemeId,
 } from "./t3team-packThemeDefinition";
-import {
-  applyT3TeamSelectedTheme,
-  seedT3TeamPackAppearanceMode,
-} from "./t3team-packThemePaint";
+import { applyT3TeamSelectedTheme, seedT3TeamPackAppearanceMode } from "./t3team-packThemePaint";
 
 export const T3TEAM_PACK_THEME_APPLIED_STORAGE_KEY = "t3team:pack-theme-applied";
 

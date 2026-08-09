@@ -24,7 +24,7 @@ export function relativeAge(iso: string): string {
 
 export function liveRunLabel(steps: ReadonlyArray<T3TeamWorkflowStepEntry>): string {
   const pending = [...steps]
-    .reverse()
+    .toReversed()
     .find((step) => step.phase === "started" || step.phase === "waiting");
   if (pending === undefined) return "Running";
   const since = pending.updatedAt === undefined ? "" : ` since ${relativeAge(pending.updatedAt)}`;
@@ -46,7 +46,7 @@ export function inferredRunStatus(
     return progress.run.phase;
   }
   const active = [...progress.steps]
-    .reverse()
+    .toReversed()
     .find((step) => step.phase === "started" || step.phase === "waiting");
   if (active?.stepKind === "wait.until") return "sleeping";
   if (active?.stepKind === "thread.turn" || active?.stepKind === "user.input") {
@@ -60,10 +60,10 @@ export function repairStatus(steps: ReadonlyArray<T3TeamWorkflowStepEntry>): {
   readonly reason?: string;
   readonly step: T3TeamWorkflowStepEntry;
 } | null {
-  const latest = [...steps].reverse().find((step) => step.stepKind === "workflow.self-heal");
+  const latest = [...steps].toReversed().find((step) => step.stepKind === "workflow.self-heal");
   if (latest === undefined) return null;
   const reason = [...steps]
-    .reverse()
+    .toReversed()
     .find((step) => step.stepKind === "workflow.self-heal" && step.error)?.error;
   if (latest.phase === "failed") return { label: "Needs attention", step: latest };
   if (latest.phase === "completed") return { label: "Orchestration ready", step: latest };

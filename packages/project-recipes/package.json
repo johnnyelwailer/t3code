@@ -18,8 +18,8 @@
     "test": "vp test run --passWithNoTests"
   },
   "dependencies": {
-    "@t3tools/project-context": "workspace:*",
     "@t3team/sdk": "workspace:*",
+    "@t3tools/project-context": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

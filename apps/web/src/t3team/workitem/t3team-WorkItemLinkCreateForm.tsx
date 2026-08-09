@@ -90,10 +90,7 @@ export function WorkItemLinkCreateForm({
   return (
     <div className="space-y-2 rounded-lg border border-border/70 bg-card/30 p-2.5">
       <div className="grid gap-2 sm:grid-cols-2">
-        <Select
-          value={linkTypeId ?? null}
-          onValueChange={(value) => value && setLinkTypeId(value)}
-        >
+        <Select value={linkTypeId ?? null} onValueChange={(value) => value && setLinkTypeId(value)}>
           <SelectTrigger size="sm" aria-label="Link type" disabled={pending}>
             <SelectValue placeholder="Link type">{selectedType?.name}</SelectValue>
           </SelectTrigger>

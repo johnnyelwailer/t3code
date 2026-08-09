@@ -34,7 +34,9 @@ describe("pickAvatarUrl", () => {
 
 describe("extractCreated / extractDueDate / extractResolvedAt", () => {
   it("reads the raw string fields, trimming empty strings to undefined", () => {
-    expect(extractCreated({ created: "2026-01-01T00:00:00.000Z" })).toBe("2026-01-01T00:00:00.000Z");
+    expect(extractCreated({ created: "2026-01-01T00:00:00.000Z" })).toBe(
+      "2026-01-01T00:00:00.000Z",
+    );
     expect(extractDueDate({ duedate: "2026-02-01" })).toBe("2026-02-01");
     expect(extractResolvedAt({ resolutiondate: "2026-03-01T00:00:00.000Z" })).toBe(
       "2026-03-01T00:00:00.000Z",

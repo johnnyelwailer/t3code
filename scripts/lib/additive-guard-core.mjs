@@ -82,6 +82,7 @@ function addCanonicalUpstreamRemote() {
     throw new Error(
       `Could not configure remote '${UPSTREAM_REMOTE_NAME}' automatically (${cause instanceof Error ? cause.message : String(cause)}). ` +
         `Add it manually with: ${expectedUpstreamRemoteHint()}`,
+      { cause: cause },
     );
   }
 }
@@ -90,13 +91,7 @@ function addCanonicalUpstreamRemote() {
 function disableUpstreamPushUrl() {
   const pushUrl = maybeRunGit(["remote", "get-url", "--push", UPSTREAM_REMOTE_NAME]);
   if (pushUrl === UPSTREAM_REMOTE_PUSH_DISABLED) return;
-  maybeRunGit([
-    "remote",
-    "set-url",
-    "--push",
-    UPSTREAM_REMOTE_NAME,
-    UPSTREAM_REMOTE_PUSH_DISABLED,
-  ]);
+  maybeRunGit(["remote", "set-url", "--push", UPSTREAM_REMOTE_NAME, UPSTREAM_REMOTE_PUSH_DISABLED]);
 }
 
 export function enforceCanonicalBaseRef(configBaseRef) {

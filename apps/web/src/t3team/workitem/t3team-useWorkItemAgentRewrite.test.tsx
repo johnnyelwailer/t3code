@@ -50,7 +50,9 @@ function mount(): {
   };
 }
 
-function baseProps(overrides?: Partial<UseWorkItemAgentRewriteInput>): UseWorkItemAgentRewriteInput {
+function baseProps(
+  overrides?: Partial<UseWorkItemAgentRewriteInput>,
+): UseWorkItemAgentRewriteInput {
   return {
     projectId: "proj-1",
     ticketId: "ticket-1",

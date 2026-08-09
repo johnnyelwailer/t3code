@@ -67,9 +67,9 @@ export function T3TeamSetupWelcomeSurface({
   const headingText = `Bring your Jira work into ${productName} in a few clicks.`;
   const sublineText =
     reason.kind === "no-work-project"
-      ? (reason.projectTitle
-          ? `My work shows tickets and backlog from a connected Jira project. “${reason.projectTitle}” is a local workspace and keeps working as one — connecting a Jira project here adds the work views alongside it.`
-          : `My work shows tickets and backlog from a connected Jira project. Your local workspaces keep working as they are — connecting a Jira project adds the work views alongside them.`)
+      ? reason.projectTitle
+        ? `My work shows tickets and backlog from a connected Jira project. “${reason.projectTitle}” is a local workspace and keeps working as one — connecting a Jira project here adds the work views alongside it.`
+        : `My work shows tickets and backlog from a connected Jira project. Your local workspaces keep working as they are — connecting a Jira project adds the work views alongside them.`
       : `Pick how you want ${productName} to communicate, connect a Jira project, and start from a workspace that feels ready out of the box.`;
 
   // `align-items: safe center` rather than `items-center`: once the card is taller

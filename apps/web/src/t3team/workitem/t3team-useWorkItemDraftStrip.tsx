@@ -47,7 +47,9 @@ export function useWorkItemDraftStrip(input: {
   /** Distinct from `input.backend` (Jira only): the app backend is what can address a thread. */
   const appBackend = useBackend();
   const discardDraft = useT3TeamDraftMutationStore((state) => state.discardDraft);
-  const returnDraftWithFeedback = useT3TeamDraftMutationStore((state) => state.returnDraftWithFeedback);
+  const returnDraftWithFeedback = useT3TeamDraftMutationStore(
+    (state) => state.returnDraftWithFeedback,
+  );
   const highlightField = useWorkItemDraftReviewUiStore((state) => state.highlightField);
   const resolveScalarAccept = useWorkItemDraftStripScalarAccept({
     issueIdOrKey,
@@ -92,9 +94,11 @@ export function useWorkItemDraftStrip(input: {
       return {
         ...shared,
         fieldLabel: documentFieldLabel(draft.field),
-        summary: draft.summary ?? `${added + removed} word${added + removed === 1 ? "" : "s"} changed`,
+        summary:
+          draft.summary ?? `${added + removed} word${added + removed === 1 ? "" : "s"} changed`,
         reviewInPlace: {
-          onClick: draft.field === "description" ? input.onReviewDescription : input.onReviewComments,
+          onClick:
+            draft.field === "description" ? input.onReviewDescription : input.onReviewComments,
           added,
           removed,
         },

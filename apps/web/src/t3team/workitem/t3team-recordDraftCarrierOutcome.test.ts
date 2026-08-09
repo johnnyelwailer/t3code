@@ -50,9 +50,9 @@ describe("recordDraftCarrierOutcome", () => {
   it("records a dismissal with the same shape", async () => {
     await recordDraftCarrierOutcome({ backend: BACKEND, draft: DRAFT, outcome: "dismissed" });
 
-    expect(JSON.parse(String((fetchSpy.mock.calls[0] as [string, RequestInit])[1].body)).status).toBe(
-      "dismissed",
-    );
+    expect(
+      JSON.parse(String((fetchSpy.mock.calls[0] as [string, RequestInit])[1].body)).status,
+    ).toBe("dismissed");
   });
 
   /** A write that landed in Jira but was not recorded is the state that produces a duplicate write. */

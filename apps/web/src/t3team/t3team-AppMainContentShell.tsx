@@ -121,9 +121,7 @@ function ProjectBrowserEmpty({
           key={showInlineCreateWizard ? "wizard" : "welcome"}
           className="flex h-full min-h-0 [view-transition-name:t3team-create-project-entry-surface]"
         >
-          {content ?? (
-            <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />
-          )}
+          {content ?? <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />}
         </div>
       </div>
     </div>

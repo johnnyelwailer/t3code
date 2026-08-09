@@ -88,7 +88,12 @@ const iesSandbox: ExternalProject = {
 // marker the cached copy never had — proof that a survived selection re-reads the CURRENT list
 // rather than holding on to the stale row the user actually clicked.
 const extraProject: ExternalProject = { id: "0", provider: "atlassian", title: "Extra Project" };
-const nexiAiRevalidated: ExternalProject = { id: "1", provider: "atlassian", title: "Nexi AI", key: "NEXI" };
+const nexiAiRevalidated: ExternalProject = {
+  id: "1",
+  provider: "atlassian",
+  title: "Nexi AI",
+  key: "NEXI",
+};
 const iesSandboxRevalidated: ExternalProject = {
   id: "2",
   provider: "atlassian",

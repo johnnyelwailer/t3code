@@ -54,7 +54,11 @@ describe("ReviewStep", () => {
         title: "My Team Partner",
         description: "A cloned starter, tuned for this team.",
         audience: "mixed",
-        communicationStyle: { technicalDepth: "medium", brevity: "balanced", guidanceStyle: "balanced" },
+        communicationStyle: {
+          technicalDepth: "medium",
+          brevity: "balanced",
+          guidanceStyle: "balanced",
+        },
         preferredArtifactKinds: [],
         defaultRecipeWeights: {},
         recommendedSkillPackIds: [],

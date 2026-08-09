@@ -74,18 +74,21 @@ describe("resolveProviderInstanceReadiness", () => {
     expect(entry && resolveProviderInstanceReadiness(entry)).toBe("needsAuth");
   });
 
-  it("needsAuth for Claude's 'unknown' default — the critical subtlety: Claude's health probe " +
-    "never reports 'unauthenticated', only 'unknown', in every not-ready path", () => {
-    const [entry] = deriveProviderInstanceEntries([
-      provider({
-        provider: ProviderDriverKind.make("claudeAgent"),
-        instanceId: "claudeAgent",
-        status: "error",
-        authStatus: "unknown",
-      }),
-    ]);
-    expect(entry && resolveProviderInstanceReadiness(entry)).toBe("needsAuth");
-  });
+  it(
+    "needsAuth for Claude's 'unknown' default — the critical subtlety: Claude's health probe " +
+      "never reports 'unauthenticated', only 'unknown', in every not-ready path",
+    () => {
+      const [entry] = deriveProviderInstanceEntries([
+        provider({
+          provider: ProviderDriverKind.make("claudeAgent"),
+          instanceId: "claudeAgent",
+          status: "error",
+          authStatus: "unknown",
+        }),
+      ]);
+      expect(entry && resolveProviderInstanceReadiness(entry)).toBe("needsAuth");
+    },
+  );
 
   it("otherError for a probe failure unrelated to install/auth (installed, authenticated, still not ready)", () => {
     const [entry] = deriveProviderInstanceEntries([

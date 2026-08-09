@@ -50,13 +50,13 @@ content actually has. Layout keys off `@container` (Tailwind v4, already used in
 Zones: header → title band → content column + field rail → agent aside (existing
 `ResizableRightSidebarLayout`, preserved).
 
-| Container width | Layout |
-| --- | --- |
-| < 40rem | Single column. Collapsed details summary above description. |
-| 40–64rem | Single column, field rail becomes a 2-col grid card. |
-| 64–90rem | Content + 280px rail. |
-| 90–120rem | Content (max 760px) + 300px rail. |
-| ≥ 120rem | Capped at 1600px centered; activity promoted beside description. |
+| Container width | Layout                                                           |
+| --------------- | ---------------------------------------------------------------- |
+| < 40rem         | Single column. Collapsed details summary above description.      |
+| 40–64rem        | Single column, field rail becomes a 2-col grid card.             |
+| 64–90rem        | Content + 280px rail.                                            |
+| 90–120rem       | Content (max 760px) + 300px rail.                                |
+| ≥ 120rem        | Capped at 1600px centered; activity promoted beside description. |
 
 ### One write path
 
@@ -99,6 +99,7 @@ No heading where the content is self-evident. No `Assignee: Unassigned` — avat
 Each slice is a reviewable commit, verified live before the next begins.
 
 ### Slice A — shell, read parity, errors, copy
+
 - `packages/integrations-atlassian`: ADF model (ported), ADF field extraction; extend
   `buildIssueFields` (duedate, timetracking, worklog, watches, votes, components,
   fixVersions, versions, resolution, resolutiondate, sprint, story points) and
@@ -110,16 +111,19 @@ Each slice is a reviewable commit, verified live before the next begins.
 - Copy pass.
 
 ### Slice B — field mutations
+
 `update-fields` + `edit-meta` routes across all four layers; inline text, picker and date
 primitives; `useWorkItemFieldMutation` (optimistic + rollback); status, assignee, priority,
 labels, dates, sprint, estimate, parent, components, versions all editable.
 
 ### Slice C — content mutations
+
 Lexical ADF editor (with opaque decorator nodes for unsupported types); comment
 create/edit/delete; attachment upload (multipart, `X-Atlassian-Token: no-check`) and delete;
 issue links create/delete + link types; child issue creation.
 
 ### Slice D — activity, engagement, polish
+
 Changelog + worklog reads; merged filterable activity stream; watchers and votes; worklog
 entry; keyboard layer + shortcut sheet; server-side comment drafts; view transitions.
 
@@ -135,6 +139,7 @@ entry; keyboard layer + shortcut sheet; server-side comment drafts; view transit
 ## Verification
 
 Per slice:
+
 - Focused vitest for changed modules (`vp test run <files>`), serially — never the full suite.
 - Storybook stories for reusable UI; snapshot coverage for the detail screen.
 - Live click-through via the `test-t3-app` skill: one isolated environment, real pairing URL
@@ -151,7 +156,7 @@ predates the redesign; the redesign has to finish wiring it rather than invent i
 
 **What exists.** `t3team-draftMutationTypes.ts` defines a draft with a lifecycle
 (`draft → applying → applied | discarded | error`), split into document drafts (`description`,
-`comment`, carrying proposed *and* current content so a diff can be shown) and scalar drafts
+`comment`, carrying proposed _and_ current content so a diff can be shown) and scalar drafts
 (`assignee`, `estimate`, `status`, `subtask`, carrying a patch). `t3teamToolCatalogImplementedDrafts.ts`
 already exposes eight `draft-mutation` tools, and `jiraWrite` is a declared SDK tool group.
 
@@ -163,7 +168,7 @@ it — the draft is created and silently invisible. Scalar drafts need to surfac
 
 1. a direct control in the UI,
 2. an agent tool that produces a draft rather than writing,
-3. a review affordance rendered *where the change would land* — a proposed status on the status chip,
+3. a review affordance rendered _where the change would land_ — a proposed status on the status chip,
    a proposed comment in the comment list — not in a separate queue the reader has to go find.
 
 Applying a draft goes through the same mutation path as the equivalent direct edit, so optimistic

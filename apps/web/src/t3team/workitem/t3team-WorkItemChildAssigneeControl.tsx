@@ -1,12 +1,9 @@
+import { assigneeIdentity } from "~/t3team/workitem/t3team-assigneeIdentity";
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { useWorkItemFieldMutation } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
 import { WorkItemAssigneeControl } from "~/t3team/workitem/t3team-WorkItemAssigneeControl";
 import type { WorkItemPerson } from "~/t3team/workitem/t3team-workItemFieldReaders";
-
-function assigneeIdentity(person: WorkItemPerson | null): string | null {
-  return person ? (person.accountId ?? person.displayName) : null;
-}
 
 /** Reads a child ticket's current assignee into the `WorkItemPerson | null` shape the shared control expects. */
 export function childAssigneeValue(child: ProjectTicket): WorkItemPerson | null {

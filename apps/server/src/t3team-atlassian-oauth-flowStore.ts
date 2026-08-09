@@ -146,7 +146,10 @@ export function markAtlassianOAuthFlowCompleted(state: string, nowMs: number): v
  * Distinguishing `unknown` from `pending` is the whole point: it lets a waiting tab stop and say the
  * link expired instead of polling forever.
  */
-export function readAtlassianOAuthFlowStatus(state: string, nowMs: number): AtlassianOAuthFlowStatus {
+export function readAtlassianOAuthFlowStatus(
+  state: string,
+  nowMs: number,
+): AtlassianOAuthFlowStatus {
   sweepExpiredCompletedFlows(nowMs);
   if (completedFlows.has(state)) return "completed";
   return readPendingAtlassianOAuthFlow(state, nowMs) ? "pending" : "unknown";

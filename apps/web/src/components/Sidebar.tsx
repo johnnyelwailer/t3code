@@ -3431,7 +3431,10 @@ export default function Sidebar() {
                   // different selection (array order, not preferred environment), so using it can
                   // open a different physical project than the header says.
                   items.push(
-                    <InboxWorkNav key="t3team-inbox-work-nav" projectId={scopedProjectGroup?.id ?? null} />,
+                    <InboxWorkNav
+                      key="t3team-inbox-work-nav"
+                      projectId={scopedProjectGroup?.id ?? null}
+                    />,
                   );
                   // t3team: assigned/pinned work items as peers in the same stream.
                   items.push(<InboxWorkItemSection key="t3team-inbox-work-items" />);

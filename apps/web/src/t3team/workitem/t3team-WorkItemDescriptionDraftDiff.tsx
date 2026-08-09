@@ -3,7 +3,10 @@ import { useShallow } from "zustand/react/shallow";
 
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
 import { draftContentToComparableText } from "~/t3team/t3team-draftMutationDiff";
-import { selectJiraDocumentDrafts, useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
+import {
+  selectJiraDocumentDrafts,
+  useT3TeamDraftMutationStore,
+} from "~/t3team/t3team-draftMutationStore";
 import { deliverDraftFeedbackToSourceThread } from "~/t3team/workitem/t3team-deliverDraftFeedbackToSourceThread";
 import { recordDraftCarrierOutcome } from "~/t3team/workitem/t3team-recordDraftCarrierOutcome";
 import { useWorkItemDraftActionAccept } from "~/t3team/workitem/t3team-useWorkItemDraftActionAccept";
@@ -54,8 +57,12 @@ export function WorkItemDescriptionDraftDiff({
   );
   const draft = drafts.find((candidate) => candidate.field === "description");
   const discardDraft = useT3TeamDraftMutationStore((state) => state.discardDraft);
-  const returnDraftWithFeedback = useT3TeamDraftMutationStore((state) => state.returnDraftWithFeedback);
-  const closeDescriptionReview = useWorkItemDraftReviewUiStore((state) => state.closeDescriptionReview);
+  const returnDraftWithFeedback = useT3TeamDraftMutationStore(
+    (state) => state.returnDraftWithFeedback,
+  );
+  const closeDescriptionReview = useWorkItemDraftReviewUiStore(
+    (state) => state.closeDescriptionReview,
+  );
   const collapseDescriptionReview = useWorkItemDraftReviewUiStore(
     (state) => state.collapseDescriptionReview,
   );
@@ -98,7 +105,9 @@ export function WorkItemDescriptionDraftDiff({
   }
 
   function sendBack() {
-    const feedback = comments.comments.map((comment) => `> ${comment.quote}\n${comment.body}`).join("\n\n");
+    const feedback = comments.comments
+      .map((comment) => `> ${comment.quote}\n${comment.body}`)
+      .join("\n\n");
     returnDraftWithFeedback(draft!.id, feedback);
     void deliverDraftFeedbackToSourceThread({
       backend,
@@ -118,7 +127,9 @@ export function WorkItemDescriptionDraftDiff({
         removed={removed}
         commentCount={comments.total}
         acceptDisabled={acceptDisabled}
-        {...(acceptDisabled && comments.total === 0 ? { acceptReason: APPLY_UNAVAILABLE_REASON } : {})}
+        {...(acceptDisabled && comments.total === 0
+          ? { acceptReason: APPLY_UNAVAILABLE_REASON }
+          : {})}
         onSendBack={sendBack}
         onDismiss={() => {
           discardDraft(draft.id);

@@ -59,7 +59,9 @@ function ReviewBar() {
   settle what the result should look like before the diffing is written against it.
 */
 const INTRO: ReadonlyArray<Segment> = [
-  { text: "The bulk importer reads a supplier catalogue and writes it into the staging table. It " },
+  {
+    text: "The bulk importer reads a supplier catalogue and writes it into the staging table. It ",
+  },
   { text: "should", kind: "del" },
   { text: "must", kind: "add" },
   { text: " handle " },
@@ -146,8 +148,8 @@ export const ProposedRewrite: Story = {
   render: () => (
     <div className="mx-auto max-w-2xl">
       <p className="mb-3 text-xs leading-5 text-muted-foreground">
-        What “Review in place” opens: the description section itself, in review mode. Removed text is
-        struck through, added text tinted, changed blocks marked in the gutter. The bar stays put
+        What “Review in place” opens: the description section itself, in review mode. Removed text
+        is struck through, added text tinted, changed blocks marked in the gutter. The bar stays put
         while you scroll a long description.
       </p>
       <div className="overflow-hidden rounded-xl border border-border bg-background">

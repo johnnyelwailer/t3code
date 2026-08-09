@@ -19,9 +19,8 @@ export function useUpstreamRouteBridge(pathname: string, enabled: boolean): void
 
   const resolveProjectIdForThread = useCallback(
     ({ environmentId, threadId }: { environmentId: string; threadId: string }) =>
-      threadShells.find(
-        (shell) => shell.id === threadId && shell.environmentId === environmentId,
-      )?.projectId ??
+      threadShells.find((shell) => shell.id === threadId && shell.environmentId === environmentId)
+        ?.projectId ??
       // Deep links can arrive before the environment id is known locally; a
       // unique thread id is still enough to place the thread.
       threadShells.find((shell) => shell.id === threadId)?.projectId ??

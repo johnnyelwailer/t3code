@@ -60,7 +60,10 @@ export function RepairProjectBindingDialog({
             </p>
 
             {repair.confirmError ? (
-              <T3TeamErrorState error={repair.confirmError} action="repairing the project binding" />
+              <T3TeamErrorState
+                error={repair.confirmError}
+                action="repairing the project binding"
+              />
             ) : null}
 
             {!repair.selectedAccount ? (

@@ -26,9 +26,7 @@ export interface BundledActionPlacementInput {
  * Build the `action`-placement contribution for one bundled recipe. Throws (at module load, so
  * a bad view can never ship) when the view or its surfaces are unrenderable.
  */
-export function buildBundledActionPlacement(
-  input: BundledActionPlacementInput,
-): ActionDefinition {
+export function buildBundledActionPlacement(input: BundledActionPlacementInput): ActionDefinition {
   return defineAction({
     // Placement ids are namespaced by their recipe: one launcher per bundled recipe today.
     id: `${input.id}.action`,
@@ -37,8 +35,6 @@ export function buildBundledActionPlacement(
     surfaces: input.surfaces,
     view: input.view,
     ...(input.rankHint === undefined ? {} : { rank: input.rankHint }),
-    ...(input.shortDescription === undefined
-      ? {}
-      : { shortDescription: input.shortDescription }),
+    ...(input.shortDescription === undefined ? {} : { shortDescription: input.shortDescription }),
   });
 }

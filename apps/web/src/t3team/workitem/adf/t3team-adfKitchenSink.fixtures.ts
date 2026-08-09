@@ -211,7 +211,12 @@ export const T3TEAM_ADF_KITCHEN_SINK_DOC: AdfDocument = {
         // A second gallery image — proves the lightbox's next/previous, not just open/close.
         {
           type: "media",
-          attrs: { id: "media-3", type: "file", collection: "jira-attachments", alt: "chart-2.png" },
+          attrs: {
+            id: "media-3",
+            type: "file",
+            collection: "jira-attachments",
+            alt: "chart-2.png",
+          },
         },
         // Real Jira attachment shapes the ADF media renderer must never treat as an `<img>`.
         {
