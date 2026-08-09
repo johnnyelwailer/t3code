@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off - these tests drive the real journal on disk;
+// the whole point is that durable runs survive a process boundary, which a memory FS cannot show.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

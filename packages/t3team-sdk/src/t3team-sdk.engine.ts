@@ -1,3 +1,6 @@
+// @effect-diagnostics nodeBuiltinImport:off - workflowSourceVersion hashes the source artifact
+// synchronously so a resumed run cannot silently execute changed code; making it effectful would
+// push Effect into every caller of a pure version stamp.
 /**
  * T3Code's lifecycle adapter for the reusable Runbook engine.
  *

@@ -9,6 +9,7 @@ import {
   type ThreadId as ThreadIdType,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
+import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -132,9 +133,16 @@ function shouldPersistThread(thread: OrchestrationThread): boolean {
   return status !== "starting" && status !== "running";
 }
 
+/**
+ * `Schema.is`, not `instanceof`: the failure crosses a transport boundary, so the value reaching
+ * here is a decoded error rather than necessarily the same class instance. Matches the idiom the
+ * rest of this package uses (see connection/resolver.ts).
+ */
+const isGetSnapshotError = Schema.is(OrchestrationGetSnapshotError);
+
 function isThreadNotFoundFailure(cause: Cause.Cause<unknown>): boolean {
   const error = Cause.squash(cause);
-  return error instanceof OrchestrationGetSnapshotError && error.reason === "not-found";
+  return isGetSnapshotError(error) && error.reason === "not-found";
 }
 
 export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make")(function* (
