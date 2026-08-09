@@ -3,6 +3,7 @@ import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
+import { ThreadEnvMode } from "./environment.ts";
 import {
   DEFAULT_TEXT_GENERATION_MODEL,
   DEFAULT_TEXT_GENERATION_REASONING_EFFORT,
@@ -214,8 +215,9 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = Schema.decodeSync(ClientS
 
 // ── Server Settings (server-authoritative) ────────────────────
 
-export const ThreadEnvMode = Schema.Literals(["local", "worktree"]);
-export type ThreadEnvMode = typeof ThreadEnvMode.Type;
+// Moved to environment.ts so orchestration contracts can use it without an
+// import cycle; re-exported here for compatibility with deep imports.
+export { ThreadEnvMode } from "./environment.ts";
 
 const makeBinaryPathSetting = (fallback: string) =>
   TrimmedString.pipe(
@@ -548,6 +550,8 @@ export const BackgroundActivitySettings = Schema.Struct({
 export type BackgroundActivitySettings = typeof BackgroundActivitySettings.Type;
 
 export const ServerSettings = Schema.Struct({
+  // Watch the official Codex and Claude profile folders and surface matching sessions.
+  showLocalProviderSessions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Legacy token-by-token assistant output. Deliberately a fresh key (was
   // `enableAssistantStreaming`): decoding drops the old key, so everyone,
   // including prior opt-ins, resets to the buffered default.
@@ -719,6 +723,7 @@ const OpenCodeSettingsPatch = Schema.Struct({
 
 export const ServerSettingsPatch = Schema.Struct({
   // Server settings
+  showLocalProviderSessions: Schema.optionalKey(Schema.Boolean),
   enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   backgroundActivity: Schema.optionalKey(

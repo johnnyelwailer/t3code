@@ -23,6 +23,8 @@ describe("translateUpstreamPath", () => {
       "/settings",
       "/settings/beta",
       "/pair",
+      "/connect",
+      "/connect_/callback",
     ]) {
       expect(translateUpstreamPath(pathname, deps("p1"))).toEqual({ kind: "ignore" });
     }

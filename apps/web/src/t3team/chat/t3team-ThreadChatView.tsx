@@ -2,6 +2,8 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 import type { ProjectSource } from "@t3tools/project-context";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { ThreadChatViewBody } from "~/t3team/chat/t3team-ThreadChatViewBody";
+import { ExternalSessionReadOnlyOverlay } from "~/t3team/chat/t3team-ExternalSessionReadOnlyOverlay";
+import { useExternalSessionReadOnly } from "~/t3team/chat/t3team-useExternalSessionReadOnly";
 import { useThreadBootstrap } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { useT3TeamDraftMutationIngest } from "~/t3team/chat/t3team-useDraftMutationIngest";
@@ -139,6 +141,11 @@ export function ThreadChatView({
     return <div className="flex h-full min-h-0 flex-1 bg-background" />;
   }
 
+  // A thread mirrored from an external Codex/Claude session is read-only while that tool still
+  // owns it. The composer is COVERED rather than removed, so the transcript stays readable and
+  // the row does not appear broken.
+  const externalSession = useExternalSessionReadOnly(serverThread);
+
   return (
     <ThreadChatViewBody
       environmentId={environmentId}
@@ -159,6 +166,13 @@ export function ThreadChatView({
       bootstrapStatus={bootstrapStatus}
       retryThreadBootstrap={retryThreadBootstrap}
       composerState={composerState}
+      {...(externalSession.active && externalSession.session
+        ? {
+            composerReadOnlyOverlay: (
+              <ExternalSessionReadOnlyOverlay session={externalSession.session} />
+            ),
+          }
+        : {})}
     />
   );
 }
