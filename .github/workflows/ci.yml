@@ -1,10 +1,17 @@
 name: CI
 
+# Lightweight by default. Every PR and push runs lint/format + typecheck only — the checks that
+# catch most breakage in minutes. The expensive half (full suites, Rust, the Electron desktop
+# pipeline, release smoke) runs on manual dispatch, plus a nightly so a regression still surfaces
+# within a day if nobody remembers to press the button.
 on:
   pull_request:
   push:
     branches:
       - main
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
@@ -16,7 +23,7 @@ jobs:
     # ubuntu-latest, not Blacksmith: this fork has no Blacksmith runners, so every run queued
     # until cancelled — CI has never once completed here. Upstream value kept for merge clarity.
     runs-on: ubuntu-latest # upstream: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 45 # 4-vCPU hosted runner; upstream's 10 assumed an 8-vCPU one
+    timeout-minutes: 25 # lint + typecheck only on the default path
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -34,11 +41,13 @@ jobs:
           run-install: true
 
       - name: Setup Rust
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
 
       - name: Ensure Electron runtime is installed
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
         run: vp run --filter @t3tools/desktop ensure:electron
 
       - name: Check
@@ -48,12 +57,15 @@ jobs:
         run: vpr typecheck
 
       - name: Check resource monitor formatting
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
         run: cargo fmt --manifest-path native/resource-monitor/Cargo.toml -- --check
 
       - name: Build desktop pipeline
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
         run: vp run build:desktop
 
       - name: Verify preload bundle output
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
         run: |
           test -f apps/desktop/dist-electron/preload.cjs
           grep -nE "desktopBridge|getLocalEnvironmentBootstrap|PICK_FOLDER_CHANNEL|wsUrl" apps/desktop/dist-electron/preload.cjs
@@ -61,6 +73,7 @@ jobs:
 
   test:
     name: Test
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest # upstream: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 60 # full monorepo suites on a 4-vCPU hosted runner
     steps:
@@ -146,6 +159,7 @@ jobs:
 
   release_smoke:
     name: Release Smoke
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest # upstream: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
