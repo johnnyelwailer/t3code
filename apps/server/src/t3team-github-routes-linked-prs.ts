@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { resolveGitHubWorkItemKey } from "@t3tools/shared/t3team-githubActivity";
 import type { VcsProcessShape } from "./t3team-vcsProcessShape.ts";
 import { parseLinkedRepositoryName } from "./t3team-github-routes-suggestions.ts";
 import type {
@@ -64,6 +65,15 @@ export function loadLinkedPullRequestsAttempt(input: {
                 typeof pullRequest.number === "number"
                   ? String(pullRequest.number)
                   : readTrimmedString(pullRequest.id)?.toString();
+              // Stamp the work-item association server-side, so a response already carries it
+              // for callers with no browser to run `toGitHubWorkActivityItems` in (a headless
+              // orchestration run, a scheduled job, an agent). Same precedence, same function the
+              // web app uses — see `@t3tools/shared/t3team-githubActivity`.
+              const workItemKey = resolveGitHubWorkItemKey({
+                ...(subjectTitle ? { subjectTitle } : {}),
+                ...(subjectBranch ? { subjectBranch } : {}),
+                repository,
+              });
               const inboxItem: GitHubInboxItem = {
                 id: number
                   ? `pr:${repository}:${number}`
@@ -95,6 +105,7 @@ export function loadLinkedPullRequestsAttempt(input: {
                   : {}),
                 ...(updatedAt ? { updatedAt } : {}),
                 subjectState,
+                ...(workItemKey ? { workItemKey } : {}),
               };
               return inboxItem;
             }),

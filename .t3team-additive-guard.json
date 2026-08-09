@@ -128,6 +128,7 @@
     "packages/contracts/src/settings.ts",
     "packages/contracts/src/sourceControl.ts",
     "packages/project-context/src/index.ts",
+    "packages/shared/package.json",
     "packages/shared/src/model.test.ts",
     "packages/shared/src/shell.test.ts",
     "packages/shared/src/shell.ts",

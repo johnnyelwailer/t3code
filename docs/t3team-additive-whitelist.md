@@ -91,6 +91,8 @@ Prefix policy:
   - Pass the multi-host auth data through provider resolution.
 - `bun.lock`
   - Lockfile drift due workspace/package updates.
+- `packages/shared/package.json`
+  - Add the `./t3team-githubActivity` subpath export so `apps/server` and `apps/web` can both import the moved GitHub work-item association/grouping helpers from one module.
 
 - `docs/README.md`
   - Append a `## This fork (t3team)` section linking the fork's own docs (MVP spec, this whitelist, runbook engine). Purely additive tail; upstream's own index above it is untouched.

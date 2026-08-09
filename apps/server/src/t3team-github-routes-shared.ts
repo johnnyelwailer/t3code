@@ -39,6 +39,18 @@ export type GitHubInboxItem = {
   readonly deletions?: number;
   readonly changedFiles?: number;
   readonly updatedAt?: string;
+  /**
+   * The tracker work item (e.g. `IES-9242`) this item is associated with, resolved from the PR
+   * title, then branch, then repository name — see `resolveGitHubWorkItemKey` in
+   * `@t3tools/shared/t3team-githubActivity`. Stamped by BOTH producers of this type — the linked
+   * pull requests path (`t3team-github-routes-linked-prs.ts`) and the notifications inbox path
+   * (`t3team-github-routes-loaders.ts`) — because a consumer cannot tell which path an item came
+   * from, so stamping only one would make the field silently unreliable rather than merely absent.
+   * Optional because an item may genuinely have no key anywhere in its title, branch or repository
+   * name. Additive: the web app still resolves its own copy in `toGitHubWorkActivityItems`, and
+   * nothing reads this field yet — it exists for callers with no browser to do that in.
+   */
+  readonly workItemKey?: string;
 };
 
 export type GitHubInboxDiscoverResponse = {
