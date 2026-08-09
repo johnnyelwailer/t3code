@@ -19,6 +19,24 @@ export const githubWrite = defineToolGroup({
     "Merge pull requests, push branches, edit issues, and trigger write-side GitHub actions.",
 });
 
+/**
+ * Preparing a review a human then approves is NOT the same authority as changing GitHub, and this
+ * group exists so the two cannot be conflated. `githubWrite` grants merging, pushing and editing;
+ * a workflow that only wants to hand a reviewer a draft must not have to ask for any of that to
+ * get it — that is precisely the least-privilege split `githubWrite`'s own doc comment above
+ * describes, applied one level further.
+ *
+ * Nothing in this group reaches GitHub. A tool here produces a draft; the host holds the token and
+ * posts only what the user approved, so the grant a user is being asked for is "let this workflow
+ * put a review in front of me", not "let this workflow write to the repository".
+ */
+export const githubReviewDraft = defineToolGroup({
+  id: "github.review.draft",
+  label: "Draft a pull-request review",
+  description:
+    "Prepare a pull-request review — a verdict, a summary, and inline comments — for you to read and approve. Nothing is posted to GitHub without your approval.",
+});
+
 export const jiraRead = defineToolGroup({
   id: "jira.read",
   label: "Read Jira data",
@@ -67,6 +85,7 @@ export const releaseNotesWrite = defineToolGroup({
 export const builtinToolGroups = [
   githubRead,
   githubWrite,
+  githubReviewDraft,
   jiraRead,
   jiraWrite,
   t3teamRecipeRead,

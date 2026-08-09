@@ -38,6 +38,10 @@
     "./tools/t3teamWorkflow": {
       "types": "./src/tools/t3team-sdk.workflow.ts",
       "import": "./src/tools/t3team-sdk.workflow.ts"
+    },
+    "./tools/t3teamGithubReview": {
+      "types": "./src/tools/t3team-sdk.githubReview.ts",
+      "import": "./src/tools/t3team-sdk.githubReview.ts"
     }
   },
   "scripts": {
