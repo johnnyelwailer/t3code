@@ -1,3 +1,5 @@
+// t3team: this fork already occupies upstream's migration ids, so 039/040 are registered as
+// 53/54 (see Migrations.ts). The ids below track that, not upstream's numbering.
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -13,8 +15,8 @@ layer("040_ProjectionProjectFaviconPath", (it) => {
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      yield* runMigrations({ toMigrationInclusive: 39 });
-      yield* runMigrations({ toMigrationInclusive: 40 });
+      yield* runMigrations({ toMigrationInclusive: 53 });
+      yield* runMigrations({ toMigrationInclusive: 54 });
 
       const columns = yield* sql<{ readonly name: string; readonly notnull: number }>`
         PRAGMA table_info(projection_projects)
