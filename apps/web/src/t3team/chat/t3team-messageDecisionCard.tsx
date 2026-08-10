@@ -12,16 +12,27 @@
  */
 import { useState } from "react";
 import { CircleHelpIcon, CornerDownRightIcon } from "lucide-react";
-import {
-  isProjectRecipeWorkflowDecisionPayload,
-  PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
-  type ProjectRecipeWorkflowDecisionPayload,
-} from "@t3tools/project-recipes";
+
+import type { ProjectRecipeWorkflowDecisionPayload } from "@t3tools/project-recipes";
 
 import type { ChatMessage } from "~/types";
 
 import { T3TeamWorkflowQuestionProse } from "./t3team-WorkflowQuestionProse";
 import { T3TeamWorkflowDecisionAffordance } from "./t3team-messageDecisionAffordance";
+import type { T3TeamWorkflowDecisionAnswer } from "./t3team-workflowDecisionAnswers";
+// Re-exported for existing callers — the attachment lookup itself now lives in
+// `t3team-workflowDecisionAnswers.ts` so that module doesn't need to import back from here (that
+// was the other half of a type/value import cycle between the two files).
+export { getT3TeamWorkflowDecisionAttachment } from "./t3team-workflowDecisionAnswers";
+
+const ANSWER_CHIP_MAX_CHARS = 120;
+
+/** A freeform text answer can be arbitrarily long; the chip is a summary, not the transcript. */
+function truncateAnswerChipText(text: string): string {
+  return text.length <= ANSWER_CHIP_MAX_CHARS
+    ? text
+    : `${text.slice(0, ANSWER_CHIP_MAX_CHARS - 1)}…`;
+}
 
 export type WorkflowDecisionChooseHandler = (input: {
   /** The chosen option label — the reply message's display text. */
@@ -31,24 +42,6 @@ export type WorkflowDecisionChooseHandler = (input: {
   /** The ask this card was rendered for; the server rejects it if no longer pending. */
   correlationId: string;
 }) => Promise<void>;
-
-export function getT3TeamWorkflowDecisionAttachment(
-  message: Pick<ChatMessage, "t3teamExt">,
-): ProjectRecipeWorkflowDecisionPayload | null {
-  for (const attachment of message.t3teamExt?.attachments ?? []) {
-    if (attachment.kind !== "view") {
-      continue;
-    }
-    if (attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION) {
-      continue;
-    }
-    if (isProjectRecipeWorkflowDecisionPayload(attachment.props)) {
-      return attachment.props;
-    }
-  }
-
-  return null;
-}
 
 /**
  * The message currently awaiting the user's answer: the latest `waiting-for-input` message with
@@ -82,9 +75,12 @@ export function T3TeamWorkflowDecisionCard(props: {
   active: boolean;
   /** Terminal runs withdraw their pending ask; do not leave dead reply controls in the timeline. */
   unavailableMessage?: string | undefined;
+  /** The reply that answered this ask, when one exists — keeps the card in an answered state
+   * (question + chosen chip) instead of vanishing once a user has replied. */
+  answer?: T3TeamWorkflowDecisionAnswer | undefined;
   onChoose?: WorkflowDecisionChooseHandler | undefined;
 }) {
-  const { decision, active, unavailableMessage, onChoose } = props;
+  const { decision, active, unavailableMessage, answer, onChoose } = props;
   const [submitting, setSubmitting] = useState<string | null>(null);
   const affordance = decision.affordance;
   const unavailable = unavailableMessage !== undefined;
@@ -126,9 +122,26 @@ export function T3TeamWorkflowDecisionCard(props: {
           submitting={submitting}
           locked={locked}
           formDisabled={!active || !onChoose}
+          {...(answer ? { answeredChoice: answer.text } : {})}
           onChoose={runChoose}
         />
       )}
+
+      {/*
+        The answer is USER input, not a system notice — even though the underlying reply message
+        may itself be attributed to the workflow, the card renders it as the user's own bubble so
+        the reader never mistakes their own choice for something the system said.
+      */}
+      {answer ? (
+        <div className="mt-3 flex justify-end" data-workflow-decision-status="answered">
+          <span
+            className="max-w-[85%] rounded-2xl bg-primary px-3 py-1.5 text-sm text-primary-foreground"
+            title={answer.text}
+          >
+            {truncateAnswerChipText(answer.text)}
+          </span>
+        </div>
+      ) : null}
 
       {/*
         The run is BLOCKED here. A muted one-liner read as a status note, so the card looked like a

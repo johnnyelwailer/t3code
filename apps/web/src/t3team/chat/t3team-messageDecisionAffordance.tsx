@@ -29,14 +29,19 @@ function DecisionButton(props: {
   busy: boolean;
   disabled: boolean;
   primary?: boolean;
+  /** This option is the one the user already chose — kept visually distinct, never muted. */
+  chosen?: boolean;
+  /** Some other option was chosen — this one fades out rather than reading as still-live. */
+  muted?: boolean;
   onClick: () => void;
 }) {
   return (
     <Button
       type="button"
       size="sm"
-      variant={props.primary ? "default" : "outline"}
+      variant={props.chosen || props.primary ? "default" : "outline"}
       disabled={props.disabled}
+      className={props.muted ? "opacity-40" : undefined}
       onClick={props.onClick}
     >
       {props.busy ? <LoaderCircleIcon className="mr-1 size-3 animate-spin" /> : null}
@@ -51,6 +56,7 @@ export function T3TeamWorkflowDecisionAffordance({
   submitting,
   locked,
   formDisabled,
+  answeredChoice,
   onChoose,
 }: {
   readonly affordance: Affordance;
@@ -58,6 +64,9 @@ export function T3TeamWorkflowDecisionAffordance({
   readonly submitting: string | null;
   readonly locked: boolean;
   readonly formDisabled: boolean;
+  /** The label of the option the user already picked, if this ask has been answered — the
+   * matching button stays highlighted, the rest mute instead of reading as still choosable. */
+  readonly answeredChoice?: string | undefined;
   readonly onChoose: (choice: string, value: unknown) => void;
 }) {
   if (affordance.kind === "choice") {
@@ -69,6 +78,8 @@ export function T3TeamWorkflowDecisionAffordance({
             label={option}
             busy={submitting === option}
             disabled={locked}
+            chosen={answeredChoice === option}
+            muted={answeredChoice !== undefined && answeredChoice !== option}
             onClick={() =>
               onChoose(
                 option,
@@ -95,6 +106,8 @@ export function T3TeamWorkflowDecisionAffordance({
               busy={submitting === label}
               disabled={locked}
               primary={bool}
+              chosen={answeredChoice === label}
+              muted={answeredChoice !== undefined && answeredChoice !== label}
               onClick={() => onChoose(label, bool)}
             />
           );

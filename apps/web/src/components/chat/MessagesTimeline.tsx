@@ -127,6 +127,10 @@ import {
   findActiveWorkflowInputMessageId,
   T3TeamSystemTimelineRow,
 } from "~/t3team/chat/t3team-SystemTimelineRow";
+import {
+  findT3TeamWorkflowDecisionAnswers,
+  type T3TeamWorkflowDecisionAnswer,
+} from "~/t3team/chat/t3team-workflowDecisionAnswers";
 import { T3TeamActorTimelineRow } from "~/t3team/chat/t3team-ActorTimelineRow";
 import {
   getT3TeamRenderableAttachments,
@@ -158,6 +162,8 @@ interface TimelineRowSharedState {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   activeWorkflowInputMessageId: string | null;
+  workflowDecisionAnswers: ReadonlyMap<string, T3TeamWorkflowDecisionAnswer>;
+  answeredDecisionReplyMessageIds: ReadonlySet<string>;
   workflowStepRuns: ReadonlyMap<string, T3TeamWorkflowRunProgress>;
   workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
   onSubmitRecipeCardAction?: ChatViewT3TeamExtensionProps["onSubmitRecipeCardAction"];
@@ -567,6 +573,20 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [timelineEntries],
   );
 
+  const workflowDecisionAnswers = useMemo(
+    () => findT3TeamWorkflowDecisionAnswers(timelineEntries),
+    [timelineEntries],
+  );
+
+  // A decision reply renders its chosen chip inline on the ask card (see
+  // `T3TeamWorkflowDecisionCard`) — its own bare user-bubble row would just repeat it. Suppress
+  // by identity of the answer message `findT3TeamWorkflowDecisionAnswers` already resolved
+  // (correlationId-matched, with a legacy adjacency fallback), not by re-deriving adjacency here.
+  const answeredDecisionReplyMessageIds = useMemo(
+    () => new Set([...workflowDecisionAnswers.values()].map((answer) => answer.answerMessageId)),
+    [workflowDecisionAnswers],
+  );
+
   const workflowStepRuns = useMemo(
     () => deriveT3TeamWorkflowStepRuns(threadActivities ?? []),
     [threadActivities],
@@ -587,6 +607,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       activeWorkflowInputMessageId,
+      workflowDecisionAnswers,
+      answeredDecisionReplyMessageIds,
       workflowStepRuns,
       ...(workflowRunStatus ? { workflowRunStatus } : {}),
       onSubmitRecipeCardAction,
@@ -610,6 +632,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       activeWorkflowInputMessageId,
+      workflowDecisionAnswers,
+      answeredDecisionReplyMessageIds,
       workflowStepRuns,
       workflowRunStatus,
       onSubmitRecipeCardAction,
@@ -1037,7 +1061,9 @@ function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message
     <T3TeamSystemTimelineRow
       message={row.message}
       threadRef={ctx.threadRef}
+      {...(ctx.markdownCwd ? { markdownCwd: ctx.markdownCwd } : {})}
       activeWorkflowInputMessageId={ctx.activeWorkflowInputMessageId}
+      workflowDecisionAnswers={ctx.workflowDecisionAnswers}
       workflowStepRuns={ctx.workflowStepRuns}
       {...(ctx.workflowRunStatus ? { workflowRunStatus: ctx.workflowRunStatus } : {})}
       {...(ctx.onSubmitRecipeCardAction
@@ -1093,6 +1119,11 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
 
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  // This message answered a still-visible ask card, which now renders the chosen chip inline
+  // (see `T3TeamWorkflowDecisionCard`) — a second, bare bubble here would just repeat it.
+  if (ctx.answeredDecisionReplyMessageIds.has(row.message.id)) {
+    return null;
+  }
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(
     row.message.t3teamExt?.displayText ?? row.message.text,
