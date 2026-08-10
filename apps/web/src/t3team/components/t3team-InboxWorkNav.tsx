@@ -17,6 +17,7 @@
  * `t3team-InboxSlots.tsx` — the component renders `null` whenever it has nothing to add.
  */
 import { useNavigate } from "@tanstack/react-router";
+import { CircleUserRound, ListTree } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { SidebarMenuSubButton } from "~/t3team/components/ui/t3team-sidebar";
@@ -42,10 +43,13 @@ export function InboxWorkNav({ projectId }: InboxWorkNavProps): ReactNode {
       data-thread-selection-safe
       className="mx-1 mt-1 mb-1.5 flex w-full list-none flex-col gap-0.5 overflow-hidden px-1.5 py-0.5"
     >
+      {/* Primary navigation rows, not sub-entries: these are the Work lens's top-level surfaces,
+          so they carry an icon and the same row weight as the rest of the sidebar — an unanchored
+          11px text label here read as a stray caption, not as a destination. */}
       {projectId === null ? null : (
         <SidebarMenuSubButton
           size="sm"
-          className="h-7 w-full translate-x-0 justify-start px-2 text-left text-[11px]"
+          className="h-8 w-full translate-x-0 justify-start gap-2 rounded-lg px-2 text-left text-sm font-medium"
           onClick={() => {
             void navigate({
               to: "/t3team/projects/$projectId",
@@ -54,12 +58,13 @@ export function InboxWorkNav({ projectId }: InboxWorkNavProps): ReactNode {
             });
           }}
         >
+          <ListTree aria-hidden className="size-4 shrink-0" />
           <span className="truncate">Backlog</span>
         </SidebarMenuSubButton>
       )}
       <SidebarMenuSubButton
         size="sm"
-        className="h-7 w-full translate-x-0 justify-start px-2 text-left text-[11px]"
+        className="h-8 w-full translate-x-0 justify-start gap-2 rounded-lg px-2 text-left text-sm font-medium"
         onClick={() => {
           void (projectId === null
             ? navigate({ to: "/t3team/my-work" })
@@ -70,6 +75,7 @@ export function InboxWorkNav({ projectId }: InboxWorkNavProps): ReactNode {
               }));
         }}
       >
+        <CircleUserRound aria-hidden className="size-4 shrink-0" />
         <span className="truncate">My work</span>
       </SidebarMenuSubButton>
     </li>
