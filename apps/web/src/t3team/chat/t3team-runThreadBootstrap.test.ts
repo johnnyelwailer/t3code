@@ -413,6 +413,80 @@ describe("runThreadBootstrap", () => {
     );
   });
 
+  it("launches workflow-only recipe kickoffs even with an empty initial message", async () => {
+    const backend = createBackend();
+
+    await runThreadBootstrap({
+      backend,
+      environmentId: "env-1",
+      threadId: "thread-3c",
+      projectTitle: "Project Alpha",
+      projectWorkspaceRoot: "/tmp/project-alpha",
+      canonicalProjectId: "project-alpha",
+      title: "Thread title",
+      initialUserMessage: "",
+      kickoffModelSelection: { instanceId: "codex" as any, model: "gpt-5.4" },
+      kickoffRuntimeMode: "full-access",
+      kickoffInteractionMode: "default",
+      kickoffWorkflow: TEST_KICKOFF_WORKFLOW,
+      toolContext: TEST_TOOL_CONTEXT,
+      createdAt: "2026-05-19T12:00:00.000Z",
+      shouldEnsureProject: false,
+      action: "kickoff",
+      state: {
+        threadId: "thread-3c",
+        projectEnsured: false,
+        threadCreateSent: false,
+        kickoffSent: false,
+      },
+      onInitialUserMessageSent: undefined,
+    });
+
+    expect(backend.launchRecipeWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-3c",
+        kickoffMessage: "",
+      }),
+    );
+  });
+
+  it("does not send a normal turn when there is no kickoff message and no workflow", async () => {
+    const backend = createBackend();
+
+    await runThreadBootstrap({
+      backend,
+      environmentId: "env-1",
+      threadId: "thread-3d",
+      projectTitle: "Project Alpha",
+      projectWorkspaceRoot: "/tmp/project-alpha",
+      canonicalProjectId: "project-alpha",
+      title: "Thread title",
+      initialUserMessage: "",
+      kickoffModelSelection: { instanceId: "codex" as any, model: "gpt-5.4" },
+      kickoffRuntimeMode: "full-access",
+      kickoffInteractionMode: "default",
+      toolContext: TEST_TOOL_CONTEXT,
+      createdAt: "2026-05-19T12:00:00.000Z",
+      shouldEnsureProject: false,
+      action: "kickoff",
+      state: {
+        threadId: "thread-3d",
+        projectEnsured: false,
+        threadCreateSent: false,
+        kickoffSent: false,
+      },
+      onInitialUserMessageSent: undefined,
+    });
+
+    expect(backend.launchRecipeWorkflow).not.toHaveBeenCalled();
+    expect(backend.dispatchCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "thread.create" }),
+    );
+    expect(backend.dispatchCommand).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "thread.turn.start" }),
+    );
+  });
+
   it("continues recipe launch when retrying after the thread already exists", async () => {
     const backend = createBackend();
     vi.mocked(backend.dispatchCommand).mockRejectedValueOnce(

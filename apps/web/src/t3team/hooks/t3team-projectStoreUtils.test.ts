@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { ProjectId, type EnvironmentId } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { Project } from "~/types";
-import { deriveLooseWorkspaceProjects } from "./t3team-projectStoreUtils";
+import { buildThreadForProject, deriveLooseWorkspaceProjects } from "./t3team-projectStoreUtils";
 
 function makeStoredProject(overrides: Partial<ProjectShellProject> = {}): ProjectShellProject {
   return {
@@ -244,5 +244,23 @@ describe("deriveLooseWorkspaceProjects", () => {
     );
 
     expect(looseWorkspaceProjects).toEqual([]);
+  });
+});
+
+describe("buildThreadForProject", () => {
+  it("preserves an empty-string kickoff message instead of dropping it", () => {
+    const thread = buildThreadForProject("project-alpha", {
+      kickoffMessage: "",
+      kickoffPending: true,
+    });
+
+    expect(thread.kickoffMessage).toBe("");
+    expect(thread.kickoffPending).toBe(true);
+  });
+
+  it("omits kickoffMessage entirely when none is provided", () => {
+    const thread = buildThreadForProject("project-alpha");
+
+    expect(thread.kickoffMessage).toBeUndefined();
   });
 });
