@@ -66,7 +66,11 @@ export async function runThreadBootstrap({
     createdAt,
   });
 
-  if (action === "kickoff" && initialUserMessage) {
+  if (
+    action === "kickoff" &&
+    initialUserMessage !== undefined &&
+    (initialUserMessage !== "" || kickoffWorkflow !== undefined)
+  ) {
     await runThreadBootstrapKickoff({
       backend,
       action,
