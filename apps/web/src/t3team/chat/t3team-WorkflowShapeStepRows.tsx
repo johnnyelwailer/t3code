@@ -34,7 +34,7 @@ type DynamicRow = T3TeamWorkflowShapeProgressRow & {
   readonly runtimeStep: NonNullable<T3TeamWorkflowShapeProgressRow["runtimeStep"]>;
 };
 
-type RenderUnit =
+export type RenderUnit =
   | { readonly kind: "row"; readonly row: T3TeamWorkflowShapeProgressRow; readonly index: number }
   | {
       readonly kind: "dynamic-group";
@@ -48,13 +48,14 @@ type RenderUnit =
  * wait-until timers) that grouping would have to thread through, and the reported duplication is
  * entirely dynamic agent-call rows anyway.
  */
-function groupDynamicRuntimeRows(rows: LiveState["rows"]): RenderUnit[] {
+export function groupDynamicRuntimeRows(rows: LiveState["rows"]): RenderUnit[] {
   const units: RenderUnit[] = [];
   let index = 0;
   while (index < rows.length) {
     const row = rows[index]!;
     if (row.planStep === undefined && row.runtimeStep !== undefined) {
       const label = fallbackRuntimeLabel(row.runtimeStep);
+      const startIndex = index;
       const group: DynamicRow[] = [row as DynamicRow];
       let next = index + 1;
       while (next < rows.length) {
@@ -69,7 +70,13 @@ function groupDynamicRuntimeRows(rows: LiveState["rows"]): RenderUnit[] {
         group.push(candidate as DynamicRow);
         next += 1;
       }
-      units.push({ kind: "dynamic-group", label, rows: group });
+      // A lone dynamic row is not a repeat of anything — render it as a plain row so it
+      // doesn't pick up a bogus "↻1" attempt badge.
+      if (group.length === 1) {
+        units.push({ kind: "row", row, index: startIndex });
+      } else {
+        units.push({ kind: "dynamic-group", label, rows: group });
+      }
       index = next;
     } else {
       units.push({ kind: "row", row, index });
@@ -79,23 +86,26 @@ function groupDynamicRuntimeRows(rows: LiveState["rows"]): RenderUnit[] {
   return units;
 }
 
-function aggregateGroupStatus(
+export function aggregateGroupStatus(
   rows: readonly DynamicRow[],
   runStatus: LiveState["status"],
-): { readonly icon: StepStatus; readonly completed: number; readonly failed: number } {
+): { readonly icon: StepStatus; readonly completed: number } {
   const statuses = rows.map((row) => displayedStepStatus(row.runtimeStep, runStatus));
   const completed = statuses.filter((entryStatus) => entryStatus === "completed").length;
-  const failed = statuses.filter((entryStatus) => entryStatus === "failed").length;
-  const icon = statuses.includes("failed")
-    ? "failed"
-    : statuses.includes("started")
-      ? "started"
-      : statuses.includes("waiting")
-        ? "waiting"
-        : completed === rows.length
-          ? "completed"
-          : "pending";
-  return { icon, completed, failed };
+  const icon = statuses.includes("started")
+    ? "started"
+    : statuses.includes("failed")
+      ? "failed"
+      : completed === rows.length
+        ? "completed"
+        : statuses.includes("waiting")
+          ? "waiting"
+          : statuses.includes("cancelled")
+            ? "cancelled"
+            : statuses.includes("paused")
+              ? "paused"
+              : "pending";
+  return { icon, completed };
 }
 
 function T3TeamWorkflowShapeDynamicGroupRow({
@@ -122,20 +132,48 @@ function T3TeamWorkflowShapeDynamicGroupRow({
   if (rows.length <= 3) {
     const last = rows.at(-1)!;
     return (
-      <T3TeamWorkflowStepDetails
-        step={last.runtimeStep}
-        {...(onOpenThread ? { onOpenThread } : {})}
-        {...(currentThreadId ? { currentThreadId } : {})}
-      >
-        <div className="flex items-center gap-2.5" data-step-runtime="unknown">
-          <StepStatusIcon status={icon} />
-          <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">{label}</span>
-          <span className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/80">
-            ↻{rows.length}
-          </span>
-          <StepTrailing step={last.runtimeStep} wakeAt={undefined} childStatuses={childStatuses} />
-        </div>
-      </T3TeamWorkflowStepDetails>
+      <div className="space-y-1">
+        <T3TeamWorkflowStepDetails
+          step={last.runtimeStep}
+          hideDetail={last.runtimeStep.detail === undefined}
+          redactDetail={last.runtimeStep.stepKind === "workflow.self-heal"}
+          {...(onOpenThread ? { onOpenThread } : {})}
+          {...(currentThreadId ? { currentThreadId } : {})}
+        >
+          <div className="flex items-center gap-2.5" data-step-runtime="unknown">
+            <StepStatusIcon status={icon} />
+            <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">{label}</span>
+            {rows.length > 1 ? (
+              <span className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/80">
+                ↻{rows.length}
+              </span>
+            ) : null}
+            <StepTrailing
+              step={last.runtimeStep}
+              wakeAt={undefined}
+              childStatuses={childStatuses}
+            />
+          </div>
+        </T3TeamWorkflowStepDetails>
+        {rows.length > 1 ? (
+          <div className="ml-7 space-y-0.5">
+            {rows.map((row, attemptIndex) => (
+              <T3TeamWorkflowStepDetails
+                key={row.runtimeStep.stepId}
+                step={row.runtimeStep}
+                hideDetail={row.runtimeStep.detail === undefined}
+                redactDetail={row.runtimeStep.stepKind === "workflow.self-heal"}
+                {...(onOpenThread ? { onOpenThread } : {})}
+                {...(currentThreadId ? { currentThreadId } : {})}
+              >
+                <span className="text-[11px] text-muted-foreground/70">
+                  Attempt {attemptIndex + 1}
+                </span>
+              </T3TeamWorkflowStepDetails>
+            ))}
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -153,6 +191,8 @@ function T3TeamWorkflowShapeDynamicGroupRow({
           <T3TeamWorkflowStepDetails
             key={row.runtimeStep.stepId}
             step={row.runtimeStep}
+            hideDetail={row.runtimeStep.detail === undefined}
+            redactDetail={row.runtimeStep.stepKind === "workflow.self-heal"}
             {...(onOpenThread ? { onOpenThread } : {})}
             {...(currentThreadId ? { currentThreadId } : {})}
           >
@@ -224,13 +264,14 @@ export function T3TeamWorkflowShapeStepRows({
           const rawStatus = displayedStepStatus(step, status);
           // An unmatched act ("script") plan row only looks "skipped" because no runtime
           // activity matched it (see `stepMatchesPlan`) — unlike an `ask` that a run can
-          // legitimately bypass, a script step that never gets skipped in practice, so once
-          // the run has settled successfully it almost certainly ran without leaving a
-          // reconcilable match. Render it like any other completed step instead of struck
-          // through; genuine failure/cancellation still shows through `status`.
+          // legitimately bypass, a script step rarely gets skipped in practice, so once the
+          // run has settled successfully it likely ran without leaving a reconcilable match.
+          // We don't actually know that, though — claiming "completed" would invent data
+          // (a conditionally-skipped script would show a false green check). Stay neutral:
+          // plain row, pending-style icon, no strikethrough.
           const effectiveStatus: typeof rawStatus =
             rawStatus === "skipped" && planStep?.kind === "act" && status === "completed"
-              ? "completed"
+              ? "pending"
               : rawStatus;
           return (
             <div
