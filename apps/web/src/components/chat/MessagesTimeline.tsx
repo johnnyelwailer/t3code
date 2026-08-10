@@ -127,6 +127,10 @@ import {
   findActiveWorkflowInputMessageId,
   T3TeamSystemTimelineRow,
 } from "~/t3team/chat/t3team-SystemTimelineRow";
+import {
+  findT3TeamWorkflowDecisionAnswers,
+  type T3TeamWorkflowDecisionAnswer,
+} from "~/t3team/chat/t3team-workflowDecisionAnswers";
 import { T3TeamActorTimelineRow } from "~/t3team/chat/t3team-ActorTimelineRow";
 import {
   getT3TeamRenderableAttachments,
@@ -158,6 +162,7 @@ interface TimelineRowSharedState {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   activeWorkflowInputMessageId: string | null;
+  workflowDecisionAnswers: ReadonlyMap<string, T3TeamWorkflowDecisionAnswer>;
   workflowStepRuns: ReadonlyMap<string, T3TeamWorkflowRunProgress>;
   workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
   onSubmitRecipeCardAction?: ChatViewT3TeamExtensionProps["onSubmitRecipeCardAction"];
@@ -567,6 +572,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [timelineEntries],
   );
 
+  const workflowDecisionAnswers = useMemo(
+    () => findT3TeamWorkflowDecisionAnswers(timelineEntries),
+    [timelineEntries],
+  );
+
   const workflowStepRuns = useMemo(
     () => deriveT3TeamWorkflowStepRuns(threadActivities ?? []),
     [threadActivities],
@@ -587,6 +597,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       activeWorkflowInputMessageId,
+      workflowDecisionAnswers,
       workflowStepRuns,
       ...(workflowRunStatus ? { workflowRunStatus } : {}),
       onSubmitRecipeCardAction,
@@ -610,6 +621,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       activeWorkflowInputMessageId,
+      workflowDecisionAnswers,
       workflowStepRuns,
       workflowRunStatus,
       onSubmitRecipeCardAction,
@@ -1037,7 +1049,9 @@ function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message
     <T3TeamSystemTimelineRow
       message={row.message}
       threadRef={ctx.threadRef}
+      {...(ctx.markdownCwd ? { markdownCwd: ctx.markdownCwd } : {})}
       activeWorkflowInputMessageId={ctx.activeWorkflowInputMessageId}
+      workflowDecisionAnswers={ctx.workflowDecisionAnswers}
       workflowStepRuns={ctx.workflowStepRuns}
       {...(ctx.workflowRunStatus ? { workflowRunStatus: ctx.workflowRunStatus } : {})}
       {...(ctx.onSubmitRecipeCardAction

@@ -22,6 +22,7 @@ import type { ChatMessage } from "~/types";
 
 import { T3TeamWorkflowQuestionProse } from "./t3team-WorkflowQuestionProse";
 import { T3TeamWorkflowDecisionAffordance } from "./t3team-messageDecisionAffordance";
+import type { T3TeamWorkflowDecisionAnswer } from "./t3team-workflowDecisionAnswers";
 
 export type WorkflowDecisionChooseHandler = (input: {
   /** The chosen option label — the reply message's display text. */
@@ -82,9 +83,12 @@ export function T3TeamWorkflowDecisionCard(props: {
   active: boolean;
   /** Terminal runs withdraw their pending ask; do not leave dead reply controls in the timeline. */
   unavailableMessage?: string | undefined;
+  /** The reply that answered this ask, when one exists — keeps the card in an answered state
+   * (question + chosen chip) instead of vanishing once a user has replied. */
+  answer?: T3TeamWorkflowDecisionAnswer | undefined;
   onChoose?: WorkflowDecisionChooseHandler | undefined;
 }) {
-  const { decision, active, unavailableMessage, onChoose } = props;
+  const { decision, active, unavailableMessage, answer, onChoose } = props;
   const [submitting, setSubmitting] = useState<string | null>(null);
   const affordance = decision.affordance;
   const unavailable = unavailableMessage !== undefined;
@@ -126,9 +130,23 @@ export function T3TeamWorkflowDecisionCard(props: {
           submitting={submitting}
           locked={locked}
           formDisabled={!active || !onChoose}
+          {...(answer ? { answeredChoice: answer.text } : {})}
           onChoose={runChoose}
         />
       )}
+
+      {/*
+        The answer is USER input, not a system notice — even though the underlying reply message
+        may itself be attributed to the workflow, the card renders it as the user's own bubble so
+        the reader never mistakes their own choice for something the system said.
+      */}
+      {answer ? (
+        <div className="mt-3 flex justify-end" data-workflow-decision-status="answered">
+          <span className="max-w-[85%] rounded-2xl bg-primary px-3 py-1.5 text-sm text-primary-foreground">
+            {answer.text}
+          </span>
+        </div>
+      ) : null}
 
       {/*
         The run is BLOCKED here. A muted one-liner read as a status note, so the card looked like a
