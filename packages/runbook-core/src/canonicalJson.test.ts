@@ -1,4 +1,4 @@
-import * as NodeVm from "node:vm";
+import * as NodeVM from "node:vm";
 
 import { describe, expect, it } from "vite-plus/test";
 
@@ -36,13 +36,13 @@ describe("@runbook/core canonicalJson strict mode", () => {
     // Unlike the Object.create(Object.create(null)) simulation above, this object literal
     // is built in an actual separate V8 realm (its own global object, its own
     // Object.prototype) via `vm.runInNewContext`, in strict mode.
-    const crossRealmLiteral = NodeVm.runInNewContext('"use strict"; ({a: 1})') as object;
+    const crossRealmLiteral = NodeVM.runInNewContext('"use strict"; ({a: 1})') as object;
 
     expect(canonicalJsonError(crossRealmLiteral)).toBeUndefined();
   });
 
   it("rejects a Map instance built via node:vm in a separate realm", () => {
-    const crossRealmMap = NodeVm.runInNewContext("new Map()") as object;
+    const crossRealmMap = NodeVM.runInNewContext("new Map()") as object;
 
     const error = canonicalJsonError(crossRealmMap);
     expect(error).toBeInstanceOf(TypeError);
