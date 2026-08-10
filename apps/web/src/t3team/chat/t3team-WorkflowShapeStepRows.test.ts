@@ -10,8 +10,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   aggregateGroupStatus,
+  type DynamicRow,
   groupDynamicRuntimeRows,
-} from "~/t3team/chat/t3team-WorkflowShapeStepRows";
+} from "~/t3team/chat/t3team-workflowShapeStepGrouping";
 import type { T3TeamWorkflowShapeProgressRow } from "~/t3team/chat/t3team-workflowShapeProgress";
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 
@@ -71,13 +72,8 @@ describe("groupDynamicRuntimeRows", () => {
 });
 
 describe("aggregateGroupStatus", () => {
-  function rowsWithPhases(phases: ReadonlyArray<T3TeamWorkflowStepEntry["phase"]>) {
-    return phases.map((phase, i) => {
-      const row = dynamicRow({ stepId: `run:${i}`, phase });
-      return row as T3TeamWorkflowShapeProgressRow & {
-        readonly runtimeStep: NonNullable<T3TeamWorkflowShapeProgressRow["runtimeStep"]>;
-      };
-    });
+  function rowsWithPhases(phases: ReadonlyArray<T3TeamWorkflowStepEntry["phase"]>): DynamicRow[] {
+    return phases.map((phase, i) => dynamicRow({ stepId: `run:${i}`, phase }) as DynamicRow);
   }
 
   it("is never merely 'pending' for a cancelled group", () => {
