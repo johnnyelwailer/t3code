@@ -13,6 +13,8 @@
 import { useState } from "react";
 import { CircleHelpIcon, CornerDownRightIcon } from "lucide-react";
 
+import type { ProjectRecipeWorkflowDecisionPayload } from "@t3tools/project-recipes";
+
 import type { ChatMessage } from "~/types";
 
 import { T3TeamWorkflowQuestionProse } from "./t3team-WorkflowQuestionProse";
