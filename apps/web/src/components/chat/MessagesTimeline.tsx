@@ -163,6 +163,7 @@ interface TimelineRowSharedState {
   onToggleTurnFold: (turnId: TurnId) => void;
   activeWorkflowInputMessageId: string | null;
   workflowDecisionAnswers: ReadonlyMap<string, T3TeamWorkflowDecisionAnswer>;
+  answeredDecisionReplyMessageIds: ReadonlySet<string>;
   workflowStepRuns: ReadonlyMap<string, T3TeamWorkflowRunProgress>;
   workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
   onSubmitRecipeCardAction?: ChatViewT3TeamExtensionProps["onSubmitRecipeCardAction"];
@@ -577,6 +578,15 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [timelineEntries],
   );
 
+  // A decision reply renders its chosen chip inline on the ask card (see
+  // `T3TeamWorkflowDecisionCard`) — its own bare user-bubble row would just repeat it. Suppress
+  // by identity of the answer message `findT3TeamWorkflowDecisionAnswers` already resolved
+  // (correlationId-matched, with a legacy adjacency fallback), not by re-deriving adjacency here.
+  const answeredDecisionReplyMessageIds = useMemo(
+    () => new Set([...workflowDecisionAnswers.values()].map((answer) => answer.answerMessageId)),
+    [workflowDecisionAnswers],
+  );
+
   const workflowStepRuns = useMemo(
     () => deriveT3TeamWorkflowStepRuns(threadActivities ?? []),
     [threadActivities],
@@ -598,6 +608,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleTurnFold,
       activeWorkflowInputMessageId,
       workflowDecisionAnswers,
+      answeredDecisionReplyMessageIds,
       workflowStepRuns,
       ...(workflowRunStatus ? { workflowRunStatus } : {}),
       onSubmitRecipeCardAction,
@@ -622,6 +633,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleTurnFold,
       activeWorkflowInputMessageId,
       workflowDecisionAnswers,
+      answeredDecisionReplyMessageIds,
       workflowStepRuns,
       workflowRunStatus,
       onSubmitRecipeCardAction,
@@ -1107,6 +1119,11 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
 
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  // This message answered a still-visible ask card, which now renders the chosen chip inline
+  // (see `T3TeamWorkflowDecisionCard`) — a second, bare bubble here would just repeat it.
+  if (ctx.answeredDecisionReplyMessageIds.has(row.message.id)) {
+    return null;
+  }
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(
     row.message.t3teamExt?.displayText ?? row.message.text,

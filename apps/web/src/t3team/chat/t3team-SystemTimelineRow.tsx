@@ -71,15 +71,10 @@ export function T3TeamSystemTimelineRow(props: {
     !(workflowDecision && message.text.trim() === workflowDecision.question.trim()) &&
     !workflowShape;
 
-  // This message IS the reply that answered a still-visible ask card above it — that card now
-  // renders the chosen chip inline, so a second, bare copy here would just repeat it (and, worse,
-  // read as a second "System" notice for what was the user's own input).
-  const isAnsweredDecisionReply = [...(workflowDecisionAnswers?.values() ?? [])].some(
-    (answer) => answer.answerMessageId === message.id,
-  );
-  if (isAnsweredDecisionReply && !workflowDecision && !workflowShape) {
-    return null;
-  }
+  // A decision reply is always posted as a `role: "user"` message (see
+  // `t3team-thread-recipe-workflow-routes-resolve.ts`), so it renders through `UserTimelineRow`,
+  // never through this system row — suppression for it lives there instead (matched by
+  // `t3teamExt.workflowReply.correlationId`, not by id-in-a-set here).
 
   if (workflowShape) {
     return (

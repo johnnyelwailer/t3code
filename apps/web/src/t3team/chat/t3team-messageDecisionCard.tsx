@@ -12,17 +12,25 @@
  */
 import { useState } from "react";
 import { CircleHelpIcon, CornerDownRightIcon } from "lucide-react";
-import {
-  isProjectRecipeWorkflowDecisionPayload,
-  PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
-  type ProjectRecipeWorkflowDecisionPayload,
-} from "@t3tools/project-recipes";
 
 import type { ChatMessage } from "~/types";
 
 import { T3TeamWorkflowQuestionProse } from "./t3team-WorkflowQuestionProse";
 import { T3TeamWorkflowDecisionAffordance } from "./t3team-messageDecisionAffordance";
 import type { T3TeamWorkflowDecisionAnswer } from "./t3team-workflowDecisionAnswers";
+// Re-exported for existing callers — the attachment lookup itself now lives in
+// `t3team-workflowDecisionAnswers.ts` so that module doesn't need to import back from here (that
+// was the other half of a type/value import cycle between the two files).
+export { getT3TeamWorkflowDecisionAttachment } from "./t3team-workflowDecisionAnswers";
+
+const ANSWER_CHIP_MAX_CHARS = 120;
+
+/** A freeform text answer can be arbitrarily long; the chip is a summary, not the transcript. */
+function truncateAnswerChipText(text: string): string {
+  return text.length <= ANSWER_CHIP_MAX_CHARS
+    ? text
+    : `${text.slice(0, ANSWER_CHIP_MAX_CHARS - 1)}…`;
+}
 
 export type WorkflowDecisionChooseHandler = (input: {
   /** The chosen option label — the reply message's display text. */
@@ -32,24 +40,6 @@ export type WorkflowDecisionChooseHandler = (input: {
   /** The ask this card was rendered for; the server rejects it if no longer pending. */
   correlationId: string;
 }) => Promise<void>;
-
-export function getT3TeamWorkflowDecisionAttachment(
-  message: Pick<ChatMessage, "t3teamExt">,
-): ProjectRecipeWorkflowDecisionPayload | null {
-  for (const attachment of message.t3teamExt?.attachments ?? []) {
-    if (attachment.kind !== "view") {
-      continue;
-    }
-    if (attachment.miniappId !== PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION) {
-      continue;
-    }
-    if (isProjectRecipeWorkflowDecisionPayload(attachment.props)) {
-      return attachment.props;
-    }
-  }
-
-  return null;
-}
 
 /**
  * The message currently awaiting the user's answer: the latest `waiting-for-input` message with
@@ -142,8 +132,11 @@ export function T3TeamWorkflowDecisionCard(props: {
       */}
       {answer ? (
         <div className="mt-3 flex justify-end" data-workflow-decision-status="answered">
-          <span className="max-w-[85%] rounded-2xl bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-            {answer.text}
+          <span
+            className="max-w-[85%] rounded-2xl bg-primary px-3 py-1.5 text-sm text-primary-foreground"
+            title={answer.text}
+          >
+            {truncateAnswerChipText(answer.text)}
           </span>
         </div>
       ) : null}
