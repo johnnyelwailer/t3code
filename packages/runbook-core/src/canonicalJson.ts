@@ -43,7 +43,12 @@ function canonicalizeArray(value: ReadonlyArray<unknown>, strict: boolean): stri
  * canonicalize to `{}` (silent data loss) and have no place in a JSON result. */
 function assertPlainObject(value: object): void {
   const proto = Object.getPrototypeOf(value) as object | null;
-  if (proto !== null && proto !== Object.prototype) {
+  // Cross-realm plain literals are accepted: an object literal built in another
+  // realm (workflow bodies run in their own realm) carries that realm's
+  // Object.prototype, which fails the identity check above but still ends the
+  // chain immediately (its own prototype is null). Class/Map/Set instances from
+  // ANY realm keep a chain of depth >= 2 and stay rejected.
+  if (proto !== null && proto !== Object.prototype && Object.getPrototypeOf(proto) !== null) {
     const name =
       (proto.constructor as { readonly name?: string } | undefined)?.name ?? "non-plain object";
     throw new TypeError(
