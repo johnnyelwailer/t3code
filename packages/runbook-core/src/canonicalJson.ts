@@ -39,13 +39,74 @@ function canonicalizeArray(value: ReadonlyArray<unknown>, strict: boolean): stri
   return `[${value.map((item) => (item === undefined ? "null" : canonicalJsonStringify(item, strict))).join(",")}]`;
 }
 
+/**
+ * Brand checks for the exotic types called out in the module doc comment (Map/Set/Date/
+ * Error/Promise) that would otherwise canonicalize to `{}` or lose data. Each check invokes
+ * a built-in accessor/method that inspects the callee's OWN internal slot rather than its
+ * prototype chain, so it still fires even when the object's prototype has been reparented
+ * (e.g. `Object.setPrototypeOf(new Map(), null)`) — a case `Object.prototype.toString` can no
+ * longer catch once the prototype (and with it, the `Symbol.toStringTag` lookup) is gone.
+ */
+const EXOTIC_BRAND_CHECKS: ReadonlyArray<[string, (value: object) => void]> = [
+  ["Map", (value) => void Map.prototype.has.call(value, undefined)],
+  ["Set", (value) => void Set.prototype.has.call(value, undefined)],
+  ["WeakMap", (value) => void WeakMap.prototype.has.call(value, {})],
+  ["WeakSet", (value) => void WeakSet.prototype.has.call(value, {})],
+  ["Date", (value) => void Date.prototype.getTime.call(value)],
+  ["RegExp", (value) => void RegExp.prototype.test.call(value, "")],
+  ["Promise", (value) => void Promise.prototype.then.call(value, undefined, undefined)],
+];
+
+function exoticBrandName(value: object): string | undefined {
+  for (const [name, check] of EXOTIC_BRAND_CHECKS) {
+    try {
+      check(value);
+      return name;
+    } catch {
+      // Wrong brand; internal slot missing. Try the next one.
+    }
+  }
+  return undefined;
+}
+
 /** Result mode only: reject objects that aren't plain records — Map/Set/class instances
- * canonicalize to `{}` (silent data loss) and have no place in a JSON result. */
+ * canonicalize to `{}` (silent data loss) and have no place in a JSON result.
+ *
+ * Primary check: `Object.prototype.toString.call(value) === "[object Object]"`. This is
+ * realm-independent (a cross-realm `{}` literal still reports "[object Object]") and catches
+ * exotic objects whose prototype is intact, including Errors and Error subclasses (their
+ * `Symbol.toStringTag` — or, for base `Error`, the `name` property — resolves through the
+ * chain). We also keep the prototype-chain-depth check as a belt-and-braces second gate,
+ * because `Symbol.toStringTag` can be used to spoof the toString tag of an otherwise-exotic
+ * object (e.g. a class instance with `[Symbol.toStringTag] = "Object"`); the depth check
+ * still rejects that case since a genuine class/Map/Set instance keeps a prototype chain of
+ * depth >= 2 even when its toString tag lies.
+ *
+ * Neither check alone catches a *prototype-tampered* exotic object — e.g.
+ * `Object.setPrototypeOf(new Map(), null)` reports `Object.prototype.toString` as
+ * "[object Object]" (the @@toStringTag lookup walks the now-null prototype chain and finds
+ * nothing) AND presents a depth of 0 (looks like a legitimate `Object.create(null)` record).
+ * That's a real, pre-existing hole neither the old depth check nor toString alone can close.
+ * We close it with a third gate: {@link exoticBrandName}, which calls built-in
+ * accessors/methods that inspect the object's own internal slot directly, independent of its
+ * prototype.
+ */
 function assertPlainObject(value: object): void {
+  const tag = Object.prototype.toString.call(value);
   const proto = Object.getPrototypeOf(value) as object | null;
-  if (proto !== null && proto !== Object.prototype) {
+  // Cross-realm plain literals are accepted: an object literal built in another
+  // realm (workflow bodies run in their own realm) carries that realm's
+  // Object.prototype, which fails the identity check above but still ends the
+  // chain immediately (its own prototype is null). Class/Map/Set instances from
+  // ANY realm keep a chain of depth >= 2 and stay rejected.
+  const looksPlainByDepth =
+    proto === null || proto === Object.prototype || Object.getPrototypeOf(proto) === null;
+  const brandName = exoticBrandName(value);
+  if (tag !== "[object Object]" || !looksPlainByDepth || brandName !== undefined) {
     const name =
-      (proto.constructor as { readonly name?: string } | undefined)?.name ?? "non-plain object";
+      brandName ??
+      (proto?.constructor as { readonly name?: string } | undefined)?.name ??
+      "non-plain object";
     throw new TypeError(
       `Cannot encode a ${name} as a workflow result; return a plain JSON object (Map/Set/class instances are not canonical JSON).`,
     );

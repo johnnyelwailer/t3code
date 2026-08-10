@@ -65,7 +65,7 @@ export function buildThreadForProject(
     lastMessageAt: now,
     messageCount: 0,
     createdAt: now,
-    ...(options?.kickoffMessage ? { kickoffMessage: options.kickoffMessage } : {}),
+    ...(options?.kickoffMessage !== undefined ? { kickoffMessage: options.kickoffMessage } : {}),
     ...(options?.kickoffPending !== undefined ? { kickoffPending: options.kickoffPending } : {}),
     ...(options?.kickoffModelSelection
       ? { kickoffModelSelection: options.kickoffModelSelection }
