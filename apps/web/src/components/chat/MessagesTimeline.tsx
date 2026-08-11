@@ -2502,11 +2502,12 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
                     onOpenChildThread();
                   }}
                   className={cn(
-                    "min-w-0 shrink truncate underline-offset-2 hover:underline",
+                    "group/child-link -mx-1 flex min-w-0 shrink items-center gap-0.5 truncate rounded px-1 hover:bg-accent/60 hover:text-foreground",
                     headingClass,
                   )}
                 >
-                  {heading}
+                  <span className="min-w-0 truncate">{heading}</span>
+                  <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground opacity-60 transition-opacity group-hover/child-link:opacity-100" />
                 </button>
               ) : (
                 <span className={cn("min-w-0 shrink truncate", headingClass)}>{heading}</span>
