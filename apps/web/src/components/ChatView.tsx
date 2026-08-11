@@ -5116,7 +5116,8 @@ function ChatViewContent(props: ChatViewProps) {
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
       text:
-        messageTextWithT3TeamContext || (hasImageOnlyContent ? IMAGE_ONLY_BOOTSTRAP_PROMPT : ""),
+        messageTextWithT3TeamContext ||
+        (composerImagesSnapshot.length > 0 ? IMAGE_ONLY_BOOTSTRAP_PROMPT : ""),
     });
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
