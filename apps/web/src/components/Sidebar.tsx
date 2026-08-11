@@ -195,6 +195,31 @@ const SETTLED_TAIL_PAGE_COUNT = 25;
 // Keep the v2 key so existing preferences survive the v2-to-default rename.
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:snoozed-expanded";
+// t3team: project scope survives a component remount (redirect fallback,
+// shell swap, HMR) via sessionStorage — see projectScopeKey below.
+const PROJECT_SCOPE_KEY_STORAGE_KEY = "t3team:sidebar:project-scope-key";
+
+function readPersistedProjectScopeKey(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(PROJECT_SCOPE_KEY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedProjectScopeKey(value: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (value === null) {
+      window.sessionStorage.removeItem(PROJECT_SCOPE_KEY_STORAGE_KEY);
+    } else {
+      window.sessionStorage.setItem(PROJECT_SCOPE_KEY_STORAGE_KEY, value);
+    }
+  } catch {
+    // sessionStorage unavailable (private mode, quota) — degrade to in-memory only.
+  }
+}
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
@@ -1965,7 +1990,18 @@ export default function Sidebar() {
 
   // Project scope: one menu above the list. Scoping filters the list without
   // making the header width depend on the number or length of project names.
-  const [projectScopeKey, setProjectScopeKey] = useState<string | null>(null);
+  // t3team: persisted in sessionStorage (not useLocalStorage's Effect-Schema
+  // storage — this is a plain string, and sessionStorage's per-tab lifetime
+  // fits a view filter better than localStorage's cross-session persistence)
+  // so any remount of this component (redirect fallback, shell swap, HMR)
+  // restores the filter instead of silently resetting it to "All projects".
+  const [projectScopeKey, setProjectScopeKeyState] = useState<string | null>(() =>
+    readPersistedProjectScopeKey(),
+  );
+  const setProjectScopeKey = useCallback((value: string | null) => {
+    setProjectScopeKeyState(value);
+    writePersistedProjectScopeKey(value);
+  }, []);
   const scopedProjectGroup = useMemo(
     () =>
       projectScopeKey === null

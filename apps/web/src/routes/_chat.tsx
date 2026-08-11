@@ -220,6 +220,20 @@ export const Route = createFileRoute("/_chat")({
       throw redirect(translation.target);
     }
     if (translation.kind === "unhandled") {
+      // t3team: the concrete unhandled path is a race, not a bad link. Both
+      // segments of `/$environmentId/$threadId` are already known here, but
+      // resolveProjectIdForThread still misses when this environment's
+      // thread shells haven't finished syncing into the entities store yet
+      // (readThreadShells() above is a synchronous snapshot of an
+      // asynchronously-populated atom) — e.g. a thread click landing right
+      // after a cold load, or for an environment whose shells are still
+      // in flight. That drops projectId to null and lands here.
+      // This redirect to /t3team used to also reset the sidebar's
+      // component-local project scope back to "All projects" on remount.
+      // Now that projectScopeKey is persisted in sessionStorage (see
+      // Sidebar.tsx), the remount restores the scope, so this fallback is
+      // safe to keep as a plain redirect rather than adding wait/passthrough
+      // logic here.
       throw redirect({ to: "/t3team" });
     }
   },
