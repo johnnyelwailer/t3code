@@ -7,7 +7,6 @@ import {
 } from "~/t3team/t3team-agentContextDrag";
 import { useT3TeamPinnedSidebarStore } from "~/t3team/t3team-pinnedSidebarStore";
 import { useT3TeamSidebarNavPreferencesStore } from "~/t3team/t3team-sidebarNavPreferencesStore";
-import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import {
   getSidebarStandaloneButtonClassName,
   type SidebarItemState,
@@ -30,8 +29,6 @@ type ProjectSidebarDashboardNavProps = {
   showJiraItems: boolean;
   currentIssueCount: number;
   currentIssuesContent: ReactNode;
-  showGitHubActivity: boolean;
-  githubItems: ReadonlyArray<GitHubWorkActivityItem>;
   githubActivityLastCheckedAt?: number;
 };
 
@@ -60,8 +57,6 @@ export function ProjectSidebarDashboardNav({
   showJiraItems,
   currentIssueCount,
   currentIssuesContent,
-  showGitHubActivity,
-  githubItems,
   githubActivityLastCheckedAt: _githubActivityLastCheckedAt,
 }: ProjectSidebarDashboardNavProps) {
   const pinItem = useT3TeamPinnedSidebarStore((state) => state.pinItem);
@@ -85,11 +80,9 @@ export function ProjectSidebarDashboardNav({
   });
   const showMyWorkThreads = showMyActivityFeed && myWorkThreadCount > 0;
   const showCurrentIssuesSection = showJiraItems && currentIssueCount > 0;
-  const showGitHubSection = showGitHubActivity && githubItems.length > 0;
-  const hasMyWorkChildren =
-    pinnedItemCount > 0 || showMyWorkThreads || showCurrentIssuesSection || showGitHubSection;
+  const hasMyWorkChildren = pinnedItemCount > 0 || showMyWorkThreads || showCurrentIssuesSection;
   const showPinnedSectionDivider =
-    pinnedItemCount > 0 && (showMyWorkThreads || showCurrentIssuesSection || showGitHubSection);
+    pinnedItemCount > 0 && (showMyWorkThreads || showCurrentIssuesSection);
   const showMyWorkSection = myWorkExpanded && hasMyWorkChildren;
   const previousAutoExpandSignalRef = useRef(myWorkAutoExpandSignal);
 
