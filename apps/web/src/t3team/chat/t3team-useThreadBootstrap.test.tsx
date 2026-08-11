@@ -152,13 +152,13 @@ afterEach(() => {
 function BranchAwareBootstrapProbe({
   backend,
   threadId,
-  isKickoffBranchQueryPending,
   initialBranch,
+  serverThread = null,
 }: {
   backend: BackendApi;
   threadId: string;
-  isKickoffBranchQueryPending: boolean;
   initialBranch: string | undefined;
+  serverThread?: unknown | null;
 }) {
   useThreadBootstrap({
     backend,
@@ -174,17 +174,16 @@ function BranchAwareBootstrapProbe({
     initialRuntimeMode: undefined,
     initialInteractionMode: undefined,
     initialBranch,
-    isKickoffBranchQueryPending,
     kickoffWorkflow: undefined,
     initialToolContext: undefined,
     onInitialUserMessageSent: undefined,
-    serverThread: null,
+    serverThread,
   });
   return null;
 }
 
-describe("useThreadBootstrap branch-query hold (F11)", () => {
-  it("holds the kickoff dispatch while the branch query is pending, then sends the resolved branch", async () => {
+describe("useThreadBootstrap branch backfill (F11)", () => {
+  it("dispatches the kickoff immediately even while the branch query is still pending, then backfills the resolved branch via thread.meta.update", async () => {
     const threadId = "thread-branch-hold-1";
     const tracked = createTrackedBackend();
 
@@ -199,35 +198,103 @@ describe("useThreadBootstrap branch-query hold (F11)", () => {
         <BranchAwareBootstrapProbe
           backend={tracked.backend}
           threadId={threadId}
-          isKickoffBranchQueryPending={true}
           initialBranch={undefined}
         />,
       );
     });
     await flush();
 
-    // While the branch query is still pending, the kickoff must not dispatch at all — sending
-    // now would lock in `branch: null` for a workspace that does have a branch.
-    expect(tracked.dispatchCommand).not.toHaveBeenCalled();
+    // The branch query being unresolved must NOT hold up the dispatch — a fresh kickoff with no
+    // branch known yet still has to reach the server, carrying `branch: null` for now.
+    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(1);
+    const [createCommand] = tracked.dispatchCommand.mock.calls[0] as [
+      { type: string; bootstrap?: { createThread?: { branch?: string | null } } },
+    ];
+    expect(createCommand.type).toBe("thread.turn.start");
+    expect(createCommand.bootstrap?.createThread?.branch).toBeNull();
 
     act(() => {
       root.render(
         <BranchAwareBootstrapProbe
           backend={tracked.backend}
           threadId={threadId}
-          isKickoffBranchQueryPending={false}
           initialBranch="feature/some-branch"
+          serverThread={null}
+        />,
+      );
+    });
+    await flush();
+
+    // The dispatch has been claimed (kickoffSent) but the server hasn't confirmed the thread
+    // exists yet (`serverThread` is still null): a backfill sent into that window is rejected
+    // server-side, so the hasServerThread gate must hold it rather than sending it.
+    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      root.render(
+        <BranchAwareBootstrapProbe
+          backend={tracked.backend}
+          threadId={threadId}
+          initialBranch="feature/some-branch"
+          serverThread={{ id: threadId }}
+        />,
+      );
+    });
+    await flush();
+
+    // Once the server confirms the thread exists, the branch is backfilled onto the
+    // already-dispatched thread rather than being lost.
+    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(2);
+    const [metaUpdateCommand] = tracked.dispatchCommand.mock.calls[1] as [
+      { type: string; threadId?: unknown; branch?: string | null; expectedBranch?: string | null },
+    ];
+    expect(metaUpdateCommand.type).toBe("thread.meta.update");
+    expect(metaUpdateCommand.threadId).toBe(threadId);
+    expect(metaUpdateCommand.branch).toBe("feature/some-branch");
+    expect(metaUpdateCommand.expectedBranch).toBeNull();
+
+    // A further render with the same resolved serverThread must not re-fire the backfill.
+    act(() => {
+      root.render(
+        <BranchAwareBootstrapProbe
+          backend={tracked.backend}
+          threadId={threadId}
+          initialBranch="feature/some-branch"
+          serverThread={{ id: threadId }}
+        />,
+      );
+    });
+    await flush();
+
+    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it("dispatches the kickoff immediately when the environment does not exist yet (fresh kickoff regression)", async () => {
+    // The environment a kickoff's branch query needs is often created BY this very dispatch — a
+    // fresh kickoff must not deadlock waiting for a query that can only resolve after the
+    // dispatch already went out.
+    const threadId = "thread-fresh-kickoff-1";
+    const tracked = createTrackedBackend();
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    containers.push(container);
+    const root = createRoot(container);
+    roots.push(root);
+
+    act(() => {
+      root.render(
+        <BranchAwareBootstrapProbe
+          backend={tracked.backend}
+          threadId={threadId}
+          initialBranch={undefined}
         />,
       );
     });
     await flush();
 
     expect(tracked.dispatchCommand).toHaveBeenCalledTimes(1);
-    const [command] = tracked.dispatchCommand.mock.calls[0] as [
-      { type: string; bootstrap?: { createThread?: { branch?: string | null } } },
-    ];
-    expect(command.type).toBe("thread.turn.start");
-    expect(command.bootstrap?.createThread?.branch).toBe("feature/some-branch");
+    expect(tracked.dispatchCommand.mock.calls[0]?.[0]?.type).toBe("thread.turn.start");
   });
 });
 

@@ -132,6 +132,8 @@ describe("kickoff handoff", () => {
         projectEnsured: true,
         threadCreateSent: false,
         kickoffSent: false,
+        dispatchedBranch: undefined,
+        branchBackfillSent: false,
       },
       environmentId: "env-1",
       threadId: "thread-handoff",

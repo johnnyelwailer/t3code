@@ -142,6 +142,10 @@ export function buildT3TeamWidgetSrcdoc(input: {
     // metric-compatible with the host app if the theme snapshot is ever unavailable.
     `body { color: var(--foreground, inherit); font-family: var(--font-sans, ${DEFAULT_SANS_FONT_STACK}); }`,
     "img, svg, video, canvas { max-width: 100%; height: auto; }",
+    // Widget-authored content can be wider than the card (wide tables, long paths). The host
+    // wrapper clips (`overflow-hidden` rounded card), so without this the overflowing part is
+    // simply unreachable — let the widget body scroll horizontally instead.
+    "body { overflow-x: auto; }",
     T3TEAM_WIDGET_ICON_CSS,
   ].join(" ");
   // CSP first: no external network at all (postMessage is unaffected by connect-src);

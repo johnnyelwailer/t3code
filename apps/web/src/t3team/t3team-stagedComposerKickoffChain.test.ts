@@ -98,6 +98,7 @@ async function bootstrapMountedThread(thread: ProjectThread, backend: BackendApi
     threadId: thread.id,
     hasServerThread: false,
     hasInitialUserMessage: Boolean(initialUserMessage),
+    hasKickoffWorkflow: thread.kickoffWorkflow !== undefined,
     hasProjectWorkspaceRoot: true,
     projectExists: true,
   });

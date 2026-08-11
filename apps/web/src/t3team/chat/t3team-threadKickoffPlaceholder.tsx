@@ -152,9 +152,7 @@ export function ThreadKickoffPlaceholder({
             <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{message}</p>
           </div>
         )}
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          Showing the local kickoff prompt until the live thread picks up the durable launch state.
-        </p>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">Starting…</p>
       </div>
     </div>
   );

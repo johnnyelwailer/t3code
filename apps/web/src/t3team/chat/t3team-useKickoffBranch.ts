@@ -6,9 +6,6 @@ const DETACHED_HEAD_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 
 export interface KickoffBranchResult {
   initialBranch: string | undefined;
-  // While true, hold the kickoff dispatch: the branch it would carry is not resolved yet, and a
-  // cold-load kickoff must not lock in `branch: null` before the real branch is known.
-  isKickoffBranchQueryPending: boolean;
 }
 
 /**
@@ -16,6 +13,13 @@ export interface KickoffBranchResult {
  * source the composer footer's branch chip reads, since the thread does not exist yet to have
  * its own. The underlying Effect atom (see ~/state/query.ts) dedupes this against the composer's
  * own query for the same cwd, so this adds no extra request.
+ *
+ * This must never hold up the kickoff dispatch itself: `thread.create`/`thread.turn.start` fire
+ * as soon as everything else is ready, carrying whatever branch is synchronously known (often
+ * none yet, since the environment the query needs may not exist until the create dispatch itself
+ * creates it — holding on it deadlocks the launch). `runThreadBootstrapEffect` watches
+ * `initialBranch` and backfills it onto the already-created thread via `thread.meta.update` once
+ * this query resolves.
  */
 export function useKickoffBranch(input: {
   environmentId: EnvironmentId | null | undefined;
@@ -38,12 +42,6 @@ export function useKickoffBranch(input: {
     rawKickoffRefName && !DETACHED_HEAD_SHA_PATTERN.test(rawKickoffRefName)
       ? rawKickoffRefName
       : undefined;
-  // The bootstrap kickoff dispatch must not fire before this query resolves: an unresolved
-  // workspace root means we don't yet know the branch, and dispatching early sends branch:null
-  // for what should have been a real branch. `isPending` clears once the query settles, even on
-  // error, so a hanging query can't block kickoff forever.
-  const isKickoffBranchQueryPending =
-    Boolean(projectWorkspaceRoot) && kickoffGitStatusQuery.isPending;
 
-  return { initialBranch, isKickoffBranchQueryPending };
+  return { initialBranch };
 }

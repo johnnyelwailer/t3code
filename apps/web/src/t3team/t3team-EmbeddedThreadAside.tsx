@@ -49,7 +49,9 @@ export function EmbeddedThreadAside({
           {...(projectSource ? { projectSource } : {})}
           {...(projectWorkspaceRoot ? { projectWorkspaceRoot } : {})}
           title={thread.title}
-          {...(thread.kickoffMessage ? { kickoffMessage: thread.kickoffMessage } : {})}
+          {...(thread.kickoffMessage !== undefined
+            ? { kickoffMessage: thread.kickoffMessage }
+            : {})}
           {...(thread.kickoffPending !== undefined
             ? { kickoffPending: thread.kickoffPending }
             : {})}

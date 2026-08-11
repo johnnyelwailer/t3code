@@ -180,6 +180,8 @@ describe("runThreadBootstrap", () => {
         projectEnsured: false,
         threadCreateSent: false,
         kickoffSent: false,
+        dispatchedBranch: undefined,
+        branchBackfillSent: false,
       },
       onInitialUserMessageSent,
     });
@@ -246,6 +248,8 @@ describe("runThreadBootstrap", () => {
         projectEnsured: false,
         threadCreateSent: false,
         kickoffSent: false,
+        dispatchedBranch: undefined,
+        branchBackfillSent: false,
       },
       onInitialUserMessageSent: undefined,
     });
@@ -307,6 +311,8 @@ describe("runThreadBootstrap", () => {
         projectEnsured: false,
         threadCreateSent: false,
         kickoffSent: false,
+        dispatchedBranch: undefined,
+        branchBackfillSent: false,
       },
       onInitialUserMessageSent: undefined,
     });
@@ -401,6 +407,8 @@ describe("runThreadBootstrap", () => {
         projectEnsured: false,
         threadCreateSent: false,
         kickoffSent: false,
+        dispatchedBranch: undefined,
+        branchBackfillSent: false,
       },
       onInitialUserMessageSent: undefined,
     });
@@ -443,6 +451,8 @@ describe("runThreadBootstrap", () => {
         projectEnsured: false,
         threadCreateSent: false,
         kickoffSent: false,
+        dispatchedBranch: undefined,
+        branchBackfillSent: false,
       },
       onInitialUserMessageSent: undefined,
     });
@@ -480,6 +490,8 @@ describe("runThreadBootstrap", () => {
         projectEnsured: false,
         threadCreateSent: false,
         kickoffSent: false,
+        dispatchedBranch: undefined,
+        branchBackfillSent: false,
       },
       onInitialUserMessageSent: undefined,
     });
@@ -522,6 +534,8 @@ describe("runThreadBootstrap", () => {
         projectEnsured: false,
         threadCreateSent: false,
         kickoffSent: false,
+        dispatchedBranch: undefined,
+        branchBackfillSent: false,
       },
       onInitialUserMessageSent: undefined,
     });

@@ -95,7 +95,7 @@ export function ThreadChatView({
     title,
   });
 
-  const { initialBranch, isKickoffBranchQueryPending } = useKickoffBranch({
+  const { initialBranch } = useKickoffBranch({
     environmentId,
     projectWorkspaceRoot,
   });
@@ -114,7 +114,6 @@ export function ThreadChatView({
     initialRuntimeMode,
     initialInteractionMode,
     initialBranch,
-    isKickoffBranchQueryPending,
     kickoffWorkflow,
     initialToolContext: turnToolContext,
     onInitialUserMessageSent,

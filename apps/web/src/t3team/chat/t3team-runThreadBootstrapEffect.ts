@@ -2,6 +2,7 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 import { readThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapDispatchRegistry";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { planThreadBootstrap } from "~/t3team/chat/t3team-threadBootstrapPlan";
+import { maybeBackfillKickoffBranch } from "~/t3team/chat/t3team-kickoffBranchBackfill";
 import { runThreadBootstrap } from "~/t3team/chat/t3team-runThreadBootstrap";
 import { resolveThreadBootstrapKickoffDefaults } from "~/t3team/chat/t3team-threadBootstrapKickoffDefaults";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
@@ -28,9 +29,6 @@ export interface RunThreadBootstrapEffectInput {
   initialRuntimeMode: RuntimeMode | undefined;
   initialInteractionMode: ProviderInteractionMode | undefined;
   initialBranch: string | undefined;
-  // While true, hold the kickoff dispatch: the branch it would carry is not resolved yet, and a
-  // cold-load kickoff must not lock in `branch: null` before the real branch is known.
-  isKickoffBranchQueryPending: boolean;
   kickoffWorkflow: T3TeamKickoffWorkflow | undefined;
   initialToolContext: T3TeamTurnToolContext | undefined;
   onInitialUserMessageSent: (() => void) | undefined;
@@ -61,7 +59,6 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     initialRuntimeMode,
     initialInteractionMode,
     initialBranch,
-    isKickoffBranchQueryPending,
     kickoffWorkflow,
     initialToolContext,
     onInitialUserMessageSent,
@@ -85,6 +82,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     threadId,
     hasServerThread: serverThread != null,
     hasInitialUserMessage: Boolean(initialUserMessage),
+    hasKickoffWorkflow: kickoffWorkflow !== undefined,
     hasProjectWorkspaceRoot: Boolean(projectWorkspaceRoot),
     projectExists,
   });
@@ -116,17 +114,27 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
   }
 
   if (bootstrapPlan.action === "none") {
+    // The dispatch already went out on an earlier pass. The branch it carried may have been
+    // `null` because the workspace's git status hadn't resolved yet — backfill it now that
+    // `initialBranch` has a value, rather than leaving the thread branchless forever.
+    maybeBackfillKickoffBranch({
+      backend,
+      threadId,
+      initialBranch,
+      hasServerThread: serverThread != null,
+      state: bootstrapPlan.state,
+    });
     return;
   }
 
-  // Hold the kickoff until the branch query settles: dispatching now would send `branch: null`
-  // for a workspace that does have one, and the next effect pass re-evaluates once
-  // `isKickoffBranchQueryPending` flips (or `retryThreadBootstrap` is called), so this state
-  // isn't claimed and the kickoff is not lost — just deferred.
-  if (bootstrapPlan.action === "kickoff" && isKickoffBranchQueryPending) {
-    updateBootstrapStatus("running");
-    return;
-  }
+  // `thread.create`/`thread.turn.start` must dispatch as soon as everything else is ready — never
+  // held for the branch query. The branch this dispatch carries is whatever is synchronously
+  // known right now (often `undefined` on a fresh kickoff, since the environment the branch query
+  // needs may not exist until this very dispatch creates it — holding on it deadlocks the launch).
+  // `maybeBackfillKickoffBranch` above sends the real branch via `thread.meta.update` once the
+  // query resolves on a later pass.
+  const dispatchedBranch = initialBranch ?? null;
+  bootstrapPlan.state.dispatchedBranch = dispatchedBranch;
 
   // Claim the dispatch synchronously, before the first `await` inside runThreadBootstrap can
   // yield: a second effect pass in the same tick would otherwise still read the un-flagged state.
@@ -152,7 +160,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     title,
     initialUserMessage,
     ...kickoffDefaults,
-    kickoffBranch: initialBranch ?? null,
+    kickoffBranch: dispatchedBranch,
     ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
     ...(initialToolContext !== undefined ? { toolContext: initialToolContext } : {}),
     createdAt,
