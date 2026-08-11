@@ -69,7 +69,6 @@ export function useProjectGitHubActivity({
   const listError = listQuery.data?.errors.find((error) => error.projectId === projectId);
   // Recomputed only when the answer itself changes, not on every render, so this reads as "the
   // moment this list last landed" rather than drifting forward on every unrelated re-render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed by data identity only
   const lastCheckedAt = useMemo(() => (listQuery.data ? Date.now() : undefined), [listQuery.data]);
 
   const activityByWorkItem = useMemo(

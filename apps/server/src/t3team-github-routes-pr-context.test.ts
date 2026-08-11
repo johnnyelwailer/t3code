@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import { PullRequestOperationError } from "@t3tools/contracts";
 import type {
@@ -203,9 +205,9 @@ const providerRegistryLayer = Layer.succeed(
 );
 
 describe("loadPullRequestContext", () => {
-  it("loads a complete pull request package including diff, comments, and snapshots", async () => {
-    const result = await Effect.runPromise(
-      loadPullRequestContext({
+  it.effect("loads a complete pull request package including diff, comments, and snapshots", () =>
+    Effect.gen(function* () {
+      const result = yield* loadPullRequestContext({
         host: "github.com",
         repository: "acme/project",
         subjectUrl: "https://github.com/acme/project/pull/42",
@@ -213,29 +215,32 @@ describe("loadPullRequestContext", () => {
         Effect.provide(
           Layer.mergeAll(pullRequestServiceLayer(), projectionLayer, providerRegistryLayer),
         ),
-      ),
-    );
+      );
 
-    expect(result.pullRequestNumber).toBe(42);
-    expect(result.diff).toContain("diff --git a/src/foo.ts b/src/foo.ts");
-    expect(result.reviews).toHaveLength(1);
-    expect(result.reviewComments).toHaveLength(1);
-    expect(result.reviewComments[0]?.line).toBe(1);
-    expect(result.issueComments).toHaveLength(1);
-    expect(result.commits).toHaveLength(1);
-    expect(result.files).toHaveLength(1);
-    expect(result.fileSnapshots[0]?.base?.contents).toContain("old");
-    expect(result.fileSnapshots[0]?.head?.contents).toContain("new");
-  });
+      expect(result.pullRequestNumber).toBe(42);
+      expect(result.diff).toContain("diff --git a/src/foo.ts b/src/foo.ts");
+      expect(result.reviews).toHaveLength(1);
+      expect(result.reviewComments).toHaveLength(1);
+      expect(result.reviewComments[0]?.line).toBe(1);
+      expect(result.issueComments).toHaveLength(1);
+      expect(result.commits).toHaveLength(1);
+      expect(result.files).toHaveLength(1);
+      expect(result.fileSnapshots[0]?.base?.contents).toContain("old");
+      expect(result.fileSnapshots[0]?.head?.contents).toContain("new");
+    }),
+  );
 
-  it("fails when no project checkout is bound to the repository", async () => {
-    const emptyProjectionLayer = Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
-      getShellSnapshot: () =>
-        Effect.succeed({ ...shellSnapshot, projects: [] } as unknown as OrchestrationShellSnapshot),
-    } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]);
+  it.effect("fails when no project checkout is bound to the repository", () =>
+    Effect.gen(function* () {
+      const emptyProjectionLayer = Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+        getShellSnapshot: () =>
+          Effect.succeed({
+            ...shellSnapshot,
+            projects: [],
+          } as unknown as OrchestrationShellSnapshot),
+      } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]);
 
-    const outcome = await Effect.runPromise(
-      Effect.exit(
+      const outcome = yield* Effect.exit(
         loadPullRequestContext({
           host: "github.com",
           repository: "acme/other-project",
@@ -245,63 +250,67 @@ describe("loadPullRequestContext", () => {
             Layer.mergeAll(pullRequestServiceLayer(), emptyProjectionLayer, providerRegistryLayer),
           ),
         ),
-      ),
-    );
-
-    expect(outcome._tag).toBe("Failure");
-    expect(JSON.stringify(outcome)).toContain("No open project checkout is bound to");
-  });
-
-  it("degrades the diff to a warning instead of looping forever when pagination repeats a cursor", async () => {
-    const diffCalls: Array<string | undefined> = [];
-    const repeatingDiff = () =>
-      Effect.sync(() => {
-        // Every page hands back the same cursor, as a provider bug might: the loop must
-        // detect the repeat rather than appending this patch forever.
-        diffCalls.push("stuck-cursor");
-        return {
-          patch: "diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-a\n+b\n",
-          truncated: true,
-          nextCursor: "stuck-cursor",
-        } satisfies PullRequestDiffResult;
-      });
-
-    const result = await Effect.runPromise(
-      loadPullRequestContext({
-        host: "github.com",
-        repository: "acme/project",
-        subjectUrl: "https://github.com/acme/project/pull/7",
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            pullRequestServiceLayer(repeatingDiff),
-            projectionLayer,
-            providerRegistryLayer,
-          ),
-        ),
-      ),
-    );
-
-    // The repeated-cursor guard fails only the diff sub-read; the rest of the bundle (detail,
-    // activity, file list) still loads, with the failure surfaced as a warning instead of
-    // taking the whole endpoint down.
-    expect(result.diff).toBeUndefined();
-    expect(result.warnings).toContain("Unable to load the pull request diff.");
-    // Once for the first page, once more to notice the cursor repeats — never unbounded.
-    expect(diffCalls.length).toBe(2);
-  });
-
-  it("degrades activity to empty-with-a-warning without failing detail or the diff", async () => {
-    const failingActivity = () =>
-      Effect.fail(
-        new PullRequestOperationError({
-          operation: "activity",
-          detail: "This host cannot provide activity right now.",
-        }),
       );
 
-    const result = await Effect.runPromise(
-      loadPullRequestContext({
+      expect(Exit.isFailure(outcome)).toBe(true);
+      expect(Exit.isFailure(outcome) ? Cause.pretty(outcome.cause) : "").toContain(
+        "No open project checkout is bound to",
+      );
+    }),
+  );
+
+  it.effect(
+    "degrades the diff to a warning instead of looping forever when pagination repeats a cursor",
+    () =>
+      Effect.gen(function* () {
+        const diffCalls: Array<string | undefined> = [];
+        const repeatingDiff = () =>
+          Effect.sync(() => {
+            // Every page hands back the same cursor, as a provider bug might: the loop must
+            // detect the repeat rather than appending this patch forever.
+            diffCalls.push("stuck-cursor");
+            return {
+              patch: "diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-a\n+b\n",
+              truncated: true,
+              nextCursor: "stuck-cursor",
+            } satisfies PullRequestDiffResult;
+          });
+
+        const result = yield* loadPullRequestContext({
+          host: "github.com",
+          repository: "acme/project",
+          subjectUrl: "https://github.com/acme/project/pull/7",
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              pullRequestServiceLayer(repeatingDiff),
+              projectionLayer,
+              providerRegistryLayer,
+            ),
+          ),
+        );
+
+        // The repeated-cursor guard fails only the diff sub-read; the rest of the bundle
+        // (detail, activity, file list) still loads, with the failure surfaced as a warning
+        // instead of taking the whole endpoint down.
+        expect(result.diff).toBeUndefined();
+        expect(result.warnings).toContain("Unable to load the pull request diff.");
+        // Once for the first page, once more to notice the cursor repeats — never unbounded.
+        expect(diffCalls.length).toBe(2);
+      }),
+  );
+
+  it.effect("degrades activity to empty-with-a-warning without failing detail or the diff", () =>
+    Effect.gen(function* () {
+      const failingActivity = () =>
+        Effect.fail(
+          new PullRequestOperationError({
+            operation: "activity",
+            detail: "This host cannot provide activity right now.",
+          }),
+        );
+
+      const result = yield* loadPullRequestContext({
         host: "github.com",
         repository: "acme/project",
         subjectUrl: "https://github.com/acme/project/pull/8",
@@ -313,48 +322,50 @@ describe("loadPullRequestContext", () => {
             providerRegistryLayer,
           ),
         ),
-      ),
-    );
+      );
 
-    expect(result.pullRequestNumber).toBe(8);
-    expect(result.diff).toContain("diff --git");
-    expect(result.reviews).toHaveLength(0);
-    expect(result.commits).toHaveLength(0);
-    expect(result.warnings).toContain(
-      "Unable to load pull request reviews, comments, and commits.",
-    );
-  });
+      expect(result.pullRequestNumber).toBe(8);
+      expect(result.diff).toContain("diff --git");
+      expect(result.reviews).toHaveLength(0);
+      expect(result.commits).toHaveLength(0);
+      expect(result.warnings).toContain(
+        "Unable to load pull request reviews, comments, and commits.",
+      );
+    }),
+  );
 
-  it("carries a truncation warning when the host reports the diff or the comments as incomplete", async () => {
-    const truncatedActivity = () => Effect.succeed({ ...activity, commentsTruncated: true });
-    const truncatedDiff = () =>
-      Effect.succeed({
-        patch: diff,
-        truncated: true,
-        nextCursor: null,
-      } satisfies PullRequestDiffResult);
+  it.effect(
+    "carries a truncation warning when the host reports the diff or the comments as incomplete",
+    () =>
+      Effect.gen(function* () {
+        const truncatedActivity = () => Effect.succeed({ ...activity, commentsTruncated: true });
+        const truncatedDiff = () =>
+          Effect.succeed({
+            patch: diff,
+            truncated: true,
+            nextCursor: null,
+          } satisfies PullRequestDiffResult);
 
-    const result = await Effect.runPromise(
-      loadPullRequestContext({
-        host: "github.com",
-        repository: "acme/project",
-        subjectUrl: "https://github.com/acme/project/pull/9",
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            pullRequestServiceLayer(truncatedDiff, truncatedActivity),
-            projectionLayer,
-            providerRegistryLayer,
+        const result = yield* loadPullRequestContext({
+          host: "github.com",
+          repository: "acme/project",
+          subjectUrl: "https://github.com/acme/project/pull/9",
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              pullRequestServiceLayer(truncatedDiff, truncatedActivity),
+              projectionLayer,
+              providerRegistryLayer,
+            ),
           ),
-        ),
-      ),
-    );
+        );
 
-    expect(result.warnings).toContain(
-      "Pull request comments were truncated by the host; not every comment is included.",
-    );
-    expect(result.warnings).toContain(
-      "The pull request diff was truncated; some file changes may be incomplete.",
-    );
-  });
+        expect(result.warnings).toContain(
+          "Pull request comments were truncated by the host; not every comment is included.",
+        );
+        expect(result.warnings).toContain(
+          "The pull request diff was truncated; some file changes may be incomplete.",
+        );
+      }),
+  );
 });
