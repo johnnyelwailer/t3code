@@ -51,22 +51,48 @@ function extractPullRequestNumber(input: {
   return undefined;
 }
 
+/**
+ * The largest diff this route will assemble before giving up. A well-behaved provider finishes
+ * in a handful of slices; this exists only so a provider bug that repeats or never ends its own
+ * cursor fails loudly and quickly instead of growing `acc` and looping forever.
+ */
+const MAX_DIFF_PAGES = 100;
+
 /** `diff()` is cursor-paginated; the bundle wants the whole unified patch as one string. */
 function loadFullDiff(
   pullRequests: PullRequestService.PullRequestService["Service"],
   ref: PullRequestRef,
-): Effect.Effect<string, PullRequestService.PullRequestError, never> {
+): Effect.Effect<string, PullRequestService.PullRequestError | T3TeamAtlassianError, never> {
+  const seenCursors = new Set<string>();
   const loop = (
     cursor: string | undefined,
     acc: string,
-  ): Effect.Effect<string, PullRequestService.PullRequestError, never> =>
-    pullRequests.diff({ ...ref, ...(cursor ? { cursor } : {}) }).pipe(
+    page: number,
+  ): Effect.Effect<string, PullRequestService.PullRequestError | T3TeamAtlassianError, never> => {
+    if (page > MAX_DIFF_PAGES) {
+      return Effect.fail(
+        new T3TeamAtlassianError({
+          message: `GitHub pull request diff did not finish paginating after ${String(MAX_DIFF_PAGES)} pages.`,
+        }),
+      );
+    }
+    return pullRequests.diff({ ...ref, ...(cursor ? { cursor } : {}) }).pipe(
       Effect.flatMap((result) => {
         const next = acc + result.patch;
-        return result.nextCursor ? loop(result.nextCursor, next) : Effect.succeed(next);
+        if (!result.nextCursor) return Effect.succeed(next);
+        if (seenCursors.has(result.nextCursor)) {
+          return Effect.fail(
+            new T3TeamAtlassianError({
+              message: "GitHub pull request diff pagination returned a repeated cursor.",
+            }),
+          );
+        }
+        seenCursors.add(result.nextCursor);
+        return loop(result.nextCursor, next, page + 1);
       }),
     );
-  return loop(undefined, "");
+  };
+  return loop(undefined, "", 1);
 }
 
 export function loadPullRequestContext(

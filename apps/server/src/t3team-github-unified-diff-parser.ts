@@ -8,11 +8,9 @@ import type { GitHubPullRequestContextFile } from "./t3team-github-routes-pr-typ
  * same per-file shape without themselves changing.
  */
 
-const DIFF_HEADER_PATTERN = /^diff --git a\/(.+) b\/(.+)$/;
-
 interface ParsedFileBlock {
-  readonly oldPath: string;
-  readonly newPath: string;
+  /** The raw `diff --git ...` line, kept only as a last-resort path source. */
+  readonly headerLine: string;
   readonly lines: ReadonlyArray<string>;
 }
 
@@ -20,13 +18,12 @@ interface ParsedFileBlock {
 function splitIntoFileBlocks(diff: string): ReadonlyArray<ParsedFileBlock> {
   const lines = diff.split("\n");
   const blocks: ParsedFileBlock[] = [];
-  let current: { oldPath: string; newPath: string; lines: string[] } | null = null;
+  let current: { headerLine: string; lines: string[] } | null = null;
 
   for (const line of lines) {
-    const header = DIFF_HEADER_PATTERN.exec(line);
-    if (header) {
+    if (line.startsWith("diff --git ")) {
       if (current) blocks.push(current);
-      current = { oldPath: header[1]!, newPath: header[2]!, lines: [] };
+      current = { headerLine: line, lines: [] };
       continue;
     }
     if (current) current.lines.push(line);
@@ -35,31 +32,90 @@ function splitIntoFileBlocks(diff: string): ReadonlyArray<ParsedFileBlock> {
   return blocks;
 }
 
-function isBinaryBlock(lines: ReadonlyArray<string>): boolean {
-  return lines.some(
-    (line) => line.startsWith("Binary files ") || line.startsWith("GIT binary patch"),
-  );
+function unescapeQuoted(raw: string): string {
+  return raw.replace(/\\(.)/g, "$1");
 }
 
-function resolveStatus(block: ParsedFileBlock): {
-  readonly status: "added" | "removed" | "renamed" | "modified";
-  readonly previousFilename?: string;
-} {
-  const isNewFile = block.lines.some((line) => line.startsWith("new file mode"));
-  const isDeletedFile = block.lines.some((line) => line.startsWith("deleted file mode"));
+/**
+ * The `diff --git` line itself, quoted (`"a/x y" "b/x y"`, escaped quotes/backslashes allowed) or
+ * plain. Plain paths are ambiguous wherever they contain their own literal `" b/"` — git never
+ * quotes a path for spaces alone — so the non-rename case (paths equal once the `a/`/`b/` prefix
+ * is stripped) is resolved exactly, by requiring the two halves to match; a genuine unquoted
+ * rename through an ambiguous path falls back to the first `" b/"`, same as before this fix.
+ */
+function parseDiffGitHeaderLine(line: string): { old: string; new: string } | null {
+  const rest = line.slice("diff --git ".length);
+  const quoted = /^"((?:\\.|[^"\\])*)" "((?:\\.|[^"\\])*)"$/.exec(rest);
+  if (quoted) {
+    const old = unescapeQuoted(quoted[1]!);
+    const next = unescapeQuoted(quoted[2]!);
+    return { old: old.replace(/^a\//, ""), new: next.replace(/^b\//, "") };
+  }
+  if (!rest.startsWith("a/")) return null;
+  const afterA = rest.slice(2);
+  const candidates: Array<{ old: string; new: string }> = [];
+  let searchFrom = 0;
+  for (;;) {
+    const idx = afterA.indexOf(" b/", searchFrom);
+    if (idx === -1) break;
+    candidates.push({ old: afterA.slice(0, idx), new: afterA.slice(idx + 3) });
+    searchFrom = idx + 1;
+  }
+  const exact = candidates.find((candidate) => candidate.old === candidate.new);
+  return exact ?? candidates[0] ?? null;
+}
+
+function stripDevNullPrefix(line: string, prefix: string, devNull: string): string | null {
+  if (line === devNull) return null;
+  return line.startsWith(prefix) ? line.slice(prefix.length) : null;
+}
+
+/**
+ * The header line is only a fallback: `---`/`+++` (or `rename from`/`rename to`) are authoritative
+ * whenever present, because they carry one path each with no ambiguity to resolve, unlike the
+ * combined `diff --git a/... b/...` line.
+ */
+function resolvePaths(block: ParsedFileBlock): { oldPath: string; newPath: string } {
   const renameFrom = block.lines
     .find((line) => line.startsWith("rename from "))
     ?.slice("rename from ".length);
   const renameTo = block.lines
     .find((line) => line.startsWith("rename to "))
     ?.slice("rename to ".length);
+  if (renameFrom !== undefined && renameTo !== undefined) {
+    return { oldPath: renameFrom, newPath: renameTo };
+  }
+
+  const minusLine = block.lines.find((line) => line.startsWith("--- "));
+  const plusLine = block.lines.find((line) => line.startsWith("+++ "));
+  const fromMinus = minusLine ? stripDevNullPrefix(minusLine, "--- a/", "--- /dev/null") : null;
+  const fromPlus = plusLine ? stripDevNullPrefix(plusLine, "+++ b/", "+++ /dev/null") : null;
+  if (fromMinus !== null || fromPlus !== null) {
+    return { oldPath: fromMinus ?? fromPlus!, newPath: fromPlus ?? fromMinus! };
+  }
+
+  const fromHeader = parseDiffGitHeaderLine(block.headerLine);
+  if (fromHeader) return { oldPath: fromHeader.old, newPath: fromHeader.new };
+  return { oldPath: "unknown", newPath: "unknown" };
+}
+
+function isBinaryBlock(lines: ReadonlyArray<string>): boolean {
+  return lines.some(
+    (line) => line.startsWith("Binary files ") || line.startsWith("GIT binary patch"),
+  );
+}
+
+function resolveStatus(
+  block: ParsedFileBlock,
+  paths: { oldPath: string; newPath: string },
+): { readonly status: "added" | "removed" | "renamed" | "modified" } {
+  const isNewFile = block.lines.some((line) => line.startsWith("new file mode"));
+  const isDeletedFile = block.lines.some((line) => line.startsWith("deleted file mode"));
+  const isRename = block.lines.some((line) => line.startsWith("rename from "));
 
   if (isNewFile) return { status: "added" };
   if (isDeletedFile) return { status: "removed" };
-  if (renameFrom && renameTo) return { status: "renamed", previousFilename: renameFrom };
-  if (block.oldPath !== block.newPath) {
-    return { status: "renamed", previousFilename: block.oldPath };
-  }
+  if (isRename || paths.oldPath !== paths.newPath) return { status: "renamed" };
   return { status: "modified" };
 }
 
@@ -75,11 +131,21 @@ function extractPatch(lines: ReadonlyArray<string>): string | undefined {
   return patchLines.join("\n");
 }
 
+/**
+ * `---`/`+++` only mean "file header" in the preamble before the first hunk; inside a hunk they
+ * are ordinary two-character content (an added line starting "++", a removed line starting "--")
+ * with the diff's own `+`/`-` marker in front of it, and must count as such.
+ */
 function countChanges(lines: ReadonlyArray<string>): { additions: number; deletions: number } {
   let additions = 0;
   let deletions = 0;
+  let inHunk = false;
   for (const line of lines) {
-    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("@@")) {
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk && (line.startsWith("+++") || line.startsWith("---"))) continue;
     if (line.startsWith("+")) additions += 1;
     else if (line.startsWith("-")) deletions += 1;
   }
@@ -92,21 +158,22 @@ function countChanges(lines: ReadonlyArray<string>): { additions: number; deleti
  */
 export function parseUnifiedDiffToFiles(diff: string): ReadonlyArray<GitHubPullRequestContextFile> {
   return splitIntoFileBlocks(diff).map((block) => {
+    const paths = resolvePaths(block);
     const binary = isBinaryBlock(block.lines);
-    const { status, previousFilename } = resolveStatus(block);
+    const { status } = resolveStatus(block, paths);
     const patch = binary ? undefined : extractPatch(block.lines);
     const { additions, deletions } = binary
       ? { additions: 0, deletions: 0 }
       : countChanges(block.lines);
 
     return {
-      filename: block.newPath,
+      filename: paths.newPath,
       status,
       additions,
       deletions,
       changes: additions + deletions,
       ...(patch ? { patch } : {}),
-      ...(previousFilename ? { previous_filename: previousFilename } : {}),
+      ...(status === "renamed" ? { previous_filename: paths.oldPath } : {}),
     } satisfies GitHubPullRequestContextFile;
   });
 }

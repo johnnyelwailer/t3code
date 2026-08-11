@@ -172,4 +172,94 @@ describe("parseUnifiedDiffToFiles", () => {
     expect(files[1]?.status).toBe("renamed");
     expect(files[2]?.patch).toBeUndefined();
   });
+
+  it("parses a quoted diff --git header for a path containing spaces", () => {
+    const diff = [
+      'diff --git "a/src/my file.ts" "b/src/my file.ts"',
+      "index 111aaaa..222bbbb 100644",
+      "--- a/src/my file.ts",
+      "+++ b/src/my file.ts",
+      "@@ -1 +1 @@",
+      "-old",
+      "+new",
+      "",
+    ].join("\n");
+
+    const files = parseUnifiedDiffToFiles(diff);
+
+    expect(files[0]).toMatchObject({
+      filename: "src/my file.ts",
+      status: "modified",
+      additions: 1,
+      deletions: 1,
+    });
+  });
+
+  it("parses a quoted diff --git header with an escaped quote in the path", () => {
+    const diff = [
+      'diff --git "a/src/say \\"hi\\".ts" "b/src/say \\"hi\\".ts"',
+      "index 111aaaa..222bbbb 100644",
+      '--- a/src/say "hi".ts',
+      '+++ b/src/say "hi".ts',
+      "@@ -1 +1 @@",
+      "-old",
+      "+new",
+      "",
+    ].join("\n");
+
+    const files = parseUnifiedDiffToFiles(diff);
+
+    expect(files[0]?.filename).toBe('src/say "hi".ts');
+  });
+
+  it("resolves an unquoted spaced path from the ---/+++ lines rather than the ambiguous header", () => {
+    // The naive `a\/(.+) b\/(.+)` split would cut at the first " b/" inside the path itself.
+    const diff = [
+      "diff --git a/src/a b/thing.ts b/src/a b/thing.ts",
+      "index 111aaaa..222bbbb 100644",
+      "--- a/src/a b/thing.ts",
+      "+++ b/src/a b/thing.ts",
+      "@@ -1 +1 @@",
+      "-old",
+      "+new",
+      "",
+    ].join("\n");
+
+    const files = parseUnifiedDiffToFiles(diff);
+
+    expect(files[0]?.filename).toBe("src/a b/thing.ts");
+    expect(files).toHaveLength(1);
+  });
+
+  it("falls back to the self-consistent split of an unquoted spaced header when no ---/+++ lines exist", () => {
+    const diff = [
+      "diff --git a/assets/a b/logo.png b/assets/a b/logo.png",
+      "index 111aaaa..222bbbb 100644",
+      "Binary files a/assets/a b/logo.png and b/assets/a b/logo.png differ",
+      "",
+    ].join("\n");
+
+    const files = parseUnifiedDiffToFiles(diff);
+
+    expect(files[0]?.filename).toBe("assets/a b/logo.png");
+  });
+
+  it("counts an added line whose own content starts with ++ as one addition, not a header", () => {
+    const diff = [
+      "diff --git a/src/foo.ts b/src/foo.ts",
+      "index 111aaaa..222bbbb 100644",
+      "--- a/src/foo.ts",
+      "+++ b/src/foo.ts",
+      "@@ -1,2 +1,2 @@",
+      "-normal line",
+      "+++incremented;",
+      "-count;",
+      "--count;",
+      "",
+    ].join("\n");
+
+    const files = parseUnifiedDiffToFiles(diff);
+
+    expect(files[0]).toMatchObject({ additions: 1, deletions: 3 });
+  });
 });

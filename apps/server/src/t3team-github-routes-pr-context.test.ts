@@ -154,18 +154,20 @@ const activity: PullRequestActivity = {
 const diff =
   "diff --git a/src/foo.ts b/src/foo.ts\n--- a/src/foo.ts\n+++ b/src/foo.ts\n@@ -1 +1 @@\n-export const value = 'old';\n+export const value = 'new';\n";
 
-function pullRequestServiceLayer() {
+function pullRequestServiceLayer(diffImpl?: () => Effect.Effect<PullRequestDiffResult, never>) {
   const service = PullRequestService.PullRequestService.of({
     list: () => Effect.die("not used"),
     listStats: () => Effect.die("not used"),
     detail: () => Effect.succeed(detail),
     activity: () => Effect.succeed(activity),
-    diff: () =>
-      Effect.succeed({
-        patch: diff,
-        truncated: false,
-        nextCursor: null,
-      } satisfies PullRequestDiffResult),
+    diff:
+      diffImpl ??
+      (() =>
+        Effect.succeed({
+          patch: diff,
+          truncated: false,
+          nextCursor: null,
+        } satisfies PullRequestDiffResult)),
     diffFileContents: () =>
       Effect.succeed({
         oldContents: "export const value = 'old';\n",
@@ -223,5 +225,37 @@ describe("loadPullRequestContext", () => {
 
     expect(outcome._tag).toBe("Failure");
     expect(JSON.stringify(outcome)).toContain("No open project checkout is bound to");
+  });
+
+  it("fails instead of looping forever when diff pagination repeats the same cursor", async () => {
+    const diffCalls: Array<string | undefined> = [];
+    const repeatingDiff = () =>
+      Effect.sync(() => {
+        // Every page hands back the same cursor, as a provider bug might: the loop must
+        // detect the repeat rather than appending this patch forever.
+        diffCalls.push("stuck-cursor");
+        return {
+          patch: "diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-a\n+b\n",
+          truncated: true,
+          nextCursor: "stuck-cursor",
+        } satisfies PullRequestDiffResult;
+      });
+
+    const outcome = await Effect.runPromise(
+      Effect.exit(
+        loadPullRequestContext({
+          host: "github.com",
+          repository: "acme/project",
+          subjectUrl: "https://github.com/acme/project/pull/7",
+        }).pipe(
+          Effect.provide(Layer.merge(pullRequestServiceLayer(repeatingDiff), projectionLayer)),
+        ),
+      ),
+    );
+
+    expect(outcome._tag).toBe("Failure");
+    expect(JSON.stringify(outcome)).toContain("repeated cursor");
+    // Once for the first page, once more to notice the cursor repeats — never unbounded.
+    expect(diffCalls.length).toBe(2);
   });
 });
