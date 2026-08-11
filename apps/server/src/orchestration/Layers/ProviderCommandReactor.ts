@@ -7,12 +7,14 @@ import {
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
+  type ServerSettings,
   ThreadId,
   type ProviderSession,
   type RuntimeMode,
   type TurnId,
 } from "@t3tools/contracts";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
+import { isModelSelectionProviderEnabled } from "@t3tools/shared/serverSettings";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -43,10 +45,36 @@ import {
   resolveSourceControlWriterModelSelection,
   ServerSettingsService,
 } from "../../serverSettings.ts";
+import { getConfiguredTextGenerationModelSelection } from "../../t3team-configuredDefaultModelSelection.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
+
+// Aux-generation (title) model selection, in priority order:
+//   1. The env-configured Nexplore policy, unconditionally — a deployment pinning aux generation
+//      on-prem must never have titles routed to the thread's (possibly cloud) provider.
+//   2. The thread's own model, so title generation doesn't force the inference gateway to swap
+//      models mid-stream — but only when that instance is actually registered/enabled (mirrors
+//      the settings validation in serverSettings.ts's resolveTextGenerationProvider and how
+//      TextGeneration.resolveInstance fails on an unregistered instance); an unavailable thread
+//      instance falls back to settings instead of silently never titling.
+//   3. settings.textGenerationModelSelection.
+// Options (effort/thinking/fastMode/ultracode) are stripped — aux generation only needs
+// { instanceId, model }.
+const resolveAuxTextGenerationModelSelection = (
+  settings: ServerSettings,
+  threadModelSelection: ModelSelection | undefined,
+): ModelSelection => {
+  const policySelection = getConfiguredTextGenerationModelSelection();
+  const validatedThreadSelection =
+    threadModelSelection && isModelSelectionProviderEnabled(settings, threadModelSelection)
+      ? threadModelSelection
+      : undefined;
+  const resolved =
+    policySelection ?? validatedThreadSelection ?? settings.textGenerationModelSelection;
+  return { instanceId: resolved.instanceId, model: resolved.model };
+};
 
 type ProviderIntentEvent = Extract<
   OrchestrationEvent,
@@ -866,8 +894,22 @@ const make = Effect.gen(function* () {
     }) {
       const attachments = input.attachments ?? [];
       yield* Effect.gen(function* () {
-        const { textGenerationModelSelection: modelSelection } =
-          yield* serverSettingsService.getSettings;
+        const thread = yield* resolveThread(input.threadId);
+        if (!thread) return;
+        if (!canReplaceThreadTitle(thread.title, input.titleSeed)) {
+          return;
+        }
+
+        // Aux generation (title) must inherit the thread's own model rather than a
+        // separate default, otherwise every title generation forces the inference
+        // gateway to swap models and stalls the thread's own in-flight stream — but a
+        // configured Nexplore policy always wins, and an unavailable instance falls
+        // back to settings. See resolveAuxTextGenerationModelSelection.
+        const settings = yield* serverSettingsService.getSettings;
+        const modelSelection = resolveAuxTextGenerationModelSelection(
+          settings,
+          thread.modelSelection,
+        );
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: input.cwd,
@@ -877,9 +919,9 @@ const make = Effect.gen(function* () {
         });
         if (!generated) return;
 
-        const thread = yield* resolveThread(input.threadId);
-        if (!thread) return;
-        if (!canReplaceThreadTitle(thread.title, input.titleSeed)) {
+        const latestThread = yield* resolveThread(input.threadId);
+        if (!latestThread) return;
+        if (!canReplaceThreadTitle(latestThread.title, input.titleSeed)) {
           return;
         }
 
@@ -929,8 +971,16 @@ const make = Effect.gen(function* () {
         thread,
         projects: project ? [project] : [],
       }) ?? process.cwd();
-    const { textGenerationModelSelection: modelSelection } =
-      yield* serverSettingsService.getSettings;
+    // Inherit the thread's own model for regeneration too, for the same reason as
+    // maybeGenerateThreadTitleForFirstTurn: a separate default model forces a
+    // gateway model swap that stalls the thread's in-flight stream — subject to the
+    // same policy-override and availability fallback. See
+    // resolveAuxTextGenerationModelSelection.
+    const regenerationSettings = yield* serverSettingsService.getSettings;
+    const modelSelection = resolveAuxTextGenerationModelSelection(
+      regenerationSettings,
+      thread.modelSelection,
+    );
     const generated = yield* textGeneration.generateThreadTitle({
       cwd,
       message,

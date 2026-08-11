@@ -4,6 +4,7 @@ import { useBackend } from "~/t3team/backend/t3team-index";
 import { ThreadChatViewBody } from "~/t3team/chat/t3team-ThreadChatViewBody";
 import { ExternalSessionReadOnlyOverlay } from "~/t3team/chat/t3team-ExternalSessionReadOnlyOverlay";
 import { useExternalSessionReadOnly } from "~/t3team/chat/t3team-useExternalSessionReadOnly";
+import { useKickoffBranch } from "~/t3team/chat/t3team-useKickoffBranch";
 import { useThreadBootstrap } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { useT3TeamDraftMutationIngest } from "~/t3team/chat/t3team-useDraftMutationIngest";
@@ -94,6 +95,11 @@ export function ThreadChatView({
     title,
   });
 
+  const { initialBranch, isKickoffBranchQueryPending } = useKickoffBranch({
+    environmentId,
+    projectWorkspaceRoot,
+  });
+
   const { bootstrapStatus, retryThreadBootstrap } = useThreadBootstrap({
     backend,
     environmentId,
@@ -107,6 +113,8 @@ export function ThreadChatView({
     initialModelSelection,
     initialRuntimeMode,
     initialInteractionMode,
+    initialBranch,
+    isKickoffBranchQueryPending,
     kickoffWorkflow,
     initialToolContext: turnToolContext,
     onInitialUserMessageSent,
