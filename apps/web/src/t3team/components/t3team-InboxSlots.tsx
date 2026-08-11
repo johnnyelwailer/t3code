@@ -8,6 +8,7 @@ import {
 } from "~/t3team/t3team-useInboxWorkItems";
 import { InboxWorkItemRows } from "~/t3team/components/t3team-InboxWorkItemRows";
 import { ProjectSidebarHeader } from "~/t3team/components/t3team-ProjectSidebarHeader";
+import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
 
 /**
  * The only two places T3 Team reaches into upstream's Inbox sidebar.
@@ -47,6 +48,32 @@ export function InboxThreadAttribution({ threadId }: { threadId: string }): Reac
       className="shrink-0 truncate rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium text-sidebar-muted-foreground"
     >
       {attribution.displayId}
+    </span>
+  );
+}
+
+/**
+ * Muted "N sub-runs" chip for a thread that has sub-runbook child threads
+ * (Epic: first-class sub-runbooks). Children themselves are filtered out of
+ * the Work-lens row list elsewhere (`t3team-useChildThreadRelations.ts`); this
+ * chip is the only trace of them left on the parent row.
+ */
+export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode {
+  const { subRunCountsByParentId } = useT3TeamChildThreadRelations();
+  const counts = subRunCountsByParentId.get(threadId);
+  if (!counts || counts.total === 0) {
+    return null;
+  }
+  const label =
+    counts.running > 0
+      ? `${counts.total} sub-runs · ${counts.running} active`
+      : `${counts.total} sub-runs`;
+  return (
+    <span
+      data-t3team-sub-runs-chip
+      className="shrink-0 truncate rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium text-sidebar-muted-foreground"
+    >
+      {label}
     </span>
   );
 }

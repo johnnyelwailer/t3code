@@ -140,6 +140,7 @@ import {
   deriveT3TeamWorkflowStepRuns,
   type T3TeamWorkflowRunProgress,
 } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import { useThreadShell } from "~/state/entities";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -2405,6 +2406,12 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
 }) {
   const { workEntry, workspaceRoot } = props;
   const activity = use(TimelineRowActivityCtx);
+  // t3team: "Started child session …" rows link their title into the child
+  // thread. The child shares the current thread's project (start_child never
+  // moves a session to another project), so the current thread's own shell
+  // supplies the projectId `onOpenThread` needs — no new prop threading.
+  const ctx = use(TimelineRowCtx);
+  const currentThreadShell = useThreadShell(ctx.threadRef);
   const [expanded, setExpanded] = useState(false);
   const iconConfig = workToneIcon(workEntry.tone);
   const showWarningIndicator = workEntry.sourceActivityKind === "runtime.warning";
@@ -2458,6 +2465,15 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
         },
       }
     : {};
+  // t3team: only offer the link when we actually have somewhere to send it —
+  // a project id (from the current thread's shell) and the host's navigation
+  // callback both need to be present.
+  const childThreadId = workEntry.childThreadId;
+  const onOpenChildThread =
+    childThreadId && ctx.onOpenThread && currentThreadShell
+      ? () =>
+          ctx.onOpenThread?.({ projectId: currentThreadShell.projectId, threadId: childThreadId })
+      : null;
 
   return (
     <div
@@ -2478,7 +2494,23 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <div className="min-w-0 flex-1 overflow-hidden">
             <p className="flex min-w-0 w-full items-baseline gap-1.5 text-[12px] leading-5">
-              <span className={cn("min-w-0 shrink truncate", headingClass)}>{heading}</span>
+              {onOpenChildThread ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenChildThread();
+                  }}
+                  className={cn(
+                    "min-w-0 shrink truncate underline-offset-2 hover:underline",
+                    headingClass,
+                  )}
+                >
+                  {heading}
+                </button>
+              ) : (
+                <span className={cn("min-w-0 shrink truncate", headingClass)}>{heading}</span>
+              )}
               {preview && (
                 <span className="min-w-0 flex-1 truncate text-secondary-label">{preview}</span>
               )}
