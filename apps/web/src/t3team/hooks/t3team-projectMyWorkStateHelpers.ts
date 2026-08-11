@@ -92,7 +92,6 @@ export function countMatchingStatusCategory(
 }
 
 export function countProjectMyWorkActiveOptions(input: {
-  showGitHubActivity: boolean;
   statusCategory: ProjectMyWorkStatusCategory | "all";
   selectedPriority: string;
   selectedStatus: string;
@@ -101,7 +100,6 @@ export function countProjectMyWorkActiveOptions(input: {
   excludedTypeKeys: ReadonlyArray<string>;
 }): number {
   return (
-    Number(!input.showGitHubActivity) +
     Number(input.statusCategory !== "all") +
     Number(input.selectedPriority !== "all") +
     Number(input.selectedStatus !== "all") +

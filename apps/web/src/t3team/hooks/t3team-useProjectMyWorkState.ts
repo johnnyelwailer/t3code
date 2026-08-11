@@ -56,7 +56,6 @@ export function useProjectMyWorkState({
     viewMode,
     groupMode,
     statusCategory,
-    showGitHubActivity,
     hiddenKanbanColumnIds,
     hasCustomizedKanbanLanes,
     excludedTypeKeys,
@@ -130,8 +129,6 @@ export function useProjectMyWorkState({
     statusCategory,
     setStatusCategory: (value: ProjectMyWorkStatusCategory) =>
       updateState({ statusCategory: value }),
-    showGitHubActivity,
-    setShowGitHubActivity: (value: boolean) => updateState({ showGitHubActivity: value }),
     hiddenKanbanColumnIds: normalizedHiddenKanbanColumnIds,
     toggleKanbanLaneVisibility: (columnId: string, visible: boolean) =>
       setState((current) => ({
@@ -170,7 +167,6 @@ export function useProjectMyWorkState({
     setTableSortDirection: (value: ProjectMyWorkTableSortDirection) =>
       updateState({ tableSortDirection: value }),
     activeOptionsCount: countProjectMyWorkActiveOptions({
-      showGitHubActivity,
       statusCategory,
       selectedPriority,
       selectedStatus,
@@ -180,7 +176,6 @@ export function useProjectMyWorkState({
     }),
     resetOptionsFilters: () => {
       updateState({
-        showGitHubActivity: true,
         statusCategory: "all",
         hiddenKanbanColumnIds: [],
         hasCustomizedKanbanLanes: false,

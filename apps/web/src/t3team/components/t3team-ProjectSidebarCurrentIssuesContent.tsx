@@ -47,8 +47,8 @@ export function ProjectSidebarCurrentIssuesContent({
   ticketThreadsById,
   githubActivityByWorkItem,
   jiraLastCheckedAt,
-  githubActivityLastCheckedAt,
-  showGitHubActivity,
+  githubActivityLastCheckedAt: _githubActivityLastCheckedAt,
+  showGitHubActivity: _showGitHubActivity,
   onSelectTicket,
   onCreateTicketThread,
   onSelectThread,
@@ -86,10 +86,6 @@ export function ProjectSidebarCurrentIssuesContent({
                 ticketThreadsById={ticketThreadsById}
                 githubActivityByWorkItem={githubActivityByWorkItem}
                 {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
-                {...(githubActivityLastCheckedAt !== undefined
-                  ? { githubActivityLastCheckedAt }
-                  : {})}
-                showGitHubActivity={showGitHubActivity}
                 onSelectTicket={onSelectTicket}
                 onCreateTicketThread={onCreateTicketThread}
                 onSelectThread={onSelectThread}
@@ -112,10 +108,6 @@ export function ProjectSidebarCurrentIssuesContent({
                 ticketThreads={ticketThreadsById.get(ticket.id) ?? []}
                 {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
                 githubActivityItems={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
-                {...(githubActivityLastCheckedAt !== undefined
-                  ? { githubActivityLastCheckedAt }
-                  : {})}
-                showGitHubActivity={showGitHubActivity}
                 onSelectTicket={onSelectTicket}
                 onCreateTicketThread={onCreateTicketThread}
                 onSelectThread={onSelectThread}
@@ -142,10 +134,6 @@ export function ProjectSidebarCurrentIssuesContent({
                 ticketThreads={ticketThreadsById.get(ticket.id) ?? []}
                 {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
                 githubActivityItems={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
-                {...(githubActivityLastCheckedAt !== undefined
-                  ? { githubActivityLastCheckedAt }
-                  : {})}
-                showGitHubActivity={showGitHubActivity}
                 onSelectTicket={onSelectTicket}
                 onCreateTicketThread={onCreateTicketThread}
                 onSelectThread={onSelectThread}

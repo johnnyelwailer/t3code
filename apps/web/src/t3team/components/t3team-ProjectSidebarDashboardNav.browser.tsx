@@ -35,8 +35,6 @@ async function renderNav(
         showJiraItems={false}
         currentIssueCount={0}
         currentIssuesContent={<div data-testid="current-issues">Current issues</div>}
-        showGitHubActivity={false}
-        githubItems={[]}
         {...overrides}
       />,
       { container: host },

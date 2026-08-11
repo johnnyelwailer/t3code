@@ -14,7 +14,6 @@ export function useProjectDashboardMyWorkRecipeSupport(input: {
   readonly filteredWorkItems: ReadonlyArray<ProjectTicket>;
   readonly setQuery: (value: string) => void;
   readonly setStatusCategory: (value: ProjectDashboardMyWorkState["statusCategory"]) => void;
-  readonly setShowGitHubActivity: (value: boolean) => void;
   readonly setSelectedPriority: (value: string) => void;
   readonly setSelectedStatus: (value: string) => void;
 }) {
@@ -38,7 +37,6 @@ export function useProjectDashboardMyWorkRecipeSupport(input: {
 
         input.setQuery(outcome.nextState.query);
         input.setStatusCategory(outcome.nextState.statusCategory);
-        input.setShowGitHubActivity(outcome.nextState.showGitHubActivity);
         input.setSelectedPriority(outcome.nextState.selectedPriority);
         input.setSelectedStatus(outcome.nextState.selectedStatus);
 
