@@ -866,8 +866,18 @@ const make = Effect.gen(function* () {
     }) {
       const attachments = input.attachments ?? [];
       yield* Effect.gen(function* () {
-        const { textGenerationModelSelection: modelSelection } =
-          yield* serverSettingsService.getSettings;
+        const thread = yield* resolveThread(input.threadId);
+        if (!thread) return;
+        if (!canReplaceThreadTitle(thread.title, input.titleSeed)) {
+          return;
+        }
+
+        // Aux generation (title) must inherit the thread's own model rather than a
+        // separate default, otherwise every title generation forces the inference
+        // gateway to swap models and stalls the thread's own in-flight stream.
+        const modelSelection =
+          thread.modelSelection ??
+          (yield* serverSettingsService.getSettings).textGenerationModelSelection;
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: input.cwd,
@@ -877,9 +887,9 @@ const make = Effect.gen(function* () {
         });
         if (!generated) return;
 
-        const thread = yield* resolveThread(input.threadId);
-        if (!thread) return;
-        if (!canReplaceThreadTitle(thread.title, input.titleSeed)) {
+        const latestThread = yield* resolveThread(input.threadId);
+        if (!latestThread) return;
+        if (!canReplaceThreadTitle(latestThread.title, input.titleSeed)) {
           return;
         }
 
@@ -929,8 +939,12 @@ const make = Effect.gen(function* () {
         thread,
         projects: project ? [project] : [],
       }) ?? process.cwd();
-    const { textGenerationModelSelection: modelSelection } =
-      yield* serverSettingsService.getSettings;
+    // Inherit the thread's own model for regeneration too, for the same reason as
+    // maybeGenerateThreadTitleForFirstTurn: a separate default model forces a
+    // gateway model swap that stalls the thread's in-flight stream.
+    const modelSelection =
+      thread.modelSelection ??
+      (yield* serverSettingsService.getSettings).textGenerationModelSelection;
     const generated = yield* textGeneration.generateThreadTitle({
       cwd,
       message,
