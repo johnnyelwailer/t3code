@@ -165,12 +165,15 @@ import { Input } from "./ui/input";
 import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./ui/menu";
 import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter } from "./sidebar/SidebarChrome";
-// t3team: the fork's only structural additions to this file are the three slots imported here.
+// t3team: the fork's structural additions to this file are the slots imported here,
+// plus the child-thread relation hook used to hide sub-runbook children and chip their parent.
 import {
   InboxHeader,
+  InboxSubRunsChip,
   InboxThreadAttribution,
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
+import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
@@ -1453,6 +1456,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               )}
               {/* t3team: compact work-item attribution; renders null when there is none. */}
               <InboxThreadAttribution threadId={thread.id} />
+              {/* t3team: "N sub-runs" chip on a parent thread; renders null when it has none. */}
+              <InboxSubRunsChip threadId={thread.id} />
               {terminalStatusIcon}
               {prBadge}
               {diff ? (
@@ -1613,6 +1618,9 @@ export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
+  // t3team: sub-runbook children are filtered out of the row list below and
+  // surfaced instead as a "N sub-runs" chip on their parent (InboxSubRunsChip).
+  const { childThreadIds } = useT3TeamChildThreadRelations();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -1944,6 +1952,9 @@ export default function Sidebar() {
     const visible = threads.filter(
       (thread) =>
         thread.archivedAt === null &&
+        // t3team: sub-runbook children are folded into their parent's "N sub-runs"
+        // chip instead of appearing as flat sibling rows.
+        !childThreadIds.has(thread.id) &&
         (scopedProjectKeys === null ||
           scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
     );
@@ -2014,6 +2025,7 @@ export default function Sidebar() {
   }, [
     autoSettleAfterDays,
     changeRequestStateByKey,
+    childThreadIds,
     nowMinute,
     scopedProjectKeys,
     serverConfigs,
