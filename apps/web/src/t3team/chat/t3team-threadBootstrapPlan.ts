@@ -35,6 +35,13 @@ export function planThreadBootstrap(input: {
   threadId: string;
   hasServerThread: boolean;
   hasInitialUserMessage: boolean;
+  /**
+   * A workflow-only recipe (defineWorkflow, no definePrompt) legitimately kicks off with an EMPTY
+   * message — gating the kickoff on the message alone silently downgrades such a launch to a bare
+   * `thread.create` (thread exists, no run, no error). The workflow itself is what makes it a
+   * kickoff.
+   */
+  hasKickoffWorkflow: boolean;
   hasProjectWorkspaceRoot: boolean;
   projectExists: boolean;
 }): {
@@ -52,7 +59,7 @@ export function planThreadBootstrap(input: {
     };
   }
 
-  if (input.hasInitialUserMessage) {
+  if (input.hasInitialUserMessage || input.hasKickoffWorkflow) {
     return {
       state,
       action: state.kickoffSent ? "none" : "kickoff",

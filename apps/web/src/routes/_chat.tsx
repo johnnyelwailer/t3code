@@ -21,6 +21,8 @@ import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
+import { readThreadShells } from "../state/entities";
+import { translateUpstreamPath } from "../t3team/t3team-upstreamRouteBridge";
 
 function ChatRouteGlobalShortcuts() {
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
@@ -184,12 +186,41 @@ function ChatRouteLayout() {
 }
 
 export const Route = createFileRoute("/_chat")({
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     if (
       context.authGateState.status !== "authenticated" &&
       context.authGateState.status !== "hosted-static"
     ) {
       throw redirect({ to: "/pair", replace: true });
+    }
+
+    // T3 Team is the permanent shell: upstream's sidebar navigates with
+    // upstream's own route shapes (`/`, `/$environmentId/$threadId`,
+    // `/draft/$draftId`), all of which live under this layout route. Resolving
+    // the equivalent Team route here — synchronously, before this route ever
+    // commits — means a thread row click never renders this tree at all.
+    // Doing the same translation reactively (the __root.tsx bridge effect,
+    // which still covers deep links this beforeLoad can't reach, e.g. history
+    // navigation that bypasses the router) requires this route to mount
+    // first and then bounce away, which unmounts the whole Team shell
+    // (including the sidebar) for a frame and remounts it fresh — silently
+    // resetting any component-local sidebar state, such as the project scope
+    // selector, back to its default.
+    const translation = translateUpstreamPath(location.pathname, {
+      resolveProjectIdForThread: ({ environmentId, threadId }) =>
+        readThreadShells().find(
+          (shell) => shell.id === threadId && shell.environmentId === environmentId,
+        )?.projectId ??
+        // Deep links can arrive before the environment id is known locally; a
+        // unique thread id is still enough to place the thread.
+        readThreadShells().find((shell) => shell.id === threadId)?.projectId ??
+        null,
+    });
+    if (translation.kind === "target") {
+      throw redirect(translation.target);
+    }
+    if (translation.kind === "unhandled") {
+      throw redirect({ to: "/t3team" });
     }
   },
   component: ChatRouteLayout,

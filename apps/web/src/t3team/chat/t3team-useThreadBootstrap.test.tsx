@@ -153,10 +153,12 @@ function BranchAwareBootstrapProbe({
   backend,
   threadId,
   initialBranch,
+  serverThread = null,
 }: {
   backend: BackendApi;
   threadId: string;
   initialBranch: string | undefined;
+  serverThread?: unknown | null;
 }) {
   useThreadBootstrap({
     backend,
@@ -175,7 +177,7 @@ function BranchAwareBootstrapProbe({
     kickoffWorkflow: undefined,
     initialToolContext: undefined,
     onInitialUserMessageSent: undefined,
-    serverThread: null,
+    serverThread,
   });
   return null;
 }
@@ -217,13 +219,31 @@ describe("useThreadBootstrap branch backfill (F11)", () => {
           backend={tracked.backend}
           threadId={threadId}
           initialBranch="feature/some-branch"
+          serverThread={null}
         />,
       );
     });
     await flush();
 
-    // Once the branch resolves, it's backfilled onto the already-dispatched thread rather than
-    // being lost.
+    // The dispatch has been claimed (kickoffSent) but the server hasn't confirmed the thread
+    // exists yet (`serverThread` is still null): a backfill sent into that window is rejected
+    // server-side, so the hasServerThread gate must hold it rather than sending it.
+    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      root.render(
+        <BranchAwareBootstrapProbe
+          backend={tracked.backend}
+          threadId={threadId}
+          initialBranch="feature/some-branch"
+          serverThread={{ id: threadId }}
+        />,
+      );
+    });
+    await flush();
+
+    // Once the server confirms the thread exists, the branch is backfilled onto the
+    // already-dispatched thread rather than being lost.
     expect(tracked.dispatchCommand).toHaveBeenCalledTimes(2);
     const [metaUpdateCommand] = tracked.dispatchCommand.mock.calls[1] as [
       { type: string; threadId?: unknown; branch?: string | null; expectedBranch?: string | null },
@@ -232,6 +252,21 @@ describe("useThreadBootstrap branch backfill (F11)", () => {
     expect(metaUpdateCommand.threadId).toBe(threadId);
     expect(metaUpdateCommand.branch).toBe("feature/some-branch");
     expect(metaUpdateCommand.expectedBranch).toBeNull();
+
+    // A further render with the same resolved serverThread must not re-fire the backfill.
+    act(() => {
+      root.render(
+        <BranchAwareBootstrapProbe
+          backend={tracked.backend}
+          threadId={threadId}
+          initialBranch="feature/some-branch"
+          serverThread={{ id: threadId }}
+        />,
+      );
+    });
+    await flush();
+
+    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(2);
   });
 
   it("dispatches the kickoff immediately when the environment does not exist yet (fresh kickoff regression)", async () => {

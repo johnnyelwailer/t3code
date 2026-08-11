@@ -111,8 +111,8 @@ export function T3TeamWorkflowRunControls({
       {showMenu ? (
         <Menu>
           <MenuTrigger
-            aria-label="More orchestration actions"
-            disabled={pending !== null}
+            aria-label={showStopItem ? "More orchestration actions" : "What this run may do"}
+            disabled={pending !== null && showStopItem}
             className={ICON_BUTTON_CLASS_NAME}
           >
             <EllipsisIcon className="size-3.5" />

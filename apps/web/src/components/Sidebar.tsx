@@ -167,7 +167,7 @@ import {
   InboxThreadAttribution,
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
-import { InboxWorkNav } from "~/t3team/components/t3team-InboxWorkNav";
+import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import {
@@ -1828,6 +1828,13 @@ export default function Sidebar() {
       setProjectScopeKey(null);
     }
   }, [projectScopeKey, scopedProjectGroup]);
+  // t3team: mirror the scope for chrome outside this component (footer "My work"/"Backlog").
+  const setScopedProjectIdForChrome = useT3TeamSidebarProjectScope(
+    (state) => state.setScopedProjectId,
+  );
+  useEffect(() => {
+    setScopedProjectIdForChrome(scopedProjectGroup?.id ?? null);
+  }, [scopedProjectGroup, setScopedProjectIdForChrome]);
   // Count-only subscription: the parent needs "are there draft rows" for the
   // empty state, while SidebarDraftBlock owns the per-keystroke content
   // subscription. Selecting a number keeps typing in a draft composer from
@@ -3584,17 +3591,9 @@ export default function Sidebar() {
                       />,
                     );
                   }
-                  // t3team: Backlog / My work entry points, scoped by the project selector above.
-                  // `.id` is the group's REPRESENTATIVE project — the same one the header names
-                  // and the one every other control here acts on. `memberProjectRefs[0]` is a
-                  // different selection (array order, not preferred environment), so using it can
-                  // open a different physical project than the header says.
-                  items.push(
-                    <InboxWorkNav
-                      key="t3team-inbox-work-nav"
-                      projectId={scopedProjectGroup?.id ?? null}
-                    />,
-                  );
+                  // t3team: Backlog / My work moved to the sidebar footer (SidebarChromeFooter) —
+                  // they are navigation chrome, not stream content, and read as misplaced here.
+                  // The footer follows the scope via useT3TeamSidebarProjectScope (mirrored above).
                   // t3team: assigned/pinned work items as peers in the same stream.
                   items.push(<InboxWorkItemSection key="t3team-inbox-work-items" />);
                   for (const thread of activeThreads) {

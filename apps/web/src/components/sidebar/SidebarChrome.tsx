@@ -1,6 +1,6 @@
-import { ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import { ChartNoAxesColumnIcon, InboxIcon, ListTreeIcon, SettingsIcon } from "lucide-react";
 import { memo, useCallback } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
@@ -22,6 +22,7 @@ import {
 } from "../ui/sidebar";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdatePill } from "./SidebarUpdatePill";
+import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -133,11 +134,63 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
     void navigate({ to: "/usage" });
   }, [isMobile, navigate, setOpenMobile]);
 
+  // t3team: the sidebar's project-scope selection, mirrored out of Sidebar.tsx. "My work"
+  // follows it (scoped → that project's my-work board, otherwise the global view), and
+  // "Backlog" only exists scoped — flattened across projects it loses the hierarchy that IS
+  // the view.
+  const scopedProjectId = useT3TeamSidebarProjectScope((state) => state.scopedProjectId);
+  const handleMyWorkClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void (scopedProjectId === null
+      ? navigate({ to: "/t3team/my-work" })
+      : navigate({
+          to: "/t3team/projects/$projectId",
+          params: { projectId: scopedProjectId },
+          search: { projectView: "my-work" },
+        }));
+  }, [isMobile, navigate, scopedProjectId, setOpenMobile]);
+  const handleBacklogClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    if (scopedProjectId === null) {
+      return;
+    }
+    void navigate({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: scopedProjectId },
+      search: { projectView: "backlog" },
+    });
+  }, [isMobile, navigate, scopedProjectId, setOpenMobile]);
+  // Team-shell surfaces; this footer also renders on the plain T3 Code routes, where the target
+  // views do not exist. Router state, not window.location: this component is memoized, so a raw
+  // window read freezes at whatever path the sidebar first mounted on.
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const showTeamNav = pathname.startsWith("/t3team");
+
   return (
     <SidebarFooter className="p-[var(--sidebar-content-inset)]">
       <SidebarProviderUpdatePill />
       <SidebarUpdatePill />
       <SidebarMenu>
+        {showTeamNav ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleMyWorkClick}>
+              <InboxIcon />
+              <span>My work</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
+        {showTeamNav && scopedProjectId !== null ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleBacklogClick}>
+              <ListTreeIcon />
+              <span>Backlog</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
         <SidebarMenuItem>
           <SidebarMenuButton onClick={handleUsageClick}>
             <ChartNoAxesColumnIcon />

@@ -52,14 +52,24 @@ function maybeBackfillKickoffBranch(input: {
   backend: BackendApi;
   threadId: string;
   initialBranch: string | undefined;
+  hasServerThread: boolean;
   state: ThreadBootstrapDispatchState;
 }): void {
-  const { backend, threadId, initialBranch, state } = input;
+  const { backend, threadId, initialBranch, hasServerThread, state } = input;
 
   // Only fires for a thread THIS hook dispatched with an unresolved branch (`dispatchedBranch ===
   // null`). `undefined` means nothing was dispatched here (e.g. a server thread that showed up
   // without our bootstrap) and a string means the branch is already set — either way, no backfill.
-  if (state.dispatchedBranch !== null || state.branchBackfillSent || initialBranch === undefined) {
+  // `hasServerThread` gates on the thread provably existing server-side: `kickoffSent` flips
+  // synchronously long before `thread.create` lands, and a backfill dispatched into that window is
+  // rejected — with one interleaving (serverThread arrives while the doomed send is in flight)
+  // where the reset flag never gets another effect pass and the thread stayed branchless forever.
+  if (
+    !hasServerThread ||
+    state.dispatchedBranch !== null ||
+    state.branchBackfillSent ||
+    initialBranch === undefined
+  ) {
     return;
   }
 
@@ -130,6 +140,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     threadId,
     hasServerThread: serverThread != null,
     hasInitialUserMessage: Boolean(initialUserMessage),
+    hasKickoffWorkflow: kickoffWorkflow !== undefined,
     hasProjectWorkspaceRoot: Boolean(projectWorkspaceRoot),
     projectExists,
   });
@@ -168,6 +179,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
       backend,
       threadId,
       initialBranch,
+      hasServerThread: serverThread != null,
       state: bootstrapPlan.state,
     });
     return;
