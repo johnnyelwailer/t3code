@@ -25,6 +25,9 @@ describe("translateUpstreamPath", () => {
       "/pair",
       "/connect",
       "/connect_/callback",
+      "/pull-requests",
+      "/projects/my-project-key",
+      "/usage",
     ]) {
       expect(translateUpstreamPath(pathname, deps("p1"))).toEqual({ kind: "ignore" });
     }
