@@ -6,7 +6,7 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import { memo, useCallback } from "react";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
@@ -181,11 +181,10 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       search: { projectView: "backlog" },
     });
   }, [isMobile, navigate, scopedProjectId, setOpenMobile]);
-  // Team-shell surfaces; this footer also renders on the plain T3 Code routes, where the target
-  // views do not exist. Router state, not window.location: this component is memoized, so a raw
-  // window read freezes at whatever path the sidebar first mounted on.
-  const pathname = useLocation({ select: (location) => location.pathname });
-  const showTeamNav = pathname.startsWith("/t3team");
+  // t3team: the Team shell is the permanent product shell, so its nav targets exist from every
+  // route — including upstream-shell pages like /pull-requests or /settings. Hiding these rows
+  // off /t3team/* made "My work" vanish the moment the user opened the PR page.
+  const showTeamNav = true;
 
   return (
     <SidebarFooter className="p-[var(--sidebar-content-inset)]">
