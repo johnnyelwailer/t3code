@@ -17,8 +17,6 @@ export interface ProjectMyWorkOptionsMenuProps {
   onGroupModeChange: (value: "flat" | "hierarchy") => void;
   statusCategory: ProjectMyWorkStatusCategory;
   onStatusCategoryChange: (value: ProjectMyWorkStatusCategory) => void;
-  showGitHubActivity: boolean;
-  onShowGitHubActivityChange: (value: boolean) => void;
   hiddenKanbanColumnIds: ReadonlyArray<string>;
   onKanbanLaneVisibilityChange: (columnId: string, visible: boolean) => void;
   epicsHidden: boolean;

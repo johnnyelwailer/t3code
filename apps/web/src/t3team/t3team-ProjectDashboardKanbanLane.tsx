@@ -6,8 +6,6 @@ import {
   ProjectDashboardKanbanDroppableLane,
 } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";
 import { TicketWorkItemCard } from "~/t3team/t3team-ProjectDashboardItemViews";
-import { ProjectDashboardTicketGitHubActivity } from "~/t3team/t3team-ProjectDashboardTicketGitHubActivity";
-import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import type { ProjectDashboardKanbanOptimisticMove } from "~/t3team/t3team-projectDashboardKanbanDnd";
 import {
   buildProjectDashboardKanbanLaneHierarchy,
@@ -22,13 +20,9 @@ export function ProjectDashboardKanbanLane({
   isHierarchyMode,
   parentChildGroups,
   jiraLastCheckedAt,
-  githubLastCheckedAt,
-  showGitHubActivity,
-  githubActivityByWorkItem,
   projectId,
   onOpenTicket,
   onTicketContextMenu,
-  onGitHubActivityContextMenu,
   renderTicketExtra,
   onMoveTicketToStatus,
   optimisticMoves,
@@ -38,17 +32,9 @@ export function ProjectDashboardKanbanLane({
   isHierarchyMode: boolean;
   parentChildGroups: TicketHierarchy;
   jiraLastCheckedAt?: number;
-  githubLastCheckedAt?: number;
-  showGitHubActivity: boolean;
-  githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
   projectId: string;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
-  onGitHubActivityContextMenu: (
-    event: React.MouseEvent,
-    ticket: ProjectTicket,
-    item: GitHubWorkActivityItem,
-  ) => void;
   renderTicketExtra?: (ticket: ProjectTicket, compact: boolean) => React.ReactNode;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
   optimisticMoves: Readonly<Record<string, ProjectDashboardKanbanOptimisticMove>>;
@@ -73,7 +59,6 @@ export function ProjectDashboardKanbanLane({
           const children = laneHierarchy?.childrenByParentId.get(ticket.id) ?? [];
           const isContextOnly = !laneTicketIds.has(ticket.id);
           const isPending = optimisticMoves[ticket.id]?.pending === true;
-          const githubActivityItems = githubActivityByWorkItem.get(ticket.ref.displayId) ?? [];
 
           return (
             <T3SurfacePanel
@@ -90,29 +75,10 @@ export function ProjectDashboardKanbanLane({
                   ticket={ticket}
                   compact
                   flat
-                  githubActivityItems={githubActivityItems}
-                  showGitHubActivityTitleBadge={false}
                   {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
                   {...(isHierarchyMode ? { childCount: children.length } : {})}
                   onContextMenu={(event) => onTicketContextMenu(event, ticket)}
-                  extraChildren={
-                    renderTicketExtra ? (
-                      renderTicketExtra(ticket, true)
-                    ) : (
-                      <ProjectDashboardTicketGitHubActivity
-                        items={githubActivityItems}
-                        enabled={showGitHubActivity}
-                        limit={1}
-                        compact
-                        {...(githubLastCheckedAt !== undefined
-                          ? { lastCheckedAt: githubLastCheckedAt }
-                          : {})}
-                        onItemContextMenu={(event, item) =>
-                          onGitHubActivityContextMenu(event, ticket, item)
-                        }
-                      />
-                    )
-                  }
+                  extraChildren={renderTicketExtra ? renderTicketExtra(ticket, true) : null}
                   onOpen={() => onOpenTicket(projectId, ticket.id)}
                 />
               </ProjectDashboardKanbanDraggableCard>

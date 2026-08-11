@@ -34,14 +34,12 @@ export function ProjectMyWorkContent({
   visibleHierarchy,
   viewMode,
   groupMode,
-  showGitHubActivity,
   tableSortBy,
   tableSortDirection,
   kanbanColumns,
   parentChildGroups,
   githubActivityByWorkItem,
   jiraLastCheckedAt,
-  githubLastCheckedAt,
   onTableSortByChange,
   onTableSortDirectionChange,
   onMoveTicketToStatus,
@@ -55,25 +53,22 @@ export function ProjectMyWorkContent({
   visibleHierarchy: ProjectMyWorkVisibleHierarchy;
   viewMode: "table" | "list" | "grid" | "kanban";
   groupMode: "flat" | "hierarchy";
-  showGitHubActivity: boolean;
   tableSortBy: ProjectMyWorkTableSortBy;
   tableSortDirection: ProjectMyWorkTableSortDirection;
   kanbanColumns: ProjectTicketKanbanColumns;
   parentChildGroups: TicketHierarchy;
   githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
   jiraLastCheckedAt?: number;
-  githubLastCheckedAt?: number;
   onTableSortByChange: (value: ProjectMyWorkTableSortBy) => void;
   onTableSortDirectionChange: (value: ProjectMyWorkTableSortDirection) => void;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const {
-    getTicketAgentContext,
-    getGitHubActivityAgentContext,
-    openTicketAgentContextMenu,
-    openGitHubActivityAgentContextMenu,
-  } = useTicketAgentContext({ project, projectTickets: tickets, githubActivityByWorkItem });
+  const { getTicketAgentContext, openTicketAgentContextMenu } = useTicketAgentContext({
+    project,
+    projectTickets: tickets,
+    githubActivityByWorkItem,
+  });
   const isHierarchyMode = groupMode === "hierarchy" && viewMode !== "kanban";
   const tableRows = buildProjectMyWorkTableRows({
     isHierarchyMode,
@@ -86,15 +81,7 @@ export function ProjectMyWorkContent({
     filteredWorkItemsCount: filteredWorkItems.length,
   });
   const renderTicketExtra = (ticket: ProjectTicket, compact?: boolean) =>
-    renderProjectMyWorkTicketExtra({
-      ticket,
-      compact,
-      showGitHubActivity,
-      githubActivityByWorkItem,
-      githubLastCheckedAt,
-      onGitHubActivityContextMenu: openGitHubActivityAgentContextMenu,
-      getGitHubActivityDragCapabilities: getGitHubActivityAgentContext,
-    });
+    renderProjectMyWorkTicketExtra({ ticket, compact });
 
   if (contentState.kind === "loading") {
     return <ProjectMyWorkLoadingState />;
@@ -113,19 +100,12 @@ export function ProjectMyWorkContent({
       <ProjectMyWorkTableView
         projectId={project.id}
         rows={tableRows}
-        showGitHubActivity={showGitHubActivity}
         sortBy={tableSortBy}
         sortDirection={tableSortDirection}
-        githubActivityByWorkItem={githubActivityByWorkItem}
-        {...(githubLastCheckedAt !== undefined ? { githubLastCheckedAt } : {})}
         onSortByChange={onTableSortByChange}
         onSortDirectionChange={onTableSortDirectionChange}
-        onGitHubActivityContextMenu={openGitHubActivityAgentContextMenu}
         onTicketContextMenu={openTicketAgentContextMenu}
         onOpenTicket={onOpenTicket}
-        getGitHubActivityDragCapabilities={(ticket, item) =>
-          getGitHubActivityAgentContext(ticket, item)
-        }
       />
     );
   }
@@ -138,13 +118,9 @@ export function ProjectMyWorkContent({
         isHierarchyMode={groupMode === "hierarchy"}
         parentChildGroups={parentChildGroups}
         {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
-        {...(githubLastCheckedAt !== undefined ? { githubLastCheckedAt } : {})}
-        showGitHubActivity={showGitHubActivity}
-        githubActivityByWorkItem={githubActivityByWorkItem}
         projectId={project.id}
         onOpenTicket={onOpenTicket}
         onTicketContextMenu={openTicketAgentContextMenu}
-        onGitHubActivityContextMenu={openGitHubActivityAgentContextMenu}
         renderTicketExtra={renderTicketExtra}
         {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
       />

@@ -1,6 +1,5 @@
 import { useTicketAgentContext } from "~/t3team/hooks/t3team-useTicketAgentContext";
 import { SidebarMenuSub } from "~/t3team/components/ui/t3team-sidebar";
-import { GitHubActivityInlineList } from "~/t3team/t3team-GitHubActivityViews";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { sortSidebarItemsByStoredOrder } from "~/t3team/t3team-sidebarNavPreferences";
 import type { ProjectTicket, ViewState } from "~/t3team/t3team-types";
@@ -8,7 +7,11 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import { useMemo } from "react";
 
 import { getSidebarTicketState } from "./t3team-projectSidebarItemState";
-import { PinnedTicketFallbackRow, PinnedTicketRow } from "./t3team-ProjectSidebarPinnedTicketRows";
+import {
+  PinnedGitHubActivityRow,
+  PinnedTicketFallbackRow,
+  PinnedTicketRow,
+} from "./t3team-ProjectSidebarPinnedTicketRows";
 import { useProjectSidebarNavItemPreferences } from "./t3team-useProjectSidebarNavItemPreferences";
 import type { ResolvedPinnedSidebarItem } from "./t3team-useProjectSidebarPinnedItems";
 
@@ -20,7 +23,7 @@ export function ProjectSidebarPinnedItems({
   view,
   visibleTicketIds,
   jiraLastCheckedAt,
-  githubActivityLastCheckedAt,
+  githubActivityLastCheckedAt: _githubActivityLastCheckedAt,
   onSelectTicket,
 }: {
   project: ProjectShellProject;
@@ -123,16 +126,12 @@ export function ProjectSidebarPinnedItems({
             title={item.title}
           />
         ) : (
-          <GitHubActivityInlineList
+          <PinnedGitHubActivityRow
             key={item.pinnedItem.id}
-            items={[item.item]}
-            limit={1}
-            compact
-            {...(githubActivityLastCheckedAt !== undefined
-              ? { lastCheckedAt: githubActivityLastCheckedAt }
-              : {})}
-            onItemContextMenu={(event, activity) => {
-              openGitHubActivityAgentContextMenu(event, item.linkedWorkItem, activity, {
+            item={item.item}
+            state={{ isSelected: false, isOpen: false }}
+            onContextMenu={(event) => {
+              openGitHubActivityAgentContextMenu(event, item.linkedWorkItem, item.item, {
                 visibleInSidebar: true,
               });
             }}

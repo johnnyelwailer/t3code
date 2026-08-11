@@ -13,7 +13,6 @@ describe("project dashboard my work state", () => {
       viewMode: "kanban",
       groupMode: "hierarchy",
       statusCategory: "all",
-      showGitHubActivity: true,
       hiddenKanbanColumnIds: [],
       hasCustomizedKanbanLanes: false,
       excludedTypeKeys: [],
@@ -30,7 +29,6 @@ describe("project dashboard my work state", () => {
       viewMode: "grid",
       groupMode: "flat",
       statusCategory: "review",
-      showGitHubActivity: false,
       hiddenKanbanColumnIds: ["accepted"],
       hasCustomizedKanbanLanes: true,
       excludedTypeKeys: ["bug"],
@@ -44,7 +42,6 @@ describe("project dashboard my work state", () => {
       myWorkView: "table",
       myWorkGroup: "hierarchy",
       myWorkStatus: "active",
-      myWorkGitHub: "show",
       myWorkLanesMode: "custom",
       myWorkLanes: "in-test,accepted",
       myWorkPriority: "Critical",
@@ -59,7 +56,6 @@ describe("project dashboard my work state", () => {
       viewMode: "table",
       groupMode: "hierarchy",
       statusCategory: "active",
-      showGitHubActivity: true,
       hiddenKanbanColumnIds: ["accepted", "in-test"],
       hasCustomizedKanbanLanes: true,
       excludedTypeKeys: ["epic", "story"],
@@ -76,9 +72,28 @@ describe("project dashboard my work state", () => {
       viewMode: "kanban",
       groupMode: "hierarchy",
       statusCategory: "all",
-      showGitHubActivity: true,
       hiddenKanbanColumnIds: ["done"],
       hasCustomizedKanbanLanes: true,
+      excludedTypeKeys: [],
+      selectedPriority: "all",
+      selectedStatus: "all",
+      tableSortBy: "updated",
+      tableSortDirection: "desc",
+    });
+  });
+
+  it("ignores a stale myWorkGitHub param arriving from an old bookmarked URL", () => {
+    expect(
+      resolveProjectDashboardMyWorkState({
+        search: { myWorkQ: "q", myWorkGitHub: "show" } as ProjectDashboardMyWorkRouteSearch,
+      }),
+    ).toEqual({
+      query: "q",
+      viewMode: "kanban",
+      groupMode: "hierarchy",
+      statusCategory: "all",
+      hiddenKanbanColumnIds: [],
+      hasCustomizedKanbanLanes: false,
       excludedTypeKeys: [],
       selectedPriority: "all",
       selectedStatus: "all",

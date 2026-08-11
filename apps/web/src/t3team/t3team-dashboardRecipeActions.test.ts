@@ -116,7 +116,6 @@ describe("t3team-dashboardRecipeActions", () => {
       query: "stale",
       selectedPriority: "High",
       selectedStatus: "In Review",
-      showGitHubActivity: false,
     };
     const outcome = buildMyWorkNeedsMyActionOutcome(state, [
       createTicket({ id: "ticket-1", status: "In Review" }),
@@ -129,7 +128,6 @@ describe("t3team-dashboardRecipeActions", () => {
         query: "stale",
         selectedPriority: "High",
         selectedStatus: "In Review",
-        showGitHubActivity: false,
       },
     });
     expect(outcome?.promptText).toContain("review-stage work");

@@ -26,8 +26,6 @@ function renderNav(
       showJiraItems={false}
       currentIssueCount={0}
       currentIssuesContent={<div>Current issues</div>}
-      showGitHubActivity={false}
-      githubItems={[]}
       {...overrides}
     />,
   );
