@@ -68,12 +68,8 @@ export function ProjectMyWorkContent({
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const {
-    getTicketAgentContext,
-    getGitHubActivityAgentContext,
-    openTicketAgentContextMenu,
-    openGitHubActivityAgentContextMenu,
-  } = useTicketAgentContext({ project, projectTickets: tickets, githubActivityByWorkItem });
+  const { getTicketAgentContext, openTicketAgentContextMenu, openGitHubActivityAgentContextMenu } =
+    useTicketAgentContext({ project, projectTickets: tickets, githubActivityByWorkItem });
   const isHierarchyMode = groupMode === "hierarchy" && viewMode !== "kanban";
   const tableRows = buildProjectMyWorkTableRows({
     isHierarchyMode,
@@ -86,15 +82,7 @@ export function ProjectMyWorkContent({
     filteredWorkItemsCount: filteredWorkItems.length,
   });
   const renderTicketExtra = (ticket: ProjectTicket, compact?: boolean) =>
-    renderProjectMyWorkTicketExtra({
-      ticket,
-      compact,
-      showGitHubActivity,
-      githubActivityByWorkItem,
-      githubLastCheckedAt,
-      onGitHubActivityContextMenu: openGitHubActivityAgentContextMenu,
-      getGitHubActivityDragCapabilities: getGitHubActivityAgentContext,
-    });
+    renderProjectMyWorkTicketExtra({ ticket, compact });
 
   if (contentState.kind === "loading") {
     return <ProjectMyWorkLoadingState />;
@@ -113,19 +101,12 @@ export function ProjectMyWorkContent({
       <ProjectMyWorkTableView
         projectId={project.id}
         rows={tableRows}
-        showGitHubActivity={showGitHubActivity}
         sortBy={tableSortBy}
         sortDirection={tableSortDirection}
-        githubActivityByWorkItem={githubActivityByWorkItem}
-        {...(githubLastCheckedAt !== undefined ? { githubLastCheckedAt } : {})}
         onSortByChange={onTableSortByChange}
         onSortDirectionChange={onTableSortDirectionChange}
-        onGitHubActivityContextMenu={openGitHubActivityAgentContextMenu}
         onTicketContextMenu={openTicketAgentContextMenu}
         onOpenTicket={onOpenTicket}
-        getGitHubActivityDragCapabilities={(ticket, item) =>
-          getGitHubActivityAgentContext(ticket, item)
-        }
       />
     );
   }

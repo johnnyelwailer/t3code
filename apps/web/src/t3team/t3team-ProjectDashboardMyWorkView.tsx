@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import { ProjectDashboardUnmatchedActivity } from "~/t3team/t3team-ProjectDashboardUnmatchedActivity";
 import { ProjectMyWorkContent } from "~/t3team/t3team-ProjectMyWorkContent";
 import { ProjectMyWorkFilterBar } from "~/t3team/t3team-ProjectMyWorkFilterBar";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
@@ -182,10 +181,6 @@ export function ProjectDashboardMyWorkView({
           {...(canMoveTickets ? { onMoveTicketToStatus: moveTicketToStatus } : {})}
           onOpenTicket={onOpenTicket}
         />
-      </section>
-
-      <section>
-        <ProjectDashboardUnmatchedActivity project={project} githubActivity={githubActivity} />
       </section>
 
       {githubActivity.loading ? (

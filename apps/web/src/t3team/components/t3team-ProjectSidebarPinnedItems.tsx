@@ -1,6 +1,5 @@
 import { useTicketAgentContext } from "~/t3team/hooks/t3team-useTicketAgentContext";
 import { SidebarMenuSub } from "~/t3team/components/ui/t3team-sidebar";
-import { GitHubActivityInlineList } from "~/t3team/t3team-GitHubActivityViews";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { sortSidebarItemsByStoredOrder } from "~/t3team/t3team-sidebarNavPreferences";
 import type { ProjectTicket, ViewState } from "~/t3team/t3team-types";
@@ -20,7 +19,7 @@ export function ProjectSidebarPinnedItems({
   view,
   visibleTicketIds,
   jiraLastCheckedAt,
-  githubActivityLastCheckedAt,
+  githubActivityLastCheckedAt: _githubActivityLastCheckedAt,
   onSelectTicket,
 }: {
   project: ProjectShellProject;
@@ -33,13 +32,8 @@ export function ProjectSidebarPinnedItems({
   githubActivityLastCheckedAt?: number;
   onSelectTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const {
-    getTicketAgentContext,
-    getGitHubActivityAgentContext,
-    openTicketAgentContextMenu,
-    openTicketAgentContextMenuAt,
-    openGitHubActivityAgentContextMenu,
-  } = useTicketAgentContext({ project, projectTickets, githubActivityByWorkItem });
+  const { getTicketAgentContext, openTicketAgentContextMenu, openTicketAgentContextMenuAt } =
+    useTicketAgentContext({ project, projectTickets, githubActivityByWorkItem });
   const { orderedItemIds } = useProjectSidebarNavItemPreferences(project.id);
   const sortedItems = useMemo(
     () =>
@@ -122,27 +116,7 @@ export function ProjectSidebarPinnedItems({
             ticketId={item.ticketId}
             title={item.title}
           />
-        ) : (
-          <GitHubActivityInlineList
-            key={item.pinnedItem.id}
-            items={[item.item]}
-            limit={1}
-            compact
-            {...(githubActivityLastCheckedAt !== undefined
-              ? { lastCheckedAt: githubActivityLastCheckedAt }
-              : {})}
-            onItemContextMenu={(event, activity) => {
-              openGitHubActivityAgentContextMenu(event, item.linkedWorkItem, activity, {
-                visibleInSidebar: true,
-              });
-            }}
-            getItemDragCapabilities={(activity) =>
-              getGitHubActivityAgentContext(item.linkedWorkItem, activity, {
-                visibleInSidebar: true,
-              })
-            }
-          />
-        ),
+        ) : null,
       )}
     </SidebarMenuSub>
   );

@@ -1,7 +1,6 @@
 import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { SidebarMenuSubButton } from "~/t3team/components/ui/t3team-sidebar";
-import { GitHubActivityInlineList } from "~/t3team/t3team-GitHubActivityViews";
 import {
   T3TeamAgentContextDropOverlay,
   useT3TeamAgentContextDropTarget,
@@ -63,7 +62,7 @@ export function ProjectSidebarDashboardNav({
   currentIssuesContent,
   showGitHubActivity,
   githubItems,
-  githubActivityLastCheckedAt,
+  githubActivityLastCheckedAt: _githubActivityLastCheckedAt,
 }: ProjectSidebarDashboardNavProps) {
   const pinItem = useT3TeamPinnedSidebarStore((state) => state.pinItem);
   const showSidebarItemAtTop = useT3TeamSidebarNavPreferencesStore((state) => state.showItemAtTop);
@@ -169,24 +168,6 @@ export function ProjectSidebarDashboardNav({
           {showMyWorkThreads ? myWorkContent : null}
 
           {showCurrentIssuesSection ? currentIssuesContent : null}
-
-          {showGitHubSection ? (
-            <div className="space-y-1">
-              <div className="px-3 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">
-                GitHub items
-              </div>
-              <div className="-ml-1">
-                <GitHubActivityInlineList
-                  items={githubItems}
-                  limit={3}
-                  compact
-                  {...(githubActivityLastCheckedAt !== undefined
-                    ? { lastCheckedAt: githubActivityLastCheckedAt }
-                    : {})}
-                />
-              </div>
-            </div>
-          ) : null}
         </div>
       ) : null}
     </>
