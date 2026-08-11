@@ -5093,8 +5093,16 @@ function ChatViewContent(props: ChatViewProps) {
       }
       return;
     }
+    // The placeholder only stands in for a truly image-only send — no typed text and no other
+    // attachment (a work-item ref, etc.) that will render its own card. Those other attachments
+    // already carry their own context into the prompt below; claiming "images" and injecting
+    // this text over an empty body would be wrong on both counts for them.
+    const hasImageOnlyContent =
+      composerImagesSnapshot.length > 0 &&
+      messageTextForSend.trim().length === 0 &&
+      contextAttachmentsResult.value.length === 0;
     const t3teamMessageExt = buildContextAttachmentMessageExt(contextAttachmentsResult.value, {
-      displayText: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+      displayText: hasImageOnlyContent ? IMAGE_ONLY_BOOTSTRAP_PROMPT : messageTextForSend,
     });
     const messageTextWithT3TeamContext = appendContextAttachmentsToPrompt(
       messageTextForSend,
@@ -5107,7 +5115,9 @@ function ChatViewContent(props: ChatViewProps) {
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: messageTextWithT3TeamContext || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+      text:
+        messageTextWithT3TeamContext ||
+        (composerImagesSnapshot.length > 0 ? IMAGE_ONLY_BOOTSTRAP_PROMPT : ""),
     });
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({

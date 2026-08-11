@@ -54,7 +54,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
             "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
         )}
       />
-      <SidebarBrand onBackdrop={backdropVariant !== null} />
+      <SidebarBrand isElectron={isElectron} onBackdrop={backdropVariant !== null} />
       {pillLabel ? (
         <Badge
           className="relative z-10 ml-1 rounded-full px-1.5 text-muted-foreground"
@@ -69,12 +69,20 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   );
 });
 
-function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
+function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackdrop: boolean }) {
   return (
     <Link
       aria-label="Go to threads"
       className={cn(
-        "sidebar-brand relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2",
+        "sidebar-brand relative z-10 h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2",
+        // Titlebar inset only where native window buttons exist — on the web the brand docks
+        // left, flush with the sidebar items below it, instead of reserving phantom control
+        // space (see the same rule in `t3team-ProjectSidebarHeader.tsx`). Electron always has
+        // native controls; on the web the inset only applies once the installed PWA is running
+        // in window-controls-overlay mode (the `.wco` class toggled by windowControlsOverlay.ts).
+        isElectron
+          ? "ml-[var(--workspace-titlebar-content-left)]"
+          : "wco:ml-[var(--workspace-titlebar-content-left)]",
         onBackdrop ? "text-white" : "text-foreground",
       )}
       to="/"
