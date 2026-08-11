@@ -12,6 +12,8 @@ describe("planThreadBootstrap", () => {
       projectEnsured: true,
       threadCreateSent: true,
       kickoffSent: true,
+      dispatchedBranch: undefined,
+      branchBackfillSent: false,
     };
 
     const result = planThreadBootstrap({
@@ -28,6 +30,8 @@ describe("planThreadBootstrap", () => {
       projectEnsured: false,
       threadCreateSent: false,
       kickoffSent: false,
+      dispatchedBranch: undefined,
+      branchBackfillSent: false,
     });
     expect(result.action).toBe("create");
     expect(result.shouldEnsureProject).toBe(true);
@@ -54,6 +58,8 @@ describe("planThreadBootstrap", () => {
         projectEnsured: true,
         threadCreateSent: false,
         kickoffSent: true,
+        dispatchedBranch: undefined,
+        branchBackfillSent: false,
       },
       threadId: "thread-a",
       hasServerThread: false,

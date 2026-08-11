@@ -25,9 +25,6 @@ type ThreadBootstrapInput = {
   initialRuntimeMode: RuntimeMode | undefined;
   initialInteractionMode: ProviderInteractionMode | undefined;
   initialBranch: string | undefined;
-  // While true, hold the kickoff dispatch: the branch it would carry is not resolved yet, and a
-  // cold-load kickoff must not lock in `branch: null` before the real branch is known.
-  isKickoffBranchQueryPending?: boolean;
   kickoffWorkflow: T3TeamKickoffWorkflow | undefined;
   initialToolContext: T3TeamTurnToolContext | undefined;
   onInitialUserMessageSent: (() => void) | undefined;
@@ -48,7 +45,6 @@ export function useThreadBootstrap({
   initialRuntimeMode,
   initialInteractionMode,
   initialBranch,
-  isKickoffBranchQueryPending = false,
   kickoffWorkflow,
   initialToolContext,
   onInitialUserMessageSent,
@@ -90,7 +86,6 @@ export function useThreadBootstrap({
       initialRuntimeMode,
       initialInteractionMode,
       initialBranch,
-      isKickoffBranchQueryPending,
       kickoffWorkflow,
       initialToolContext,
       onInitialUserMessageSent: onInitialUserMessageSentRef.current,
@@ -107,7 +102,6 @@ export function useThreadBootstrap({
     environmentId,
     initialBranch,
     initialInteractionMode,
-    isKickoffBranchQueryPending,
     kickoffWorkflow,
     initialModelSelection,
     initialRuntimeMode,

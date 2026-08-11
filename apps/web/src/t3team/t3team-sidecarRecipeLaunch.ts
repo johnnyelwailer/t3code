@@ -110,6 +110,8 @@ export async function launchBundledSidecarRecipeThread(input: {
       projectEnsured: true,
       threadCreateSent: false,
       kickoffSent: false,
+      dispatchedBranch: undefined,
+      branchBackfillSent: false,
     },
     environmentId: input.environmentId,
     threadId,
