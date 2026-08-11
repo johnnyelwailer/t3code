@@ -23,6 +23,10 @@ export type UpstreamRouteTranslation =
 const PASSTHROUGH_PREFIXES = [
   "/t3team",
   "/settings",
+  // Upstream top-level pages that render in upstream's own shell — the bridge must not
+  // translate them away (a bounced /pull-requests makes the whole PR page a dead button).
+  "/pull-requests",
+  "/projects",
   "/usage",
   "/pair",
   "/connect",
