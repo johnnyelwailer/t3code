@@ -26,8 +26,12 @@ interface ComposerPrimaryActionsProps {
   isPreparingWorktree: boolean;
   hasSendableContent: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
+  /** True when the thread has descendant sub-run threads, so the stop button
+   * grows a secondary "Stop incl. sub-runs" action alongside the plain stop. */
+  hasChildThreads?: boolean | undefined;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
+  onInterruptCascade?: (() => void) | undefined;
   onImplementPlanInNewThread: () => void;
 }
 
@@ -66,8 +70,10 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   isPreparingWorktree,
   hasSendableContent,
   preserveComposerFocusOnPointerDown = false,
+  hasChildThreads = false,
   onPreviousPendingQuestion,
   onInterrupt,
+  onInterruptCascade,
   onImplementPlanInNewThread,
 }: ComposerPrimaryActionsProps) {
   const pointerFocusProps = preserveComposerFocusOnPointerDown
@@ -75,22 +81,68 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     : undefined;
   const isSendDisabled = sendDisabledReason !== null;
 
-  const renderStopGenerationButton = (insidePendingAction: boolean) => (
-    <button
-      type="button"
-      className={cn(
-        "flex cursor-pointer items-center justify-center rounded-full bg-destructive/90 text-white shadow-xs shadow-destructive/24 inset-shadow-[0_1px_--theme(--color-white/16%)] transition-all duration-150 hover:bg-destructive hover:scale-105 active:inset-shadow-[0_1px_--theme(--color-black/8%)] active:shadow-none",
-        insidePendingAction ? "size-8 sm:size-7" : "size-8 sm:h-8 sm:w-8",
-      )}
-      {...pointerFocusProps}
-      onClick={onInterrupt}
-      aria-label="Stop generation"
-    >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-        <rect x="2" y="2" width="8" height="8" rx="1.5" />
-      </svg>
-    </button>
-  );
+  const stopIconButtonClassName = (
+    insidePendingAction: boolean,
+    splitSide: "left" | "right" | null,
+  ) =>
+    cn(
+      "flex cursor-pointer items-center justify-center bg-destructive/90 text-white shadow-xs shadow-destructive/24 inset-shadow-[0_1px_--theme(--color-white/16%)] transition-all duration-150 hover:bg-destructive hover:scale-105 active:inset-shadow-[0_1px_--theme(--color-black/8%)] active:shadow-none",
+      insidePendingAction ? "size-8 sm:size-7" : "size-8 sm:h-8 sm:w-8",
+      splitSide === "left" ? "rounded-l-full rounded-r-none" : null,
+      splitSide === "right" ? "rounded-l-none rounded-r-full border-l border-l-white/20" : null,
+      splitSide === null ? "rounded-full" : null,
+    );
+
+  const renderStopGenerationButton = (insidePendingAction: boolean) => {
+    if (!hasChildThreads || !onInterruptCascade) {
+      return (
+        <button
+          type="button"
+          className={stopIconButtonClassName(insidePendingAction, null)}
+          {...pointerFocusProps}
+          onClick={onInterrupt}
+          aria-label="Stop generation"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+            <rect x="2" y="2" width="8" height="8" rx="1.5" />
+          </svg>
+        </button>
+      );
+    }
+
+    return (
+      <div className="flex items-center">
+        <button
+          type="button"
+          className={stopIconButtonClassName(insidePendingAction, "left")}
+          {...pointerFocusProps}
+          onClick={onInterrupt}
+          aria-label="Stop generation"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+            <rect x="2" y="2" width="8" height="8" rx="1.5" />
+          </svg>
+        </button>
+        <Menu>
+          <MenuTrigger
+            render={
+              <button
+                type="button"
+                className={stopIconButtonClassName(insidePendingAction, "right")}
+                aria-label="Stop options"
+                {...pointerFocusProps}
+              />
+            }
+          >
+            <ChevronDownIcon className="size-3" />
+          </MenuTrigger>
+          <MenuPopup align="end" side="top">
+            <MenuItem onClick={() => onInterruptCascade()}>Stop incl. sub-runs</MenuItem>
+          </MenuPopup>
+        </Menu>
+      </div>
+    );
+  };
 
   if (pendingAction) {
     return (

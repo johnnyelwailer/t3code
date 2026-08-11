@@ -1073,6 +1073,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           ...(command.turnId !== undefined ? { turnId: command.turnId } : {}),
+          ...(command.t3teamStopOrigin === "user" ? { byUser: true } : {}),
+          ...(command.cascade === true ? { cascade: true } : {}),
           createdAt: command.createdAt,
         },
       };

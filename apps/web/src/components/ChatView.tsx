@@ -5436,20 +5436,30 @@ function ChatViewContent(props: ChatViewProps) {
     }
   };
 
-  const onInterrupt = async () => {
+  const onInterrupt = async (options?: { readonly cascade?: boolean }) => {
     if (!activeThread) return;
     const result = await interruptThreadTurn({
       environmentId,
-      input: buildThreadTurnInterruptInput(activeThread),
+      input: buildThreadTurnInterruptInput(activeThread, options),
     });
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       setThreadError(
         activeThread.id,
-        error instanceof Error ? error.message : "Failed to interrupt the current turn.",
+        error instanceof Error
+          ? error.message
+          : options?.cascade
+            ? "Failed to stop the run and its sub-runs."
+            : "Failed to interrupt the current turn.",
       );
     }
   };
+  // Cascade stop (also interrupts descendant sub-run threads server-side) is
+  // additive UI: it rides the same "Stop generation" control. Whether the
+  // active thread actually has children is resolved server-side (a cascade
+  // stop with no descendants is a cheap no-op), so no extra client-side
+  // thread-tree lookup is needed to offer it.
+  const onInterruptCascade = () => void onInterrupt({ cascade: true });
 
   const onRespondToApproval = useCallback(
     async (requestId: ApprovalRequestId, decision: ProviderApprovalDecision) => {
@@ -6527,6 +6537,15 @@ function ChatViewContent(props: ChatViewProps) {
                             composerElementContextsRef={composerElementContextsRef}
                             onSend={onSend}
                             onInterrupt={onInterrupt}
+                            onInterruptCascade={onInterruptCascade}
+                            // DEVIATION: whether the active thread actually has
+                            // descendant sub-runs is resolved server-side (the
+                            // cascade stop is a cheap no-op with none), so this
+                            // always offers the secondary action rather than
+                            // adding a client-side thread-tree lookup just to
+                            // hide it. Revisit once a cheap "has children"
+                            // signal exists on the thread shell.
+                            hasChildThreads={Boolean(isWorking)}
                             onImplementPlanInNewThread={onImplementPlanInNewThread}
                             onRespondToApproval={onRespondToApproval}
                             onSelectActivePendingUserInputOption={

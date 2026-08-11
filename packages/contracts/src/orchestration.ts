@@ -979,6 +979,24 @@ const ThreadTurnInterruptCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   turnId: Schema.optional(TurnId),
+  /**
+   * t3team: also stop every descendant thread's active turn (walking
+   * `parentThreadId`/handoff relations), applying the same user-stop
+   * suppression to each. Additive — omitted/false keeps today's single-thread
+   * stop. See t3team-threadStopCascade.ts.
+   */
+  cascade: Schema.optional(Schema.Boolean),
+  /**
+   * t3team: who raised this stop. "user" marks a stop a person explicitly
+   * clicked (Stop generation); it suppresses auto-dispatch of queued actor
+   * messages on this thread until the user sends the next message (see
+   * t3team-actorMessageReactor.ts). Absent or "system" means fork automation
+   * raised it (workflow cancel, cascade descendant stop) and must NOT suppress
+   * actor delivery. Server side only — the client command variant deliberately
+   * cannot set it; the dispatch seam (Normalizer) stamps "user" on every stop
+   * that actually arrived from a client.
+   */
+  t3teamStopOrigin: Schema.optional(Schema.Literals(["user", "system"])),
   createdAt: IsoDateTime,
 });
 
@@ -1441,6 +1459,13 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
 export const ThreadTurnInterruptRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   turnId: Schema.optional(TurnId),
+  /** Mirrors the command's `t3teamStopOrigin === "user"` so downstream
+   * reactors (actor-message suppression) can tell a person's stop apart from
+   * fork automation without re-deriving it. */
+  byUser: Schema.optional(Schema.Boolean),
+  /** Mirrors the command's `cascade`; the descendant-stop reactor walks this
+   * thread's handoff children and interrupts each when true. */
+  cascade: Schema.optional(Schema.Boolean),
   createdAt: IsoDateTime,
 });
 

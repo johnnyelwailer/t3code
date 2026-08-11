@@ -100,6 +100,19 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
       } satisfies OrchestrationCommand;
     }
 
+    // t3team: every command reaching this seam actually arrived from a client
+    // (ws/http dispatch), so a stop decided here is always a user-raised stop.
+    // Internal fork automation (workflow cancel, cascade descendant stop)
+    // dispatches `thread.turn.interrupt` straight through the engine and never
+    // passes through here, so it keeps the default "system" origin. See
+    // t3team-actorMessageReactor.ts for what this flag gates.
+    if (canonicalCommand.type === "thread.turn.interrupt") {
+      return {
+        ...canonicalCommand,
+        t3teamStopOrigin: "user",
+      } satisfies OrchestrationCommand;
+    }
+
     if (canonicalCommand.type !== "thread.turn.start") {
       return canonicalCommand as OrchestrationCommand;
     }
