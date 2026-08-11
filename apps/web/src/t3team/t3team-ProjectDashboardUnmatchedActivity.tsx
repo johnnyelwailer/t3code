@@ -24,9 +24,15 @@ export function ProjectDashboardUnmatchedActivity({
       projectTickets: [],
     });
 
+  // A panel whose only content is "nothing matched" is pure noise on the board — show the
+  // section once there is actual activity (or a warning worth surfacing).
+  if (githubActivity.unlinkedActivityItems.length === 0 && !githubActivity.warning) {
+    return null;
+  }
+
   return (
     <GitHubActivitySection
-      title="Unmatched GitHub activity"
+      title="Other GitHub activity"
       items={githubActivity.unlinkedActivityItems}
       onItemContextMenu={(event, item) => {
         openGitHubActivityAgentContextMenu(event, null, item, {
