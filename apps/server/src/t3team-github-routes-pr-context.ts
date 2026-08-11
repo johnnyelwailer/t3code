@@ -1,27 +1,24 @@
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import type { VcsError } from "@t3tools/contracts";
+import type { PullRequestRef } from "@t3tools/contracts";
 
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
-import type { VcsProcessShape } from "./t3team-vcsProcessShape.ts";
+import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import type {
-  GitHubPullRequestContextCommit,
-  GitHubPullRequestContextDetails,
-  GitHubPullRequestContextFile,
-  GitHubPullRequestContextIssueComment,
   GitHubPullRequestContextRequest,
   GitHubPullRequestContextResponse,
-  GitHubPullRequestContextReview,
-  GitHubPullRequestContextReviewComment,
 } from "./t3team-github-routes-pr-types.ts";
 import {
-  encodeRepositoryPath,
-  extractPullRequestNumber,
-  runJsonObject,
-  runPaginatedArray,
-  runText,
-} from "./t3team-github-routes-pr-api.ts";
+  toGitHubCommits,
+  toGitHubIssueComments,
+  toGitHubPullRequestDetails,
+  toGitHubReviewComments,
+  toGitHubReviews,
+} from "./t3team-github-pr-context-adapter.ts";
+import { resolvePullRequestProjectId } from "./t3team-github-pr-project-resolver.ts";
+import { parseUnifiedDiffToFiles } from "./t3team-github-unified-diff-parser.ts";
 import { fetchFileSnapshots } from "./t3team-github-routes-pr-files.ts";
 import {
   PULL_REQUEST_CONTEXT_CACHE_TTL_MS,
@@ -36,37 +33,54 @@ function cacheKey(input: { host: string; repository: string; pullRequestNumber: 
   return `${input.host}:${input.repository}:pr:${String(input.pullRequestNumber)}`;
 }
 
-function optionalArray<T>(
-  effect: Effect.Effect<ReadonlyArray<T>, VcsError, never>,
-  warning: string,
-): Effect.Effect<{ readonly value: ReadonlyArray<T>; readonly warning?: string }, never, never> {
-  return effect.pipe(
-    Effect.map((value) => ({ value })),
-    Effect.catch(() => Effect.succeed({ value: [] as ReadonlyArray<T>, warning })),
+function extractPullRequestNumber(input: {
+  subjectUrl?: string;
+  itemId?: string;
+}): number | undefined {
+  const candidates = [input.subjectUrl, input.itemId].filter(
+    (value): value is string => typeof value === "string" && value.trim().length > 0,
   );
+  for (const candidate of candidates) {
+    const apiMatch = candidate.match(/\/pulls\/(\d+)(?:\D|$)/i);
+    if (apiMatch) return Number(apiMatch[1]);
+    const webMatch = candidate.match(/\/pull\/(\d+)(?:\D|$)/i);
+    if (webMatch) return Number(webMatch[1]);
+    const itemMatch = candidate.match(/:(\d+)(?:\D|$)/);
+    if (itemMatch) return Number(itemMatch[1]);
+  }
+  return undefined;
 }
 
-function optionalText(
-  effect: Effect.Effect<string, VcsError, never>,
-  warning: string,
-): Effect.Effect<{ readonly value?: string; readonly warning?: string }, never, never> {
-  return effect.pipe(
-    Effect.map((value) => ({ value })),
-    Effect.catch(() => Effect.succeed({ warning })),
-  );
+/** `diff()` is cursor-paginated; the bundle wants the whole unified patch as one string. */
+function loadFullDiff(
+  pullRequests: PullRequestService.PullRequestService["Service"],
+  ref: PullRequestRef,
+): Effect.Effect<string, PullRequestService.PullRequestError, never> {
+  const loop = (
+    cursor: string | undefined,
+    acc: string,
+  ): Effect.Effect<string, PullRequestService.PullRequestError, never> =>
+    pullRequests.diff({ ...ref, ...(cursor ? { cursor } : {}) }).pipe(
+      Effect.flatMap((result) => {
+        const next = acc + result.patch;
+        return result.nextCursor ? loop(result.nextCursor, next) : Effect.succeed(next);
+      }),
+    );
+  return loop(undefined, "");
 }
 
 export function loadPullRequestContext(
-  vcs: VcsProcessShape,
   input: GitHubPullRequestContextRequest,
-): Effect.Effect<GitHubPullRequestContextResponse, T3TeamAtlassianError, never> {
+): Effect.Effect<
+  GitHubPullRequestContextResponse,
+  T3TeamAtlassianError,
+  PullRequestService.PullRequestService | ProjectionSnapshotQuery.ProjectionSnapshotQuery
+> {
   const host = readTrimmedString(input.host) ?? "github.com";
   const repository = readTrimmedString(input.repository);
   if (!repository) {
     return Effect.fail(
-      new T3TeamAtlassianError({
-        message: "GitHub pull request context requires a repository.",
-      }),
+      new T3TeamAtlassianError({ message: "GitHub pull request context requires a repository." }),
     );
   }
 
@@ -86,121 +100,38 @@ export function loadPullRequestContext(
   const cached = readCached(pullRequestContextCache, key);
   if (cached) return Effect.succeed(cached);
 
-  const repositoryPath = encodeRepositoryPath(repository);
-  const pullRequestPath = `/repos/${repositoryPath}/pulls/${String(pullRequestNumber)}`;
-
   return Effect.gen(function* () {
-    const pullRequest = yield* runJsonObject<GitHubPullRequestContextDetails>({
-      vcs,
-      host,
-      operation: "t3team.github.pr-context.pull-request",
-      path: pullRequestPath,
-      accept: "application/vnd.github.full+json",
-      maxOutputBytes: 2_000_000,
-    }).pipe(
-      Effect.mapError((cause) => toT3TeamError(cause, "Failed to load GitHub pull request.")),
-    );
+    const pullRequests = yield* PullRequestService.PullRequestService;
+    const projectId = yield* resolvePullRequestProjectId({ host, repository });
+    if (!projectId) {
+      return yield* new T3TeamAtlassianError({
+        message: `No open project checkout is bound to ${host}/${repository}.`,
+      });
+    }
 
-    const files = yield* runPaginatedArray<GitHubPullRequestContextFile>({
-      vcs,
-      host,
-      operation: "t3team.github.pr-context.files",
-      path: `${pullRequestPath}/files`,
-      accept: "application/vnd.github+json",
-      maxOutputBytes: 8_000_000,
-    }).pipe(
-      Effect.mapError((cause) => toT3TeamError(cause, "Failed to load GitHub pull request files.")),
-    );
+    const ref = { projectId, repository, number: pullRequestNumber } as PullRequestRef;
 
-    const [reviewsResult, reviewCommentsResult, issueCommentsResult, commitsResult, diffResult] =
-      yield* Effect.all([
-        optionalArray(
-          runPaginatedArray<GitHubPullRequestContextReview>({
-            vcs,
-            host,
-            operation: "t3team.github.pr-context.reviews",
-            path: `${pullRequestPath}/reviews`,
-            accept: "application/vnd.github.full+json",
-            maxOutputBytes: 4_000_000,
-          }),
-          "Unable to load pull request reviews.",
-        ),
-        optionalArray(
-          runPaginatedArray<GitHubPullRequestContextReviewComment>({
-            vcs,
-            host,
-            operation: "t3team.github.pr-context.review-comments",
-            path: `${pullRequestPath}/comments`,
-            accept: "application/vnd.github.full+json",
-            maxOutputBytes: 8_000_000,
-          }),
-          "Unable to load pull request review comments.",
-        ),
-        optionalArray(
-          runPaginatedArray<GitHubPullRequestContextIssueComment>({
-            vcs,
-            host,
-            operation: "t3team.github.pr-context.issue-comments",
-            path: `/repos/${repositoryPath}/issues/${String(pullRequestNumber)}/comments`,
-            accept: "application/vnd.github.full+json",
-            maxOutputBytes: 4_000_000,
-          }),
-          "Unable to load pull request issue comments.",
-        ),
-        optionalArray(
-          runPaginatedArray<GitHubPullRequestContextCommit>({
-            vcs,
-            host,
-            operation: "t3team.github.pr-context.commits",
-            path: `${pullRequestPath}/commits`,
-            accept: "application/vnd.github+json",
-            maxOutputBytes: 4_000_000,
-          }),
-          "Unable to load pull request commits.",
-        ),
-        optionalText(
-          runText({
-            vcs,
-            host,
-            operation: "t3team.github.pr-context.diff",
-            path: pullRequestPath,
-            accept: "application/vnd.github.v3.diff",
-            maxOutputBytes: 12_000_000,
-          }),
-          "Unable to load pull request diff.",
-        ),
-      ]);
+    const [detail, activity, diffText] = yield* Effect.all(
+      [pullRequests.detail(ref), pullRequests.activity(ref), loadFullDiff(pullRequests, ref)],
+      { concurrency: 3 },
+    ).pipe(Effect.mapError((cause) => toT3TeamError(cause, "Failed to load GitHub pull request.")));
 
-    const fileSnapshots = yield* fetchFileSnapshots({
-      vcs,
-      host,
-      repository,
-      pullRequest,
-      files,
-    });
-
-    const warnings = [
-      reviewsResult.warning,
-      reviewCommentsResult.warning,
-      issueCommentsResult.warning,
-      commitsResult.warning,
-      diffResult.warning,
-    ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+    const files = parseUnifiedDiffToFiles(diffText);
+    const fileSnapshots = yield* fetchFileSnapshots({ pullRequests, ref, files });
 
     const response = {
       host,
       repository,
       pullRequestNumber,
       capturedAt: DateTime.formatIso(yield* DateTime.now),
-      pullRequest,
+      pullRequest: toGitHubPullRequestDetails(detail, activity),
       files,
-      reviews: reviewsResult.value,
-      reviewComments: reviewCommentsResult.value,
-      issueComments: issueCommentsResult.value,
-      commits: commitsResult.value,
+      reviews: toGitHubReviews(activity),
+      reviewComments: toGitHubReviewComments(activity),
+      issueComments: toGitHubIssueComments(activity),
+      commits: toGitHubCommits(activity),
       fileSnapshots,
-      ...(diffResult.value ? { diff: diffResult.value } : {}),
-      ...(warnings.length > 0 ? { warnings } : {}),
+      ...(diffText ? { diff: diffText } : {}),
     } satisfies GitHubPullRequestContextResponse;
 
     writeCached(pullRequestContextCache, key, response, PULL_REQUEST_CONTEXT_CACHE_TTL_MS);
