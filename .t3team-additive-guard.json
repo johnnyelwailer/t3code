@@ -84,6 +84,7 @@
     "apps/server/vite.config.ts",
     "apps/server/vitest.config.ts",
     "apps/web/package.json",
+    "apps/web/src/components/AgentsPanel.tsx",
     "apps/web/src/components/ChatView.tsx",
     "apps/web/src/components/CommandPalette.tsx",
     "apps/web/src/components/Sidebar.tsx",

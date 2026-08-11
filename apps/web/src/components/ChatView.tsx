@@ -349,6 +349,15 @@ import {
   type T3TeamActiveWorkflowDockItem,
 } from "~/t3team/chat/t3team-activeWorkflowDock";
 import { deriveT3TeamWorkflowStepRuns } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import { T3TeamAgentsPanelForkSection } from "~/t3team/chat/t3team-AgentsPanelForkSection";
+import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
+import type { ProjectThread as T3TeamProjectThread } from "~/t3team/t3team-types";
+
+const EMPTY_T3TEAM_CHILD_THREADS: ReadonlyArray<T3TeamProjectThread> = [];
+function t3teamNoopOpenThread(_input: {
+  readonly projectId: string;
+  readonly threadId: string;
+}): void {}
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
@@ -2207,6 +2216,14 @@ function ChatViewContent(props: ChatViewProps) {
       }),
     [agentSessionLive, threadActivities],
   );
+  // Agents-surface fork seam: sub-run child threads for the Agents panel (see
+  // T3TeamAgentsPanelForkSection). Reuses the same parent/child relation the Work-lens sidebar
+  // uses to roll up sub-runs, kept referentially stable by that hook's single-slot memo.
+  const t3teamChildThreadRelations = useT3TeamChildThreadRelations();
+  const t3teamAgentsPanelSubRuns =
+    (activeThread
+      ? t3teamChildThreadRelations.childThreadsByParentId.get(activeThread.id)
+      : undefined) ?? EMPTY_T3TEAM_CHILD_THREADS;
   const pendingApprovals = useMemo(
     () => derivePendingApprovals(threadActivities),
     [threadActivities],
@@ -6217,6 +6234,14 @@ function ChatViewContent(props: ChatViewProps) {
         model={agentPanelModel}
         environmentId={activeThreadRef?.environmentId ?? null}
         threadId={activeThreadRef?.threadId ?? null}
+        forkSection={
+          <T3TeamAgentsPanelForkSection
+            childThreads={t3teamAgentsPanelSubRuns}
+            onOpenChildThread={onOpenThread ?? t3teamNoopOpenThread}
+            workflowRuns={activeWorkflowDockItems}
+            onOpenWorkflowRun={openWorkflowCard}
+          />
+        }
       />
     ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
       activeProject &&
