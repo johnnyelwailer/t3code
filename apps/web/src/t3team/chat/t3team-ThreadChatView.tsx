@@ -1,11 +1,10 @@
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import type { ProjectSource } from "@t3tools/project-context";
-import { useEnvironmentQuery } from "~/state/query";
-import { vcsEnvironment } from "~/state/vcs";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { ThreadChatViewBody } from "~/t3team/chat/t3team-ThreadChatViewBody";
 import { ExternalSessionReadOnlyOverlay } from "~/t3team/chat/t3team-ExternalSessionReadOnlyOverlay";
 import { useExternalSessionReadOnly } from "~/t3team/chat/t3team-useExternalSessionReadOnly";
+import { useKickoffBranch } from "~/t3team/chat/t3team-useKickoffBranch";
 import { useThreadBootstrap } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { useT3TeamDraftMutationIngest } from "~/t3team/chat/t3team-useDraftMutationIngest";
@@ -13,8 +12,6 @@ import { useThreadChatDebug } from "~/t3team/chat/t3team-useThreadChatDebug";
 import { useThreadChatServerState } from "~/t3team/chat/t3team-useThreadChatServerState";
 import { useThreadChatTurnToolContext } from "~/t3team/chat/t3team-useThreadChatTurnToolContext";
 import type { T3TeamKickoffWorkflow, T3TeamThreadToolId } from "~/t3team/t3team-types";
-
-const DETACHED_HEAD_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 
 export interface ThreadChatViewProps {
   threadId: string;
@@ -98,32 +95,10 @@ export function ThreadChatView({
     title,
   });
 
-  // Kickoff threads carry the workspace's current branch, same as the composer footer's branch
-  // chip: both read it from the workspace's git status rather than a thread that does not exist
-  // yet. The underlying Effect atom (see ~/state/query.ts) dedupes this against the composer's
-  // own query for the same cwd, so this
-  // adds no extra request.
-  const kickoffGitStatusQuery = useEnvironmentQuery(
-    !environmentId || !projectWorkspaceRoot
-      ? null
-      : vcsEnvironment.status({
-          environmentId,
-          input: { cwd: projectWorkspaceRoot },
-        }),
-  );
-  const rawKickoffRefName = kickoffGitStatusQuery.data?.refName;
-  // A 40-hex refName means detached HEAD (git status reports the raw sha, not a branch name) —
-  // kickoff should carry no branch rather than a sha that can't be checked out as one.
-  const initialBranch =
-    rawKickoffRefName && !DETACHED_HEAD_SHA_PATTERN.test(rawKickoffRefName)
-      ? rawKickoffRefName
-      : undefined;
-  // The bootstrap kickoff dispatch must not fire before this query resolves: an unresolved
-  // workspace root means we don't yet know the branch, and dispatching early sends branch:null
-  // for what should have been a real branch. `isPending` clears once the query settles, even on
-  // error, so a hanging query can't block kickoff forever.
-  const isKickoffBranchQueryPending =
-    Boolean(projectWorkspaceRoot) && kickoffGitStatusQuery.isPending;
+  const { initialBranch, isKickoffBranchQueryPending } = useKickoffBranch({
+    environmentId,
+    projectWorkspaceRoot,
+  });
 
   const { bootstrapStatus, retryThreadBootstrap } = useThreadBootstrap({
     backend,
