@@ -137,14 +137,22 @@ export function ThreadChatView({
     hasServerLaunchActivity,
   });
 
-  if (!environmentId) {
-    return <div className="flex h-full min-h-0 flex-1 bg-background" />;
-  }
-
   // A thread mirrored from an external Codex/Claude session is read-only while that tool still
   // owns it. The composer is COVERED rather than removed, so the transcript stays readable and
   // the row does not appear broken.
+  //
+  // Called unconditionally, before the `!environmentId` early return below: hooks must run in
+  // the same order on every render, and `environmentId` can still be undefined on the first
+  // render of a freshly opened thread (it resolves once thread state loads). Calling this hook
+  // only after that early return meant the hook count differed between the "not yet resolved"
+  // and "resolved" renders of the SAME component instance, which React surfaces as "Rendered
+  // more hooks than during the previous render" — reproducing once per thread open, right when
+  // environmentId flips from undefined to set (e.g. opening a thread with a workflow run card).
   const externalSession = useExternalSessionReadOnly(serverThread);
+
+  if (!environmentId) {
+    return <div className="flex h-full min-h-0 flex-1 bg-background" />;
+  }
 
   return (
     <ThreadChatViewBody
