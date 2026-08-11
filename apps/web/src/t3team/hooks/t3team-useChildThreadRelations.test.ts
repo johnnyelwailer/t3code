@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { buildChildThreadRelations } from "./t3team-useChildThreadRelations";
+import {
+  buildChildThreadRelations,
+  createChildThreadRelationsMemo,
+} from "./t3team-useChildThreadRelations";
 
 function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
   return {
@@ -46,5 +49,42 @@ describe("buildChildThreadRelations", () => {
 
     expect(relations.childThreadIds.size).toBe(0);
     expect(relations.subRunCountsByParentId.size).toBe(0);
+  });
+});
+
+describe("createChildThreadRelationsMemo", () => {
+  it("returns the SAME relations object across calls whose threads have a fresh array identity but equal content", () => {
+    const memo = createChildThreadRelationsMemo();
+    const parent = createThread({ id: "parent-1" });
+    const child = createThread({ id: "child-a", parentThreadId: "parent-1", status: "running" });
+
+    // Two arrays, same content, deliberately different identity — this is
+    // exactly what useProjectStore() hands out on every render (e.g. on
+    // thread selection), even when nothing about the threads changed.
+    const first = memo([parent, child]);
+    const second = memo([{ ...parent }, { ...child }]);
+
+    expect(second).toBe(first);
+  });
+
+  it("returns a NEW relations object once the content actually changes", () => {
+    const memo = createChildThreadRelationsMemo();
+    const parent = createThread({ id: "parent-1" });
+    const runningChild = createThread({
+      id: "child-a",
+      parentThreadId: "parent-1",
+      status: "running",
+    });
+    const completedChild = createThread({
+      id: "child-a",
+      parentThreadId: "parent-1",
+      status: "completed",
+    });
+
+    const first = memo([parent, runningChild]);
+    const second = memo([parent, completedChild]);
+
+    expect(second).not.toBe(first);
+    expect(second.subRunCountsByParentId.get("parent-1")).toEqual({ total: 1, running: 0 });
   });
 });
