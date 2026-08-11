@@ -221,12 +221,9 @@ export function ProjectDashboardKanbanMatrixFixtureView({
           allTickets={scenario.tickets}
           isHierarchyMode
           parentChildGroups={parentChildGroups}
-          showGitHubActivity={false}
-          githubActivityByWorkItem={new Map()}
           projectId="storybook-project"
           onOpenTicket={() => undefined}
           onTicketContextMenu={() => undefined}
-          onGitHubActivityContextMenu={() => undefined}
         />
       </div>
     </div>

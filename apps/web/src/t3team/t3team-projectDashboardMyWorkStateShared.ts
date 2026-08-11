@@ -11,7 +11,6 @@ export interface ProjectDashboardMyWorkRouteSearch {
   myWorkView?: ProjectMyWorkViewMode;
   myWorkGroup?: ProjectMyWorkGroupMode;
   myWorkStatus?: ProjectMyWorkStatusCategory;
-  myWorkGitHub?: "show" | "hide";
   myWorkLanes?: string;
   myWorkLanesMode?: ProjectMyWorkKanbanLaneSelectionMode;
   myWorkPriority?: string;
@@ -26,7 +25,6 @@ export interface ProjectDashboardMyWorkState {
   viewMode: ProjectMyWorkViewMode;
   groupMode: ProjectMyWorkGroupMode;
   statusCategory: ProjectMyWorkStatusCategory;
-  showGitHubActivity: boolean;
   hiddenKanbanColumnIds: ReadonlyArray<string>;
   hasCustomizedKanbanLanes: boolean;
   excludedTypeKeys: ReadonlyArray<string>;
@@ -53,7 +51,6 @@ export const projectMyWorkStatusCategoryValues = new Set<ProjectMyWorkStatusCate
 ]);
 export const projectMyWorkKanbanLaneSelectionModeValues =
   new Set<ProjectMyWorkKanbanLaneSelectionMode>(["auto", "custom"]);
-export const projectMyWorkGitHubVisibilityValues = new Set(["show", "hide"] as const);
 export const projectMyWorkTableSortByValues = new Set<ProjectMyWorkTableSortBy>([
   "updated",
   "title",
@@ -70,7 +67,6 @@ export const projectDashboardMyWorkRouteSearchKeys = [
   "myWorkView",
   "myWorkGroup",
   "myWorkStatus",
-  "myWorkGitHub",
   "myWorkLanes",
   "myWorkLanesMode",
   "myWorkPriority",
@@ -124,7 +120,6 @@ export function createDefaultProjectDashboardMyWorkState(): ProjectDashboardMyWo
     viewMode: "kanban",
     groupMode: "hierarchy",
     statusCategory: "all",
-    showGitHubActivity: true,
     hiddenKanbanColumnIds: [],
     hasCustomizedKanbanLanes: false,
     excludedTypeKeys: [],
@@ -161,11 +156,6 @@ export function parseProjectDashboardMyWorkRouteSearch(
   const statusCategory = parseRouteEnum(search.myWorkStatus, projectMyWorkStatusCategoryValues);
   if (statusCategory !== undefined) {
     parsed.myWorkStatus = statusCategory;
-  }
-
-  const gitHubVisibility = parseRouteEnum(search.myWorkGitHub, projectMyWorkGitHubVisibilityValues);
-  if (gitHubVisibility !== undefined) {
-    parsed.myWorkGitHub = gitHubVisibility;
   }
 
   const hiddenKanbanColumnIds = parseRouteStringList(search.myWorkLanes);

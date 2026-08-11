@@ -7,7 +7,11 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import { useMemo } from "react";
 
 import { getSidebarTicketState } from "./t3team-projectSidebarItemState";
-import { PinnedTicketFallbackRow, PinnedTicketRow } from "./t3team-ProjectSidebarPinnedTicketRows";
+import {
+  PinnedGitHubActivityRow,
+  PinnedTicketFallbackRow,
+  PinnedTicketRow,
+} from "./t3team-ProjectSidebarPinnedTicketRows";
 import { useProjectSidebarNavItemPreferences } from "./t3team-useProjectSidebarNavItemPreferences";
 import type { ResolvedPinnedSidebarItem } from "./t3team-useProjectSidebarPinnedItems";
 
@@ -32,8 +36,13 @@ export function ProjectSidebarPinnedItems({
   githubActivityLastCheckedAt?: number;
   onSelectTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const { getTicketAgentContext, openTicketAgentContextMenu, openTicketAgentContextMenuAt } =
-    useTicketAgentContext({ project, projectTickets, githubActivityByWorkItem });
+  const {
+    getTicketAgentContext,
+    getGitHubActivityAgentContext,
+    openTicketAgentContextMenu,
+    openTicketAgentContextMenuAt,
+    openGitHubActivityAgentContextMenu,
+  } = useTicketAgentContext({ project, projectTickets, githubActivityByWorkItem });
   const { orderedItemIds } = useProjectSidebarNavItemPreferences(project.id);
   const sortedItems = useMemo(
     () =>
@@ -116,7 +125,23 @@ export function ProjectSidebarPinnedItems({
             ticketId={item.ticketId}
             title={item.title}
           />
-        ) : null,
+        ) : (
+          <PinnedGitHubActivityRow
+            key={item.pinnedItem.id}
+            item={item.item}
+            state={{ isSelected: false, isOpen: false }}
+            onContextMenu={(event) => {
+              openGitHubActivityAgentContextMenu(event, item.linkedWorkItem, item.item, {
+                visibleInSidebar: true,
+              });
+            }}
+            getItemDragCapabilities={(activity) =>
+              getGitHubActivityAgentContext(item.linkedWorkItem, activity, {
+                visibleInSidebar: true,
+              })
+            }
+          />
+        ),
       )}
     </SidebarMenuSub>
   );

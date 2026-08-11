@@ -28,8 +28,6 @@ export interface TicketSidebarEntryProps {
   ticketThreads: readonly ProjectThread[];
   jiraLastCheckedAt?: number;
   githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
-  githubActivityLastCheckedAt?: number;
-  showGitHubActivity: boolean;
   onSelectTicket: (projectId: string, ticketId: string) => void;
   onCreateTicketThread: (input: {
     projectId: string;
@@ -51,8 +49,6 @@ export function TicketSidebarEntry({
   ticketThreads,
   jiraLastCheckedAt,
   githubActivityItems,
-  githubActivityLastCheckedAt: _githubActivityLastCheckedAt,
-  showGitHubActivity: _showGitHubActivity,
   onSelectTicket,
   onCreateTicketThread,
   onSelectThread,

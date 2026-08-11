@@ -40,8 +40,6 @@ export function ProjectDashboardMyWorkView({
     setViewMode,
     groupMode,
     setGroupMode,
-    showGitHubActivity,
-    setShowGitHubActivity,
     statusCategory,
     setStatusCategory,
     activeOptionsCount,
@@ -80,7 +78,6 @@ export function ProjectDashboardMyWorkView({
       viewMode,
       groupMode,
       statusCategory,
-      showGitHubActivity,
       hiddenKanbanColumnIds,
       hasCustomizedKanbanLanes: hiddenKanbanColumnIds.length > 0,
       excludedTypeKeys,
@@ -92,7 +89,6 @@ export function ProjectDashboardMyWorkView({
     filteredWorkItems,
     setQuery,
     setStatusCategory,
-    setShowGitHubActivity,
     setSelectedPriority,
     setSelectedStatus,
   });
@@ -110,7 +106,6 @@ export function ProjectDashboardMyWorkView({
       viewMode,
       groupMode,
       statusCategory,
-      showGitHubActivity,
       hiddenKanbanColumnIds,
       excludedTypeKeys,
       selectedPriority,
@@ -134,8 +129,6 @@ export function ProjectDashboardMyWorkView({
           statusCategory={statusCategory}
           onStatusCategoryChange={setStatusCategory}
           activeOptionsCount={activeOptionsCount}
-          showGitHubActivity={showGitHubActivity}
-          onShowGitHubActivityChange={setShowGitHubActivity}
           hiddenKanbanColumnIds={hiddenKanbanColumnIds}
           onKanbanLaneVisibilityChange={toggleKanbanLaneVisibility}
           epicsHidden={epicsHidden}
@@ -166,16 +159,12 @@ export function ProjectDashboardMyWorkView({
           visibleHierarchy={visibleHierarchy}
           viewMode={viewMode}
           groupMode={groupMode}
-          showGitHubActivity={showGitHubActivity}
           tableSortBy={tableSortBy}
           tableSortDirection={tableSortDirection}
           kanbanColumns={kanbanColumns}
           parentChildGroups={parentChildGroups}
           githubActivityByWorkItem={githubActivity.activityByWorkItem}
           {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
-          {...(githubActivity.lastCheckedAt !== undefined
-            ? { githubLastCheckedAt: githubActivity.lastCheckedAt }
-            : {})}
           onTableSortByChange={setTableSortBy}
           onTableSortDirectionChange={setTableSortDirection}
           {...(canMoveTickets ? { onMoveTicketToStatus: moveTicketToStatus } : {})}

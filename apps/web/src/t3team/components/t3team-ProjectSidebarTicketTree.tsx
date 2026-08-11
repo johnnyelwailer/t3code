@@ -40,8 +40,6 @@ export function TicketTreeNode({
   orderedSidebarItemIds,
   siblingSidebarItemIds,
   jiraLastCheckedAt,
-  githubActivityLastCheckedAt,
-  showGitHubActivity,
   onSelectTicket,
   onCreateTicketThread,
   onSelectThread,
@@ -73,8 +71,6 @@ export function TicketTreeNode({
         ticketThreads={ticketThreadsById.get(ticket.id) ?? []}
         {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
         githubActivityItems={githubActivityByWorkItem.get(ticket.ref.displayId) ?? []}
-        {...(githubActivityLastCheckedAt !== undefined ? { githubActivityLastCheckedAt } : {})}
-        showGitHubActivity={showGitHubActivity}
         onSelectTicket={onSelectTicket}
         onCreateTicketThread={onCreateTicketThread}
         onSelectThread={onSelectThread}
@@ -96,10 +92,6 @@ export function TicketTreeNode({
               ticketThreadsById={ticketThreadsById}
               githubActivityByWorkItem={githubActivityByWorkItem}
               {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
-              {...(githubActivityLastCheckedAt !== undefined
-                ? { githubActivityLastCheckedAt }
-                : {})}
-              showGitHubActivity={showGitHubActivity}
               onSelectTicket={onSelectTicket}
               onCreateTicketThread={onCreateTicketThread}
               onSelectThread={onSelectThread}
