@@ -21,6 +21,7 @@ export * from "./sourceControl.ts";
 export * from "./t3team-draft-mutation.ts";
 export * from "./t3team-message-ext.ts";
 export * from "./t3team-widget-bridge.ts";
+export * from "./pullRequest.ts";
 export * from "./orchestration.ts";
 export * from "./t3ProjectFile.ts";
 export * from "./editor.ts";
