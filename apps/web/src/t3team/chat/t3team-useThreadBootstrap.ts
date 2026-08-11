@@ -30,6 +30,9 @@ type ThreadBootstrapInput = {
   initialRuntimeMode: RuntimeMode | undefined;
   initialInteractionMode: ProviderInteractionMode | undefined;
   initialBranch: string | undefined;
+  // While true, hold the kickoff dispatch: the branch it would carry is not resolved yet, and a
+  // cold-load kickoff must not lock in `branch: null` before the real branch is known.
+  isKickoffBranchQueryPending?: boolean;
   kickoffWorkflow: T3TeamKickoffWorkflow | undefined;
   initialToolContext: T3TeamTurnToolContext | undefined;
   onInitialUserMessageSent: (() => void) | undefined;
@@ -52,6 +55,7 @@ export function useThreadBootstrap({
   initialRuntimeMode,
   initialInteractionMode,
   initialBranch,
+  isKickoffBranchQueryPending = false,
   kickoffWorkflow,
   initialToolContext,
   onInitialUserMessageSent,
@@ -133,6 +137,17 @@ export function useThreadBootstrap({
       };
     }
 
+    // Hold the kickoff until the branch query settles: dispatching now would send `branch: null`
+    // for a workspace that does have one, and the effect re-runs once
+    // `isKickoffBranchQueryPending` flips (or `retryThreadBootstrap` is called), so this state
+    // isn't claimed and the kickoff is not lost — just deferred.
+    if (bootstrapPlan.action === "kickoff" && isKickoffBranchQueryPending) {
+      updateBootstrapStatus("running");
+      return () => {
+        active = false;
+      };
+    }
+
     // Claim the dispatch synchronously, before the first `await` inside runThreadBootstrap can
     // yield: a second effect pass in the same tick would otherwise still read the un-flagged state.
     if (bootstrapPlan.action === "kickoff") {
@@ -191,6 +206,7 @@ export function useThreadBootstrap({
     environmentId,
     initialBranch,
     initialInteractionMode,
+    isKickoffBranchQueryPending,
     kickoffWorkflow,
     initialModelSelection,
     initialRuntimeMode,

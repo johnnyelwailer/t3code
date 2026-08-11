@@ -149,6 +149,88 @@ afterEach(() => {
   containers = [];
 });
 
+function BranchAwareBootstrapProbe({
+  backend,
+  threadId,
+  isKickoffBranchQueryPending,
+  initialBranch,
+}: {
+  backend: BackendApi;
+  threadId: string;
+  isKickoffBranchQueryPending: boolean;
+  initialBranch: string | undefined;
+}) {
+  useThreadBootstrap({
+    backend,
+    environmentId: "env-1",
+    threadId,
+    projectTitle: "Project Alpha",
+    projectWorkspaceRoot: "/tmp/project-alpha",
+    canonicalProjectId: "project-alpha",
+    projectExists: true,
+    title: "Draft status update",
+    initialUserMessage: KICKOFF_MESSAGE,
+    initialModelSelection: undefined,
+    initialRuntimeMode: undefined,
+    initialInteractionMode: undefined,
+    initialBranch,
+    isKickoffBranchQueryPending,
+    kickoffWorkflow: undefined,
+    initialToolContext: undefined,
+    onInitialUserMessageSent: undefined,
+    serverThread: null,
+  });
+  return null;
+}
+
+describe("useThreadBootstrap branch-query hold (F11)", () => {
+  it("holds the kickoff dispatch while the branch query is pending, then sends the resolved branch", async () => {
+    const threadId = "thread-branch-hold-1";
+    const tracked = createTrackedBackend();
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    containers.push(container);
+    const root = createRoot(container);
+    roots.push(root);
+
+    act(() => {
+      root.render(
+        <BranchAwareBootstrapProbe
+          backend={tracked.backend}
+          threadId={threadId}
+          isKickoffBranchQueryPending={true}
+          initialBranch={undefined}
+        />,
+      );
+    });
+    await flush();
+
+    // While the branch query is still pending, the kickoff must not dispatch at all — sending
+    // now would lock in `branch: null` for a workspace that does have a branch.
+    expect(tracked.dispatchCommand).not.toHaveBeenCalled();
+
+    act(() => {
+      root.render(
+        <BranchAwareBootstrapProbe
+          backend={tracked.backend}
+          threadId={threadId}
+          isKickoffBranchQueryPending={false}
+          initialBranch="feature/some-branch"
+        />,
+      );
+    });
+    await flush();
+
+    expect(tracked.dispatchCommand).toHaveBeenCalledTimes(1);
+    const [command] = tracked.dispatchCommand.mock.calls[0] as [
+      { type: string; bootstrap?: { createThread?: { branch?: string | null } } },
+    ];
+    expect(command.type).toBe("thread.turn.start");
+    expect(command.bootstrap?.createThread?.branch).toBe("feature/some-branch");
+  });
+});
+
 describe("useThreadBootstrap recipe kickoff", () => {
   it("dispatches thread.create once when the launch remounts the thread view", async () => {
     const threadId = "thread-remount-1";
