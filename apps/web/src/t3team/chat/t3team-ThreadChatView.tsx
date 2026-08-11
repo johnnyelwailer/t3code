@@ -1,5 +1,7 @@
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import type { ProjectSource } from "@t3tools/project-context";
+import { useEnvironmentQuery } from "~/state/query";
+import { vcsEnvironment } from "~/state/vcs";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { ThreadChatViewBody } from "~/t3team/chat/t3team-ThreadChatViewBody";
 import { ExternalSessionReadOnlyOverlay } from "~/t3team/chat/t3team-ExternalSessionReadOnlyOverlay";
@@ -94,6 +96,20 @@ export function ThreadChatView({
     title,
   });
 
+  // Kickoff threads carry the workspace's current branch, same as the composer footer's branch
+  // chip: both read it from the workspace's git status rather than a thread that does not exist
+  // yet. react-query dedupes this against the composer's own query for the same cwd, so this
+  // adds no extra request.
+  const kickoffGitStatusQuery = useEnvironmentQuery(
+    !environmentId || !projectWorkspaceRoot
+      ? null
+      : vcsEnvironment.status({
+          environmentId,
+          input: { cwd: projectWorkspaceRoot },
+        }),
+  );
+  const initialBranch = kickoffGitStatusQuery.data?.refName ?? undefined;
+
   const { bootstrapStatus, retryThreadBootstrap } = useThreadBootstrap({
     backend,
     environmentId,
@@ -107,6 +123,7 @@ export function ThreadChatView({
     initialModelSelection,
     initialRuntimeMode,
     initialInteractionMode,
+    initialBranch,
     kickoffWorkflow,
     initialToolContext: turnToolContext,
     onInitialUserMessageSent,

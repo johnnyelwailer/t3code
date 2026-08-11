@@ -119,6 +119,7 @@ export async function launchBundledSidecarRecipeThread(input: {
     kickoffModelSelection: input.launchConfig.selection,
     kickoffRuntimeMode: input.launchConfig.runtimeMode,
     kickoffInteractionMode: input.launchConfig.interactionMode,
+    kickoffBranch: null,
     kickoffWorkflow,
     toolContext: undefined,
     createdAt: new Date().toISOString(),

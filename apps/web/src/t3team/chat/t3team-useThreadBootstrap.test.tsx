@@ -101,6 +101,7 @@ function BootstrapProbe({ backend, threadId }: { backend: BackendApi; threadId: 
     initialModelSelection: undefined,
     initialRuntimeMode: undefined,
     initialInteractionMode: undefined,
+    initialBranch: undefined,
     kickoffWorkflow: createRecipeKickoffWorkflow(),
     initialToolContext: undefined,
     onInitialUserMessageSent: undefined,

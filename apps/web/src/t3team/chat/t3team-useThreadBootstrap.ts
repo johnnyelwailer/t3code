@@ -3,18 +3,13 @@ import {
   readThreadBootstrapDispatchState,
   resetThreadBootstrapDispatchState,
 } from "~/t3team/chat/t3team-threadBootstrapDispatchRegistry";
-import {
-  DEFAULT_RUNTIME_MODE,
-  type ModelSelection,
-  type ProviderInteractionMode,
-  type RuntimeMode,
-} from "@t3tools/contracts";
+import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { planThreadBootstrap } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import { runThreadBootstrap } from "~/t3team/chat/t3team-runThreadBootstrap";
+import { resolveThreadBootstrapKickoffDefaults } from "~/t3team/chat/t3team-threadBootstrapKickoffDefaults";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
-import { getConfiguredDefaultModelSelection } from "~/t3team-configuredDefaultModelSelection";
 import {
   recordThreadBootstrapFailure,
   recordThreadBootstrapPlan,
@@ -34,6 +29,7 @@ type ThreadBootstrapInput = {
   initialModelSelection: ModelSelection | undefined;
   initialRuntimeMode: RuntimeMode | undefined;
   initialInteractionMode: ProviderInteractionMode | undefined;
+  initialBranch: string | undefined;
   kickoffWorkflow: T3TeamKickoffWorkflow | undefined;
   initialToolContext: T3TeamTurnToolContext | undefined;
   onInitialUserMessageSent: (() => void) | undefined;
@@ -55,6 +51,7 @@ export function useThreadBootstrap({
   initialModelSelection,
   initialRuntimeMode,
   initialInteractionMode,
+  initialBranch,
   kickoffWorkflow,
   initialToolContext,
   onInitialUserMessageSent,
@@ -145,9 +142,11 @@ export function useThreadBootstrap({
     }
 
     const createdAt = new Date().toISOString();
-    const kickoffModelSelection = initialModelSelection ?? getConfiguredDefaultModelSelection();
-    const kickoffRuntimeMode = initialRuntimeMode ?? DEFAULT_RUNTIME_MODE;
-    const kickoffInteractionMode = initialInteractionMode ?? ("default" as ProviderInteractionMode);
+    const kickoffDefaults = resolveThreadBootstrapKickoffDefaults({
+      initialModelSelection,
+      initialRuntimeMode,
+      initialInteractionMode,
+    });
     void runThreadBootstrap({
       backend,
       environmentId,
@@ -157,9 +156,8 @@ export function useThreadBootstrap({
       canonicalProjectId,
       title,
       initialUserMessage,
-      kickoffModelSelection,
-      kickoffRuntimeMode,
-      kickoffInteractionMode,
+      ...kickoffDefaults,
+      kickoffBranch: initialBranch ?? null,
       ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
       ...(initialToolContext !== undefined ? { toolContext: initialToolContext } : {}),
       createdAt,
@@ -191,6 +189,7 @@ export function useThreadBootstrap({
     backend,
     canonicalProjectId,
     environmentId,
+    initialBranch,
     initialInteractionMode,
     kickoffWorkflow,
     initialModelSelection,

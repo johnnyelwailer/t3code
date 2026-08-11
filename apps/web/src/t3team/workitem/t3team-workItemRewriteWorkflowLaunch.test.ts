@@ -141,6 +141,7 @@ describe("kickoff handoff", () => {
       kickoffModelSelection: LAUNCH_CONFIG.selection,
       kickoffRuntimeMode: LAUNCH_CONFIG.runtimeMode,
       kickoffInteractionMode: LAUNCH_CONFIG.interactionMode,
+      kickoffBranch: null,
       kickoffWorkflow: baseWorkflow(),
       toolContext: undefined,
       createdAt: new Date().toISOString(),
