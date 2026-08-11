@@ -350,7 +350,7 @@ import {
 } from "~/t3team/chat/t3team-activeWorkflowDock";
 import { deriveT3TeamWorkflowStepRuns } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { T3TeamAgentsPanelForkSection } from "~/t3team/chat/t3team-AgentsPanelForkSection";
-import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
+import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import type { ProjectThread as T3TeamProjectThread } from "~/t3team/t3team-types";
 
 const EMPTY_T3TEAM_CHILD_THREADS: ReadonlyArray<T3TeamProjectThread> = [];
@@ -2217,13 +2217,18 @@ function ChatViewContent(props: ChatViewProps) {
     [agentSessionLive, threadActivities],
   );
   // Agents-surface fork seam: sub-run child threads for the Agents panel (see
-  // T3TeamAgentsPanelForkSection). Reuses the same parent/child relation the Work-lens sidebar
-  // uses to roll up sub-runs, kept referentially stable by that hook's single-slot memo.
-  const t3teamChildThreadRelations = useT3TeamChildThreadRelations();
+  // T3TeamAgentsPanelForkSection). Reads the mirror the sidebar publishes into
+  // t3team-childThreadRelationsStore rather than instantiating a second
+  // useT3TeamChildThreadRelations()/useProjectStore() here — that hook is backed by a heavy,
+  // per-call-site stateful store with its own backend-fetch hydration effects, and a fresh
+  // instance mounted inside ChatView (which remounts per active thread) has no guarantee of ever
+  // hydrating parent/child placements, even though the sidebar's long-lived instance already has.
+  const t3teamChildThreadsByParentId = useT3TeamChildThreadRelationsStore(
+    (state) => state.childThreadsByParentId,
+  );
   const t3teamAgentsPanelSubRuns =
-    (activeThread
-      ? t3teamChildThreadRelations.childThreadsByParentId.get(activeThread.id)
-      : undefined) ?? EMPTY_T3TEAM_CHILD_THREADS;
+    (activeThread ? t3teamChildThreadsByParentId.get(activeThread.id) : undefined) ??
+    EMPTY_T3TEAM_CHILD_THREADS;
   const pendingApprovals = useMemo(
     () => derivePendingApprovals(threadActivities),
     [threadActivities],
