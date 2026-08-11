@@ -39,8 +39,14 @@ export function toGitHubWorkActivityItemsFromPullRequestEntries(
         subjectUrl: entry.url,
         subjectBranch: entry.headBranch,
         subjectState: entry.isDraft ? "draft" : entry.state,
-        additions: entry.additions,
-        deletions: entry.deletions,
+        // A listing row carries 0/0 until `listStats` reads the real counts separately (see
+        // pullRequestEnvironment.listStats) — GitHub is the one host that fills them in on the
+        // listing itself. Omitting the pair rather than sending literal zeros keeps a consumer
+        // that renders "+N / -M only when present" from drawing "+0 / -0" for a row nothing has
+        // measured yet.
+        ...(entry.additions > 0 || entry.deletions > 0
+          ? { additions: entry.additions, deletions: entry.deletions }
+          : {}),
         updatedAt: entry.updatedAt,
         ...(workItemKey ? { workItemKey } : {}),
       } satisfies GitHubWorkActivityItem;

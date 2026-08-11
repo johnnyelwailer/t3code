@@ -212,6 +212,21 @@ describe("parseUnifiedDiffToFiles", () => {
     expect(files[0]?.filename).toBe('src/say "hi".ts');
   });
 
+  it("decodes octal-escaped non-ASCII bytes in a quoted header (git's core.quotePath default)", () => {
+    // No ---/+++ lines here on purpose, so the header itself — where git puts the octal escape
+    // — is the only path source; \303\251 is "é" as two UTF-8 bytes.
+    const diff = [
+      'diff --git "a/src/h\\303\\251llo.txt" "b/src/h\\303\\251llo.txt"',
+      "index 111aaaa..222bbbb 100644",
+      "Binary files a/src/héllo.txt and b/src/héllo.txt differ",
+      "",
+    ].join("\n");
+
+    const files = parseUnifiedDiffToFiles(diff);
+
+    expect(files[0]?.filename).toBe("src/héllo.txt");
+  });
+
   it("resolves an unquoted spaced path from the ---/+++ lines rather than the ambiguous header", () => {
     // The naive `a\/(.+) b\/(.+)` split would cut at the first " b/" inside the path itself.
     const diff = [

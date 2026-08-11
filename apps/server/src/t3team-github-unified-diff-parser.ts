@@ -32,8 +32,35 @@ function splitIntoFileBlocks(diff: string): ReadonlyArray<ParsedFileBlock> {
   return blocks;
 }
 
+/**
+ * Git quotes a non-ASCII byte in a path as a 3-digit octal escape (`core.quotePath`'s default),
+ * so `café.txt` becomes `caf\303\251.txt` — the two escapes are the UTF-8 bytes of "é", not two
+ * separate characters. A plain `\\(.)`-style unescape would consume `\3` as an escaped "3" and
+ * garble the rest. This instead assembles the raw byte sequence (octal escapes as their byte,
+ * everything else re-encoded to UTF-8) and decodes it once, at the end, as UTF-8 text.
+ */
 function unescapeQuoted(raw: string): string {
-  return raw.replace(/\\(.)/g, "$1");
+  const bytes: Array<number> = [];
+  const encoder = new TextEncoder();
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw[i]!;
+    if (char === "\\") {
+      const octal = /^[0-7]{3}/.exec(raw.slice(i + 1, i + 4));
+      if (octal) {
+        bytes.push(Number.parseInt(octal[0], 8));
+        i += 3;
+        continue;
+      }
+      const escaped = raw[i + 1];
+      if (escaped !== undefined) {
+        bytes.push(...encoder.encode(escaped));
+        i += 1;
+        continue;
+      }
+    }
+    bytes.push(...encoder.encode(char));
+  }
+  return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
 }
 
 /**

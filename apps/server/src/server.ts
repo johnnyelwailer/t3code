@@ -551,7 +551,7 @@ const commandReadinessLayer = HttpRouter.middleware(
   { global: true },
 );
 
-const PullRequestServiceLive = PullRequestService.layer.pipe(
+export const PullRequestServiceLive = PullRequestService.layer.pipe(
   // One registry entry per supported host; the service only knows the registry.
   Layer.provide(PullRequestProviderRegistry.layer),
   Layer.provide(SourceControlProviderRegistryLayerLive),
@@ -830,6 +830,14 @@ export const makeServerLayer = Layer.unwrap(
     );
 
     return serverApplicationLayer.pipe(
+      // loadPullRequestContext (behind t3teamGitHubPullRequestContextRouteLayer, inside
+      // makeRoutesLayer) now requires PullRequestService directly. makeRoutesLayer already
+      // provides PullRequestServiceLive to the routes merged there, but that provision does
+      // not reach the requirement HttpRouter.serve's own effect carries at this outer level —
+      // so it is provided again here, ahead of the rest of this pipe. The pr-context route's
+      // own project resolver also reads PullRequestProviderRegistry directly, same story.
+      Layer.provide(PullRequestServiceLive),
+      Layer.provide(PullRequestProviderRegistry.layer),
       Layer.provideMerge(runtimeServicesLive),
       Layer.provide(activationLayer),
       Layer.provideMerge(serverRelayBrokerTracingLayer),

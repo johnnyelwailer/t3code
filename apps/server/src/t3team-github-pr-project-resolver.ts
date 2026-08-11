@@ -1,7 +1,13 @@
 import * as Effect from "effect/Effect";
-import type { OrchestrationProjectShell, ProjectId } from "@t3tools/contracts";
+import {
+  pullRequestHostOf,
+  type OrchestrationProjectShell,
+  type ProjectId,
+  type SourceControlProviderKind,
+} from "@t3tools/contracts";
 
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 
 /**
  * Upstream's `PullRequestService` is keyed by `projectId`, not by `host`+`repository`: it reads a
@@ -19,32 +25,40 @@ function repositoryIdentityOf(project: OrchestrationProjectShell): string | null
   return identity.owner && identity.name ? `${identity.owner}/${identity.name}` : null;
 }
 
-function hostOf(project: OrchestrationProjectShell): string {
-  const canonicalKey = project.repositoryIdentity?.canonicalKey;
-  const host = canonicalKey?.split("/")[0]?.trim();
-  return host === undefined || host.length === 0 ? "unknown" : host.toLowerCase();
-}
-
 /**
  * Finds the project bound to a repository on a host. Two projects can be checkouts of the same
  * repository (worktrees, or the same fork cloned twice) — that is not an error, so the first
- * match in shell-snapshot order is returned deterministically and every other match is only
- * noted, never surfaced as a failure.
+ * *usable* match in shell-snapshot order is returned deterministically and every other match is
+ * only noted, never surfaced as a failure. "Usable" means the registry has an implementation for
+ * the project's provider kind: a project whose kind is `"unknown"` or unimplemented would only
+ * fail every read after being picked, so it is skipped in favor of a later, readable match —
+ * mirroring `PullRequestService`'s own `listWorkspaceProjects`, which drops such projects into
+ * its `unimplemented` bucket rather than the readable list.
  */
 export function resolvePullRequestProjectId(input: {
   readonly host: string;
   readonly repository: string;
-}): Effect.Effect<ProjectId | null, never, ProjectionSnapshotQuery.ProjectionSnapshotQuery> {
+}): Effect.Effect<
+  ProjectId | null,
+  never,
+  ProjectionSnapshotQuery.ProjectionSnapshotQuery | PullRequestProviderRegistry
+> {
   const wantedHost = input.host.trim().toLowerCase();
   const wantedRepository = input.repository.trim().toLowerCase();
 
-  return ProjectionSnapshotQuery.ProjectionSnapshotQuery.pipe(
-    Effect.flatMap((projections) => projections.getShellSnapshot()),
-    Effect.flatMap((snapshot) => {
+  return Effect.all([
+    ProjectionSnapshotQuery.ProjectionSnapshotQuery.pipe(
+      Effect.flatMap((projections) => projections.getShellSnapshot()),
+    ),
+    PullRequestProviderRegistry,
+  ]).pipe(
+    Effect.flatMap(([snapshot, registry]) => {
       const matches = snapshot.projects.filter((project) => {
         const repository = repositoryIdentityOf(project);
         if (!repository || repository.toLowerCase() !== wantedRepository) return false;
-        return hostOf(project) === wantedHost;
+        const kind = project.repositoryIdentity?.provider as SourceControlProviderKind | undefined;
+        if (kind === undefined || kind === "unknown" || registry.get(kind) === null) return false;
+        return pullRequestHostOf(project.repositoryIdentity, kind) === wantedHost;
       });
 
       const logAmbiguity =

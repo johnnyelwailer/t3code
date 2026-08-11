@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import { PullRequestOperationError } from "@t3tools/contracts";
 import type {
   OrchestrationProjectShell,
   OrchestrationShellSnapshot,
@@ -12,6 +13,7 @@ import type {
 import { loadPullRequestContext } from "./t3team-github-routes-pr-context.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
+import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 
 const project = {
   id: "project-1",
@@ -25,6 +27,7 @@ const project = {
       remoteUrl: "git@github.com:acme/project.git",
     },
     displayName: "acme/project",
+    provider: "github",
   },
   defaultModelSelection: null,
   scripts: [],
@@ -154,12 +157,15 @@ const activity: PullRequestActivity = {
 const diff =
   "diff --git a/src/foo.ts b/src/foo.ts\n--- a/src/foo.ts\n+++ b/src/foo.ts\n@@ -1 +1 @@\n-export const value = 'old';\n+export const value = 'new';\n";
 
-function pullRequestServiceLayer(diffImpl?: () => Effect.Effect<PullRequestDiffResult, never>) {
+function pullRequestServiceLayer(
+  diffImpl?: () => Effect.Effect<PullRequestDiffResult, never>,
+  activityImpl?: () => Effect.Effect<PullRequestActivity, PullRequestService.PullRequestError>,
+) {
   const service = PullRequestService.PullRequestService.of({
     list: () => Effect.die("not used"),
     listStats: () => Effect.die("not used"),
     detail: () => Effect.succeed(detail),
-    activity: () => Effect.succeed(activity),
+    activity: activityImpl ?? (() => Effect.succeed(activity)),
     diff:
       diffImpl ??
       (() =>
@@ -185,6 +191,17 @@ function pullRequestServiceLayer(diffImpl?: () => Effect.Effect<PullRequestDiffR
   return Layer.succeed(PullRequestService.PullRequestService, service);
 }
 
+// The resolver only calls `.get("github")`, never a provider's own methods, so a minimal stub is
+// enough — no need for the full `PullRequestProviderApi` fake `PullRequestService.test.ts` uses
+// to exercise the provider itself.
+const providerRegistryLayer = Layer.succeed(
+  PullRequestProviderRegistry,
+  PullRequestProviderRegistry.of({
+    get: (kind) => (kind === "github" ? ({ kind } as never) : null),
+    kinds: ["github"],
+  }),
+);
+
 describe("loadPullRequestContext", () => {
   it("loads a complete pull request package including diff, comments, and snapshots", async () => {
     const result = await Effect.runPromise(
@@ -192,7 +209,11 @@ describe("loadPullRequestContext", () => {
         host: "github.com",
         repository: "acme/project",
         subjectUrl: "https://github.com/acme/project/pull/42",
-      }).pipe(Effect.provide(Layer.merge(pullRequestServiceLayer(), projectionLayer))),
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(pullRequestServiceLayer(), projectionLayer, providerRegistryLayer),
+        ),
+      ),
     );
 
     expect(result.pullRequestNumber).toBe(42);
@@ -219,7 +240,11 @@ describe("loadPullRequestContext", () => {
           host: "github.com",
           repository: "acme/other-project",
           subjectUrl: "https://github.com/acme/other-project/pull/99",
-        }).pipe(Effect.provide(Layer.merge(pullRequestServiceLayer(), emptyProjectionLayer))),
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(pullRequestServiceLayer(), emptyProjectionLayer, providerRegistryLayer),
+          ),
+        ),
       ),
     );
 
@@ -227,7 +252,7 @@ describe("loadPullRequestContext", () => {
     expect(JSON.stringify(outcome)).toContain("No open project checkout is bound to");
   });
 
-  it("fails instead of looping forever when diff pagination repeats the same cursor", async () => {
+  it("degrades the diff to a warning instead of looping forever when pagination repeats a cursor", async () => {
     const diffCalls: Array<string | undefined> = [];
     const repeatingDiff = () =>
       Effect.sync(() => {
@@ -241,21 +266,95 @@ describe("loadPullRequestContext", () => {
         } satisfies PullRequestDiffResult;
       });
 
-    const outcome = await Effect.runPromise(
-      Effect.exit(
-        loadPullRequestContext({
-          host: "github.com",
-          repository: "acme/project",
-          subjectUrl: "https://github.com/acme/project/pull/7",
-        }).pipe(
-          Effect.provide(Layer.merge(pullRequestServiceLayer(repeatingDiff), projectionLayer)),
+    const result = await Effect.runPromise(
+      loadPullRequestContext({
+        host: "github.com",
+        repository: "acme/project",
+        subjectUrl: "https://github.com/acme/project/pull/7",
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            pullRequestServiceLayer(repeatingDiff),
+            projectionLayer,
+            providerRegistryLayer,
+          ),
         ),
       ),
     );
 
-    expect(outcome._tag).toBe("Failure");
-    expect(JSON.stringify(outcome)).toContain("repeated cursor");
+    // The repeated-cursor guard fails only the diff sub-read; the rest of the bundle (detail,
+    // activity, file list) still loads, with the failure surfaced as a warning instead of
+    // taking the whole endpoint down.
+    expect(result.diff).toBeUndefined();
+    expect(result.warnings).toContain("Unable to load the pull request diff.");
     // Once for the first page, once more to notice the cursor repeats — never unbounded.
     expect(diffCalls.length).toBe(2);
+  });
+
+  it("degrades activity to empty-with-a-warning without failing detail or the diff", async () => {
+    const failingActivity = () =>
+      Effect.fail(
+        new PullRequestOperationError({
+          operation: "activity",
+          detail: "This host cannot provide activity right now.",
+        }),
+      );
+
+    const result = await Effect.runPromise(
+      loadPullRequestContext({
+        host: "github.com",
+        repository: "acme/project",
+        subjectUrl: "https://github.com/acme/project/pull/8",
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            pullRequestServiceLayer(undefined, failingActivity),
+            projectionLayer,
+            providerRegistryLayer,
+          ),
+        ),
+      ),
+    );
+
+    expect(result.pullRequestNumber).toBe(8);
+    expect(result.diff).toContain("diff --git");
+    expect(result.reviews).toHaveLength(0);
+    expect(result.commits).toHaveLength(0);
+    expect(result.warnings).toContain(
+      "Unable to load pull request reviews, comments, and commits.",
+    );
+  });
+
+  it("carries a truncation warning when the host reports the diff or the comments as incomplete", async () => {
+    const truncatedActivity = () => Effect.succeed({ ...activity, commentsTruncated: true });
+    const truncatedDiff = () =>
+      Effect.succeed({
+        patch: diff,
+        truncated: true,
+        nextCursor: null,
+      } satisfies PullRequestDiffResult);
+
+    const result = await Effect.runPromise(
+      loadPullRequestContext({
+        host: "github.com",
+        repository: "acme/project",
+        subjectUrl: "https://github.com/acme/project/pull/9",
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            pullRequestServiceLayer(truncatedDiff, truncatedActivity),
+            projectionLayer,
+            providerRegistryLayer,
+          ),
+        ),
+      ),
+    );
+
+    expect(result.warnings).toContain(
+      "Pull request comments were truncated by the host; not every comment is included.",
+    );
+    expect(result.warnings).toContain(
+      "The pull request diff was truncated; some file changes may be incomplete.",
+    );
   });
 });

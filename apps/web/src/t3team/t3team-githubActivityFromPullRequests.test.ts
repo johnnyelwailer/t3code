@@ -72,4 +72,19 @@ describe("toGitHubWorkActivityItemsFromPullRequestEntries", () => {
     ]);
     expect(item?.workItemKey).toBe("PROJ-77");
   });
+
+  it("carries real additions/deletions when the listing already measured them", () => {
+    const [item] = toGitHubWorkActivityItemsFromPullRequestEntries([
+      entry({ additions: 10, deletions: 2 }),
+    ]);
+    expect(item).toMatchObject({ additions: 10, deletions: 2 });
+  });
+
+  it("omits additions/deletions rather than rendering +0/-0 for a row listStats hasn't measured yet", () => {
+    const [item] = toGitHubWorkActivityItemsFromPullRequestEntries([
+      entry({ additions: 0, deletions: 0 }),
+    ]);
+    expect(item).not.toHaveProperty("additions");
+    expect(item).not.toHaveProperty("deletions");
+  });
 });
