@@ -64,10 +64,11 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
   if (!counts || counts.total === 0) {
     return null;
   }
+  const noun = counts.total === 1 ? "sub-run" : "sub-runs";
   const label =
     counts.running > 0
-      ? `${counts.total} sub-runs · ${counts.running} active`
-      : `${counts.total} sub-runs`;
+      ? `${counts.total} ${noun} · ${counts.running} active`
+      : `${counts.total} ${noun}`;
   return (
     <span
       data-t3team-sub-runs-chip
