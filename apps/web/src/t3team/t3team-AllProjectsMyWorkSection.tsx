@@ -13,6 +13,8 @@
  * A read-only roll-up needs none of that machinery, so it takes none of it.
  */
 import { useMemo } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { ChevronRightIcon } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
@@ -28,6 +30,7 @@ export function AllProjectsMyWorkSection({
 }) {
   const { tickets, loading, error, lastCheckedAt } = useProjectMyWork(project);
   const assigned = useMemo(() => tickets ?? [], [tickets]);
+  const navigate = useNavigate();
 
   // A project with nothing assigned is noise in a roll-up; drop the whole section rather than
   // render an empty heading per project.
@@ -38,11 +41,26 @@ export function AllProjectsMyWorkSection({
   return (
     <section className="flex min-w-0 flex-col gap-2">
       <header className="flex min-w-0 items-center gap-2">
-        <AppProjectIcon project={project} />
-        <h2 className="min-w-0 truncate font-medium text-sm">{project.title}</h2>
-        <span className="shrink-0 text-muted-foreground text-xs">
-          {loading && assigned.length === 0 ? "Loading…" : `${assigned.length}`}
-        </span>
+        {/* The whole heading filters into the project's own My-work board — the roll-up is the
+            overview, the project view is where the work happens. */}
+        <button
+          type="button"
+          className="group/section-head flex min-w-0 cursor-pointer items-center gap-2 rounded-md text-left hover:text-foreground"
+          onClick={() => {
+            void navigate({
+              to: "/t3team/projects/$projectId",
+              params: { projectId: project.id },
+              search: { projectView: "my-work" },
+            });
+          }}
+        >
+          <AppProjectIcon project={project} />
+          <h2 className="min-w-0 truncate font-medium text-sm">{project.title}</h2>
+          <span className="shrink-0 text-muted-foreground text-xs">
+            {loading && assigned.length === 0 ? "Loading…" : `${assigned.length}`}
+          </span>
+          <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/section-head:opacity-100" />
+        </button>
       </header>
       {error ? (
         <p className="text-destructive text-xs">{error}</p>
