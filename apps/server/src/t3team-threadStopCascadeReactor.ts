@@ -30,16 +30,27 @@ export const T3TeamThreadStopCascadeReactorLive = Layer.effectDiscard(
       }
       return stopThreadDescendants({
         threadId: event.payload.threadId,
+        triggerEventId: event.eventId,
         createdAt: event.payload.createdAt,
         byUser: event.payload.byUser === true,
         dispatch: engine.dispatch,
       }).pipe(
+        Effect.tap(({ attempted, failed }) =>
+          failed > 0
+            ? Effect.logWarning("t3team cascade stop failed to interrupt some descendants", {
+                threadId: event.payload.threadId,
+                attempted,
+                failed,
+              })
+            : Effect.void,
+        ),
         Effect.catchCause((cause) =>
           Effect.logWarning("t3team thread-stop-cascade reactor failed to stop descendants", {
             threadId: event.payload.threadId,
             cause: Cause.pretty(cause),
           }),
         ),
+        Effect.asVoid,
       );
     };
 

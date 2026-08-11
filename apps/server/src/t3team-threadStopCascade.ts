@@ -12,7 +12,8 @@
  *
  * @module t3team-threadStopCascade
  */
-import { CommandId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
+import { CommandId, ThreadId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
@@ -62,7 +63,14 @@ export const loadT3TeamThreadDescendants = (
     }
 
     return descendants;
-  }).pipe(Effect.catchCause(() => Effect.succeed([])));
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning("t3team failed to load thread descendants for a cascade stop", {
+        rootThreadId,
+        cause: Cause.pretty(cause),
+      }).pipe(Effect.as([])),
+    ),
+  );
 
 /**
  * Interrupt every descendant of `threadId` (NOT `threadId` itself — the
@@ -70,15 +78,34 @@ export const loadT3TeamThreadDescendants = (
  * it). Each descendant interrupt carries the same `t3teamStopOrigin` as the
  * triggering stop, so a user-raised cascade suppresses actor auto-dispatch on
  * every descendant exactly like it does on the root.
+ *
+ * `triggerEventId` (the `thread.turn-interrupt-requested` event that raised
+ * this cascade) — NOT a random id — seeds every descendant's `commandId`.
+ * Command receipts are persisted with `command_id` as a SQL PRIMARY KEY and
+ * the engine short-circuits redelivery of a command id it has already seen
+ * (even a rejected one) forever; keying on the triggering event keeps
+ * redelivery of the SAME cascade idempotent while still letting a LATER
+ * cascade stop (a new interrupt event, a new eventId) reach a child that a
+ * previous cascade failed to stop or that has since resumed. A per-pair
+ * constant id would instead poison that pair permanently after one failure.
+ *
+ * A dispatch failure is logged, not silently discarded — see the caller,
+ * which surfaces the failed count.
  */
 export const stopThreadDescendants = (input: {
   readonly threadId: string;
+  readonly triggerEventId: string;
   readonly createdAt: string;
   readonly byUser: boolean;
   readonly dispatch: OrchestrationEngineShape["dispatch"];
-}): Effect.Effect<void, never, SqlClient.SqlClient> =>
+}): Effect.Effect<
+  { readonly attempted: number; readonly failed: number },
+  never,
+  SqlClient.SqlClient
+> =>
   Effect.gen(function* () {
     const descendants = yield* loadT3TeamThreadDescendants(input.threadId);
+    let failed = 0;
     yield* Effect.forEach(
       descendants,
       (descendantThreadId) =>
@@ -86,13 +113,22 @@ export const stopThreadDescendants = (input: {
           .dispatch({
             type: "thread.turn.interrupt",
             commandId: CommandId.make(
-              `t3team-cascade-stop:${input.threadId}:${descendantThreadId}`,
+              `t3team-cascade-stop:${input.triggerEventId}:${descendantThreadId}`,
             ),
             threadId: ThreadId.make(descendantThreadId),
             t3teamStopOrigin: input.byUser ? "user" : "system",
             createdAt: input.createdAt,
           })
-          .pipe(Effect.catchCause(() => Effect.void)),
+          .pipe(
+            Effect.catchCause((cause) => {
+              failed++;
+              return Effect.logWarning(
+                "t3team cascade stop failed to interrupt a descendant thread",
+                { rootThreadId: input.threadId, descendantThreadId, cause: Cause.pretty(cause) },
+              );
+            }),
+          ),
       { concurrency: 1 },
     );
+    return { attempted: descendants.length, failed };
   });

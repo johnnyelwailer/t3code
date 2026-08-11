@@ -134,7 +134,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
               />
             }
           >
-            <ChevronDownIcon className="size-3" />
+            <ChevronDownIcon className="size-3" aria-hidden="true" />
           </MenuTrigger>
           <MenuPopup align="end" side="top">
             <MenuItem onClick={() => onInterruptCascade()}>Stop incl. sub-runs</MenuItem>

@@ -992,9 +992,14 @@ const ThreadTurnInterruptCommand = Schema.Struct({
    * messages on this thread until the user sends the next message (see
    * t3team-actorMessageReactor.ts). Absent or "system" means fork automation
    * raised it (workflow cancel, cascade descendant stop) and must NOT suppress
-   * actor delivery. Server side only — the client command variant deliberately
-   * cannot set it; the dispatch seam (Normalizer) stamps "user" on every stop
-   * that actually arrived from a client.
+   * actor delivery. The client CAN technically set this field (it's the same
+   * struct as `ClientOrchestrationCommand`); it's safe only because the
+   * dispatch seam overwrites it unconditionally to "user" for every command
+   * that actually reaches ws.ts / orchestration/http.ts, regardless of what
+   * the client sent. TRAP: any future caller of that same authenticated HTTP
+   * dispatch endpoint — not just the web UI — gets stamped "user" too, so a
+   * new automated caller wired through it will unexpectedly suppress actor
+   * delivery unless it's given its own non-client dispatch path instead.
    */
   t3teamStopOrigin: Schema.optional(Schema.Literals(["user", "system"])),
   createdAt: IsoDateTime,

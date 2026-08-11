@@ -25,13 +25,17 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { makeT3TeamActorMailbox } from "./t3team-actorMailbox.ts";
 import { rehydrateActorMailbox } from "./t3team-actorMailboxRehydrate.ts";
 import { startActorReaction } from "./t3team-actorMessageReaction.ts";
-import { isRealUserMessage } from "./t3team-actorMessageSuppression.ts";
+import {
+  clearSuppressionForThreadTree,
+  isRealUserMessage,
+} from "./t3team-actorMessageSuppression.ts";
 
 /**
  * Maximum number of auto-reaction hops in a single actor-message chain. A
@@ -112,7 +116,9 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         yield* tryDrain(payload.threadId);
       });
 
-    const handleEvent = (event: OrchestrationEvent): Effect.Effect<void> => {
+    const handleEvent = (
+      event: OrchestrationEvent,
+    ): Effect.Effect<void, never, SqlClient.SqlClient> => {
       switch (event.type) {
         case "thread.actor-message-delivered":
           return onDelivered(event.payload);
@@ -129,6 +135,11 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           return tryDrain(event.payload.threadId);
         // A person clicked "Stop generation" — suppress auto-dispatch so a
         // following actor message can't re-open the turn they just stopped.
+        // NOTE (accepted race): a reaction turn already in flight when the
+        // suppress lands still completes and its own settle can trigger one
+        // more drain before the flag takes effect on the NEXT delivery. That
+        // is at most one extra turn, and the mailbox's serialization still
+        // converges — it does not resume the ping-pong.
         case "thread.turn-interrupt-requested":
           return event.payload.byUser === true
             ? mailbox.suppress(event.payload.threadId)
@@ -137,9 +148,11 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         // the "user" role) lifts suppression and drains anything queued.
         case "thread.message-sent":
           return isRealUserMessage(event.payload)
-            ? mailbox
-                .clearSuppression(event.payload.threadId)
-                .pipe(Effect.andThen(tryDrain(event.payload.threadId)))
+            ? clearSuppressionForThreadTree({
+                mailbox,
+                tryDrain,
+                threadId: event.payload.threadId,
+              })
             : Effect.void;
         default:
           return Effect.void;
