@@ -5,8 +5,10 @@ import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import {
   useT3TeamInboxAttribution,
+  useT3TeamInboxPinnedGitHubActivity,
   useT3TeamInboxWorkItems,
 } from "~/t3team/t3team-useInboxWorkItems";
+import { InboxPinnedGitHubActivityRows } from "~/t3team/components/t3team-InboxPinnedGitHubActivityRows";
 import { InboxWorkItemRows } from "~/t3team/components/t3team-InboxWorkItemRows";
 import { ProjectSidebarHeader } from "~/t3team/components/t3team-ProjectSidebarHeader";
 import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
@@ -108,8 +110,14 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
  */
 export function InboxWorkItemSection(): ReactNode {
   const workItems = useT3TeamInboxWorkItems();
-  if (workItems.length === 0) {
+  const pinnedGitHubActivity = useT3TeamInboxPinnedGitHubActivity();
+  if (workItems.length === 0 && pinnedGitHubActivity.length === 0) {
     return null;
   }
-  return <InboxWorkItemRows rows={workItems} />;
+  return (
+    <>
+      <InboxWorkItemRows rows={workItems} />
+      <InboxPinnedGitHubActivityRows rows={pinnedGitHubActivity} />
+    </>
+  );
 }
