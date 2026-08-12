@@ -23,7 +23,7 @@ export type GitHubWorkActivityItem = {
   readonly workItemKey?: string;
 };
 
-function normalizeWorkItemKey(value: string | undefined): string | undefined {
+export function normalizeWorkItemKey(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed.toUpperCase() : undefined;
 }
@@ -38,7 +38,7 @@ function isUnmergedPullRequestActivity(item: GitHubWorkActivityItem): boolean {
   return state === "open" || state === "draft" || state === undefined;
 }
 
-function sortGitHubActivityItems(
+export function sortGitHubActivityItems(
   items: ReadonlyArray<GitHubWorkActivityItem>,
 ): ReadonlyArray<GitHubWorkActivityItem> {
   return [...items].sort((left, right) => {

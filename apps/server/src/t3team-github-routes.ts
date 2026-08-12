@@ -13,9 +13,8 @@ export const t3teamGitHubPullRequestContextRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/github/pull-request-context",
   Effect.gen(function* () {
-    const vcs = yield* VcsProcess;
     const input = yield* readJsonBody<GitHubPullRequestContextRequest>();
-    const response = yield* loadPullRequestContext(vcs, input).pipe(
+    const response = yield* loadPullRequestContext(input).pipe(
       Effect.mapError((cause) =>
         toT3TeamError(cause, "Failed to load GitHub pull request context."),
       ),

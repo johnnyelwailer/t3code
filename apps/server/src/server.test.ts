@@ -101,7 +101,8 @@ const collectQueueUntil = Effect.fn("TransferBudget.collectQueueUntil")(function
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as ServerConfig from "./config.ts";
-import { makeRoutesLayer } from "./server.ts";
+import { makeRoutesLayer, PullRequestServiceLive } from "./server.ts";
+import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
 import * as ProviderSessionRuntime from "./persistence/ProviderSessionRuntime.ts";
 import { isThreadDetailEvent, resolveAvailableEditorsForConfig } from "./ws.ts";
@@ -654,6 +655,46 @@ const buildAppUnderTest = (options?: {
       Layer.provide(Layer.succeed(HostProcessEnvironment, {})),
     );
 
+    // Provided twice below: once inside `servedRoutesLayer` for the orchestration routes that
+    // already needed it, and again on `appLayer` — the GitHub pr-context route's own
+    // requirement on this service does not appear to be closed by the first provision, the same
+    // way PullRequestService needed providing again at the outer layer too.
+    const projectionSnapshotQueryMockLayer = Layer.mock(
+      ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+    )({
+      getCommandReadModel: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
+      getSnapshot: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
+      getShellSnapshot: () =>
+        Effect.succeed({
+          snapshotSequence: 0,
+          projects: [],
+          threads: [],
+          updatedAt: "1970-01-01T00:00:00.000Z",
+        }),
+      getArchivedShellSnapshot: () =>
+        Effect.succeed({
+          snapshotSequence: 0,
+          projects: [],
+          threads: [],
+          updatedAt: "1970-01-01T00:00:00.000Z",
+        }),
+      searchThreads: () => Effect.succeed({ matches: [] }),
+      // t3team addition to the service; defaulted here so upstream tests that only override
+      // the members they care about (e.g. the subscribeThread resume-gap cases) don't hit
+      // `Unimplemented method "threadExists"` when ws.ts checks liveness.
+      threadExists: () => Effect.succeed(true),
+      getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
+      getProjectShellById: () => Effect.succeed(Option.none()),
+      getThreadShellById: () => Effect.succeed(Option.none()),
+      getThreadDetailById: () => Effect.succeed(Option.none()),
+      getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
+      getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
+      getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+      getFirstActiveThreadIdByProjectId: () => Effect.succeed(Option.none()),
+      getThreadCheckpointContext: () => Effect.succeed(Option.none()),
+      ...options?.layers?.projectionSnapshotQuery,
+    });
+
     const servedRoutesLayer = HttpRouter.serve(
       makeRoutesLayer.pipe(Layer.provide(serviceLauncherClientLayer)),
       {
@@ -827,41 +868,7 @@ const buildAppUnderTest = (options?: {
           ...options?.layers?.orchestrationEngine,
         }),
       ),
-      Layer.provide(
-        Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
-          getCommandReadModel: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
-          getSnapshot: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
-          getShellSnapshot: () =>
-            Effect.succeed({
-              snapshotSequence: 0,
-              projects: [],
-              threads: [],
-              updatedAt: "1970-01-01T00:00:00.000Z",
-            }),
-          getArchivedShellSnapshot: () =>
-            Effect.succeed({
-              snapshotSequence: 0,
-              projects: [],
-              threads: [],
-              updatedAt: "1970-01-01T00:00:00.000Z",
-            }),
-          searchThreads: () => Effect.succeed({ matches: [] }),
-          // t3team addition to the service; defaulted here so upstream tests that only override
-          // the members they care about (e.g. the subscribeThread resume-gap cases) don't hit
-          // `Unimplemented method "threadExists"` when ws.ts checks liveness.
-          threadExists: () => Effect.succeed(true),
-          getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
-          getProjectShellById: () => Effect.succeed(Option.none()),
-          getThreadShellById: () => Effect.succeed(Option.none()),
-          getThreadDetailById: () => Effect.succeed(Option.none()),
-          getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
-          getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
-          getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
-          getFirstActiveThreadIdByProjectId: () => Effect.succeed(Option.none()),
-          getThreadCheckpointContext: () => Effect.succeed(Option.none()),
-          ...options?.layers?.projectionSnapshotQuery,
-        }),
-      ),
+      Layer.provide(projectionSnapshotQueryMockLayer),
       Layer.provide(
         Layer.mock(CheckpointDiffQuery.CheckpointDiffQuery)({
           getTurnDiff: () =>
@@ -884,6 +891,26 @@ const buildAppUnderTest = (options?: {
     );
 
     const appLayer = servedRoutesLayer.pipe(
+      // loadPullRequestContext (behind the GitHub pr-context route) reads PullRequestService,
+      // ProjectionSnapshotQuery, and PullRequestProviderRegistry directly; none is closed by
+      // servedRoutesLayer's own provision above, so all three are provided again here — merged
+      // into one slot, since this pipe is already near TypeScript's typed-overload ceiling. The
+      // registry is a stub rather than the real CLI-backed one: the real layer needs
+      // GitVcsDriver and friends that this test environment does not stand up, and the resolver
+      // only ever calls `.get(kind)`, never a provider's own methods.
+      Layer.provide(
+        Layer.mergeAll(
+          PullRequestServiceLive,
+          Layer.succeed(
+            PullRequestProviderRegistry,
+            PullRequestProviderRegistry.of({
+              get: (kind) => (kind === "github" ? ({ kind } as never) : null),
+              kinds: ["github"],
+            }),
+          ),
+        ),
+      ),
+      Layer.provide(projectionSnapshotQueryMockLayer),
       Layer.provide(resourceTelemetryLayer),
       Layer.provide(UsageService.layerTest),
       Layer.provide(

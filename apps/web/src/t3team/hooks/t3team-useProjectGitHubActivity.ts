@@ -1,30 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import type { ProjectId } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { usePrimaryEnvironmentId } from "~/state/environments";
-import { sourceControlEnvironment } from "~/state/sourceControl";
-import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
-import { asT3TeamPollingBackend } from "~/t3team/backend/t3team-pollingBackend";
-import { useBackend } from "~/t3team/backend/t3team-index";
+import { usePrimaryEnvironment } from "~/state/environments";
+import { useEnvironmentQuery } from "~/state/query";
+import { pullRequestEnvironment } from "~/state/pullRequests";
 import {
   groupGitHubActivityByWorkItem,
-  toGitHubWorkActivityItems,
   type GitHubWorkActivityItem,
 } from "~/t3team/t3team-githubActivity";
-import {
-  areGitHubActivityItemsEqual,
-  type ProjectGitHubActivityCache,
-} from "./t3team-projectGitHubActivityShared";
-import {
-  normalizeCacheList,
-  readIntegrationCache,
-  writeIntegrationCache,
-} from "./t3team-integrationCache";
-import {
-  GITHUB_ACTIVITY_CACHE_MAX_AGE_MS,
-  GITHUB_ACTIVITY_POLL_INTERVAL_MS,
-  startBrowserPolling,
-} from "./t3team-integrationPolling";
-import { resolveProjectGitHubActivityDiscovery } from "./t3team-useProjectGitHubActivityDiscovery";
+import { toGitHubWorkActivityItemsFromPullRequestEntries } from "~/t3team/t3team-githubActivityFromPullRequests";
 
 type UseProjectGitHubActivityOptions = {
   readonly project: ProjectShellProject;
@@ -32,161 +16,60 @@ type UseProjectGitHubActivityOptions = {
   readonly enabled?: boolean;
 };
 
+/**
+ * Ticket↔PR matching used to poll the fork's own GitHub inbox notifications
+ * (`backend.github.pollInbox`) for this project's linked repositories. It now reads upstream's
+ * `pullRequestEnvironment.list` atom instead — the same one `routes/_chat.pull-requests.tsx`
+ * reads for the full pull request list — scoped to this project rather than to a set of linked
+ * repository URLs, since upstream's listing is keyed by project rather than by repository.
+ *
+ * TODO(narrowing, tracked in PR body): `linkedRepositoryUrls` is accepted but unused. The old
+ * inbox source could scope itself to more than one repository per project;
+ * `PullRequestListInput` (packages/contracts/src/pullRequest.ts) has no `repository` field at
+ * all — only `projectId`/`host`/`query` — so there is no way to ask upstream's listing for a
+ * second repository's rows without adding that field and its provider plumbing server-side.
+ * That is new server surface, out of scope here: a project's *own* repository still matches
+ * fully, but a ticket linked only through a second repository on the same project will not
+ * surface here until that surface exists. Kept in the signature so every call site needs no
+ * change once it does.
+ */
 export function useProjectGitHubActivity({
   project,
-  linkedRepositoryUrls,
   enabled = true,
 }: UseProjectGitHubActivityOptions) {
-  const backend = asT3TeamPollingBackend(useBackend());
-  const environmentId = usePrimaryEnvironmentId();
-  const discoverSourceControl = useAtomQueryRunner(sourceControlEnvironment.discovery, {
-    reportFailure: false,
-  });
-  const cacheKey = useMemo(
-    () =>
-      `github:projectActivity:${project.id}:${project.source.externalProjectKey ?? "none"}:${project.title}:${normalizeCacheList(linkedRepositoryUrls)}`,
-    [linkedRepositoryUrls, project.id, project.source.externalProjectKey, project.title],
-  );
-  const cached = readIntegrationCache<ProjectGitHubActivityCache>(cacheKey)?.value;
-  const cachedRecord = readIntegrationCache<ProjectGitHubActivityCache>(cacheKey);
-  const [loading, setLoading] = useState(false);
-  const [host, setHost] = useState<string>(cached?.host ?? "github.com");
-  const [account, setAccount] = useState<string | undefined>(cached?.account);
-  const [warning, setWarning] = useState<string | undefined>(cached?.warning);
-  const [suggestedRepositoryCount, setSuggestedRepositoryCount] = useState(
-    cached?.suggestedRepositoryCount ?? 0,
-  );
-  const [activityItems, setActivityItems] = useState<ReadonlyArray<GitHubWorkActivityItem>>(
-    cached?.activityItems ?? [],
-  );
-  const [lastCheckedAt, setLastCheckedAt] = useState<number | undefined>(cachedRecord?.updatedAt);
+  const projectId = project.id as unknown as ProjectId;
+  const primaryEnvironment = usePrimaryEnvironment();
+  const pullRequestsSupported =
+    primaryEnvironment?.serverConfig?.environment.capabilities.pullRequests === true;
+  const environmentId =
+    enabled && pullRequestsSupported ? primaryEnvironment?.environmentId : undefined;
 
-  useEffect(() => {
-    const nextCachedRecord = readIntegrationCache<ProjectGitHubActivityCache>(cacheKey);
-    const cachedValue = nextCachedRecord?.value;
-    setHost(cachedValue?.host ?? "github.com");
-    setAccount(cachedValue?.account);
-    setWarning(cachedValue?.warning);
-    setSuggestedRepositoryCount(cachedValue?.suggestedRepositoryCount ?? 0);
-    setActivityItems(cachedValue?.activityItems ?? []);
-    setLastCheckedAt(nextCachedRecord?.updatedAt);
-  }, [cacheKey]);
-
-  useEffect(() => {
-    if (!backend) return;
-    if (!enabled) {
-      setLoading(false);
-      setAccount(undefined);
-      setWarning(undefined);
-      setSuggestedRepositoryCount(0);
-      setActivityItems([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = async () => {
-      const cachedRecord = readIntegrationCache<ProjectGitHubActivityCache>(cacheKey);
-      setLoading(cachedRecord?.value == null);
-      try {
-        // Prefer cached metadata and avoid rediscovering source control on every poll cycle.
-        let resolvedHost = cachedRecord?.value.host ?? host;
-        let discoveredAccount = cachedRecord?.value.account ?? account;
-        const discovery = await resolveProjectGitHubActivityDiscovery({
+  const listQuery = useEnvironmentQuery(
+    environmentId === undefined
+      ? null
+      : pullRequestEnvironment.list({
           environmentId,
-          discoverSourceControl,
-          host: resolvedHost,
-          account: discoveredAccount,
-        });
-        resolvedHost = discovery.host;
-        discoveredAccount = discovery.account;
+          input: { state: "all", projectId, limit: 99 },
+        }),
+  );
 
-        const response = await backend.github.pollInbox({
-          host: resolvedHost,
-          ...(project.source.externalProjectKey
-            ? { projectKey: project.source.externalProjectKey }
-            : {}),
-          ...(project.title ? { projectTitle: project.title } : {}),
-          linkedRepositoryUrls,
-          ...(cachedRecord?.fingerprint ? { knownFingerprint: cachedRecord.fingerprint } : {}),
-        });
+  const activityItems = useMemo<ReadonlyArray<GitHubWorkActivityItem>>(
+    () => toGitHubWorkActivityItemsFromPullRequestEntries(listQuery.data?.entries ?? []),
+    [listQuery.data],
+  );
 
-        if (cancelled) return;
-        const nextCache = response.unchanged
-          ? {
-              host: cachedRecord?.value.host ?? resolvedHost,
-              ...((cachedRecord?.value.account ?? discoveredAccount)
-                ? { account: cachedRecord?.value.account ?? discoveredAccount }
-                : {}),
-              ...(cachedRecord?.value.warning ? { warning: cachedRecord.value.warning } : {}),
-              suggestedRepositoryCount: cachedRecord?.value.suggestedRepositoryCount ?? 0,
-              activityItems: cachedRecord?.value.activityItems ?? [],
-            }
-          : {
-              host: response.value.host || resolvedHost,
-              ...((response.value.account ?? discoveredAccount)
-                ? { account: response.value.account ?? discoveredAccount }
-                : {}),
-              ...(response.value.inboxWarning ? { warning: response.value.inboxWarning } : {}),
-              suggestedRepositoryCount: response.value.suggestedRepositoryUrls.length,
-              activityItems: toGitHubWorkActivityItems(response.value.inboxItems),
-            };
-        const nextCheckedAt = Date.now();
-        writeIntegrationCache(cacheKey, nextCache, {
-          fingerprint: response.fingerprint,
-          updatedAt: nextCheckedAt,
-        });
-        setHost((current) => (current === nextCache.host ? current : nextCache.host));
-        setAccount((current) => (current === nextCache.account ? current : nextCache.account));
-        setWarning((current) => (current === nextCache.warning ? current : nextCache.warning));
-        setSuggestedRepositoryCount((current) =>
-          current === nextCache.suggestedRepositoryCount
-            ? current
-            : nextCache.suggestedRepositoryCount,
-        );
-        setActivityItems((current) =>
-          areGitHubActivityItemsEqual(current, nextCache.activityItems)
-            ? current
-            : nextCache.activityItems,
-        );
-
-        // Keep polling cadence fresh via cache timestamp, but avoid minute-level UI churn when data is unchanged.
-        if (!response.unchanged || cachedRecord?.updatedAt === undefined) {
-          setLastCheckedAt(nextCheckedAt);
-        }
-      } catch (error) {
-        if (cancelled) return;
-        setWarning(error instanceof Error ? error.message : "Unable to load GitHub activity");
-        setActivityItems([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    const poller = startBrowserPolling({
-      enabled,
-      intervalMs: GITHUB_ACTIVITY_POLL_INTERVAL_MS,
-      maxAgeMs: GITHUB_ACTIVITY_CACHE_MAX_AGE_MS,
-      getUpdatedAt: () => readIntegrationCache<ProjectGitHubActivityCache>(cacheKey)?.updatedAt,
-      poll: load,
-    });
-
-    return () => {
-      cancelled = true;
-      poller.dispose();
-    };
-  }, [
-    backend,
-    cacheKey,
-    enabled,
-    linkedRepositoryUrls,
-    project.source.externalProjectKey,
-    project.title,
-    account,
-    discoverSourceControl,
-    environmentId,
-    host,
-  ]);
+  const host = useMemo(() => {
+    const first = listQuery.data?.entries[0];
+    return first?.host ?? "github.com";
+  }, [listQuery.data]);
+  const account = useMemo(
+    () => (listQuery.data ? Object.values(listQuery.data.viewers)[0] : undefined),
+    [listQuery.data],
+  );
+  const listError = listQuery.data?.errors.find((error) => error.projectId === projectId);
+  // Recomputed only when the answer itself changes, not on every render, so this reads as "the
+  // moment this list last landed" rather than drifting forward on every unrelated re-render.
+  const lastCheckedAt = useMemo(() => (listQuery.data ? Date.now() : undefined), [listQuery.data]);
 
   const activityByWorkItem = useMemo(
     () => groupGitHubActivityByWorkItem(activityItems),
@@ -199,11 +82,13 @@ export function useProjectGitHubActivity({
   );
 
   return {
-    loading,
+    loading: listQuery.isPending && listQuery.data === null,
     host,
     account,
-    warning,
-    suggestedRepositoryCount,
+    warning: listQuery.error ?? listError?.message,
+    // Repository suggestions are a discovery-flow concept upstream has no listing counterpart
+    // for; `useGitHubRepositoryDiscovery` still owns that surface.
+    suggestedRepositoryCount: 0,
     activityItems,
     activityByWorkItem,
     unlinkedActivityItems,

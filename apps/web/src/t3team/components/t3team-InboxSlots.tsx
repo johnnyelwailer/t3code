@@ -1,11 +1,14 @@
+import { ListTreeIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import {
   useT3TeamInboxAttribution,
+  useT3TeamInboxPinnedGitHubActivity,
   useT3TeamInboxWorkItems,
 } from "~/t3team/t3team-useInboxWorkItems";
+import { InboxPinnedGitHubActivityRows } from "~/t3team/components/t3team-InboxPinnedGitHubActivityRows";
 import { InboxWorkItemRows } from "~/t3team/components/t3team-InboxWorkItemRows";
 import { ProjectSidebarHeader } from "~/t3team/components/t3team-ProjectSidebarHeader";
 import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
@@ -69,7 +72,7 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
     return null;
   }
   const noun = counts.total === 1 ? "sub-run" : "sub-runs";
-  const label =
+  const description =
     counts.running > 0
       ? `${counts.total} ${noun} · ${counts.running} active`
       : `${counts.total} ${noun}`;
@@ -78,6 +81,8 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
       type="button"
       data-t3team-sub-runs-chip
       aria-expanded={expanded}
+      aria-label={description}
+      title={description}
       // The chip sits inside the row's own clickable button (see
       // Sidebar.tsx's SidebarThreadRow), same nesting the Settle/Snooze
       // affordances already use there — stopPropagation keeps this toggle
@@ -86,9 +91,15 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
         event.stopPropagation();
         toggle(threadId);
       }}
-      className="shrink-0 cursor-pointer truncate rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium text-sidebar-muted-foreground hover:text-sidebar-foreground"
+      // Just the count — the row line is already crowded, and the verbose label
+      // truncated ("6 sub-runs · 1 acti…"). Detail lives in the tooltip.
+      className="flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
     >
-      {label}
+      <ListTreeIcon aria-hidden className="size-3 shrink-0" />
+      {counts.total}
+      {counts.running > 0 ? (
+        <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-primary" />
+      ) : null}
     </button>
   );
 }
@@ -99,8 +110,14 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
  */
 export function InboxWorkItemSection(): ReactNode {
   const workItems = useT3TeamInboxWorkItems();
-  if (workItems.length === 0) {
+  const pinnedGitHubActivity = useT3TeamInboxPinnedGitHubActivity();
+  if (workItems.length === 0 && pinnedGitHubActivity.length === 0) {
     return null;
   }
-  return <InboxWorkItemRows rows={workItems} />;
+  return (
+    <>
+      <InboxWorkItemRows rows={workItems} />
+      <InboxPinnedGitHubActivityRows rows={pinnedGitHubActivity} />
+    </>
+  );
 }

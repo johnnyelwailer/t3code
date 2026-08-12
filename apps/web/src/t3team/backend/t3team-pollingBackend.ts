@@ -1,10 +1,6 @@
 import type { ResourcePage } from "@t3tools/project-context";
 
-import type {
-  AtlassianBacklogResponse,
-  BackendApi,
-  GitHubInboxDiscoverResponse,
-} from "./t3team-types";
+import type { AtlassianBacklogResponse, BackendApi } from "./t3team-types";
 import { postJson } from "./t3team-t3BackendHttp";
 
 type T3TeamPollEnvelope = { readonly enabled: true; readonly knownFingerprint?: string };
@@ -44,15 +40,6 @@ export type T3TeamPollingBackend = BackendApi & {
       readonly externalProjectId: string;
       readonly knownFingerprint?: string;
     }) => Promise<T3TeamPollResult<ResourcePage>>;
-  };
-  readonly github: BackendApi["github"] & {
-    readonly pollInbox: (input: {
-      readonly host: string;
-      readonly projectKey?: string;
-      readonly projectTitle?: string;
-      readonly linkedRepositoryUrls?: ReadonlyArray<string>;
-      readonly knownFingerprint?: string;
-    }) => Promise<T3TeamPollResult<GitHubInboxDiscoverResponse>>;
   };
 };
 
@@ -158,43 +145,6 @@ export function createAtlassianPollingBackendApi(httpBaseUrl: string) {
           {
             account: input.account,
             externalProjectId: input.externalProjectId,
-          },
-          input.knownFingerprint,
-        ),
-      );
-    },
-  };
-}
-
-export function createGitHubPollingBackendApi(httpBaseUrl: string) {
-  return {
-    pollInbox(input: {
-      readonly host: string;
-      readonly projectKey?: string;
-      readonly projectTitle?: string;
-      readonly linkedRepositoryUrls?: ReadonlyArray<string>;
-      readonly knownFingerprint?: string;
-    }) {
-      return postJson<
-        {
-          readonly host: string;
-          readonly projectKey?: string;
-          readonly projectTitle?: string;
-          readonly linkedRepositoryUrls?: ReadonlyArray<string>;
-          readonly poll: T3TeamPollEnvelope;
-        },
-        T3TeamPollResult<GitHubInboxDiscoverResponse>
-      >(
-        httpBaseUrl,
-        "/api/t3team/github/inbox/poll",
-        withPollEnvelope(
-          {
-            host: input.host,
-            ...(input.projectKey ? { projectKey: input.projectKey } : {}),
-            ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
-            ...(input.linkedRepositoryUrls
-              ? { linkedRepositoryUrls: input.linkedRepositoryUrls }
-              : {}),
           },
           input.knownFingerprint,
         ),
