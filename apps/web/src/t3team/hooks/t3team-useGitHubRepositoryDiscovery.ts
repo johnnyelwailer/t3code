@@ -131,6 +131,7 @@ export function useGitHubRepositoryDiscovery({
             try {
               const response = await backend.github.discoverInbox({
                 host: entry.host,
+                discoveryMode: "repositories",
                 ...(projectKey ? { projectKey } : {}),
                 ...(projectTitle ? { projectTitle } : {}),
                 linkedRepositoryUrls,

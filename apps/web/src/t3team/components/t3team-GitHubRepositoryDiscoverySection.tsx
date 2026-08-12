@@ -57,18 +57,18 @@ export function GitHubRepositoryDiscoverySection({
       : `Searching ${discovery.githubHost || "GitHub"}`;
 
   return (
-    <section className="space-y-3 rounded-xl border border-border/70 bg-card p-3">
+    <section className="space-y-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="rounded-md border border-border/70 bg-background/80 p-2">
+          <div className="rounded-md border border-border/70 bg-background/80 p-1.5">
             <Github className="size-4 text-foreground" />
           </div>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h3 className="text-sm font-semibold">GitHub repository discovery</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold">Find your GitHub repository</h3>
               {!isAuthenticated ? (
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${status.badge}`}
+                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${status.badge}`}
                 >
                   <StatusIcon className="size-3.5" />
                   {status.label}
@@ -82,7 +82,7 @@ export function GitHubRepositoryDiscoverySection({
           size="icon-xs"
           onClick={() => void discovery.refresh()}
           disabled={!discovery.backendAvailable || showAuthSkeleton || discovery.loadingDiscovery}
-          aria-label="Refresh GitHub authentication status"
+          aria-label="Refresh repository discovery"
         >
           <RefreshCw
             className={`size-3.5 ${showAuthSkeleton || discovery.loadingDiscovery ? "animate-spin" : ""}`}
@@ -96,17 +96,11 @@ export function GitHubRepositoryDiscoverySection({
         </div>
       ) : isAuthenticated ? (
         <>
-          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span className="font-medium">Connected</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {connectedAccountLabel}
-              </span>
-            </div>
-            <div className="mt-1 pl-5 text-xs text-muted-foreground">
-              All connected GitHub accounts are searched automatically.
-            </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+            <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="font-medium text-foreground">GitHub connected</span>
+            <span aria-hidden="true">·</span>
+            <span>{connectedAccountLabel}</span>
           </div>
           <Collapsible open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
             <CollapsibleTrigger className="w-full">
@@ -122,10 +116,7 @@ export function GitHubRepositoryDiscoverySection({
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-2">
               <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">
-                  Automatic discovery checks every connected host. Use these controls only when you
-                  need to search one host manually.
-                </p>
+                <p className="text-xs text-muted-foreground">Search one host manually.</p>
                 <GitHubAuthHostPicker discovery={discovery} />
                 <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
                 {discovery.authDetail ? (
@@ -137,17 +128,14 @@ export function GitHubRepositoryDiscoverySection({
         </>
       ) : (
         <>
-          <div className="rounded-lg border border-border/70 bg-muted/20 p-3 text-xs">
-            <div className="flex items-start gap-2 text-muted-foreground">
-              <ShieldAlert className="mt-0.5 size-3.5 text-amber-600 dark:text-amber-400" />
-              <div>
-                Sign in with{" "}
-                <span className="font-mono">
-                  gh auth login --hostname {discovery.githubHost || "github.com"}
-                </span>
-                {discovery.authDetail ? <div className="mt-1">{discovery.authDetail}</div> : null}
-              </div>
-            </div>
+          <div className="flex items-start gap-2 text-xs text-muted-foreground">
+            <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              Sign in with{" "}
+              <span className="font-mono">
+                gh auth login --hostname {discovery.githubHost || "github.com"}
+              </span>
+            </span>
           </div>
           <Collapsible open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
             <CollapsibleTrigger className="w-full">
@@ -173,8 +161,8 @@ export function GitHubRepositoryDiscoverySection({
         </>
       )}
 
-      <div className="h-4 text-xs text-muted-foreground" aria-live="polite">
-        {discovery.loadingDiscovery ? "Searching..." : ""}
+      <div className="min-h-4 text-xs text-muted-foreground" aria-live="polite">
+        {discovery.loadingDiscovery ? "Searching connected GitHub accounts…" : null}
       </div>
 
       {discovery.discoveryWarning ? (
@@ -186,39 +174,43 @@ export function GitHubRepositoryDiscoverySection({
       {isAuthenticated &&
       !discovery.loadingDiscovery &&
       discovery.visibleSuggestedUrls.length === 0 ? (
-        <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
-          No matching repositories were found across the connected GitHub accounts. You can add a
-          repository manually below if needed.
-        </div>
+        <p className="text-xs text-muted-foreground">
+          No matching repository found yet. Try the manual options below.
+        </p>
       ) : null}
 
       {discovery.visibleSuggestedUrls.length > 0 ? (
-        <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-          <div className="flex items-center gap-2 text-xs font-medium text-primary">
-            <Sparkles className="size-3.5" />
-            Found {discovery.visibleSuggestedUrls.length} matching repositories.
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-foreground">
+            <span className="flex items-center gap-2">
+              <Sparkles className="size-3.5" />
+              Matching repositories
+            </span>
+            <span className="text-muted-foreground">
+              {discovery.visibleSuggestedUrls.length} found
+            </span>
           </div>
-          <div className="space-y-2">
+          <div className="overflow-hidden rounded-md border border-border/70">
             {discovery.visibleSuggestedUrls.map((url) => (
               <label
                 key={url}
-                className="flex items-start gap-3 rounded-lg border border-primary/15 bg-background/70 px-3 py-2.5 text-sm"
+                className="flex items-center gap-3 border-b border-border/60 px-3 py-2 text-sm last:border-b-0 hover:bg-muted/30"
               >
                 <input
                   type="checkbox"
                   checked={discovery.selectedSuggestedUrls.has(url)}
                   onChange={() => discovery.toggleSuggestion(url)}
-                  className="mt-0.5"
+                  className="shrink-0"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{url.replace(/^https?:\/\//, "")}</div>
-                  <div className="truncate text-xs text-muted-foreground">{url}</div>
                 </div>
               </label>
             ))}
           </div>
           <Button
-            variant="outline"
+            variant="default"
+            size="sm"
             onClick={() => onAddSuggestedUrls(selectedUrls)}
             disabled={selectedUrls.length === 0}
           >

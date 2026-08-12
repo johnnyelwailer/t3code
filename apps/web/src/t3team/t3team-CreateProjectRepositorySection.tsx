@@ -55,8 +55,8 @@ export function RepositoriesStep({
         onVisibleSuggestionsChange={onDiscoveredRepositoryUrlsChange}
       />
       <Collapsible defaultOpen={linkedRepositoryUrls.length > 0}>
-        <CollapsibleTrigger className="flex w-full items-center justify-between px-1 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
-          <span>Add a repository manually</span>
+        <CollapsibleTrigger className="flex w-full items-center justify-between border-t border-border/60 px-1 pt-2 text-left text-xs text-muted-foreground hover:text-foreground">
+          <span>Can’t find it? Add a repository manually</span>
           <ChevronDown className="size-3.5 text-muted-foreground" />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-2">
