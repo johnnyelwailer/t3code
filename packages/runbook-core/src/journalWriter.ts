@@ -31,6 +31,9 @@ export interface ResolvedWireInput {
   readonly reply?: unknown;
   /** Terminal dismissal — `.response` rejects and a later real reply is ignored. */
   readonly dismissed?: boolean;
+  /** Provenance: the intercepting handler's name, when this reply did NOT come from the real
+   * host (Epic: sub-workflow effect interception). Absent is the default. */
+  readonly by?: string;
   readonly startedAt: string;
   readonly endedAt: string;
 }
@@ -82,6 +85,10 @@ export function toResolvedWire(input: ResolvedWireInput): Record<string, unknown
     result,
     phase: "resolved",
     correlationId: input.correlationId,
+    // `by` is provenance-only; omitted (not `null`) when absent so `JSON.stringify` drops the
+    // key entirely and an unintercepted reply's wire line is byte-identical to before this field
+    // existed.
+    by: input.by,
     startedAt: input.startedAt,
     endedAt: input.endedAt,
   };

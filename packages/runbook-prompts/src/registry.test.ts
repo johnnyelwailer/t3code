@@ -1,13 +1,13 @@
 // @effect-diagnostics nodeBuiltinImport:off - these tests exercise the
 // registry's own filesystem I/O directly against tmp fixtures.
 import { describe, expect, it } from "vite-plus/test";
-import { fileURLToPath } from "node:url";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import * as NodeURL from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import { resolvePrompt } from "./registry.js";
 
-const fixturesDir = fileURLToPath(new URL("./fixtures/prompts", import.meta.url));
+const fixturesDir = NodeURL.fileURLToPath(new URL("./fixtures/prompts", import.meta.url));
 
 describe("prompt registry", () => {
   it("resolves an under-budget prompt with a stable content hash", () => {
@@ -27,9 +27,9 @@ describe("prompt registry", () => {
   });
 
   it("rejects a file whose frontmatter id disagrees with the resolved id", () => {
-    const dir = mkdtempSync(join(tmpdir(), "prompt-id-mismatch-"));
-    writeFileSync(
-      join(dir, "honest-name.md"),
+    const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "prompt-id-mismatch-"));
+    NodeFS.writeFileSync(
+      NodePath.join(dir, "honest-name.md"),
       "---\nid: something-else\nversion: 1.0.0\nlocBudget: 10\n---\nBody.\n",
     );
 
@@ -60,11 +60,11 @@ describe("prompt id containment (traversal reachable at depth 8 in the ported so
   });
 
   it("still resolves a legitimate nested id", () => {
-    const dir = mkdtempSync(join(tmpdir(), "runbook-prompt-nested-"));
-    const nestedDir = join(dir, "code-pr-review");
-    mkdirSync(nestedDir, { recursive: true });
-    writeFileSync(
-      join(nestedDir, "main.md"),
+    const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-prompt-nested-"));
+    const nestedDir = NodePath.join(dir, "code-pr-review");
+    NodeFS.mkdirSync(nestedDir, { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(nestedDir, "main.md"),
       "---\nid: code-pr-review/main\nversion: 0.1.0\nlocBudget: 5\n---\nReview body.\n",
     );
     const p = resolvePrompt("code-pr-review/main", dir);
@@ -73,9 +73,12 @@ describe("prompt id containment (traversal reachable at depth 8 in the ported so
   });
 
   it("counts bare-CR lines against the budget", () => {
-    const dir = mkdtempSync(join(tmpdir(), "runbook-prompt-cr-"));
+    const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-prompt-cr-"));
     const body = Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\r");
-    writeFileSync(join(dir, "cr.md"), `---\nid: cr\nversion: 1.0.0\nlocBudget: 5\n---\n${body}\n`);
+    NodeFS.writeFileSync(
+      NodePath.join(dir, "cr.md"),
+      `---\nid: cr\nversion: 1.0.0\nlocBudget: 5\n---\n${body}\n`,
+    );
     expect(() => resolvePrompt("cr", dir)).toThrow(/over its locBudget/i);
   });
 });

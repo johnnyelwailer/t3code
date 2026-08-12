@@ -23,7 +23,11 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     correlationId: string,
     kind: PrimitiveKind,
     refId: string,
-    settle: { readonly reply?: unknown; readonly dismissed?: boolean },
+    // `by` is provenance (Epic: sub-workflow effect interception) — set only when a composed
+    // broker's handler settled this reply instead of the real host. Absent is the default and
+    // must stay indistinguishable from "no provenance support existed": a real host's synchronous
+    // resolve (the mock broker, `createHostBroker`'s `model.resolve`) never passes it.
+    settle: { readonly reply?: unknown; readonly dismissed?: boolean; readonly by?: string },
   ): void => {
     if (seat.resolvedFor(correlationId) !== undefined) return; // first write wins
     const ts = seat.nowIso();
@@ -41,6 +45,7 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       refId,
       dismissed: settle.dismissed ?? false,
       reply: settle.reply,
+      ...(settle.by === undefined ? {} : { by: settle.by }),
     });
   };
 
@@ -49,7 +54,13 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     kind: PrimitiveKind,
     refId: string,
   ): ReplyResolver => ({
-    resolve: (reply) => recordResolved(correlationId, kind, refId, { reply }),
+    resolve: (reply, provenance) =>
+      recordResolved(
+        correlationId,
+        kind,
+        refId,
+        provenance?.by === undefined ? { reply } : { reply, by: provenance.by },
+      ),
     reject: () => recordResolved(correlationId, kind, refId, { dismissed: true }),
   });
 

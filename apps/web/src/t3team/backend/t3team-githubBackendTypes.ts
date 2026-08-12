@@ -53,6 +53,7 @@ export interface GitHubBackendApi {
     readonly projectKey?: string;
     readonly projectTitle?: string;
     readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+    readonly discoveryMode?: "inbox" | "repositories";
   }) => Promise<GitHubInboxDiscoverResponse>;
   readonly getPullRequestContext: (
     input: GitHubPullRequestContextRequest,

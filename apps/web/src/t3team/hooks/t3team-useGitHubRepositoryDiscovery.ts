@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBackend } from "~/t3team/backend/t3team-index";
-import {
-  normalizeCacheList,
-  readIntegrationCache,
-  writeIntegrationCache,
-} from "./t3team-integrationCache";
+import { normalizeCacheList, readIntegrationCache } from "./t3team-integrationCache";
 import { useGitHubAuthProbe } from "./t3team-useGitHubAuthProbe";
-import {
-  type GitHubAuthAccount,
-  type GitHubAuthCache,
-  type GitHubDiscoveryCache,
+import { useGitHubRepositoryDiscoveryFetchers } from "./t3team-useGitHubRepositoryDiscoveryFetchers";
+import type {
+  GitHubAuthAccount,
+  GitHubAuthCache,
+  GitHubDiscoveryCache,
 } from "./t3team-githubRepositoryDiscoveryUtils";
 
 export function useGitHubRepositoryDiscovery({
@@ -53,7 +50,7 @@ export function useGitHubRepositoryDiscovery({
     discoveryCache?.discoveryWarning,
   );
   const [authenticatedHosts, setAuthenticatedHosts] = useState<ReadonlyArray<GitHubAuthAccount>>(
-    [],
+    authCache?.accounts ?? [],
   );
 
   useEffect(() => {
@@ -64,52 +61,30 @@ export function useGitHubRepositoryDiscovery({
     setGithubAccount(cachedDiscovery?.githubAccount ?? cachedAuth?.githubAccount);
     setAuthStatus(cachedAuth?.authStatus ?? "checking");
     setAuthDetail(cachedAuth?.authDetail);
+    setAuthenticatedHosts(cachedAuth?.accounts ?? []);
     setSuggestedUrls(cachedDiscovery?.suggestedUrls ?? []);
     setSelectedSuggestedUrls(new Set(cachedDiscovery?.suggestedUrls ?? []));
     setDiscoveryWarning(cachedDiscovery?.discoveryWarning);
   }, [discoveryCacheKey]);
 
-  const discoverSuggestions = useCallback(
-    async (host: string, account?: string) => {
-      if (!backend || !host) return;
-      setLoadingDiscovery(true);
-      setDiscoveryWarning(undefined);
-      try {
-        const response = await backend.github.discoverInbox({
-          host,
-          ...(projectKey ? { projectKey } : {}),
-          ...(projectTitle ? { projectTitle } : {}),
-          linkedRepositoryUrls,
-        });
-        const nextAccount = response.account ?? account;
-        const nextCache: GitHubDiscoveryCache = {
-          githubHost: response.host,
-          ...(nextAccount !== undefined ? { githubAccount: nextAccount } : {}),
-          suggestedUrls: response.suggestedRepositoryUrls,
-          ...(response.inboxWarning ? { discoveryWarning: response.inboxWarning } : {}),
-        };
-        writeIntegrationCache(discoveryCacheKey, nextCache);
-        setGithubHost(response.host);
-        setGithubAccount(response.account ?? account);
-        setSuggestedUrls(response.suggestedRepositoryUrls);
-        setSelectedSuggestedUrls(new Set(response.suggestedRepositoryUrls));
-        setDiscoveryWarning(response.inboxWarning);
-      } catch (error) {
-        setSuggestedUrls([]);
-        setSelectedSuggestedUrls(new Set());
-        setDiscoveryWarning(
-          error instanceof Error ? error.message : "Failed to discover repository suggestions.",
-        );
-      } finally {
-        setLoadingDiscovery(false);
-      }
-    },
-    [backend, discoveryCacheKey, linkedRepositoryUrls, projectKey, projectTitle],
-  );
+  const { discoverSuggestions, discoverSuggestionsAcrossHosts } =
+    useGitHubRepositoryDiscoveryFetchers({
+      backend,
+      discoveryCacheKey,
+      linkedRepositoryUrls,
+      projectKey,
+      projectTitle,
+      setLoadingDiscovery,
+      setDiscoveryWarning,
+      setGithubHost,
+      setGithubAccount,
+      setSuggestedUrls,
+      setSelectedSuggestedUrls,
+    });
 
   useGitHubAuthProbe({
     enabled,
-    onAuthenticated: discoverSuggestions,
+    onAuthenticated: discoverSuggestionsAcrossHosts,
     setAuthStatus,
     setAuthDetail,
     setLoadingAuth,
@@ -152,6 +127,27 @@ export function useGitHubRepositoryDiscovery({
     [authenticatedHosts, discoverSuggestions],
   );
 
+  const refresh = useCallback(() => {
+    if (authStatus === "authenticated" && authenticatedHosts.length > 0) {
+      const active = authenticatedHosts.find((entry) => entry.active) ?? authenticatedHosts[0];
+      if (!active) return;
+      void discoverSuggestionsAcrossHosts({
+        host: active.host,
+        account: active.account,
+        accounts: authenticatedHosts,
+      });
+      return;
+    }
+    void discoverSuggestions(githubHost, githubAccount);
+  }, [
+    authStatus,
+    authenticatedHosts,
+    discoverSuggestions,
+    discoverSuggestionsAcrossHosts,
+    githubAccount,
+    githubHost,
+  ]);
+
   return {
     backendAvailable: Boolean(backend),
     githubHost,
@@ -166,7 +162,7 @@ export function useGitHubRepositoryDiscovery({
     authenticatedHosts,
     setGithubHost,
     selectHost,
-    refresh: () => discoverSuggestions(githubHost, githubAccount),
+    refresh,
     toggleSuggestion,
   };
 }

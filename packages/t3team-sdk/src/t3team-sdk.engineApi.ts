@@ -21,7 +21,7 @@
 import type { WorkflowBudget } from "./t3team-sdk.primitiveTypes.ts";
 import { bodyApiStorage } from "./t3team-sdk.internal.ts";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
-import type { WorkflowRef } from "./t3team-sdk.types.ts";
+import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
 
 /** Reads one member of the active body surface, or explains precisely why it is unavailable. */
 function fromRun<T>(name: string): T {
@@ -82,11 +82,28 @@ export function parallel<const T extends ReadonlyArray<() => unknown>>(
 
 export const pipeline = call<ReadonlyArray<unknown>, Promise<unknown[]>>("pipeline");
 
-/** Run another orchestration inline as one sub-step. The typed `WorkflowRef` from `defineWorkflow`
+/**
+ * Run another orchestration inline as one sub-step. The typed `WorkflowRef` from `defineWorkflow`
  * carries the child's `Inputs`/`Outputs`, so `args` is checked and the result is the child's own
- * output type rather than `unknown` (spec §The engine API: `ref` must be a typed `WorkflowRef`). */
-export function workflow<I, O>(ref: WorkflowRef<I, O>, args?: I): Promise<O> {
-  return fromRun<(r: WorkflowRef<I, O>, a?: I) => Promise<O>>("workflow")(ref, args);
+ * output type rather than `unknown` (spec §The engine API: `ref` must be a typed `WorkflowRef`).
+ *
+ * `opts.handlers`, if given, lets THIS call answer some of the child's effects itself instead of
+ * handing it the run's real broker unconditionally — e.g. a deterministic `thread.turn` result for
+ * sub-workflow testing, or a scripted `user.input` reply. Unlisted `HandleKind`s (and every call
+ * that omits `opts` entirely) reach the real host exactly as before this parameter existed; there
+ * is no per-ask opt-out, only this per-invocation opt-in (see `InterceptHandler` in
+ * `t3team-sdk.broker.ts` for why).
+ */
+export function workflow<I, O>(
+  ref: WorkflowRef<I, O>,
+  args?: I,
+  opts?: WorkflowInvokeOpts,
+): Promise<O> {
+  return fromRun<(r: WorkflowRef<I, O>, a?: I, o?: WorkflowInvokeOpts) => Promise<O>>("workflow")(
+    ref,
+    args,
+    opts,
+  );
 }
 
 // --- Progress and control ----------------------------------------------------

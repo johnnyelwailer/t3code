@@ -11,6 +11,32 @@ import type {
   RawGitHubRepo,
 } from "./t3team-github-routes-shared.ts";
 import { parseJsonArray, readTrimmedString } from "./t3team-github-routes-shared.ts";
+import { collectProjectSearchTerms } from "./t3team-github-routes-suggestions.ts";
+
+function mapRawRepositories(
+  host: string,
+  items: ReadonlyArray<RawGitHubRepo>,
+): ReadonlyArray<GitHubRepositoryCandidate> {
+  return items
+    .map((item) => {
+      const nameWithOwner = readTrimmedString(item.full_name);
+      const url = readTrimmedString(item.html_url);
+      const updatedAt = readTrimmedString(item.updated_at);
+      const description = readTrimmedString(item.description);
+      if (!nameWithOwner || !url) return undefined;
+      return {
+        id: String(item.id ?? `${host}:${nameWithOwner}`),
+        nameWithOwner,
+        url,
+        host,
+        ...(updatedAt ? { updatedAt } : {}),
+        ...(description ? { description } : {}),
+        ...(typeof item.private === "boolean" ? { isPrivate: item.private } : {}),
+      };
+    })
+    .filter((value): value is NonNullable<typeof value> => value !== undefined)
+    .toSorted((left, right) => left.nameWithOwner.localeCompare(right.nameWithOwner));
+}
 
 export function loadRepositoriesAttempt(
   vcs: VcsProcessShape,
@@ -31,29 +57,7 @@ export function loadRepositoriesAttempt(
     })
     .pipe(
       Effect.map((output) => parseJsonArray<RawGitHubRepo>(output.stdout, [])),
-      Effect.map((items) =>
-        items
-          .map((item: RawGitHubRepo) => {
-            const nameWithOwner = readTrimmedString(item.full_name);
-            const url = readTrimmedString(item.html_url);
-            const updatedAt = readTrimmedString(item.updated_at);
-            const description = readTrimmedString(item.description);
-            if (!nameWithOwner || !url) return undefined;
-            return {
-              id: String(item.id ?? `${host}:${nameWithOwner}`),
-              nameWithOwner,
-              url,
-              host,
-              ...(updatedAt ? { updatedAt } : {}),
-              ...(description ? { description } : {}),
-              ...(typeof item.private === "boolean" ? { isPrivate: item.private } : {}),
-            };
-          })
-          .filter((value): value is NonNullable<typeof value> => value !== undefined),
-      ),
-      Effect.map((items) =>
-        items.toSorted((left, right) => left.nameWithOwner.localeCompare(right.nameWithOwner)),
-      ),
+      Effect.map((items) => mapRawRepositories(host, items)),
       Effect.match({
         onFailure: () => ({
           items: [] as ReadonlyArray<GitHubRepositoryCandidate>,
@@ -61,6 +65,49 @@ export function loadRepositoriesAttempt(
             "Unable to list repositories for this host (check host, permissions, or API availability).",
         }),
         onSuccess: (items) => ({ items }),
+      }),
+    );
+}
+
+/** Fast path for project setup: search repository names instead of listing every accessible repo. */
+export function loadRepositorySearchAttempt(
+  vcs: VcsProcessShape,
+  host: string,
+  input: { readonly projectKey?: string; readonly projectTitle?: string },
+): Effect.Effect<GitHubRepositoriesAttempt, never, never> {
+  const terms = collectProjectSearchTerms(input).slice(0, 4);
+  if (terms.length === 0) return Effect.succeed({ items: [] });
+
+  const query = terms.map((term) => `"${term}" in:name`).join(" OR ");
+  return vcs
+    .run({
+      operation: "t3team.github.repository-search",
+      command: "gh",
+      args: [
+        "api",
+        "--hostname",
+        host,
+        `/search/repositories?q=${encodeURIComponent(query)}&per_page=100`,
+      ],
+      cwd: process.cwd(),
+    })
+    .pipe(
+      Effect.map((output) => {
+        try {
+          const parsed = JSON.parse(output.stdout) as { readonly items?: unknown };
+          return Array.isArray(parsed.items) ? parsed.items : [];
+        } catch {
+          return [];
+        }
+      }),
+      Effect.map((items) => mapRawRepositories(host, items as ReadonlyArray<RawGitHubRepo>)),
+      Effect.map((items) => ({ items })),
+      Effect.match({
+        onFailure: () => ({
+          items: [] as ReadonlyArray<GitHubRepositoryCandidate>,
+          warning: "Unable to search repositories for this host (check API permissions).",
+        }),
+        onSuccess: (value) => value,
       }),
     );
 }

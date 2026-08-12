@@ -1,6 +1,6 @@
 // @effect-diagnostics globalConsole:off - the "three-way demo" test prints
 // provenance lines intentionally, mirroring the ported source's demo test.
-import { fileURLToPath } from "node:url";
+import * as NodeURL from "node:url";
 import { describe, expect, it } from "vite-plus/test";
 import { resolvePromptCascade } from "./resolvePromptCascade.js";
 import type { CascadeConfig } from "./layers.js";
@@ -14,23 +14,27 @@ import type { CascadeConfig } from "./layers.js";
  *   project-team-a/code-pr-review/main.slots.json   fills only house_rules (delta override)
  *   project-team-b/code-pr-review/main.md   full replacement body (no slots file)
  */
-const defaultsDir = fileURLToPath(new URL("./fixtures/cascade/defaults", import.meta.url));
-const catalogDir = fileURLToPath(new URL("./fixtures/cascade/catalog", import.meta.url));
-const projectADir = fileURLToPath(new URL("./fixtures/cascade/project-team-a", import.meta.url));
-const projectBDir = fileURLToPath(new URL("./fixtures/cascade/project-team-b", import.meta.url));
-const projectLocBudgetDir = fileURLToPath(
+const defaultsDir = NodeURL.fileURLToPath(new URL("./fixtures/cascade/defaults", import.meta.url));
+const catalogDir = NodeURL.fileURLToPath(new URL("./fixtures/cascade/catalog", import.meta.url));
+const projectADir = NodeURL.fileURLToPath(
+  new URL("./fixtures/cascade/project-team-a", import.meta.url),
+);
+const projectBDir = NodeURL.fileURLToPath(
+  new URL("./fixtures/cascade/project-team-b", import.meta.url),
+);
+const projectLocBudgetDir = NodeURL.fileURLToPath(
   new URL("./fixtures/cascade/project-team-loc-budget", import.meta.url),
 );
-const multikeyDefaultsDir = fileURLToPath(
+const multikeyDefaultsDir = NodeURL.fileURLToPath(
   new URL("./fixtures/cascade/multikey-defaults", import.meta.url),
 );
-const multikeyCatalogDir = fileURLToPath(
+const multikeyCatalogDir = NodeURL.fileURLToPath(
   new URL("./fixtures/cascade/multikey-catalog", import.meta.url),
 );
-const multikeyProjectDir = fileURLToPath(
+const multikeyProjectDir = NodeURL.fileURLToPath(
   new URL("./fixtures/cascade/multikey-project", import.meta.url),
 );
-const multikeyProjectOverrideDir = fileURLToPath(
+const multikeyProjectOverrideDir = NodeURL.fileURLToPath(
   new URL("./fixtures/cascade/multikey-project-override", import.meta.url),
 );
 const MULTIKEY_ID = "code-pr-review/main";

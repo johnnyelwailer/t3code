@@ -13,6 +13,11 @@
  *     {@link appendResolvedEntry} to write the `resolved` line, then `resumeWorkflow`, which
  *     replays to the same `await` and finds it.
  *
+ * {@link createInterceptingBroker} is a third broker: it lets a CALLER (not the host) answer some
+ * kinds itself while every other kind still reaches the real host. This is the mechanism behind
+ * `workflow()`'s handler-map parameter — a parent that hands a sub-workflow a mocked `user.input`
+ * or a scripted `thread.turn` composes one of these over the run's real broker.
+ *
  * The four thread verbs map onto orchestration: `thread.create` → dispatch(thread.create),
  * `thread.turn` → dispatch(thread.turn.start) (resolves on turn-done), `thread.message` →
  * dispatch(thread.message.upsert) (one-way), `user.input` → a system message requesting input
@@ -77,6 +82,55 @@ export function createMockBroker(
       if (outcome.kind === "resolve") resolver.resolve(outcome.reply);
       else if (outcome.kind === "reject") resolver.reject();
       // "defer" → leave it pending → an ask verb suspends on `await`.
+    },
+  };
+}
+
+/**
+ * One caller-declared answer for an intercepted {@link HandleKind}. `by` is not decoration: it
+ * is written into the fired reply's `resolved` journal entry as provenance (see
+ * `handlesDispatch.ts`'s `recordResolved`), so a reader — or a resumed run — can tell "the parent
+ * answered this" apart from "the real host answered this" after the fact. There is deliberately
+ * no per-call opt-out flag alongside it (an earlier design's `askUser(q, { requiresHuman: true
+ * })` was rejected for exactly that "flag opting out of an opt-in mechanism" smell): the contract
+ * lives here, at the invocation boundary, once — a composer that must not intercept a kind simply
+ * omits it from `handlers`.
+ */
+export interface InterceptHandler {
+  readonly by: string;
+  readonly handle: (envelope: MessageEnvelope) => Promise<unknown>;
+}
+
+/** A partial map of {@link InterceptHandler}s, one slot per {@link HandleKind}. Every kind is
+ * covered uniformly here — `user.input` is not special-cased over `thread.turn` or the rest;
+ * whether a real host would treat them differently is a host-wiring concern, not this seam's. */
+export type InterceptHandlers = { readonly [K in HandleKind]?: InterceptHandler };
+
+/**
+ * Compose a broker that consults `handlers` for each fired envelope and falls through to
+ * `parent`, UNCHANGED, for every kind the caller did not declare. This is deliberately the whole
+ * mechanism — no special-casing lives in the dispatch path (`handlesDispatch.ts`) or in any
+ * individual thread verb, because the seam a real host answers through (`MessageBroker.send`) is
+ * already the one thing every kind funnels through. A caller that wants to answer a child
+ * sub-workflow's `user.input` (or supply its `thread.turn` result, the deterministic-testing
+ * case) builds one of these over the run's real broker and hands it to that one child.
+ *
+ * A handler's `handle` resolves SYNCHRONOUSLY from this broker's point of view — same shape as
+ * {@link createMockBroker}'s "resolve" outcome, so an intercepted kind never suspends the run.
+ * `handle` rejecting is NOT caught here: the rejection propagates out of `send`, through the
+ * dispatch's `call.fire`, and surfaces at the body's `await` as a real error. There is no silent
+ * fallthrough to `parent` on failure — a handler that cannot answer must throw, not defer.
+ */
+export function createInterceptingBroker(
+  parent: MessageBroker,
+  handlers: InterceptHandlers,
+): MessageBroker {
+  return {
+    send: async (envelope, resolver) => {
+      const handler = handlers[envelope.kind];
+      if (handler === undefined) return parent.send(envelope, resolver);
+      const reply = await handler.handle(envelope);
+      resolver.resolve(reply, { by: handler.by });
     },
   };
 }

@@ -1,4 +1,7 @@
 import type { ExternalProject } from "@t3tools/integrations-core";
+import { ChevronDown } from "lucide-react";
+
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 
 import { GitHubRepositoryDiscoverySection } from "~/t3team/components/t3team-GitHubRepositoryDiscoverySection";
 import { LinkedRepositoryListEditor } from "~/t3team/components/t3team-LinkedRepositoryListEditor";
@@ -51,16 +54,24 @@ export function RepositoriesStep({
         onAddSuggestedUrls={onAddRepositories}
         onVisibleSuggestionsChange={onDiscoveredRepositoryUrlsChange}
       />
-      <LinkedRepositoryListEditor
-        repositoryUrls={linkedRepositoryUrls}
-        newRepositoryUrl={newRepositoryUrl}
-        setNewRepositoryUrl={setNewRepositoryUrl}
-        onAddRepository={onAddRepository}
-        onRemoveRepository={onRemoveRepository}
-        onAddSearchableOption={(url) => onAddRepositories([url])}
-        searchableRepositoryOptions={discoveredRepositoryUrls}
-        emptyMessage="Add GitHub or GHE repositories to give agents context from code."
-      />
+      <Collapsible defaultOpen={linkedRepositoryUrls.length > 0}>
+        <CollapsibleTrigger className="flex w-full items-center justify-between border-t border-border/60 px-1 pt-2 text-left text-xs text-muted-foreground hover:text-foreground">
+          <span>Can’t find it? Add a repository manually</span>
+          <ChevronDown className="size-3.5 text-muted-foreground" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-2">
+          <LinkedRepositoryListEditor
+            repositoryUrls={linkedRepositoryUrls}
+            newRepositoryUrl={newRepositoryUrl}
+            setNewRepositoryUrl={setNewRepositoryUrl}
+            onAddRepository={onAddRepository}
+            onRemoveRepository={onRemoveRepository}
+            onAddSearchableOption={(url) => onAddRepositories([url])}
+            searchableRepositoryOptions={discoveredRepositoryUrls}
+            emptyMessage="Add GitHub or GHE repositories to give agents context from code."
+          />
+        </CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }

@@ -10,9 +10,8 @@ import {
 import type { GitHubDiscoveryState } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
 
 /**
- * Host picker shown only when the user is authenticated to more than one `gh` host (e.g.
- * `github.com` and a GitHub Enterprise host). Single-host users keep the plain manual "Host" input
- * below with no added picker noise.
+ * The exceptional one-host override. Normal discovery searches every authenticated host and does
+ * not render this control until the user opens the advanced options.
  */
 /**
  * The connected/sign-in-required badge treatment for a discovery auth status.
@@ -49,7 +48,7 @@ export function GitHubAuthHostPicker({ discovery }: { discovery: GitHubDiscovery
   return (
     <div className="space-y-1.5">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Authenticated host
+        Search one host
       </div>
       <Select
         value={selected?.host ?? null}

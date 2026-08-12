@@ -1,7 +1,7 @@
 import type { EnvironmentAppearance } from "@t3tools/contracts";
 
 import { isElectron } from "~/env";
-import { cn } from "~/lib/utils";
+import { cn, isMacPlatform } from "~/lib/utils";
 import {
   SidebarStageBackdrop,
   useSidebarStageBackdropVariant,
@@ -25,6 +25,9 @@ type ProjectSidebarHeaderProps = {
 export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHeaderProps) {
   const backdropVariant = useSidebarStageBackdropVariant();
   const onBackdrop = backdropVariant !== null;
+  const shouldInsetTitlebarBrand =
+    isMacPlatform(navigator.platform) &&
+    (isElectron || document.documentElement.classList.contains("wco"));
 
   return (
     <SidebarHeader
@@ -52,15 +55,12 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
       <div
         className={cn(
           "relative z-10 flex h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden",
-          // Titlebar inset only where native window buttons exist. Electron always
-          // has native controls; on the web the titlebar inset only applies once the
-          // installed PWA runs in window-controls-overlay mode (the `.wco` class
-          // toggled by windowControlsOverlay.ts). Plain web gets NO phantom control
-          // space — but not zero either: the brand lines up with the sidebar rows
-          // below it (content inset + row padding), not the raw sidebar edge.
-          isElectron
+          // Only macOS needs a left inset for native traffic lights. Windows and
+          // Linux place native controls on the right, so the brand can align with
+          // the sidebar content. On the web, reserve space only for WCO mode.
+          shouldInsetTitlebarBrand
             ? "ml-[var(--workspace-titlebar-content-left)]"
-            : "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))] wco:md:ml-[var(--workspace-titlebar-content-left)]",
+            : "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))]",
           onBackdrop ? "text-white" : "text-sidebar-foreground",
         )}
       >
