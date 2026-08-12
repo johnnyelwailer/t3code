@@ -1415,6 +1415,11 @@ body {
   padding: 0;
 }
 
+/* Do not let a bold surrounding label leak into native placeholder text. */
+::placeholder {
+  font-weight: 400;
+}
+
 html,
 body {
   min-height: calc(100svh + env(safe-area-inset-top));
@@ -1525,10 +1530,10 @@ code {
 }
 
 /* Settings -> Appearance can point the composer at its own face (for example a
-   mono font); default follows the sans stack. Applied on the surface wrapper so
-   the editor and its placeholder inherit together. */
+   mono font); otherwise use the surrounding interface face. Applied on the
+   surface wrapper so the editor and its placeholder inherit together. */
 .composer-editor-surface {
-  font-family: var(--font-composer, var(--font-sans));
+  font-family: var(--font-composer, inherit);
   font-size: var(--font-size-prompt, 0.875rem);
 }
 

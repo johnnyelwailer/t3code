@@ -1754,7 +1754,7 @@ function ComposerPromptEditorInner({
               className={cn(
                 // The size comes from .composer-editor-surface so Settings -> Appearance
                 // can drive it; keep everything else here.
-                "block max-h-50 min-h-17.5 w-full overflow-y-auto whitespace-pre-wrap wrap-break-word bg-transparent leading-relaxed text-foreground focus:outline-none",
+                "block max-h-50 min-h-17.5 w-full overflow-y-auto whitespace-pre-wrap wrap-break-word bg-transparent font-normal leading-relaxed text-foreground focus:outline-none",
                 className,
               )}
               data-testid="composer-editor"
@@ -1765,7 +1765,7 @@ function ComposerPromptEditorInner({
           }
           placeholder={
             terminalContexts.length > 0 ? null : (
-              <div className="pointer-events-none absolute inset-0 leading-relaxed text-placeholder/60">
+              <div className="pointer-events-none absolute inset-0 font-normal leading-relaxed text-placeholder/60">
                 {placeholder}
               </div>
             )
