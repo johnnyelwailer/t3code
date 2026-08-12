@@ -25,6 +25,30 @@ describe("host-neutral child capabilities", () => {
     ).toEqual(["integration.read", "user"]);
   });
 
+  it("rejects a non-array `declared` instead of silently coercing to an empty grant", () => {
+    expect(() =>
+      resolveChildCapabilities({
+        declared: "integration.read",
+        parent,
+        childLabel: "reviewer",
+      }),
+    ).toThrow(PermissionDeniedError);
+    expect(() =>
+      resolveChildCapabilities({
+        declared: "integration.read",
+        parent,
+        childLabel: "reviewer",
+      }),
+    ).toThrow(/invalid `capabilities`/);
+    expect(() =>
+      resolveChildCapabilities({
+        declared: null,
+        parent,
+        childLabel: "reviewer",
+      }),
+    ).toThrow(PermissionDeniedError);
+  });
+
   it("rejects a capability outside the parent's grant at spawn time", () => {
     expect(() =>
       resolveChildCapabilities({

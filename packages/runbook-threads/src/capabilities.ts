@@ -45,8 +45,22 @@ export function resolveChildCapabilities(opts: {
     );
   }
   if (opts.declared === "inherit") return [...opts.parent];
-  const entries = Array.isArray(opts.declared) ? opts.declared : [];
-  const childCapabilities = normalizeCapabilityEntries(entries);
+  if (!Array.isArray(opts.declared)) {
+    throw new PermissionDeniedError(
+      "Subagent '" +
+        opts.childLabel +
+        "' was created with an invalid `capabilities` value (" +
+        typeof opts.declared +
+        ": " +
+        JSON.stringify(opts.declared) +
+        "). " +
+        'Pass `capabilities: "inherit"` to give it exactly this workflow\'s own grant, or an ' +
+        'explicit array such as `capabilities: ["integration.read"]`. There is deliberately no ' +
+        "coercion: a non-array grant is rejected rather than silently treated as empty, which " +
+        "would silently break the child.",
+    );
+  }
+  const childCapabilities = normalizeCapabilityEntries(opts.declared);
   assertChildCapabilitiesSubset({
     childName: opts.childLabel,
     childCapabilities,
