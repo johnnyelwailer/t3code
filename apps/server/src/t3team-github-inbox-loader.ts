@@ -124,12 +124,21 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
         ));
     }
 
-    let suggestedRepositoryUrls = collectSuggestedRepositoryUrls({
-      repositories: repositoriesAttempt.items,
-      ...(input.projectKey ? { projectKey: input.projectKey } : {}),
-      ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
-      ...(input.linkedRepositoryUrls ? { linkedRepositoryUrls: input.linkedRepositoryUrls } : {}),
-    });
+    const collectSuggestions = (repositories: typeof repositoriesAttempt.items) =>
+      collectSuggestedRepositoryUrls({
+        repositories,
+        ...(input.projectKey ? { projectKey: input.projectKey } : {}),
+        ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
+        // Repository discovery should still show a match after the wizard has auto-linked it.
+        // Linked URLs are only relevant to inbox filtering, not to finding the project match.
+        ...(repositoriesOnly
+          ? {}
+          : input.linkedRepositoryUrls
+            ? { linkedRepositoryUrls: input.linkedRepositoryUrls }
+            : {}),
+      });
+
+    let suggestedRepositoryUrls = collectSuggestions(repositoriesAttempt.items);
 
     // A provider search can return repositories but still omit the matching private or
     // organization-visible repository. If the fast result produces no actual match, retry once
@@ -145,12 +154,7 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
           ),
         ));
       repositoriesAttempt = completeRepositoriesAttempt;
-      suggestedRepositoryUrls = collectSuggestedRepositoryUrls({
-        repositories: repositoriesAttempt.items,
-        ...(input.projectKey ? { projectKey: input.projectKey } : {}),
-        ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
-        ...(input.linkedRepositoryUrls ? { linkedRepositoryUrls: input.linkedRepositoryUrls } : {}),
-      });
+      suggestedRepositoryUrls = collectSuggestions(repositoriesAttempt.items);
     }
 
     const inboxAttempt = repositoriesOnly

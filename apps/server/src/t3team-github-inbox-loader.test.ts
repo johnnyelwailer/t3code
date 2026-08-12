@@ -79,6 +79,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
           projectKey: "NEXI",
           projectTitle: "Nexi Distribution",
           discoveryMode: "repositories",
+          linkedRepositoryUrls: ["https://nexplore.ghe.com/pj/nexi-distribution"],
         },
       ),
     );

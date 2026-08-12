@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBackend } from "~/t3team/backend/t3team-index";
-import { normalizeCacheList, readIntegrationCache } from "./t3team-integrationCache";
+import { readIntegrationCache } from "./t3team-integrationCache";
 import { useGitHubAuthProbe } from "./t3team-useGitHubAuthProbe";
 import { useGitHubRepositoryDiscoveryFetchers } from "./t3team-useGitHubRepositoryDiscoveryFetchers";
 import type {
@@ -23,9 +23,8 @@ export function useGitHubRepositoryDiscovery({
   const backend = useBackend();
   const authCache = readIntegrationCache<GitHubAuthCache>("github:auth")?.value;
   const discoveryCacheKey = useMemo(
-    () =>
-      `github:discovery:${projectKey ?? "none"}:${projectTitle ?? "none"}:${normalizeCacheList(linkedRepositoryUrls)}`,
-    [linkedRepositoryUrls, projectKey, projectTitle],
+    () => `github:discovery:${projectKey ?? "none"}:${projectTitle ?? "none"}`,
+    [projectKey, projectTitle],
   );
   const discoveryCache = readIntegrationCache<GitHubDiscoveryCache>(discoveryCacheKey)?.value;
   const [githubHost, setGithubHost] = useState(
@@ -79,6 +78,7 @@ export function useGitHubRepositoryDiscovery({
 
   useGitHubAuthProbe({
     enabled,
+    refreshKey: discoveryCacheKey,
     onAuthenticated: discoverSuggestionsAcrossHosts,
     setAuthStatus,
     setAuthDetail,

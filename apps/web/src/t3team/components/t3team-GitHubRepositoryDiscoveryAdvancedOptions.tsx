@@ -20,7 +20,7 @@ export function GitHubRepositoryDiscoveryAdvancedOptions({
     <Collapsible open={open} onOpenChange={onOpenChange}>
       <CollapsibleTrigger className="w-full">
         <div className="flex items-center justify-between px-1 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
-          <span>Search a different host</span>
+          <span>Search manually</span>
           <ChevronDown
             className={cn(
               "size-3.5 text-muted-foreground transition-transform",

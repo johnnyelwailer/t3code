@@ -37,12 +37,10 @@ export function RepositoriesStep({
   readonly onDiscoveredRepositoryUrlsChange: (urls: ReadonlyArray<string>) => void;
 }) {
   return (
-    <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">Link repositories</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Optional — link GitHub or GHE repositories so agents get context from code.
-        </p>
+    <section className="space-y-3.5">
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <h3 className="text-base font-semibold tracking-tight">Link a repository</h3>
+        <span className="text-[11px] text-muted-foreground">Optional</span>
       </div>
 
       <GitHubRepositoryDiscoverySection
@@ -53,8 +51,8 @@ export function RepositoriesStep({
         onVisibleSuggestionsChange={onDiscoveredRepositoryUrlsChange}
       />
       <Collapsible defaultOpen={linkedRepositoryUrls.length > 0}>
-        <CollapsibleTrigger className="flex w-full items-center justify-between border-t border-border/60 px-1 pt-2 text-left text-xs text-muted-foreground hover:text-foreground">
-          <span>Can’t find it? Add a repository manually</span>
+        <CollapsibleTrigger className="flex w-full items-center justify-between border-t border-border/60 px-1 pt-3 text-left text-xs text-muted-foreground hover:text-foreground">
+          <span>Enter a repository URL</span>
           <ChevronDown className="size-3.5 text-muted-foreground" />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-2">

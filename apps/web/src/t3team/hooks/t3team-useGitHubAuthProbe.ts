@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { sourceControlEnvironment } from "~/state/sourceControl";
@@ -16,6 +16,7 @@ export type GitHubAuthStatus = "checking" | "authenticated" | "unauthenticated" 
  */
 export function useGitHubAuthProbe(params: {
   readonly enabled: boolean;
+  readonly refreshKey?: string;
   readonly onAuthenticated: (input: {
     readonly host: string;
     readonly account: string | undefined;
@@ -30,6 +31,7 @@ export function useGitHubAuthProbe(params: {
 }): void {
   const {
     enabled,
+    refreshKey,
     onAuthenticated,
     setAuthStatus,
     setAuthDetail,
@@ -38,6 +40,12 @@ export function useGitHubAuthProbe(params: {
     setGithubAccount,
     setAuthenticatedHosts,
   } = params;
+  const onAuthenticatedRef = useRef(onAuthenticated);
+
+  useEffect(() => {
+    onAuthenticatedRef.current = onAuthenticated;
+  }, [onAuthenticated]);
+
   const environmentId = usePrimaryEnvironmentId();
   const discoverSourceControl = useAtomQueryRunner(sourceControlEnvironment.discovery, {
     reportFailure: false,
@@ -83,7 +91,7 @@ export function useGitHubAuthProbe(params: {
         setGithubAccount(auth.account);
         setAuthenticatedHosts(auth.accounts);
         if (auth.status === "authenticated") {
-          await onAuthenticated({
+          await onAuthenticatedRef.current({
             host: auth.host ?? "github.com",
             account: auth.account,
             accounts: auth.accounts,
@@ -106,7 +114,7 @@ export function useGitHubAuthProbe(params: {
     discoverSourceControl,
     enabled,
     environmentId,
-    onAuthenticated,
+    refreshKey,
     setAuthDetail,
     setAuthStatus,
     setAuthenticatedHosts,
