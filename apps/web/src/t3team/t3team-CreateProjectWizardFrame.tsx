@@ -83,7 +83,7 @@ export function CreateProjectWizardFrame({
 
   if (variant === "inline") {
     return (
-      <div className="relative flex min-h-0 flex-1 items-start justify-center overflow-hidden p-3 sm:p-6">
+      <div className="relative flex min-h-0 flex-1 items-start justify-center overflow-hidden p-3 pb-6 sm:p-6 sm:pb-8">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-[radial-gradient(44rem_22rem_at_top,color-mix(in_srgb,var(--color-sky-400)_18%,transparent),transparent)] opacity-80" />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_88%,white)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-amber-100))_100%)] dark:bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_92%,black)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-sky-950))_100%)]" />
 
@@ -97,7 +97,7 @@ export function CreateProjectWizardFrame({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-2 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-2 pb-6 sm:items-center sm:p-4 sm:pb-8">
       {/*
         No fixed height: the card fits its content (a short step like "review" or "creating" no
         longer leaves a void), capped by a max-height so it never grows past the viewport. Tall
