@@ -170,6 +170,7 @@
     "packages/client-runtime/src/state/threadDetail.test.ts",
     "packages/client-runtime/src/state/threads-notFoundTerminal.test.ts",
     "packages/contracts/src/orchestration-getSnapshotError.test.ts",
+    "packages/agent-runner/**",
     "packages/integrations-atlassian/**",
     "packages/integrations-core/**",
     "packages/project-context/**",
