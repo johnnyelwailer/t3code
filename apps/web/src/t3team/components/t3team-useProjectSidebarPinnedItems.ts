@@ -40,10 +40,38 @@ export type ResolvedPinnedSidebarItem =
       linkedWorkItem: ProjectTicket | null;
     };
 
-type ResolvedGitHubActivityById = ReadonlyMap<
+export type ResolvedGitHubActivityById = ReadonlyMap<
   string,
   { item: GitHubWorkActivityItem; linkedWorkItem: ProjectTicket | null }
 >;
+
+/**
+ * Maps a project's raw GitHub-activity feed to the shape pinned rows need: activity id ->
+ * `{ item, linkedWorkItem }`. Shared with the Work-lens Inbox (`t3team-InboxPinnedGitHubActivityRows.tsx`),
+ * which resolves the same pinned-activity-id -> row lookup per project rather than per pinned item.
+ */
+export function buildGitHubActivityByIdLookup(input: {
+  githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
+  unlinkedGitHubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
+  projectTickets: ReadonlyArray<ProjectTicket>;
+}): ResolvedGitHubActivityById {
+  const resolvedItems = new Map<
+    string,
+    { item: GitHubWorkActivityItem; linkedWorkItem: ProjectTicket | null }
+  >();
+
+  for (const item of input.unlinkedGitHubActivityItems) {
+    resolvedItems.set(item.id, { item, linkedWorkItem: null });
+  }
+
+  for (const ticket of input.projectTickets) {
+    for (const item of input.githubActivityByWorkItem.get(ticket.ref.displayId) ?? []) {
+      resolvedItems.set(item.id, { item, linkedWorkItem: ticket });
+    }
+  }
+
+  return resolvedItems;
+}
 
 export function resolveProjectSidebarPinnedProjectIds(input: {
   project: ProjectShellProject;
@@ -158,24 +186,15 @@ export function useProjectSidebarPinnedItems(input: {
       }).filter((projectId) => projectId !== project.id),
     [liveProjects, project],
   );
-  const githubActivityById = useMemo(() => {
-    const resolvedItems = new Map<
-      string,
-      { item: GitHubWorkActivityItem; linkedWorkItem: ProjectTicket | null }
-    >();
-
-    for (const item of unlinkedGitHubActivityItems) {
-      resolvedItems.set(item.id, { item, linkedWorkItem: null });
-    }
-
-    for (const ticket of projectTickets) {
-      for (const item of githubActivityByWorkItem.get(ticket.ref.displayId) ?? []) {
-        resolvedItems.set(item.id, { item, linkedWorkItem: ticket });
-      }
-    }
-
-    return resolvedItems;
-  }, [githubActivityByWorkItem, projectTickets, unlinkedGitHubActivityItems]);
+  const githubActivityById = useMemo(
+    () =>
+      buildGitHubActivityByIdLookup({
+        githubActivityByWorkItem,
+        unlinkedGitHubActivityItems,
+        projectTickets,
+      }),
+    [githubActivityByWorkItem, projectTickets, unlinkedGitHubActivityItems],
+  );
 
   return useMemo<ResolvedPinnedSidebarItem[]>(
     () =>

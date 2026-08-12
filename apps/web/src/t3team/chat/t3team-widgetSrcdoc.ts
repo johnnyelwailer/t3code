@@ -8,6 +8,7 @@
  */
 
 import { buildT3TeamWidgetIconSprite, T3TEAM_WIDGET_ICON_CSS } from "./t3team-widgetIconSprite.ts";
+import { DEFAULT_SANS_FONT_STACK } from "~/appearanceFonts";
 
 /**
  * Theme tokens a widget may rely on. Every one is also snapshotted from the live document, so the
@@ -129,8 +130,22 @@ export function buildT3TeamWidgetSrcdoc(input: {
   const reset = [
     "*, *::before, *::after { box-sizing: border-box; }",
     "html, body { margin: 0; padding: 0; background: transparent; }",
-    "body { color: var(--foreground, inherit); font-family: var(--font-sans, system-ui, sans-serif); }",
+    // `--font-sans` is always present in `input.themeCss` (see `FALLBACK_THEME_VARIABLES` in
+    // `collectT3TeamWidgetThemeCss`), so this fallback is a belt-and-braces default rather than
+    // the common path. It intentionally matches `DEFAULT_SANS_FONT_STACK` (apps/web's own
+    // `--font-sans` default in index.css) instead of a generic `system-ui, sans-serif`: the app
+    // ships no self-hosted webfont at all — every font on every platform this app runs on is a
+    // system font matched by name, which resolves identically inside a sandboxed `srcdoc` iframe
+    // as outside one (the CSP's `font-src` only gates `@font-face url()` loading, which system
+    // fonts never use). There is therefore no font ASSET here to embed as a `data:` URI; keeping
+    // this fallback byte-for-byte the same stack is what actually keeps a widget
+    // metric-compatible with the host app if the theme snapshot is ever unavailable.
+    `body { color: var(--foreground, inherit); font-family: var(--font-sans, ${DEFAULT_SANS_FONT_STACK}); }`,
     "img, svg, video, canvas { max-width: 100%; height: auto; }",
+    // Widget-authored content can be wider than the card (wide tables, long paths). The host
+    // wrapper clips (`overflow-hidden` rounded card), so without this the overflowing part is
+    // simply unreachable — let the widget body scroll horizontally instead.
+    "body { overflow-x: auto; }",
     T3TEAM_WIDGET_ICON_CSS,
   ].join(" ");
   // CSP first: no external network at all (postMessage is unaffected by connect-src);

@@ -21,8 +21,6 @@ export function ProjectMyWorkOptionsMenuViewSection({
   onGroupModeChange,
   statusCategory,
   onStatusCategoryChange,
-  showGitHubActivity,
-  onShowGitHubActivityChange,
   epicsHidden,
   onEpicsHiddenChange,
   hiddenKanbanColumnIds,
@@ -40,8 +38,6 @@ export function ProjectMyWorkOptionsMenuViewSection({
   | "onGroupModeChange"
   | "statusCategory"
   | "onStatusCategoryChange"
-  | "showGitHubActivity"
-  | "onShowGitHubActivityChange"
   | "epicsHidden"
   | "onEpicsHiddenChange"
   | "hiddenKanbanColumnIds"
@@ -131,13 +127,6 @@ export function ProjectMyWorkOptionsMenuViewSection({
 
       <MenuGroup>
         <MenuGroupLabel>Display</MenuGroupLabel>
-        <MenuCheckboxItem
-          checked={showGitHubActivity}
-          variant="switch"
-          onCheckedChange={(checked) => onShowGitHubActivityChange(Boolean(checked))}
-        >
-          Show GitHub activity
-        </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={epicsHidden}
           variant="switch"

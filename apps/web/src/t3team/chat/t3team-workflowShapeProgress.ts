@@ -99,6 +99,14 @@ export function reconcileT3TeamWorkflowShapeProgress(
   const insertedByAnchor = new Map<number, number>();
   for (const [runtimeIndex, runtimeStep] of visibleRuntime.entries()) {
     if (planIndexByRuntimeIndex.has(runtimeIndex)) continue;
+    // The phase an unmatched (dynamic) runtime step is bucketed under is the AUTHORED phase of
+    // the nearest prior matched plan step, not the workflow's actual current phase at the time
+    // this step ran — `T3TeamWorkflowStepEntry.phase` is a lifecycle phase (started/completed/…),
+    // there is no "current workflow phase" field on the runtime activity to bucket by instead.
+    // A long dynamic run (many agent calls with no per-call plan row) can therefore anchor to
+    // whichever plan step matched last, even if the run has since moved through later phases.
+    // Left as-is per the no-invented-data rule; fixing this needs the server to stamp the
+    // workflow's phase onto each step activity.
     const priorMatches = [...planIndexByRuntimeIndex.entries()].filter(
       ([matchedRuntimeIndex]) => matchedRuntimeIndex < runtimeIndex,
     );

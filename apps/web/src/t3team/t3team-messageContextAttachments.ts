@@ -53,7 +53,11 @@ export function buildContextAttachmentMessageExt(
 ): T3TeamMessageExt | undefined {
   if (attachments.length === 0) return undefined;
   return {
-    ...(input?.displayText ? { displayText: input.displayText } : {}),
+    // An explicit empty string is meaningful here, not "no override": it is how an empty-body
+    // message with a non-image attachment stops the UI falling back to `message.text`, which
+    // for this codepath is the prompt WITH the attachment's context text prepended — showing
+    // that dump as the visible message body would be worse than showing nothing.
+    ...(input?.displayText !== undefined ? { displayText: input.displayText } : {}),
     visibleToUser: true,
     visibleToAgent: true,
     attachments: attachments.map(contextAttachmentToMessageAttachment),

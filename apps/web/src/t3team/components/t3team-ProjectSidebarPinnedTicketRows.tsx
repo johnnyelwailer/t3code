@@ -1,10 +1,16 @@
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
-import { T3TeamAgentContextDropOverlay } from "~/t3team/t3team-agentContextDrag";
+import {
+  T3TeamAgentContextDropOverlay,
+  useT3TeamAgentContextDrag,
+} from "~/t3team/t3team-agentContextDrag";
 import { SidebarMenuSubButton } from "~/t3team/components/ui/t3team-sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { TicketCardDetailsTooltip } from "~/t3team/t3team-TicketCardDetailsTooltip";
+import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
+import { getGitHubActivityVisual } from "~/t3team/t3team-githubActivityViewUtils";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+import { LinkExternalIcon } from "@primer/octicons-react";
 import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
 
 import { useProjectSidebarNavItemDnd } from "./t3team-useProjectSidebarNavItemDnd";
@@ -141,6 +147,54 @@ export function PinnedTicketFallbackRow({
         </div>
         <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
           {title}
+        </div>
+      </SidebarMenuSubButton>
+    </div>
+  );
+}
+
+export function PinnedGitHubActivityRow({
+  item,
+  state,
+  onContextMenu,
+  getItemDragCapabilities,
+}: {
+  item: GitHubWorkActivityItem;
+  state: SidebarItemState;
+  onContextMenu: (event: React.MouseEvent) => void;
+  getItemDragCapabilities?: (item: GitHubWorkActivityItem) => AgentContextCapabilities;
+}) {
+  const visual = getGitHubActivityVisual(item);
+  const dragProps = useT3TeamAgentContextDrag({
+    capabilities: getItemDragCapabilities?.(item) ?? null,
+    label: item.subjectTitle ?? item.repository,
+  });
+  const linkTarget = item.subjectUrl ?? item.repositoryUrl;
+
+  return (
+    <div
+      className={`group/pinned-ticket relative ${getSidebarSurfaceClassName(state)}`}
+      onContextMenu={onContextMenu}
+      draggable={dragProps.draggable}
+      onDragStart={dragProps.onDragStart}
+      onDragEnd={dragProps.onDragEnd}
+    >
+      <SidebarMenuSubButton
+        size="sm"
+        className="h-auto min-h-8 w-full flex-col items-start px-2 py-1"
+        render={linkTarget ? <a href={linkTarget} target="_blank" rel="noreferrer" /> : <div />}
+      >
+        <div className="flex w-full items-center gap-1">
+          <visual.Icon className={`size-3 shrink-0 ${visual.iconClassName}`} />
+          <span className="truncate text-[11px] font-medium">
+            {item.subjectTitle ?? item.repository}
+          </span>
+          {linkTarget ? (
+            <LinkExternalIcon className="ml-auto size-3 shrink-0 text-muted-foreground/70" />
+          ) : null}
+        </div>
+        <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
+          {item.repository}
         </div>
       </SidebarMenuSubButton>
     </div>

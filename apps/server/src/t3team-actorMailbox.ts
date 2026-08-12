@@ -38,9 +38,18 @@ export interface T3TeamActorMailboxEntry {
 interface ThreadMailboxState {
   readonly queue: ReadonlyArray<T3TeamActorMailboxEntry>;
   readonly reacting: boolean;
+  /**
+   * Set when the user explicitly stops this thread's turn. While true, a
+   * queued actor message stays visible in the timeline but does NOT get
+   * auto-dispatched into a reaction turn — otherwise an incoming actor
+   * message re-opens the exact turn the user just told the agent to stop,
+   * and "Stop generation" never converges. Cleared when the user sends the
+   * thread's next real message (see T3TeamActorMessageReactorLive).
+   */
+  readonly suppressed: boolean;
 }
 
-const EMPTY: ThreadMailboxState = { queue: [], reacting: false };
+const EMPTY: ThreadMailboxState = { queue: [], reacting: false, suppressed: false };
 
 export interface T3TeamActorMailboxShape {
   /** Append an actor message to a thread's queue. */
@@ -62,6 +71,12 @@ export interface T3TeamActorMailboxShape {
   ) => Effect.Effect<boolean>;
   /** Whether a reaction turn is currently in flight for the thread. */
   readonly isReacting: (threadId: string) => Effect.Effect<boolean>;
+  /** Mark the thread suppressed: queued/future actor messages enqueue but do not auto-dispatch. */
+  readonly suppress: (threadId: string) => Effect.Effect<void>;
+  /** Lift suppression (called when the user sends the thread's next real message). */
+  readonly clearSuppression: (threadId: string) => Effect.Effect<void>;
+  /** Whether auto-dispatch is currently suppressed for the thread. */
+  readonly isSuppressed: (threadId: string) => Effect.Effect<boolean>;
 }
 
 export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Effect.gen(
@@ -94,12 +109,12 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
     const takeNextForDispatch: T3TeamActorMailboxShape["takeNextForDispatch"] = (threadId) =>
       Ref.modify(state, (map) => {
         const current = read(map, threadId);
-        if (current.reacting || current.queue.length === 0) {
+        if (current.reacting || current.suppressed || current.queue.length === 0) {
           return [undefined, map] as const;
         }
         const [head, ...rest] = current.queue;
         const next = new Map(map);
-        next.set(threadId, { queue: rest, reacting: true });
+        next.set(threadId, { ...current, queue: rest, reacting: true });
         return [head, next] as const;
       });
 
@@ -121,6 +136,7 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
         const retry = attempts < 3;
         const next = new Map(map);
         next.set(threadId, {
+          ...current,
           queue: retry
             ? [{ ...entry, dispatchAttempts: attempts }, ...current.queue]
             : current.queue,
@@ -132,6 +148,40 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
     const isReacting: T3TeamActorMailboxShape["isReacting"] = (threadId) =>
       Ref.get(state).pipe(Effect.map((map) => read(map, threadId).reacting));
 
-    return { enqueue, takeNextForDispatch, clearReacting, requeueFailed, isReacting };
+    const suppress: T3TeamActorMailboxShape["suppress"] = (threadId) =>
+      Ref.update(state, (map) => {
+        const current = read(map, threadId);
+        if (current.suppressed) {
+          return map;
+        }
+        const next = new Map(map);
+        next.set(threadId, { ...current, suppressed: true });
+        return next;
+      });
+
+    const clearSuppression: T3TeamActorMailboxShape["clearSuppression"] = (threadId) =>
+      Ref.update(state, (map) => {
+        const current = read(map, threadId);
+        if (!current.suppressed) {
+          return map;
+        }
+        const next = new Map(map);
+        next.set(threadId, { ...current, suppressed: false });
+        return next;
+      });
+
+    const isSuppressed: T3TeamActorMailboxShape["isSuppressed"] = (threadId) =>
+      Ref.get(state).pipe(Effect.map((map) => read(map, threadId).suppressed));
+
+    return {
+      enqueue,
+      takeNextForDispatch,
+      clearReacting,
+      requeueFailed,
+      isReacting,
+      suppress,
+      clearSuppression,
+      isSuppressed,
+    };
   },
 );

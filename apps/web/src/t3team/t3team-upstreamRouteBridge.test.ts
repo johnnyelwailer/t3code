@@ -22,6 +22,8 @@ describe("translateUpstreamPath", () => {
       "/t3team/projects/p1",
       "/settings",
       "/settings/beta",
+      "/usage",
+      "/usage/deep",
       "/pair",
       "/connect",
       "/connect_/callback",

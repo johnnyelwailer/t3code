@@ -24,20 +24,6 @@ export function createMockBackend(): BackendApi {
     mockIntegrationProvider,
     toMockPollResult,
   });
-  const githubBackend: T3TeamPollingBackend["github"] = {
-    ...github,
-    pollInbox: async (input) =>
-      toMockPollResult(
-        await github.discoverInbox({
-          host: input.host,
-          ...(input.projectKey ? { projectKey: input.projectKey } : {}),
-          ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
-          ...(input.linkedRepositoryUrls
-            ? { linkedRepositoryUrls: input.linkedRepositoryUrls }
-            : {}),
-        }),
-      ),
-  };
 
   function notifyState(nextState: BackendState) {
     state = nextState;
@@ -116,7 +102,7 @@ export function createMockBackend(): BackendApi {
 
     atlassian,
 
-    github: githubBackend,
+    github,
 
     projectWorkspace: {
       bootstrapWorkspace: async (input) => ({

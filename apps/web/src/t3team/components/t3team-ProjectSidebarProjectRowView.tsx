@@ -174,8 +174,6 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
               onRenameThread={onRenameThread}
             />
           }
-          showGitHubActivity={showGitHubActivity}
-          githubItems={githubItems}
           {...(state.githubActivityLastCheckedAt !== undefined
             ? { githubActivityLastCheckedAt: state.githubActivityLastCheckedAt }
             : {})}

@@ -71,6 +71,7 @@ export async function dispatchThreadBootstrapCreate(input: {
   kickoffModelSelection: ModelSelection;
   kickoffRuntimeMode: RuntimeMode;
   kickoffInteractionMode: ProviderInteractionMode;
+  kickoffBranch: string | null;
   createdAt: string;
 }) {
   input.state.threadCreateSent = true;
@@ -90,7 +91,7 @@ export async function dispatchThreadBootstrapCreate(input: {
     modelSelection: input.kickoffModelSelection,
     runtimeMode: input.kickoffRuntimeMode,
     interactionMode: input.kickoffInteractionMode,
-    branch: null,
+    branch: input.kickoffBranch,
     worktreePath: null,
     createdAt: input.createdAt,
   });

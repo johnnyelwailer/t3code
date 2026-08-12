@@ -1,14 +1,12 @@
 import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { SidebarMenuSubButton } from "~/t3team/components/ui/t3team-sidebar";
-import { GitHubActivityInlineList } from "~/t3team/t3team-GitHubActivityViews";
 import {
   T3TeamAgentContextDropOverlay,
   useT3TeamAgentContextDropTarget,
 } from "~/t3team/t3team-agentContextDrag";
 import { useT3TeamPinnedSidebarStore } from "~/t3team/t3team-pinnedSidebarStore";
 import { useT3TeamSidebarNavPreferencesStore } from "~/t3team/t3team-sidebarNavPreferencesStore";
-import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import {
   getSidebarStandaloneButtonClassName,
   type SidebarItemState,
@@ -31,8 +29,6 @@ type ProjectSidebarDashboardNavProps = {
   showJiraItems: boolean;
   currentIssueCount: number;
   currentIssuesContent: ReactNode;
-  showGitHubActivity: boolean;
-  githubItems: ReadonlyArray<GitHubWorkActivityItem>;
   githubActivityLastCheckedAt?: number;
 };
 
@@ -61,9 +57,7 @@ export function ProjectSidebarDashboardNav({
   showJiraItems,
   currentIssueCount,
   currentIssuesContent,
-  showGitHubActivity,
-  githubItems,
-  githubActivityLastCheckedAt,
+  githubActivityLastCheckedAt: _githubActivityLastCheckedAt,
 }: ProjectSidebarDashboardNavProps) {
   const pinItem = useT3TeamPinnedSidebarStore((state) => state.pinItem);
   const showSidebarItemAtTop = useT3TeamSidebarNavPreferencesStore((state) => state.showItemAtTop);
@@ -86,11 +80,9 @@ export function ProjectSidebarDashboardNav({
   });
   const showMyWorkThreads = showMyActivityFeed && myWorkThreadCount > 0;
   const showCurrentIssuesSection = showJiraItems && currentIssueCount > 0;
-  const showGitHubSection = showGitHubActivity && githubItems.length > 0;
-  const hasMyWorkChildren =
-    pinnedItemCount > 0 || showMyWorkThreads || showCurrentIssuesSection || showGitHubSection;
+  const hasMyWorkChildren = pinnedItemCount > 0 || showMyWorkThreads || showCurrentIssuesSection;
   const showPinnedSectionDivider =
-    pinnedItemCount > 0 && (showMyWorkThreads || showCurrentIssuesSection || showGitHubSection);
+    pinnedItemCount > 0 && (showMyWorkThreads || showCurrentIssuesSection);
   const showMyWorkSection = myWorkExpanded && hasMyWorkChildren;
   const previousAutoExpandSignalRef = useRef(myWorkAutoExpandSignal);
 
@@ -169,24 +161,6 @@ export function ProjectSidebarDashboardNav({
           {showMyWorkThreads ? myWorkContent : null}
 
           {showCurrentIssuesSection ? currentIssuesContent : null}
-
-          {showGitHubSection ? (
-            <div className="space-y-1">
-              <div className="px-3 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">
-                GitHub items
-              </div>
-              <div className="-ml-1">
-                <GitHubActivityInlineList
-                  items={githubItems}
-                  limit={3}
-                  compact
-                  {...(githubActivityLastCheckedAt !== undefined
-                    ? { lastCheckedAt: githubActivityLastCheckedAt }
-                    : {})}
-                />
-              </div>
-            </div>
-          ) : null}
         </div>
       ) : null}
     </>

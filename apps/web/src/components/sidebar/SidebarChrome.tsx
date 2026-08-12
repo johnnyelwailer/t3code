@@ -1,4 +1,10 @@
-import { ChartNoAxesColumnIcon, GitPullRequestIcon, SettingsIcon } from "lucide-react";
+import {
+  ChartNoAxesColumnIcon,
+  GitPullRequestIcon,
+  InboxIcon,
+  ListTreeIcon,
+  SettingsIcon,
+} from "lucide-react";
 import { memo, useCallback } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
@@ -23,6 +29,7 @@ import {
 } from "../ui/sidebar";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdatePill } from "./SidebarUpdatePill";
+import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -55,7 +62,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
             "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
         )}
       />
-      <SidebarBrand onBackdrop={backdropVariant !== null} />
+      <SidebarBrand isElectron={isElectron} onBackdrop={backdropVariant !== null} />
       {pillLabel ? (
         <Badge
           className="relative z-10 ml-1 rounded-full px-1.5 text-muted-foreground"
@@ -70,12 +77,20 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   );
 });
 
-function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
+function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackdrop: boolean }) {
   return (
     <Link
       aria-label="Go to threads"
       className={cn(
-        "sidebar-brand relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2",
+        "sidebar-brand relative z-10 h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2",
+        // Titlebar inset only where native window buttons exist — on the web the brand docks
+        // left, flush with the sidebar items below it, instead of reserving phantom control
+        // space (see the same rule in `t3team-ProjectSidebarHeader.tsx`). Electron always has
+        // native controls; on the web the inset only applies once the installed PWA is running
+        // in window-controls-overlay mode (the `.wco` class toggled by windowControlsOverlay.ts).
+        isElectron
+          ? "ml-[var(--workspace-titlebar-content-left)]"
+          : "wco:ml-[var(--workspace-titlebar-content-left)]",
         onBackdrop ? "text-white" : "text-foreground",
       )}
       to="/"
@@ -136,11 +151,62 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
     void navigate({ to: "/usage" });
   }, [isMobile, navigate, setOpenMobile]);
 
+  // t3team: the sidebar's project-scope selection, mirrored out of Sidebar.tsx. "My work"
+  // follows it (scoped → that project's my-work board, otherwise the global view), and
+  // "Backlog" only exists scoped — flattened across projects it loses the hierarchy that IS
+  // the view.
+  const scopedProjectId = useT3TeamSidebarProjectScope((state) => state.scopedProjectId);
+  const handleMyWorkClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void (scopedProjectId === null
+      ? navigate({ to: "/t3team/my-work" })
+      : navigate({
+          to: "/t3team/projects/$projectId",
+          params: { projectId: scopedProjectId },
+          search: { projectView: "my-work" },
+        }));
+  }, [isMobile, navigate, scopedProjectId, setOpenMobile]);
+  const handleBacklogClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    if (scopedProjectId === null) {
+      return;
+    }
+    void navigate({
+      to: "/t3team/projects/$projectId",
+      params: { projectId: scopedProjectId },
+      search: { projectView: "backlog" },
+    });
+  }, [isMobile, navigate, scopedProjectId, setOpenMobile]);
+  // t3team: the Team shell is the permanent product shell, so its nav targets exist from every
+  // route — including upstream-shell pages like /pull-requests or /settings. Hiding these rows
+  // off /t3team/* made "My work" vanish the moment the user opened the PR page.
+  const showTeamNav = true;
+
   return (
     <SidebarFooter className="p-[var(--sidebar-content-inset)]">
       <SidebarProviderUpdatePill />
       <SidebarUpdatePill />
       <SidebarMenu>
+        {showTeamNav ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleMyWorkClick}>
+              <InboxIcon />
+              <span>My work</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
+        {showTeamNav && scopedProjectId !== null ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleBacklogClick}>
+              <ListTreeIcon />
+              <span>Backlog</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
         {pullRequestsSupported ? (
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handlePullRequestsClick}>

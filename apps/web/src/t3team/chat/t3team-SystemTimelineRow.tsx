@@ -1,11 +1,13 @@
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
+import ChatMarkdown from "~/components/ChatMarkdown";
 import type { ChatMessage } from "~/types";
 import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
 import {
   findActiveWorkflowInputMessageId,
   getT3TeamWorkflowDecisionAttachment,
 } from "~/t3team/chat/t3team-messageDecisionCard";
+import type { T3TeamWorkflowDecisionAnswer } from "~/t3team/chat/t3team-workflowDecisionAnswers";
 import {
   getT3TeamRenderableAttachments,
   getT3TeamWidgetAttachments,
@@ -24,7 +26,11 @@ import { workflowDecisionUnavailableMessage } from "~/t3team/chat/t3team-workflo
 export function T3TeamSystemTimelineRow(props: {
   readonly message: ChatMessage;
   readonly threadRef: ScopedThreadRef | null;
+  readonly markdownCwd?: string | undefined;
   readonly activeWorkflowInputMessageId: string | null;
+  /** Every answered ask, keyed by the ask message's id — lets this row keep rendering the ask's
+   * card in an answered state instead of vanishing, and suppress the reply's own bare row. */
+  readonly workflowDecisionAnswers?: ReadonlyMap<string, T3TeamWorkflowDecisionAnswer>;
   /** Live per-run step progress derived from thread activities (keyed by workflowRunId). */
   readonly workflowStepRuns?: ReadonlyMap<string, T3TeamWorkflowRunProgress>;
   readonly workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
@@ -37,7 +43,9 @@ export function T3TeamSystemTimelineRow(props: {
   const {
     message,
     threadRef,
+    markdownCwd,
     activeWorkflowInputMessageId,
+    workflowDecisionAnswers,
     workflowStepRuns,
     workflowRunStatus,
     onSubmitRecipeCardAction,
@@ -63,6 +71,11 @@ export function T3TeamSystemTimelineRow(props: {
     !(workflowDecision && message.text.trim() === workflowDecision.question.trim()) &&
     !workflowShape;
 
+  // A decision reply is always posted as a `role: "user"` message (see
+  // `t3team-thread-recipe-workflow-routes-resolve.ts`), so it renders through `UserTimelineRow`,
+  // never through this system row — suppression for it lives there instead (matched by
+  // `t3teamExt.workflowReply.correlationId`, not by id-in-a-set here).
+
   if (workflowShape) {
     return (
       <T3TeamSystemTimelineShapeRow
@@ -77,6 +90,7 @@ export function T3TeamSystemTimelineRow(props: {
   }
 
   if (workflowDecision) {
+    const answer = workflowDecisionAnswers?.get(message.id);
     return (
       <T3TeamSystemTimelineDecisionRow
         message={message}
@@ -84,6 +98,7 @@ export function T3TeamSystemTimelineRow(props: {
         workflowDecision={workflowDecision}
         activeWorkflowInputMessageId={activeWorkflowInputMessageId}
         decisionUnavailableMessage={decisionUnavailableMessage}
+        {...(answer ? { answer } : {})}
         {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
         {...(dispatchWorkflowDecision ? { dispatchWorkflowDecision } : {})}
       />
@@ -137,7 +152,9 @@ export function T3TeamSystemTimelineRow(props: {
     widgetAttachments.length === 0;
   if (workflowNotification) {
     return showMessageText ? (
-      <p className="max-w-[92%] text-sm leading-6 text-foreground/90">{message.text}</p>
+      <div className="max-w-[92%] text-sm leading-6 text-foreground/90">
+        <ChatMarkdown text={message.text} cwd={markdownCwd} threadRef={threadRef ?? undefined} />
+      </div>
     ) : null;
   }
 
@@ -148,7 +165,13 @@ export function T3TeamSystemTimelineRow(props: {
           System
         </p>
         {showMessageText ? (
-          <p className="text-sm leading-6 text-foreground/90">{message.text}</p>
+          <div className="text-sm leading-6 text-foreground/90">
+            <ChatMarkdown
+              text={message.text}
+              cwd={markdownCwd}
+              threadRef={threadRef ?? undefined}
+            />
+          </div>
         ) : null}
         {workflowCard ? (
           <div className={showMessageText ? "mt-3" : undefined}>

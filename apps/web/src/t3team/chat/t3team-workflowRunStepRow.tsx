@@ -46,7 +46,9 @@ function runtimeDetailLabel(detail: string | undefined): string | null {
   return useful.length <= 96 ? useful : `${useful.slice(0, 95)}…`;
 }
 
-function fallbackRuntimeLabel(step: T3TeamWorkflowStepEntry): string {
+/** The label a runtime-only row (no authored plan match) displays. Exported so the step-row
+ *  list can group consecutive dynamic rows by this same text. */
+export function fallbackRuntimeLabel(step: T3TeamWorkflowStepEntry): string {
   switch (step.stepKind) {
     case "workflow.self-heal":
       // The server supplies only these host-authored labels. Do not expose the repair

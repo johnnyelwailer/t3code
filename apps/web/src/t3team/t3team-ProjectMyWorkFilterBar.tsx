@@ -21,8 +21,6 @@ export function ProjectMyWorkFilterBar({
   statusCategory,
   onStatusCategoryChange,
   activeOptionsCount,
-  showGitHubActivity,
-  onShowGitHubActivityChange,
   hiddenKanbanColumnIds,
   onKanbanLaneVisibilityChange,
   epicsHidden,
@@ -52,8 +50,6 @@ export function ProjectMyWorkFilterBar({
   statusCategory: ProjectMyWorkStatusCategory;
   onStatusCategoryChange: (value: ProjectMyWorkStatusCategory) => void;
   activeOptionsCount: number;
-  showGitHubActivity: boolean;
-  onShowGitHubActivityChange: (value: boolean) => void;
   hiddenKanbanColumnIds: ReadonlyArray<string>;
   onKanbanLaneVisibilityChange: (columnId: string, visible: boolean) => void;
   epicsHidden: boolean;
@@ -92,8 +88,6 @@ export function ProjectMyWorkFilterBar({
           onGroupModeChange={onGroupModeChange}
           statusCategory={statusCategory}
           onStatusCategoryChange={onStatusCategoryChange}
-          showGitHubActivity={showGitHubActivity}
-          onShowGitHubActivityChange={onShowGitHubActivityChange}
           hiddenKanbanColumnIds={hiddenKanbanColumnIds}
           onKanbanLaneVisibilityChange={onKanbanLaneVisibilityChange}
           epicsHidden={epicsHidden}

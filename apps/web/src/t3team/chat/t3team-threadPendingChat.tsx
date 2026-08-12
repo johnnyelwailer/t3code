@@ -37,17 +37,13 @@ export function ThreadPendingChat({
           <LoaderCircleIcon className="size-5 animate-spin text-primary" />
         )}
         <p className="mt-3 text-sm font-medium text-foreground">
-          {isFailed
-            ? "Launch interrupted"
-            : stalled
-              ? "Launch never started"
-              : "Creating thread..."}
+          {isFailed ? "Launch interrupted" : stalled ? "This didn't start" : "Creating thread..."}
         </p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {isFailed
             ? "The live conversation never picked up the local kickoff state. Retry the launch to recreate the durable thread state."
             : stalled
-              ? "The conversation was never created on the server, so the workflow never started. Nothing was sent to a model. Retry the launch to dispatch it again."
+              ? "Something went wrong before anything was sent — no model was called and nothing ran. Retrying is safe."
               : "Waiting for the live conversation to pick up the local kickoff state."}
         </p>
         <Button

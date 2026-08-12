@@ -9,7 +9,6 @@ import { useAgentContext } from "~/t3team/hooks/t3team-useAgentContext";
 import { buildTicketSidebarPinnedItemId } from "~/t3team/t3team-sidebarPinningTypes";
 import { ProjectSidebarTicketCard } from "./t3team-ProjectSidebarTicketCard";
 import { ThreadRow } from "./t3team-ProjectSidebarThreadRow";
-import { ProjectSidebarTicketEntryGitHubActivity } from "./t3team-ProjectSidebarTicketEntryGitHubActivity";
 import {
   getSidebarSurfaceClassName,
   getSidebarThreadState,
@@ -29,8 +28,6 @@ export interface TicketSidebarEntryProps {
   ticketThreads: readonly ProjectThread[];
   jiraLastCheckedAt?: number;
   githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
-  githubActivityLastCheckedAt?: number;
-  showGitHubActivity: boolean;
   onSelectTicket: (projectId: string, ticketId: string) => void;
   onCreateTicketThread: (input: {
     projectId: string;
@@ -52,8 +49,6 @@ export function TicketSidebarEntry({
   ticketThreads,
   jiraLastCheckedAt,
   githubActivityItems,
-  githubActivityLastCheckedAt,
-  showGitHubActivity,
   onSelectTicket,
   onCreateTicketThread,
   onSelectThread,
@@ -69,17 +64,12 @@ export function TicketSidebarEntry({
       ]),
     [githubActivityItems, ticket.ref.displayId],
   );
-  const {
-    getTicketAgentContext,
-    getGitHubActivityAgentContext,
-    openTicketAgentContextMenu,
-    openTicketAgentContextMenuAt,
-    openGitHubActivityAgentContextMenu,
-  } = useTicketAgentContext({
-    project,
-    projectTickets,
-    githubActivityByWorkItem,
-  });
+  const { getTicketAgentContext, openTicketAgentContextMenu, openTicketAgentContextMenuAt } =
+    useTicketAgentContext({
+      project,
+      projectTickets,
+      githubActivityByWorkItem,
+    });
   const ticketSidebarItemId = buildTicketSidebarPinnedItemId({ projectId, ticketId: ticket.id });
   const ticketAgentContext = getTicketAgentContext(ticket, { visibleInSidebar: true });
   const { dragProps, dropProps, isDropActive } = useProjectSidebarNavItemDnd({
@@ -157,7 +147,6 @@ export function TicketSidebarEntry({
         ticket={ticket}
         state={ticketState}
         {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
-        githubActivityItems={githubActivityItems}
         rowRef={rowRef}
         onSelectTicket={() => onSelectTicket(projectId, ticket.id)}
         onCreateThread={async (event) => {
@@ -182,24 +171,6 @@ export function TicketSidebarEntry({
           {threadTree.rootThreads.map((thread) => renderThreadBranch(thread))}
         </div>
       ) : null}
-
-      <ProjectSidebarTicketEntryGitHubActivity
-        items={githubActivityItems}
-        showGitHubActivity={showGitHubActivity}
-        {...(githubActivityLastCheckedAt !== undefined
-          ? { lastCheckedAt: githubActivityLastCheckedAt }
-          : {})}
-        onItemContextMenu={(event, item) => {
-          openGitHubActivityAgentContextMenu(event, ticket, item, {
-            visibleInSidebar: true,
-          });
-        }}
-        getItemDragCapabilities={(item) =>
-          getGitHubActivityAgentContext(ticket, item, {
-            visibleInSidebar: true,
-          })
-        }
-      />
     </div>
   );
 }

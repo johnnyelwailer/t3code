@@ -98,6 +98,7 @@ async function bootstrapMountedThread(thread: ProjectThread, backend: BackendApi
     threadId: thread.id,
     hasServerThread: false,
     hasInitialUserMessage: Boolean(initialUserMessage),
+    hasKickoffWorkflow: thread.kickoffWorkflow !== undefined,
     hasProjectWorkspaceRoot: true,
     projectExists: true,
   });
@@ -120,6 +121,7 @@ async function bootstrapMountedThread(thread: ProjectThread, backend: BackendApi
     kickoffModelSelection: { instanceId: "instance-1", model: "test-model" } as never,
     kickoffRuntimeMode: "chat" as never,
     kickoffInteractionMode: "default" as never,
+    kickoffBranch: null,
     ...(thread.kickoffWorkflow ? { kickoffWorkflow: thread.kickoffWorkflow } : {}),
     createdAt: new Date().toISOString(),
     shouldEnsureProject: plan.shouldEnsureProject,

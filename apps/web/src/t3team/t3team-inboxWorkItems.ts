@@ -2,7 +2,11 @@ import {
   filterHiddenSidebarItemsById,
   sortSidebarItemsByStoredOrderById,
 } from "~/t3team/t3team-sidebarNavPreferences";
-import { buildTicketSidebarPinnedItemId } from "~/t3team/t3team-sidebarPinningTypes";
+import {
+  buildGitHubActivitySidebarPinnedItemId,
+  buildTicketSidebarPinnedItemId,
+  type T3TeamSidebarPinnedItem,
+} from "~/t3team/t3team-sidebarPinningTypes";
 import type { ProjectThread, ProjectTicket } from "~/t3team/t3team-types";
 
 /**
@@ -143,6 +147,52 @@ export function selectInboxWorkItems(input: {
   // leaves everything else in the activity order computed above.
   const sidebarItemIdOf = (row: InboxWorkItemRow) =>
     buildTicketSidebarPinnedItemId({ projectId: row.projectId, ticketId: row.ticketId });
+
+  return sortSidebarItemsByStoredOrderById(
+    filterHiddenSidebarItemsById(rows, hiddenSidebarItemIds, sidebarItemIdOf),
+    orderedSidebarItemIds,
+    sidebarItemIdOf,
+  );
+}
+
+/**
+ * A pinned `github-activity` item, ready for the Work-lens Inbox to resolve against a project's
+ * live activity feed. Kept separate from `InboxWorkItemRow`: GitHub activity has no ticket record
+ * to key off of the way jira pins do, so resolving title/repo/url needs a per-project fetch
+ * (`useProjectGitHubActivity`) rather than the flat ticket lookup `selectInboxWorkItems` uses —
+ * `t3team-InboxPinnedGitHubActivityRows.tsx` does that fetch once per project and matches these
+ * ids against it.
+ */
+export interface InboxGitHubActivityPinRow {
+  readonly id: string;
+  readonly projectId: string;
+  readonly activityId: string;
+  readonly pinnedAt: string;
+}
+
+export function selectInboxPinnedGitHubActivity(input: {
+  readonly pinnedItems: ReadonlyArray<T3TeamSidebarPinnedItem>;
+  readonly hiddenSidebarItemIds?: ReadonlyArray<string>;
+  readonly orderedSidebarItemIds?: ReadonlyArray<string>;
+}): ReadonlyArray<InboxGitHubActivityPinRow> {
+  const { pinnedItems, hiddenSidebarItemIds = [], orderedSidebarItemIds = [] } = input;
+
+  const rows: InboxGitHubActivityPinRow[] = pinnedItems
+    .filter(
+      (item): item is Extract<T3TeamSidebarPinnedItem, { kind: "github-activity" }> =>
+        item.kind === "github-activity",
+    )
+    .map((item) => ({
+      id: buildGitHubActivitySidebarPinnedItemId({
+        projectId: item.projectId,
+        activityId: item.activityId,
+      }),
+      projectId: item.projectId,
+      activityId: item.activityId,
+      pinnedAt: item.pinnedAt,
+    }));
+
+  const sidebarItemIdOf = (row: InboxGitHubActivityPinRow) => row.id;
 
   return sortSidebarItemsByStoredOrderById(
     filterHiddenSidebarItemsById(rows, hiddenSidebarItemIds, sidebarItemIdOf),

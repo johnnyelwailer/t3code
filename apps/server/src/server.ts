@@ -162,6 +162,7 @@ import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
 import { T3TeamContextRefreshServiceLive } from "./t3team-contextRefreshService.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
+import { T3TeamThreadStopCascadeReactorLive } from "./t3team-threadStopCascadeReactor.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
@@ -551,7 +552,7 @@ const commandReadinessLayer = HttpRouter.middleware(
   { global: true },
 );
 
-const PullRequestServiceLive = PullRequestService.layer.pipe(
+export const PullRequestServiceLive = PullRequestService.layer.pipe(
   // One registry entry per supported host; the service only knows the registry.
   Layer.provide(PullRequestProviderRegistry.layer),
   Layer.provide(SourceControlProviderRegistryLayerLive),
@@ -824,12 +825,21 @@ export const makeServerLayer = Layer.unwrap(
       tailscaleServeLayer,
       T3TeamWorkflowEngineReactorLive,
       T3TeamActorMessageReactorLive,
+      T3TeamThreadStopCascadeReactorLive,
       T3TeamChildStatusReactorLive,
       T3TeamWorkflowEngineRehydrateLive,
       cloudDesiredLinkReconcileLayer,
     );
 
     return serverApplicationLayer.pipe(
+      // loadPullRequestContext (behind t3teamGitHubPullRequestContextRouteLayer, inside
+      // makeRoutesLayer) now requires PullRequestService directly. makeRoutesLayer already
+      // provides PullRequestServiceLive to the routes merged there, but that provision does
+      // not reach the requirement HttpRouter.serve's own effect carries at this outer level —
+      // so it is provided again here, ahead of the rest of this pipe. The pr-context route's
+      // own project resolver also reads PullRequestProviderRegistry directly, same story.
+      Layer.provide(PullRequestServiceLive),
+      Layer.provide(PullRequestProviderRegistry.layer),
       Layer.provideMerge(runtimeServicesLive),
       Layer.provide(activationLayer),
       Layer.provideMerge(serverRelayBrokerTracingLayer),

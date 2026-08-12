@@ -55,6 +55,7 @@ import {
   XIcon,
 } from "lucide-react";
 import {
+  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -165,13 +166,19 @@ import { Input } from "./ui/input";
 import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./ui/menu";
 import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter } from "./sidebar/SidebarChrome";
-// t3team: the fork's only structural additions to this file are the three slots imported here.
+// t3team: the fork's structural additions to this file are the slots imported here,
+// plus the child-thread relation hook used to hide sub-runbook children and chip their parent.
 import {
   InboxHeader,
+  InboxSubRunsChip,
   InboxThreadAttribution,
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
-import { InboxWorkNav } from "~/t3team/components/t3team-InboxWorkNav";
+import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
+import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
+import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
+import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
+import type { ProjectThread } from "~/t3team/t3team-types";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import {
@@ -189,6 +196,31 @@ const SETTLED_TAIL_PAGE_COUNT = 25;
 // Keep the v2 key so existing preferences survive the v2-to-default rename.
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:snoozed-expanded";
+// t3team: project scope survives a component remount (redirect fallback,
+// shell swap, HMR) via sessionStorage — see projectScopeKey below.
+const PROJECT_SCOPE_KEY_STORAGE_KEY = "t3team:sidebar:project-scope-key";
+
+function readPersistedProjectScopeKey(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(PROJECT_SCOPE_KEY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedProjectScopeKey(value: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (value === null) {
+      window.sessionStorage.removeItem(PROJECT_SCOPE_KEY_STORAGE_KEY);
+    } else {
+      window.sessionStorage.setItem(PROJECT_SCOPE_KEY_STORAGE_KEY, value);
+    }
+  } catch {
+    // sessionStorage unavailable (private mode, quota) — degrade to in-memory only.
+  }
+}
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
@@ -1453,6 +1485,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               )}
               {/* t3team: compact work-item attribution; renders null when there is none. */}
               <InboxThreadAttribution threadId={thread.id} />
+              {/* t3team: "N sub-runs" chip on a parent thread; renders null when it has none. */}
+              <InboxSubRunsChip threadId={thread.id} />
               {terminalStatusIcon}
               {prBadge}
               {diff ? (
@@ -1609,10 +1643,115 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   );
 });
 
+/**
+ * t3team: one-line row for a sub-runbook child thread (Epic: first-class
+ * sub-runbooks, tree v2). Rendered directly below its parent's row when the
+ * parent's "N sub-runs" chip is expanded (`InboxSubRunsChip`) — never in the
+ * flat row list itself, per `useT3TeamChildThreadRelations`'s orphan rule.
+ * Deliberately minimal: no project/branch/meta line, just enough to tell
+ * sub-runs apart and jump into one.
+ */
+const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
+  child: ProjectThread;
+  childRef: ScopedThreadRef;
+  isActive: boolean;
+  onNavigate: () => void;
+  onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
+}) {
+  const { child } = props;
+  const handleContextMenu = useCallback(
+    (event: ReactMouseEvent) => {
+      event.preventDefault();
+      props.onContextMenu(props.childRef, { x: event.clientX, y: event.clientY });
+    },
+    [props.childRef, props.onContextMenu],
+  );
+  const statusDot =
+    child.status === "running" ? (
+      <span aria-hidden className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary" />
+    ) : child.status === "error" ? (
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />
+    ) : child.status === "completed" ? (
+      <CircleCheckIcon aria-hidden className="size-3 shrink-0 text-sidebar-muted-foreground/70" />
+    ) : (
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-sidebar-muted-foreground/40" />
+    );
+  return (
+    <li role="presentation" className="list-none">
+      <button
+        type="button"
+        onClick={props.onNavigate}
+        onContextMenu={handleContextMenu}
+        aria-current={props.isActive ? "page" : undefined}
+        className={cn(
+          "flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-[calc(var(--sidebar-content-inset)+1rem)] text-left text-xs outline-none",
+          props.isActive
+            ? "bg-sidebar-row-active text-sidebar-foreground"
+            : "text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+        )}
+      >
+        {statusDot}
+        <span className="min-w-0 flex-1 truncate">{child.title}</span>
+        <span className="shrink-0 text-[0.6875rem] text-muted-foreground/55 tabular-nums">
+          {compactSidebarTimeLabel(formatRelativeTimeLabel(child.lastMessageAt))}
+        </span>
+      </button>
+    </li>
+  );
+});
+
 export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
+  // t3team: sub-runbook children are filtered out of the row list below and
+  // surfaced instead as a "N sub-runs" chip on their parent (InboxSubRunsChip).
+  const { childThreadIds, childThreadsByParentId } = useT3TeamChildThreadRelations();
+  // t3team: mirror the relation for chrome outside this component (Agents panel fork section) —
+  // see t3team-childThreadRelationsStore.ts for why this is a mirror rather than a second
+  // useT3TeamChildThreadRelations()/useProjectStore() instance elsewhere.
+  const setChildThreadsByParentIdForAgentsPanel = useT3TeamChildThreadRelationsStore(
+    (state) => state.setChildThreadsByParentId,
+  );
+  useEffect(() => {
+    setChildThreadsByParentIdForAgentsPanel(childThreadsByParentId);
+  }, [childThreadsByParentId, setChildThreadsByParentIdForAgentsPanel]);
+  // t3team: which parents currently have their "N sub-runs" chip expanded
+  // (InboxSubRunsChip toggles this); persisted to localStorage so a parent
+  // the user opened stays open across reload (see t3team-useExpandedSubRuns.ts).
+  const expandedSubRunParentIds = useExpandedSubRunsStore((store) => store.expandedParentIds);
+  const ensureSubRunExpanded = useExpandedSubRunsStore((store) => store.ensureExpanded);
+  // t3team: auto-expand a parent the moment one of its children starts
+  // running, so active sub-run work is never invisible behind a collapsed
+  // chip — additive only (ensureExpanded never removes), and only fired on
+  // the rising edge (a parent newly seen running) so a user who explicitly
+  // collapses a still-running parent isn't immediately re-expanded.
+  const previouslyRunningSubRunParentIdsRef = useRef<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    const runningParentIds = new Set<string>();
+    for (const [parentId, children] of childThreadsByParentId) {
+      if (children.some((child) => child.status === "running")) {
+        runningParentIds.add(parentId);
+      }
+    }
+    const newlyRunningParentIds = [...runningParentIds].filter(
+      (parentId) => !previouslyRunningSubRunParentIdsRef.current.has(parentId),
+    );
+    previouslyRunningSubRunParentIdsRef.current = runningParentIds;
+    if (newlyRunningParentIds.length > 0) {
+      ensureSubRunExpanded(newlyRunningParentIds);
+    }
+  }, [childThreadsByParentId, ensureSubRunExpanded]);
+  // t3team: children are hidden from the flat row lists above (childThreadIds
+  // filter) but still live in `threads` — this map recovers each child's
+  // environmentId for navigation when its parent's row is expanded.
+  const threadShellById = useMemo(() => new Map(threads.map((t) => [t.id, t] as const)), [threads]);
+  // t3team: sub-run child rows reuse handleThreadContextMenu below, whose
+  // lookup (threadByKeyRef) is built from the filtered row list and so never
+  // contains children — this ref lets that lookup fall back to the full
+  // thread set instead of standing up a second, reduced context menu.
+  const threadShellByIdRef = useRef(threadShellById);
+  threadShellByIdRef.current = threadShellById;
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -1713,6 +1852,14 @@ export default function Sidebar() {
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
   });
+  // t3team: Team routes (/t3team/projects/$projectId/threads/$threadId) carry
+  // a threadId param but no environmentId, so resolveThreadRouteTarget (kept
+  // upstream-clean) never resolves them and returns null. Grab the raw
+  // threadId here so the fallback below can still find the row to highlight.
+  const routeParamsThreadId = useParams({
+    strict: false,
+    select: (params) => (params as { threadId?: string }).threadId ?? null,
+  });
   const routeDraftThread = useComposerDraftStore((store) =>
     routeTarget?.kind === "draft" ? store.getDraftSession(routeTarget.draftId) : null,
   );
@@ -1720,7 +1867,18 @@ export default function Sidebar() {
     () => resolveActiveThreadRouteRef(routeTarget, routeDraftThread),
     [routeDraftThread, routeTarget],
   );
-  const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
+  // t3team: fallback for Team routes — resolveThreadRouteTarget resolved to
+  // null (no environmentId param), but a threadId param is present. Thread
+  // ids are globally unique, so the environmentId can be recovered from the
+  // already-loaded thread shells and the same scoped ref built here, letting
+  // routeThreadKey match downstream exactly like an upstream thread route.
+  const routeThreadRefFallback = useMemo(() => {
+    if (routeThreadRef || !routeParamsThreadId) return null;
+    const shell = threads.find((thread) => thread.id === routeParamsThreadId);
+    return shell ? scopeThreadRef(shell.environmentId, shell.id) : null;
+  }, [routeThreadRef, routeParamsThreadId, threads]);
+  const effectiveRouteThreadRef = routeThreadRef ?? routeThreadRefFallback;
+  const routeThreadKey = effectiveRouteThreadRef ? scopedThreadKey(effectiveRouteThreadRef) : null;
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
   // Post-settle navigation validates against the CURRENT route, not the one
@@ -1842,7 +2000,18 @@ export default function Sidebar() {
 
   // Project scope: one menu above the list. Scoping filters the list without
   // making the header width depend on the number or length of project names.
-  const [projectScopeKey, setProjectScopeKey] = useState<string | null>(null);
+  // t3team: persisted in sessionStorage (not useLocalStorage's Effect-Schema
+  // storage — this is a plain string, and sessionStorage's per-tab lifetime
+  // fits a view filter better than localStorage's cross-session persistence)
+  // so any remount of this component (redirect fallback, shell swap, HMR)
+  // restores the filter instead of silently resetting it to "All projects".
+  const [projectScopeKey, setProjectScopeKeyState] = useState<string | null>(() =>
+    readPersistedProjectScopeKey(),
+  );
+  const setProjectScopeKey = useCallback((value: string | null) => {
+    setProjectScopeKeyState(value);
+    writePersistedProjectScopeKey(value);
+  }, []);
   const scopedProjectGroup = useMemo(
     () =>
       projectScopeKey === null
@@ -1866,6 +2035,13 @@ export default function Sidebar() {
       setProjectScopeKey(null);
     }
   }, [projectScopeKey, scopedProjectGroup]);
+  // t3team: mirror the scope for chrome outside this component (footer "My work"/"Backlog").
+  const setScopedProjectIdForChrome = useT3TeamSidebarProjectScope(
+    (state) => state.setScopedProjectId,
+  );
+  useEffect(() => {
+    setScopedProjectIdForChrome(scopedProjectGroup?.id ?? null);
+  }, [scopedProjectGroup, setScopedProjectIdForChrome]);
   // Count-only subscription: the parent needs "are there draft rows" for the
   // empty state, while SidebarDraftBlock owns the per-keystroke content
   // subscription. Selecting a number keeps typing in a draft composer from
@@ -1937,6 +2113,9 @@ export default function Sidebar() {
     const visible = threads.filter(
       (thread) =>
         thread.archivedAt === null &&
+        // t3team: sub-runbook children are folded into their parent's "N sub-runs"
+        // chip instead of appearing as flat sibling rows.
+        !childThreadIds.has(thread.id) &&
         (scopedProjectKeys === null ||
           scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
     );
@@ -2007,6 +2186,7 @@ export default function Sidebar() {
   }, [
     autoSettleAfterDays,
     changeRequestStateByKey,
+    childThreadIds,
     nowMinute,
     scopedProjectKeys,
     serverConfigs,
@@ -2877,11 +3057,32 @@ export default function Sidebar() {
         return;
       }
       if (clicked.value !== "delete") return;
+      // t3team: deleting a parent takes its sub-run children with it — same
+      // cascade rule as the single-row delete case in handleThreadContextMenu.
+      // Expanding the key set (rather than only expanding inside the loop)
+      // means the confirm dialog's count already reflects what's really
+      // going away.
+      const expandedThreadKeys = new Set(threadKeys);
+      const cascadedChildThreadByKey = new Map<string, EnvironmentThreadShell>();
+      for (const threadKey of threadKeys) {
+        const selectedThread = threadByKeyRef.current.get(threadKey);
+        if (!selectedThread) continue;
+        for (const child of childThreadsByParentId.get(selectedThread.id) ?? []) {
+          const childShell = threadShellByIdRef.current.get(child.id as ThreadId);
+          const childEnvironmentId = childShell?.environmentId ?? selectedThread.environmentId;
+          const childKey = scopedThreadKey(
+            scopeThreadRef(childEnvironmentId, child.id as ThreadId),
+          );
+          expandedThreadKeys.add(childKey);
+          if (childShell) cascadedChildThreadByKey.set(childKey, childShell);
+        }
+      }
+      const expandedCount = expandedThreadKeys.size;
       if (confirmThreadDelete) {
         const confirmed = await settlePromise(() =>
           api.dialogs.confirm(
             [
-              `Delete ${count} thread${count === 1 ? "" : "s"}?`,
+              `Delete ${expandedCount} thread${expandedCount === 1 ? "" : "s"}?`,
               "This permanently clears conversation history for these threads.",
             ].join("\n"),
             { variant: "destructive" },
@@ -2894,8 +3095,9 @@ export default function Sidebar() {
       // really gone, or the first delete would treat still-alive batch mates
       // as deleted and remove a worktree they still point at.
       const deletedThreadKeys = new Set<string>();
-      for (const threadKey of threadKeys) {
-        const thread = threadByKeyRef.current.get(threadKey);
+      for (const threadKey of expandedThreadKeys) {
+        const thread =
+          threadByKeyRef.current.get(threadKey) ?? cascadedChildThreadByKey.get(threadKey);
         if (!thread) continue;
         const result = await deleteThread(scopeThreadRef(thread.environmentId, thread.id), {
           deletedThreadKeys,
@@ -2915,11 +3117,12 @@ export default function Sidebar() {
         }
         deletedThreadKeys.add(threadKey);
       }
-      removeFromSelection(threadKeys);
+      removeFromSelection([...expandedThreadKeys]);
     },
     [
       attemptSettle,
       attemptSnooze,
+      childThreadsByParentId,
       clearSelection,
       confirmThreadDelete,
       deleteThread,
@@ -2944,7 +3147,13 @@ export default function Sidebar() {
           await handleMultiSelectContextMenu(position);
           return;
         }
-        const thread = threadByKeyRef.current.get(threadKey);
+        // t3team: sub-run child rows aren't in the filtered row list (they
+        // render below their parent's expanded chip instead), so they're
+        // absent from threadByKeyRef — fall back to the unfiltered shell map
+        // so children get the exact same menu as top-level rows.
+        const thread =
+          threadByKeyRef.current.get(threadKey) ??
+          threadShellByIdRef.current.get(threadRef.threadId);
         if (!thread) return;
         const threadWorkspacePath =
           thread.worktreePath ??
@@ -3083,11 +3292,24 @@ export default function Sidebar() {
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
           case "delete": {
+            // t3team: deleting a parent takes its sub-run children with it —
+            // there is no server-side cascade (thread.delete only ever
+            // touches the one threadId), so this loops client-side, same
+            // pattern the multi-select delete already uses for its batch.
+            const childThreads = childThreadsByParentId.get(thread.id) ?? [];
+            const childRefs = childThreads.map((child) => {
+              const childEnvironmentId =
+                threadShellByIdRef.current.get(child.id as ThreadId)?.environmentId ??
+                threadRef.environmentId;
+              return scopeThreadRef(childEnvironmentId, child.id as ThreadId);
+            });
             if (confirmThreadDelete) {
               const confirmed = await settlePromise(() =>
                 api.dialogs.confirm(
                   [
-                    `Delete thread "${thread.title}"?`,
+                    childRefs.length > 0
+                      ? `Delete thread "${thread.title}" and its ${childRefs.length} sub-run${childRefs.length === 1 ? "" : "s"}?`
+                      : `Delete thread "${thread.title}"?`,
                     "This permanently clears conversation history for this thread.",
                   ].join("\n"),
                   { variant: "destructive" },
@@ -3095,7 +3317,23 @@ export default function Sidebar() {
               );
               if (confirmed._tag === "Failure" || !confirmed.value) return;
             }
-            const result = await deleteThread(threadRef);
+            const deletedThreadKeys = new Set<string>();
+            for (const childRef of childRefs) {
+              const childResult = await deleteThread(childRef, { deletedThreadKeys });
+              if (childResult._tag === "Failure" && !isAtomCommandInterrupted(childResult)) {
+                const error = squashAtomCommandFailure(childResult);
+                toastManager.add(
+                  stackedThreadToast({
+                    type: "error",
+                    title: "Failed to delete sub-run",
+                    description: error instanceof Error ? error.message : "An error occurred.",
+                  }),
+                );
+                return;
+              }
+              deletedThreadKeys.add(scopedThreadKey(childRef));
+            }
+            const result = await deleteThread(threadRef, { deletedThreadKeys });
             if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
               const error = squashAtomCommandFailure(result);
               toastManager.add(
@@ -3121,6 +3359,7 @@ export default function Sidebar() {
       attemptUnpin,
       attemptUnsettle,
       attemptUnsnooze,
+      childThreadsByParentId,
       confirmThreadDelete,
       copyBranchToClipboard,
       copyPathToClipboard,
@@ -3139,8 +3378,9 @@ export default function Sidebar() {
   // Thread jump (cmd+1..9) and prev/next traversal reuse the same commands as
   // v1 — the keybinding layer is shared, only the ordered list differs.
   const routeTerminalOpen = useTerminalUiStateStore((state) =>
-    routeThreadRef
-      ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
+    effectiveRouteThreadRef
+      ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, effectiveRouteThreadRef)
+          .terminalOpen
       : false,
   );
   useEffect(() => {
@@ -3573,7 +3813,7 @@ export default function Sidebar() {
                         // rows resolve to null on their own.
                         wokeAt={threadWokeAt(thread, { now: snoozeNow })}
                         isActive={routeThreadKey === threadKey}
-                        openPullRequestsInRightPanel={routeThreadRef !== null}
+                        openPullRequestsInRightPanel={effectiveRouteThreadRef !== null}
                         jumpLabel={showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null}
                         currentEnvironmentId={primaryEnvironmentId}
                         environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
@@ -3609,6 +3849,52 @@ export default function Sidebar() {
                         onAcknowledgeWoke={acknowledgeWoke}
                         onChangeRequestState={handleChangeRequestState}
                       />
+                    );
+                  };
+                  // t3team: compact sub-run rows for a parent thread, rendered only
+                  // while its "N sub-runs" chip is expanded (InboxSubRunsChip).
+                  // Navigation reuses navigateToThread — the child's environmentId
+                  // is recovered from the still-live thread shell, falling back to
+                  // the parent's when a shell hasn't hydrated yet (same environment
+                  // in practice, since sub-runbooks never cross environments).
+                  const renderSubRunRows = (parentThread: EnvironmentThreadShell): ReactNode[] => {
+                    if (!expandedSubRunParentIds.has(parentThread.id)) return [];
+                    const children = childThreadsByParentId.get(parentThread.id);
+                    if (!children || children.length === 0) return [];
+                    return children.map((child) => {
+                      const childEnvironmentId =
+                        threadShellById.get(child.id as ThreadId)?.environmentId ??
+                        parentThread.environmentId;
+                      const childRef = scopeThreadRef(childEnvironmentId, child.id as ThreadId);
+                      return (
+                        <SidebarSubRunRow
+                          key={`sub-run:${child.id}`}
+                          child={child}
+                          childRef={childRef}
+                          isActive={routeThreadKey === scopedThreadKey(childRef)}
+                          onNavigate={() => navigateToThread(childRef)}
+                          onContextMenu={handleThreadContextMenu}
+                        />
+                      );
+                    });
+                  };
+                  const renderThreadRowWithChildren = (
+                    thread: EnvironmentThreadShell,
+                    section: "pinned" | "active" | "snoozed" | "settled",
+                    sortable?: SortablePinnedRowBag,
+                  ): ReactNode => {
+                    const subRunRows = renderSubRunRows(thread);
+                    if (subRunRows.length === 0) {
+                      return renderThreadRow(thread, section, sortable);
+                    }
+                    const threadKey = scopedThreadKey(
+                      scopeThreadRef(thread.environmentId, thread.id),
+                    );
+                    return (
+                      <Fragment key={`${threadKey}:with-sub-runs`}>
+                        {renderThreadRow(thread, section, sortable)}
+                        {subRunRows}
+                      </Fragment>
                     );
                   };
                   // Draft block above everything, then the pinned block:
@@ -3648,11 +3934,11 @@ export default function Sidebar() {
                             scopeThreadRef(thread.environmentId, thread.id),
                           );
                           if (!reorderablePinnedKeys.has(threadKey)) {
-                            return renderThreadRow(thread, "pinned");
+                            return renderThreadRowWithChildren(thread, "pinned");
                           }
                           return (
                             <SortablePinnedThreadRow key={threadKey} id={threadKey}>
-                              {(bag) => renderThreadRow(thread, "pinned", bag)}
+                              {(bag) => renderThreadRowWithChildren(thread, "pinned", bag)}
                             </SortablePinnedThreadRow>
                           );
                         })}
@@ -3669,21 +3955,13 @@ export default function Sidebar() {
                       />,
                     );
                   }
-                  // t3team: Backlog / My work entry points, scoped by the project selector above.
-                  // `.id` is the group's REPRESENTATIVE project — the same one the header names
-                  // and the one every other control here acts on. `memberProjectRefs[0]` is a
-                  // different selection (array order, not preferred environment), so using it can
-                  // open a different physical project than the header says.
-                  items.push(
-                    <InboxWorkNav
-                      key="t3team-inbox-work-nav"
-                      projectId={scopedProjectGroup?.id ?? null}
-                    />,
-                  );
+                  // t3team: Backlog / My work moved to the sidebar footer (SidebarChromeFooter) —
+                  // they are navigation chrome, not stream content, and read as misplaced here.
+                  // The footer follows the scope via useT3TeamSidebarProjectScope (mirrored above).
                   // t3team: assigned/pinned work items as peers in the same stream.
                   items.push(<InboxWorkItemSection key="t3team-inbox-work-items" />);
                   for (const thread of activeThreads) {
-                    items.push(renderThreadRow(thread, "active"));
+                    items.push(renderThreadRowWithChildren(thread, "active"));
                   }
                   // Snoozed shelf: between the inbox and Settled — out of the
                   // way, never gone. The header always renders while anything
@@ -3721,7 +3999,7 @@ export default function Sidebar() {
                       </li>,
                     );
                     for (const thread of visibleSnoozedThreads) {
-                      items.push(renderThreadRow(thread, "snoozed"));
+                      items.push(renderThreadRowWithChildren(thread, "snoozed"));
                     }
                   }
                   if (settledThreads.length > 0) {
@@ -3756,7 +4034,7 @@ export default function Sidebar() {
                     );
                   }
                   for (const thread of renderedSettledThreads) {
-                    items.push(renderThreadRow(thread, "settled"));
+                    items.push(renderThreadRowWithChildren(thread, "settled"));
                   }
                   return items;
                 })()}

@@ -49,12 +49,14 @@ export function EmbeddedThreadAside({
           {...(projectSource ? { projectSource } : {})}
           {...(projectWorkspaceRoot ? { projectWorkspaceRoot } : {})}
           title={thread.title}
-          {...(thread.kickoffMessage ? { kickoffMessage: thread.kickoffMessage } : {})}
+          {...(thread.kickoffMessage !== undefined
+            ? { kickoffMessage: thread.kickoffMessage }
+            : {})}
           {...(thread.kickoffPending !== undefined
             ? { kickoffPending: thread.kickoffPending }
             : {})}
           {...(thread.kickoffWorkflow ? { kickoffWorkflow: thread.kickoffWorkflow } : {})}
-          {...(thread.kickoffPending && thread.kickoffMessage
+          {...(thread.kickoffPending && thread.kickoffMessage !== undefined
             ? { initialUserMessage: thread.kickoffMessage }
             : {})}
           {...(thread.kickoffModelSelection

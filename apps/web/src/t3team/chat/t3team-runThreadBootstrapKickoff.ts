@@ -31,6 +31,7 @@ type DispatchThreadBootstrapCreateWithRecoveryInput = {
   kickoffModelSelection: ModelSelection;
   kickoffRuntimeMode: RuntimeMode;
   kickoffInteractionMode: ProviderInteractionMode;
+  kickoffBranch: string | null;
   createdAt: string;
 };
 
@@ -58,6 +59,7 @@ type RunThreadBootstrapKickoffInput = {
   kickoffModelSelection: ModelSelection;
   kickoffRuntimeMode: RuntimeMode;
   kickoffInteractionMode: ProviderInteractionMode;
+  kickoffBranch: string | null;
   kickoffWorkflow: T3TeamKickoffWorkflow | undefined;
   toolContext: T3TeamTurnToolContext | undefined;
   createdAt: string;
@@ -119,6 +121,7 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
       kickoffModelSelection: input.kickoffModelSelection,
       kickoffRuntimeMode: input.kickoffRuntimeMode,
       kickoffInteractionMode: input.kickoffInteractionMode,
+      kickoffBranch: input.kickoffBranch,
       createdAt: input.createdAt,
     });
   }
@@ -189,7 +192,7 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
         modelSelection: input.kickoffModelSelection,
         runtimeMode: input.kickoffRuntimeMode,
         interactionMode: input.kickoffInteractionMode,
-        branch: null,
+        branch: input.kickoffBranch,
         worktreePath: null,
         createdAt: input.createdAt,
       },

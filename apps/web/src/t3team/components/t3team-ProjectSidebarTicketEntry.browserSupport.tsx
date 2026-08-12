@@ -81,7 +81,6 @@ export function JiraTicketEntryHarness() {
             view={null}
             ticketThreads={[]}
             githubActivityItems={[]}
-            showGitHubActivity={false}
             onSelectTicket={() => {}}
             onCreateTicketThread={() => "thread-1"}
             onSelectThread={() => {}}

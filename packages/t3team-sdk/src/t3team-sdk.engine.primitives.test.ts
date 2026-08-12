@@ -88,20 +88,27 @@ describe("durable workflow engine — composition primitives", () => {
     expect(counters.noopCalls).toBe(2);
   });
 
-  it("runs a sub-workflow as one entry; the child does not re-execute on resume", async () => {
+  it("runs a sub-workflow inline: its own calls are journaled and replay individually", async () => {
     const { runId, result } = completed(
       await startWorkflow(subParentWorkflow, { name: "sub" }, base),
     );
     expect(result).toEqual({ greeting: "hi sub", upper: "HI SUB" });
-    expect(counters.greetCalls).toBe(1); // the child's script call ran once, black-boxed
+    expect(counters.greetCalls).toBe(1);
+
+    // The child's `scripts.greet` call takes a seat in the PARENT's journal — there is no
+    // black-boxed `workflow` entry standing in for the whole sub-run. That is what lets a
+    // sub-workflow suspend on a question and resume, exactly like a root body.
     const journal = readJournal(journalFilePath(runsRoot, runId));
     expect(journal.size).toBe(1);
-    expect(journal.get(1)).toMatchObject({ kind: "workflow", refId: "workflow" });
+    expect(journal.get(1)).toMatchObject({ kind: "script", refId: "greet" });
+
     const resumed = completed(
       await resumeWorkflow(runId, subParentWorkflow, { name: "sub" }, base),
     );
     expect(resumed.result).toEqual(result);
-    expect(counters.greetCalls).toBe(1); // child not re-run
+    // Still one: the child body re-executes on replay (as every body does), but its journaled
+    // script call replays from the record instead of re-firing the handler.
+    expect(counters.greetCalls).toBe(1);
   });
 
   it("exposes budget.total / spent() / remaining() and replays the same readings", async () => {
