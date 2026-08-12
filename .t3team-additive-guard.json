@@ -175,6 +175,7 @@
     "packages/project-context/**",
     "packages/project-recipes/**",
     "packages/runbook-core/**",
+    "packages/runbook-prompts/**",
     "packages/runbook-scripts/**",
     "packages/runbook-threads/**",
     "packages/runbook-tools/**",
