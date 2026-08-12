@@ -18,8 +18,8 @@ describe("getT3TeamMainContentHeaderClassName", () => {
       shouldInsetDesktopHeader: true,
     });
 
-    expect(className).toContain("pl-[90px]");
-    expect(className).toContain("sm:pl-[90px]");
+    expect(className).toContain("pl-[var(--workspace-titlebar-content-left)]");
+    expect(className).toContain("sm:pl-[var(--workspace-titlebar-content-left)]");
     expect(className).toContain("bg-gradient-to-b");
   });
 });

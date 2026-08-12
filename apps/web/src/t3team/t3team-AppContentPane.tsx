@@ -1,5 +1,4 @@
 import { SidebarInset, useSidebar } from "~/t3team/components/ui/t3team-sidebar";
-import { isElectron } from "~/env";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { AppMainContent } from "~/t3team/t3team-AppMainContent";
 import { T3TeamInlineRecipeLaunchProvider } from "~/t3team/t3team-inlineRecipeLaunch";
@@ -44,7 +43,7 @@ export function AppContentPane({
   onManageRepositories: (projectId: string | null) => void;
 }) {
   const { isMobile, open } = useSidebar();
-  const shouldInsetDesktopHeader = isElectron && !isMobile && !open;
+  const shouldInsetDesktopHeader = !isMobile && !open;
 
   return (
     <T3TeamInlineRecipeLaunchProvider>

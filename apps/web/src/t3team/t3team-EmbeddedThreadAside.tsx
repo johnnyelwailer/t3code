@@ -28,14 +28,15 @@ export function EmbeddedThreadAside({
 }: EmbeddedThreadAsideProps) {
   return (
     <aside className="relative flex h-full min-h-0 flex-col overflow-hidden border-l border-border/70 bg-background [view-transition-name:t3team-right-sidebar-panel]">
-      <div className="flex min-h-0 flex-1 flex-col pt-10">
+      <div className="flex min-h-0 flex-1 flex-col">
         {onOpenFullThread ? (
-          <div className="px-3 pb-2">
+          <div className="flex h-10 shrink-0 items-center justify-end border-b border-border/60 px-3">
             <Button
               variant="ghost"
               size="xs"
               className="text-muted-foreground/80"
               onClick={() => runT3TeamViewTransition(() => onOpenFullThread())}
+              aria-label="Open full thread"
             >
               <ArrowUpRightIcon className="size-3.5" />
               Open full thread

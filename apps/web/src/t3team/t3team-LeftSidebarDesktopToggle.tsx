@@ -1,5 +1,5 @@
 import { CSSProperties } from "react";
-import { ChevronRight } from "lucide-react";
+import { PanelLeftIcon } from "lucide-react";
 import { useSidebar } from "~/t3team/components/ui/t3team-sidebar";
 
 export function T3TeamLeftSidebarDesktopToggle() {
@@ -11,22 +11,27 @@ export function T3TeamLeftSidebarDesktopToggle() {
 
   const dockStyle: CSSProperties = {
     position: "fixed",
-    left: "max(env(titlebar-area-x, 0px), 0.5rem)",
-    bottom: "0.5rem",
-    zIndex: 40,
+    left: "var(--workspace-controls-left)",
+    top: "var(--workspace-controls-top)",
+    height: "var(--workspace-topbar-height)",
+    zIndex: 50,
     pointerEvents: "none",
   };
 
   return (
-    <div className="pointer-events-none hidden md:flex" style={dockStyle}>
+    <div
+      className="pointer-events-none hidden items-center md:flex"
+      style={dockStyle}
+      data-sidebar-control=""
+    >
       <button
         type="button"
         aria-label="Expand left sidebar"
         title="Expand left sidebar"
-        className="pointer-events-auto inline-flex size-7 items-center justify-center rounded-full border border-border/70 bg-background/95 text-muted-foreground shadow-sm transition-colors hover:text-foreground [-webkit-app-region:no-drag]"
+        className="pointer-events-auto inline-flex size-[var(--workspace-titlebar-control-size)]! items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [-webkit-app-region:no-drag]"
         onClick={toggleSidebar}
       >
-        <ChevronRight className="size-4" />
+        <PanelLeftIcon className="size-4" />
       </button>
     </div>
   );

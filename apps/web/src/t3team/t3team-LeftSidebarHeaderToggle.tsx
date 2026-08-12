@@ -1,4 +1,4 @@
-import { ChevronLeft } from "lucide-react";
+import { PanelLeftCloseIcon } from "lucide-react";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { useSidebar } from "~/t3team/components/ui/t3team-sidebar";
 
@@ -19,7 +19,7 @@ export function T3TeamLeftSidebarHeaderToggle() {
       title="Collapse left sidebar"
       onClick={toggleSidebar}
     >
-      <ChevronLeft className="size-4" />
+      <PanelLeftCloseIcon className="size-4" />
     </Button>
   );
 }

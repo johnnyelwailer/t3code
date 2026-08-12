@@ -438,14 +438,13 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     -webkit-app-region: no-drag;
   }
 
-  /* A side-by-side thread hides ChatView's normal header. On Windows that would put its close
-     button inside Electron's native titlebar controls, so reserve the same titlebar band and place
-     the button below it. The variables collapse to the normal compact spacing outside Electron. */
-  html.electron-windows .t3team-embedded-thread-pane {
+  /* A side-by-side thread hides ChatView's normal header. Reserve the shared topbar band so its
+     content and close action line up with the main thread and never land under native chrome. */
+  .t3team-embedded-thread-pane {
     padding-top: var(--workspace-topbar-height);
   }
 
-  html.electron-windows .t3team-embedded-thread-close {
+  .t3team-embedded-thread-close {
     top: calc(var(--workspace-topbar-height) + 0.5rem);
     right: calc(var(--workspace-controls-right) + 0.5rem);
   }

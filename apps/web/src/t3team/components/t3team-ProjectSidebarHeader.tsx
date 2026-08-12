@@ -6,6 +6,7 @@ import {
   SidebarStageBackdrop,
   useSidebarStageBackdropVariant,
 } from "~/components/SidebarStageBackdrop";
+import { T3TeamLeftSidebarHeaderToggle } from "~/t3team/t3team-LeftSidebarHeaderToggle";
 import { SidebarHeader, SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { T3TeamPackBrandImage } from "~/t3team/t3team-PackBrandImage";
 
@@ -69,6 +70,9 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
             otherwise) — the app name is the Team header's primary label, unlike
             upstream's secondary "Code" caption next to a standalone wordmark. */}
         <span className="truncate text-sm font-semibold">{appName}</span>
+      </div>
+      <div className="relative z-10 ml-auto flex items-center">
+        <T3TeamLeftSidebarHeaderToggle />
       </div>
     </SidebarHeader>
   );

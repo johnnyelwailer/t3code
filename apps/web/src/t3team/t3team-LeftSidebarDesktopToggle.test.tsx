@@ -28,9 +28,10 @@ describe("T3TeamLeftSidebarDesktopToggle", () => {
     const markup = renderToStaticMarkup(<T3TeamLeftSidebarDesktopToggle />);
 
     expect(markup).toContain("Expand left sidebar");
-    expect(markup).toContain("rounded-full");
-    expect(markup).toContain("bottom:0.5rem");
-    expect(markup).toContain("left:max(env(titlebar-area-x, 0px), 0.5rem)");
+    expect(markup).toContain("data-sidebar-control");
+    expect(markup).toContain("top:var(--workspace-controls-top)");
+    expect(markup).toContain("height:var(--workspace-topbar-height)");
+    expect(markup).toContain("left:var(--workspace-controls-left)");
   });
 
   it("renders nothing on mobile because the header triggers already handle that case", () => {

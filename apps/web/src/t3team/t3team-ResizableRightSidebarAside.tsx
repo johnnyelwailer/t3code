@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 type ResizableRightSidebarAsideProps = {
@@ -26,18 +26,18 @@ export function ResizableRightSidebarAside({
 }: ResizableRightSidebarAsideProps) {
   return (
     <>
-      <div className="pointer-events-none absolute top-2 right-2 z-40">
+      <div className="workspace-titlebar-controls pointer-events-none z-40 gap-1">
         <button
           type="button"
           aria-label={isCollapsed ? "Expand right sidebar" : "Collapse right sidebar"}
           title={isCollapsed ? "Expand right sidebar" : "Collapse right sidebar"}
-          className="pointer-events-auto inline-flex size-6 items-center justify-center rounded-full border border-border/70 bg-background/95 text-muted-foreground shadow-sm transition-colors hover:text-foreground [-webkit-app-region:no-drag]"
+          className="pointer-events-auto inline-flex size-[var(--workspace-titlebar-control-size)]! items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [-webkit-app-region:no-drag]"
           onClick={onToggleCollapsed}
         >
           {isCollapsed ? (
-            <ChevronLeft className="size-3.5" />
+            <PanelRightOpenIcon className="size-4" />
           ) : (
-            <ChevronRight className="size-3.5" />
+            <PanelRightCloseIcon className="size-4" />
           )}
         </button>
       </div>
@@ -64,7 +64,7 @@ export function ResizableRightSidebarAside({
 
         <div
           className={cn(
-            "h-full min-h-0",
+            "box-border h-full min-h-0 pt-[var(--workspace-topbar-height)]",
             isCollapsed ? "pointer-events-none opacity-0" : "opacity-100",
           )}
         >
