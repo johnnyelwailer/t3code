@@ -148,9 +148,7 @@ export function GitHubRepositoryDiscoverySection({
         </div>
       ) : null}
 
-      {isAuthenticated &&
-      !discovery.loadingDiscovery &&
-      discovery.suggestedUrls.length === 0 ? (
+      {isAuthenticated && !discovery.loadingDiscovery && discovery.suggestedUrls.length === 0 ? (
         <p className="text-xs text-muted-foreground">No matching repository found.</p>
       ) : null}
 
@@ -161,9 +159,7 @@ export function GitHubRepositoryDiscoverySection({
               <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
               Matching repositories
             </span>
-            <span className="text-muted-foreground">
-              {discovery.suggestedUrls.length} found
-            </span>
+            <span className="text-muted-foreground">{discovery.suggestedUrls.length} found</span>
           </div>
           <div className="overflow-hidden rounded-md border border-border/70">
             {discovery.suggestedUrls.map((url) => (
