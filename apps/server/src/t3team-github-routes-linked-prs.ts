@@ -22,9 +22,15 @@ export function loadLinkedPullRequestsAttempt(input: {
 
   if (repositoryNames.length === 0) return Effect.succeed({ items: [] });
 
+  type RepositoryResult = {
+    readonly repository: string;
+    readonly items: ReadonlyArray<GitHubInboxItem>;
+    readonly failed: boolean;
+  };
+
   return Effect.forEach(
     repositoryNames,
-    (repository): Effect.Effect<ReadonlyArray<GitHubInboxItem>, never, never> =>
+    (repository): Effect.Effect<RepositoryResult, never, never> =>
       input.vcs
         .run({
           operation: "t3team.github.repo-prs",
@@ -110,11 +116,23 @@ export function loadLinkedPullRequestsAttempt(input: {
               return inboxItem;
             }),
           ),
-          Effect.catch(() => Effect.succeed([] as ReadonlyArray<GitHubInboxItem>)),
+          Effect.match({
+            onFailure: () => ({ repository, items: [], failed: true }) satisfies RepositoryResult,
+            onSuccess: (items) => ({ repository, items, failed: false }) satisfies RepositoryResult,
+          }),
         ),
     { concurrency: 3 },
   ).pipe(
-    Effect.map((allItems) => allItems.flat()),
-    Effect.map((items) => ({ items }) satisfies GitHubInboxAttempt),
+    Effect.map((results) => {
+      const items = results.flatMap((result) => result.items);
+      const failedRepositories = results
+        .filter((result) => result.failed)
+        .map((result) => result.repository);
+      const warning =
+        failedRepositories.length > 0
+          ? `Unable to load pull requests for ${failedRepositories.join(", ")} (check host, permissions, or API availability).`
+          : undefined;
+      return { items, ...(warning ? { warning } : {}) } satisfies GitHubInboxAttempt;
+    }),
   );
 }
