@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBackend } from "~/t3team/backend/t3team-index";
-import {
-  normalizeCacheList,
-  readIntegrationCache,
-  writeIntegrationCache,
-} from "./t3team-integrationCache";
+import { normalizeCacheList, readIntegrationCache } from "./t3team-integrationCache";
 import { useGitHubAuthProbe } from "./t3team-useGitHubAuthProbe";
-import {
-  mergeGitHubDiscoveryResults,
-  type GitHubAuthAccount,
-  type GitHubAuthCache,
-  type GitHubDiscoveryResult,
-  type GitHubDiscoveryCache,
+import { useGitHubRepositoryDiscoveryFetchers } from "./t3team-useGitHubRepositoryDiscoveryFetchers";
+import type {
+  GitHubAuthAccount,
+  GitHubAuthCache,
+  GitHubDiscoveryCache,
 } from "./t3team-githubRepositoryDiscoveryUtils";
 
 export function useGitHubRepositoryDiscovery({
@@ -72,126 +67,20 @@ export function useGitHubRepositoryDiscovery({
     setDiscoveryWarning(cachedDiscovery?.discoveryWarning);
   }, [discoveryCacheKey]);
 
-  const discoverSuggestions = useCallback(
-    async (host: string, account?: string) => {
-      if (!backend || !host) return;
-      setLoadingDiscovery(true);
-      setDiscoveryWarning(undefined);
-      try {
-        const response = await backend.github.discoverInbox({
-          host,
-          ...(projectKey ? { projectKey } : {}),
-          ...(projectTitle ? { projectTitle } : {}),
-          linkedRepositoryUrls,
-        });
-        const nextAccount = response.account ?? account;
-        const nextCache: GitHubDiscoveryCache = {
-          githubHost: response.host,
-          ...(nextAccount !== undefined ? { githubAccount: nextAccount } : {}),
-          suggestedUrls: response.suggestedRepositoryUrls,
-          ...(response.inboxWarning ? { discoveryWarning: response.inboxWarning } : {}),
-        };
-        writeIntegrationCache(discoveryCacheKey, nextCache);
-        setGithubHost(response.host);
-        setGithubAccount(response.account ?? account);
-        setSuggestedUrls(response.suggestedRepositoryUrls);
-        setSelectedSuggestedUrls(new Set(response.suggestedRepositoryUrls));
-        setDiscoveryWarning(response.inboxWarning);
-      } catch (error) {
-        setSuggestedUrls([]);
-        setSelectedSuggestedUrls(new Set());
-        setDiscoveryWarning(
-          error instanceof Error ? error.message : "Failed to discover repository suggestions.",
-        );
-      } finally {
-        setLoadingDiscovery(false);
-      }
-    },
-    [backend, discoveryCacheKey, linkedRepositoryUrls, projectKey, projectTitle],
-  );
-
-  const discoverSuggestionsAcrossHosts = useCallback(
-    async ({
-      host,
-      account,
-      accounts,
-    }: {
-      readonly host: string;
-      readonly account: string | undefined;
-      readonly accounts: ReadonlyArray<GitHubAuthAccount>;
-    }) => {
-      const hosts = accounts.length > 0 ? accounts : [{ host, account, active: true }];
-      if (!backend) return;
-
-      setLoadingDiscovery(true);
-      setDiscoveryWarning(undefined);
-      try {
-        const outcomes = await Promise.all(
-          hosts.map(async (entry) => {
-            try {
-              const response = await backend.github.discoverInbox({
-                host: entry.host,
-                discoveryMode: "repositories",
-                ...(projectKey ? { projectKey } : {}),
-                ...(projectTitle ? { projectTitle } : {}),
-                linkedRepositoryUrls,
-              });
-              return { response, error: undefined };
-            } catch (error) {
-              return {
-                response: undefined,
-                error: {
-                  host: entry.host,
-                  message: error instanceof Error ? error.message : "request failed",
-                },
-              };
-            }
-          }),
-        );
-        const responses: ReadonlyArray<GitHubDiscoveryResult> = outcomes.flatMap((outcome) =>
-          outcome.response ? [outcome.response] : [],
-        );
-        const failures = outcomes.filter((outcome) => outcome.error);
-
-        if (responses.length === 0) {
-          setSuggestedUrls([]);
-          setSelectedSuggestedUrls(new Set());
-          setDiscoveryWarning(
-            failures.length === 1
-              ? `Could not search ${failures[0]?.error?.host ?? "GitHub"}.`
-              : "Could not search the connected GitHub accounts.",
-          );
-          return;
-        }
-
-        const merged = mergeGitHubDiscoveryResults(responses, host);
-        const failureWarning =
-          failures.length > 0
-            ? `Could not search ${failures.map((failure) => failure.error?.host).join(", ")}.`
-            : undefined;
-        const nextWarning = [merged.discoveryWarning, failureWarning]
-          .filter((warning): warning is string => Boolean(warning))
-          .join(" ");
-        const nextAccount = merged.githubAccount ?? account;
-        const nextCache: GitHubDiscoveryCache = {
-          githubHost: merged.githubHost,
-          ...(nextAccount ? { githubAccount: nextAccount } : {}),
-          suggestedUrls: merged.suggestedUrls,
-          ...(nextWarning ? { discoveryWarning: nextWarning } : {}),
-        };
-
-        writeIntegrationCache(discoveryCacheKey, nextCache);
-        setGithubHost(merged.githubHost);
-        setGithubAccount(nextAccount);
-        setSuggestedUrls(merged.suggestedUrls);
-        setSelectedSuggestedUrls(new Set(merged.suggestedUrls));
-        setDiscoveryWarning(nextWarning || undefined);
-      } finally {
-        setLoadingDiscovery(false);
-      }
-    },
-    [backend, discoveryCacheKey, linkedRepositoryUrls, projectKey, projectTitle],
-  );
+  const { discoverSuggestions, discoverSuggestionsAcrossHosts } =
+    useGitHubRepositoryDiscoveryFetchers({
+      backend,
+      discoveryCacheKey,
+      linkedRepositoryUrls,
+      projectKey,
+      projectTitle,
+      setLoadingDiscovery,
+      setDiscoveryWarning,
+      setGithubHost,
+      setGithubAccount,
+      setSuggestedUrls,
+      setSelectedSuggestedUrls,
+    });
 
   useGitHubAuthProbe({
     enabled,

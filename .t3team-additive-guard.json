@@ -89,6 +89,7 @@
     "apps/web/src/components/ChatView.logic.ts",
     "apps/web/src/components/ChatView.tsx",
     "apps/web/src/components/CommandPalette.tsx",
+    "apps/web/src/components/ComposerPromptEditor.tsx",
     "apps/web/src/components/Sidebar.tsx",
     "apps/web/src/components/chat/ChatComposer.tsx",
     "apps/web/src/components/chat/ComposerCommandMenu.tsx",

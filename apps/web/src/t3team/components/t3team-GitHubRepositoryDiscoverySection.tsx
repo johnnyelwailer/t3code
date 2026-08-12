@@ -1,8 +1,6 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useState } from "react";
-import { CheckCircle2, ChevronDown, Github, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
-import { cn } from "~/lib/utils";
+import { CheckCircle2, Github, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
+import { GitHubRepositoryDiscoveryAdvancedOptions } from "~/t3team/components/t3team-GitHubRepositoryDiscoveryAdvancedOptions";
 import {
   GitHubAuthHostPicker,
   GitHubRepositoryDiscoveryAuthFields,
@@ -102,29 +100,19 @@ export function GitHubRepositoryDiscoverySection({
             <span aria-hidden="true">·</span>
             <span>{connectedAccountLabel}</span>
           </div>
-          <Collapsible open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
-            <CollapsibleTrigger className="w-full">
-              <div className="flex items-center justify-between px-1 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
-                <span>Advanced discovery options</span>
-                <ChevronDown
-                  className={cn(
-                    "size-3.5 text-muted-foreground transition-transform",
-                    showAdvancedOptions && "rotate-180",
-                  )}
-                />
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2">
-              <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">Search one host manually.</p>
-                <GitHubAuthHostPicker discovery={discovery} />
-                <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
-                {discovery.authDetail ? (
-                  <div className="text-xs text-muted-foreground">{discovery.authDetail}</div>
-                ) : null}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+          <GitHubRepositoryDiscoveryAdvancedOptions
+            open={showAdvancedOptions}
+            onOpenChange={setShowAdvancedOptions}
+          >
+            <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground">Search one host manually.</p>
+              <GitHubAuthHostPicker discovery={discovery} />
+              <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
+              {discovery.authDetail ? (
+                <div className="text-xs text-muted-foreground">{discovery.authDetail}</div>
+              ) : null}
+            </div>
+          </GitHubRepositoryDiscoveryAdvancedOptions>
         </>
       ) : (
         <>
@@ -137,27 +125,17 @@ export function GitHubRepositoryDiscoverySection({
               </span>
             </span>
           </div>
-          <Collapsible open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
-            <CollapsibleTrigger className="w-full">
-              <div className="flex items-center justify-between px-1 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
-                <span>Advanced discovery options</span>
-                <ChevronDown
-                  className={cn(
-                    "size-3.5 text-muted-foreground transition-transform",
-                    showAdvancedOptions && "rotate-180",
-                  )}
-                />
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2">
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
-                {discovery.authDetail ? (
-                  <div className="mt-2 text-xs text-muted-foreground">{discovery.authDetail}</div>
-                ) : null}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+          <GitHubRepositoryDiscoveryAdvancedOptions
+            open={showAdvancedOptions}
+            onOpenChange={setShowAdvancedOptions}
+          >
+            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+              <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
+              {discovery.authDetail ? (
+                <div className="mt-2 text-xs text-muted-foreground">{discovery.authDetail}</div>
+              ) : null}
+            </div>
+          </GitHubRepositoryDiscoveryAdvancedOptions>
         </>
       )}
 
