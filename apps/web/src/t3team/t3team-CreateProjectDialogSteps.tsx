@@ -82,7 +82,7 @@ export function ProjectStep({
         placeholder="Search by name or key..."
         disabled={showLoadingSkeletons}
       />
-      <div className="space-y-2">
+      <div className="max-h-[min(60dvh,36rem)] space-y-2 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]">
         {showLoadingSkeletons
           ? ["project-1", "project-2", "project-3", "project-4"].map((key) => (
               <Skeleton key={key} className="h-14 w-full rounded-md" />

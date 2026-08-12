@@ -51,7 +51,7 @@ export function loadRepositoriesAttempt(
         "--hostname",
         host,
         "--paginate",
-        "/user/repos?per_page=100&affiliation=owner,collaborator,organization_member",
+        "/user/repos?per_page=100&affiliation=owner,organization_member",
       ],
       cwd: process.cwd(),
     })

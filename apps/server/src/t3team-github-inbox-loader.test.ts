@@ -35,6 +35,69 @@ afterEach(() => {
 });
 
 describe("loadGitHubInboxResponse repository discovery", () => {
+  it("uses the authenticated GitHub repository list instead of public search results", async () => {
+    const run = vi.fn<VcsProcessShape["run"]>((input) => {
+      if (input.operation === "t3team.github.account") {
+        return Effect.succeed(processOutput("johnnyelwailer\n"));
+      }
+      if (input.operation === "t3team.github.repositories") {
+        return Effect.succeed(
+          processOutput(
+            JSON.stringify([
+              {
+                id: 1,
+                full_name: "johnnyelwailer/nexi-distribution",
+                html_url: "https://github.com/johnnyelwailer/nexi-distribution",
+              },
+              {
+                id: 2,
+                full_name: "acend-swai/nexi-distribution",
+                html_url: "https://github.com/acend-swai/nexi-distribution",
+              },
+            ]),
+          ),
+        );
+      }
+      if (input.operation === "t3team.github.repository-search") {
+        return Effect.succeed(
+          processOutput(
+            JSON.stringify({
+              items: [
+                {
+                  id: 3,
+                  full_name: "unrelated/nexi-ai",
+                  html_url: "https://github.com/unrelated/nexi-ai",
+                },
+              ],
+            }),
+          ),
+        );
+      }
+      return Effect.succeed(processOutput("[]"));
+    });
+
+    const result = await Effect.runPromise(
+      loadGitHubInboxResponse(
+        { run },
+        {
+          host: "github.com",
+          projectKey: "NEXI",
+          projectTitle: "Nexi Distribution",
+          discoveryMode: "repositories",
+        },
+      ),
+    );
+
+    expect(result.suggestedRepositoryUrls).toEqual([
+      "https://github.com/acend-swai/nexi-distribution",
+      "https://github.com/johnnyelwailer/nexi-distribution",
+    ]);
+    expect(run.mock.calls.map(([input]) => input.operation)).toEqual([
+      "t3team.github.account",
+      "t3team.github.repositories",
+    ]);
+  });
+
   it("falls back to the complete repository list when fast search has no matching candidate", async () => {
     const run = vi.fn<VcsProcessShape["run"]>((input) => {
       if (input.operation === "t3team.github.account") {

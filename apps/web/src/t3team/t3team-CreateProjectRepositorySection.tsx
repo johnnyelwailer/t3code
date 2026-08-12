@@ -48,11 +48,15 @@ export function RepositoriesStep({
         projectKey={selectedProject?.key ?? undefined}
         projectTitle={selectedProject?.title ?? undefined}
         linkedRepositoryUrls={linkedRepositoryUrls}
+        onAddRepositories={onAddRepositories}
+        onRemoveRepository={onRemoveRepository}
         onVisibleSuggestionsChange={onDiscoveredRepositoryUrlsChange}
       />
       <Collapsible defaultOpen={linkedRepositoryUrls.length > 0}>
         <CollapsibleTrigger className="flex w-full items-center justify-between border-t border-border/60 px-1 pt-3 text-left text-xs text-muted-foreground hover:text-foreground">
-          <span>Enter a repository URL</span>
+          <span>
+            {linkedRepositoryUrls.length > 0 ? "Manage repositories" : "Add a repository manually"}
+          </span>
           <ChevronDown className="size-3.5 text-muted-foreground" />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-2">

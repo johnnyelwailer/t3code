@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Github, RefreshCw } from "lucide-react";
 import { GitHubRepositoryDiscoveryAdvancedOptions } from "~/t3team/components/t3team-GitHubRepositoryDiscoveryAdvancedOptions";
 import {
@@ -18,12 +18,16 @@ export function GitHubRepositoryDiscoverySection({
   projectKey,
   projectTitle,
   linkedRepositoryUrls,
+  onAddRepositories,
+  onRemoveRepository,
   onVisibleSuggestionsChange,
 }: {
   enabled?: boolean;
   projectKey: string | undefined;
   projectTitle: string | undefined;
   linkedRepositoryUrls: ReadonlyArray<string>;
+  onAddRepositories?: (urls: ReadonlyArray<string>) => void;
+  onRemoveRepository?: (url: string) => void;
   onVisibleSuggestionsChange?: (urls: ReadonlyArray<string>) => void;
 }) {
   const discovery = useGitHubRepositoryDiscovery({
@@ -33,9 +37,22 @@ export function GitHubRepositoryDiscoverySection({
     linkedRepositoryUrls,
   });
 
+  const [suppressedAutoAddUrls, setSuppressedAutoAddUrls] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+
   useEffect(() => {
-    onVisibleSuggestionsChange?.(discovery.visibleSuggestedUrls);
-  }, [discovery.visibleSuggestedUrls, onVisibleSuggestionsChange]);
+    setSuppressedAutoAddUrls(new Set());
+  }, [projectKey, projectTitle]);
+
+  const autoAddSuggestions = useMemo(
+    () => discovery.visibleSuggestedUrls.filter((url) => !suppressedAutoAddUrls.has(url)),
+    [discovery.visibleSuggestedUrls, suppressedAutoAddUrls],
+  );
+
+  useEffect(() => {
+    onVisibleSuggestionsChange?.(autoAddSuggestions);
+  }, [autoAddSuggestions, onVisibleSuggestionsChange]);
 
   const status = githubAuthTone(discovery.authStatus);
   const StatusIcon = status.icon;
@@ -52,15 +69,11 @@ export function GitHubRepositoryDiscoverySection({
   ];
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border/60 bg-background/45">
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-3.5 py-3">
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-1 pb-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="rounded-lg bg-muted/70 p-2">
-            <Github className="size-4 text-foreground" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold">Find your repository</h3>
-          </div>
+          <Github className="size-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold">Find your repository</h3>
         </div>
         <Button
           variant="ghost"
@@ -75,7 +88,7 @@ export function GitHubRepositoryDiscoverySection({
         </Button>
       </div>
 
-      <div className="space-y-3 px-3.5 py-3.5">
+      <div className="space-y-3">
         {showAuthSkeleton ? (
           <Skeleton className="h-8 w-full rounded-lg" />
         ) : isAuthenticated ? (
@@ -109,12 +122,9 @@ export function GitHubRepositoryDiscoverySection({
             ) : null}
 
             {discovery.suggestedUrls.length > 0 ? (
-              <div className="space-y-1.5">
+              <div className="divide-y divide-emerald-200/70 border-y border-emerald-200/80 bg-emerald-50/45 dark:divide-emerald-900/70 dark:border-emerald-900/70 dark:bg-emerald-950/20">
                 {discovery.suggestedUrls.map((url) => (
-                  <div
-                    key={url}
-                    className="flex items-center gap-2.5 rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-3 py-2.5 dark:border-emerald-900/70 dark:bg-emerald-950/25"
-                  >
+                  <div key={url} className="flex items-center gap-2.5 px-2.5 py-2.5">
                     <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                     <span className="min-w-0 flex-1 truncate text-xs font-medium">
                       {url.replace(/^https?:\/\//, "")}
@@ -124,6 +134,25 @@ export function GitHubRepositoryDiscoverySection({
                         Added
                       </span>
                     ) : null}
+                    <Button
+                      variant={linkedRepositoryUrls.includes(url) ? "ghost" : "outline"}
+                      size="xs"
+                      onClick={() => {
+                        if (linkedRepositoryUrls.includes(url)) {
+                          setSuppressedAutoAddUrls((current) => new Set([...current, url]));
+                          onRemoveRepository?.(url);
+                        } else {
+                          setSuppressedAutoAddUrls((current) => {
+                            const next = new Set(current);
+                            next.delete(url);
+                            return next;
+                          });
+                          onAddRepositories?.([url]);
+                        }
+                      }}
+                    >
+                      {linkedRepositoryUrls.includes(url) ? "Remove" : "Add"}
+                    </Button>
                   </div>
                 ))}
               </div>

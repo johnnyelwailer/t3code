@@ -79,23 +79,24 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
       return response;
     }
 
+    const useAuthenticatedRepositoryList = !repositoriesOnly || host.toLowerCase() === "github.com";
     let repositoriesAttempt =
-      (repositoriesOnly
-        ? readCached(repositorySearchCache, responseCacheKey)
-        : readCached(repositoriesCache, host)) ??
+      (useAuthenticatedRepositoryList
+        ? readCached(repositoriesCache, host)
+        : readCached(repositorySearchCache, responseCacheKey)) ??
       (yield* (
-        repositoriesOnly
-          ? loadRepositorySearchAttempt(vcs, host, {
+        useAuthenticatedRepositoryList
+          ? loadRepositoriesAttempt(vcs, host)
+          : loadRepositorySearchAttempt(vcs, host, {
               ...(input.projectKey ? { projectKey: input.projectKey } : {}),
               ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
             })
-          : loadRepositoriesAttempt(vcs, host)
       ).pipe(
         Effect.tap((value) =>
           Effect.sync(() => {
             writeCached(
-              repositoriesOnly ? repositorySearchCache : repositoriesCache,
-              repositoriesOnly ? responseCacheKey : host,
+              useAuthenticatedRepositoryList ? repositoriesCache : repositorySearchCache,
+              useAuthenticatedRepositoryList ? host : responseCacheKey,
               value,
               REPOSITORIES_CACHE_TTL_MS,
             );
@@ -103,10 +104,16 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
         ),
       ));
 
-    // Search is the fast path, but GHE search can omit private/organization-visible repos on some
+    // GHE search is the fast path, but it can omit private/organization-visible repos on some
     // installations. Fall back to the authenticated repository list only when the fast search has
-    // no candidates, so a valid repo is not hidden behind a provider-specific search quirk.
-    if (repositoriesOnly && repositoriesAttempt.items.length === 0) {
+    // no candidates, so a valid repo is not hidden behind a provider-specific search quirk. GitHub
+    // uses the authenticated list directly so public repositories outside the user's account or
+    // organizations never become setup suggestions.
+    if (
+      repositoriesOnly &&
+      !useAuthenticatedRepositoryList &&
+      repositoriesAttempt.items.length === 0
+    ) {
       repositoriesAttempt =
         readCached(repositoriesCache, host) ??
         (yield* loadRepositoriesAttempt(vcs, host).pipe(
