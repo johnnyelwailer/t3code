@@ -13,6 +13,7 @@ import {
   getT3TeamWorkflowDecisionAttachment,
   T3TeamWorkflowDecisionCard,
 } from "~/t3team/chat/t3team-messageDecisionCard";
+import type { T3TeamWorkflowDecisionAnswer } from "~/t3team/chat/t3team-workflowDecisionAnswers";
 import {
   getT3TeamRenderableAttachments,
   getT3TeamWidgetAttachments,
@@ -29,6 +30,7 @@ export function T3TeamSystemTimelineDecisionRow({
   workflowDecision,
   activeWorkflowInputMessageId,
   decisionUnavailableMessage,
+  answer,
   onSubmitRecipeCardAction,
   dispatchWorkflowDecision,
 }: {
@@ -37,6 +39,7 @@ export function T3TeamSystemTimelineDecisionRow({
   readonly workflowDecision: NonNullable<ReturnType<typeof getT3TeamWorkflowDecisionAttachment>>;
   readonly activeWorkflowInputMessageId: string | null;
   readonly decisionUnavailableMessage: string | undefined;
+  readonly answer?: T3TeamWorkflowDecisionAnswer | undefined;
   readonly onSubmitRecipeCardAction?: ChatViewT3TeamExtensionProps["onSubmitRecipeCardAction"];
   readonly dispatchWorkflowDecision?: ChatViewT3TeamExtensionProps["dispatchWorkflowDecision"];
 }) {
@@ -66,6 +69,7 @@ export function T3TeamSystemTimelineDecisionRow({
           activeWorkflowInputMessageId === message.id && decisionUnavailableMessage === undefined
         }
         {...(decisionUnavailableMessage ? { unavailableMessage: decisionUnavailableMessage } : {})}
+        {...(answer ? { answer } : {})}
         onChoose={
           dispatchWorkflowDecision && threadRef
             ? async ({ choice, value, correlationId }) => {

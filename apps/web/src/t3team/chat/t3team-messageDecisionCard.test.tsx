@@ -315,6 +315,58 @@ describe("workflow decision card in the timeline", () => {
   }, 10000);
 });
 
+describe("answered decision reply — single render", () => {
+  it("renders the chosen answer only in the card chip, not a second bare user bubble", async () => {
+    const ask = decisionMessage("message-decision-1");
+    const reply: ChatMessage = {
+      id: MessageId.make("message-reply-1"),
+      role: "user",
+      text: "hold",
+      streaming: false,
+      createdAt: "2026-06-09T00:00:01.000Z",
+      updatedAt: "2026-06-09T00:00:01.000Z",
+      turnId: null,
+      t3teamExt: { workflowReply: { value: "hold", correlationId: "run-1:1" } },
+    };
+
+    const markup = await renderTimeline([ask, reply]);
+
+    expect(markup).toContain('data-workflow-decision-status="answered"');
+    // The reply must not also render as its own bare user bubble (`UserTimelineRow`'s
+    // "bg-message" bubble class) — only the card's inline answered chip.
+    expect(markup).not.toContain("bg-message");
+  }, 10000);
+
+  it("does not swallow an interleaved system notification as the answer", async () => {
+    const ask = decisionMessage("message-decision-1");
+    const notification: ChatMessage = {
+      id: MessageId.make("message-notify-1"),
+      role: "system",
+      text: "Preparing release notes",
+      streaming: false,
+      createdAt: "2026-06-09T00:00:00.500Z",
+      updatedAt: "2026-06-09T00:00:00.500Z",
+      turnId: null,
+    };
+    const reply: ChatMessage = {
+      id: MessageId.make("message-reply-1"),
+      role: "user",
+      text: "hold",
+      streaming: false,
+      createdAt: "2026-06-09T00:00:01.000Z",
+      updatedAt: "2026-06-09T00:00:01.000Z",
+      turnId: null,
+      t3teamExt: { workflowReply: { value: "hold", correlationId: "run-1:1" } },
+    };
+
+    const markup = await renderTimeline([ask, notification, reply]);
+
+    expect(markup).toContain("Preparing release notes");
+    expect(markup).toContain('data-workflow-decision-status="answered"');
+    expect(markup).not.toContain("bg-message");
+  }, 10000);
+});
+
 describe("findActiveWorkflowInputMessageId", () => {
   const entry = (message: ChatMessage) => ({ kind: "message" as const, message });
 

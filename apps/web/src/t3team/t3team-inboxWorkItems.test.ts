@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveInboxAttribution, selectInboxWorkItems } from "./t3team-inboxWorkItems.ts";
+import {
+  resolveInboxAttribution,
+  selectInboxPinnedGitHubActivity,
+  selectInboxWorkItems,
+} from "./t3team-inboxWorkItems.ts";
+import type { T3TeamSidebarPinnedItem } from "./t3team-sidebarPinningTypes.ts";
 import type { ProjectThread, ProjectTicket } from "./t3team-types.ts";
 
 const ticket = (over: Partial<ProjectTicket> & { id: string }): ProjectTicket =>
@@ -170,5 +175,62 @@ describe("selectInboxWorkItems honours sidebar-nav preferences", () => {
   it("leaves ordering untouched when no preferences are stored", () => {
     const rows = selectInboxWorkItems({ ...base, tickets, pinnedTicketIds });
     expect(rows.map((row) => row.ticketId)).toEqual(["t-1", "t-2", "t-3"]);
+  });
+});
+
+/**
+ * The regression this suite guards: `useT3TeamInboxWorkItems` only ever read
+ * `kind: "jira-work-item"` pins, so a GitHub item pinned via "Pin to left" wrote to the pinned-
+ * sidebar store fine but the Work-lens Inbox dropped it entirely — the Code lens's
+ * `PinnedGitHubActivityRow` has no Work-lens equivalent to read it back into.
+ */
+describe("selectInboxPinnedGitHubActivity", () => {
+  const githubPin = (
+    over: Partial<Extract<T3TeamSidebarPinnedItem, { kind: "github-activity" }>> & {
+      activityId: string;
+    },
+  ): T3TeamSidebarPinnedItem => ({
+    kind: "github-activity",
+    id: `project-1:github-activity:${over.activityId}`,
+    projectId: "project-1",
+    pinnedAt: "2026-07-01T00:00:00.000Z",
+    ...over,
+  });
+  const jiraPin: T3TeamSidebarPinnedItem = {
+    kind: "jira-work-item",
+    id: "project-1:jira-work-item:t-1",
+    projectId: "project-1",
+    ticketId: "t-1",
+    pinnedAt: "2026-07-01T00:00:00.000Z",
+  };
+
+  it("returns only the github-activity pins, ignoring jira pins", () => {
+    const rows = selectInboxPinnedGitHubActivity({
+      pinnedItems: [jiraPin, githubPin({ activityId: "gh-1" })],
+    });
+    expect(rows).toEqual([
+      {
+        id: "project-1:github-activity:gh-1",
+        projectId: "project-1",
+        activityId: "gh-1",
+        pinnedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("drops items hidden from the sidebar", () => {
+    const rows = selectInboxPinnedGitHubActivity({
+      pinnedItems: [githubPin({ activityId: "gh-1" }), githubPin({ activityId: "gh-2" })],
+      hiddenSidebarItemIds: ["project-1:github-activity:gh-1"],
+    });
+    expect(rows.map((row) => row.activityId)).toEqual(["gh-2"]);
+  });
+
+  it("floats explicitly ordered items above pin order", () => {
+    const rows = selectInboxPinnedGitHubActivity({
+      pinnedItems: [githubPin({ activityId: "gh-1" }), githubPin({ activityId: "gh-2" })],
+      orderedSidebarItemIds: ["project-1:github-activity:gh-2"],
+    });
+    expect(rows[0]?.activityId).toBe("gh-2");
   });
 });

@@ -43,7 +43,7 @@ export function hasEnvironmentReconnectWarningGraceElapsed(
 
 export function startNewThreadForProject(
   projectRef: ScopedProjectRef | null,
-  handleNewThread: (projectRef: ScopedProjectRef) => Promise<void>,
+  handleNewThread: (projectRef: ScopedProjectRef) => Promise<unknown>,
 ): boolean {
   if (projectRef === null) return false;
   void handleNewThread(projectRef);
@@ -138,14 +138,19 @@ export function shouldWriteThreadErrorToCurrentServerThread(input: {
   );
 }
 
-export function buildThreadTurnInterruptInput(thread: Pick<Thread, "id" | "session">): {
+export function buildThreadTurnInterruptInput(
+  thread: Pick<Thread, "id" | "session">,
+  options?: { readonly cascade?: boolean },
+): {
   threadId: ThreadId;
   turnId?: TurnId;
+  cascade?: boolean;
 } {
   const runningTurnId = thread.session?.status === "running" ? thread.session.activeTurnId : null;
   return {
     threadId: thread.id,
     ...(runningTurnId !== null ? { turnId: runningTurnId } : {}),
+    ...(options?.cascade ? { cascade: true } : {}),
   };
 }
 

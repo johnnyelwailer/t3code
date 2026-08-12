@@ -24,6 +24,7 @@ import {
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { Bot, Braces, Check, ChevronDown, ChevronRight, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { orchestrationEnvironment } from "~/state/orchestration";
@@ -522,20 +523,30 @@ export function AgentsPanel({
   model,
   environmentId = null,
   threadId = null,
+  // Fork seam: a fork-owned section (sub-run child threads, recipe workflow runs — concepts
+  // upstream's roster model has no field for) rendered below the native roster. See
+  // `T3TeamAgentsPanelForkSection` for why this is a separate section instead of adapted
+  // `RuntimeSubagent` rows. Renders in BOTH branches below so fork content still surfaces when
+  // this thread has no native subagents/workflows.
+  forkSection = null,
 }: {
   model: AgentPanelModel;
   environmentId?: EnvironmentId | null;
   threadId?: ThreadId | null;
+  forkSection?: ReactNode;
 }) {
   if (!model.hasAgents) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-        <Bot aria-hidden className="size-6 text-muted-foreground/60" />
-        <p className="text-sm font-medium">No agents yet</p>
-        <p className="max-w-56 text-xs text-muted-foreground">
-          When this thread spawns subagents or runs a workflow, they show up here with live status,
-          activity, and token usage.
-        </p>
+      <div className="flex h-full flex-col">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+          <Bot aria-hidden className="size-6 text-muted-foreground/60" />
+          <p className="text-sm font-medium">No agents yet</p>
+          <p className="max-w-56 text-xs text-muted-foreground">
+            When this thread spawns subagents or runs a workflow, they show up here with live
+            status, activity, and token usage.
+          </p>
+        </div>
+        {forkSection}
       </div>
     );
   }
@@ -563,6 +574,7 @@ export function AgentsPanel({
             </section>
           ) : null}
         </div>
+        {forkSection}
       </ScrollArea>
       <footer className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 font-mono text-[.7rem] text-muted-foreground">
         <span className="flex items-center gap-2">

@@ -18,6 +18,8 @@ export {
   extractWorkItemKey,
   groupGitHubActivityByWorkItem,
   getGitHubActivityItemsForWorkItem,
+  normalizeWorkItemKey,
+  sortGitHubActivityItems,
 } from "@t3tools/shared/t3team-githubActivity";
 
 export type GitHubWorkActivityItem = {

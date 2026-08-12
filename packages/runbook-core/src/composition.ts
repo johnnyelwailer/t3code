@@ -40,7 +40,11 @@ export interface WorkflowPrimitivesDeps<Ref extends WorkflowReference = Workflow
   readonly budgetTotal: number;
   readonly onPhase: (title: string) => void;
   readonly onLog: (message: string) => void;
-  /** Absent for a nested child, which preserves the existing one-level nesting guard. */
+  /**
+   * Runs `ref` inline, in THIS run's journal sequence. Absent only for a host that does not
+   * support sub-workflows at all; a nested child now receives one too, because nesting is no
+   * longer capped at one level — see {@link createWorkflowPrimitives}'s `workflow`.
+   */
   readonly runSubWorkflow?: (ref: Ref, args: unknown) => Promise<unknown>;
 }
 
@@ -93,20 +97,44 @@ export function createWorkflowPrimitives<Ref extends WorkflowReference = Workflo
       decodeRecorded: (recorded) => recorded as unknown[],
     });
 
+  /**
+   * Runs a sub-workflow INLINE, in this run's own journal sequence — deliberately NOT through
+   * `callPrimitive`/`runBlackBoxed` the way `parallel` and `pipeline` are.
+   *
+   * Sealing a sub-run inside one black-boxed journal entry cost it three things a root body has,
+   * and there was no way for an author to get them back:
+   *
+   *   1. **It could not durably suspend.** Inside a black box an ask gets an in-memory resolver
+   *      (`handlesDispatch.ts`), so a question asked from a sub-workflow only resolved while the
+   *      process stayed alive. A restart lost it. That made `askUser` a root-body-only verb by
+   *      accident rather than by design.
+   *   2. **It was not replay-deterministic.** `now`/`random`/`uuid` skip the journal inside a black
+   *      box (`durableRuntimePrimitive.ts`), so a resumed run drew fresh values one level down.
+   *   3. **It could not be resumed part-way.** The whole sub-run was one entry: either replayed
+   *      wholesale or re-executed wholesale.
+   *
+   * Running it inline fixes all three at once, because the child's primitive calls simply take
+   * their `seq` from the parent's counter, in the order they happen. That order is deterministic
+   * for the same reason the parent's own is: one body, executing sequentially. `parallel` and
+   * `pipeline` keep their black boxes precisely because their branches are NOT sequential — their
+   * calls would interleave differently on replay and the journal would mismatch.
+   *
+   * The cost, stated plainly: editing a sub-workflow's body shifts every later `seq` in the
+   * parent, so an already-suspended run will not line up on resume. The engine detects that and
+   * fails loudly (`assertJournalMatch` / gap drift) rather than silently doing the wrong thing —
+   * the same contract that already governs editing the parent body itself.
+   *
+   * Depth is no longer capped. Recursion is refused by the host's own cycle guard, which sees the
+   * ref stack; this layer stays free of that policy.
+   */
   const workflow = (ref: Ref, args?: unknown): Promise<unknown> => {
     const runSub = deps.runSubWorkflow;
     if (runSub === undefined) {
       throw new WorkflowError(
-        "workflow() supports one level of nesting only: a sub-workflow cannot call workflow() again.",
+        "workflow() is not available in this run: the host supplied no sub-workflow executor.",
       );
     }
-    return deps.callPrimitive<unknown>({
-      kind: "workflow",
-      refId: "workflow",
-      args: { workflowName: ref.path, subArgs: args ?? null },
-      exec: () => deps.runBlackBoxed(() => runSub(ref, args)),
-      decodeRecorded: (recorded) => recorded,
-    });
+    return runSub(ref, args);
   };
 
   const wait = async (durationMs: number): Promise<void> => {

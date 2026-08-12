@@ -3,6 +3,11 @@ export type ThreadBootstrapDispatchState = {
   projectEnsured: boolean;
   threadCreateSent: boolean;
   kickoffSent: boolean;
+  // The branch the create/kickoff dispatch actually carried (`null` when it went out before the
+  // workspace's branch was known). Once set, `runThreadBootstrapEffect` uses this to decide
+  // whether a later-resolved branch still needs to be backfilled via `thread.meta.update`.
+  dispatchedBranch: string | null | undefined;
+  branchBackfillSent: boolean;
 };
 
 export type ThreadBootstrapAction = "none" | "create" | "kickoff";
@@ -20,6 +25,8 @@ export function resolveThreadBootstrapDispatchState(
     projectEnsured: false,
     threadCreateSent: false,
     kickoffSent: false,
+    dispatchedBranch: undefined,
+    branchBackfillSent: false,
   };
 }
 
@@ -28,6 +35,13 @@ export function planThreadBootstrap(input: {
   threadId: string;
   hasServerThread: boolean;
   hasInitialUserMessage: boolean;
+  /**
+   * A workflow-only recipe (defineWorkflow, no definePrompt) legitimately kicks off with an EMPTY
+   * message — gating the kickoff on the message alone silently downgrades such a launch to a bare
+   * `thread.create` (thread exists, no run, no error). The workflow itself is what makes it a
+   * kickoff.
+   */
+  hasKickoffWorkflow: boolean;
   hasProjectWorkspaceRoot: boolean;
   projectExists: boolean;
 }): {
@@ -45,7 +59,7 @@ export function planThreadBootstrap(input: {
     };
   }
 
-  if (input.hasInitialUserMessage) {
+  if (input.hasInitialUserMessage || input.hasKickoffWorkflow) {
     return {
       state,
       action: state.kickoffSent ? "none" : "kickoff",

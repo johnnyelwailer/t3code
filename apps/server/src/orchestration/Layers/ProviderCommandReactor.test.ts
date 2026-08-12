@@ -716,6 +716,100 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.title).toBe("Generated title");
   });
 
+  it("prefers the thread's own model over settings when generating a title", async () => {
+    // Thread pinned to claudeAgent; settings.textGenerationModelSelection defaults to codex.
+    // No Nexplore policy env configured, so the thread's own (enabled) instance must win — see
+    // resolveAuxTextGenerationModelSelection in ProviderCommandReactor.ts.
+    const harness = await createHarness({
+      threadModelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "Generated title" }));
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-thread-model-wins"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-thread-model-wins"),
+          role: "user",
+          text: "Investigate the thread-model-wins scenario.",
+          attachments: [],
+        },
+        titleSeed: "Thread",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
+    expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
+    });
+  });
+
+  it("prefers the Nexplore env policy over the thread's own model when generating a title", async () => {
+    const harness = await createHarness({
+      threadModelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "Generated title" }));
+
+    const previousInstanceId = process.env.T3TEAM_TEXT_GENERATION_MODEL_INSTANCE_ID;
+    const previousModel = process.env.T3TEAM_TEXT_GENERATION_MODEL;
+    process.env.T3TEAM_TEXT_GENERATION_MODEL_INSTANCE_ID = "codex";
+    process.env.T3TEAM_TEXT_GENERATION_MODEL = "gpt-5-policy";
+    try {
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-turn-start-policy-wins"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId("user-message-policy-wins"),
+            role: "user",
+            text: "Investigate the policy-wins scenario.",
+            attachments: [],
+          },
+          titleSeed: "Thread",
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        }),
+      );
+
+      await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
+      expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-policy",
+        },
+      });
+    } finally {
+      if (previousInstanceId === undefined) {
+        delete process.env.T3TEAM_TEXT_GENERATION_MODEL_INSTANCE_ID;
+      } else {
+        process.env.T3TEAM_TEXT_GENERATION_MODEL_INSTANCE_ID = previousInstanceId;
+      }
+      if (previousModel === undefined) {
+        delete process.env.T3TEAM_TEXT_GENERATION_MODEL;
+      } else {
+        process.env.T3TEAM_TEXT_GENERATION_MODEL = previousModel;
+      }
+    }
+  });
+
   it("regenerates a thread title from the current conversation", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

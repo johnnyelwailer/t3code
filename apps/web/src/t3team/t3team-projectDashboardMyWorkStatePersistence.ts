@@ -46,10 +46,6 @@ export function readPersistedProjectDashboardMyWorkState(
     const statusCategory = parseRouteEnum(parsed.statusCategory, projectMyWorkStatusCategoryValues);
     if (statusCategory !== undefined) persisted.statusCategory = statusCategory;
 
-    if (typeof parsed.showGitHubActivity === "boolean") {
-      persisted.showGitHubActivity = parsed.showGitHubActivity;
-    }
-
     const hiddenKanbanColumnIds = parsePersistedStringList(parsed.hiddenKanbanColumnIds);
     if (hiddenKanbanColumnIds !== undefined) {
       persisted.hiddenKanbanColumnIds = hiddenKanbanColumnIds;
@@ -117,7 +113,6 @@ export function resolveProjectDashboardMyWorkState(input: {
   if (search.myWorkView !== undefined) next.viewMode = search.myWorkView;
   if (search.myWorkGroup !== undefined) next.groupMode = search.myWorkGroup;
   if (search.myWorkStatus !== undefined) next.statusCategory = search.myWorkStatus;
-  if (search.myWorkGitHub !== undefined) next.showGitHubActivity = search.myWorkGitHub === "show";
   const kanbanLaneSelectionMode = parseRouteEnum(
     search.myWorkLanesMode,
     projectMyWorkKanbanLaneSelectionModeValues,
@@ -154,7 +149,6 @@ export function buildProjectDashboardMyWorkRouteSearch(
     myWorkView: state.viewMode,
     myWorkGroup: state.groupMode,
     myWorkStatus: state.statusCategory,
-    myWorkGitHub: state.showGitHubActivity ? "show" : "hide",
     ...(state.hasCustomizedKanbanLanes
       ? {
           myWorkLanesMode: "custom" as const,
@@ -188,7 +182,6 @@ export function areProjectDashboardMyWorkStatesEqual(
     left.viewMode === right.viewMode &&
     left.groupMode === right.groupMode &&
     left.statusCategory === right.statusCategory &&
-    left.showGitHubActivity === right.showGitHubActivity &&
     left.hasCustomizedKanbanLanes === right.hasCustomizedKanbanLanes &&
     left.hiddenKanbanColumnIds.length === right.hiddenKanbanColumnIds.length &&
     left.hiddenKanbanColumnIds.every((key, index) => key === right.hiddenKanbanColumnIds[index]) &&

@@ -29,18 +29,15 @@ vi.mock("./t3team-ProjectSidebarDashboardNav", () => ({
     pinnedContent,
     currentIssueCount,
     currentIssuesContent,
-    githubItems,
   }: {
     pinnedItemCount: number;
     pinnedContent?: React.ReactNode;
     currentIssueCount: number;
     currentIssuesContent: React.ReactNode;
-    githubItems: ReadonlyArray<unknown>;
   }) => (
     <div>
       <div>nav:pinned-count:{pinnedItemCount}</div>
       <div>nav:issues-count:{currentIssueCount}</div>
-      <div>nav:github-count:{githubItems.length}</div>
       {pinnedContent}
       {currentIssueCount > 0 ? currentIssuesContent : null}
     </div>
@@ -218,7 +215,6 @@ describe("ProjectSidebarProjectRowView", () => {
 
     expect(markup).toContain("nav:pinned-count:0");
     expect(markup).toContain("nav:issues-count:1");
-    expect(markup).toContain("nav:github-count:1");
     expect(markup).toContain("current-issues");
     expect(markup).not.toContain("pinned-items:");
   });
@@ -254,7 +250,6 @@ describe("ProjectSidebarProjectRowView", () => {
 
     expect(markup).toContain("pinned-items");
     expect(markup).toContain("nav:issues-count:0");
-    expect(markup).toContain("nav:github-count:0");
     expect(markup).not.toContain("current-issues");
   });
 });

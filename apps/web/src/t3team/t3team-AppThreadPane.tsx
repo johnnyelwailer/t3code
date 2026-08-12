@@ -70,14 +70,16 @@ export function AppThreadPane({
         ? { projectWorkspaceRoot: threadProject.workspace.rootPath }
         : {})}
       title={resolvedThread?.title ?? "New thread"}
-      {...(resolvedThread?.kickoffMessage ? { kickoffMessage: resolvedThread.kickoffMessage } : {})}
+      {...(resolvedThread?.kickoffMessage !== undefined
+        ? { kickoffMessage: resolvedThread.kickoffMessage }
+        : {})}
       {...(resolvedThread?.kickoffPending !== undefined
         ? { kickoffPending: resolvedThread.kickoffPending }
         : {})}
       {...(resolvedThread?.kickoffWorkflow
         ? { kickoffWorkflow: resolvedThread.kickoffWorkflow }
         : {})}
-      {...(resolvedThread?.kickoffPending && resolvedThread.kickoffMessage
+      {...(resolvedThread?.kickoffPending && resolvedThread.kickoffMessage !== undefined
         ? { initialUserMessage: resolvedThread.kickoffMessage }
         : {})}
       {...(resolvedThread?.kickoffModelSelection

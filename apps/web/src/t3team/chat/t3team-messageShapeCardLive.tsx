@@ -22,9 +22,9 @@ import type { ProjectRecipeWorkflowShapePayload } from "@t3tools/project-recipes
 import {
   T3TeamWorkflowRunControls,
   T3TeamWorkflowRunControlStatus,
+  type WorkflowRunControlAction,
 } from "~/t3team/chat/t3team-workflowRunControls";
 import { T3TeamWorkflowShapeStepRows } from "~/t3team/chat/t3team-WorkflowShapeStepRows";
-import { T3TeamShapeCapabilityChips } from "~/t3team/chat/t3team-messageShapeCardCapabilities";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { RepairStatusStrip, RunStatusBanner } from "~/t3team/chat/t3team-workflowRunBanner";
 export { formatWorkflowStepDue } from "~/t3team/chat/t3team-workflowRunLabels";
@@ -77,51 +77,60 @@ export function T3TeamWorkflowShapeLiveCard({
     ...(onControlWorkflow ? { onControlWorkflow } : {}),
   });
 
+  const showLiveStatus = progress.run === null || progress.run.phase === "started";
+
   return (
-    <div className="rounded-lg border border-primary/35 bg-background/65 px-4 py-3">
+    <div className="@container/workflow-live-card rounded-lg border border-primary/35 bg-background/65 px-4 py-3">
       {queued ? (
         <div className="mb-2 text-xs font-medium text-muted-foreground">
           Queued · starts when capacity is free
         </div>
       ) : null}
       <T3TeamWorkflowRunControlStatus pending={controlPending} error={controlError} />
-      <div className="mb-2 flex items-center gap-1.5 text-primary">
-        <RouteIcon className="size-3.5" />
-        {shape.name ? (
-          <span className="text-sm font-semibold text-foreground">{shape.name}</span>
-        ) : null}
-        {progress.run === null || progress.run.phase === "started" ? (
-          <span
-            data-run-live-status={liveLabel}
-            className="ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
-          >
-            {liveLabel === "Scheduled" ? (
-              <ClockIcon className="size-3" />
-            ) : (
-              <CircleDashedIcon className="size-3" />
-            )}
-            {liveLabel}
-          </span>
-        ) : null}
-        {onControlWorkflow ? (
+      <div className="mb-2 flex items-start justify-between gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 @sm/workflow-live-card:flex-row @sm/workflow-live-card:items-center @sm/workflow-live-card:gap-1.5">
+          <div className="flex min-w-0 items-center gap-1.5 text-primary">
+            <RouteIcon className="size-3.5 shrink-0" />
+            {shape.name ? (
+              <span
+                className="min-w-0 truncate text-sm font-semibold text-foreground"
+                title={shape.name}
+              >
+                {shape.name}
+              </span>
+            ) : null}
+          </div>
+          {showLiveStatus ? (
+            <span
+              data-run-live-status={liveLabel}
+              className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground @sm/workflow-live-card:ml-auto"
+            >
+              {liveLabel === "Scheduled" ? (
+                <ClockIcon className="size-3" />
+              ) : (
+                <CircleDashedIcon className="size-3" />
+              )}
+              {liveLabel}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
           <T3TeamWorkflowRunControls
             canPause={canPause}
             canResume={canResume}
             canStop={canStop}
             pending={controlPending}
-            className={
-              progress.run === null || progress.run.phase === "started"
-                ? "ml-1 flex items-center gap-1"
-                : "ml-auto flex items-center gap-1"
-            }
-            onControl={(action) => void control(action)}
+            className="flex items-center gap-1"
+            {...(shape.capabilities ? { capabilities: shape.capabilities } : {})}
+            {...(onControlWorkflow
+              ? { onControl: (action: WorkflowRunControlAction) => void control(action) }
+              : {})}
           />
-        ) : null}
+        </div>
       </div>
       {shape.description ? (
         <p className="text-sm leading-6 text-muted-foreground">{shape.description}</p>
       ) : null}
-      <T3TeamShapeCapabilityChips capabilities={shape.capabilities} />
       {repair ? (
         <RepairStatusStrip
           repair={repair}

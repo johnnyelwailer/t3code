@@ -979,6 +979,29 @@ const ThreadTurnInterruptCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   turnId: Schema.optional(TurnId),
+  /**
+   * t3team: also stop every descendant thread's active turn (walking
+   * `parentThreadId`/handoff relations), applying the same user-stop
+   * suppression to each. Additive — omitted/false keeps today's single-thread
+   * stop. See t3team-threadStopCascade.ts.
+   */
+  cascade: Schema.optional(Schema.Boolean),
+  /**
+   * t3team: who raised this stop. "user" marks a stop a person explicitly
+   * clicked (Stop generation); it suppresses auto-dispatch of queued actor
+   * messages on this thread until the user sends the next message (see
+   * t3team-actorMessageReactor.ts). Absent or "system" means fork automation
+   * raised it (workflow cancel, cascade descendant stop) and must NOT suppress
+   * actor delivery. The client CAN technically set this field (it's the same
+   * struct as `ClientOrchestrationCommand`); it's safe only because the
+   * dispatch seam overwrites it unconditionally to "user" for every command
+   * that actually reaches ws.ts / orchestration/http.ts, regardless of what
+   * the client sent. TRAP: any future caller of that same authenticated HTTP
+   * dispatch endpoint — not just the web UI — gets stamped "user" too, so a
+   * new automated caller wired through it will unexpectedly suppress actor
+   * delivery unless it's given its own non-client dispatch path instead.
+   */
+  t3teamStopOrigin: Schema.optional(Schema.Literals(["user", "system"])),
   createdAt: IsoDateTime,
 });
 
@@ -1441,6 +1464,13 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
 export const ThreadTurnInterruptRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   turnId: Schema.optional(TurnId),
+  /** Mirrors the command's `t3teamStopOrigin === "user"` so downstream
+   * reactors (actor-message suppression) can tell a person's stop apart from
+   * fork automation without re-deriving it. */
+  byUser: Schema.optional(Schema.Boolean),
+  /** Mirrors the command's `cascade`; the descendant-stop reactor walks this
+   * thread's handoff children and interrupts each when true. */
+  cascade: Schema.optional(Schema.Boolean),
   createdAt: IsoDateTime,
 });
 

@@ -2,8 +2,6 @@ import { useLayoutEffect, useRef } from "react";
 
 import { ProjectDashboardKanbanDraggableCard } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";
 import { TicketWorkItemCard } from "~/t3team/t3team-ProjectDashboardItemViews";
-import { ProjectDashboardTicketGitHubActivity } from "~/t3team/t3team-ProjectDashboardTicketGitHubActivity";
-import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import type { ProjectDashboardKanbanOptimisticMove } from "~/t3team/t3team-projectDashboardKanbanDnd";
 import {
   getProjectDashboardKanbanMatrixRowSpanForHeight,
@@ -21,12 +19,8 @@ export function ProjectDashboardKanbanMatrixLaneCard({
   rowGapPx,
   onMeasuredRowSpan,
   jiraLastCheckedAt,
-  githubLastCheckedAt,
-  showGitHubActivity,
-  githubActivityByWorkItem,
   onOpenTicket,
   onTicketContextMenu,
-  onGitHubActivityContextMenu,
   renderTicketExtra,
   onMoveTicketToStatus,
   optimisticMoves,
@@ -40,23 +34,14 @@ export function ProjectDashboardKanbanMatrixLaneCard({
   rowGapPx: number;
   onMeasuredRowSpan?: (ticketId: string, rowSpan: number) => void;
   jiraLastCheckedAt?: number;
-  githubLastCheckedAt?: number;
-  showGitHubActivity: boolean;
-  githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
-  onGitHubActivityContextMenu: (
-    event: React.MouseEvent,
-    ticket: ProjectTicket,
-    item: GitHubWorkActivityItem,
-  ) => void;
   renderTicketExtra?: (ticket: ProjectTicket, compact: boolean) => React.ReactNode;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
   optimisticMoves: Readonly<Record<string, ProjectDashboardKanbanOptimisticMove>>;
 }) {
   const ticket = placement.ticket;
   const isPending = optimisticMoves[ticket.id]?.pending === true;
-  const githubActivityItems = githubActivityByWorkItem.get(ticket.ref.displayId) ?? [];
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -97,32 +82,13 @@ export function ProjectDashboardKanbanMatrixLaneCard({
             ticket={ticket}
             compact
             flat
-            githubActivityItems={githubActivityItems}
-            showGitHubActivityTitleBadge={false}
             {...(groupParent ? { groupParent: true } : {})}
             {...(inlineParent ? { inlineParent: true } : {})}
             {...(inlineChild ? { inlineChild: true } : {})}
             {...(jiraLastCheckedAt !== undefined ? { lastCheckedAt: jiraLastCheckedAt } : {})}
             {...(placement.childCount > 0 ? { childCount: placement.childCount } : {})}
             onContextMenu={(event) => onTicketContextMenu(event, ticket)}
-            extraChildren={
-              renderTicketExtra ? (
-                renderTicketExtra(ticket, true)
-              ) : (
-                <ProjectDashboardTicketGitHubActivity
-                  items={githubActivityItems}
-                  enabled={showGitHubActivity}
-                  limit={1}
-                  compact
-                  {...(githubLastCheckedAt !== undefined
-                    ? { lastCheckedAt: githubLastCheckedAt }
-                    : {})}
-                  onItemContextMenu={(event, item) =>
-                    onGitHubActivityContextMenu(event, ticket, item)
-                  }
-                />
-              )
-            }
+            extraChildren={renderTicketExtra ? renderTicketExtra(ticket, true) : null}
             onOpen={() => onOpenTicket(projectId, ticket.id)}
           />
         </ProjectDashboardKanbanDraggableCard>

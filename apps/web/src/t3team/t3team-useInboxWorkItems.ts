@@ -5,7 +5,9 @@ import { useT3TeamPinnedSidebarStore } from "~/t3team/t3team-pinnedSidebarStore"
 import { useT3TeamSidebarNavPreferencesStore } from "~/t3team/t3team-sidebarNavPreferencesStore";
 import {
   resolveInboxAttribution,
+  selectInboxPinnedGitHubActivity,
   selectInboxWorkItems,
+  type InboxGitHubActivityPinRow,
   type InboxWorkItemAttribution,
   type InboxWorkItemRow,
 } from "~/t3team/t3team-inboxWorkItems";
@@ -39,28 +41,23 @@ export function useT3TeamInboxAttribution(threadId: string): InboxWorkItemAttrib
   }, [threadId, threads, ticketsById]);
 }
 
-export function useT3TeamInboxWorkItems(): ReadonlyArray<InboxWorkItemRow> {
-  const { threads } = useProjectStore();
-  const tickets = useTeamTickets();
-  const pinnedItems = useT3TeamPinnedSidebarStore((state) => state.items);
-
+/**
+ * Sidebar-nav preferences ("hide from sidebar" / "show at top"), flattened across projects.
+ * The Code lens scopes these per project because its rows live under per-project headings; the
+ * Inbox stream is flat (both the jira and the GitHub-activity rows within it), and project-scoped
+ * item ids keep the union unambiguous. Projects are visited in sorted id order so the arrangement
+ * is stable across reloads rather than following whatever order the settings blob happened to
+ * serialize in.
+ */
+function useFlattenedSidebarNavPreferences(): {
+  hiddenSidebarItemIds: ReadonlyArray<string>;
+  orderedSidebarItemIds: ReadonlyArray<string>;
+} {
   const preferencesByProjectId = useT3TeamSidebarNavPreferencesStore(
     (state) => state.preferencesByProjectId,
   );
 
-  const pinnedTicketIds = useMemo(
-    () =>
-      new Set(
-        pinnedItems.flatMap((item) => (item.kind === "jira-work-item" ? [item.ticketId] : [])),
-      ),
-    [pinnedItems],
-  );
-
-  // Flattened across projects. The Code lens scopes these per project because its rows live under
-  // per-project headings; this stream has one flat list, and project-scoped item ids keep the
-  // union unambiguous. Projects are visited in sorted id order so the arrangement is stable across
-  // reloads rather than following whatever order the settings blob happened to serialize in.
-  const { hiddenSidebarItemIds, orderedSidebarItemIds } = useMemo(() => {
+  return useMemo(() => {
     const projectIds = Object.keys(preferencesByProjectId).sort();
     return {
       hiddenSidebarItemIds: projectIds.flatMap(
@@ -71,6 +68,21 @@ export function useT3TeamInboxWorkItems(): ReadonlyArray<InboxWorkItemRow> {
       ),
     };
   }, [preferencesByProjectId]);
+}
+
+export function useT3TeamInboxWorkItems(): ReadonlyArray<InboxWorkItemRow> {
+  const { threads } = useProjectStore();
+  const tickets = useTeamTickets();
+  const pinnedItems = useT3TeamPinnedSidebarStore((state) => state.items);
+  const { hiddenSidebarItemIds, orderedSidebarItemIds } = useFlattenedSidebarNavPreferences();
+
+  const pinnedTicketIds = useMemo(
+    () =>
+      new Set(
+        pinnedItems.flatMap((item) => (item.kind === "jira-work-item" ? [item.ticketId] : [])),
+      ),
+    [pinnedItems],
+  );
 
   return useMemo(
     () =>
@@ -89,5 +101,29 @@ export function useT3TeamInboxWorkItems(): ReadonlyArray<InboxWorkItemRow> {
         threadHasPullRequest: () => false,
       }),
     [hiddenSidebarItemIds, orderedSidebarItemIds, pinnedTicketIds, threads, tickets],
+  );
+}
+
+/**
+ * Pinned `github-activity` items for the Work-lens Inbox (doc 40 follow-up). The Code lens reaches
+ * these through `ProjectSidebarPinnedItems`; a `sidebarLens: "work"` distribution never mounts
+ * that tree, so a GitHub item pinned via "Pin to left" had nowhere to render — the pin wrote to
+ * the store fine, but this Inbox only ever read `jira-work-item` pins. This returns the raw pinned
+ * refs (id/project/activity), already filtered and ordered by the same nav preferences the jira
+ * rows honour; `t3team-InboxPinnedGitHubActivityRows.tsx` resolves each one against its project's
+ * live activity feed.
+ */
+export function useT3TeamInboxPinnedGitHubActivity(): ReadonlyArray<InboxGitHubActivityPinRow> {
+  const pinnedItems = useT3TeamPinnedSidebarStore((state) => state.items);
+  const { hiddenSidebarItemIds, orderedSidebarItemIds } = useFlattenedSidebarNavPreferences();
+
+  return useMemo(
+    () =>
+      selectInboxPinnedGitHubActivity({
+        pinnedItems,
+        hiddenSidebarItemIds,
+        orderedSidebarItemIds,
+      }),
+    [hiddenSidebarItemIds, orderedSidebarItemIds, pinnedItems],
   );
 }

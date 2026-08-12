@@ -127,6 +127,10 @@ import {
   findActiveWorkflowInputMessageId,
   T3TeamSystemTimelineRow,
 } from "~/t3team/chat/t3team-SystemTimelineRow";
+import {
+  findT3TeamWorkflowDecisionAnswers,
+  type T3TeamWorkflowDecisionAnswer,
+} from "~/t3team/chat/t3team-workflowDecisionAnswers";
 import { T3TeamActorTimelineRow } from "~/t3team/chat/t3team-ActorTimelineRow";
 import {
   getT3TeamRenderableAttachments,
@@ -136,6 +140,7 @@ import {
   deriveT3TeamWorkflowStepRuns,
   type T3TeamWorkflowRunProgress,
 } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import { useThreadShell } from "~/state/entities";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -158,6 +163,8 @@ interface TimelineRowSharedState {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   activeWorkflowInputMessageId: string | null;
+  workflowDecisionAnswers: ReadonlyMap<string, T3TeamWorkflowDecisionAnswer>;
+  answeredDecisionReplyMessageIds: ReadonlySet<string>;
   workflowStepRuns: ReadonlyMap<string, T3TeamWorkflowRunProgress>;
   workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
   onSubmitRecipeCardAction?: ChatViewT3TeamExtensionProps["onSubmitRecipeCardAction"];
@@ -567,6 +574,20 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [timelineEntries],
   );
 
+  const workflowDecisionAnswers = useMemo(
+    () => findT3TeamWorkflowDecisionAnswers(timelineEntries),
+    [timelineEntries],
+  );
+
+  // A decision reply renders its chosen chip inline on the ask card (see
+  // `T3TeamWorkflowDecisionCard`) — its own bare user-bubble row would just repeat it. Suppress
+  // by identity of the answer message `findT3TeamWorkflowDecisionAnswers` already resolved
+  // (correlationId-matched, with a legacy adjacency fallback), not by re-deriving adjacency here.
+  const answeredDecisionReplyMessageIds = useMemo(
+    () => new Set([...workflowDecisionAnswers.values()].map((answer) => answer.answerMessageId)),
+    [workflowDecisionAnswers],
+  );
+
   const workflowStepRuns = useMemo(
     () => deriveT3TeamWorkflowStepRuns(threadActivities ?? []),
     [threadActivities],
@@ -587,6 +608,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       activeWorkflowInputMessageId,
+      workflowDecisionAnswers,
+      answeredDecisionReplyMessageIds,
       workflowStepRuns,
       ...(workflowRunStatus ? { workflowRunStatus } : {}),
       onSubmitRecipeCardAction,
@@ -610,6 +633,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       activeWorkflowInputMessageId,
+      workflowDecisionAnswers,
+      answeredDecisionReplyMessageIds,
       workflowStepRuns,
       workflowRunStatus,
       onSubmitRecipeCardAction,
@@ -1037,7 +1062,9 @@ function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message
     <T3TeamSystemTimelineRow
       message={row.message}
       threadRef={ctx.threadRef}
+      {...(ctx.markdownCwd ? { markdownCwd: ctx.markdownCwd } : {})}
       activeWorkflowInputMessageId={ctx.activeWorkflowInputMessageId}
+      workflowDecisionAnswers={ctx.workflowDecisionAnswers}
       workflowStepRuns={ctx.workflowStepRuns}
       {...(ctx.workflowRunStatus ? { workflowRunStatus: ctx.workflowRunStatus } : {})}
       {...(ctx.onSubmitRecipeCardAction
@@ -1093,6 +1120,11 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
 
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  // This message answered a still-visible ask card, which now renders the chosen chip inline
+  // (see `T3TeamWorkflowDecisionCard`) — a second, bare bubble here would just repeat it.
+  if (ctx.answeredDecisionReplyMessageIds.has(row.message.id)) {
+    return null;
+  }
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(
     row.message.t3teamExt?.displayText ?? row.message.text,
@@ -2374,6 +2406,12 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
 }) {
   const { workEntry, workspaceRoot } = props;
   const activity = use(TimelineRowActivityCtx);
+  // t3team: "Started child session …" rows link their title into the child
+  // thread. The child shares the current thread's project (start_child never
+  // moves a session to another project), so the current thread's own shell
+  // supplies the projectId `onOpenThread` needs — no new prop threading.
+  const ctx = use(TimelineRowCtx);
+  const currentThreadShell = useThreadShell(ctx.threadRef);
   const [expanded, setExpanded] = useState(false);
   const iconConfig = workToneIcon(workEntry.tone);
   const showWarningIndicator = workEntry.sourceActivityKind === "runtime.warning";
@@ -2427,6 +2465,15 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
         },
       }
     : {};
+  // t3team: only offer the link when we actually have somewhere to send it —
+  // a project id (from the current thread's shell) and the host's navigation
+  // callback both need to be present.
+  const childThreadId = workEntry.childThreadId;
+  const onOpenChildThread =
+    childThreadId && ctx.onOpenThread && currentThreadShell
+      ? () =>
+          ctx.onOpenThread?.({ projectId: currentThreadShell.projectId, threadId: childThreadId })
+      : null;
 
   return (
     <div
@@ -2447,7 +2494,24 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <div className="min-w-0 flex-1 overflow-hidden">
             <p className="flex min-w-0 w-full items-baseline gap-1.5 text-[12px] leading-5">
-              <span className={cn("min-w-0 shrink truncate", headingClass)}>{heading}</span>
+              {onOpenChildThread ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenChildThread();
+                  }}
+                  className={cn(
+                    "group/child-link -mx-1 flex min-w-0 shrink items-center gap-0.5 truncate rounded px-1 hover:bg-accent/60 hover:text-foreground",
+                    headingClass,
+                  )}
+                >
+                  <span className="min-w-0 truncate">{heading}</span>
+                  <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground opacity-60 transition-opacity group-hover/child-link:opacity-100" />
+                </button>
+              ) : (
+                <span className={cn("min-w-0 shrink truncate", headingClass)}>{heading}</span>
+              )}
               {preview && (
                 <span className="min-w-0 flex-1 truncate text-secondary-label">{preview}</span>
               )}

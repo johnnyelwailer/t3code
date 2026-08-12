@@ -25,6 +25,7 @@ type RunThreadBootstrapInput = {
   kickoffModelSelection: ModelSelection;
   kickoffRuntimeMode: RuntimeMode;
   kickoffInteractionMode: ProviderInteractionMode;
+  kickoffBranch: string | null;
   kickoffWorkflow?: T3TeamKickoffWorkflow;
   toolContext?: T3TeamTurnToolContext;
   createdAt: string;
@@ -46,6 +47,7 @@ export async function runThreadBootstrap({
   kickoffModelSelection,
   kickoffRuntimeMode,
   kickoffInteractionMode,
+  kickoffBranch,
   kickoffWorkflow,
   toolContext,
   createdAt,
@@ -66,7 +68,11 @@ export async function runThreadBootstrap({
     createdAt,
   });
 
-  if (action === "kickoff" && initialUserMessage) {
+  if (
+    action === "kickoff" &&
+    initialUserMessage !== undefined &&
+    (initialUserMessage !== "" || kickoffWorkflow !== undefined)
+  ) {
     await runThreadBootstrapKickoff({
       backend,
       action,
@@ -79,6 +85,7 @@ export async function runThreadBootstrap({
       kickoffModelSelection,
       kickoffRuntimeMode,
       kickoffInteractionMode,
+      kickoffBranch,
       kickoffWorkflow,
       toolContext,
       createdAt,
@@ -98,6 +105,7 @@ export async function runThreadBootstrap({
     kickoffModelSelection,
     kickoffRuntimeMode,
     kickoffInteractionMode,
+    kickoffBranch,
     createdAt,
   });
 }

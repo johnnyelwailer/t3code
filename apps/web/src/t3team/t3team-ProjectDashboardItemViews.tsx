@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
-import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { ProjectDashboardTicketTooltip } from "~/t3team/t3team-ProjectDashboardItemViewParts";
 import {
   TicketWorkItemCardMeta,
@@ -19,8 +18,6 @@ export function TicketWorkItemCard({
   child,
   childCount,
   lastCheckedAt,
-  githubActivityItems,
-  showGitHubActivityTitleBadge,
   extraChildren,
   onContextMenu,
 }: {
@@ -34,8 +31,6 @@ export function TicketWorkItemCard({
   child?: boolean;
   childCount?: number;
   lastCheckedAt?: number;
-  githubActivityItems?: ReadonlyArray<GitHubWorkActivityItem>;
-  showGitHubActivityTitleBadge?: boolean;
   extraChildren?: ReactNode;
   onContextMenu?: (event: React.MouseEvent) => void;
 }) {
@@ -74,8 +69,6 @@ export function TicketWorkItemCard({
               child={child}
               inlineChild={inlineChild}
               childCount={childCount}
-              githubActivityItems={githubActivityItems}
-              showGitHubActivityTitleBadge={showGitHubActivityTitleBadge}
             />
             <div
               className={`mt-1 overflow-hidden font-medium ${
@@ -125,7 +118,6 @@ export function TicketWorkItemRow({
   child,
   childCount,
   lastCheckedAt,
-  githubActivityItems,
   extraChildren,
   onContextMenu,
 }: {
@@ -134,7 +126,6 @@ export function TicketWorkItemRow({
   child?: boolean;
   childCount?: number;
   lastCheckedAt?: number;
-  githubActivityItems?: ReadonlyArray<GitHubWorkActivityItem>;
   extraChildren?: ReactNode;
   onContextMenu?: (event: React.MouseEvent) => void;
 }) {
@@ -157,12 +148,7 @@ export function TicketWorkItemRow({
           issueTypeIconUrl={ticket.issueTypeIconUrl ?? ticket.ref.issueTypeIconUrl}
         />
         <div className="min-w-0 flex-1">
-          <TicketWorkItemRowMeta
-            ticket={ticket}
-            child={child}
-            childCount={childCount}
-            githubActivityItems={githubActivityItems}
-          />
+          <TicketWorkItemRowMeta ticket={ticket} child={child} childCount={childCount} />
           <div className="mt-0.5 text-sm font-medium leading-5">{ticket.ref.title}</div>
           {ticket.assignee && (
             <div className="text-xs text-muted-foreground">Assigned to {ticket.assignee}</div>

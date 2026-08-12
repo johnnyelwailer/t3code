@@ -13,8 +13,6 @@ export function ProjectMyWorkOptionsMenu({
   onGroupModeChange,
   statusCategory,
   onStatusCategoryChange,
-  showGitHubActivity,
-  onShowGitHubActivityChange,
   hiddenKanbanColumnIds,
   onKanbanLaneVisibilityChange,
   epicsHidden,
@@ -58,8 +56,6 @@ export function ProjectMyWorkOptionsMenu({
           onGroupModeChange={onGroupModeChange}
           statusCategory={statusCategory}
           onStatusCategoryChange={onStatusCategoryChange}
-          showGitHubActivity={showGitHubActivity}
-          onShowGitHubActivityChange={onShowGitHubActivityChange}
           epicsHidden={epicsHidden}
           onEpicsHiddenChange={onEpicsHiddenChange}
           hiddenKanbanColumnIds={hiddenKanbanColumnIds}

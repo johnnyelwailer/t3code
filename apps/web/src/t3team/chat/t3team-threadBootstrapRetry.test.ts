@@ -25,6 +25,7 @@ function planFor(threadId: string) {
     threadId,
     hasServerThread: false,
     hasInitialUserMessage: true,
+    hasKickoffWorkflow: false,
     hasProjectWorkspaceRoot: true,
     projectExists: true,
   });

@@ -18,6 +18,7 @@ import type * as AskChoiceWorkflow from "./__fixtures__/t3team-sdk.askChoice.wor
 import type * as AskResponseWorkflow from "./__fixtures__/t3team-sdk.askResponse.workflow.ts";
 import type * as BudgetWorkflow from "./__fixtures__/t3team-sdk.budgetPrimitive.workflow.ts";
 import type * as ChildSpawnWorkflow from "./__fixtures__/t3team-sdk.childSpawn.workflow.ts";
+import type * as CtxToolWorkflow from "./__fixtures__/t3team-sdk.ctxTool.workflow.ts";
 import type * as E2eReviewWorkflow from "./__fixtures__/t3team-sdk.e2eReview.workflow.ts";
 import type * as FireForgetWorkflow from "./__fixtures__/t3team-sdk.handleFireForget.workflow.ts";
 import type * as ModelCascadeWorkflow from "./__fixtures__/t3team-sdk.modelCascade.workflow.ts";
@@ -187,6 +188,9 @@ export const demoScripts = {
 
 export const twoTools = defineWorkflow<typeof TwoToolsWorkflow>(
   "./__fixtures__/t3team-sdk.journalTwoTools.workflow.ts",
+);
+export const ctxToolWorkflow = defineWorkflow<typeof CtxToolWorkflow>(
+  "./__fixtures__/t3team-sdk.ctxTool.workflow.ts",
 );
 export const insertedWorkflow = defineWorkflow<typeof InsertedWorkflow>(
   "./__fixtures__/t3team-sdk.journalInserted.workflow.ts",

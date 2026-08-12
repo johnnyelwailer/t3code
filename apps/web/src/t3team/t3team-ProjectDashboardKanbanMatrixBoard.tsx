@@ -1,6 +1,5 @@
 import { Fragment } from "react";
 
-import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { ProjectDashboardKanbanDroppableColumnBody } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";
 import { ProjectDashboardKanbanMatrixLaneCard } from "~/t3team/t3team-ProjectDashboardKanbanMatrixLaneCard";
 import type { ProjectDashboardKanbanOptimisticMove } from "~/t3team/t3team-projectDashboardKanbanDnd";
@@ -20,13 +19,9 @@ export function ProjectDashboardKanbanMatrixBoard({
   dragging,
   parentChildGroups,
   jiraLastCheckedAt,
-  githubLastCheckedAt,
-  showGitHubActivity,
-  githubActivityByWorkItem,
   projectId,
   onOpenTicket,
   onTicketContextMenu,
-  onGitHubActivityContextMenu,
   renderTicketExtra,
   onMoveTicketToStatus,
   optimisticMoves,
@@ -36,17 +31,9 @@ export function ProjectDashboardKanbanMatrixBoard({
   dragging: boolean;
   parentChildGroups: TicketHierarchy;
   jiraLastCheckedAt?: number;
-  githubLastCheckedAt?: number;
-  showGitHubActivity: boolean;
-  githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
   projectId: string;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onTicketContextMenu: (event: React.MouseEvent, ticket: ProjectTicket) => void;
-  onGitHubActivityContextMenu: (
-    event: React.MouseEvent,
-    ticket: ProjectTicket,
-    item: GitHubWorkActivityItem,
-  ) => void;
   renderTicketExtra?: (ticket: ProjectTicket, compact: boolean) => React.ReactNode;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
   optimisticMoves: Readonly<Record<string, ProjectDashboardKanbanOptimisticMove>>;
@@ -146,12 +133,8 @@ export function ProjectDashboardKanbanMatrixBoard({
             rowGapPx={PROJECT_DASHBOARD_KANBAN_MATRIX_ROW_GAP_PX}
             onMeasuredRowSpan={handleMeasuredRowSpan}
             {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
-            {...(githubLastCheckedAt !== undefined ? { githubLastCheckedAt } : {})}
-            showGitHubActivity={showGitHubActivity}
-            githubActivityByWorkItem={githubActivityByWorkItem}
             onOpenTicket={onOpenTicket}
             onTicketContextMenu={onTicketContextMenu}
-            onGitHubActivityContextMenu={onGitHubActivityContextMenu}
             {...(renderTicketExtra ? { renderTicketExtra } : {})}
             {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
             optimisticMoves={optimisticMoves}

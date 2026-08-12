@@ -45,8 +45,22 @@ export function resolveChildCapabilities(opts: {
     );
   }
   if (opts.declared === "inherit") return [...opts.parent];
-  const entries = Array.isArray(opts.declared) ? opts.declared : [];
-  const childCapabilities = normalizeCapabilityEntries(entries);
+  if (!Array.isArray(opts.declared)) {
+    throw new PermissionDeniedError(
+      "Subagent '" +
+        opts.childLabel +
+        "' was created with an invalid `capabilities` value (" +
+        typeof opts.declared +
+        ": " +
+        JSON.stringify(opts.declared) +
+        "). " +
+        'Pass `capabilities: "inherit"` to give it exactly this workflow\'s own grant, or an ' +
+        'explicit array such as `capabilities: ["integration.read"]`. There is deliberately no ' +
+        "coercion: a non-array grant is rejected rather than silently treated as empty, which " +
+        "would silently break the child.",
+    );
+  }
+  const childCapabilities = normalizeCapabilityEntries(opts.declared);
   assertChildCapabilitiesSubset({
     childName: opts.childLabel,
     childCapabilities,
@@ -71,6 +85,30 @@ export function assertToolGroupDeclared(
       "). " +
       "Add the group to this workflow's meta.capabilities.",
   );
+}
+
+/**
+ * Layer-escalation trust gate (the runbook cascade's "layer 3 cannot grant
+ * itself new capabilities" rule): a project-layer runbook may only declare
+ * capabilities its inherited base runbook already had. No-ops for any other
+ * layer — layers 1-2 (defaults/catalog) are trusted, reviewed content and
+ * may declare whatever they want. Delegates the actual subset check to
+ * {@link assertChildCapabilitiesSubset} rather than duplicating the
+ * set-difference logic.
+ */
+export function assertNoLayerCapabilityEscalation(opts: {
+  readonly runbookName: string;
+  readonly layer: string | undefined;
+  readonly baseCapabilities: ReadonlySet<string>;
+  readonly declaredCapabilities: ReadonlySet<string>;
+}): void {
+  if (opts.layer !== "project") return;
+  assertChildCapabilitiesSubset({
+    childName: opts.runbookName,
+    childCapabilities: opts.declaredCapabilities,
+    parentCapabilities: opts.baseCapabilities,
+    childKind: "project-layer runbook",
+  });
 }
 
 export function assertChildCapabilitiesSubset(opts: {

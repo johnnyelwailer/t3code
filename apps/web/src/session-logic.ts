@@ -85,6 +85,12 @@ export interface WorkLogEntry {
   /** Agent role (subagent_type) for labeled timeline rows. */
   agentRole?: string;
   /**
+   * t3team: the started child thread's id, present on a `t3team.handoff.started`
+   * "Started child session …" row. Lets the timeline render the row's title as a
+   * link into the child thread instead of plain text.
+   */
+  childThreadId?: string;
+  /**
    * Present on agent-spawn CTA rows: one per workflow run or per-turn batch
    * of direct spawns. The row renders as a call-to-action ("Kicked off N
    * subagents") whose live status is derived from the agent panel model at
@@ -917,6 +923,16 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   }
   if (isTaskActivity && payload && isBackgroundTaskActivity(payload)) {
     entry.isBackgroundTask = true;
+  }
+  // t3team: "Started child session …" rows carry the started thread's id in the
+  // payload (appendStartChildHandoffActivities) — surface it so the timeline can
+  // link the title instead of rendering plain text.
+  if (
+    activity.kind === "t3team.handoff.started" &&
+    typeof payload?.childThreadId === "string" &&
+    payload.childThreadId.length > 0
+  ) {
+    entry.childThreadId = payload.childThreadId;
   }
   const collapseKey = deriveToolLifecycleCollapseKey(entry);
   if (collapseKey) {

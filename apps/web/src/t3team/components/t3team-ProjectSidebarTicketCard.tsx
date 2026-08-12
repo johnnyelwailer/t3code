@@ -4,8 +4,6 @@ import { SidebarMenuSubButton } from "~/t3team/components/ui/t3team-sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { TicketCardDetailsTooltip } from "~/t3team/t3team-TicketCardDetailsTooltip";
-import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
-import { GitHubActivityTitleBadge } from "~/t3team/t3team-GitHubActivityTitleBadge";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 import { ProjectSidebarTicketEntryActions } from "./t3team-ProjectSidebarTicketEntryActions";
@@ -18,7 +16,6 @@ export function ProjectSidebarTicketCard({
   ticket,
   state,
   jiraLastCheckedAt,
-  githubActivityItems,
   rowRef,
   onSelectTicket,
   onCreateThread,
@@ -27,7 +24,6 @@ export function ProjectSidebarTicketCard({
   ticket: ProjectTicket;
   state: SidebarItemState;
   jiraLastCheckedAt?: number;
-  githubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
   rowRef: RefObject<HTMLAnchorElement | null>;
   onSelectTicket: () => void;
   onCreateThread: (event: MouseEvent) => Promise<void>;
@@ -56,9 +52,6 @@ export function ProjectSidebarTicketCard({
             />
             <span className="truncate text-[11px] font-medium">{ticket.ref.displayId}</span>
             <span className="ml-1 text-[10px] text-muted-foreground/75">{ticket.status}</span>
-            {githubActivityItems.length > 0 ? (
-              <GitHubActivityTitleBadge items={githubActivityItems} compact />
-            ) : null}
           </div>
           <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
             {ticket.ref.title}

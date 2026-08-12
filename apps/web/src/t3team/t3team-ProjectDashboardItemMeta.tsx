@@ -1,6 +1,4 @@
-import { GitHubActivityTitleBadge } from "~/t3team/t3team-GitHubActivityTitleBadge";
 import { renderRelativeUpdatedAt } from "~/t3team/t3team-githubActivityViewUtils";
-import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 import { ProjectDashboardTicketRelationshipBadge } from "./t3team-ProjectDashboardItemViewParts";
@@ -11,16 +9,12 @@ export function TicketWorkItemCardMeta({
   child,
   inlineChild,
   childCount,
-  githubActivityItems,
-  showGitHubActivityTitleBadge,
 }: {
   ticket: ProjectTicket;
   compact: boolean | undefined;
   child: boolean | undefined;
   inlineChild: boolean | undefined;
   childCount: number | undefined;
-  githubActivityItems: ReadonlyArray<GitHubWorkActivityItem> | undefined;
-  showGitHubActivityTitleBadge: boolean | undefined;
 }) {
   const updatedLabel = compact ? renderRelativeUpdatedAt(ticket.updatedAt) : undefined;
   return (
@@ -52,14 +46,6 @@ export function TicketWorkItemCardMeta({
           {ticket.priority}
         </span>
       )}
-      {showGitHubActivityTitleBadge !== false &&
-      githubActivityItems &&
-      githubActivityItems.length > 0 ? (
-        <GitHubActivityTitleBadge
-          items={githubActivityItems}
-          {...(compact ? { compact: true } : {})}
-        />
-      ) : null}
       {updatedLabel ? (
         <span className="ml-auto hidden shrink-0 text-[10px] text-muted-foreground @lg/ticket-card:inline-flex">
           Updated {updatedLabel}
@@ -73,12 +59,10 @@ export function TicketWorkItemRowMeta({
   ticket,
   child,
   childCount,
-  githubActivityItems,
 }: {
   ticket: ProjectTicket;
   child: boolean | undefined;
   childCount: number | undefined;
-  githubActivityItems: ReadonlyArray<GitHubWorkActivityItem> | undefined;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -90,9 +74,6 @@ export function TicketWorkItemRowMeta({
           {ticket.priority}
         </span>
       )}
-      {githubActivityItems && githubActivityItems.length > 0 ? (
-        <GitHubActivityTitleBadge items={githubActivityItems} compact />
-      ) : null}
     </div>
   );
 }

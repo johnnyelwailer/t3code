@@ -52,9 +52,15 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
       <div
         className={cn(
           "relative z-10 flex h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden",
-          // Titlebar inset only where native window buttons exist — on the web
-          // the brand docks left instead of reserving phantom control space.
-          isElectron && "ml-[var(--workspace-titlebar-content-left)]",
+          // Titlebar inset only where native window buttons exist. Electron always
+          // has native controls; on the web the titlebar inset only applies once the
+          // installed PWA runs in window-controls-overlay mode (the `.wco` class
+          // toggled by windowControlsOverlay.ts). Plain web gets NO phantom control
+          // space — but not zero either: the brand lines up with the sidebar rows
+          // below it (content inset + row padding), not the raw sidebar edge.
+          isElectron
+            ? "ml-[var(--workspace-titlebar-content-left)]"
+            : "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))] wco:md:ml-[var(--workspace-titlebar-content-left)]",
           onBackdrop ? "text-white" : "text-sidebar-foreground",
         )}
       >

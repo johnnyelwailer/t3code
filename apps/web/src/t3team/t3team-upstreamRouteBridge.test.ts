@@ -22,9 +22,14 @@ describe("translateUpstreamPath", () => {
       "/t3team/projects/p1",
       "/settings",
       "/settings/beta",
+      "/usage",
+      "/usage/deep",
       "/pair",
       "/connect",
       "/connect_/callback",
+      "/pull-requests",
+      "/projects/my-project-key",
+      "/usage",
     ]) {
       expect(translateUpstreamPath(pathname, deps("p1"))).toEqual({ kind: "ignore" });
     }
