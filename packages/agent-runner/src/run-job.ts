@@ -14,7 +14,7 @@
  * about this CLI is Temporal-specific; it exists so the executor is
  * runnable and testable standalone before stage 3 wires it in.
  */
-import { readFile } from "node:fs/promises";
+import * as NodeFSP from "node:fs/promises";
 import { parseJobSpec } from "./contract.js";
 import { runJob } from "./executor.js";
 
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  const raw = JSON.parse(await readFile(specPath, "utf8"));
+  const raw = JSON.parse(await NodeFSP.readFile(specPath, "utf8"));
   const spec = parseJobSpec(raw);
 
   const result = await runJob(spec, {

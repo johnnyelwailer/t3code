@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import * as NodeChildProcess from "node:child_process";
 import { describe, expect, it } from "vite-plus/test";
 import type { JobEvent, JobResult } from "../src/contract.js";
 import { runJob, startSandbox } from "../src/executor.js";
@@ -8,14 +8,16 @@ import { runJob, startSandbox } from "../src/executor.js";
 // and happen at module load, not inside an async beforeAll.
 let dockerAvailable = false;
 try {
-  execSync("docker info", { stdio: "ignore" });
+  NodeChildProcess.execSync("docker info", { stdio: "ignore" });
   dockerAvailable = true;
 } catch {
   dockerAvailable = false;
 }
 
 function containerIsListed(containerName: string): boolean {
-  const psOutput = execSync(`docker ps -a --filter "name=${containerName}" --format "{{.Names}}"`)
+  const psOutput = NodeChildProcess.execSync(
+    `docker ps -a --filter "name=${containerName}" --format "{{.Names}}"`,
+  )
     .toString()
     .trim();
   return psOutput !== "";

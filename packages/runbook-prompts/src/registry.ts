@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - this registry does plain
 // filesystem I/O (frontmatter parsing, path containment) by design.
-import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { createHash } from "node:crypto";
-import path from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodeCrypto from "node:crypto";
+import * as NodePath from "node:path";
 import type { ResolvedPrompt } from "@runbook/core/authoring";
 
 /**
@@ -101,12 +101,12 @@ function resolveFileWithin(dir: string, id: string, extension: string): string {
       `prompt registry: invalid prompt id "${id}" — ids are slash-separated names, no "..", absolute paths or backslashes`,
     );
   }
-  const rootReal = realpathSync(dir);
-  const filePath = path.resolve(rootReal, `${id}${extension}`);
+  const rootReal = NodeFS.realpathSync(dir);
+  const filePath = NodePath.resolve(rootReal, `${id}${extension}`);
   // Belt to the charset braces: containment is checked on the resolved path,
   // so a future id-charset change cannot silently reopen the escape.
-  const rel = path.relative(rootReal, filePath);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+  const rel = NodePath.relative(rootReal, filePath);
+  if (rel.startsWith("..") || NodePath.isAbsolute(rel)) {
     throw new Error(`prompt registry: prompt id "${id}" resolves outside the prompts directory`);
   }
   return filePath;
@@ -132,7 +132,7 @@ export function slotsPathWithin(promptsDir: string, id: string): string {
  * happens at LOAD time, not lazily.
  */
 export function loadPromptFile(filePath: string, expectedId?: string): ResolvedPrompt {
-  const raw = readFileSync(filePath, "utf8");
+  const raw = NodeFS.readFileSync(filePath, "utf8");
   const { meta, body } = parseFrontmatter(raw, filePath);
 
   // The returned id feeds provenance records (promptsUsed) and cascade
@@ -151,7 +151,7 @@ export function loadPromptFile(filePath: string, expectedId?: string): ResolvedP
     );
   }
 
-  const hash = createHash("sha256").update(body, "utf8").digest("hex");
+  const hash = NodeCrypto.createHash("sha256").update(body, "utf8").digest("hex");
   return { id: meta.id, version: meta.version, locBudget: meta.locBudget, hash, body };
 }
 
@@ -164,10 +164,10 @@ export function resolvePrompt(id: string, promptsDir: string): ResolvedPrompt {
   try {
     // A symlink inside the tree pointing out of it is still an escape, so the
     // final target is re-checked after resolution.
-    const targetReal = realpathSync(filePath);
-    const rootReal = realpathSync(promptsDir);
-    const rel = path.relative(rootReal, targetReal);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    const targetReal = NodeFS.realpathSync(filePath);
+    const rootReal = NodeFS.realpathSync(promptsDir);
+    const rel = NodePath.relative(rootReal, targetReal);
+    if (rel.startsWith("..") || NodePath.isAbsolute(rel)) {
       throw new Error(`prompt registry: prompt "${id}" is a symlink leaving the prompts directory`);
     }
   } catch (err) {
@@ -209,17 +209,17 @@ export interface PromptLookupResult {
  * fall through to the next one.
  */
 export function tryResolvePrompt(id: string, promptsDir: string): PromptLookupResult | undefined {
-  if (!existsSync(promptsDir)) {
+  if (!NodeFS.existsSync(promptsDir)) {
     return undefined;
   }
   const filePath = promptPathWithin(promptsDir, id);
   try {
     // A symlink inside the tree pointing out of it is still an escape, so the
     // final target is re-checked after resolution (mirrors resolvePrompt).
-    const targetReal = realpathSync(filePath);
-    const rootReal = realpathSync(promptsDir);
-    const rel = path.relative(rootReal, targetReal);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    const targetReal = NodeFS.realpathSync(filePath);
+    const rootReal = NodeFS.realpathSync(promptsDir);
+    const rel = NodePath.relative(rootReal, targetReal);
+    if (rel.startsWith("..") || NodePath.isAbsolute(rel)) {
       throw new Error(`prompt registry: prompt "${id}" is a symlink leaving the prompts directory`);
     }
   } catch (err) {
