@@ -38,6 +38,7 @@ import type * as T from "./t3team-sdk.types.ts";
 import { buildScriptTree, buildToolTree, defaultBroker } from "./t3team-sdk.bodyTrees.ts";
 import { withBodyApi } from "./t3team-sdk.engineApi.ts";
 import { buildWorkflowGlobals } from "./t3team-sdk.workflowGlobals.ts";
+import { buildRunbookContext } from "./t3team-sdk.runbookContext.ts";
 
 const nodeRequire = NodeModule.createRequire(import.meta.url);
 const fs = nodeRequire("node:fs") as { readonly readFileSync: (p: string, e: "utf8") => string };
@@ -109,6 +110,9 @@ export async function runPreparedBody(opts: {
     primitives: opts.primitives,
     threads,
     schedule,
+    // The `RunbookContext` subset (`@runbook/core/authoring`) a `run(ctx)`-shaped body sees;
+    // legacy bodies declare zero parameters and the loader never passes this to them.
+    ctx: buildRunbookContext({ toolRefs: opts.toolRefs, runtime: opts.runtime, capabilities }),
   });
   // Bind the SAME surface the body-scope injection uses, so an IMPORTED `agent`/`phase`/… resolves
   // too (Epic 25 §The engine API — imported, not injected). Both paths are live during the

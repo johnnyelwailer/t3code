@@ -55,12 +55,16 @@ export function buildWorkflowGlobals(opts: {
   readonly primitives: WorkflowPrimitives;
   readonly threads: WorkflowThreadPrimitives;
   readonly schedule: SchedulePrimitives;
+  /** The `@runbook/core/authoring` `RunbookContext` subset a body's `run(ctx)` sees. Optional:
+   * older globals shapes and legacy zero-arg bodies never reference `ctx` at all. */
+  readonly ctx?: unknown;
 }): Record<string, unknown> {
   const p = opts.primitives;
   const t = opts.threads;
   return {
     ...deterministicGlobals(opts.runtime),
     args: opts.args,
+    ctx: opts.ctx,
     Schema,
     tools: opts.tools,
     scripts: opts.scripts,
