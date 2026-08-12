@@ -23,7 +23,6 @@ export function useGitHubRepositoryDiscoveryFetchers({
   setGithubHost,
   setGithubAccount,
   setSuggestedUrls,
-  setSelectedSuggestedUrls,
 }: {
   backend: ReturnType<typeof useBackend>;
   discoveryCacheKey: string;
@@ -35,7 +34,6 @@ export function useGitHubRepositoryDiscoveryFetchers({
   setGithubHost: (host: string) => void;
   setGithubAccount: (account: string | undefined) => void;
   setSuggestedUrls: (urls: ReadonlyArray<string>) => void;
-  setSelectedSuggestedUrls: (urls: Set<string>) => void;
 }) {
   const discoverSuggestions = useCallback(
     async (host: string, account?: string) => {
@@ -60,11 +58,9 @@ export function useGitHubRepositoryDiscoveryFetchers({
         setGithubHost(response.host);
         setGithubAccount(response.account ?? account);
         setSuggestedUrls(response.suggestedRepositoryUrls);
-        setSelectedSuggestedUrls(new Set(response.suggestedRepositoryUrls));
         setDiscoveryWarning(response.inboxWarning);
       } catch (error) {
         setSuggestedUrls([]);
-        setSelectedSuggestedUrls(new Set());
         setDiscoveryWarning(
           error instanceof Error ? error.message : "Failed to discover repository suggestions.",
         );
@@ -82,7 +78,6 @@ export function useGitHubRepositoryDiscoveryFetchers({
       setGithubAccount,
       setGithubHost,
       setLoadingDiscovery,
-      setSelectedSuggestedUrls,
       setSuggestedUrls,
     ],
   );
@@ -132,7 +127,6 @@ export function useGitHubRepositoryDiscoveryFetchers({
 
         if (responses.length === 0) {
           setSuggestedUrls([]);
-          setSelectedSuggestedUrls(new Set());
           setDiscoveryWarning(
             failures.length === 1
               ? `Could not search ${failures[0]?.error?.host ?? "GitHub"}.`
@@ -161,7 +155,6 @@ export function useGitHubRepositoryDiscoveryFetchers({
         setGithubHost(merged.githubHost);
         setGithubAccount(nextAccount);
         setSuggestedUrls(merged.suggestedUrls);
-        setSelectedSuggestedUrls(new Set(merged.suggestedUrls));
         setDiscoveryWarning(nextWarning || undefined);
       } finally {
         setLoadingDiscovery(false);
@@ -177,7 +170,6 @@ export function useGitHubRepositoryDiscoveryFetchers({
       setGithubAccount,
       setGithubHost,
       setLoadingDiscovery,
-      setSelectedSuggestedUrls,
       setSuggestedUrls,
     ],
   );

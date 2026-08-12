@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Github, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
+import { CheckCircle2, Github, RefreshCw, ShieldAlert } from "lucide-react";
 import { GitHubRepositoryDiscoveryAdvancedOptions } from "~/t3team/components/t3team-GitHubRepositoryDiscoveryAdvancedOptions";
 import {
   GitHubAuthHostPicker,
@@ -18,14 +18,12 @@ export function GitHubRepositoryDiscoverySection({
   projectKey,
   projectTitle,
   linkedRepositoryUrls,
-  onAddSuggestedUrls,
   onVisibleSuggestionsChange,
 }: {
   enabled?: boolean;
   projectKey: string | undefined;
   projectTitle: string | undefined;
   linkedRepositoryUrls: ReadonlyArray<string>;
-  onAddSuggestedUrls: (urls: ReadonlyArray<string>) => void;
   onVisibleSuggestionsChange?: (urls: ReadonlyArray<string>) => void;
 }) {
   const discovery = useGitHubRepositoryDiscovery({
@@ -34,10 +32,6 @@ export function GitHubRepositoryDiscoverySection({
     projectTitle,
     linkedRepositoryUrls,
   });
-
-  const selectedUrls = discovery.visibleSuggestedUrls.filter((url) =>
-    discovery.selectedSuggestedUrls.has(url),
-  );
 
   useEffect(() => {
     onVisibleSuggestionsChange?.(discovery.visibleSuggestedUrls);
@@ -49,10 +43,19 @@ export function GitHubRepositoryDiscoverySection({
   const isAuthenticated = discovery.authStatus === "authenticated";
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const connectedAccountCount = discovery.authenticatedHosts.length;
-  const connectedAccountLabel =
-    connectedAccountCount > 1
+  const connectedAccountLabel = [
+    ...new Map(
+      discovery.authenticatedHosts.map((entry) => [
+        entry.host,
+        entry.account ? `${entry.host} (${entry.account})` : entry.host,
+      ]),
+    ).values(),
+  ].join(" · ");
+  const connectedSearchLabel = discovery.loadingDiscovery
+    ? connectedAccountCount > 1
       ? `Searching ${connectedAccountCount} connected accounts`
-      : `Searching ${discovery.githubHost || "GitHub"}`;
+      : `Searching ${discovery.githubHost || "GitHub"}`
+    : connectedAccountLabel || "Connected GitHub accounts";
 
   return (
     <section className="space-y-2.5">
@@ -63,7 +66,7 @@ export function GitHubRepositoryDiscoverySection({
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold">Find your GitHub repository</h3>
+              <h3 className="text-sm font-semibold">Find your repository</h3>
               {!isAuthenticated ? (
                 <span
                   className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${status.badge}`}
@@ -96,9 +99,9 @@ export function GitHubRepositoryDiscoverySection({
         <>
           <div className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
             <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span className="font-medium text-foreground">GitHub connected</span>
+            <span className="font-medium text-foreground">Connected</span>
             <span aria-hidden="true">·</span>
-            <span>{connectedAccountLabel}</span>
+            <span>{connectedSearchLabel}</span>
           </div>
           <GitHubRepositoryDiscoveryAdvancedOptions
             open={showAdvancedOptions}
@@ -139,10 +142,6 @@ export function GitHubRepositoryDiscoverySection({
         </>
       )}
 
-      <div className="min-h-4 text-xs text-muted-foreground" aria-live="polite">
-        {discovery.loadingDiscovery ? "Searching connected GitHub accounts…" : null}
-      </div>
-
       {discovery.discoveryWarning ? (
         <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
           {discovery.discoveryWarning}
@@ -151,49 +150,37 @@ export function GitHubRepositoryDiscoverySection({
 
       {isAuthenticated &&
       !discovery.loadingDiscovery &&
-      discovery.visibleSuggestedUrls.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          No matching repository found yet. Try the manual options below.
-        </p>
+      discovery.suggestedUrls.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No matching repository found.</p>
       ) : null}
 
-      {discovery.visibleSuggestedUrls.length > 0 ? (
-        <div className="space-y-2">
+      {discovery.suggestedUrls.length > 0 ? (
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2 text-xs font-medium text-foreground">
-            <span className="flex items-center gap-2">
-              <Sparkles className="size-3.5" />
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
               Matching repositories
             </span>
             <span className="text-muted-foreground">
-              {discovery.visibleSuggestedUrls.length} found
+              {discovery.suggestedUrls.length} found
             </span>
           </div>
           <div className="overflow-hidden rounded-md border border-border/70">
-            {discovery.visibleSuggestedUrls.map((url) => (
-              <label
+            {discovery.suggestedUrls.map((url) => (
+              <div
                 key={url}
                 className="flex items-center gap-3 border-b border-border/60 px-3 py-2 text-sm last:border-b-0 hover:bg-muted/30"
               >
-                <input
-                  type="checkbox"
-                  checked={discovery.selectedSuggestedUrls.has(url)}
-                  onChange={() => discovery.toggleSuggestion(url)}
-                  className="shrink-0"
-                />
+                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{url.replace(/^https?:\/\//, "")}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {linkedRepositoryUrls.includes(url) ? "Added automatically" : "Matching"}
+                  </div>
                 </div>
-              </label>
+              </div>
             ))}
           </div>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => onAddSuggestedUrls(selectedUrls)}
-            disabled={selectedUrls.length === 0}
-          >
-            Add selected repositories
-          </Button>
         </div>
       ) : null}
     </section>

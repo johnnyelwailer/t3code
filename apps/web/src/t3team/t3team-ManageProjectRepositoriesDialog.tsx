@@ -97,11 +97,6 @@ export function ManageProjectRepositoriesDialog({
                   projectKey={project.source.externalProjectKey ?? undefined}
                   projectTitle={project.title ?? undefined}
                   linkedRepositoryUrls={linkedRepositoryUrls}
-                  onAddSuggestedUrls={(urls) =>
-                    setLinkedRepositoryUrls((current) =>
-                      normalizeRepositoryUrls([...current, ...urls]),
-                    )
-                  }
                   onVisibleSuggestionsChange={handleDiscoveredRepositoryUrlsChange}
                 />
               </CardContent>

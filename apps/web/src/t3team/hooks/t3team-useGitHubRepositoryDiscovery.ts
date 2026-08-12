@@ -43,9 +43,6 @@ export function useGitHubRepositoryDiscovery({
   const [suggestedUrls, setSuggestedUrls] = useState<ReadonlyArray<string>>(
     discoveryCache?.suggestedUrls ?? [],
   );
-  const [selectedSuggestedUrls, setSelectedSuggestedUrls] = useState<Set<string>>(
-    new Set(discoveryCache?.suggestedUrls ?? []),
-  );
   const [discoveryWarning, setDiscoveryWarning] = useState<string | undefined>(
     discoveryCache?.discoveryWarning,
   );
@@ -63,7 +60,6 @@ export function useGitHubRepositoryDiscovery({
     setAuthDetail(cachedAuth?.authDetail);
     setAuthenticatedHosts(cachedAuth?.accounts ?? []);
     setSuggestedUrls(cachedDiscovery?.suggestedUrls ?? []);
-    setSelectedSuggestedUrls(new Set(cachedDiscovery?.suggestedUrls ?? []));
     setDiscoveryWarning(cachedDiscovery?.discoveryWarning);
   }, [discoveryCacheKey]);
 
@@ -79,7 +75,6 @@ export function useGitHubRepositoryDiscovery({
       setGithubHost,
       setGithubAccount,
       setSuggestedUrls,
-      setSelectedSuggestedUrls,
     });
 
   useGitHubAuthProbe({
@@ -97,25 +92,6 @@ export function useGitHubRepositoryDiscovery({
     () => suggestedUrls.filter((url) => !linkedRepositoryUrls.includes(url)),
     [linkedRepositoryUrls, suggestedUrls],
   );
-
-  useEffect(() => {
-    setSelectedSuggestedUrls((current) => {
-      const next = new Set(visibleSuggestedUrls.filter((url) => current.has(url)));
-      if (next.size === 0) {
-        for (const url of visibleSuggestedUrls) next.add(url);
-      }
-      return next;
-    });
-  }, [visibleSuggestedUrls]);
-
-  const toggleSuggestion = useCallback((url: string) => {
-    setSelectedSuggestedUrls((prev) => {
-      const next = new Set(prev);
-      if (next.has(url)) next.delete(url);
-      else next.add(url);
-      return next;
-    });
-  }, []);
 
   const selectHost = useCallback(
     (host: string) => {
@@ -156,14 +132,13 @@ export function useGitHubRepositoryDiscovery({
     authDetail,
     loadingAuth,
     loadingDiscovery,
+    suggestedUrls,
     visibleSuggestedUrls,
-    selectedSuggestedUrls,
     discoveryWarning,
     authenticatedHosts,
     setGithubHost,
     selectHost,
     refresh,
-    toggleSuggestion,
   };
 }
 

@@ -41,8 +41,7 @@ export function RepositoriesStep({
       <div>
         <h3 className="text-sm font-semibold">Link repositories</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Optional — link GitHub or GHE repositories so agents get context from code. Skip this and
-          add them later from the project.
+          Optional — link GitHub or GHE repositories so agents get context from code.
         </p>
       </div>
 
@@ -51,7 +50,6 @@ export function RepositoriesStep({
         projectKey={selectedProject?.key ?? undefined}
         projectTitle={selectedProject?.title ?? undefined}
         linkedRepositoryUrls={linkedRepositoryUrls}
-        onAddSuggestedUrls={onAddRepositories}
         onVisibleSuggestionsChange={onDiscoveredRepositoryUrlsChange}
       />
       <Collapsible defaultOpen={linkedRepositoryUrls.length > 0}>

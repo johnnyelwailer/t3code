@@ -124,6 +124,35 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
         ));
     }
 
+    let suggestedRepositoryUrls = collectSuggestedRepositoryUrls({
+      repositories: repositoriesAttempt.items,
+      ...(input.projectKey ? { projectKey: input.projectKey } : {}),
+      ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
+      ...(input.linkedRepositoryUrls ? { linkedRepositoryUrls: input.linkedRepositoryUrls } : {}),
+    });
+
+    // A provider search can return repositories but still omit the matching private or
+    // organization-visible repository. If the fast result produces no actual match, retry once
+    // against the authenticated repository list before reporting an empty discovery result.
+    if (repositoriesOnly && suggestedRepositoryUrls.length === 0) {
+      const completeRepositoriesAttempt =
+        readCached(repositoriesCache, host) ??
+        (yield* loadRepositoriesAttempt(vcs, host).pipe(
+          Effect.tap((value) =>
+            Effect.sync(() => {
+              writeCached(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
+            }),
+          ),
+        ));
+      repositoriesAttempt = completeRepositoriesAttempt;
+      suggestedRepositoryUrls = collectSuggestedRepositoryUrls({
+        repositories: repositoriesAttempt.items,
+        ...(input.projectKey ? { projectKey: input.projectKey } : {}),
+        ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
+        ...(input.linkedRepositoryUrls ? { linkedRepositoryUrls: input.linkedRepositoryUrls } : {}),
+      });
+    }
+
     const inboxAttempt = repositoriesOnly
       ? { items: [] as ReadonlyArray<GitHubInboxDiscoverResponse["inboxItems"][number]> }
       : (readCached(inboxCache, host) ??
@@ -149,13 +178,6 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
     const mergedInboxItems = mergeGitHubActivityItems({
       notifications: hydrateInboxRepositoryUrls(host, inboxAttempt.items),
       linkedPullRequests: linkedPullRequestsAttempt.items,
-    });
-
-    const suggestedRepositoryUrls = collectSuggestedRepositoryUrls({
-      repositories: repositoriesAttempt.items,
-      ...(input.projectKey ? { projectKey: input.projectKey } : {}),
-      ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
-      ...(input.linkedRepositoryUrls ? { linkedRepositoryUrls: input.linkedRepositoryUrls } : {}),
     });
 
     const inboxItems = filterInboxItemsToLinkedRepositories({
