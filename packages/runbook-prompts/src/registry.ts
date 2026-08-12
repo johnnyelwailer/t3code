@@ -131,9 +131,18 @@ export function slotsPathWithin(promptsDir: string, id: string): string {
  * clear message if the body exceeds its declared locBudget — enforcement
  * happens at LOAD time, not lazily.
  */
-export function loadPromptFile(filePath: string): ResolvedPrompt {
+export function loadPromptFile(filePath: string, expectedId?: string): ResolvedPrompt {
   const raw = readFileSync(filePath, "utf8");
   const { meta, body } = parseFrontmatter(raw, filePath);
+
+  // The returned id feeds provenance records (promptsUsed) and cascade
+  // lookups, so a file whose frontmatter claims a different identity than
+  // the id it was resolved under must be rejected, not passed through.
+  if (expectedId !== undefined && meta.id !== expectedId) {
+    throw new Error(
+      `prompt registry: file resolved for id "${expectedId}" declares id "${meta.id}" (${filePath})`,
+    );
+  }
 
   const loc = countLoc(body);
   if (loc > meta.locBudget) {
@@ -168,7 +177,7 @@ export function resolvePrompt(id: string, promptsDir: string): ResolvedPrompt {
     // Missing file falls through to the ENOENT message below.
   }
   try {
-    return loadPromptFile(filePath);
+    return loadPromptFile(filePath, id);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       throw new Error(`prompt registry: unknown prompt id "${id}" (expected file at ${filePath})`);
@@ -220,7 +229,7 @@ export function tryResolvePrompt(id: string, promptsDir: string): PromptLookupRe
     throw err;
   }
   try {
-    return { prompt: loadPromptFile(filePath), filePath };
+    return { prompt: loadPromptFile(filePath, id), filePath };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return undefined;

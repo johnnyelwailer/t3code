@@ -26,6 +26,18 @@ describe("prompt registry", () => {
     expect(() => resolvePrompt("over-budget", fixturesDir)).toThrow(/over its locBudget of 2/);
   });
 
+  it("rejects a file whose frontmatter id disagrees with the resolved id", () => {
+    const dir = mkdtempSync(join(tmpdir(), "prompt-id-mismatch-"));
+    writeFileSync(
+      join(dir, "honest-name.md"),
+      "---\nid: something-else\nversion: 1.0.0\nlocBudget: 10\n---\nBody.\n",
+    );
+
+    expect(() => resolvePrompt("honest-name", dir)).toThrow(
+      /resolved for id "honest-name" declares id "something-else"/,
+    );
+  });
+
   it("throws a clear error for an unknown prompt id", () => {
     expect(() => resolvePrompt("does-not-exist", fixturesDir)).toThrow(
       /unknown prompt id "does-not-exist"/,
