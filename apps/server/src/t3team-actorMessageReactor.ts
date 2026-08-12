@@ -18,20 +18,24 @@
  *
  * @module t3team-actorMessageReactor
  */
-import { CommandId, MessageId, type OrchestrationEvent, ThreadId } from "@t3tools/contracts";
+import type { OrchestrationEvent } from "@t3tools/contracts";
+import { ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { makeT3TeamActorMailbox, type T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
+import { makeT3TeamActorMailbox } from "./t3team-actorMailbox.ts";
 import { rehydrateActorMailbox } from "./t3team-actorMailboxRehydrate.ts";
-import { buildActorReactionInput } from "./t3team-actorReactionInput.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
+import { startActorReaction } from "./t3team-actorMessageReaction.ts";
+import {
+  clearSuppressionForThreadTree,
+  isRealUserMessage,
+} from "./t3team-actorMessageSuppression.ts";
 
 /**
  * Maximum number of auto-reaction hops in a single actor-message chain. A
@@ -64,58 +68,6 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
       return thread.latestTurn?.state === "running";
     };
 
-    const startReaction = (threadId: string, entry: T3TeamActorMailboxEntry) =>
-      Effect.gen(function* () {
-        const thread = yield* loadThread(threadId);
-        if (!thread) {
-          // Thread vanished between claim and dispatch; release the flag so a
-          // later delivery is not stuck behind a phantom reaction.
-          yield* mailbox.clearReacting(threadId);
-          return;
-        }
-        const createdAt = DateTime.formatIso(yield* DateTime.now);
-        yield* engine
-          .dispatch({
-            type: "thread.turn.start",
-            commandId: CommandId.make(`server:t3team:actor-react:${t3teamRandomUUID()}`),
-            threadId: thread.id,
-            message: {
-              messageId: MessageId.make(t3teamRandomUUID()),
-              role: "user",
-              text: buildActorReactionInput(entry),
-              attachments: [],
-              t3teamExt: {
-                visibleToUser: false,
-                actor: {
-                  senderThreadId: entry.fromThreadId,
-                  urgency: entry.urgency,
-                  hopCount: entry.hopCount,
-                  rootThreadId: entry.rootThreadId,
-                },
-              },
-            },
-            modelSelection: thread.modelSelection,
-            runtimeMode: thread.runtimeMode,
-            interactionMode: thread.interactionMode,
-            createdAt,
-          })
-          .pipe(
-            Effect.catch((error) =>
-              mailbox.requeueFailed(threadId, entry).pipe(
-                Effect.flatMap((willRetry) =>
-                  Effect.logWarning("actor-message reaction turn failed to start", {
-                    threadId,
-                    fromThreadId: entry.fromThreadId,
-                    dispatchAttempts: entry.dispatchAttempts + 1,
-                    willRetry,
-                    error,
-                  }),
-                ),
-              ),
-            ),
-          );
-      });
-
     // Claim-and-dispatch: only when the thread is neither reacting nor otherwise
     // running does a queued message become a reaction turn. Stream events are
     // processed sequentially, so this never interleaves with itself for one
@@ -134,7 +86,7 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         if (!entry) {
           return;
         }
-        yield* startReaction(threadId, entry);
+        yield* startActorReaction({ engine, mailbox, threadId, loadThread, entry });
       });
 
     const onDelivered = (
@@ -164,7 +116,9 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         yield* tryDrain(payload.threadId);
       });
 
-    const handleEvent = (event: OrchestrationEvent): Effect.Effect<void> => {
+    const handleEvent = (
+      event: OrchestrationEvent,
+    ): Effect.Effect<void, never, SqlClient.SqlClient> => {
       switch (event.type) {
         case "thread.actor-message-delivered":
           return onDelivered(event.payload);
@@ -179,6 +133,27 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         }
         case "thread.turn-diff-completed":
           return tryDrain(event.payload.threadId);
+        // A person clicked "Stop generation" — suppress auto-dispatch so a
+        // following actor message can't re-open the turn they just stopped.
+        // NOTE (accepted race): a reaction turn already in flight when the
+        // suppress lands still completes and its own settle can trigger one
+        // more drain before the flag takes effect on the NEXT delivery. That
+        // is at most one extra turn, and the mailbox's serialization still
+        // converges — it does not resume the ping-pong.
+        case "thread.turn-interrupt-requested":
+          return event.payload.byUser === true
+            ? mailbox.suppress(event.payload.threadId)
+            : Effect.void;
+        // The user re-engaging (not an actor reaction/system message wearing
+        // the "user" role) lifts suppression and drains anything queued.
+        case "thread.message-sent":
+          return isRealUserMessage(event.payload)
+            ? clearSuppressionForThreadTree({
+                mailbox,
+                tryDrain,
+                threadId: event.payload.threadId,
+              })
+            : Effect.void;
         default:
           return Effect.void;
       }

@@ -396,8 +396,10 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   isEnvironmentUnavailable: boolean;
   hasSendableContent: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
+  hasChildThreads?: boolean | undefined;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
+  onInterruptCascade?: (() => void) | undefined;
   onImplementPlanInNewThread: () => void;
 }) {
   return (
@@ -424,8 +426,10 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         isPreparingWorktree={props.isPreparingWorktree}
         hasSendableContent={props.hasSendableContent}
         preserveComposerFocusOnPointerDown={props.preserveComposerFocusOnPointerDown ?? false}
+        hasChildThreads={props.hasChildThreads}
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
+        onInterruptCascade={props.onInterruptCascade}
         onImplementPlanInNewThread={props.onImplementPlanInNewThread}
       />
     </>
@@ -554,9 +558,14 @@ export interface ChatComposerProps {
   composerElementContextsRef: React.RefObject<ElementContextDraft[]>;
   composerRef: React.RefObject<ChatComposerHandle | null>;
 
+  // True when the active thread has descendant sub-run threads, so the stop
+  // button grows a secondary "Stop incl. sub-runs" action.
+  hasChildThreads?: boolean | undefined;
+
   // Callbacks
   onSend: (e?: { preventDefault: () => void }) => void;
   onInterrupt: () => void;
+  onInterruptCascade?: (() => void) | undefined;
   onImplementPlanInNewThread: () => void;
   onRespondToApproval: (
     requestId: ApprovalRequestId,
@@ -637,8 +646,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerImagesRef,
     composerTerminalContextsRef,
     composerElementContextsRef,
+    hasChildThreads,
     onSend,
     onInterrupt,
+    onInterruptCascade,
     onImplementPlanInNewThread,
     onRespondToApproval,
     onSelectActivePendingUserInputOption,
@@ -2258,6 +2269,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const handleInterruptPrimaryAction = useCallback(() => {
     void onInterrupt();
   }, [onInterrupt]);
+  const handleInterruptCascadePrimaryAction = useCallback(() => {
+    onInterruptCascade?.();
+  }, [onInterruptCascade]);
   const handleImplementPlanInNewThreadPrimaryAction = useCallback(() => {
     void onImplementPlanInNewThread();
   }, [onImplementPlanInNewThread]);
@@ -2986,8 +3000,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   isPreparingWorktree={isPreparingWorktree}
                   hasSendableContent={composerSendState.hasSendableContent}
                   preserveComposerFocusOnPointerDown={isMobileViewport}
+                  hasChildThreads={hasChildThreads}
                   onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                   onInterrupt={handleInterruptPrimaryAction}
+                  onInterruptCascade={
+                    onInterruptCascade ? handleInterruptCascadePrimaryAction : undefined
+                  }
                   onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
                 />
               </div>

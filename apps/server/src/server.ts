@@ -162,6 +162,7 @@ import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
 import { T3TeamContextRefreshServiceLive } from "./t3team-contextRefreshService.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
+import { T3TeamThreadStopCascadeReactorLive } from "./t3team-threadStopCascadeReactor.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
@@ -824,6 +825,7 @@ export const makeServerLayer = Layer.unwrap(
       tailscaleServeLayer,
       T3TeamWorkflowEngineReactorLive,
       T3TeamActorMessageReactorLive,
+      T3TeamThreadStopCascadeReactorLive,
       T3TeamChildStatusReactorLive,
       T3TeamWorkflowEngineRehydrateLive,
       cloudDesiredLinkReconcileLayer,

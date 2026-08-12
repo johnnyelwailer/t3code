@@ -115,6 +115,11 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
           type: "thread.turn.interrupt",
           commandId: CommandId.make(`t3team-wf-stop-child:${runId}:${childThreadId}`),
           threadId: ThreadId.make(childThreadId),
+          // This route only runs off an authenticated user's explicit "stop"
+          // click on the workflow run card — it IS user intent, so stamp it
+          // the same as the composer's Stop generation button (see
+          // t3team-actorMessageReactor.ts for what this suppresses).
+          t3teamStopOrigin: "user",
           createdAt: nowIso(),
         });
       }
