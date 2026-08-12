@@ -13,6 +13,7 @@
 import * as NodeVM from "node:vm";
 
 import { WorkflowLoadError } from "@runbook/core/errors";
+import type { LayerId } from "@runbook/core/authoring";
 
 import {
   blankSpans,
@@ -42,6 +43,15 @@ export interface WorkflowMeta {
   readonly capabilities?: ReadonlyArray<unknown>;
   readonly phases?: ReadonlyArray<WorkflowPhase>;
   readonly model?: unknown;
+  /** Which cascade layer defined this runbook ('defaults' | 'catalog' |
+   * 'project'). Optional: a loaded workflow's `meta` need not participate
+   * in the cascade at all. See `@runbook/core/authoring`'s `LayerId`. */
+  readonly layer?: LayerId;
+  /** Only meaningful when `layer` is `'project'`: the capability set the
+   * inherited base runbook already had. A project-layer runbook declaring
+   * anything outside this set is a capability escalation — see
+   * `assertNoLayerCapabilityEscalation` in `@runbook/threads/capabilities`. */
+  readonly baseCapabilities?: ReadonlyArray<unknown>;
   readonly [key: string]: unknown;
 }
 

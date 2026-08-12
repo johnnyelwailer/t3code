@@ -73,6 +73,30 @@ export function assertToolGroupDeclared(
   );
 }
 
+/**
+ * Layer-escalation trust gate (the runbook cascade's "layer 3 cannot grant
+ * itself new capabilities" rule): a project-layer runbook may only declare
+ * capabilities its inherited base runbook already had. No-ops for any other
+ * layer — layers 1-2 (defaults/catalog) are trusted, reviewed content and
+ * may declare whatever they want. Delegates the actual subset check to
+ * {@link assertChildCapabilitiesSubset} rather than duplicating the
+ * set-difference logic.
+ */
+export function assertNoLayerCapabilityEscalation(opts: {
+  readonly runbookName: string;
+  readonly layer: string | undefined;
+  readonly baseCapabilities: ReadonlySet<string>;
+  readonly declaredCapabilities: ReadonlySet<string>;
+}): void {
+  if (opts.layer !== "project") return;
+  assertChildCapabilitiesSubset({
+    childName: opts.runbookName,
+    childCapabilities: opts.declaredCapabilities,
+    parentCapabilities: opts.baseCapabilities,
+    childKind: "project-layer runbook",
+  });
+}
+
 export function assertChildCapabilitiesSubset(opts: {
   readonly childName: string;
   readonly childCapabilities: ReadonlySet<string>;

@@ -85,6 +85,10 @@
     "./replayDrift": {
       "types": "./src/replayDrift.ts",
       "import": "./src/replayDrift.ts"
+    },
+    "./authoring": {
+      "types": "./src/authoring.ts",
+      "import": "./src/authoring.ts"
     }
   },
   "scripts": {
