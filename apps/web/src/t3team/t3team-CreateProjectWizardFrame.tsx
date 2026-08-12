@@ -97,7 +97,7 @@ export function CreateProjectWizardFrame({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-2 pb-6 sm:items-center sm:p-4 sm:pb-8">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-2 pb-6 backdrop-blur-sm sm:items-center sm:p-4 sm:pb-8">
       {/*
         No fixed height: the card fits its content (a short step like "review" or "creating" no
         longer leaves a void), capped by a max-height so it never grows past the viewport. Tall
