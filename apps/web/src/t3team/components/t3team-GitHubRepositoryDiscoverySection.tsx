@@ -1,14 +1,6 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useState } from "react";
-import {
-  CheckCircle2,
-  ChevronDown,
-  Github,
-  RefreshCw,
-  Search,
-  ShieldAlert,
-  Sparkles,
-} from "lucide-react";
+import { CheckCircle2, ChevronDown, Github, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { cn } from "~/lib/utils";
 import {
@@ -57,27 +49,26 @@ export function GitHubRepositoryDiscoverySection({
   const StatusIcon = status.icon;
   const showAuthSkeleton = discovery.authStatus === "checking" || discovery.loadingAuth;
   const isAuthenticated = discovery.authStatus === "authenticated";
-  const [showAuthDetails, setShowAuthDetails] = useState(!isAuthenticated);
-
-  useEffect(() => {
-    if (!showAuthSkeleton) {
-      setShowAuthDetails(!isAuthenticated);
-    }
-  }, [isAuthenticated, showAuthSkeleton]);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const connectedAccountCount = discovery.authenticatedHosts.length;
+  const connectedAccountLabel =
+    connectedAccountCount > 1
+      ? `Searching ${connectedAccountCount} connected accounts`
+      : `Searching ${discovery.githubHost || "GitHub"}`;
 
   return (
-    <section className="space-y-3 rounded-xl border border-border/70 bg-card p-3">
+    <section className="space-y-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="rounded-md border border-border/70 bg-background/80 p-2">
+          <div className="rounded-md border border-border/70 bg-background/80 p-1.5">
             <Github className="size-4 text-foreground" />
           </div>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h3 className="text-sm font-semibold">GitHub repository discovery</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold">Find your GitHub repository</h3>
               {!isAuthenticated ? (
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${status.badge}`}
+                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${status.badge}`}
                 >
                   <StatusIcon className="size-3.5" />
                   {status.label}
@@ -91,7 +82,7 @@ export function GitHubRepositoryDiscoverySection({
           size="icon-xs"
           onClick={() => void discovery.refresh()}
           disabled={!discovery.backendAvailable || showAuthSkeleton || discovery.loadingDiscovery}
-          aria-label="Refresh GitHub authentication status"
+          aria-label="Refresh repository discovery"
         >
           <RefreshCw
             className={`size-3.5 ${showAuthSkeleton || discovery.loadingDiscovery ? "animate-spin" : ""}`}
@@ -105,56 +96,73 @@ export function GitHubRepositoryDiscoverySection({
         </div>
       ) : isAuthenticated ? (
         <>
-          {/* More than one authenticated gh host (e.g. github.com + a GHE host) is a real
-              choice — buried inside the collapsed "Connected" disclosure nobody finds it,
-              and the wizard silently lists repos for whichever host gh names first. */}
-          <GitHubAuthHostPicker discovery={discovery} />
-          <Collapsible open={showAuthDetails} onOpenChange={setShowAuthDetails}>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+            <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="font-medium text-foreground">GitHub connected</span>
+            <span aria-hidden="true">·</span>
+            <span>{connectedAccountLabel}</span>
+          </div>
+          <Collapsible open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
             <CollapsibleTrigger className="w-full">
-              <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm">
-                <div className="flex min-w-0 items-center gap-2">
-                  <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Connected</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {discovery.githubHost || "github.com"}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between px-1 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
+                <span>Advanced discovery options</span>
                 <ChevronDown
                   className={cn(
                     "size-3.5 text-muted-foreground transition-transform",
-                    showAuthDetails && "rotate-180",
+                    showAdvancedOptions && "rotate-180",
                   )}
                 />
               </div>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-2">
-              <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
-              {discovery.authDetail ? (
-                <div className="mt-2 text-xs text-muted-foreground">{discovery.authDetail}</div>
-              ) : null}
+              <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">Search one host manually.</p>
+                <GitHubAuthHostPicker discovery={discovery} />
+                <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
+                {discovery.authDetail ? (
+                  <div className="text-xs text-muted-foreground">{discovery.authDetail}</div>
+                ) : null}
+              </div>
             </CollapsibleContent>
           </Collapsible>
         </>
       ) : (
         <>
-          <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
-          <div className="rounded-lg border border-border/70 bg-muted/20 p-3 text-xs">
-            <div className="flex items-start gap-2 text-muted-foreground">
-              <ShieldAlert className="mt-0.5 size-3.5 text-amber-600 dark:text-amber-400" />
-              <div>
-                Sign in with{" "}
-                <span className="font-mono">
-                  gh auth login --hostname {discovery.githubHost || "github.com"}
-                </span>
-                {discovery.authDetail ? <div className="mt-1">{discovery.authDetail}</div> : null}
-              </div>
-            </div>
+          <div className="flex items-start gap-2 text-xs text-muted-foreground">
+            <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              Sign in with{" "}
+              <span className="font-mono">
+                gh auth login --hostname {discovery.githubHost || "github.com"}
+              </span>
+            </span>
           </div>
+          <Collapsible open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
+            <CollapsibleTrigger className="w-full">
+              <div className="flex items-center justify-between px-1 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
+                <span>Advanced discovery options</span>
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 text-muted-foreground transition-transform",
+                    showAdvancedOptions && "rotate-180",
+                  )}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
+                {discovery.authDetail ? (
+                  <div className="mt-2 text-xs text-muted-foreground">{discovery.authDetail}</div>
+                ) : null}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </>
       )}
 
-      <div className="h-4 text-xs text-muted-foreground" aria-live="polite">
-        {discovery.loadingDiscovery ? "Searching..." : ""}
+      <div className="min-h-4 text-xs text-muted-foreground" aria-live="polite">
+        {discovery.loadingDiscovery ? "Searching connected GitHub accounts…" : null}
       </div>
 
       {discovery.discoveryWarning ? (
@@ -163,37 +171,50 @@ export function GitHubRepositoryDiscoverySection({
         </div>
       ) : null}
 
+      {isAuthenticated &&
+      !discovery.loadingDiscovery &&
+      discovery.visibleSuggestedUrls.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No matching repository found yet. Try the manual options below.
+        </p>
+      ) : null}
+
       {discovery.visibleSuggestedUrls.length > 0 ? (
-        <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-          <div className="flex items-center gap-2 text-xs font-medium text-primary">
-            <Sparkles className="size-3.5" />
-            {discovery.visibleSuggestedUrls.length} matches.
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-foreground">
+            <span className="flex items-center gap-2">
+              <Sparkles className="size-3.5" />
+              Matching repositories
+            </span>
+            <span className="text-muted-foreground">
+              {discovery.visibleSuggestedUrls.length} found
+            </span>
           </div>
-          <div className="space-y-2">
+          <div className="overflow-hidden rounded-md border border-border/70">
             {discovery.visibleSuggestedUrls.map((url) => (
               <label
                 key={url}
-                className="flex items-start gap-3 rounded-lg border border-primary/15 bg-background/70 px-3 py-2.5 text-sm"
+                className="flex items-center gap-3 border-b border-border/60 px-3 py-2 text-sm last:border-b-0 hover:bg-muted/30"
               >
                 <input
                   type="checkbox"
                   checked={discovery.selectedSuggestedUrls.has(url)}
                   onChange={() => discovery.toggleSuggestion(url)}
-                  className="mt-0.5"
+                  className="shrink-0"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{url.replace(/^https?:\/\//, "")}</div>
-                  <div className="truncate text-xs text-muted-foreground">{url}</div>
                 </div>
               </label>
             ))}
           </div>
           <Button
-            variant="outline"
+            variant="default"
+            size="sm"
             onClick={() => onAddSuggestedUrls(selectedUrls)}
             disabled={selectedUrls.length === 0}
           >
-            Add selected suggestions
+            Add selected repositories
           </Button>
         </div>
       ) : null}

@@ -5,6 +5,7 @@ export type GitHubAuthCache = {
   readonly githubAccount?: string;
   readonly authStatus: "authenticated" | "unauthenticated" | "unknown";
   readonly authDetail?: string;
+  readonly accounts?: ReadonlyArray<GitHubAuthAccount>;
 };
 
 export type GitHubDiscoveryCache = {
@@ -20,6 +21,35 @@ export type GitHubAuthAccount = {
   readonly account?: string;
   readonly active: boolean;
 };
+
+export type GitHubDiscoveryResult = {
+  readonly host: string;
+  readonly account?: string;
+  readonly suggestedRepositoryUrls: ReadonlyArray<string>;
+  readonly inboxWarning?: string;
+};
+
+export function mergeGitHubDiscoveryResults(
+  results: ReadonlyArray<GitHubDiscoveryResult>,
+  preferredHost?: string,
+): {
+  readonly githubHost: string;
+  readonly githubAccount?: string;
+  readonly suggestedUrls: ReadonlyArray<string>;
+  readonly discoveryWarning?: string;
+} {
+  const preferred = results.find((result) => result.host === preferredHost) ?? results[0];
+  const warnings = results
+    .map((result) => result.inboxWarning)
+    .filter((warning): warning is string => Boolean(warning));
+
+  return {
+    githubHost: preferred?.host ?? preferredHost ?? "github.com",
+    ...(preferred?.account ? { githubAccount: preferred.account } : {}),
+    suggestedUrls: [...new Set(results.flatMap((result) => result.suggestedRepositoryUrls))],
+    ...(warnings.length > 0 ? { discoveryWarning: warnings.join(" ") } : {}),
+  };
+}
 
 function parseOptionString(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim().length > 0) return value.trim();

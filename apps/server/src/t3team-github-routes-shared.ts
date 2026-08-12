@@ -8,6 +8,8 @@ export type GitHubInboxDiscoverRequest = {
   readonly projectKey?: string;
   readonly projectTitle?: string;
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+  /** Repository setup only needs matches; skip inbox and pull-request hydration for a fast path. */
+  readonly discoveryMode?: "inbox" | "repositories";
 };
 
 export type GitHubRepositoryCandidate = {
@@ -112,6 +114,7 @@ const CACHE_MAX_ENTRIES = 256;
 
 export const accountCache = new Map<string, CacheEntry<string | undefined>>();
 export const repositoriesCache = new Map<string, CacheEntry<GitHubRepositoriesAttempt>>();
+export const repositorySearchCache = new Map<string, CacheEntry<GitHubRepositoriesAttempt>>();
 export const inboxCache = new Map<string, CacheEntry<GitHubInboxAttempt>>();
 export const responseCache = new Map<string, CacheEntry<GitHubInboxDiscoverResponse>>();
 export const pullRequestContextCache = new Map<
@@ -179,11 +182,13 @@ export function makeResponseCacheKey(input: {
   readonly projectKey?: string;
   readonly projectTitle?: string;
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
+  readonly discoveryMode?: "inbox" | "repositories";
 }): string {
   const linked = normalizeRepositoryUrls(input.linkedRepositoryUrls).join("|");
   return [
-    "v3",
+    "v4",
     input.host,
+    input.discoveryMode ?? "inbox",
     readTrimmedString(input.projectKey)?.toLowerCase() ?? "",
     readTrimmedString(input.projectTitle)?.toLowerCase() ?? "",
     linked,

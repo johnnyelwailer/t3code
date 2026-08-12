@@ -9,7 +9,7 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function collectProjectTokens(input: {
+export function collectProjectSearchTerms(input: {
   readonly projectKey?: string;
   readonly projectTitle?: string;
 }): ReadonlyArray<string> {
@@ -61,7 +61,7 @@ export function collectSuggestedRepositoryUrls(input: {
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
 }): ReadonlyArray<string> {
   const linked = new Set(normalizeRepositoryUrls(input.linkedRepositoryUrls));
-  const tokens = collectProjectTokens({
+  const tokens = collectProjectSearchTerms({
     ...(input.projectKey ? { projectKey: input.projectKey } : {}),
     ...(input.projectTitle ? { projectTitle: input.projectTitle } : {}),
   });

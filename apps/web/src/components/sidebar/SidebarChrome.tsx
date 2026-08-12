@@ -9,7 +9,7 @@ import { memo, useCallback } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
-import { cn } from "../../lib/utils";
+import { cn, isMacPlatform } from "../../lib/utils";
 import { usePrimaryEnvironment } from "../../state/environments";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -78,6 +78,10 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 });
 
 function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackdrop: boolean }) {
+  const shouldInsetTitlebarBrand =
+    isMacPlatform(navigator.platform) &&
+    (isElectron || document.documentElement.classList.contains("wco"));
+
   return (
     <Link
       aria-label="Go to threads"
@@ -88,9 +92,9 @@ function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackd
         // space (see the same rule in `t3team-ProjectSidebarHeader.tsx`). Electron always has
         // native controls; on the web the inset only applies once the installed PWA is running
         // in window-controls-overlay mode (the `.wco` class toggled by windowControlsOverlay.ts).
-        isElectron
+        shouldInsetTitlebarBrand
           ? "ml-[var(--workspace-titlebar-content-left)]"
-          : "wco:ml-[var(--workspace-titlebar-content-left)]",
+          : "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))]",
         onBackdrop ? "text-white" : "text-foreground",
       )}
       to="/"

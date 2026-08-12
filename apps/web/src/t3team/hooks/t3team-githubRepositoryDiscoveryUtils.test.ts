@@ -1,7 +1,10 @@
 import * as Option from "effect/Option";
 import { describe, expect, it } from "vite-plus/test";
 import type { SourceControlDiscoveryResult } from "@t3tools/contracts";
-import { parseGitHubAuth } from "./t3team-githubRepositoryDiscoveryUtils";
+import {
+  mergeGitHubDiscoveryResults,
+  parseGitHubAuth,
+} from "./t3team-githubRepositoryDiscoveryUtils";
 
 function discoveryWithGitHubAuth(
   auth: SourceControlDiscoveryResult["sourceControlProviders"][number]["auth"],
@@ -77,5 +80,50 @@ describe("parseGitHubAuth", () => {
 
     expect(result.status).toBe("unknown");
     expect(result.accounts).toEqual([]);
+  });
+});
+
+describe("mergeGitHubDiscoveryResults", () => {
+  it("combines suggestions from every connected host and keeps the active host first", () => {
+    expect(
+      mergeGitHubDiscoveryResults(
+        [
+          {
+            host: "github.com",
+            account: "octocat",
+            suggestedRepositoryUrls: ["https://github.com/acme/app"],
+          },
+          {
+            host: "nexplore.ghe.com",
+            account: "octocat-work",
+            suggestedRepositoryUrls: [
+              "https://nexplore.ghe.com/acme/app",
+              "https://github.com/acme/app",
+            ],
+          },
+        ],
+        "nexplore.ghe.com",
+      ),
+    ).toEqual({
+      githubHost: "nexplore.ghe.com",
+      githubAccount: "octocat-work",
+      suggestedUrls: ["https://github.com/acme/app", "https://nexplore.ghe.com/acme/app"],
+    });
+  });
+
+  it("preserves warnings from successful host searches", () => {
+    expect(
+      mergeGitHubDiscoveryResults([
+        {
+          host: "github.com",
+          suggestedRepositoryUrls: [],
+          inboxWarning: "GitHub inbox access is unavailable.",
+        },
+      ]),
+    ).toMatchObject({
+      githubHost: "github.com",
+      suggestedUrls: [],
+      discoveryWarning: "GitHub inbox access is unavailable.",
+    });
   });
 });

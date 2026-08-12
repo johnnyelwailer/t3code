@@ -7,8 +7,10 @@ import {
 } from "./t3team-integrationCache";
 import { useGitHubAuthProbe } from "./t3team-useGitHubAuthProbe";
 import {
+  mergeGitHubDiscoveryResults,
   type GitHubAuthAccount,
   type GitHubAuthCache,
+  type GitHubDiscoveryResult,
   type GitHubDiscoveryCache,
 } from "./t3team-githubRepositoryDiscoveryUtils";
 
@@ -53,7 +55,7 @@ export function useGitHubRepositoryDiscovery({
     discoveryCache?.discoveryWarning,
   );
   const [authenticatedHosts, setAuthenticatedHosts] = useState<ReadonlyArray<GitHubAuthAccount>>(
-    [],
+    authCache?.accounts ?? [],
   );
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export function useGitHubRepositoryDiscovery({
     setGithubAccount(cachedDiscovery?.githubAccount ?? cachedAuth?.githubAccount);
     setAuthStatus(cachedAuth?.authStatus ?? "checking");
     setAuthDetail(cachedAuth?.authDetail);
+    setAuthenticatedHosts(cachedAuth?.accounts ?? []);
     setSuggestedUrls(cachedDiscovery?.suggestedUrls ?? []);
     setSelectedSuggestedUrls(new Set(cachedDiscovery?.suggestedUrls ?? []));
     setDiscoveryWarning(cachedDiscovery?.discoveryWarning);
@@ -107,9 +110,92 @@ export function useGitHubRepositoryDiscovery({
     [backend, discoveryCacheKey, linkedRepositoryUrls, projectKey, projectTitle],
   );
 
+  const discoverSuggestionsAcrossHosts = useCallback(
+    async ({
+      host,
+      account,
+      accounts,
+    }: {
+      readonly host: string;
+      readonly account: string | undefined;
+      readonly accounts: ReadonlyArray<GitHubAuthAccount>;
+    }) => {
+      const hosts = accounts.length > 0 ? accounts : [{ host, account, active: true }];
+      if (!backend) return;
+
+      setLoadingDiscovery(true);
+      setDiscoveryWarning(undefined);
+      try {
+        const outcomes = await Promise.all(
+          hosts.map(async (entry) => {
+            try {
+              const response = await backend.github.discoverInbox({
+                host: entry.host,
+                discoveryMode: "repositories",
+                ...(projectKey ? { projectKey } : {}),
+                ...(projectTitle ? { projectTitle } : {}),
+                linkedRepositoryUrls,
+              });
+              return { response, error: undefined };
+            } catch (error) {
+              return {
+                response: undefined,
+                error: {
+                  host: entry.host,
+                  message: error instanceof Error ? error.message : "request failed",
+                },
+              };
+            }
+          }),
+        );
+        const responses: ReadonlyArray<GitHubDiscoveryResult> = outcomes.flatMap((outcome) =>
+          outcome.response ? [outcome.response] : [],
+        );
+        const failures = outcomes.filter((outcome) => outcome.error);
+
+        if (responses.length === 0) {
+          setSuggestedUrls([]);
+          setSelectedSuggestedUrls(new Set());
+          setDiscoveryWarning(
+            failures.length === 1
+              ? `Could not search ${failures[0]?.error?.host ?? "GitHub"}.`
+              : "Could not search the connected GitHub accounts.",
+          );
+          return;
+        }
+
+        const merged = mergeGitHubDiscoveryResults(responses, host);
+        const failureWarning =
+          failures.length > 0
+            ? `Could not search ${failures.map((failure) => failure.error?.host).join(", ")}.`
+            : undefined;
+        const nextWarning = [merged.discoveryWarning, failureWarning]
+          .filter((warning): warning is string => Boolean(warning))
+          .join(" ");
+        const nextAccount = merged.githubAccount ?? account;
+        const nextCache: GitHubDiscoveryCache = {
+          githubHost: merged.githubHost,
+          ...(nextAccount ? { githubAccount: nextAccount } : {}),
+          suggestedUrls: merged.suggestedUrls,
+          ...(nextWarning ? { discoveryWarning: nextWarning } : {}),
+        };
+
+        writeIntegrationCache(discoveryCacheKey, nextCache);
+        setGithubHost(merged.githubHost);
+        setGithubAccount(nextAccount);
+        setSuggestedUrls(merged.suggestedUrls);
+        setSelectedSuggestedUrls(new Set(merged.suggestedUrls));
+        setDiscoveryWarning(nextWarning || undefined);
+      } finally {
+        setLoadingDiscovery(false);
+      }
+    },
+    [backend, discoveryCacheKey, linkedRepositoryUrls, projectKey, projectTitle],
+  );
+
   useGitHubAuthProbe({
     enabled,
-    onAuthenticated: discoverSuggestions,
+    onAuthenticated: discoverSuggestionsAcrossHosts,
     setAuthStatus,
     setAuthDetail,
     setLoadingAuth,
@@ -152,6 +238,27 @@ export function useGitHubRepositoryDiscovery({
     [authenticatedHosts, discoverSuggestions],
   );
 
+  const refresh = useCallback(() => {
+    if (authStatus === "authenticated" && authenticatedHosts.length > 0) {
+      const active = authenticatedHosts.find((entry) => entry.active) ?? authenticatedHosts[0];
+      if (!active) return;
+      void discoverSuggestionsAcrossHosts({
+        host: active.host,
+        account: active.account,
+        accounts: authenticatedHosts,
+      });
+      return;
+    }
+    void discoverSuggestions(githubHost, githubAccount);
+  }, [
+    authStatus,
+    authenticatedHosts,
+    discoverSuggestions,
+    discoverSuggestionsAcrossHosts,
+    githubAccount,
+    githubHost,
+  ]);
+
   return {
     backendAvailable: Boolean(backend),
     githubHost,
@@ -166,7 +273,7 @@ export function useGitHubRepositoryDiscovery({
     authenticatedHosts,
     setGithubHost,
     selectHost,
-    refresh: () => discoverSuggestions(githubHost, githubAccount),
+    refresh,
     toggleSuggestion,
   };
 }
