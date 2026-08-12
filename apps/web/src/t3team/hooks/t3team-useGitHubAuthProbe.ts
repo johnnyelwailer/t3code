@@ -16,7 +16,11 @@ export type GitHubAuthStatus = "checking" | "authenticated" | "unauthenticated" 
  */
 export function useGitHubAuthProbe(params: {
   readonly enabled: boolean;
-  readonly onAuthenticated: (host: string, account: string | undefined) => void | Promise<void>;
+  readonly onAuthenticated: (input: {
+    readonly host: string;
+    readonly account: string | undefined;
+    readonly accounts: ReadonlyArray<GitHubAuthAccount>;
+  }) => void | Promise<void>;
   readonly setAuthStatus: (status: GitHubAuthStatus) => void;
   readonly setAuthDetail: (detail: string | undefined) => void;
   readonly setLoadingAuth: (loading: boolean) => void;
@@ -71,6 +75,7 @@ export function useGitHubAuthProbe(params: {
           ...(auth.account ? { githubAccount: auth.account } : {}),
           authStatus: auth.status,
           ...(auth.detail ? { authDetail: auth.detail } : {}),
+          accounts: auth.accounts,
         });
         setAuthStatus(auth.status);
         setAuthDetail(auth.detail);
@@ -78,7 +83,11 @@ export function useGitHubAuthProbe(params: {
         setGithubAccount(auth.account);
         setAuthenticatedHosts(auth.accounts);
         if (auth.status === "authenticated") {
-          await onAuthenticated(auth.host ?? "github.com", auth.account);
+          await onAuthenticated({
+            host: auth.host ?? "github.com",
+            account: auth.account,
+            accounts: auth.accounts,
+          });
         }
       } catch (error) {
         if (!cancelled) {

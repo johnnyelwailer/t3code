@@ -1,14 +1,6 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useState } from "react";
-import {
-  CheckCircle2,
-  ChevronDown,
-  Github,
-  RefreshCw,
-  Search,
-  ShieldAlert,
-  Sparkles,
-} from "lucide-react";
+import { CheckCircle2, ChevronDown, Github, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { cn } from "~/lib/utils";
 import {
@@ -57,13 +49,12 @@ export function GitHubRepositoryDiscoverySection({
   const StatusIcon = status.icon;
   const showAuthSkeleton = discovery.authStatus === "checking" || discovery.loadingAuth;
   const isAuthenticated = discovery.authStatus === "authenticated";
-  const [showAuthDetails, setShowAuthDetails] = useState(!isAuthenticated);
-
-  useEffect(() => {
-    if (!showAuthSkeleton) {
-      setShowAuthDetails(!isAuthenticated);
-    }
-  }, [isAuthenticated, showAuthSkeleton]);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const connectedAccountCount = discovery.authenticatedHosts.length;
+  const connectedAccountLabel =
+    connectedAccountCount > 1
+      ? `Searching ${connectedAccountCount} connected accounts`
+      : `Searching ${discovery.githubHost || "GitHub"}`;
 
   return (
     <section className="space-y-3 rounded-xl border border-border/70 bg-card p-3">
@@ -105,39 +96,47 @@ export function GitHubRepositoryDiscoverySection({
         </div>
       ) : isAuthenticated ? (
         <>
-          {/* More than one authenticated gh host (e.g. github.com + a GHE host) is a real
-              choice — buried inside the collapsed "Connected" disclosure nobody finds it,
-              and the wizard silently lists repos for whichever host gh names first. */}
-          <GitHubAuthHostPicker discovery={discovery} />
-          <Collapsible open={showAuthDetails} onOpenChange={setShowAuthDetails}>
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="font-medium">Connected</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {connectedAccountLabel}
+              </span>
+            </div>
+            <div className="mt-1 pl-5 text-xs text-muted-foreground">
+              All connected GitHub accounts are searched automatically.
+            </div>
+          </div>
+          <Collapsible open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
             <CollapsibleTrigger className="w-full">
-              <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm">
-                <div className="flex min-w-0 items-center gap-2">
-                  <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Connected</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {discovery.githubHost || "github.com"}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between px-1 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
+                <span>Advanced discovery options</span>
                 <ChevronDown
                   className={cn(
                     "size-3.5 text-muted-foreground transition-transform",
-                    showAuthDetails && "rotate-180",
+                    showAdvancedOptions && "rotate-180",
                   )}
                 />
               </div>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-2">
-              <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
-              {discovery.authDetail ? (
-                <div className="mt-2 text-xs text-muted-foreground">{discovery.authDetail}</div>
-              ) : null}
+              <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">
+                  Automatic discovery checks every connected host. Use these controls only when you
+                  need to search one host manually.
+                </p>
+                <GitHubAuthHostPicker discovery={discovery} />
+                <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
+                {discovery.authDetail ? (
+                  <div className="text-xs text-muted-foreground">{discovery.authDetail}</div>
+                ) : null}
+              </div>
             </CollapsibleContent>
           </Collapsible>
         </>
       ) : (
         <>
-          <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
           <div className="rounded-lg border border-border/70 bg-muted/20 p-3 text-xs">
             <div className="flex items-start gap-2 text-muted-foreground">
               <ShieldAlert className="mt-0.5 size-3.5 text-amber-600 dark:text-amber-400" />
@@ -150,6 +149,27 @@ export function GitHubRepositoryDiscoverySection({
               </div>
             </div>
           </div>
+          <Collapsible open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
+            <CollapsibleTrigger className="w-full">
+              <div className="flex items-center justify-between px-1 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
+                <span>Advanced discovery options</span>
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 text-muted-foreground transition-transform",
+                    showAdvancedOptions && "rotate-180",
+                  )}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                <GitHubRepositoryDiscoveryAuthFields discovery={discovery} />
+                {discovery.authDetail ? (
+                  <div className="mt-2 text-xs text-muted-foreground">{discovery.authDetail}</div>
+                ) : null}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </>
       )}
 
@@ -163,11 +183,20 @@ export function GitHubRepositoryDiscoverySection({
         </div>
       ) : null}
 
+      {isAuthenticated &&
+      !discovery.loadingDiscovery &&
+      discovery.visibleSuggestedUrls.length === 0 ? (
+        <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+          No matching repositories were found across the connected GitHub accounts. You can add a
+          repository manually below if needed.
+        </div>
+      ) : null}
+
       {discovery.visibleSuggestedUrls.length > 0 ? (
         <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
           <div className="flex items-center gap-2 text-xs font-medium text-primary">
             <Sparkles className="size-3.5" />
-            {discovery.visibleSuggestedUrls.length} matches.
+            Found {discovery.visibleSuggestedUrls.length} matching repositories.
           </div>
           <div className="space-y-2">
             {discovery.visibleSuggestedUrls.map((url) => (
@@ -193,7 +222,7 @@ export function GitHubRepositoryDiscoverySection({
             onClick={() => onAddSuggestedUrls(selectedUrls)}
             disabled={selectedUrls.length === 0}
           >
-            Add selected suggestions
+            Add selected repositories
           </Button>
         </div>
       ) : null}
