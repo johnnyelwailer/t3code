@@ -79,7 +79,7 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
       return response;
     }
 
-    const repositoriesAttempt =
+    let repositoriesAttempt =
       (repositoriesOnly
         ? readCached(repositorySearchCache, responseCacheKey)
         : readCached(repositoriesCache, host)) ??
@@ -102,6 +102,27 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
           }),
         ),
       ));
+
+    // Search is the fast path, but GHE search can omit private/organization-visible repos on some
+    // installations. Fall back to the authenticated repository list only when the fast search has
+    // no candidates, so a valid repo is not hidden behind a provider-specific search quirk.
+    if (repositoriesOnly && repositoriesAttempt.items.length === 0) {
+      repositoriesAttempt =
+        readCached(repositoriesCache, host) ??
+        (yield* loadRepositoriesAttempt(vcs, host).pipe(
+          Effect.tap((value) =>
+            Effect.sync(() => {
+              writeCached(
+                repositorySearchCache,
+                responseCacheKey,
+                value,
+                REPOSITORIES_CACHE_TTL_MS,
+              );
+              writeCached(repositoriesCache, host, value, REPOSITORIES_CACHE_TTL_MS);
+            }),
+          ),
+        ));
+    }
 
     const inboxAttempt = repositoriesOnly
       ? { items: [] as ReadonlyArray<GitHubInboxDiscoverResponse["inboxItems"][number]> }
