@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { resolveGitHubWorkItemKey } from "@t3tools/shared/t3team-githubActivity";
 import type { VcsProcessShape } from "./t3team-vcsProcessShape.ts";
 import { enrichPullRequestState } from "./t3team-github-routes-pr.ts";
 import type {
@@ -136,6 +137,15 @@ export function loadInboxAttempt(
             const subjectApiUrl = readTrimmedString(item.subject?.url);
             const updatedAt = readTrimmedString(item.updated_at);
             if (!id || !repository || !reason) return undefined;
+            // Stamped here as well as in `loadLinkedPullRequestsAttempt`, because these are the
+            // only two producers of `GitHubInboxItem` and a caller with no browser cannot tell
+            // which path an item came from. Stamping one and not the other would make the field
+            // silently unreliable — worse than absent. A notification carries no head branch, so
+            // the precedence chain resolves from title, then repository name.
+            const workItemKey = resolveGitHubWorkItemKey({
+              ...(subjectTitle ? { subjectTitle } : {}),
+              repository,
+            });
             const inboxItem: GitHubInboxItem = {
               id,
               repository,
@@ -146,6 +156,7 @@ export function loadInboxAttempt(
               ...(subjectTitle ? { subjectTitle } : {}),
               ...(subjectApiUrl ? { subjectUrl: subjectApiUrl } : {}),
               ...(updatedAt ? { updatedAt } : {}),
+              ...(workItemKey ? { workItemKey } : {}),
             };
             return inboxItem;
           })

@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { resolveGitHubWorkItemKey } from "@t3tools/shared/t3team-githubActivity";
 import type { VcsProcessShape } from "./t3team-vcsProcessShape.ts";
 import { parseLinkedRepositoryName } from "./t3team-github-routes-suggestions.ts";
 import type {
@@ -21,9 +22,15 @@ export function loadLinkedPullRequestsAttempt(input: {
 
   if (repositoryNames.length === 0) return Effect.succeed({ items: [] });
 
+  type RepositoryResult = {
+    readonly repository: string;
+    readonly items: ReadonlyArray<GitHubInboxItem>;
+    readonly failed: boolean;
+  };
+
   return Effect.forEach(
     repositoryNames,
-    (repository): Effect.Effect<ReadonlyArray<GitHubInboxItem>, never, never> =>
+    (repository): Effect.Effect<RepositoryResult, never, never> =>
       input.vcs
         .run({
           operation: "t3team.github.repo-prs",
@@ -64,6 +71,15 @@ export function loadLinkedPullRequestsAttempt(input: {
                 typeof pullRequest.number === "number"
                   ? String(pullRequest.number)
                   : readTrimmedString(pullRequest.id)?.toString();
+              // Stamp the work-item association server-side, so a response already carries it
+              // for callers with no browser to run `toGitHubWorkActivityItems` in (a headless
+              // orchestration run, a scheduled job, an agent). Same precedence, same function the
+              // web app uses — see `@t3tools/shared/t3team-githubActivity`.
+              const workItemKey = resolveGitHubWorkItemKey({
+                ...(subjectTitle ? { subjectTitle } : {}),
+                ...(subjectBranch ? { subjectBranch } : {}),
+                repository,
+              });
               const inboxItem: GitHubInboxItem = {
                 id: number
                   ? `pr:${repository}:${number}`
@@ -95,15 +111,28 @@ export function loadLinkedPullRequestsAttempt(input: {
                   : {}),
                 ...(updatedAt ? { updatedAt } : {}),
                 subjectState,
+                ...(workItemKey ? { workItemKey } : {}),
               };
               return inboxItem;
             }),
           ),
-          Effect.catch(() => Effect.succeed([] as ReadonlyArray<GitHubInboxItem>)),
+          Effect.match({
+            onFailure: () => ({ repository, items: [], failed: true }) satisfies RepositoryResult,
+            onSuccess: (items) => ({ repository, items, failed: false }) satisfies RepositoryResult,
+          }),
         ),
     { concurrency: 3 },
   ).pipe(
-    Effect.map((allItems) => allItems.flat()),
-    Effect.map((items) => ({ items }) satisfies GitHubInboxAttempt),
+    Effect.map((results) => {
+      const items = results.flatMap((result) => result.items);
+      const failedRepositories = results
+        .filter((result) => result.failed)
+        .map((result) => result.repository);
+      const warning =
+        failedRepositories.length > 0
+          ? `Unable to load pull requests for ${failedRepositories.join(", ")} (check host, permissions, or API availability).`
+          : undefined;
+      return { items, ...(warning ? { warning } : {}) } satisfies GitHubInboxAttempt;
+    }),
   );
 }

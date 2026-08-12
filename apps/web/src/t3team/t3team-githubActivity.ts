@@ -1,5 +1,26 @@
 import type { SourceControlDiscoveryResult } from "@t3tools/contracts";
+import {
+  resolveGitHubWorkItemKey,
+  sortGitHubActivityItems,
+} from "@t3tools/shared/t3team-githubActivity";
 import type { GitHubInboxItem } from "~/t3team/backend/t3team-types";
+
+/**
+ * Work-item ↔ GitHub association, sorting, and grouping used to be implemented in this file only,
+ * which meant the association ran exclusively in the browser: nothing server-side (a headless
+ * orchestration run, a scheduled job, an agent with no UI) could resolve "which PRs belong to this
+ * work item." That logic now lives in `@t3tools/shared/t3team-githubActivity` so
+ * `apps/server/src/t3team-github-routes-linked-prs.ts` can stamp the same `workItemKey` onto items
+ * before they ever reach a browser. The re-exports below keep this module's public surface
+ * unchanged for its many existing importers.
+ */
+export {
+  extractWorkItemKey,
+  groupGitHubActivityByWorkItem,
+  getGitHubActivityItemsForWorkItem,
+  normalizeWorkItemKey,
+  sortGitHubActivityItems,
+} from "@t3tools/shared/t3team-githubActivity";
 
 export type GitHubWorkActivityItem = {
   readonly id: string;
@@ -23,55 +44,6 @@ export type GitHubWorkActivityItem = {
   readonly workItemKey?: string;
 };
 
-export function normalizeWorkItemKey(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed.toUpperCase() : undefined;
-}
-
-function isPullRequestActivity(item: GitHubWorkActivityItem): boolean {
-  return (item.subjectType ?? "").trim().toLowerCase() === "pullrequest";
-}
-
-function isUnmergedPullRequestActivity(item: GitHubWorkActivityItem): boolean {
-  if (!isPullRequestActivity(item)) return false;
-  const state = item.subjectState;
-  return state === "open" || state === "draft" || state === undefined;
-}
-
-export function sortGitHubActivityItems(
-  items: ReadonlyArray<GitHubWorkActivityItem>,
-): ReadonlyArray<GitHubWorkActivityItem> {
-  return [...items].sort((left, right) => {
-    const leftIsUnmergedPr = isUnmergedPullRequestActivity(left);
-    const rightIsUnmergedPr = isUnmergedPullRequestActivity(right);
-    if (leftIsUnmergedPr !== rightIsUnmergedPr) {
-      return leftIsUnmergedPr ? -1 : 1;
-    }
-
-    const leftIsPr = isPullRequestActivity(left);
-    const rightIsPr = isPullRequestActivity(right);
-    if (leftIsPr !== rightIsPr) {
-      return leftIsPr ? -1 : 1;
-    }
-
-    const leftReviewRequested = left.reviewRequested === true;
-    const rightReviewRequested = right.reviewRequested === true;
-    if (leftReviewRequested !== rightReviewRequested) {
-      return leftReviewRequested ? -1 : 1;
-    }
-
-    const leftUpdatedAt = left.updatedAt ? Date.parse(left.updatedAt) : Number.NaN;
-    const rightUpdatedAt = right.updatedAt ? Date.parse(right.updatedAt) : Number.NaN;
-    const leftUpdatedAtSafe = Number.isFinite(leftUpdatedAt) ? leftUpdatedAt : 0;
-    const rightUpdatedAtSafe = Number.isFinite(rightUpdatedAt) ? rightUpdatedAt : 0;
-    if (leftUpdatedAtSafe !== rightUpdatedAtSafe) {
-      return rightUpdatedAtSafe - leftUpdatedAtSafe;
-    }
-
-    return left.id.localeCompare(right.id);
-  });
-}
-
 export function parseOptionString(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim().length > 0) return value.trim();
   if (!value || typeof value !== "object") return undefined;
@@ -92,23 +64,12 @@ export function parseGitHubHostFromDiscovery(discovery: SourceControlDiscoveryRe
   return parseOptionString(github.auth.host) ?? "github.com";
 }
 
-export function extractWorkItemKey(input: string | undefined): string | undefined {
-  if (!input) return undefined;
-  const match = input.toUpperCase().match(/\b([A-Z][A-Z0-9]+-\d+)\b/);
-  return match ? match[1] : undefined;
-}
-
 export function toGitHubWorkActivityItems(
   inboxItems: ReadonlyArray<GitHubInboxItem>,
 ): ReadonlyArray<GitHubWorkActivityItem> {
   return sortGitHubActivityItems(
     inboxItems.map((item) => {
-      const workItemKey = normalizeWorkItemKey(
-        extractWorkItemKey(item.subjectTitle) ??
-          extractWorkItemKey(item.subjectBranch) ??
-          extractWorkItemKey(item.repository) ??
-          undefined,
-      );
+      const workItemKey = resolveGitHubWorkItemKey(item);
       return {
         id: item.id,
         repository: item.repository,
@@ -136,33 +97,4 @@ export function toGitHubWorkActivityItems(
       } satisfies GitHubWorkActivityItem;
     }),
   );
-}
-
-export function groupGitHubActivityByWorkItem(
-  items: ReadonlyArray<GitHubWorkActivityItem>,
-): ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>> {
-  const map = new Map<string, GitHubWorkActivityItem[]>();
-  for (const item of items) {
-    const workItemKey = normalizeWorkItemKey(item.workItemKey);
-    if (!workItemKey) continue;
-    const existing = map.get(workItemKey) ?? [];
-    existing.push(item);
-    map.set(workItemKey, existing);
-  }
-  for (const [workItemKey, groupedItems] of map) {
-    map.set(workItemKey, [...sortGitHubActivityItems(groupedItems)]);
-  }
-  return map;
-}
-
-export function getGitHubActivityItemsForWorkItem(
-  itemsByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>,
-  workItemKey: string | undefined,
-): ReadonlyArray<GitHubWorkActivityItem> {
-  const normalizedWorkItemKey = normalizeWorkItemKey(workItemKey);
-  if (!normalizedWorkItemKey) {
-    return [];
-  }
-
-  return itemsByWorkItem.get(normalizedWorkItemKey) ?? [];
 }

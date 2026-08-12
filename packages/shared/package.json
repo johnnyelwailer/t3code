@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./t3team-githubActivity": {
+      "types": "./src/t3team-githubActivity.ts",
+      "import": "./src/t3team-githubActivity.ts"
+    },
     "./projectFavicon": {
       "types": "./src/projectFavicon.ts",
       "import": "./src/projectFavicon.ts"
