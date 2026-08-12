@@ -175,6 +175,7 @@ import {
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
 import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
+import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 import type { ProjectThread } from "~/t3team/t3team-types";
@@ -1706,6 +1707,15 @@ export default function Sidebar() {
   // t3team: sub-runbook children are filtered out of the row list below and
   // surfaced instead as a "N sub-runs" chip on their parent (InboxSubRunsChip).
   const { childThreadIds, childThreadsByParentId } = useT3TeamChildThreadRelations();
+  // t3team: mirror the relation for chrome outside this component (Agents panel fork section) —
+  // see t3team-childThreadRelationsStore.ts for why this is a mirror rather than a second
+  // useT3TeamChildThreadRelations()/useProjectStore() instance elsewhere.
+  const setChildThreadsByParentIdForAgentsPanel = useT3TeamChildThreadRelationsStore(
+    (state) => state.setChildThreadsByParentId,
+  );
+  useEffect(() => {
+    setChildThreadsByParentIdForAgentsPanel(childThreadsByParentId);
+  }, [childThreadsByParentId, setChildThreadsByParentIdForAgentsPanel]);
   // t3team: which parents currently have their "N sub-runs" chip expanded
   // (InboxSubRunsChip toggles this); persisted to localStorage so a parent
   // the user opened stays open across reload (see t3team-useExpandedSubRuns.ts).
