@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, vi } from "vite-plus/test";
+import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
@@ -26,45 +27,63 @@ function processOutput(stdout: string): VcsProcessOutput {
  * name to work with — which is exactly what the third case here pins down.
  */
 describe("loadInboxAttempt", () => {
-  it("stamps workItemKey from the notification subject title, falls back to the repository name, and leaves it undefined when neither carries a key", async () => {
-    const run = vi.fn<VcsProcessShape["run"]>(() =>
-      Effect.succeed(
-        processOutput(
-          JSON.stringify([
-            {
-              id: "n1",
-              reason: "review_requested",
-              repository: { full_name: "acme/project" },
-              subject: { type: "PullRequest", title: "ABC-123 something", url: "https://api/1" },
-              updated_at: "2026-08-09T00:00:00Z",
-            },
-            {
-              id: "n2",
-              reason: "mention",
-              repository: { full_name: "acme/DEF-42-spike" },
-              subject: { type: "PullRequest", title: "Refactor internals", url: "https://api/2" },
-              updated_at: "2026-08-09T00:00:00Z",
-            },
-            {
-              id: "n3",
-              reason: "mention",
-              repository: { full_name: "acme/project" },
-              subject: { type: "PullRequest", title: "Refactor internals", url: "https://api/3" },
-              updated_at: "2026-08-09T00:00:00Z",
-            },
-          ]),
-        ),
-      ),
-    );
+  it.effect(
+    "stamps workItemKey from the notification subject title, falls back to the repository name, and leaves it undefined when neither carries a key",
+    () =>
+      Effect.gen(function* () {
+        const run = vi.fn<VcsProcessShape["run"]>(() =>
+          Effect.succeed(
+            processOutput(
+              JSON.stringify([
+                {
+                  id: "n1",
+                  reason: "review_requested",
+                  repository: { full_name: "acme/project" },
+                  subject: {
+                    type: "PullRequest",
+                    title: "ABC-123 something",
+                    url: "https://api/1",
+                  },
+                  updated_at: "2026-08-09T00:00:00Z",
+                },
+                {
+                  id: "n2",
+                  reason: "mention",
+                  repository: { full_name: "acme/DEF-42-spike" },
+                  subject: {
+                    type: "PullRequest",
+                    title: "Refactor internals",
+                    url: "https://api/2",
+                  },
+                  updated_at: "2026-08-09T00:00:00Z",
+                },
+                {
+                  id: "n3",
+                  reason: "mention",
+                  repository: { full_name: "acme/project" },
+                  subject: {
+                    type: "PullRequest",
+                    title: "Refactor internals",
+                    url: "https://api/3",
+                  },
+                  updated_at: "2026-08-09T00:00:00Z",
+                },
+              ]),
+            ),
+          ),
+        );
 
-    const result = await Effect.runPromise(
-      loadInboxAttempt({ run } as unknown as VcsProcessShape, "github.com", "alex-dev"),
-    );
+        const result = yield* loadInboxAttempt(
+          { run } as unknown as VcsProcessShape,
+          "github.com",
+          "alex-dev",
+        );
 
-    const byId = new Map(result.items.map((item) => [item.id, item]));
-    expect(byId.get("n1")?.workItemKey).toBe("ABC-123");
-    // No key in the title, so the chain falls through to the repository name.
-    expect(byId.get("n2")?.workItemKey).toBe("DEF-42");
-    expect(byId.get("n3")?.workItemKey).toBe(undefined);
-  });
+        const byId = new Map(result.items.map((item) => [item.id, item]));
+        expect(byId.get("n1")?.workItemKey).toBe("ABC-123");
+        // No key in the title, so the chain falls through to the repository name.
+        expect(byId.get("n2")?.workItemKey).toBe("DEF-42");
+        expect(byId.get("n3")?.workItemKey).toBe(undefined);
+      }),
+  );
 });
