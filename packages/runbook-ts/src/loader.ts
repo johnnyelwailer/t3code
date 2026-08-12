@@ -103,8 +103,13 @@ export function prepareWorkflow(source: WorkflowSource): PreparedWorkflow {
       `Workflow '${source.absolutePath}' default-exports something the engine cannot call. Export a NAMED async function — \`export default async function run() { … }\` — so the loader can invoke it.`,
     );
   }
+  // `ctx` may not be in `bodyGlobals` at all (older adapters, or tests that only exercise
+  // legacy zero-arg bodies): `typeof` is the one operator that reads an unresolvable global
+  // without throwing, so a body declaring zero parameters still runs exactly as before.
   const invocation =
-    defaultExport.name === undefined ? "" : `\nreturn await ${defaultExport.name}();`;
+    defaultExport.name === undefined
+      ? ""
+      : `\nreturn await ${defaultExport.name}(typeof ctx === "undefined" ? undefined : ctx);`;
   const bodyScript = transpile(
     ts,
     `(async () => {\n${bodyText}${invocation}\n})()`,
