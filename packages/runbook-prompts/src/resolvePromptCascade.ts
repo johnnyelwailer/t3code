@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - this cascade does plain
 // filesystem I/O (slots-file loading, path containment) by design.
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
-import path from "node:path";
+import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 import type { LayerId } from "@runbook/core/authoring";
 import type { ResolvedPrompt } from "@runbook/core/authoring";
 import { slotsPathWithin, tryResolvePrompt } from "./registry.js";
@@ -76,22 +76,22 @@ export function applySlotFills(
  * fill value) still throws.
  */
 function tryLoadSlots(id: string, dir: string): Record<string, string> | undefined {
-  if (!existsSync(dir)) {
+  if (!NodeFS.existsSync(dir)) {
     return undefined;
   }
   const filePath = slotsPathWithin(dir, id);
-  if (!existsSync(filePath)) {
+  if (!NodeFS.existsSync(filePath)) {
     return undefined;
   }
-  const rootReal = realpathSync(dir);
-  const targetReal = realpathSync(filePath);
-  const rel = path.relative(rootReal, targetReal);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+  const rootReal = NodeFS.realpathSync(dir);
+  const targetReal = NodeFS.realpathSync(filePath);
+  const rel = NodePath.relative(rootReal, targetReal);
+  if (rel.startsWith("..") || NodePath.isAbsolute(rel)) {
     throw new Error(
       `prompt cascade: slots file for "${id}" is a symlink leaving its layer directory`,
     );
   }
-  const raw = readFileSync(filePath, "utf8");
+  const raw = NodeFS.readFileSync(filePath, "utf8");
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -209,7 +209,7 @@ export function resolvePromptCascade(id: string, config: CascadeConfig): Cascade
     fullReplacement ||
     slotFillLayers.some((layer) => CASCADE_LAYER_PRECEDENCE.indexOf(layer) > winningLayerIndex);
 
-  const hash = createHash("sha256").update(body, "utf8").digest("hex");
+  const hash = NodeCrypto.createHash("sha256").update(body, "utf8").digest("hex");
 
   return {
     id: winningLookup.prompt.id,

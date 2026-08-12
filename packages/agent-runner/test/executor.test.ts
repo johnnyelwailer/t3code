@@ -1,4 +1,4 @@
-import { Readable } from "node:stream";
+import * as NodeStream from "node:stream";
 import { describe, expect, it } from "vite-plus/test";
 import { JobSpecValidationError, type JobSpec } from "../src/contract.js";
 import {
@@ -285,7 +285,7 @@ describe("attachLineStream (R5)", () => {
   }
 
   it("forwards short lines unmodified with truncated: false-ish (undefined-equivalent)", async () => {
-    const stream = new Readable({ read() {} });
+    const stream = new NodeStream.Readable({ read() {} });
     const lines: Array<{ line: string; truncated: boolean }> = [];
     attachLineStream(
       stream,
@@ -305,7 +305,7 @@ describe("attachLineStream (R5)", () => {
   });
 
   it("truncates a single line exceeding the per-line byte cap and marks it truncated", async () => {
-    const stream = new Readable({ read() {} });
+    const stream = new NodeStream.Readable({ read() {} });
     const lines: Array<{ line: string; truncated: boolean }> = [];
     const budget = fakeBudget();
     attachLineStream(
@@ -333,7 +333,7 @@ describe("attachLineStream (R5)", () => {
   });
 
   it("stops forwarding and calls onCapped exactly once after the total-bytes cap is hit", async () => {
-    const stream = new Readable({ read() {} });
+    const stream = new NodeStream.Readable({ read() {} });
     const lines: string[] = [];
     let cappedCalls = 0;
     const budget = fakeBudget();
@@ -361,8 +361,8 @@ describe("attachLineStream (R5)", () => {
   });
 
   it("shares one budget across two streams (stdout+stderr combined cap)", async () => {
-    const stdout = new Readable({ read() {} });
-    const stderr = new Readable({ read() {} });
+    const stdout = new NodeStream.Readable({ read() {} });
+    const stderr = new NodeStream.Readable({ read() {} });
     const budget = fakeBudget();
     let cappedCalls = 0;
     const onCapped = () => {
@@ -387,7 +387,7 @@ describe("attachLineStream (R5)", () => {
   });
 
   it("does not throw on a stream 'error' event", () => {
-    const stream = new Readable({ read() {} });
+    const stream = new NodeStream.Readable({ read() {} });
     attachLineStream(
       stream,
       () => {},

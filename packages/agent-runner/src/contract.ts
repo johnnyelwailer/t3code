@@ -13,7 +13,7 @@
  * dependency, and the guard needs real path resolution to catch `..`
  * escapes.
  */
-import { isAbsolute, relative, resolve } from "node:path";
+import * as NodePath from "node:path";
 
 /** Network egress mode for a job's sandbox. See the design doc's "Egress
  * policy = provider policy" note: a project's L1–L4 provider-policy level
@@ -346,10 +346,10 @@ export function parseJobSpec(
     // risk this leaves open until every deployment sets the var.
     const root = processEnv.JOB_WORKSPACE_ROOT;
     if (root && root.trim().length > 0) {
-      const resolvedRoot = resolve(root);
-      const resolvedHost = resolve(workspace.hostPath);
-      const rel = relative(resolvedRoot, resolvedHost);
-      const escapesRoot = rel === ".." || rel.startsWith("../") || isAbsolute(rel);
+      const resolvedRoot = NodePath.resolve(root);
+      const resolvedHost = NodePath.resolve(workspace.hostPath);
+      const rel = NodePath.relative(resolvedRoot, resolvedHost);
+      const escapesRoot = rel === ".." || rel.startsWith("../") || NodePath.isAbsolute(rel);
       if (escapesRoot) {
         throw new JobSpecValidationError(
           `workspace.hostPath "${workspace.hostPath}" must resolve inside JOB_WORKSPACE_ROOT ` +
@@ -434,7 +434,7 @@ export function parseJobSpec(
           `secretMounts[${i}].containerPath must be a non-empty string`,
         );
       }
-      if (!isAbsolute(m.containerPath)) {
+      if (!NodePath.isAbsolute(m.containerPath)) {
         throw new JobSpecValidationError(
           `secretMounts[${i}].containerPath "${m.containerPath}" must be an absolute path`,
         );
@@ -444,9 +444,13 @@ export function parseJobSpec(
       // under /workspace is reachable by the review-harness's
       // workspace-scoped ACP fs guard, which defeats the entire point of a
       // dedicated secret mount. Reject rather than silently allow.
-      const relToWorkspace = relative(WORKSPACE_MOUNT_PATH, resolve(m.containerPath));
+      const relToWorkspace = NodePath.relative(
+        WORKSPACE_MOUNT_PATH,
+        NodePath.resolve(m.containerPath),
+      );
       const isUnderWorkspace =
-        relToWorkspace === "" || (!relToWorkspace.startsWith("..") && !isAbsolute(relToWorkspace));
+        relToWorkspace === "" ||
+        (!relToWorkspace.startsWith("..") && !NodePath.isAbsolute(relToWorkspace));
       if (isUnderWorkspace) {
         throw new JobSpecValidationError(
           `secretMounts[${i}].containerPath "${m.containerPath}" must not be under ` +
