@@ -61,6 +61,10 @@ export const JournalEntrySchema = Schema.Struct({
   phase: Schema.optional(Schema.Literals(["sent", "resolved"])),
   /** The Handle's stable id (`"<runId>:<seq>"`); present on `sent`/`resolved` lines. */
   correlationId: Schema.optional(Schema.String),
+  /** Provenance for a `resolved` line: the name of the handler that answered, when it was NOT
+   * the real host (Epic: sub-workflow effect interception — see {@link ResolvedEntry.by}).
+   * Absent on every other line, and on a real host's resolve. */
+  by: Schema.optional(Schema.String),
   startedAt: Schema.String,
   endedAt: Schema.String,
 });
@@ -96,6 +100,12 @@ export interface ResolvedEntry {
   readonly dismissed: boolean;
   /** The validated reply value (the `{ v }` envelope, unwrapped). `undefined` if void. */
   readonly reply: unknown;
+  /** Who answered, when it was not the real host — the `by` a composed broker's intercept
+   * handler named itself (Epic: sub-workflow effect interception). Absent means the real host
+   * answered; this must survive replay unchanged, so a resumed run reports the same provenance
+   * it did the first time (it is read straight off the journaled `resolved` line, never
+   * re-derived). */
+  readonly by?: string;
 }
 
 export interface JournalMaps {
@@ -126,6 +136,7 @@ export function insertWireEntry(maps: JournalMaps, raw: unknown): void {
         refId: wire.refId,
         dismissed: wire.result !== undefined && "dismissed" in wire.result,
         reply: unwrapResult(wire.result),
+        ...(wire.by === undefined ? {} : { by: wire.by }),
       });
     }
     return;

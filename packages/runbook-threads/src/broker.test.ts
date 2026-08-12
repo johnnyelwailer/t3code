@@ -2,7 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { JournalEntry, JournalMaps } from "@runbook/core/journalReader";
 import type { JournalStore } from "@runbook/core/journalStore";
-import { appendResolvedEntry, createHostBroker } from "./broker.ts";
+import type { MessageBroker, MessageEnvelope } from "./broker.ts";
+import { appendResolvedEntry, createHostBroker, createInterceptingBroker } from "./broker.ts";
 
 const sentEntry = (correlationId: string): JournalEntry => ({
   seq: 1,
@@ -96,5 +97,90 @@ describe("host-neutral thread broker", () => {
         reply: "late",
       }),
     ).rejects.toThrow("no matching 'sent' entry");
+  });
+});
+
+describe("createInterceptingBroker", () => {
+  const envelope = (kind: MessageEnvelope["kind"]): MessageEnvelope => ({
+    correlationId: "run-1:1",
+    kind,
+    payload: { threadId: "thread-1" },
+  });
+
+  it("falls through to the parent broker, unchanged, for a kind with no handler", async () => {
+    const parentCalls: MessageEnvelope[] = [];
+    const parent: MessageBroker = {
+      send: async (env, resolver) => {
+        parentCalls.push(env);
+        resolver.resolve("from the real host");
+      },
+    };
+    const composed = createInterceptingBroker(parent, {
+      // Declares a handler for a DIFFERENT kind, to prove the unlisted one still reaches `parent`.
+      "user.input": { by: "test-mock", handle: async () => "should not be used" },
+    });
+
+    let seen: unknown;
+    await composed.send(envelope("thread.turn"), {
+      resolve: (reply) => (seen = reply),
+      reject: () => {},
+    });
+
+    expect(parentCalls).toEqual([envelope("thread.turn")]);
+    expect(seen).toBe("from the real host");
+  });
+
+  it("resolves from its own handler without reaching the parent, and names itself as provenance", async () => {
+    let parentCalled = false;
+    const parent: MessageBroker = {
+      send: async () => {
+        parentCalled = true;
+      },
+    };
+    const composed = createInterceptingBroker(parent, {
+      "user.input": { by: "deterministic-test-mock", handle: async () => "mocked answer" },
+    });
+
+    let reply: unknown;
+    let provenance: { readonly by: string } | undefined;
+    await composed.send(envelope("user.input"), {
+      resolve: (r, p) => {
+        reply = r;
+        provenance = p;
+      },
+      reject: () => {},
+    });
+
+    expect(parentCalled).toBe(false);
+    expect(reply).toBe("mocked answer");
+    expect(provenance).toEqual({ by: "deterministic-test-mock" });
+  });
+
+  it("surfaces a throwing handler as a real rejection — no silent fallthrough to the parent", async () => {
+    let parentCalled = false;
+    let resolverCalled = false;
+    const parent: MessageBroker = {
+      send: async () => {
+        parentCalled = true;
+      },
+    };
+    const composed = createInterceptingBroker(parent, {
+      "user.input": {
+        by: "flaky-mock",
+        handle: async () => {
+          throw new Error("the mock cannot answer this one");
+        },
+      },
+    });
+
+    await expect(
+      composed.send(envelope("user.input"), {
+        resolve: () => (resolverCalled = true),
+        reject: () => (resolverCalled = true),
+      }),
+    ).rejects.toThrow("the mock cannot answer this one");
+
+    expect(parentCalled).toBe(false);
+    expect(resolverCalled).toBe(false);
   });
 });

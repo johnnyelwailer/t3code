@@ -18,20 +18,33 @@ export interface WorkflowBudget {
   readonly remaining: () => number;
 }
 
-export interface WorkflowPrimitives<Ref extends WorkflowReference = WorkflowReference> {
+export interface WorkflowPrimitives<
+  Ref extends WorkflowReference = WorkflowReference,
+  Opts = unknown,
+> {
   readonly parallel: <R>(thunks: ReadonlyArray<() => Promise<R>>) => Promise<Array<R | null>>;
   readonly pipeline: (
     items: ReadonlyArray<unknown>,
     ...stages: PipelineStage[]
   ) => Promise<unknown[]>;
-  readonly workflow: (ref: Ref, args?: unknown) => Promise<unknown>;
+  /**
+   * `opts` is opaque at this host-neutral layer — it is handed straight to `runSubWorkflow`
+   * unexamined, because only the host adapter (t3team-sdk) knows what a caller can put in it
+   * (currently: a per-`HandleKind` effect-interception handler map). Additive: every existing
+   * two-argument call keeps compiling and behaving identically, since an absent `opts` reaches
+   * `runSubWorkflow` as `undefined`.
+   */
+  readonly workflow: (ref: Ref, args?: unknown, opts?: Opts) => Promise<unknown>;
   readonly wait: (durationMs: number) => Promise<void>;
   readonly budget: WorkflowBudget;
   readonly phase: (title: string) => void;
   readonly log: (message: string) => void;
 }
 
-export interface WorkflowPrimitivesDeps<Ref extends WorkflowReference = WorkflowReference> {
+export interface WorkflowPrimitivesDeps<
+  Ref extends WorkflowReference = WorkflowReference,
+  Opts = unknown,
+> {
   readonly callPrimitive: <R>(call: PrimitiveCall<R>) => Promise<R>;
   readonly runBlackBoxed: <R>(fn: () => Promise<R>) => Promise<R>;
   readonly sleep: (durationMs: number) => Promise<void>;
@@ -43,14 +56,16 @@ export interface WorkflowPrimitivesDeps<Ref extends WorkflowReference = Workflow
   /**
    * Runs `ref` inline, in THIS run's journal sequence. Absent only for a host that does not
    * support sub-workflows at all; a nested child now receives one too, because nesting is no
-   * longer capped at one level — see {@link createWorkflowPrimitives}'s `workflow`.
+   * longer capped at one level — see {@link createWorkflowPrimitives}'s `workflow`. `opts` carries
+   * this invocation's caller-declared effect-interception handlers, if any (see `workflow` above).
    */
-  readonly runSubWorkflow?: (ref: Ref, args: unknown) => Promise<unknown>;
+  readonly runSubWorkflow?: (ref: Ref, args: unknown, opts?: Opts) => Promise<unknown>;
 }
 
-export function createWorkflowPrimitives<Ref extends WorkflowReference = WorkflowReference>(
-  deps: WorkflowPrimitivesDeps<Ref>,
-): WorkflowPrimitives<Ref> {
+export function createWorkflowPrimitives<
+  Ref extends WorkflowReference = WorkflowReference,
+  Opts = unknown,
+>(deps: WorkflowPrimitivesDeps<Ref, Opts>): WorkflowPrimitives<Ref, Opts> {
   const parallel = <R>(thunks: ReadonlyArray<() => Promise<R>>): Promise<Array<R | null>> =>
     deps.callPrimitive<Array<R | null>>({
       kind: "parallel",
@@ -127,14 +142,14 @@ export function createWorkflowPrimitives<Ref extends WorkflowReference = Workflo
    * Depth is no longer capped. Recursion is refused by the host's own cycle guard, which sees the
    * ref stack; this layer stays free of that policy.
    */
-  const workflow = (ref: Ref, args?: unknown): Promise<unknown> => {
+  const workflow = (ref: Ref, args?: unknown, opts?: Opts): Promise<unknown> => {
     const runSub = deps.runSubWorkflow;
     if (runSub === undefined) {
       throw new WorkflowError(
         "workflow() is not available in this run: the host supplied no sub-workflow executor.",
       );
     }
-    return runSub(ref, args);
+    return runSub(ref, args, opts);
   };
 
   const wait = async (durationMs: number): Promise<void> => {

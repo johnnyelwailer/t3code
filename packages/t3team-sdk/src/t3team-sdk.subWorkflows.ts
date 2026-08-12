@@ -9,6 +9,7 @@
  */
 
 import { createWorkflowPrimitives, type WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import { childBrokerFor } from "./t3team-sdk.broker.ts";
 import { defaultBroker } from "./t3team-sdk.bodyTrees.ts";
 import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
 import { WorkflowError } from "./t3team-sdk.errors.ts";
@@ -108,10 +109,19 @@ export function buildWorkflowPrimitives(opts: {
    * that child a primitive set whose `workflow()` recurses through here again — which is what makes
    * depth unbounded. The child's own capabilities are captured as it starts, so ITS children are
    * gated against it rather than against the root.
+   *
+   * `invokeOpts` is THIS call's `workflow(ref, args, opts)` third argument — the caller's
+   * per-`HandleKind` effect-interception handlers, if any. `childBrokerFor` composes them over
+   * `broker` for just this one child; every other sibling and every deeper grandchild (unless it
+   * declares its own) still reaches the same real `broker` this closure was built with.
    */
   const runSubWorkflowFor =
     (callerCapabilities: () => ReadonlySet<string>, chain: SubWorkflowChain) =>
-    async (ref: T.WorkflowRef, args: unknown): Promise<unknown> => {
+    async (
+      ref: T.WorkflowRef,
+      args: unknown,
+      invokeOpts?: T.WorkflowInvokeOpts,
+    ): Promise<unknown> => {
       const childChain = extendChain(chain, ref);
       let childCapabilities: ReadonlySet<string> = new Set();
       return await runPreparedBody({
@@ -125,7 +135,7 @@ export function buildWorkflowPrimitives(opts: {
           runSubWorkflow: runSubWorkflowFor(() => childCapabilities, childChain),
         }),
         handleDispatch: runtime.handles,
-        broker,
+        broker: childBrokerFor(broker, invokeOpts),
         parentCapabilities: callerCapabilities(),
         onCapabilities: (capabilities) => {
           childCapabilities = capabilities;

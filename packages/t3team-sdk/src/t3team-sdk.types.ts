@@ -11,6 +11,9 @@ import type { ToolGroupRef } from "./t3team-sdk.capabilityVocabulary.ts";
 import type { AnyRecipeRef } from "./t3team-sdk.recipeTypes.ts";
 import type { WorkflowRunIntent } from "./tools/t3team-sdk.workflow.ts";
 
+// `workflow()`'s third-parameter type lives next to the broker composition it wraps.
+export type { WorkflowInvokeOpts } from "./t3team-sdk.broker.ts";
+
 export type {
   AnyActionRef,
   AnyRecipeRef,
