@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
@@ -17,6 +17,8 @@ import { WorkItemDescriptionDiffBlock } from "~/t3team/workitem/t3team-WorkItemD
 import { WorkItemDescriptionDraftDiffHeader } from "~/t3team/workitem/t3team-WorkItemDescriptionDraftDiffHeader";
 import {
   buildDraftDiffParagraphs,
+  composeDraftDescription,
+  draftDiffParagraphText,
   draftDiffMagnitude,
 } from "~/t3team/workitem/t3team-workItemDescriptionDiffModel";
 
@@ -69,6 +71,9 @@ export function WorkItemDescriptionDraftDiff({
   const comments = useWorkItemDiffComments();
   const backend = useBackend();
   const acceptAction = useWorkItemDraftActionAccept();
+  const [removedParagraphIds, setRemovedParagraphIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   if (!draft) return null; // Accepted/dismissed elsewhere while this was open.
 
@@ -79,6 +84,9 @@ export function WorkItemDescriptionDraftDiff({
     draftContentToComparableText(draft.proposedContent),
   );
   const { added, removed } = draftDiffMagnitude(paragraphs);
+  const proposedDescription = composeDraftDescription(paragraphs, removedParagraphIds);
+  const removedParagraphs = paragraphs.filter((paragraph) => removedParagraphIds.has(paragraph.id));
+  const reviewNoteCount = comments.total + removedParagraphs.length;
   const atlassian = backend?.atlassian;
   const acceptDisabled = shouldDisableDescriptionAccept({
     canApply: Boolean(atlassian) && Boolean(accountId),
@@ -96,7 +104,7 @@ export function WorkItemDescriptionDraftDiff({
       await atlassian.updateIssueDescription({
         accountId,
         issueIdOrKey: draft.target.issueIdOrKey,
-        description: draftContentToComparableText(draft.proposedContent),
+        description: proposedDescription,
       });
       // Jira has the new body; record the outcome so a reload cannot re-offer it (see the seam's note).
       await recordDraftCarrierOutcome({ backend, draft, outcome: "applied" });
@@ -105,8 +113,14 @@ export function WorkItemDescriptionDraftDiff({
   }
 
   function sendBack() {
-    const feedback = comments.comments
+    const commentFeedback = comments.comments
       .map((comment) => `> ${comment.quote}\n${comment.body}`)
+      .join("\n\n");
+    const removalFeedback = removedParagraphs
+      .map((paragraph) => `> ${draftDiffParagraphText(paragraph).trim()}\nRemove this paragraph.`)
+      .join("\n\n");
+    const feedback = [commentFeedback, removalFeedback]
+      .filter((value) => value.length > 0)
       .join("\n\n");
     returnDraftWithFeedback(draft!.id, feedback);
     void deliverDraftFeedbackToSourceThread({
@@ -125,9 +139,9 @@ export function WorkItemDescriptionDraftDiff({
       <WorkItemDescriptionDraftDiffHeader
         added={added}
         removed={removed}
-        commentCount={comments.total}
+        commentCount={reviewNoteCount}
         acceptDisabled={acceptDisabled}
-        {...(acceptDisabled && comments.total === 0
+        {...(acceptDisabled && reviewNoteCount === 0
           ? { acceptReason: APPLY_UNAVAILABLE_REASON }
           : {})}
         onSendBack={sendBack}
@@ -150,6 +164,18 @@ export function WorkItemDescriptionDraftDiff({
             comments={comments.forBlock(paragraph.id)}
             quotes={comments.quotesForBlock(paragraph.id)}
             onRemoveComment={comments.remove}
+            removed={removedParagraphIds.has(paragraph.id)}
+            onComment={comments.add}
+            onRemoveParagraph={() =>
+              setRemovedParagraphIds((current) => new Set([...current, paragraph.id]))
+            }
+            onRestoreParagraph={() =>
+              setRemovedParagraphIds((current) => {
+                const next = new Set(current);
+                next.delete(paragraph.id);
+                return next;
+              })
+            }
           />
         ))}
       </div>

@@ -49,8 +49,9 @@ import {
 import { renderBundledRecipeSetupFiles } from "./t3team-projectSetupRecipes.ts";
 
 const DRAFT_TOOL = "t3team.work_item.description.draft_update";
-const WRITTEN =
+const WRITTEN_DESCRIPTION =
   "## Goal\nCheckout must round to two decimals.\n\n## Acceptance criteria\n- Totals match the invoice.";
+const WRITTEN = { description: WRITTEN_DESCRIPTION };
 
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-rewrite-"));
 const workflowPath = NodePath.join(runsRoot, "workflow.ts");
@@ -92,7 +93,7 @@ async function makeBrokerWithSeededThread(): Promise<{
 }
 
 /** Answer whatever the run is currently parked on, the way the reactor does. */
-async function reply(registry: T3TeamWorkflowEngineRegistryShape, runId: string, value: string) {
+async function reply(registry: T3TeamWorkflowEngineRegistryShape, runId: string, value: unknown) {
   const pending = registry.peekPending(threadId);
   if (pending === undefined) throw new Error("expected the run to be parked on an ask");
   await registry.getRun(runId)?.resume(pending.correlationId, value);
@@ -211,11 +212,12 @@ describe("describe-rewrite bundled workflow", () => {
     expect(run.errors).toHaveLength(0);
     expect(run.completed[0]).toMatchObject({ issueIdOrKey: "T3-42", proposed: true });
 
-    // The writer is told to return prose and touch nothing.
+    // The writer is told to return a structured value and touch nothing.
     const prompt = turnPrompts(run.runDispatched)[0] ?? "";
     expect(prompt).toContain("T3-42");
     expect(prompt).toContain("Rounding is wrong.");
     expect(prompt).toContain("Add acceptance criteria.");
+    expect(prompt).toContain("exactly one JSON object with one key: description");
     expect(prompt).toContain("Do not EDIT anything");
     // …and WHERE to read the item from: the work tracker is mirrored to disk, so a writer left to
     // guess searches the workspace, finds nothing, and writes filler. The file name is the key
@@ -226,7 +228,7 @@ describe("describe-rewrite bundled workflow", () => {
     expect(prompt).toContain("fullBundleRootRelativePath");
     expect(prompt).toContain("ticketEntryPointRelativePath");
 
-    // The BODY proposed the draft, carrying the writer's text verbatim.
+    // The BODY proposed only the structured description field, never an agent preamble.
     const carrier = draftCarrier(run.brokerDispatched);
     expect(carrier?.command.threadId).toBe(threadId);
     expect(carrier?.attachment).toMatchObject({
@@ -235,7 +237,7 @@ describe("describe-rewrite bundled workflow", () => {
         tool: DRAFT_TOOL,
         field: "description",
         target: { issueIdOrKey: "T3-42" },
-        patch: { description: WRITTEN },
+        patch: { description: WRITTEN_DESCRIPTION },
       },
     });
   });
@@ -266,7 +268,7 @@ describe("describe-rewrite bundled workflow", () => {
 
     expect(run.errors).toHaveLength(0);
     expect(draftCarrier(run.brokerDispatched)?.attachment).toMatchObject({
-      draft: { target: { issueIdOrKey: "T3-77" }, patch: { description: WRITTEN } },
+      draft: { target: { issueIdOrKey: "T3-77" }, patch: { description: WRITTEN_DESCRIPTION } },
     });
   });
 

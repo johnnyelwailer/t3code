@@ -161,6 +161,9 @@ export class JiraApiClient {
         ...init,
         headers: {
           Authorization: this.authHeader,
+          // Detail refreshes must observe a Jira edit immediately. This also protects reads from
+          // transparent proxy caches between the app server and Jira/GHE.
+          "Cache-Control": "no-cache",
           ...(options?.accept ? { Accept: options.accept } : {}),
           ...(options?.contentType ? { "Content-Type": options.contentType } : {}),
           ...init?.headers,

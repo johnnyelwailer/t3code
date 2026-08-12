@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   buildDraftDiffParagraphs,
+  composeDraftDescription,
+  draftDiffParagraphText,
   draftDiffMagnitude,
 } from "./t3team-workItemDescriptionDiffModel";
 
@@ -32,6 +34,16 @@ describe("buildDraftDiffParagraphs", () => {
     expect(paragraphs).toHaveLength(2);
     expect(paragraphs[0]?.id).toBe("p0");
     expect(paragraphs[1]?.id).toBe("p1");
+  });
+
+  it("reconstructs the proposed text without deleted words", () => {
+    const [paragraph] = buildDraftDiffParagraphs("Ship the retries", "Ship the retries carefully");
+    expect(paragraph ? draftDiffParagraphText(paragraph) : "").toBe("Ship the retries carefully");
+  });
+
+  it("omits paragraphs removed during review", () => {
+    const paragraphs = buildDraftDiffParagraphs(undefined, "Keep this\n\nRemove this");
+    expect(composeDraftDescription(paragraphs, new Set(["p1"]))).toBe("Keep this");
   });
 });
 

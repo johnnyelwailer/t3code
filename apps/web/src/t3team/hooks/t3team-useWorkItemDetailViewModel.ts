@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useBackend, useBackendState } from "~/t3team/backend/t3team-index";
@@ -57,7 +57,9 @@ export function useWorkItemDetailViewModel({
   const {
     tickets: projectTickets,
     estimateFieldLabel,
+    loading: projectIssuesLoading,
     lastCheckedAt: jiraLastCheckedAt,
+    reload: reloadProjectIssues,
   } = useProjectIssues(project);
   const currentUserName = useAtlassianCurrentUserDisplayName(project.source.accountId);
   const accountId = project.source.accountId;
@@ -66,7 +68,15 @@ export function useWorkItemDetailViewModel({
   const canonicalTicketId = resolveCanonicalProjectTicketId(ticketId, ticketLookup) ?? ticketId;
   const ticket = ticketLookup.get(ticketId);
   const resourceId = ticket?.ref.id ?? canonicalTicketId;
-  const { snapshot, loading, error, reload } = useTicketDetail(project, resourceId);
+  const {
+    snapshot,
+    loading: ticketLoading,
+    error,
+    reload: reloadTicketDetail,
+  } = useTicketDetail(project, resourceId);
+  const reload = useCallback(async () => {
+    await Promise.all([reloadTicketDetail(), reloadProjectIssues()]);
+  }, [reloadProjectIssues, reloadTicketDetail]);
 
   const displayId = ticket?.ref.displayId ?? snapshot?.ref.displayId ?? ticketId;
   const title = ticket?.ref.title ?? snapshot?.ref.title ?? "Ticket";
@@ -138,7 +148,7 @@ export function useWorkItemDetailViewModel({
     canonicalTicketId,
     ticket,
     snapshot,
-    loading,
+    loading: ticketLoading || projectIssuesLoading,
     error,
     reload,
     fieldModel,

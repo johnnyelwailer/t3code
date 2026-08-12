@@ -139,11 +139,11 @@ export function AppThreadPane({
   return (
     <div className="flex h-full min-h-0 flex-1 divide-x divide-border overflow-hidden">
       <div className="flex min-w-0 flex-1">{parentChat}</div>
-      <div className="relative flex min-w-0 flex-1">
+      <div className="t3team-embedded-thread-pane relative flex min-w-0 flex-1">
         <Button
           size="icon-xs"
           variant="ghost"
-          className="absolute right-2 top-2 z-10 shrink-0 text-muted-foreground/80"
+          className="t3team-embedded-thread-close absolute z-10 shrink-0 text-muted-foreground/80"
           onClick={() => runT3TeamViewTransition(onCloseEmbeddedThread)}
           aria-label="Close side-by-side thread"
           title="Close side-by-side thread"

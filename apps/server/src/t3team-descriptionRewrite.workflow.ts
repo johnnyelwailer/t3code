@@ -36,6 +36,12 @@ export const meta = {
 /** Compiled once: the decoder is rebuilt on every call when it is left inline. */
 const decodeInputs = Schema.decodeUnknownSync(Inputs);
 
+/** The only value the writer is allowed to return. Keeping this typed prevents prose preambles from
+ * becoming part of the description draft. */
+const RewriteResult = Schema.Struct({
+  description: Schema.String,
+});
+
 /** Just the one branch of the run's resolved tool tree this body reaches into. */
 interface DraftTools {
   readonly t3team: {
@@ -123,19 +129,20 @@ export default async function run() {
     "A description written from the key and summary alone reads like filler; the point is to say what",
     "THIS item is, in its actual context.",
     "",
-    "Then reply with the rewritten description and NOTHING else — no preamble, no commentary, no code",
-    "fences. Do not EDIT anything: this workflow proposes your text as a draft a human reviews and",
-    "accepts, so your final message must be the description itself.",
+    "Return exactly one JSON object with one key: description.",
+    "The description value must contain only the final rewritten description. Do not put a preamble,",
+    "commentary, explanation, or code fences in that value. Do not EDIT anything: this workflow",
+    "proposes your text as a draft a human reviews and accepts.",
   ].join("\n");
 
   // A template literal, not concatenation: the static shape scan can read the leading text out of
   // one, so the live card matches this runtime step to its authored plan row instead of filing it
   // under the previous phase as unplanned work.
-  const rewritten = trimmed(
-    await thread.askAgent(writerPrompt, {
-      label: `Rewrite the description of ${input.issueIdOrKey}`,
-    }),
-  );
+  const rewrittenResult = await thread.askAgent(writerPrompt, {
+    label: `Rewrite the description of ${input.issueIdOrKey}`,
+    schema: RewriteResult,
+  });
+  const rewritten = trimmed(rewrittenResult.description);
   if (rewritten.length === 0) {
     throw new Error("The writer returned no description text, so there is nothing to propose.");
   }

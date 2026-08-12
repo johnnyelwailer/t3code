@@ -11,7 +11,7 @@ export interface TicketDetail {
   snapshot: ResourceSnapshot | null;
   loading: boolean;
   error: string | null;
-  reload: () => void;
+  reload: () => Promise<void>;
 }
 
 export function useTicketDetail(project: ProjectShellProject, ticketId: string): TicketDetail {

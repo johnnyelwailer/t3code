@@ -20,6 +20,26 @@ export type DraftDiffParagraph = {
 
 export type DraftDiffMagnitude = { readonly added: number; readonly removed: number };
 
+/** Reconstructs the proposed text represented by one rendered diff block. Deleted words belong to
+ * the current document and must not be sent when a reviewer accepts the proposal. */
+export function draftDiffParagraphText(paragraph: DraftDiffParagraph): string {
+  return paragraph.segments
+    .filter((segment) => segment.kind !== "del")
+    .map((segment) => segment.text)
+    .join("");
+}
+
+/** Serializes the staged proposal after paragraph removals, preserving the markdown block gaps. */
+export function composeDraftDescription(
+  paragraphs: ReadonlyArray<DraftDiffParagraph>,
+  removedParagraphIds: ReadonlySet<string> = new Set(),
+): string {
+  return paragraphs
+    .filter((paragraph) => !removedParagraphIds.has(paragraph.id))
+    .map(draftDiffParagraphText)
+    .join("\n\n");
+}
+
 /**
  * Word-level diff, one block per markdown block.
  *

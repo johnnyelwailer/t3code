@@ -164,6 +164,9 @@ describe("JiraApiClient", () => {
       `https://test.atlassian.net/rest/api/3/issue/TEST-1?fields=${expectedFields}&expand=renderedFields`,
       expect.any(Object),
     );
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: expect.objectContaining({ "Cache-Control": "no-cache" }),
+    });
   });
 
   it("merges extraFields into the issue field list without duplicating them", async () => {

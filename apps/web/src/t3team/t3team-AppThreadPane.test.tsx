@@ -49,6 +49,8 @@ describe("AppThreadPane", () => {
 
     expect(splitMarkup).toContain('aria-label="Close side-by-side thread"');
     expect(splitMarkup).toContain('title="Close side-by-side thread"');
+    expect(splitMarkup).toContain("t3team-embedded-thread-pane");
+    expect(splitMarkup).toContain("t3team-embedded-thread-close");
     expect(splitMarkup).toContain("lucide-x");
   });
 });
