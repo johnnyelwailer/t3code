@@ -1,11 +1,22 @@
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 export type ProjectRecipeToolGroupId = Brand<string, "ProjectRecipeToolGroupId">;
+/**
+ * `"execute"` is a NEW class, not a reuse of `"draft-mutation"` or `"external-convenience"`: every
+ * existing class ends in something reversible or user-mediated — a read touches nothing, a
+ * view-state change is local UI state, a draft-mutation is a draft the user still has to commit,
+ * and external-convenience only creates a child session or handoff. Running an arbitrary command
+ * against a real checkout has none of that: the command's effects (inside its sandbox) happen
+ * immediately and are whatever the command does, not a diff the user reviews first. That is a
+ * categorically different risk shape, so it gets its own class rather than being folded into one
+ * of the above and understating what approving it actually authorizes.
+ */
 export type ProjectRecipeToolClass =
   | "read"
   | "view-state"
   | "draft-mutation"
-  | "external-convenience";
+  | "external-convenience"
+  | "execute";
 
 type ProjectRecipeToolGroup = {
   readonly id: ProjectRecipeToolGroupId;
@@ -63,6 +74,12 @@ export const PROJECT_RECIPE_UI_RENDER_TOOL_GROUP = defineToolGroup(
   "Pre-launch rendering helpers. The MVP registry intentionally leaves this empty.",
   true,
 );
+export const PROJECT_RECIPE_SANDBOX_EXECUTE_TOOL_GROUP = defineToolGroup(
+  "sandbox.execute",
+  "execute",
+  "Tools that check out a git ref into an isolated sandbox and run a command against it, such as the test suite or the app itself.",
+  false,
+);
 
 export const PROJECT_RECIPE_TOOL_GROUPS = [
   PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP,
@@ -71,6 +88,7 @@ export const PROJECT_RECIPE_TOOL_GROUPS = [
   PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP,
   PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP,
   PROJECT_RECIPE_UI_RENDER_TOOL_GROUP,
+  PROJECT_RECIPE_SANDBOX_EXECUTE_TOOL_GROUP,
 ] as const;
 
 export const PROJECT_RECIPE_PRELAUNCH_TOOL_GROUP_IDS = [
@@ -110,6 +128,7 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.github.issue_comment.draft_create": PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,
   "t3team.recipe.list": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.orchestration.run": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
+  "t3team.sandbox.run": PROJECT_RECIPE_SANDBOX_EXECUTE_TOOL_GROUP.id,
   "t3team.recipe.validate": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.read_current": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.rename": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,

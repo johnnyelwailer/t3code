@@ -45,6 +45,19 @@ export const t3teamThreadWrite = defineToolGroup({
   description: "Rename threads, send workflow thread messages, and create child workflow threads.",
 });
 
+/**
+ * Distinct from every other builtin group: those classify tools that read state or prepare a
+ * draft the user still commits. This one runs an actual command against a real checkout — the
+ * permission dialog must say so plainly, because approving it means trusting whatever the command
+ * does, not just trusting a diff the user will review afterward.
+ */
+export const t3teamSandboxExecute = defineToolGroup({
+  id: "t3team.sandbox.execute",
+  label: "Run commands in a sandboxed checkout",
+  description:
+    "Check out a git ref into an isolated sandbox and run a command inside it (for example, the test suite or the app itself). The agent sees the command's exit code and everything it prints to stdout/stderr; the command executes with whatever access the sandbox grants it.",
+});
+
 export const releaseNotesWrite = defineToolGroup({
   id: "release-notes.write",
   label: "Write release notes artifacts",
@@ -58,5 +71,6 @@ export const builtinToolGroups = [
   jiraWrite,
   t3teamRecipeRead,
   t3teamThreadWrite,
+  t3teamSandboxExecute,
   releaseNotesWrite,
 ] as const;

@@ -32,6 +32,7 @@ export {
   jiraWrite,
   releaseNotesWrite,
   t3teamRecipeRead,
+  t3teamSandboxExecute,
   t3teamThreadWrite,
 } from "./t3team-sdk.groups.ts";
 export { createStoreSink, defaultRunsRoot, FsJournalStore } from "./t3team-sdk.journalStore.ts";
