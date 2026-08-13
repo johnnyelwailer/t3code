@@ -15,6 +15,18 @@ type ProjectSidebarHeaderProps = {
   appName: string;
 };
 
+export function resolveProjectSidebarBrandInset(input: {
+  isMac: boolean;
+  isDesktop: boolean;
+  isWindowControlsOverlay: boolean;
+}): string {
+  if (input.isMac && input.isDesktop) return "ml-[var(--workspace-controls-left)]";
+  if (input.isMac && input.isWindowControlsOverlay) {
+    return "ml-[var(--workspace-titlebar-content-left)]";
+  }
+  return "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))]";
+}
+
 /**
  * Team-shell parity header for upstream's `SidebarChromeHeader`: same
  * `--workspace-topbar-height` sizing, `@container/sidebar-header`, drag-region
@@ -26,9 +38,11 @@ type ProjectSidebarHeaderProps = {
 export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHeaderProps) {
   const backdropVariant = useSidebarStageBackdropVariant();
   const onBackdrop = backdropVariant !== null;
-  const shouldInsetTitlebarBrand =
-    isMacPlatform(navigator.platform) &&
-    (isElectron || document.documentElement.classList.contains("wco"));
+  const brandInsetClass = resolveProjectSidebarBrandInset({
+    isMac: isMacPlatform(navigator.platform),
+    isDesktop: isElectron,
+    isWindowControlsOverlay: document.documentElement.classList.contains("wco"),
+  });
 
   return (
     <SidebarHeader
@@ -59,9 +73,7 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
           // Only macOS needs a left inset for native traffic lights. Windows and
           // Linux place native controls on the right, so the brand can align with
           // the sidebar content. On the web, reserve space only for WCO mode.
-          shouldInsetTitlebarBrand
-            ? "ml-[var(--workspace-titlebar-content-left)]"
-            : "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))]",
+          brandInsetClass,
           onBackdrop ? "text-white" : "text-sidebar-foreground",
         )}
       >
