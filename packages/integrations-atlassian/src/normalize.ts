@@ -243,7 +243,17 @@ function stringifyAdfBlock(node: AdfNode, depth = 0): string {
   }
 }
 
-function convertAdfToMarkdown(document: unknown): string {
+/**
+ * Renders an ADF document to markdown, preserving structure (headings, lists,
+ * tables, code blocks, panels) rather than flattening to text.
+ *
+ * Exported because the knowledge index needs the same rendering the work-item
+ * detail view gets: a flattened body loses every acceptance-criteria list and
+ * every table, which is precisely the structure an agent reads. Callers that
+ * need a guaranteed-non-empty string should follow this module's own pattern
+ * and fall back to {@link extractTextFromADF} on an empty result.
+ */
+export function convertAdfToMarkdown(document: unknown): string {
   if (!document || typeof document !== "object") return "";
   const root = document as AdfNode;
   const content = Array.isArray(root.content) ? root.content : [];
