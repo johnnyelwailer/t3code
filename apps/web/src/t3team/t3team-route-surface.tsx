@@ -31,6 +31,15 @@ function resolveWsBaseUrl(): string {
     return url.toString();
   }
 
+  // Dev and self-hosted web are single-origin: Vite (dev) and the server (prod)
+  // both route /api and /ws from the page origin. A hardcoded port here pointed
+  // t3team backend calls at dead localhost:3773 whenever the server ran on a
+  // derived port, which surfaced as a permanent "You appear to be offline".
+  if (typeof window !== "undefined" && window.location.host) {
+    const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${scheme}//${window.location.host}`;
+  }
+
   return "ws://localhost:3773";
 }
 
