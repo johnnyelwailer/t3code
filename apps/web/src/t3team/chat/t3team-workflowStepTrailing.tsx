@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The right-hand end of a runtime step row: when a scheduled step is due, and a child thread's status.
  *

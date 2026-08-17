@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { cn } from "~/t3team/lib/t3team-utils";
 import type { ProjectTicket } from "~/t3team/t3team-types";

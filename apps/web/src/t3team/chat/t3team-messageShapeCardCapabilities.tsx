@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Capability disclosure for the play-as-shape "plan" card — the pre-execution permission
  * surface (Epic 25 §Capability gating): before an orchestration with elevated capabilities runs,

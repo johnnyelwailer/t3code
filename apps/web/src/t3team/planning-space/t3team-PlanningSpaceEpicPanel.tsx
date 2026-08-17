@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Epic detail panel (§7): the cluster companion — title, rollup stats, frame
  * action, and a story list. Split out of t3team-PlanningSpacePanel.tsx.

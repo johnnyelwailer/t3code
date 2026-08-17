@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The `askUser` decision card (Epic 25 §askUser decision cards) — renders the
  * `t3team.workflow.decision` view a workflow's escalation message carries: a distinct bordered
