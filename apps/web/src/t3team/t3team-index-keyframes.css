@@ -1,0 +1,96 @@
+@keyframes t3team-create-project-step-out-forward {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+
+@keyframes t3team-create-project-step-in-forward {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes t3team-create-project-step-out-back {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes t3team-create-project-step-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes t3team-create-project-entry-out-forward {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0.22;
+    transform: translateX(-72px) scale(0.985);
+  }
+}
+
+@keyframes t3team-create-project-entry-in-forward {
+  from {
+    opacity: 0.22;
+    transform: translateX(84px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes t3team-create-project-entry-out-back {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0.22;
+    transform: translateX(72px) scale(0.985);
+  }
+}
+
+@keyframes t3team-create-project-entry-in-back {
+  from {
+    opacity: 0.22;
+    transform: translateX(-84px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
