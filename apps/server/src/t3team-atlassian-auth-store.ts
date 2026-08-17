@@ -7,6 +7,7 @@ import {
 } from "@t3tools/integrations-atlassian";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Semaphore from "effect/Semaphore";
 import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
 import {
   loadPersistedAtlassianAuthsPayload,
@@ -14,6 +15,7 @@ import {
   savePersistedAtlassianAuthsPayload,
 } from "./t3team-atlassian-auth-persistence.ts";
 import { invalidateT3TeamAtlassianAuthDependents } from "./t3team-atlassian-auth-changeHooks.ts";
+import { findAuthForAccountId } from "./t3team-atlassian-auth-lookup.ts";
 import {
   readAtlassianOAuthClientId,
   readAtlassianOAuthClientSecret,
@@ -40,48 +42,13 @@ export type OAuthConnectInput = {
 const atlassianAuths = new Map<string, JiraApiAuth>();
 const OAUTH_REFRESH_SKEW_MS = 60_000;
 
-function normalizeAtlassianSiteUrl(value: string): string | null {
-  try {
-    const trimmed = value.trim();
-    const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    const url = new URL(withProtocol);
-    return `${url.protocol}//${url.hostname.toLowerCase()}${url.port ? `:${url.port}` : ""}${
-      url.pathname === "/" ? "" : url.pathname.replace(/\/+$/, "")
-    }`;
-  } catch {
-    return null;
-  }
-}
+// Concurrent writers race the atomic tmp-write-then-rename in persistence,
+// which fails on Windows when two renames target the secret file at once.
+const persistedAuthsSaveSemaphore = Semaphore.makeUnsafe(1);
 
-function authSiteUrl(auth: JiraApiAuth): string | undefined {
-  if (auth.kind === "basic") {
-    return auth.siteUrl;
-  }
-  return auth.siteUrl;
-}
-
-function findAuthForAccountId(
-  accountId: string,
-): { readonly accountId: string; readonly auth: JiraApiAuth } | undefined {
-  const exact = atlassianAuths.get(accountId);
-  if (exact) {
-    return { accountId, auth: exact };
-  }
-
-  const normalizedAccountId = normalizeAtlassianSiteUrl(accountId);
-  if (!normalizedAccountId) {
-    return undefined;
-  }
-
-  for (const [storedAccountId, auth] of atlassianAuths) {
-    const storedAccountUrl = normalizeAtlassianSiteUrl(storedAccountId);
-    const storedAuthUrl = authSiteUrl(auth) ? normalizeAtlassianSiteUrl(authSiteUrl(auth)!) : null;
-    if (storedAccountUrl === normalizedAccountId || storedAuthUrl === normalizedAccountId) {
-      return { accountId: storedAccountId, auth };
-    }
-  }
-  return undefined;
-}
+// Atlassian rotates refresh tokens: two concurrent refreshes for one account
+// would each redeem the same token, and the loser invalidates the winner.
+const oauthRefreshSemaphore = Semaphore.makeUnsafe(1);
 
 function persistedAuthsPayload(): PersistedAtlassianAuths {
   return {
@@ -99,8 +66,8 @@ export const loadPersistedAuths = Effect.gen(function* () {
   }
 });
 
-export const savePersistedAuths = Effect.suspend(() =>
-  savePersistedAtlassianAuthsPayload(persistedAuthsPayload()),
+export const savePersistedAuths = persistedAuthsSaveSemaphore.withPermits(1)(
+  Effect.suspend(() => savePersistedAtlassianAuthsPayload(persistedAuthsPayload())),
 );
 
 function missingRefreshTokenError() {
@@ -119,8 +86,11 @@ function atlassianOAuthClientConfig(): { clientId: string; clientSecret?: string
   };
 }
 
-function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
-  return Effect.gen(function* () {
+function refreshOAuthAuthIfNeeded(accountId: string, initialAuth: JiraApiAuth) {
+  const refresh = Effect.gen(function* () {
+    // Re-read under the permit: a concurrent caller may have refreshed this
+    // account while we waited, and its rotated token is the only valid one.
+    const auth = atlassianAuths.get(accountId) ?? initialAuth;
     if (auth.kind !== "oauth" || auth.expiresAt === undefined) {
       return auth;
     }
@@ -155,12 +125,13 @@ function refreshOAuthAuthIfNeeded(accountId: string, auth: JiraApiAuth) {
     yield* savePersistedAuths;
     return nextAuth;
   });
+  return oauthRefreshSemaphore.withPermits(1)(refresh);
 }
 
 export function providerForAccount(accountId: string) {
   return Effect.gen(function* () {
     yield* loadPersistedAuths;
-    const resolved = findAuthForAccountId(accountId);
+    const resolved = findAuthForAccountId(atlassianAuths, accountId);
     return resolved
       ? new AtlassianIntegrationProvider(
           yield* refreshOAuthAuthIfNeeded(resolved.accountId, resolved.auth),

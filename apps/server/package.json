@@ -41,6 +41,7 @@
     "@t3tools/project-recipes": "workspace:*",
     "@t3tools/t3team-skill-packs": "workspace:*",
     "effect": "catalog:",
+    "msgpackr-extract": "3.0.4",
     "node-pty": "^1.1.0",
     "yaml": "catalog:",
     "zod": "^4.3.6"

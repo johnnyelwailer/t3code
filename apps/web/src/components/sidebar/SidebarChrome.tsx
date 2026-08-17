@@ -1,4 +1,5 @@
 import {
+  ArrowLeftIcon,
   ChartNoAxesColumnIcon,
   GitPullRequestIcon,
   InboxIcon,
@@ -6,14 +7,15 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import { memo, useCallback } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn, isMacPlatform } from "../../lib/utils";
-import { usePrimaryEnvironment } from "../../state/environments";
+import { useEnvironments } from "../../state/environments";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
+  resolveSidebarStageFocusRingOffsetClass,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
@@ -27,8 +29,9 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "../ui/sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
-import { SidebarUpdatePill } from "./SidebarUpdatePill";
+import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
@@ -59,7 +62,8 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         className={cn(
           "relative z-10 md:hidden",
           backdropVariant &&
-            "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
+            "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
+          backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
         )}
       />
       <SidebarBrand isElectron={isElectron} onBackdrop={backdropVariant !== null} />
@@ -102,7 +106,7 @@ function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackd
       <T3Wordmark />
       <span
         className={cn(
-          "truncate text-sm font-medium tracking-tight",
+          "-translate-y-px truncate text-sm font-medium tracking-tight",
           onBackdrop ? "text-white/70" : "text-muted-foreground",
         )}
       >
@@ -131,9 +135,20 @@ function T3Wordmark() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
-  const primaryEnvironment = usePrimaryEnvironment();
-  const pullRequestsSupported =
-    primaryEnvironment?.serverConfig?.environment.capabilities.pullRequests === true;
+  const currentFooterPage = useLocation({
+    select: (location) =>
+      location.pathname === "/usage"
+        ? "usage"
+        : location.pathname === "/pull-requests"
+          ? "pull-requests"
+          : null,
+  });
+  const { environments } = useEnvironments();
+  // The page reads every connected server, so one of them offering pull requests is enough for
+  // the link to lead somewhere.
+  const pullRequestsSupported = environments.some(
+    (environment) => environment.serverConfig?.environment.capabilities.pullRequests === true,
+  );
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
@@ -189,48 +204,92 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   // route — including upstream-shell pages like /pull-requests or /settings. Hiding these rows
   // off /t3team/* made "My work" vanish the moment the user opened the PR page.
   const showTeamNav = true;
+  const handleBackClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/" });
+  }, [closeMobileSidebar, navigate]);
 
   return (
     <SidebarFooter className="p-[var(--sidebar-content-inset)]">
       <SidebarProviderUpdatePill />
-      <SidebarUpdatePill />
-      <SidebarMenu>
-        {showTeamNav ? (
+      <SidebarUpdateArchitectureWarning />
+      {showTeamNav ? (
+        <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handleMyWorkClick}>
               <InboxIcon />
               <span>My work</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-        ) : null}
-        {showTeamNav && scopedProjectId !== null ? (
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleBacklogClick}>
-              <ListTreeIcon />
-              <span>Backlog</span>
+          {scopedProjectId !== null ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={handleBacklogClick}>
+                <ListTreeIcon />
+                <span>Backlog</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
+        </SidebarMenu>
+      ) : null}
+      <SidebarMenu className="flex-row items-center">
+        {currentFooterPage ? (
+          <SidebarMenuItem className="min-w-0 flex-1">
+            <SidebarMenuButton onClick={handleBackClick}>
+              <ArrowLeftIcon />
+              <span>Back</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-        ) : null}
-        {pullRequestsSupported ? (
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={handlePullRequestsClick}>
-              <GitPullRequestIcon />
-              <span>Pull Requests</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ) : null}
-        <SidebarMenuItem>
-          <SidebarMenuButton onClick={handleUsageClick}>
-            <ChartNoAxesColumnIcon />
-            <span>Usage</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton onClick={handleSettingsClick}>
-            <SettingsIcon />
-            <span>Settings</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+        ) : (
+          <>
+            <SidebarMenuItem className="shrink-0">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <SidebarMenuButton
+                      aria-label="Settings"
+                      onClick={handleSettingsClick}
+                      size="icon"
+                    >
+                      <SettingsIcon />
+                    </SidebarMenuButton>
+                  }
+                />
+                <TooltipPopup side="top">Settings</TooltipPopup>
+              </Tooltip>
+            </SidebarMenuItem>
+            {pullRequestsSupported ? (
+              <SidebarMenuItem className="shrink-0">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <SidebarMenuButton
+                        aria-label="Pull Requests"
+                        onClick={handlePullRequestsClick}
+                        size="icon"
+                      >
+                        <GitPullRequestIcon />
+                      </SidebarMenuButton>
+                    }
+                  />
+                  <TooltipPopup side="top">Pull Requests</TooltipPopup>
+                </Tooltip>
+              </SidebarMenuItem>
+            ) : null}
+            <SidebarMenuItem className="shrink-0">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <SidebarMenuButton aria-label="Usage" onClick={handleUsageClick} size="icon">
+                      <ChartNoAxesColumnIcon />
+                    </SidebarMenuButton>
+                  }
+                />
+                <TooltipPopup side="top">Usage</TooltipPopup>
+              </Tooltip>
+            </SidebarMenuItem>
+          </>
+        )}
+        <SidebarUpdatePill />
       </SidebarMenu>
     </SidebarFooter>
   );

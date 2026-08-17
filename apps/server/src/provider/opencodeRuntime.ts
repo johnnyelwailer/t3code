@@ -37,8 +37,19 @@ import { resolveSpawnCommand } from "@t3tools/shared/shell";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 const OPENCODE_EMPTY_CONFIG_CONTENT = "{}";
 
-export function resolveOpenCodeConfigContent(configContent: string | undefined): string {
-  return configContent?.trim() ? configContent : OPENCODE_EMPTY_CONFIG_CONTENT;
+export function resolveOpenCodeConfigContent(
+  configContent: string | undefined,
+  inputEnvironment?: Readonly<Record<string, string | undefined>>,
+  inheritedEnvironment: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  if (configContent?.trim()) {
+    return configContent;
+  }
+  return (
+    inputEnvironment?.OPENCODE_CONFIG_CONTENT ??
+    inheritedEnvironment.OPENCODE_CONFIG_CONTENT ??
+    OPENCODE_EMPTY_CONFIG_CONTENT
+  );
 }
 
 const OPENCODE_SERVER_READY_PREFIX = "opencode server listening";
@@ -473,7 +484,18 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
             shell: spawnCommand.shell,
             env: {
               ...input.environment,
-              OPENCODE_CONFIG_CONTENT: resolveOpenCodeConfigContent(input.configContent),
+              // A pack-provided declarative config wins; otherwise respect an
+              // OPENCODE_CONFIG_CONTENT provided by the caller or the
+              // inherited process environment, only falling back to the empty
+              // config when none is set. Setting it unconditionally previously
+              // clobbered the user's opencode config, hiding their
+              // providers/models. The value is set explicitly (rather than
+              // relying on inheritance) because `extendEnv` is false whenever
+              // `input.environment` is provided.
+              OPENCODE_CONFIG_CONTENT: resolveOpenCodeConfigContent(
+                input.configContent,
+                input.environment,
+              ),
             },
             extendEnv: input.environment === undefined,
           }),

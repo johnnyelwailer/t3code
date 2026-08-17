@@ -2,6 +2,7 @@ import type { JiraApiAuth } from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import { ServerConfig } from "./config.ts";
@@ -92,7 +93,11 @@ export function savePersistedAtlassianAuthsPayload(payload: PersistedAtlassianAu
     yield* Effect.gen(function* () {
       yield* fileSystem.writeFile(tempPath, textEncoder.encode(encoded));
       yield* fileSystem.chmod(tempPath, 0o600);
-      yield* fileSystem.rename(tempPath, secretPath);
+      // On Windows, renaming over the destination fails while another handle
+      // (e.g. an antivirus scan of the freshly written file) holds it open.
+      yield* fileSystem
+        .rename(tempPath, secretPath)
+        .pipe(Effect.retry({ times: 4, schedule: Schedule.spaced("50 millis") }));
       yield* fileSystem.chmod(secretPath, 0o600);
     }).pipe(
       Effect.catch((cause) =>

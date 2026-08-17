@@ -71,6 +71,7 @@ import {
 import { cn, isMacPlatform } from "~/lib/utils";
 import { basenameOfPath } from "~/pierre-icons";
 import {
+  COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME,
   COMPOSER_INLINE_CHIP_ICON_CLASS_NAME,
   COMPOSER_INLINE_SKILL_CHIP_CLASS_NAME,
   COMPOSER_INLINE_SKILL_CHIP_LABEL_CLASS_NAME,
@@ -188,7 +189,7 @@ class ComposerMentionNode extends DecoratorNode<React.ReactElement> {
 
   override createDOM(): HTMLElement {
     const dom = document.createElement("span");
-    dom.className = "composer-inline-chip relative inline-flex align-[-0.125em] leading-none";
+    dom.className = COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME;
     return dom;
   }
 
@@ -326,7 +327,7 @@ class ComposerSkillNode extends DecoratorNode<React.ReactElement> {
 
   override createDOM(): HTMLElement {
     const dom = document.createElement("span");
-    dom.className = "composer-inline-chip relative inline-flex align-[-0.125em] leading-none";
+    dom.className = COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME;
     return dom;
   }
 
@@ -397,7 +398,7 @@ class ComposerTerminalContextNode extends DecoratorNode<React.ReactElement> {
 
   override createDOM(): HTMLElement {
     const dom = document.createElement("span");
-    dom.className = "composer-inline-chip relative inline-flex align-[-0.125em] leading-none";
+    dom.className = COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME;
     return dom;
   }
 
@@ -1747,7 +1748,7 @@ function ComposerPromptEditorInner({
 
   return (
     <ComposerTerminalContextActionsContext value={terminalContextActions}>
-      <div className="composer-editor-surface relative">
+      <div className="relative [font-family:var(--font-composer,var(--font-sans))] [font-size:var(--font-size-prompt,0.875rem)] [@media(max-width:39.999rem)_and_(pointer:coarse)]:[font-size:max(var(--font-size-prompt,1rem),16px)]">
         <PlainTextPlugin
           contentEditable={
             <ContentEditable
