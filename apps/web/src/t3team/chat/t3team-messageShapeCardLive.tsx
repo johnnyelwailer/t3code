@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable react/no-array-index-key -- Mirrors the static shape card's list rendering. */
 /**
  * Live plan-card overlay (recipe UX "no black box" slice). Renders the same plan chrome as

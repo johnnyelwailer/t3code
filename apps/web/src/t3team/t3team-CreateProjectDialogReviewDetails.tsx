@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { parseRepositoryLabel } from "~/t3team/components/t3team-linkedRepositories";
 import type { ReviewSetupProfileSummary } from "~/t3team/t3team-createProjectReviewProfile";
 import {

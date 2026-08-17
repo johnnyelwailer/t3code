@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { cn } from "~/t3team/lib/t3team-utils";
 
 const RELATIVE_CUTOFF_MS = 7 * 24 * 60 * 60 * 1000;

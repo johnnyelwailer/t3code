@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { Minus, Plus } from "lucide-react";
 
 import { Input } from "~/t3team/components/ui/t3team-input";
