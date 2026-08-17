@@ -225,4 +225,3 @@
 .provider-update-pill-progress {
   animation: provider-update-pill-countdown var(--provider-update-pill-dismiss-ms) linear forwards;
 }
-
