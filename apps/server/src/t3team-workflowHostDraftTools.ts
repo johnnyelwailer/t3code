@@ -1,11 +1,20 @@
 /**
- * The broker-owned work-item DRAFT tools, made callable from a workflow body's `getTools()` tree.
+ * The broker-owned work-item DRAFT tools, made callable from a workflow body's `getTools()` tree —
+ * plus, as of the `thread.handoff` seam, the ASSEMBLY point that combines this family with the
+ * thread-handoff family (`t3team-workflowHostHandoffTools.ts`) into the single client and combined
+ * run options every consumer (`t3team-workflowEngineController.ts`,
+ * `t3team-workflowRehydrateRun.ts`, `t3team-thread-recipe-workflow-routes.ts`) already wires up
+ * under these two exported names. Consumers do not need to know a second family exists; adding a
+ * third means adding its ids to the two lists below, not touching any consumer.
  *
  * `defineTool` refs live in the SDK registry while the t3team capability surface is dispatched by
- * string id through {@link ./t3team-toolBrokerBinding.ts}; this module is the seam between them,
- * deliberately narrow — only the work-item draft family, never the whole broker surface. A draft
- * tool cannot write anything; it builds a proposal a human accepts in the review UI, which is what
- * makes it the one family safe to hand to an orchestration body.
+ * string id through {@link ./t3team-toolBrokerBinding.ts}; this module (together with the shared
+ * builder in `t3team-workflowHostToolClientShared.ts`) is the seam between them, deliberately
+ * narrow per family — only the work-item draft family and the thread-handoff family, never the
+ * whole broker surface. A draft tool cannot write anything; it builds a proposal a human accepts in
+ * the review UI. A handoff tool starts a new thread, which is immediately visible to the user the
+ * moment it happens. Both are safe to hand to an orchestration body for the same reason: neither
+ * can act silently.
  *
  * WHICH THREAD THE PROPOSAL LANDS ON: the client binds the LAUNCH thread per call, and a
  * thread-bound binding carries `publishDraft` pinned to that same thread id (`t3team-toolBrokerLive.ts`
@@ -21,22 +30,18 @@
  * @module t3team-workflowHostDraftTools
  */
 
-import { ThreadId } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import { defineToolGroup, type T3TeamToolHandlerClient, type ToolRef } from "@t3team/sdk";
 
+import type { T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
 import {
-  defineTool,
-  defineToolGroup,
-  type T3TeamToolHandlerClient,
-  type ToolRef,
-} from "@t3team/sdk";
-
+  T3TEAM_WORKFLOW_HOST_HANDOFF_TOOL_REFS,
+  HOST_HANDOFF_TOOL_ID_SET,
+} from "./t3team-workflowHostHandoffTools.ts";
 import {
-  T3TEAM_MCP_SERVER_NAME,
-  type T3TeamToolBrokerShape,
-  type T3TeamToolCallResult,
-} from "./t3team-toolBroker.ts";
+  combinedHostToolRunOptions,
+  hostBridgedToolRef,
+  makeT3TeamWorkflowHostToolClient,
+} from "./t3team-workflowHostToolClientShared.ts";
 
 /**
  * Reuses the id of the broker-side draft classification (`PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP`)
@@ -63,105 +68,43 @@ export const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS = [
 
 const HOST_DRAFT_TOOL_ID_SET: ReadonlySet<string> = new Set(T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS);
 
-/** Permissive on purpose: the broker already validates each draft tool's arguments and answers a
- * bad call specifically (`… requires issue_id.`). Restating those shapes here would be a second
- * copy of that contract, free to drift from the one the agent path uses. */
-const HostDraftToolArgs = Schema.Unknown;
-const HostDraftToolResult = Schema.Unknown;
-
-function resultText(result: T3TeamToolCallResult): string {
-  return result.content.map((entry) => entry.text).join("\n") || "The draft tool call failed.";
-}
-
-function hostDraftToolRef(id: string): ToolRef<unknown, unknown> {
-  return defineTool({
-    id,
-    group: T3TEAM_WORKFLOW_DRAFT_TOOL_GROUP,
-    args: HostDraftToolArgs,
-    result: HostDraftToolResult,
-    handler: async (args, ctx) => {
-      const callHostTool = ctx.t3team?.callHostTool;
-      if (callHostTool === undefined) {
-        throw new Error(
-          `Tool '${id}' needs a thread-bound host runtime. This run was started without one (a headless run has no thread to propose the draft on).`,
-        );
-      }
-      return await callHostTool({ tool: id, args });
-    },
-  });
-}
+/** Every id from every family this module's client and run options admit. Grows when a new family
+ * is bridged; nothing else needs to change at the consumer call sites. */
+const HOST_TOOL_ID_SET: ReadonlySet<string> = new Set([
+  ...HOST_DRAFT_TOOL_ID_SET,
+  ...HOST_HANDOFF_TOOL_ID_SET,
+]);
 
 /** Registered ONCE at module load — `defineTool` refuses a duplicate id, and the engine executes a
  * tool by looking its id up in that global registry, so per-run refs would never be reached. The
  * per-run part is the `ctx.t3team` client the handlers read. */
 export const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> =
-  T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS.map(hostDraftToolRef);
+  T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS.map((id) =>
+    hostBridgedToolRef({ id, group: T3TEAM_WORKFLOW_DRAFT_TOOL_GROUP }),
+  );
 
 /**
- * The per-run host bridge. `undefined` for a headless run: with no launch thread there is no
- * binding to reach and nowhere a proposal could be reviewed, so the refs stay bound but each call
- * reports exactly that instead of drafting into a void.
- *
- * `allowedToolGroups` is the LAUNCHING RECIPE's declared scope and must be forwarded: omitting it
- * leaves `buildBindingState` with `effectiveGroups === undefined`, which means "every tool the
- * thread offers" and silently ignores a recipe that scoped itself narrowly.
+ * The per-run host bridge, shared by the draft AND handoff families (see module doc). `undefined`
+ * for a headless run: with no launch thread there is no binding to reach and nowhere a proposal or
+ * a new session could be reviewed, so the refs stay bound but each call reports exactly that
+ * instead of acting into a void.
  */
 export function makeT3TeamWorkflowHostDraftToolClient(input: {
   readonly broker: T3TeamToolBrokerShape;
   readonly launchThreadId: string | undefined;
   readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
 }): T3TeamToolHandlerClient | undefined {
-  const { broker, launchThreadId, allowedToolGroups } = input;
-  if (launchThreadId === undefined || launchThreadId.trim().length === 0) return undefined;
-
-  return {
-    // Not part of this seam's scope; the draft family is. Mirrors the SDK bridge's stub.
-    renameThread: async () => {
-      throw new Error("t3team.thread.rename is not reachable through workflow host tools.");
-    },
-    callHostTool: async ({ tool, args }) => {
-      // Defence in depth: the tool tree already limits WHICH ids exist, and this keeps the
-      // transport from widening if a future ref is registered against the same client.
-      if (!HOST_DRAFT_TOOL_ID_SET.has(tool)) {
-        throw new Error(`Tool '${tool}' is not exposed to workflow bodies.`);
-      }
-      const binding = await Effect.runPromise(
-        broker.bindSession({
-          threadId: ThreadId.make(launchThreadId),
-          ...(allowedToolGroups === undefined ? {} : { allowedToolGroups }),
-        }),
-      );
-      if (binding === undefined) {
-        throw new Error(
-          `No t3team tool binding is available on thread '${launchThreadId}', so '${tool}' cannot propose a draft.`,
-        );
-      }
-      const result = await Effect.runPromise(
-        binding.callTool({
-          server: T3TEAM_MCP_SERVER_NAME,
-          tool,
-          arguments: args,
-          threadId: launchThreadId,
-        }),
-      );
-      // A broker error result is a FAILED step, not a value: surfacing it as data would let a body
-      // report "draft proposed" when nothing is pending review.
-      if (result.isError === true) throw new Error(resultText(result));
-      return result.structuredContent;
-    },
-  };
+  return makeT3TeamWorkflowHostToolClient({ ...input, allowedToolIds: HOST_TOOL_ID_SET });
 }
 
-/** The run-option fragment for a launch. The refs are bound even with NO client, so a body that
- * calls one on a headless run fails at the CALL with a sentence naming the cause instead of
- * `Cannot read properties of undefined` — the same reasoning as the SDK's `defaultBroker` stand-in
- * (`t3team-sdk.bodyTrees.ts`). The capability gate runs first either way, so binding a ref grants
- * nothing: without a client every call can only fail. */
+/** The run-option fragment for a launch, combining the draft refs and the handoff refs so both
+ * families are reachable wherever this is spread into `WorkflowRunOptions`. */
 export function t3teamWorkflowHostToolRunOptions(client: T3TeamToolHandlerClient | undefined): {
   readonly tools: ReadonlyArray<ToolRef<unknown, unknown>>;
   readonly t3team?: T3TeamToolHandlerClient;
 } {
-  return client === undefined
-    ? { tools: T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS }
-    : { tools: T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS, t3team: client };
+  return combinedHostToolRunOptions(client, [
+    T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS,
+    T3TEAM_WORKFLOW_HOST_HANDOFF_TOOL_REFS,
+  ]);
 }
