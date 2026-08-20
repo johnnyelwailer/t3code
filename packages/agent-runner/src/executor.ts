@@ -752,6 +752,18 @@ export interface RunJobOptions {
    * ensureGatewayNetwork(). Defaults to false (not attempted), which makes
    * gateway-only throw NotImplementedError per buildDockerRunArgs. */
   gatewayNetworkReady?: boolean;
+  /** External cancellation for the batch shape (`runJob` itself has no
+   * `SandboxHandle` a caller could `stop()` directly — this is that seam).
+   * When `signal` aborts, `runJob` calls the SAME authoritative
+   * `handle.stop()` escalation a `timeoutMs` timeout or an interactive
+   * `startSandbox()` consumer would (`docker kill` -> verify -> `docker rm
+   * -f` -> verify) rather than leaving the container to run to its own
+   * exit/timeout. Added for a Temporal Activity wrapper (a resident-agent
+   * `deepCodeProbe` job) to wire `Context.current().cancellationSignal`
+   * through to the container it started — see that caller's own doc
+   * comment. Optional and unused by every pre-existing caller, so nothing
+   * about a plain `runJob(spec, { onEvent })` call changes. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -764,10 +776,24 @@ export interface RunJobOptions {
 export async function runJob(rawSpec: JobSpec, options: RunJobOptions): Promise<JobResult> {
   const handle = await startSandbox(rawSpec, { gatewayNetworkReady: options.gatewayNetworkReady });
   const unsubscribe = handle.onEvent(options.onEvent);
+  const { signal } = options;
+  // Already aborted before the sandbox even started (a cancellation that
+  // landed during the mkdtemp/buildReviewJobSpec window above `runJob`, or
+  // one that raced startSandbox itself) — stop it immediately rather than
+  // waiting for the abort event, which never fires for an already-aborted
+  // signal.
+  if (signal?.aborted) {
+    void handle.stop();
+  }
+  const onAbort = () => {
+    void handle.stop();
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
   try {
     return await handle.wait();
   } finally {
     unsubscribe();
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 
