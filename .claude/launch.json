@@ -20,6 +20,24 @@
       "port": 5733
     },
     {
+      "name": "t3work-pack-e2e",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code-pack-api/apps/server && export PATH=\"$PWD/../../node_modules/.bin:$PATH\" && T3WORK_PACKS_DIR=/Users/pj/Dev/github/nexi-distribution/packs exec node src/t3work-bin.ts --port 14773"
+      ],
+      "port": 14773
+    },
+    {
+      "name": "t3work-pack-web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code-pack-api/apps/web && VITE_WS_URL=ws://localhost:14773 exec ../../node_modules/.bin/vp dev --port 15733"
+      ],
+      "port": 15733
+    },
+    {
       "name": "t3storybook",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
@@ -27,6 +45,87 @@
         "cd /Users/pj/Dev/github/t3code/apps/web && export PATH=\"$HOME/.bun/bin:$PWD/../../node_modules/.bin:$PATH\" && exec node scripts/t3work-storybook.mjs dev --no-open"
       ],
       "port": 6006
+    },
+    {
+      "name": "t3storybook-widget-wt",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code/.claude/worktrees/agent-a848da265b207c059/apps/web && export PATH=\"$HOME/.bun/bin:$PWD/../../node_modules/.bin:$PATH\" && exec node scripts/t3work-storybook.mjs dev --no-open"
+      ],
+      "port": 6006
+    },
+    {
+      "name": "nexi-e2e-server",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code-pack-api/apps/server && export PATH=\"$PWD/../../node_modules/.bin:$PATH\" && T3WORK_PACKS_DIR=/Users/pj/Dev/github/nexi-distribution/packs exec node src/t3work-bin.ts --port 14774 --base-dir /private/tmp/claude-501/-Users-pj-Dev-github-t3code/b367e22f-de25-42d7-8119-199fcc12de7c/scratchpad/nexi-e2e-state"
+      ],
+      "port": 14774
+    },
+    {
+      "name": "nexi-e2e-web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code-pack-api/apps/web && VITE_WS_URL=ws://localhost:14774 exec ../../node_modules/.bin/vp dev --port 15734"
+      ],
+      "port": 15734
+    },
+    {
+      "name": "nexi-storybook",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code-pack-api/apps/web && export PATH=\"$HOME/.bun/bin:$PWD/../../node_modules/.bin:$PATH\" && T3WORK_STORYBOOK_PACK_DIR=/Users/pj/Dev/github/nexi-distribution/packs/nexplore-global exec node scripts/t3work-storybook.mjs dev --no-open -p 6007"
+      ],
+      "port": 6007
+    },
+    {
+      "name": "t3web-workitem",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code/.claude/worktrees/quirky-thompson-6aafce && export PATH=\"$PWD/node_modules/.bin:$HOME/.bun/bin:$PATH\" && T3CODE_PORT_OFFSET=4 exec node scripts/dev-runner.ts dev --home-dir \"$PWD/.t3/wave1\""
+      ],
+      "port": 5737
+    },
+    {
+      "name": "t3storybook-workitem",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code/.claude/worktrees/quirky-thompson-6aafce/apps/web && export PATH=\"$HOME/.bun/bin:$PWD/../../node_modules/.bin:$PATH\" && exec node scripts/t3team-storybook.mjs dev --no-open -p 6017"
+      ],
+      "port": 6017
+    },
+    {
+      "name": "t3web-clean",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/pj/Dev/github/t3code/.claude/worktrees/quirky-thompson-6aafce && export PATH=\"$PWD/node_modules/.bin:$HOME/.bun/bin:$PATH\" && T3CODE_PORT_OFFSET=11 exec node scripts/dev-runner.ts dev --home-dir \"$PWD/.t3/clean1\""
+      ],
+      "port": 5744
+    },
+    {
+      "name": "t3web-pr",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-pj-Dev-github-t3code/2bb74cf8-0408-4ceb-aa1a-a3f0ec0d354e/scratchpad/wt-rewrite && export PATH=\"$PWD/node_modules/.bin:$HOME/.bun/bin:$PATH\" && T3CODE_PORT_OFFSET=11 exec node scripts/dev-runner.ts dev --home-dir \"/Users/pj/Dev/github/t3code/.claude/worktrees/quirky-thompson-6aafce/.t3/clean1\""
+      ],
+      "port": 5744
+    },
+    {
+      "name": "t3web-ux",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-pj-Dev-github-t3code/2bb74cf8-0408-4ceb-aa1a-a3f0ec0d354e/scratchpad/wt-rewrite && export PATH=\"$PWD/node_modules/.bin:$HOME/.bun/bin:$PATH\" && export HOME=\"/Users/pj/Dev/github/t3code/.claude/worktrees/quirky-thompson-6aafce/.t3/sandbox-home\" && T3CODE_PORT_OFFSET=15 exec node scripts/dev-runner.ts dev --home-dir \"/Users/pj/Dev/github/t3code/.claude/worktrees/quirky-thompson-6aafce/.t3/sandbox-home/basedir\""
+      ],
+      "port": 5748
     }
   ]
 }
