@@ -5,15 +5,14 @@ import type { ReactNode } from "react";
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import {
-  useT3TeamInboxAttribution,
   useT3TeamInboxPinnedGitHubActivity,
   useT3TeamInboxWorkItems,
 } from "~/t3team/t3team-useInboxWorkItems";
 import { InboxPinnedGitHubActivityRows } from "~/t3team/components/t3team-InboxPinnedGitHubActivityRows";
 import { InboxWorkItemRows } from "~/t3team/components/t3team-InboxWorkItemRows";
 import { ProjectSidebarHeader } from "~/t3team/components/t3team-ProjectSidebarHeader";
-import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
+import { useT3TeamSidebarThreadDataStore } from "~/t3team/t3team-sidebarThreadDataStore";
 
 /**
  * The only two places T3 Team reaches into upstream's Inbox sidebar.
@@ -40,9 +39,18 @@ export function InboxHeader(): ReactNode {
   );
 }
 
-/** Compact work-item attribution on a thread row. Doc 40: attribution, not hierarchy. */
+/**
+ * Compact work-item attribution on a thread row. Doc 40: attribution, not hierarchy.
+ *
+ * Reads from `t3team-sidebarThreadDataStore` — a mirror populated by
+ * `useT3TeamSidebarThreadMeta()` in `Sidebar.tsx`. This avoids a per-row
+ * `useProjectStore()` subscription that would re-render every visible thread row
+ * on every thread click (measured at ~2.4 s per click with ~64 rows).
+ */
 export function InboxThreadAttribution({ threadId }: { threadId: string }): ReactNode {
-  const attribution = useT3TeamInboxAttribution(threadId);
+  const attribution = useT3TeamSidebarThreadDataStore(
+    (s) => s.attributionByThreadId.get(threadId) ?? null,
+  );
   if (!attribution) {
     return null;
   }
@@ -63,12 +71,18 @@ export function InboxThreadAttribution({ threadId }: { threadId: string }): Reac
  * the Work-lens row list elsewhere (`t3team-useChildThreadRelations.ts`) and
  * instead render as a compact tree directly below the parent row (Sidebar.tsx)
  * when this chip is expanded — clicking it just toggles that disclosure.
+ *
+ * Reads from `t3team-sidebarThreadDataStore` — a mirror populated by
+ * `useT3TeamSidebarThreadMeta()` in `Sidebar.tsx`. This avoids a per-row
+ * `useProjectStore()` subscription (see `InboxThreadAttribution` for the full
+ * rationale).
  */
 export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode {
-  const { subRunCountsByParentId } = useT3TeamChildThreadRelations();
+  const counts = useT3TeamSidebarThreadDataStore(
+    (s) => s.subRunCountsByParentId.get(threadId) ?? null,
+  );
   const expanded = useExpandedSubRunsStore((state) => state.expandedParentIds.has(threadId));
   const toggle = useExpandedSubRunsStore((state) => state.toggle);
-  const counts = subRunCountsByParentId.get(threadId);
   if (!counts || counts.total === 0) {
     return null;
   }

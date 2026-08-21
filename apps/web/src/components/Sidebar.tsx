@@ -185,7 +185,7 @@ import {
   InboxThreadAttribution,
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
-import { useT3TeamChildThreadRelations } from "~/t3team/hooks/t3team-useChildThreadRelations";
+import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
@@ -1805,7 +1805,12 @@ export default function Sidebar() {
   const threads = useThreadShells();
   // t3team: sub-runbook children are filtered out of the row list below and
   // surfaced instead as a "N sub-runs" chip on their parent (InboxSubRunsChip).
-  const { childThreadIds, childThreadsByParentId } = useT3TeamChildThreadRelations();
+  // useT3TeamSidebarThreadMeta is the consolidated hook: one useProjectStore()
+  // call that computes ChildThreadRelations AND mirrors attributionByThreadId +
+  // subRunCountsByParentId to t3team-sidebarThreadDataStore. Per-row slots
+  // (InboxSubRunsChip, InboxThreadAttribution) read those maps with narrow
+  // Zustand selectors — no per-row useProjectStore subscriptions, memo intact.
+  const { childThreadIds, childThreadsByParentId } = useT3TeamSidebarThreadMeta();
   // t3team: mirror the relation for chrome outside this component (Agents panel fork section) —
   // see t3team-childThreadRelationsStore.ts for why this is a mirror rather than a second
   // useT3TeamChildThreadRelations()/useProjectStore() instance elsewhere.
