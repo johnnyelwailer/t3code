@@ -40,6 +40,7 @@ import * as ServerLifecycleEvents from "../src/serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "../src/serverRuntimeStartup.ts";
 import * as ServerSettings from "../src/serverSettings.ts";
 import * as AnalyticsService from "../src/telemetry/AnalyticsService.ts";
+import * as T3TeamThreadToolContextEvictionReactor from "../src/t3team-threadToolContextEvictionReactor.ts";
 
 const providerInstanceId = ProviderInstanceId.make("codex");
 const projectId = ProjectId.make("project-startup-orphan");
@@ -74,6 +75,10 @@ const startupDependencies = Layer.mergeAll(
   }),
   Layer.succeed(ProviderSessionReaper.ProviderSessionReaper, {
     start: () => Effect.void,
+  }),
+  Layer.succeed(T3TeamThreadToolContextEvictionReactor.T3TeamThreadToolContextEvictionReactor, {
+    start: () => Effect.void,
+    drain: Effect.void,
   }),
   ServerLifecycleEvents.layer,
   Layer.succeed(ServerEnvironment.ServerEnvironment, {

@@ -4,11 +4,11 @@ import {
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
-import { BotIcon, SparklesIcon } from "lucide-react";
+import { resolveProviderSkillSourceKind } from "@t3tools/client-runtime/providerSkills";
+import { SparklesIcon } from "lucide-react";
 import { memo, useLayoutEffect, useMemo, useRef } from "react";
 
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
-import { formatProviderSkillInstallSource } from "~/providerSkillPresentation";
 import { cn } from "~/lib/utils";
 import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
@@ -109,6 +109,7 @@ function groupCommandItems(
 
   const builtInItems = items.filter((item) => item.type === "slash-command");
   const providerItems = items.filter((item) => item.type === "provider-slash-command");
+  const skillItems = items.filter((item) => item.type === "skill");
   const recipeItems = items.filter((item) => item.type === "recipe-slash-command");
 
   const groups: ComposerCommandGroup[] = [];
@@ -118,10 +119,17 @@ function groupCommandItems(
   if (providerItems.length > 0) {
     groups.push({ id: "provider", label: "Provider", items: providerItems });
   }
+  if (skillItems.length > 0) {
+    groups.push({ id: "skills", label: "Skills", items: skillItems });
+  }
   // Recipes come last so a project recipe can never appear to shadow a host
   // command (docs/t3team-mvp/16-action-recipes.md#menu-grouping).
   if (recipeItems.length > 0) {
     groups.push({ id: "recipes", label: "Recipes", items: recipeItems });
+  }
+  if (groups.length === 1) {
+    const group = groups[0]!;
+    return [{ id: group.id, label: null, items: group.items }];
   }
   return groups;
 }
@@ -177,7 +185,8 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
     >
       <div
         ref={listRef}
-        className="dropdown-glass relative w-full overflow-hidden rounded-[20px] shadow-[0_16px_40px_-18px_rgb(0_0_0/55%)] **:data-[slot=scroll-area-scrollbar]:data-[orientation=vertical]:my-4 dark:shadow-[0_18px_44px_-18px_rgb(0_0_0/80%)]"
+        className="chat-composer-drawer-surface chat-composer-drawer-attached relative w-full overflow-hidden **:data-[slot=scroll-area-scrollbar]:data-[orientation=vertical]:my-4"
+        data-composer-command-drawer="true"
       >
         {props.items.length > 0 ? (
           <CommandList
@@ -250,7 +259,13 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
   onSelect: (item: ComposerCommandItem) => void;
 }) {
   const skillSourceLabel =
-    props.item.type === "skill" ? formatProviderSkillInstallSource(props.item.skill) : null;
+    props.item.type === "skill" ? resolveProviderSkillSourceKind(props.item.skill) : null;
+  const showSlashSkillLabel =
+    props.item.type === "skill" && props.item.label.toLowerCase().startsWith("skill:");
+  const showSkillGlyph = props.item.type === "skill" && !showSlashSkillLabel;
+  const skillSourceReadableLabel = skillSourceLabel
+    ? `${skillSourceLabel.charAt(0).toUpperCase()}${skillSourceLabel.slice(1)} skill`
+    : null;
 
   return (
     <CommandItem
@@ -287,25 +302,32 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           theme={props.resolvedTheme}
         />
       ) : null}
-      {props.item.type === "slash-command" ? (
-        <BotIcon className="size-4 shrink-0 text-icon-muted" />
-      ) : null}
       {props.item.type === "provider-slash-command" ? (
         <span className="inline-flex size-4 shrink-0 items-center justify-center text-icon-muted">
           <SkillGlyph className="size-3.5" />
         </span>
       ) : null}
-      {props.item.type === "skill" ? (
+      {showSkillGlyph ? (
         <span className="inline-flex size-4 shrink-0 items-center justify-center text-icon-muted">
           <SkillGlyph className="size-3.5" />
+          <span className="sr-only">{skillSourceReadableLabel ?? "App skill"}</span>
         </span>
       ) : null}
       {props.item.type === "recipe-slash-command" ? (
         <SparklesIcon className="size-4 shrink-0 text-muted-foreground/80" />
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="shrink-0">{props.item.label}</span>
-        <span className="min-w-0 flex-1 truncate text-secondary-label text-xs">
+        <span className="shrink-0 font-sans text-xs font-medium">
+          {showSlashSkillLabel ? (
+            <>
+              <span className="text-secondary-label">skill:</span>
+              {props.item.label.slice("skill:".length)}
+            </>
+          ) : (
+            props.item.label
+          )}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-right text-secondary-label text-xs">
           {props.item.description}
         </span>
       </span>

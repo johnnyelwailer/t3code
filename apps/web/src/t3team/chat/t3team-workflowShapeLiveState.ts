@@ -50,7 +50,7 @@ export function useT3TeamWorkflowShapeLiveState(input: {
   const runtimeStepsForRows = planRuntimeSteps.filter((step) => step.stepKind !== "wait.until");
   const { rows } = reconcileT3TeamWorkflowShapeProgress(visiblePlanSteps, runtimeStepsForRows);
   const activeWait = [...planRuntimeSteps]
-    .reverse()
+    .toReversed()
     .find(
       (step) =>
         step.stepKind === "wait.until" && (step.phase === "started" || step.phase === "waiting"),

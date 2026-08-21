@@ -175,7 +175,7 @@ function hasDnsLabel(host: string, label: string): boolean {
 }
 
 const GITHUB_ENTERPRISE_HOST_SUFFIXES: ReadonlyArray<string> = [".ghe.com", ".ghe.localhost"];
-const GITHUB_HOST_LABELS: ReadonlyArray<string> = ["github", "ghe"];
+const GITHUB_HOST_LABELS: ReadonlySet<string> = new Set(["github", "ghe"]);
 
 /**
  * Matches github.com, its subdomains, GitHub's managed `.ghe.com` /
@@ -197,7 +197,7 @@ function isGitHubHost(host: string): boolean {
   if (GITHUB_ENTERPRISE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) {
     return true;
   }
-  return host.split(".").some((label) => GITHUB_HOST_LABELS.includes(label));
+  return host.split(".").some((label) => GITHUB_HOST_LABELS.has(label));
 }
 
 function isGitLabHost(host: string): boolean {

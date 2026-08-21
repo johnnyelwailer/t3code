@@ -413,6 +413,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
         )
       : openCodeRuntime.loadInventoryFromCli({
           binaryPath: openCodeSettings.binaryPath,
+          cwd,
           // Upstream probes local installs through the CLI instead of spawning a server.
           // The fork's custom OpenCode config reaches a spawned server via
           // OPENCODE_CONFIG_CONTENT, so forward it here too — but only when it is actually
