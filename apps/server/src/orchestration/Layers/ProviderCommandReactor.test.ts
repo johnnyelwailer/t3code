@@ -2673,6 +2673,15 @@ describe("ProviderCommandReactor", () => {
       thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed"),
     ).toBe(false);
     expect(thread?.session?.providerName).toBe("claudeAgent");
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      input: expect.stringContaining("Conversation so far:"),
+    });
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      input: expect.stringContaining("copied assistant message"),
+    });
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      input: expect.stringContaining("New user message:\ncontinue with claude"),
+    });
   });
 
   it("bootstraps fork transcript when active session resumeCursor is null", async () => {

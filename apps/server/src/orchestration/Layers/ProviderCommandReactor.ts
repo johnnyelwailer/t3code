@@ -833,13 +833,8 @@ const make = Effect.gen(function* () {
     const requestedModelSelection =
       input.modelSelection ?? threadModelSelections.get(input.threadId) ?? thread.modelSelection;
 
-    const hasResumeCursor =
-      activeSession?.resumeCursor !== undefined && activeSession?.resumeCursor !== null;
-
     const shouldBootstrapForkTranscript =
-      normalizedInput !== undefined &&
-      isForkThreadBeforeFirstLiveTurn(thread) &&
-      !hasResumeCursor;
+      normalizedInput !== undefined && isForkThreadBeforeFirstLiveTurn(thread);
     const effectiveInput =
       shouldBootstrapForkTranscript && normalizedInput
         ? buildForkTranscriptBootstrapInput({
