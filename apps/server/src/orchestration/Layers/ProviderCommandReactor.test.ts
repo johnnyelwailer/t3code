@@ -2585,6 +2585,171 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
+  it("allows provider change on fork-replayed history before the first live turn", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.message.upsert",
+        commandId: CommandId.make("cmd-fork-replay-message-user"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("fork:thread-1:1:user"),
+          role: "user",
+          text: "copied user message",
+          attachments: [],
+          turnId: null,
+          streaming: false,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.message.upsert",
+        commandId: CommandId.make("cmd-fork-replay-message-assistant"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("fork:thread-1:2:assistant"),
+          role: "assistant",
+          text: "copied assistant message",
+          attachments: [],
+          turnId: null,
+          streaming: false,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-stopped-fork-replay"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "stopped",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-fork-replay-provider-switch"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-fork-replay-provider-switch"),
+          role: "user",
+          text: "continue with claude",
+          attachments: [],
+        },
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("claudeAgent"),
+          model: "claude-opus-4-6",
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.startSession.mock.calls.length === 1);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(
+      thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed"),
+    ).toBe(false);
+    expect(thread?.session?.providerName).toBe("claudeAgent");
+  });
+
+  it("bootstraps fork transcript when active session resumeCursor is null", async () => {
+    const harness = await createHarness({
+      startSessionEffect: (session) =>
+        Effect.succeed({
+          ...session,
+          resumeCursor: null,
+        }),
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.message.upsert",
+        commandId: CommandId.make("cmd-fork-replay-null-resume-user"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("fork:thread-1:1:user"),
+          role: "user",
+          text: "copied user message",
+          attachments: [],
+          turnId: null,
+          streaming: false,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.message.upsert",
+        commandId: CommandId.make("cmd-fork-replay-null-resume-assistant"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("fork:thread-1:2:assistant"),
+          role: "assistant",
+          text: "copied assistant message",
+          attachments: [],
+          turnId: null,
+          streaming: false,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-fork-replay-null-resume"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-fork-replay-null-resume"),
+          role: "user",
+          text: "continue with claude",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      threadId: ThreadId.make("thread-1"),
+      input: expect.stringContaining("Conversation so far:"),
+    });
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      input: expect.stringContaining("copied user message"),
+    });
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      input: expect.stringContaining("New user message:\ncontinue with claude"),
+    });
+  });
+
   it("reacts to thread.turn.interrupt-requested by calling provider interrupt", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
