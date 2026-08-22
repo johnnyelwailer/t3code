@@ -1245,6 +1245,7 @@ function ChatViewContent(props: ChatViewProps) {
     routeKind === "server" ? props.dispatchWorkflowDecision : undefined;
   const onControlWorkflow = routeKind === "server" ? props.onControlWorkflow : undefined;
   const onOpenThread = routeKind === "server" ? props.onOpenThread : undefined;
+  const onForkThread = routeKind === "server" ? props.onForkThread : undefined;
   const onBack = routeKind === "server" ? props.onBack : undefined;
   const headerAccessory = routeKind === "server" ? props.headerAccessory : undefined;
   const titleBarControlsAccessory =
@@ -2057,10 +2058,10 @@ function ChatViewContent(props: ChatViewProps) {
   );
 
   const selectedProviderByThreadId = composerActiveProvider ?? null;
-  const threadProvider =
-    activeThread?.modelSelection.instanceId ??
-    activeProject?.defaultModelSelection?.instanceId ??
-    null;
+  // Provider lock must reflect an actual runtime-bound session, not
+  // historical/default model selection values (which keeps forked threads
+  // incorrectly pinned before their first live turn).
+  const threadProvider = activeThread?.session?.providerName ?? null;
   const lockedProvider = deriveLockedProvider({
     thread: activeThread,
     selectedProvider: selectedProviderByThreadId,
@@ -6563,6 +6564,7 @@ function ChatViewContent(props: ChatViewProps) {
                 {...(dispatchWorkflowDecision ? { dispatchWorkflowDecision } : {})}
                 {...(onControlWorkflow ? { onControlWorkflow } : {})}
                 {...(onOpenThread ? { onOpenThread } : {})}
+                {...(onForkThread ? { onForkThread } : {})}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
                 workflowCardNavigationRequest={workflowCardNavigationRequest}
                 hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}

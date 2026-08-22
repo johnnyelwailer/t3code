@@ -66,6 +66,8 @@ const WorkspaceConfig = Schema.Struct({
 type WorkspaceConfig = typeof WorkspaceConfig.Type;
 
 const StageWorkspaceConfig = Schema.Struct({
+  packages: Schema.optional(Schema.Array(Schema.String)),
+  catalog: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   supportedArchitectures: Schema.Struct({
     os: Schema.Array(Schema.String),
     cpu: Schema.Array(Schema.String),
@@ -155,6 +157,9 @@ interface BuildCliInput {
   readonly arch: Option.Option<typeof BuildArch.Type>;
   readonly buildVersion: Option.Option<string>;
   readonly outputDir: Option.Option<string>;
+  readonly packsDir: Option.Option<string>;
+  readonly productName: Option.Option<string>;
+  readonly iconPng: Option.Option<string>;
   readonly skipBuild: Option.Option<boolean>;
   readonly keepStage: Option.Option<boolean>;
   readonly signed: Option.Option<boolean>;
@@ -757,6 +762,9 @@ interface ResolvedBuildOptions {
   readonly arch: typeof BuildArch.Type;
   readonly version: string | undefined;
   readonly outputDir: string;
+  readonly packsDir: string | undefined;
+  readonly productName: string | undefined;
+  readonly iconPng: string | undefined;
   readonly skipBuild: boolean;
   readonly keepStage: boolean;
   readonly signed: boolean;
@@ -1146,6 +1154,7 @@ const stageClerkPasskeyNativeBinaries = Effect.fn("stageClerkPasskeyNativeBinari
 export function createStageWorkspaceConfig(input: {
   readonly platform: typeof BuildPlatform.Type;
   readonly arch: typeof BuildArch.Type;
+  readonly catalog?: Record<string, string>;
   readonly allowBuilds?: Record<string, boolean>;
   readonly patchedDependencies?: Record<string, string>;
   readonly overrides?: Record<string, string>;
@@ -1157,7 +1166,15 @@ export function createStageWorkspaceConfig(input: {
   // symlink/junction layout surviving the trip.
   readonly linuxServerBackend?: boolean;
 }): StageWorkspaceConfig {
-  const { platform, arch, allowBuilds, patchedDependencies, overrides, linuxServerBackend } = input;
+  const {
+    platform,
+    arch,
+    catalog,
+    allowBuilds,
+    patchedDependencies,
+    overrides,
+    linuxServerBackend,
+  } = input;
   const hostOs = platform === "mac" ? "darwin" : platform === "win" ? "win32" : "linux";
   const hostCpu = arch === "universal" ? ["arm64", "x64"] : [arch];
   // Linux AppImages execute a Linux/glibc Node process that loads
@@ -1182,6 +1199,8 @@ export function createStageWorkspaceConfig(input: {
           };
 
   return {
+    packages: ["packages/*"],
+    ...(catalog && Object.keys(catalog).length > 0 ? { catalog } : {}),
     supportedArchitectures,
     ...(allowBuilds && Object.keys(allowBuilds).length > 0 ? { allowBuilds } : {}),
     ...(patchedDependencies && Object.keys(patchedDependencies).length > 0
@@ -1228,6 +1247,9 @@ const BuildEnvConfig = Config.all({
   arch: Config.schema(BuildArch, "T3CODE_DESKTOP_ARCH").pipe(Config.option),
   version: Config.string("T3CODE_DESKTOP_VERSION").pipe(Config.option),
   outputDir: Config.string("T3CODE_DESKTOP_OUTPUT_DIR").pipe(Config.option),
+  packsDir: Config.string("T3CODE_DESKTOP_PACKS_DIR").pipe(Config.option),
+  productName: Config.string("T3CODE_DESKTOP_PRODUCT_NAME").pipe(Config.option),
+  iconPng: Config.string("T3CODE_DESKTOP_ICON_PNG").pipe(Config.option),
   skipBuild: Config.boolean("T3CODE_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
   keepStage: Config.boolean("T3CODE_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
   signed: Config.boolean("T3CODE_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
@@ -1312,6 +1334,15 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     repoRoot,
     mergeOptions(input.outputDir, env.outputDir, releaseDir),
   );
+  const packsDir =
+    ("packsDir" in input ? Option.getOrUndefined(input.packsDir) : undefined) ??
+    Option.getOrUndefined(env.packsDir);
+  const productName =
+    ("productName" in input ? Option.getOrUndefined(input.productName) : undefined) ??
+    Option.getOrUndefined(env.productName);
+  const iconPng =
+    ("iconPng" in input ? Option.getOrUndefined(input.iconPng) : undefined) ??
+    Option.getOrUndefined(env.iconPng);
 
   const skipBuild = resolveBooleanFlag(input.skipBuild, env.skipBuild);
   const keepStage = resolveBooleanFlag(input.keepStage, env.keepStage);
@@ -1339,6 +1370,9 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     arch,
     version,
     outputDir,
+    packsDir,
+    productName,
+    iconPng,
     skipBuild,
     keepStage,
     signed,
@@ -1980,7 +2014,17 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
   return resolveWebAssetBrandForChannel(resolveDesktopUpdateChannel(version));
 }
 
-export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
+export function resolveDesktopBuildIconAssets(
+  version: string,
+  iconPngOverride?: string,
+): DesktopBuildIconAssets {
+  if (iconPngOverride?.trim()) {
+    return {
+      macIconPng: iconPngOverride,
+      linuxIconPng: iconPngOverride,
+      windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+    };
+  }
   if (resolveDesktopUpdateChannel(version) === "nightly") {
     return {
       macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
@@ -2013,10 +2057,30 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
   return `${trimmed.slice(0, versionSeparator)}/${trimmed.slice(versionSeparator + 1)}`;
 }
 
-export function resolveDesktopProductName(version: string): string {
+export function resolveDesktopProductName(version: string, productNameOverride?: string): string {
+  const baseName = productNameOverride?.trim() || desktopPackageJson.productName || "T3 Code";
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "T3 Code (Nightly)"
-    : (desktopPackageJson.productName ?? "T3 Code");
+    ? `${baseName.replace(/\s*\(Alpha\)$/u, "")} (Nightly)`
+    : baseName;
+}
+
+function slugifyDesktopName(value: string): string {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "t3code"
+  );
+}
+
+interface PackagedDesktopBrandingResource {
+  readonly baseName: string;
+  readonly displayName: string;
+  readonly userDataDirName: string;
+  readonly legacyUserDataDirName: string;
+  readonly linuxDesktopEntryName: string;
+  readonly linuxWmClass: string;
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2032,10 +2096,14 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         readonly provisioningProfilePath: string;
       }
     | undefined,
+  packsDir?: string,
+  productNameOverride?: string,
+  includePackagedIconPng = false,
 ) {
+  const resolvedProductName = resolveDesktopProductName(version, productNameOverride);
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
-    productName: resolveDesktopProductName(version),
+    productName: resolvedProductName,
     artifactName: "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS],
@@ -2048,6 +2116,38 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // hand-packed server.asar sidecar (see WINDOWS_SERVER_ASAR_RESOURCE).
     extraResources: [
       ...DESKTOP_EXTRA_RESOURCES,
+      ...(packsDir === undefined
+        ? []
+        : [
+            {
+              from: "apps/desktop/prod-resources/packs",
+              to: "packs",
+            },
+            {
+              from: "apps/desktop/prod-resources/.env",
+              to: ".env",
+            },
+            {
+              from: "apps/desktop/prod-resources/.env.local",
+              to: ".env.local",
+            },
+          ]),
+      ...(productNameOverride === undefined
+        ? []
+        : [
+            {
+              from: "apps/desktop/prod-resources/desktop-branding.json",
+              to: "desktop-branding.json",
+            },
+          ]),
+      ...(includePackagedIconPng
+        ? [
+            {
+              from: "apps/desktop/prod-resources/icon.png",
+              to: "icon.png",
+            },
+          ]
+        : []),
       ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
     ],
   };
@@ -2089,7 +2189,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // Give the themed installer its own Finder volume name. Finder caches
       // DMG window backgrounds by volume name, so reusing a generic name can
       // make a newly built background look unchanged during testing.
-      title: `${resolveDesktopProductName(version)} ${version} Installer`,
+      title: `${resolvedProductName} ${version} Installer`,
       background: `dmg/dmg-background-${updateChannel}.png`,
       window: {
         width: 540,
@@ -2279,6 +2379,7 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
   readonly serverDistDir: string;
   readonly arch: typeof BuildArch.Type;
   readonly appVersion: string;
+  readonly workspaceCatalog: Record<string, string>;
   readonly runtimeExternalDependencies: Record<string, string>;
   readonly fffNodeVersion: string;
   readonly allowBuilds: Record<string, boolean>;
@@ -2322,6 +2423,7 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
   const sidecarWorkspaceConfig = createStageWorkspaceConfig({
     platform: "win",
     arch: input.arch,
+    catalog: input.workspaceCatalog,
     allowBuilds: input.allowBuilds,
     patchedDependencies: sidecarPatchedDependencies,
     overrides: input.overrides,
@@ -2332,6 +2434,7 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
     path.join(serverStageDir, "pnpm-workspace.yaml"),
     sidecarWorkspaceConfigString,
   );
+  yield* fs.copy(path.join(input.repoRoot, "packages"), path.join(serverStageDir, "packages"));
   if (Object.keys(sidecarPatchedDependencies).length > 0) {
     yield* fs.copy(path.join(input.repoRoot, "patches"), path.join(serverStageDir, "patches"));
   }
@@ -2681,7 +2784,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   });
 
   const appVersion = options.version ?? serverPackageJson.version;
-  const iconAssets = resolveDesktopBuildIconAssets(appVersion);
+  const iconAssets = resolveDesktopBuildIconAssets(appVersion, options.iconPng);
   const commitHash = yield* resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
   const stageRoot = yield* mkdir({
@@ -2830,9 +2933,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     options.platform,
     stageResourcesDir,
     {
-      macIconPng: path.join(repoRoot, iconAssets.macIconPng),
-      linuxIconPng: path.join(repoRoot, iconAssets.linuxIconPng),
-      windowsIconIco: path.join(repoRoot, iconAssets.windowsIconIco),
+      macIconPng: path.isAbsolute(iconAssets.macIconPng)
+        ? iconAssets.macIconPng
+        : path.join(repoRoot, iconAssets.macIconPng),
+      linuxIconPng: path.isAbsolute(iconAssets.linuxIconPng)
+        ? iconAssets.linuxIconPng
+        : path.join(repoRoot, iconAssets.linuxIconPng),
+      windowsIconIco: path.isAbsolute(iconAssets.windowsIconIco)
+        ? iconAssets.windowsIconIco
+        : path.join(repoRoot, iconAssets.windowsIconIco),
     },
     options.verbose,
   );
@@ -2840,6 +2949,34 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
   const stageProdResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
+  if (options.packsDir !== undefined) {
+    // Packs at Resources/packs (for backward compat and easy inspection)
+    yield* fs.copy(options.packsDir, path.join(stageProdResourcesDir, "packs"));
+    // Packs inside app.asar at apps/desktop/packs/ — shares the asar's
+    // node_modules tree. The server resolves these via ELECTRON_RUN_AS_NODE.
+    yield* fs.copy(options.packsDir, path.join(stageAppDir, "apps", "desktop", "packs"));
+    for (const envFile of [".env", ".env.local"]) {
+      const sourcePath = path.join(options.packsDir, "..", "vendor", "t3code", envFile);
+      if (yield* fs.exists(sourcePath).pipe(Effect.orElseSucceed(() => false))) {
+        yield* fs.copy(sourcePath, path.join(stageProdResourcesDir, envFile));
+      }
+    }
+  }
+  if (options.productName !== undefined) {
+    const slug = slugifyDesktopName(options.productName);
+    const brandingResource: PackagedDesktopBrandingResource = {
+      baseName: options.productName,
+      displayName: options.productName,
+      userDataDirName: slug,
+      legacyUserDataDirName: options.productName,
+      linuxDesktopEntryName: `${slug}.desktop`,
+      linuxWmClass: slug,
+    };
+    yield* fs.writeFileString(
+      path.join(stageProdResourcesDir, "desktop-branding.json"),
+      `${JSON.stringify(brandingResource, null, 2)}\n`,
+    );
+  }
 
   const configuredMacPasskeySigning =
     options.platform === "mac" && options.signed
@@ -2917,6 +3054,9 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
             provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
           }
         : undefined,
+      options.packsDir,
+      options.productName,
+      options.iconPng !== undefined,
     ),
     dependencies: stageDependencies,
     devDependencies: {
@@ -2929,6 +3069,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const stageWorkspaceConfig = createStageWorkspaceConfig({
     platform: options.platform,
     arch: options.arch,
+    catalog: workspaceCatalog,
     allowBuilds: workspaceAllowBuilds,
     patchedDependencies: stagePatchedDependencies,
     overrides: resolvedOverrides,
@@ -2938,6 +3079,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     path.join(stageAppDir, "pnpm-workspace.yaml"),
     stageWorkspaceConfigString,
   );
+  yield* fs.copy(path.join(repoRoot, "packages"), path.join(stageAppDir, "packages"));
 
   if (Object.keys(stagePatchedDependencies).length > 0) {
     yield* fs.copy(path.join(repoRoot, "patches"), path.join(stageAppDir, "patches"));
@@ -2954,6 +3096,29 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   );
   yield* stageClerkPasskeyNativeBinaries(stageAppDir, options.platform, options.arch);
 
+  // @t3team/pack-api is source-only TypeScript. Node refuses type stripping
+  // for files under node_modules. Compile it to ESM so packs can import it
+  // from inside the asar or from Resources/packs/.
+  yield* Effect.log("[desktop-artifact] Compiling @t3team/pack-api for packaging...");
+  const packApiDir = path.join(stageAppDir, "node_modules", "@t3team", "pack-api");
+  const repoEsbuild = path.join(repoRoot, "node_modules", ".bin", "esbuild");
+  yield* runCommand(
+    ChildProcess.make(repoEsbuild, [
+      path.join(packApiDir, "src", "index.ts"),
+      "--bundle",
+      "--format=esm",
+      "--platform=node",
+      "--target=node22",
+      `--outfile=${path.join(packApiDir, "index.mjs")}`,
+    ]),
+    { label: "esbuild @t3team/pack-api", verbose: options.verbose },
+  );
+  // Patch package.json to export the compiled .mjs
+  const pkgJsonPath = path.join(packApiDir, "package.json");
+  const pkgJson = JSON.parse(yield* fs.readFileString(pkgJsonPath));
+  pkgJson.exports = { ".": { import: "./index.mjs" } };
+  yield* fs.writeFileString(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + "\n");
+
   // WSL is Windows-only, so only the Windows artifact carries the server
   // sidecar (which embeds the Linux node-pty prebuild); other platforms
   // ignore the prebuild input.
@@ -2964,6 +3129,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       serverDistDir: distDirs.serverDist,
       arch: options.arch,
       appVersion,
+      workspaceCatalog,
       runtimeExternalDependencies: resolvedServerRuntimeExternalDependencies,
       fffNodeVersion: serverPackageJson.dependencies["@ff-labs/fff-node"],
       allowBuilds: workspaceAllowBuilds,
@@ -3119,6 +3285,24 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   ),
   outputDir: Flag.string("output-dir").pipe(
     Flag.withDescription("Output directory for artifacts (env: T3CODE_DESKTOP_OUTPUT_DIR)."),
+    Flag.optional,
+  ),
+  packsDir: Flag.string("packs-dir").pipe(
+    Flag.withDescription(
+      "Path to a workspace packs directory to bundle as resources/packs (env: T3CODE_DESKTOP_PACKS_DIR).",
+    ),
+    Flag.optional,
+  ),
+  productName: Flag.string("product-name").pipe(
+    Flag.withDescription(
+      "Override packaged desktop product name (env: T3CODE_DESKTOP_PRODUCT_NAME).",
+    ),
+    Flag.optional,
+  ),
+  iconPng: Flag.string("icon-png").pipe(
+    Flag.withDescription(
+      "Override packaged desktop icon source PNG (env: T3CODE_DESKTOP_ICON_PNG).",
+    ),
     Flag.optional,
   ),
   skipBuild: Flag.boolean("skip-build").pipe(

@@ -251,6 +251,35 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["title"],
     },
   },
+  "t3team.thread.search_source": {
+    id: "t3team.thread.search_source",
+    label: "Search fork source thread",
+    title: "Search the fork source thread",
+    description:
+      "Search the FULL transcript of the thread this thread was forked from — including the middle messages a truncated fork omitted. Only works in a forked thread. Pass a case-insensitive 'query' substring and an optional 'limit' (default 10, max 25). Returns each matching message with its 1-based position, role, and a snippet around the match.",
+    capabilities: ["read"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Case-insensitive substring to search for in the original thread's messages.",
+          minLength: 1,
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of matches to return (default 10, max 25).",
+        },
+      },
+      required: ["query"],
+    },
+  },
   "t3team.thread.start_child": {
     id: "t3team.thread.start_child",
     label: "Start child session",

@@ -55,6 +55,14 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     await runT3TeamOrchestrationDispatch(command);
   }
 
+  async function forkThread(input: Parameters<BackendApi["forkThread"]>[0]) {
+    return postJson<typeof input, Awaited<ReturnType<BackendApi["forkThread"]>>>(
+      httpBaseUrl,
+      "/api/t3team/thread/fork",
+      input,
+    );
+  }
+
   async function listThreadPlacements(input: Parameters<BackendApi["listThreadPlacements"]>[0]) {
     return postJson<
       typeof input,
@@ -124,6 +132,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     connect,
     disconnect,
     dispatchCommand: dispatch,
+    forkThread,
     launchRecipeWorkflow,
     submitRecipeCardAction,
     resolveWorkflowInput,

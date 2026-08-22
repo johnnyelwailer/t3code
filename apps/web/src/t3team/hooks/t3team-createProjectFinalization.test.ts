@@ -18,6 +18,7 @@ function createBackend(dispatchCommand: BackendApi["dispatchCommand"]): BackendA
     connect: vi.fn(async () => undefined),
     disconnect: vi.fn(async () => undefined),
     dispatchCommand,
+    forkThread: vi.fn(async () => ({ ok: true as const, childThreadId: "child-thread" })),
     launchRecipeWorkflow: vi.fn(async () => ({ ok: true })),
     submitRecipeCardAction: vi.fn(async () => ({ ok: true })),
     resolveWorkflowInput: vi.fn(async () => undefined),

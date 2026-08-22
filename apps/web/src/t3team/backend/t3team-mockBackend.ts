@@ -60,6 +60,10 @@ export function createMockBackend(): BackendApi {
       await new Promise((resolve) => setTimeout(resolve, 200));
     },
 
+    async forkThread() {
+      return { ok: true as const, childThreadId: `mock-fork-${Date.now()}` };
+    },
+
     async launchRecipeWorkflow(input) {
       if (!input.threadId) {
         return {

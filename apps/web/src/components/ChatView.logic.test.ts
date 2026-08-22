@@ -18,6 +18,7 @@ import {
   buildThreadTurnInterruptInput,
   createLocalDispatchSnapshot,
   deriveComposerSendState,
+  deriveLockedProvider,
   dismissBranchMismatchForSession,
   ENVIRONMENT_RECONNECT_WARNING_GRACE_MS,
   getStartedThreadModelChangeBlockReason,
@@ -372,6 +373,50 @@ describe("getStartedThreadModelChangeBlockReason", () => {
       description:
         "This provider does not allow switching models after a conversation has started.",
     });
+  });
+});
+
+describe("deriveLockedProvider", () => {
+  it("does not lock from selected provider without runtime binding", () => {
+    const thread = makeThread({
+      messages: [
+        {
+          id: MessageId.make("msg-1"),
+          role: "user",
+          content: "hello",
+          createdAt: now,
+          sequence: 1,
+          kind: "message",
+          turnId: null,
+          metadata: {},
+          hidden: false,
+        } satisfies Thread["messages"][number],
+      ],
+      session: null,
+    });
+
+    expect(
+      deriveLockedProvider({
+        thread,
+        selectedProvider: "claudeAgent",
+        threadProvider: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("locks to session provider when runtime session exists", () => {
+    expect(
+      deriveLockedProvider({
+        thread: makeThread({
+          session: {
+            ...readySession,
+            providerName: "codex",
+          },
+        }),
+        selectedProvider: "claudeAgent",
+        threadProvider: null,
+      }),
+    ).toBe("codex");
   });
 });
 

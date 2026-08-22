@@ -585,6 +585,7 @@ t3team.recipe.validate
 t3team.orchestration.run
 t3team.widget.show
 t3team.thread.rename
+t3team.thread.search_source
 t3team.thread.read_current
 t3team.thread.rename.draft_update
 t3team.thread.create_context_bound
@@ -594,9 +595,14 @@ t3team.thread.attach_context
 t3team.thread.open_full_page
 ```
 
-`t3team.view.read`, `t3team.thread.rename`, and `t3team.thread.start_child` are the
+`t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search_source`, and
+`t3team.thread.start_child` are the
 current live runtime slice used by the broker implementation. The rest of this section
 remains planned catalog scope.
+
+`t3team.thread.search_source` searches the full transcript of the thread the current
+thread was forked from (the fork provenance note carries the source thread id), so the
+middle of a truncated fork stays reachable.
 
 `t3team.thread.start_child` keeps the `t3team` tool id, but uses session-style input and
 result vocabulary aligned with Copilot session tooling:

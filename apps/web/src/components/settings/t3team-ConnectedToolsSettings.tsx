@@ -4,6 +4,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { ToolAuthCard } from "./t3team-ToolAuthCard";
+import { T3TeamLocalProviderSessionsSetting } from "./t3team-LocalProviderSessionsSetting";
 import { TOOL_AUTH_TOOLS, type ToolAuthToolMeta } from "./t3team-toolAuthTools";
 
 function ConnectedToolCard({ meta }: { readonly meta: ToolAuthToolMeta }) {
@@ -25,6 +26,10 @@ function ConnectedToolCard({ meta }: { readonly meta: ToolAuthToolMeta }) {
 export function ConnectedToolsSettings() {
   return (
     <SettingsPageContainer>
+      <SettingsSection title="Provider sessions">
+        <T3TeamLocalProviderSessionsSetting />
+      </SettingsSection>
+
       <SettingsSection title="Connected tools">
         {TOOL_AUTH_TOOLS.map((meta) => (
           <ConnectedToolCard key={meta.tool} meta={meta} />

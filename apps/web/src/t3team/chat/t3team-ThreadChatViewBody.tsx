@@ -29,6 +29,8 @@ export interface ThreadChatViewBodyProps {
   titleBarControlsAccessory: React.ReactNode | undefined;
   hideHeader: boolean;
   embeddedMode: boolean;
+  /** Fork the thread from a message (branch point); rendered next to each message's copy button. */
+  onForkThread?: ((input: { readonly messageId: string }) => void | Promise<void>) | undefined;
   backend: BackendApi | null | undefined;
   bootstrapStatus: ThreadBootstrapStatus;
   retryThreadBootstrap: () => void;
@@ -52,6 +54,7 @@ export function ThreadChatViewBody({
   titleBarControlsAccessory,
   hideHeader,
   embeddedMode,
+  onForkThread,
   backend,
   bootstrapStatus,
   retryThreadBootstrap,
@@ -129,6 +132,7 @@ export function ThreadChatViewBody({
             dispatchWorkflowDecision={resolveWorkflowDecision}
             {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
             onOpenThread={onOpenThread}
+            {...(onForkThread ? { onForkThread } : {})}
           />
         </>
       ) : (

@@ -1,4 +1,5 @@
 import { getJson, postJson } from "~/t3team/backend/t3team-t3BackendHttp";
+import { isElectron } from "~/env";
 
 /**
  * Client side of the server-owned Atlassian OAuth flow.
@@ -19,6 +20,14 @@ export const ATLASSIAN_OAUTH_COMPLETE_PATH = "/api/t3team/atlassian/oauth/comple
 export const ATLASSIAN_OAUTH_STATUS_PATH = "/api/t3team/atlassian/oauth/status";
 
 function defaultApiBaseUrl(): string {
+  if (isElectron) {
+    const bootstraps = window.desktopBridge?.getLocalEnvironmentBootstraps?.() ?? [];
+    const primary = bootstraps.find((entry) => entry.id === "desktopLocal");
+    if (typeof primary?.httpBaseUrl === "string" && primary.httpBaseUrl.length > 0) {
+      return primary.httpBaseUrl;
+    }
+    return "http://127.0.0.1:3773";
+  }
   return window.location.origin;
 }
 

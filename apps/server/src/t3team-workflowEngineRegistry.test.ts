@@ -49,6 +49,14 @@ describe("workflow engine registry controls", () => {
     expect(registry.childThreadsForRun("run-1")).toEqual(["child-a", "child-b"]);
   });
 
+  it("keeps child registration idempotent for retried spawns", () => {
+    const registry = makeWorkflowEngineRegistry();
+    registry.registerChildThread("run-1", "child-a");
+    registry.registerChildThread("run-1", "child-a");
+
+    expect(registry.childThreadsForRun("run-1")).toEqual(["child-a"]);
+  });
+
   it("resolves a child thread back to its run's launching thread (start_child re-parenting)", () => {
     const registry = makeWorkflowEngineRegistry();
     registry.registerRun("run-1", { resume: async () => {}, cancel: () => {} });

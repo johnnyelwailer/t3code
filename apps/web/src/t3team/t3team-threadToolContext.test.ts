@@ -141,6 +141,11 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["write"],
         },
         {
+          id: "t3team.thread.search_source",
+          label: "Search fork source thread",
+          capabilities: ["read"],
+        },
+        {
           id: "t3team.thread.start_child",
           label: "Start child session",
           capabilities: ["write"],

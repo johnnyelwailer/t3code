@@ -200,5 +200,17 @@ export const T3TeamMessageExt = Schema.Struct({
   widgetReply: Schema.optional(T3TeamMessageWidgetReply),
   /** Present on an `actor`-role message (inter-agent coordination). */
   actor: Schema.optional(T3TeamActorMessageInfo),
+  /**
+   * Present on the fork-provenance note of a forked thread: identifies the
+   * thread this one was forked from so agents can search its full transcript
+   * (`t3team.thread.search_source`) even when the fork itself was truncated.
+   */
+  forkSource: Schema.optional(
+    Schema.Struct({
+      threadId: TrimmedNonEmptyString,
+      threadTitle: Schema.String,
+      omittedMessageCount: Schema.optional(Schema.Number),
+    }),
+  ),
 });
 export type T3TeamMessageExt = typeof T3TeamMessageExt.Type;
