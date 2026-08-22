@@ -243,6 +243,27 @@ function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMessage>): 
   };
 }
 
+function buildForkTranscriptBootstrapInput(input: {
+  readonly messages: ReadonlyArray<ThreadTitleMessage>;
+  readonly latestUserInput: string;
+}): string {
+  const historyCandidates = [...input.messages];
+  for (let index = historyCandidates.length - 1; index >= 0; index -= 1) {
+    const message = historyCandidates[index];
+    if (!message || message.role !== "user") continue;
+    if (message.text.trim() !== input.latestUserInput.trim()) continue;
+    historyCandidates.splice(index, 1);
+    break;
+  }
+  const history = formatThreadTitleContext(historyCandidates).message.trim();
+  if (history.length === 0) {
+    return input.latestUserInput;
+  }
+  return ["Conversation so far:", history, "", "New user message:", input.latestUserInput].join(
+    "\n",
+  );
+}
+
 export function providerErrorLabel(value: string | undefined): string {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : "unknown";
@@ -497,6 +518,17 @@ const make = Effect.gen(function* () {
     });
   });
 
+  const isForkThreadBeforeFirstLiveTurn = (thread: {
+    readonly messages: ReadonlyArray<{ readonly id: string; readonly turnId: TurnId | null }>;
+  }) => {
+    if (!thread.messages.some((message) => message.id.startsWith("fork:"))) {
+      return false;
+    }
+    return !thread.messages.some(
+      (message) => !message.id.startsWith("fork:") && message.turnId !== null,
+    );
+  };
+
   const ensureSessionForThread = Effect.fn("ensureSessionForThread")(function* (
     threadId: ThreadId,
     createdAt: string,
@@ -522,6 +554,8 @@ const make = Effect.gen(function* () {
       thread.session !== null && thread.session.status !== "stopped" && activeSession
         ? thread.session
         : null;
+    const allowForkProviderRebindBeforeFirstLiveTurn =
+      thread.session !== null && isForkThreadBeforeFirstLiveTurn(thread);
     if (
       activeThreadSession !== null &&
       activeSession !== undefined &&
@@ -593,7 +627,7 @@ const make = Effect.gen(function* () {
         createdAt,
       });
     }
-    if (thread.session !== null) {
+    if (thread.session !== null && !allowForkProviderRebindBeforeFirstLiveTurn) {
       yield* rejectStartedThreadModelChangeIfRequired({
         threadId,
         currentModelSelection:
@@ -609,6 +643,7 @@ const make = Effect.gen(function* () {
     }
     if (
       thread.session !== null &&
+      !allowForkProviderRebindBeforeFirstLiveTurn &&
       requestedModelSelection !== undefined &&
       requestedModelSelection.instanceId !== currentInstanceId
     ) {
@@ -793,6 +828,21 @@ const make = Effect.gen(function* () {
               .sessionModelSwitch;
     const requestedModelSelection =
       input.modelSelection ?? threadModelSelections.get(input.threadId) ?? thread.modelSelection;
+
+    const shouldBootstrapForkTranscript =
+      normalizedInput !== undefined && isForkThreadBeforeFirstLiveTurn(thread);
+    const effectiveInput =
+      shouldBootstrapForkTranscript && normalizedInput
+        ? buildForkTranscriptBootstrapInput({
+            messages: thread.messages.map((message) => ({
+              role: message.role,
+              text: message.text,
+              attachments: message.attachments,
+            })),
+            latestUserInput: normalizedInput,
+          })
+        : normalizedInput;
+
     const modelForTurn =
       sessionModelSwitch === "unsupported" && input.modelSelection === undefined
         ? activeSession?.model !== undefined
@@ -805,7 +855,7 @@ const make = Effect.gen(function* () {
 
     return {
       threadId: input.threadId,
-      ...(normalizedInput ? { input: normalizedInput } : {}),
+      ...(effectiveInput ? { input: effectiveInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
@@ -1246,7 +1296,17 @@ const make = Effect.gen(function* () {
     }
 
     // Orchestration turn ids are not provider turn ids, so interrupt by session.
-    yield* providerService.interruptTurn({ threadId: event.payload.threadId });
+    // If the adapter's in-memory session is gone (e.g., after a server restart),
+    // interruptTurn will fail. Fall back to stopSession, which clears
+    // activeTurnId in the directory and settles the stuck turn.
+    yield* providerService.interruptTurn({ threadId: event.payload.threadId }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("provider.turn.interrupt.fallback-to-stop", {
+          threadId: event.payload.threadId,
+          cause,
+        }).pipe(Effect.andThen(providerService.stopSession({ threadId: event.payload.threadId }))),
+      ),
+    );
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (
