@@ -14,7 +14,7 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
-import { isModelSelectionProviderEnabled } from "@t3tools/shared/serverSettings";
+
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -45,6 +45,7 @@ import { canReplaceThreadTitle, DEFAULT_THREAD_TITLE } from "../threadTitles.ts"
 import {
   resolveSourceControlWriterModelSelection,
   ServerSettingsService,
+  isModelSelectionProviderEnabledPackAware,
 } from "../../serverSettings.ts";
 import { getConfiguredTextGenerationModelSelection } from "../../t3team-configuredDefaultModelSelection.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
@@ -69,7 +70,7 @@ const resolveAuxTextGenerationModelSelection = (
 ): ModelSelection => {
   const policySelection = getConfiguredTextGenerationModelSelection();
   const validatedThreadSelection =
-    threadModelSelection && isModelSelectionProviderEnabled(settings, threadModelSelection)
+    threadModelSelection && isModelSelectionProviderEnabledPackAware(settings, threadModelSelection)
       ? threadModelSelection
       : undefined;
   const resolved =

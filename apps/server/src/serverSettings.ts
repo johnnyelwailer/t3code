@@ -55,6 +55,7 @@ import {
   getConfiguredDefaultModelSelection,
   getConfiguredTextGenerationModelSelection,
 } from "./t3team-configuredDefaultModelSelection.ts";
+import { getPackProviderOverlay } from "./t3team-pack-providerOverlay.ts";
 
 export { resolveSourceControlWriterModelSelection } from "@t3tools/shared/serverSettings";
 
@@ -193,6 +194,23 @@ export const layerTest = (overrides: DeepPartial<ServerSettings> = {}) =>
 const ServerSettingsJson = fromLenientJson(ServerSettings);
 const decodeServerSettingsJsonExit = Schema.decodeUnknownExit(ServerSettingsJson);
 
+/**
+ * Whether a model selection targets a provider that is currently enabled.
+ *
+ * `isModelSelectionProviderEnabled` only knows about user-persisted instance
+ * configs (`providerInstances`) and legacy built-in providers (`providers`).
+ * Distribution / pack providers (e.g. Nexplore) are registered at boot via
+ * the pack overlay and never land in user settings, so the settings-only
+ * check would reject them and force the text-generation model back to the
+ * legacy default.
+ */
+export const isModelSelectionProviderEnabledPackAware = (
+  settings: ServerSettings,
+  selection: ModelSelection,
+): boolean =>
+  isModelSelectionProviderEnabled(settings, selection) ||
+  Object.hasOwn(getPackProviderOverlay(), selection.instanceId);
+
 function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings {
   // Nexplore policy override first — a configured selection wins over any persisted preference.
   const policySelection = getConfiguredTextGenerationModelSelection();
@@ -204,7 +222,7 @@ function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings
   if (selection.instanceId === configuredSelection.instanceId) {
     return settings;
   }
-  return isModelSelectionProviderEnabled(settings, selection)
+  return isModelSelectionProviderEnabledPackAware(settings, selection)
     ? settings
     : fallbackTextGenerationProvider(settings);
 }
