@@ -11,6 +11,7 @@ import { ServerConfig, type StartupPresentation } from "../config.ts";
 // silently drifted on every upstream sync (it lost BackgroundPolicy/ResourceTelemetry/Usage in
 // the 2026-08 sync); it is gone, and with it the "register the route in BOTH registries" trap.
 import { runServer } from "../server.ts";
+import { activateCompiledInDistribution } from "../t3team-distribution-bootstrap.ts";
 import {
   inspectConfiguredWorkspacePacks,
   loadPackAppearanceOverlay,
@@ -28,14 +29,15 @@ import { setPackProviderOverlay } from "../t3team-pack-providerOverlay.ts";
 import { loadPackRecipeSources, setPackRecipeSources } from "../t3team-packRecipeSources.ts";
 import { setWorkflowRepairPolicy } from "../t3team-workflowRepairPolicy.ts";
 import { setWorkflowAgentModelPolicy } from "../t3team-workflowAgentModelPolicy.ts";
-import {
-  DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS,
-  setWorkflowEphemeralConcurrencyPolicy,
-} from "../t3team-workflowEphemeralConcurrencyPolicy.ts";
+import { setWorkflowEphemeralConcurrencyPolicy } from "../t3team-workflowEphemeralConcurrencyPolicy.ts";
 import { workflowAdmissionQueue } from "../t3team-workflowAdmissionQueue.ts";
 import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
 
 class WorkspacePackLoadError extends Data.TaggedError("WorkspacePackLoadError")<{
+  readonly cause: unknown;
+}> {}
+
+class CompiledInDistributionError extends Data.TaggedError("CompiledInDistributionError")<{
   readonly cause: unknown;
 }> {}
 
@@ -49,6 +51,19 @@ export const runT3TeamServerCommand = (
   Effect.gen(function* () {
     const logLevel = yield* GlobalFlag.LogLevel;
     const config = yield* resolveServerConfig(flags, logLevel, options);
+    // 1. Compiled-in distribution = the baseline layer (inlined at build time). It runs before any
+    // post-install pack so a runtime pack can override it for the content it actually provides. A
+    // bad distribution must not lock the user out of the host, so a failure is a warning, not fatal.
+    yield* Effect.tryPromise({
+      try: () => activateCompiledInDistribution(),
+      catch: (cause) => new CompiledInDistributionError({ cause }),
+    }).pipe(
+      Effect.catch((cause) =>
+        Effect.logWarning("Compiled-in distribution activation failed; continuing without it", {
+          cause,
+        }),
+      ),
+    );
     const workspacePacksDir = yield* Config.string("T3TEAM_PACKS_DIR").pipe(Config.option);
     const packDiagnostic = yield* Effect.promise(() =>
       inspectConfiguredWorkspacePacks(Option.getOrUndefined(workspacePacksDir)),
@@ -61,11 +76,17 @@ export const runT3TeamServerCommand = (
       for (const diagnostic of recipeSources.diagnostics) {
         yield* Effect.logWarning("Workspace pack recipe source skipped", { diagnostic });
       }
+      // Each overlay is applied only when the runtime layer actually provides that content, so an
+      // empty (or content-less) packs dir never wipes the compiled-in distribution baseline.
       const appearanceOverlay = yield* Effect.tryPromise({
         try: () => loadPackAppearanceOverlay(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
-        Effect.tap((overlay) => Effect.sync(() => setPackAppearanceOverlay(overlay))),
+        Effect.tap((overlay) =>
+          Effect.sync(() => {
+            if (overlay !== undefined) setPackAppearanceOverlay(overlay);
+          }),
+        ),
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack theme loading failed", { cause }).pipe(
             Effect.as(undefined),
@@ -76,7 +97,13 @@ export const runT3TeamServerCommand = (
         try: () => loadPackProviderOverlay(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
-        Effect.tap((overlay) => Effect.sync(() => setPackProviderOverlay(overlay))),
+        Effect.tap((overlay) =>
+          Effect.sync(() => {
+            if (Object.keys(overlay.configMap).length > 0 || overlay.driverDefinitions.size > 0) {
+              setPackProviderOverlay(overlay);
+            }
+          }),
+        ),
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack provider loading failed", { cause }).pipe(
             Effect.as(undefined),
@@ -87,7 +114,11 @@ export const runT3TeamServerCommand = (
         try: () => loadPackSetupProfileOverlay(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
-        Effect.tap((profiles) => Effect.sync(() => setPackSetupProfileOverlay(profiles))),
+        Effect.tap((profiles) =>
+          Effect.sync(() => {
+            if (profiles.length > 0) setPackSetupProfileOverlay(profiles);
+          }),
+        ),
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack setup profile loading failed", { cause }).pipe(
             Effect.as(undefined),
@@ -98,7 +129,11 @@ export const runT3TeamServerCommand = (
         try: () => loadPackWorkflowRepairPolicy(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
-        Effect.tap((policy) => Effect.sync(() => setWorkflowRepairPolicy(policy ?? {}))),
+        Effect.tap((policy) =>
+          Effect.sync(() => {
+            if (policy !== undefined) setWorkflowRepairPolicy(policy);
+          }),
+        ),
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack workflow repair policy loading failed", { cause }).pipe(
             Effect.as(undefined),
@@ -109,7 +144,11 @@ export const runT3TeamServerCommand = (
         try: () => loadPackWorkflowAgentModelPolicy(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
-        Effect.tap((policy) => Effect.sync(() => setWorkflowAgentModelPolicy(policy ?? "inherit"))),
+        Effect.tap((policy) =>
+          Effect.sync(() => {
+            if (policy !== undefined) setWorkflowAgentModelPolicy(policy);
+          }),
+        ),
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack workflow agent model policy loading failed", {
             cause,
@@ -122,10 +161,10 @@ export const runT3TeamServerCommand = (
       }).pipe(
         Effect.tap((policy) =>
           Effect.sync(() => {
-            setWorkflowEphemeralConcurrencyPolicy(
-              policy ?? { maxActiveSteps: DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS },
-            );
-            workflowAdmissionQueue.reconfigure();
+            if (policy !== undefined) {
+              setWorkflowEphemeralConcurrencyPolicy(policy);
+              workflowAdmissionQueue.reconfigure();
+            }
           }),
         ),
         Effect.catch((cause) =>
@@ -144,7 +183,7 @@ export const runT3TeamServerCommand = (
         locks: Object.keys(packDiagnostic.resolution?.locks ?? {}).sort(),
         diagnostics: packDiagnostic.resolution?.diagnostics ?? [],
         issues: packDiagnostic.issues,
-        providerInstances: providerOverlay ? Object.keys(providerOverlay).sort() : [],
+        providerInstances: providerOverlay ? Object.keys(providerOverlay.configMap).sort() : [],
         activeTheme: appearanceOverlay?.themeId,
         setupProfiles: setupProfileOverlay?.map((profile) => profile.id) ?? [],
       });
