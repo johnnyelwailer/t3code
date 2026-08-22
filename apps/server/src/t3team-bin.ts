@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -15,6 +18,23 @@ import {
   t3teamServeCommand,
   t3teamStartCommand,
 } from "./cli/t3team-server.ts";
+
+// Load runtime env vars written by the desktop installer (~/.t3/.env).
+// These are not available in the Electron-spawned process environment.
+{
+  const runtimeEnvPath = join(homedir(), ".t3", ".env");
+  if (existsSync(runtimeEnvPath)) {
+    for (const line of readFileSync(runtimeEnvPath, "utf8").split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      const value = trimmed.slice(eq + 1).trim();
+      if (key && process.env[key] === undefined) process.env[key] = value;
+    }
+  }
+}
 
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 

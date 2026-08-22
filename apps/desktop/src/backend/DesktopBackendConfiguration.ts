@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - detecting bundled packs inside the app.asar requires an asar-aware fs call; Effect's FileSystem.exists is built on fs.access, which Electron's asar patch does not cover.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
 import * as Context from "effect/Context";
@@ -114,6 +115,29 @@ function parseEnvLine(line: string): [key: string, value: string] | null {
   }
   return [key, value];
 }
+
+/**
+ * If a distribution ships a CA bundle under `<home>/.t3/userdata/certs/`,
+ * forward it to the backend child so `NODE_EXTRA_CA_CERTS` is set before
+ * the Node runtime initialises its TLS trust store.  Without this, any
+ * provider that terminates TLS with a private-CA cert (e.g. Nexplore's
+ * gateway) fails with "self-signed certificate in certificate chain".
+ */
+const resolveExtraCaCerts = (): string | undefined => {
+  try {
+    const fs = NodeFS;
+    const path = NodePath;
+    const certsDir = path.join(NodeOS.homedir(), ".t3", "userdata", "certs");
+    if (!fs.existsSync(certsDir)) return undefined;
+    const pem = fs
+      .readdirSync(certsDir)
+      .filter((f) => f.endsWith(".pem"))
+      .map((f) => path.join(certsDir, f));
+    return pem.length > 0 ? pem.join(":") : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 const getWslEnvEntryName = (entry: string): string => {
   const slashIndex = entry.indexOf("/");
@@ -440,6 +464,10 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
         ELECTRON_RUN_AS_NODE: "1",
         ...(hasBundledPacks && packsDir !== null ? { T3TEAM_PACKS_DIR: packsDir } : {}),
         ...atlassianEnv,
+        ...(() => {
+          const ca = resolveExtraCaCerts();
+          return ca !== undefined ? { NODE_EXTRA_CA_CERTS: ca } : {};
+        })(),
       },
       extendEnv: true,
       bootstrap,
