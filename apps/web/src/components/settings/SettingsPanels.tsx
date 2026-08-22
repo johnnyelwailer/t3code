@@ -127,7 +127,6 @@ import {
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
 import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
-import { T3TeamLocalProviderSessionsSetting } from "./t3team-LocalProviderSessionsSetting";
 import {
   buildProviderInstanceUpdatePatch,
   backgroundActivityOverrideSettings,
@@ -1011,7 +1010,6 @@ export function AppearanceSettingsPanel() {
 
         {/* T3Team settings insertion seam: keep this mount stable to minimize merge conflicts. */}
         <T3TeamProjectSetupSetting />
-        <T3TeamLocalProviderSessionsSetting />
 
         <SettingsRow
           {...searchableSetting("setting-glass-opacity")}
