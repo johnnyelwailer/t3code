@@ -414,4 +414,39 @@ describe("createWorkflowEngineBroker", () => {
 
     expect(dispatched.some((command) => command.type === "thread.activity.append")).toBe(false);
   });
+
+  it("does not create the same workflow child twice for a retried thread.create", async () => {
+    const dispatched: OrchestrationCommand[] = [];
+    const registry = makeWorkflowEngineRegistry();
+    const broker = createWorkflowEngineBroker({
+      runId: "run-idempotent",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry,
+      dispatch: async (command) => void dispatched.push(command),
+      newId: () => "id-1",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+
+    await broker.send(
+      {
+        correlationId: "run-idempotent:1",
+        kind: "thread.create",
+        payload: { threadId: "child-1", name: "Retry target" },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+    await broker.send(
+      {
+        correlationId: "run-idempotent:2",
+        kind: "thread.create",
+        payload: { threadId: "child-1", name: "Retry target" },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+
+    expect(dispatched.filter((command) => command.type === "thread.create")).toHaveLength(1);
+  });
 });

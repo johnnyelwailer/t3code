@@ -191,6 +191,7 @@ function createBackend(input: {
     connect: async () => undefined,
     disconnect: async () => undefined,
     dispatchCommand: async () => undefined,
+    forkThread: async () => ({ ok: true as const, childThreadId: "child-thread" }),
     launchRecipeWorkflow: async () => ({ ok: true }),
     submitRecipeCardAction: async () => ({ ok: true }),
     resolveWorkflowInput: async () => undefined,

@@ -72,6 +72,7 @@ import { ProposedPlanCard } from "./ProposedPlanCard";
 import { ChangedFilesCard } from "./ChangedFilesTree";
 import { shouldAutoExpandChangedFiles } from "./changedFilesPresentation";
 import { MessageCopyButton } from "./MessageCopyButton";
+import { MessageForkButton } from "./MessageForkButton";
 import {
   computeStableMessagesTimelineRows,
   deriveMessagesTimelineRows,
@@ -172,6 +173,7 @@ interface TimelineRowSharedState {
   dispatchWorkflowDecision?: ChatViewT3TeamExtensionProps["dispatchWorkflowDecision"];
   onControlWorkflow?: ChatViewT3TeamExtensionProps["onControlWorkflow"];
   onOpenThread?: ChatViewT3TeamExtensionProps["onOpenThread"];
+  onForkThread?: ChatViewT3TeamExtensionProps["onForkThread"];
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
   agentPanelModel: AgentPanelModel;
   onOpenAgents: () => void;
@@ -274,6 +276,7 @@ interface MessagesTimelineProps {
   dispatchWorkflowDecision?: ChatViewT3TeamExtensionProps["dispatchWorkflowDecision"];
   onControlWorkflow?: ChatViewT3TeamExtensionProps["onControlWorkflow"];
   onOpenThread?: ChatViewT3TeamExtensionProps["onOpenThread"];
+  onForkThread?: ChatViewT3TeamExtensionProps["onForkThread"];
   onManualNavigation: () => void;
   workflowCardNavigationRequest?: {
     readonly messageId: MessageId;
@@ -324,6 +327,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   dispatchWorkflowDecision,
   onControlWorkflow,
   onOpenThread,
+  onForkThread,
   onManualNavigation,
   workflowCardNavigationRequest,
   hideEmptyPlaceholder = false,
@@ -617,6 +621,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       dispatchWorkflowDecision,
       onControlWorkflow,
       onOpenThread,
+      onForkThread,
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
@@ -642,6 +647,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       dispatchWorkflowDecision,
       onControlWorkflow,
       onOpenThread,
+      onForkThread,
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
@@ -1223,6 +1229,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             {displayedUserMessage.copyText && (
               <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" />
             )}
+            {ctx.onForkThread && (
+              <MessageForkButton messageId={row.message.id} onForkThread={ctx.onForkThread} />
+            )}
           </div>
         </div>
       </div>
@@ -1303,6 +1312,9 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         {row.showAssistantMeta ? (
           <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
             <AssistantCopyButton row={row} />
+            {ctx.onForkThread && (
+              <MessageForkButton messageId={row.message.id} onForkThread={ctx.onForkThread} />
+            )}
             {!row.message.streaming && (
               <Tooltip>
                 <TooltipTrigger

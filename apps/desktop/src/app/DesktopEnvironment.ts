@@ -1,3 +1,6 @@
+// @effect-diagnostics nodeBuiltinImport:off - detecting bundled packs inside the app.asar requires an asar-aware fs call; Effect's FileSystem.exists is built on fs.access, which Electron's asar patch does not cover.
+import * as NodeFS from "node:fs";
+
 import type {
   DesktopAppBranding,
   DesktopAppStageLabel,
@@ -87,6 +90,32 @@ export class DesktopEnvironment extends Context.Service<
 
 const APP_BASE_NAME = "T3 Code";
 
+interface PackagedDesktopBrandingResource {
+  readonly baseName?: string;
+  readonly displayName?: string;
+  readonly userDataDirName?: string;
+  readonly legacyUserDataDirName?: string;
+  readonly linuxDesktopEntryName?: string;
+  readonly linuxWmClass?: string;
+}
+
+function readPackagedDesktopBranding(
+  resourcesPath: string,
+): PackagedDesktopBrandingResource | undefined {
+  for (const candidate of [
+    `${resourcesPath}/desktop-branding.json`,
+    `${resourcesPath}/resources/desktop-branding.json`,
+  ]) {
+    try {
+      if (!NodeFS.existsSync(candidate)) continue;
+      return JSON.parse(NodeFS.readFileSync(candidate, "utf8")) as PackagedDesktopBrandingResource;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
   readonly appVersion: string;
@@ -171,15 +200,21 @@ const make = Effect.fn("desktop.environment.make")(function* (
     isDevelopment,
     appVersion: input.appVersion,
   });
-  const displayName = branding.displayName;
+  const packagedBranding = input.isPackaged
+    ? readPackagedDesktopBranding(input.resourcesPath)
+    : undefined;
+  const displayName = packagedBranding?.displayName?.trim() || branding.displayName;
   const stateDir = resolveDesktopStateDir({
     baseDir,
     isDevelopment,
     joinPath: path.join,
     t3Home: config.t3Home,
   });
-  const userDataDirName = isDevelopment ? "t3code-dev" : "t3code";
-  const legacyUserDataDirName = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
+  const userDataDirName =
+    packagedBranding?.userDataDirName?.trim() || (isDevelopment ? "t3code-dev" : "t3code");
+  const legacyUserDataDirName =
+    packagedBranding?.legacyUserDataDirName?.trim() ||
+    (isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)");
   const linuxApplicationsDir = path.join(
     Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
     "applications",
@@ -227,13 +262,22 @@ const make = Effect.fn("desktop.environment.make")(function* (
     commitHashOverride: config.commitHashOverride,
     otlpTracesUrl: config.otlpTracesUrl,
     otlpExportIntervalMs: config.otlpExportIntervalMs,
-    branding,
+    branding: {
+      ...branding,
+      ...(packagedBranding?.baseName?.trim() ? { baseName: packagedBranding.baseName.trim() } : {}),
+      ...(packagedBranding?.displayName?.trim()
+        ? { displayName: packagedBranding.displayName.trim() }
+        : {}),
+    },
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
       isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
     ),
-    linuxDesktopEntryName: isDevelopment ? "t3code-dev.desktop" : "t3code.desktop",
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
+    linuxDesktopEntryName:
+      packagedBranding?.linuxDesktopEntryName?.trim() ||
+      (isDevelopment ? "t3code-dev.desktop" : "t3code.desktop"),
+    linuxWmClass:
+      packagedBranding?.linuxWmClass?.trim() || (isDevelopment ? "t3code-dev" : "t3code"),
     linuxApplicationsDir,
     appImagePath: config.appImagePath,
     userDataDirName,

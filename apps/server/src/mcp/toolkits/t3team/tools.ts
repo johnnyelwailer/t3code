@@ -17,6 +17,7 @@ const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroke
  * in the explicit policy-exclusion set. */
 export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_rename_thread: "t3team.thread.rename",
+  t3team_search_source: "t3team.thread.search_source",
   t3team_start_child: "t3team.thread.start_child",
   t3team_orchestration_run: "t3team.orchestration.run",
   t3team_orchestration_status: "t3team.orchestration.status",
@@ -106,6 +107,24 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     effort: Schema.optional(Schema.Literals(["light", "standard", "high"])),
     repo_full_name: Schema.optional(Schema.String),
     repo_ref: Schema.optional(Schema.String),
+  }),
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
+// Search the full transcript of the thread this one was forked from (the fork
+// provenance note identifies the source). Read-only; routes to the
+// t3team.thread.search_source broker tool.
+export const T3TeamSearchSourceTool = Tool.make("t3team_search_source", {
+  description:
+    "Search the FULL transcript of the thread this thread was forked from, including the " +
+    "middle messages a truncated fork omitted. Only works in a forked thread. Pass a " +
+    "case-insensitive 'query' substring and an optional 'limit' (default 10, max 25). " +
+    "Returns matching messages with their 1-based position, role, and a snippet.",
+  parameters: Schema.Struct({
+    query: Schema.String,
+    limit: Schema.optional(Schema.Number),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
@@ -317,6 +336,7 @@ export const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
 
 export const T3TeamToolkit = Toolkit.make(
   T3TeamRenameThreadTool,
+  T3TeamSearchSourceTool,
   T3TeamStartChildTool,
   T3TeamSendMessageTool,
   T3TeamOrchestrationRunTool,

@@ -120,6 +120,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     }
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
+      if (deps.registry.childThreadsForRun(deps.runId).includes(p.threadId)) return;
       // Resolve BEFORE registering/dispatching: enqueueOneWay swallows dispatch errors, so an
       // invalid provider/model must reject this send() while the SDK still observes it.
       // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a

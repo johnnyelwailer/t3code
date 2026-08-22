@@ -135,6 +135,14 @@ describe("DesktopBackendConfiguration", () => {
 
         assert.equal(first.executablePath, process.execPath);
         assert.equal(first.entryPath, environment.backendEntryPath);
+        // When isPackaged: true and packs dir exists, t3team entry is used.
+        // This test has no packs, so the standard entry is used.
+        if (first.entryPath !== environment.backendEntryPath) {
+          assert.equal(
+            first.entryPath,
+            environment.path.join(environment.serverRoot, "apps/server/dist/t3team-bin.mjs"),
+          );
+        }
         assert.equal(first.cwd, environment.backendCwd);
         assert.equal(first.captureOutput, true);
         assert.equal(first.env.ELECTRON_RUN_AS_NODE, "1");
@@ -196,6 +204,57 @@ describe("DesktopBackendConfiguration", () => {
         `${resourcesPath}/server.asar/apps/server/dist/t3team-bin.mjs`,
       );
       assert.equal(config.env.ELECTRON_RUN_AS_NODE, "1");
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("resolvePrimary finds packaged packs at asar path and enables t3team entry", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-desktop-backend-config-test-",
+      });
+      const appPath = path.join(baseDir, "app.asar");
+      const resourcesPath = path.join(baseDir, "resources");
+      const asarPacksDir = path.join(appPath, "apps", "desktop", "packs");
+      const t3teamEntryPath = path.join(appPath, "apps/server/dist/t3team-bin.mjs");
+
+      yield* fileSystem.makeDirectory(path.dirname(t3teamEntryPath), { recursive: true });
+      yield* fileSystem.writeFileString(t3teamEntryPath, "");
+      yield* fileSystem.makeDirectory(asarPacksDir, { recursive: true });
+
+      const config = yield* Effect.gen(function* () {
+        const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+        return yield* configuration.resolvePrimary;
+      }).pipe(
+        Effect.provide(
+          DesktopBackendConfiguration.layer.pipe(
+            Layer.provideMerge(serverExposureLayer),
+            Layer.provideMerge(DesktopAppSettings.layerTest()),
+            Layer.provideMerge(DesktopWslEnvironment.layerTest()),
+            Layer.provideMerge(DesktopWslServerTree.layerTest()),
+            Layer.provideMerge(
+              makeEnvironmentLayer(baseDir, {
+                appPath,
+                isPackaged: true,
+                platform: "darwin",
+                resourcesPath,
+              }),
+            ),
+          ),
+        ),
+      );
+
+      assert.equal(config.entryPath, t3teamEntryPath);
+      assert.equal(config.env.T3TEAM_PACKS_DIR, asarPacksDir);
+      const homeDirectory = baseDir;
+      const expectedBrandedDir = path.join(
+        homeDirectory,
+        "Library",
+        "Application Support",
+        "t3code",
+      );
+      assert.equal(config.bootstrap.t3Home, expectedBrandedDir);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
