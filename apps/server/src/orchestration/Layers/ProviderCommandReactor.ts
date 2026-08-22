@@ -1299,18 +1299,19 @@ const make = Effect.gen(function* () {
     // Orchestration turn ids are not provider turn ids, so interrupt by session.
     // The adapter's turn.aborted event only clears plan progress; it does not
     // clear activeTurnId or update the thread session status in the projection.
-    // We must always settle the session here so the "Working" badge clears.
+    // If the adapter's in-memory session is gone (e.g., after a server restart),
+    // interruptTurn fails — fall back to stopSession, which clears activeTurnId
+    // in the directory. Either way we must settle the session here so the
+    // "Working" badge clears.
     yield* providerService.interruptTurn({ threadId: event.payload.threadId }).pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.interrupt;
         }
-        return Effect.logWarning("interruptTurn failed; settling session anyway").pipe(
-          Effect.annotateLogs({
-            threadId: event.payload.threadId,
-            cause: Cause.pretty(cause),
-          }),
-        );
+        return Effect.logWarning("provider.turn.interrupt.fallback-to-stop", {
+          threadId: event.payload.threadId,
+          cause,
+        }).pipe(Effect.andThen(providerService.stopSession({ threadId: event.payload.threadId })));
       }),
     );
 
