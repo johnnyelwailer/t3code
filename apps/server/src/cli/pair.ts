@@ -41,6 +41,7 @@ import {
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import { resolveBaseDir } from "../os-jank.ts";
+import { distributionBranding } from "../t3team-distribution.ts";
 import {
   type PersistedServerRuntimeState,
   readPersistedServerRuntimeState,
@@ -247,12 +248,17 @@ interface DiscoveredPairTarget {
   readonly descriptor: ExecutionEnvironmentDescriptor;
 }
 
+const distroDirName = (() => {
+  const name = distributionBranding?.userDataDirName;
+  return name ? (name.startsWith(".") ? name : `.${name}`) : undefined;
+})();
+
 const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
   explicitBaseDir: string | undefined,
 ) {
   const bases: Array<string> = [];
   if (explicitBaseDir !== undefined && explicitBaseDir.trim().length > 0) {
-    bases.push(yield* resolveBaseDir(explicitBaseDir));
+    bases.push(yield* resolveBaseDir(explicitBaseDir, distroDirName));
   } else {
     // Same precedence as dev-runner: inside a linked worktree its own `.t3`
     // outranks the shared home, so `t3 pair` in a worktree pairs with the dev
@@ -262,7 +268,7 @@ const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
       bases.push(worktreeHome);
     }
     const envHome = yield* Config.string("T3CODE_HOME").pipe(Config.option);
-    bases.push(yield* resolveBaseDir(Option.getOrUndefined(envHome)));
+    bases.push(yield* resolveBaseDir(Option.getOrUndefined(envHome), distroDirName));
   }
 
   const checkedStatePaths: Array<string> = [];
