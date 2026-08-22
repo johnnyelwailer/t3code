@@ -1981,16 +1981,17 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
 }
 
 export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
+  const iconOverride = process.env.T3CODE_DESKTOP_ICON_PNG?.trim();
   if (resolveDesktopUpdateChannel(version) === "nightly") {
     return {
-      macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
+      macIconPng: iconOverride ?? BRAND_ASSET_PATHS.nightlyMacIconPng,
       linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
       windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
     };
   }
 
   return {
-    macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
+    macIconPng: iconOverride ?? BRAND_ASSET_PATHS.productionMacIconPng,
     linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
     windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
   };
@@ -2014,6 +2015,11 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
+  const override = process.env.T3CODE_DESKTOP_PRODUCT_NAME?.trim();
+  if (override) {
+    console.error(`[desktop-artifact] Using product name override: ${override}`);
+    return override;
+  }
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "T3 Code (Nightly)"
     : (desktopPackageJson.productName ?? "T3 Code");
@@ -2659,7 +2665,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   });
 
   const resolvedServerDependencies = yield* Effect.try({
-    try: () => resolveCatalogDependencies(serverDependencies, workspaceCatalog, "apps/server"),
+    try: () =>
+      Object.fromEntries(
+        Object.entries(
+          resolveCatalogDependencies(serverDependencies, workspaceCatalog, "apps/server"),
+        ).filter(([, spec]) => typeof spec !== "string" || !spec.startsWith("workspace:")),
+      ),
     catch: (cause) =>
       new DesktopBuildDependencyResolutionError({
         kind: "server-production",
@@ -2830,9 +2841,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     options.platform,
     stageResourcesDir,
     {
-      macIconPng: path.join(repoRoot, iconAssets.macIconPng),
-      linuxIconPng: path.join(repoRoot, iconAssets.linuxIconPng),
-      windowsIconIco: path.join(repoRoot, iconAssets.windowsIconIco),
+      macIconPng: path.isAbsolute(iconAssets.macIconPng)
+        ? iconAssets.macIconPng
+        : path.join(repoRoot, iconAssets.macIconPng),
+      linuxIconPng: path.isAbsolute(iconAssets.linuxIconPng)
+        ? iconAssets.linuxIconPng
+        : path.join(repoRoot, iconAssets.linuxIconPng),
+      windowsIconIco: path.isAbsolute(iconAssets.windowsIconIco)
+        ? iconAssets.windowsIconIco
+        : path.join(repoRoot, iconAssets.windowsIconIco),
     },
     options.verbose,
   );

@@ -191,7 +191,10 @@ describe("DesktopBackendConfiguration", () => {
         ),
       );
 
-      assert.equal(config.entryPath, `${resourcesPath}/server.asar/apps/server/dist/bin.mjs`);
+      assert.equal(
+        config.entryPath,
+        `${resourcesPath}/server.asar/apps/server/dist/t3team-bin.mjs`,
+      );
       assert.equal(config.env.ELECTRON_RUN_AS_NODE, "1");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
