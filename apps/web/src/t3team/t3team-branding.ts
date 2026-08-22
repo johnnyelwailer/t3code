@@ -1,2 +1,1 @@
-export const APP_BASE_NAME = "T3 Team";
-export const APP_DISPLAY_NAME = "T3 Team";
+export { APP_BASE_NAME, APP_DISPLAY_NAME } from "../branding";

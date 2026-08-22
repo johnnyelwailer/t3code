@@ -59,4 +59,10 @@ export type ChatViewT3TeamExtensionProps = {
     readonly projectId: string;
     readonly threadId: string;
   }) => void;
+  /**
+   * Fork the current thread from a given message (branch point: the fork
+   * carries messages up to and including that message). Rendered as a subtle
+   * per-message affordance next to the copy button; absent = no fork button.
+   */
+  readonly onForkThread?: (input: { readonly messageId: string }) => void | Promise<void>;
 };

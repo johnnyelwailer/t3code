@@ -103,6 +103,7 @@ describe("useProjectBacklog workspace sync", () => {
       connect: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       dispatchCommand: vi.fn(async () => undefined),
+      forkThread: vi.fn(async () => ({ ok: true as const, childThreadId: "child-thread" })),
       launchRecipeWorkflow: vi.fn(async () => ({ ok: true })),
       submitRecipeCardAction: vi.fn(async () => ({ ok: true })),
       resolveWorkflowInput: vi.fn(async () => undefined),

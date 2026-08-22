@@ -32,12 +32,24 @@ describe("resolveAtlassianOAuthRedirectUri", () => {
     ).toBe("http://127.0.0.1:5733/oauth/callback");
   });
 
+  it("uses the desktop local bootstrap base URL for packaged desktop shells", () => {
+    expect(
+      resolveAtlassianOAuthRedirectUri({
+        locationOrigin: "t3code://app",
+        configuredRedirectUri: "",
+        devServerUrl: "",
+        desktopHttpBaseUrl: "http://127.0.0.1:3773/",
+      }),
+    ).toBe("http://127.0.0.1:3773/oauth/callback");
+  });
+
   it("throws when a custom-protocol shell has no redirect configuration", () => {
     expect(() =>
       resolveAtlassianOAuthRedirectUri({
         locationOrigin: "t3code-dev://app",
         configuredRedirectUri: "",
         devServerUrl: "",
+        desktopHttpBaseUrl: "",
       }),
     ).toThrow(/VITE_ATLASSIAN_OAUTH_REDIRECT_URI/);
   });

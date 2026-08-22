@@ -18,6 +18,7 @@ import {
 } from "./t3team-toolBrokerBinding.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { makeActorSendMessage } from "./t3team-actorSendMessage.ts";
+import { callT3TeamSearchSourceTool } from "./t3team-toolBrokerBindingSearchSource.ts";
 import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3team-toolBrokerStartChild.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
@@ -162,6 +163,20 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
         setBacklogAssigneeFilter: (mode) =>
           setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,
+        searchSourceThread: (toolArgs, bindingThreadId) =>
+          callT3TeamSearchSourceTool({
+            tool: "t3team.thread.search_source",
+            scopeLabel: "for this thread.",
+            toolArgs,
+            threadId: bindingThreadId,
+            loadThreadDetail: (id) =>
+              query.getThreadDetailById(id).pipe(
+                Effect.map(Option.getOrUndefined),
+                Effect.mapError((error) =>
+                  error instanceof Error ? error.message : String(error),
+                ),
+              ),
+          }),
         recipeTools: recipeToolsForThread(threadId),
         ...(workflowTools.workflowRunToolsForThread
           ? { workflowRunTools: workflowTools.workflowRunToolsForThread(threadId) }

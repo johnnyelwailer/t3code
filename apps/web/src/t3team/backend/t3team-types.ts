@@ -37,6 +37,12 @@ export interface BackendApi {
   readonly connect: () => Promise<void>;
   readonly disconnect: () => Promise<void>;
   readonly dispatchCommand: (command: ClientOrchestrationCommand) => Promise<void>;
+  readonly forkThread: (input: {
+    readonly threadId: string;
+    readonly title?: string;
+    /** Fork branch point: copy messages up to and including this message id. */
+    readonly upToMessageId?: string;
+  }) => Promise<{ readonly ok: true; readonly childThreadId: string }>;
   readonly launchRecipeWorkflow: (
     input: LaunchProjectRecipeWorkflowRequest,
   ) => Promise<LaunchProjectRecipeWorkflowResponse>;

@@ -45,6 +45,11 @@ type CreateBindingInput<
   readonly workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   readonly workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  /** Search the full transcript of the thread this one was forked from. */
+  readonly searchSourceThread?: (
+    toolArgs: unknown,
+    threadId: ThreadId,
+  ) => Effect.Effect<T3TeamToolCallResult>;
   /** Delivers a produced draft to the review surface; only thread-bound bindings have one. */
   readonly publishDraft?: T3TeamDraftMutationPublisher;
 };
@@ -95,6 +100,12 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
       ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
       ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
       ...(input.showWidget ? { showWidget: input.showWidget } : {}),
+      ...(input.searchSourceThread && input.threadId
+        ? {
+            searchSourceThread: (toolArgs: unknown) =>
+              input.searchSourceThread!(toolArgs, input.threadId!),
+          }
+        : {}),
       ...(input.publishDraft ? { publishDraft: input.publishDraft } : {}),
     });
 
