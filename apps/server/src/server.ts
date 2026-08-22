@@ -87,6 +87,7 @@ import { ObservabilityLive } from "./observability/Layers/Observability.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import { authHttpApiLayer, environmentAuthenticatedAuthLayer } from "./auth/http.ts";
+import { t3teamRouteAuthMiddleware } from "./t3team-http-auth.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import {
@@ -598,7 +599,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamAtlassianResourceRouteLayer,
     t3teamAtlassianResourcesRouteLayer,
     t3teamTempoRouteLayer,
-  ),
+  ).pipe(Layer.provide(t3teamRouteAuthMiddleware)),
   Layer.mergeAll(
     t3teamGitHubAssetRouteLayer,
     t3teamGitHubInboxRouteLayer,
@@ -617,7 +618,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamThreadWorkflowResolveInputRouteLayer,
     t3teamThreadToolContextRouteLayer,
     t3teamWidgetToolCallRouteLayer,
-  ),
+  ).pipe(Layer.provide(t3teamRouteAuthMiddleware)),
   McpHttpServer.layer.pipe(Layer.provide(McpSessionRegistry.layer)),
 ).pipe(
   // Both transports consume the same service instance, so caches single-flight across clients
