@@ -5,6 +5,7 @@ import baseConfig from "../../vite.config.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 import packageJson from "./package.json" with { type: "json" };
 import { t3teamRawTextPackPlugin } from "./scripts/t3team-rawTextPackPlugin.ts";
+import { t3teamDistributionPackPlugin } from "./scripts/t3team-distributionPackPlugin.ts";
 
 // The bundle used to inline only workspace packages, leaving every third-party
 // runtime dep external. External deps must exist on the real filesystem (the WSL
@@ -40,7 +41,9 @@ export default mergeConfig(
       entry: ["src/bin.ts", "src/t3team-bin.ts"],
       // `?raw` is a vite feature; pack is tsdown/rolldown and has no asset pipeline of its own.
       // Without this, source that ships as TEXT could not be authored as a typechecked module.
-      plugins: [t3teamRawTextPackPlugin()],
+      // The distribution plugin inlines the compiled-in distribution (see
+      // scripts/t3team-distributionPackPlugin.ts) when T3CODE_DISTRIBUTION names one.
+      plugins: [t3teamRawTextPackPlugin(), t3teamDistributionPackPlugin()],
       outDir: "dist",
       sourcemap: true,
       clean: true,

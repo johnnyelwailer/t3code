@@ -209,13 +209,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
     rootDir,
     appRoot,
     serverRoot,
-    // Dev-only escape hatch so a distribution can boot an alternate server
-    // variant (e.g. the t3team entry) as the local backend; mirrors the
-    // devRemoteT3ServerEntryPath override and is ignored in packaged builds.
+    // The t3team entry is the default backend: it activates the compiled-in
+    // distribution (a no-op when none was bundled) and then loads post-install
+    // packs from T3TEAM_PACKS_DIR. Dev can override to a different variant.
     backendEntryPath:
       isDevelopment && !input.isPackaged && Option.isSome(config.devBackendEntryPath)
         ? config.devBackendEntryPath.value
-        : path.join(serverRoot, "apps/server/dist/bin.mjs"),
+        : path.join(serverRoot, "apps/server/dist/t3team-bin.mjs"),
     backendCwd: input.isPackaged ? homeDirectory : appRoot,
     preloadPath: path.join(input.dirname, "preload.cjs"),
     appUpdateYmlPath: input.isPackaged

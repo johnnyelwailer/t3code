@@ -259,13 +259,9 @@ function buildForkTranscriptBootstrapInput(input: {
   if (history.length === 0) {
     return input.latestUserInput;
   }
-  return [
-    "Conversation so far:",
-    history,
-    "",
-    "New user message:",
-    input.latestUserInput,
-  ].join("\n");
+  return ["Conversation so far:", history, "", "New user message:", input.latestUserInput].join(
+    "\n",
+  );
 }
 
 export function providerErrorLabel(value: string | undefined): string {

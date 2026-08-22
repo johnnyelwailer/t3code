@@ -19,6 +19,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "paths": {
+      "@t3code/distribution": ["./apps/server/src/t3team-distribution.ts"],
       "@t3team/sdk": ["./packages/t3team-sdk/src/t3team-sdk.index.ts"],
       "@t3team/sdk/groups": ["./packages/t3team-sdk/src/t3team-sdk.groups.ts"],
       "@t3team/sdk/models": ["./packages/t3team-sdk/src/t3team-sdk.models.ts"],
