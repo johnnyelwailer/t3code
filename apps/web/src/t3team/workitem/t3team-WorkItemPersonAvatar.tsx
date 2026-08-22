@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { User } from "lucide-react";
 import { useState } from "react";
 

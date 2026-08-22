@@ -1,0 +1,172 @@
+@supports (view-transition-name: none) {
+  /*
+   * While a view transition is running, the browser paints OLD snapshots for up to its full
+   * animation duration while still hit-testing the LIVE DOM underneath. A click in that window
+   * can land on whatever now occupies that screen position (wrong row) or land between
+   * mousedown/mouseup and get dispatched to a container ancestor instead of any row (no
+   * selection at all). Disabling pointer events on the stepped wizard panel for the duration of
+   * the transition closes that window entirely, regardless of which race variant would
+   * otherwise fire. See t3team-runViewTransition.ts for the attribute lifecycle.
+   */
+  html[data-t3team-view-transition-types] [data-step] {
+    pointer-events: none;
+  }
+
+  ::view-transition-group(t3team-right-sidebar-shell),
+  ::view-transition-group(t3team-right-sidebar-panel) {
+    animation-duration: 180ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  ::view-transition-group(t3team-create-project-step-panel) {
+    animation-duration: 240ms;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  ::view-transition-group(t3team-create-project-entry-surface) {
+    animation-duration: 320ms;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  ::view-transition-old(t3team-create-project-step-panel),
+  ::view-transition-new(t3team-create-project-step-panel) {
+    animation-duration: 240ms;
+    animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    mix-blend-mode: normal;
+  }
+
+  ::view-transition-old(t3team-create-project-step-panel) {
+    animation-name: t3team-create-project-step-out-forward;
+  }
+
+  ::view-transition-new(t3team-create-project-step-panel) {
+    animation-name: t3team-create-project-step-in-forward;
+  }
+
+  ::view-transition-old(t3team-create-project-entry-surface),
+  ::view-transition-new(t3team-create-project-entry-surface) {
+    animation-duration: 320ms;
+    animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    mix-blend-mode: normal;
+  }
+
+  ::view-transition-old(t3team-create-project-entry-surface) {
+    animation-name: t3team-create-project-entry-out-forward;
+  }
+
+  ::view-transition-new(t3team-create-project-entry-surface) {
+    animation-name: t3team-create-project-entry-in-forward;
+  }
+
+  html[data-t3team-view-transition-types~="t3team-wizard-forward"] {
+    view-transition-name: none;
+  }
+
+  html[data-t3team-view-transition-types~="t3team-wizard-back"] {
+    view-transition-name: none;
+  }
+
+  html[data-t3team-view-transition-types~="t3team-wizard-back"]::view-transition-old(t3team-create-project-step-panel) {
+    animation-name: t3team-create-project-step-out-back;
+  }
+
+  html[data-t3team-view-transition-types~="t3team-wizard-back"]::view-transition-old(t3team-create-project-entry-surface) {
+    animation-name: t3team-create-project-entry-out-back;
+  }
+
+  html[data-t3team-view-transition-types~="t3team-wizard-back"]::view-transition-new(t3team-create-project-step-panel) {
+    animation-name: t3team-create-project-step-in-back;
+  }
+
+  html[data-t3team-view-transition-types~="t3team-wizard-back"]::view-transition-new(t3team-create-project-entry-surface) {
+    animation-name: t3team-create-project-entry-in-back;
+  }
+}
+
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+  --background: var(--color-white);
+  --app-chrome-background: var(--background);
+  --foreground: var(--color-neutral-800);
+  --card: var(--color-white);
+  --card-foreground: var(--color-neutral-800);
+  --popover: var(--color-white);
+  --popover-foreground: var(--color-neutral-800);
+  --primary: oklch(0.488 0.217 264);
+  --primary-foreground: var(--color-white);
+  --secondary: --alpha(var(--color-black) / 4%);
+  --secondary-foreground: var(--color-neutral-800);
+  --muted: --alpha(var(--color-black) / 4%);
+  --muted-foreground: color-mix(in srgb, var(--color-neutral-500) 90%, var(--color-black));
+  --accent: --alpha(var(--color-black) / 4%);
+  --accent-foreground: var(--color-neutral-800);
+  --destructive: var(--color-red-500);
+  --border: --alpha(var(--color-black) / 8%);
+  --input: --alpha(var(--color-black) / 10%);
+  --ring: oklch(0.488 0.217 264);
+  --destructive-foreground: var(--color-red-700);
+  --info: var(--color-blue-500);
+  --info-foreground: var(--color-blue-700);
+  --success: var(--color-emerald-500);
+  --success-foreground: var(--color-emerald-700);
+  --warning: var(--color-amber-500);
+  --warning-foreground: var(--color-amber-700);
+  /* Keep every sidebar primitive on the same light surface hierarchy, including
+     portaled mobile sheets and settings navigation outside the app sidebar. */
+  --sidebar: var(--color-zinc-50);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-muted-foreground: var(--muted-foreground);
+  --sidebar-control-surface: var(--color-zinc-100);
+  --sidebar-row-hover: var(--color-zinc-25);
+  --sidebar-row-active: var(--color-white);
+  --sidebar-row-selected: var(--color-white);
+  --sidebar-border: var(--border);
+  --sidebar-stage-fade: var(--sidebar);
+  --glass-blur: 12px;
+  --glass-opacity: 80%;
+  --glass-saturation: 1.14;
+
+  @variant dark {
+    color-scheme: dark;
+    --background: color-mix(in srgb, var(--color-neutral-950) 95%, var(--color-white));
+    --app-chrome-background: var(--background);
+    --foreground: var(--color-neutral-100);
+    --card: color-mix(in srgb, var(--background) 98%, var(--color-white));
+    --card-foreground: var(--color-neutral-100);
+    --popover: color-mix(in srgb, var(--background) 98%, var(--color-white));
+    --popover-foreground: var(--color-neutral-100);
+    --primary: oklch(0.588 0.217 264);
+    --primary-foreground: var(--color-white);
+    --secondary: --alpha(var(--color-white) / 4%);
+    --secondary-foreground: var(--color-neutral-100);
+    --muted: --alpha(var(--color-white) / 4%);
+    --muted-foreground: color-mix(in srgb, var(--color-neutral-500) 90%, var(--color-white));
+    --accent: --alpha(var(--color-white) / 4%);
+    --accent-foreground: var(--color-neutral-100);
+    --destructive: color-mix(in srgb, var(--color-red-500) 90%, var(--color-white));
+    --border: --alpha(var(--color-white) / 6%);
+    --input: --alpha(var(--color-white) / 8%);
+    --ring: oklch(0.588 0.217 264);
+    --destructive-foreground: var(--color-red-400);
+    --info: var(--color-blue-500);
+    --info-foreground: var(--color-blue-400);
+    --success: var(--color-emerald-500);
+    --success-foreground: var(--color-emerald-400);
+    --warning: var(--color-amber-500);
+    --warning-foreground: var(--color-amber-400);
+    --sidebar: var(--card);
+    --sidebar-foreground: var(--foreground);
+    --sidebar-muted-foreground: var(--muted-foreground);
+    --sidebar-control-surface: var(--muted);
+    --sidebar-row-hover: var(--accent);
+    --sidebar-row-active: var(--accent);
+    --sidebar-row-selected: var(--muted);
+    --sidebar-border: var(--border);
+    --sidebar-stage-fade: var(--card);
+    --glass-blur: 16px;
+    --glass-saturation: 1.08;
+  }
+}

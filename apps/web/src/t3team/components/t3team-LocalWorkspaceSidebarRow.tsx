@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { EnvironmentId } from "@t3tools/contracts";

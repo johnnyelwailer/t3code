@@ -1748,7 +1748,11 @@ function ComposerPromptEditorInner({
 
   return (
     <ComposerTerminalContextActionsContext value={terminalContextActions}>
-      <div className="relative [font-family:var(--font-composer,var(--font-sans))] [font-size:var(--font-size-prompt,0.875rem)] [@media(max-width:39.999rem)_and_(pointer:coarse)]:[font-size:max(var(--font-size-prompt,1rem),16px)]">
+      {/* Fall back to `inherit`, not var(--font-sans): the shell around the composer may set its
+          own body face (the t3team shell does), and the composer should follow it unless the user
+          picked an explicit composer font in Settings -> Appearance. In the default shell body
+          already resolves to var(--font-sans), so the two fallbacks are equivalent there. */}
+      <div className="relative [font-family:var(--font-composer,inherit)] [font-size:var(--font-size-prompt,0.875rem)] [@media(max-width:39.999rem)_and_(pointer:coarse)]:[font-size:max(var(--font-size-prompt,1rem),16px)]">
         <PlainTextPlugin
           contentEditable={
             <ContentEditable

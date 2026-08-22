@@ -1,7 +1,7 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
- * Story detail panel (spec §7): the quick-edit + navigation companion for bands
- * 0–4 (per-item singleton; camera never moves). Subtask/epic panels and shared
- * parts live in the sibling t3team-PlanningSpace*Panel* modules.
+ * Story detail panel (spec §7): the quick-edit + navigation companion for bands 0–4 (per-item
+ * singleton; camera never moves). Subtask/epic panels and shared parts live in the sibling modules.
  */
 
 import { ArrowUp, Crosshair, X } from "lucide-react";

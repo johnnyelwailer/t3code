@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { Archive, File, FileCode, FileText, Film, Image as ImageIcon, Music } from "lucide-react";
 import { useState } from "react";
 

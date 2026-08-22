@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The story "frame" node rendered into the planning space stage — the §3.3 card
  * that band-CSS reveals progressively (dot → card → subtask grid). Memoized on

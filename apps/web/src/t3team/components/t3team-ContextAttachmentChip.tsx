@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { AlertCircleIcon, DownloadIcon, XIcon } from "lucide-react";
 import {
   FALLBACK_KIND_CONFIG,

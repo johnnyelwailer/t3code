@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Subtask detail panel (§7): the subtask branch of the story companion — key +
  * parent crumb, estimate stepper, owner affordance, description. Split out of

@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The play-as-shape "plan" card (recipe-UX design pass) — renders the `t3team.workflow.shape`
