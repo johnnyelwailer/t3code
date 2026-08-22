@@ -1296,7 +1296,35 @@ const make = Effect.gen(function* () {
     }
 
     // Orchestration turn ids are not provider turn ids, so interrupt by session.
-    yield* providerService.interruptTurn({ threadId: event.payload.threadId });
+    // The adapter's turn.aborted event only clears plan progress; it does not
+    // clear activeTurnId or update the thread session status in the projection.
+    // We must always settle the session here so the "Working" badge clears.
+    yield* providerService.interruptTurn({ threadId: event.payload.threadId }).pipe(
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) {
+          return Effect.interrupt;
+        }
+        return Effect.logWarning("interruptTurn failed; settling session anyway").pipe(
+          Effect.annotateLogs({
+            threadId: event.payload.threadId,
+            cause: Cause.pretty(cause),
+          }),
+        );
+      }),
+    );
+
+    yield* setThreadSession({
+      threadId: event.payload.threadId,
+      session: {
+        threadId: event.payload.threadId,
+        status: "stopped",
+        providerName: thread.session?.providerName ?? null,
+        ...(thread.session?.providerInstanceId !== undefined
+          ? { providerInstanceId: thread.session.providerInstanceId }
+          : {}),
+      },
+      createdAt: event.payload.createdAt,
+    });
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (
