@@ -6,8 +6,10 @@
  *     straight onto the matching select option. Requires the caller to know the provider.
  *   • `effort` — the provider-AGNOSTIC tier (`light` / `standard` / `high`), the same ladder
  *     workflow child turns use. Mapped by `applyWorkflowEffort` against whatever reasoning
- *     control the resolved provider/model advertises, and a documented no-op when it advertises
- *     none. This is the one an agent can use without naming a provider or a model.
+ *     control the resolved provider/model advertises — or, when the provider exposes its tiers
+ *     as model slugs (the Nexplore gateway's `low` / `medium` / `high` aliases), onto the closest
+ *     tier model. Documented no-op when it advertises neither. This is the one an agent can use
+ *     without naming a provider or a model.
  *
  * `reasoning_effort` is the more specific request, so it wins when both are supplied.
  */

@@ -171,4 +171,36 @@ describe("resolveChildModel", () => {
         }
       }),
   );
+
+  effectIt.effect("says explicitly when the requested effort cannot be honored", () =>
+    Effect.gen(function* () {
+      const plainParent = {
+        instanceId: "plain",
+        model: "plain-a",
+        options: [],
+      } as unknown as ModelSelection;
+      const result = yield* resolveChildModel(plainParent, { effort: "high" }, () =>
+        Effect.succeed([makeProvider("plain", ["plain-a"])]),
+      );
+      expect(result.modelSelection.model).toBe("plain-a");
+      expect(result.effortNote).toContain("not honored");
+      expect(result.effortNote).toContain("'high'");
+    }),
+  );
+
+  effectIt.effect("omits the effortNote when the provider's tier models honor the effort", () =>
+    Effect.gen(function* () {
+      const tiers = makeProvider("nexplore", ["no-thinking", "low", "medium", "high"]);
+      const onFast = {
+        instanceId: "nexplore",
+        model: "low",
+        options: [],
+      } as unknown as ModelSelection;
+      const result = yield* resolveChildModel(onFast, { effort: "high" }, () =>
+        Effect.succeed([tiers]),
+      );
+      expect(result.modelSelection.model).toBe("high");
+      expect(result.effortNote).toBeUndefined();
+    }),
+  );
 });

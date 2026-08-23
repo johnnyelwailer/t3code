@@ -25,7 +25,9 @@ export type T3TeamStartChildArgs = {
    * ({@link applyWorkflowEffort}): the caller asks for `light` / `standard` / `high` without
    * naming a provider, a model, or that provider's own vocabulary. Ignored when the explicit,
    * provider-specific `reasoningEffort` is also given (that one is more specific), and a
-   * documented no-op on a provider that exposes no reasoning control.
+   * documented no-op on a provider that exposes neither a reasoning control nor tier models —
+   * in which case the launch result carries an explicit `effort_note` instead of downgrading
+   * silently.
    */
   readonly effort?: AgentEffort;
   readonly repoFullName?: string;
