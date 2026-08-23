@@ -467,6 +467,28 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       } as const;
     }
 
+    // Stale session recovery: the binding says "running" but the adapter no
+    // longer holds the session (crash, OOM, unhandled rejection). Reset the
+    // persisted status so the next upsert does not inherit a stale
+    // activeTurnId that would block subsequent turns.
+    if (binding.status === "running") {
+      yield* directory
+        .upsert({
+          threadId: input.threadId,
+          provider: binding.provider,
+          providerInstanceId: instanceId,
+          status: "stopped",
+        })
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("provider.session.stale-reset-failed", {
+              threadId: input.threadId,
+              cause,
+            }),
+          ),
+        );
+    }
+
     if (!input.allowRecovery) {
       return {
         adapter,
