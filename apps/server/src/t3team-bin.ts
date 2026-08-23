@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - bootstrap env loading runs at module load, before any Effect runtime exists.
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
