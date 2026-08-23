@@ -3,6 +3,7 @@ import type { ProjectSource } from "@t3tools/project-context";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { useBackend } from "~/t3team/backend/t3team-index";
+import { toastManager } from "~/components/ui/toast";
 import { ThreadChatViewBody } from "~/t3team/chat/t3team-ThreadChatViewBody";
 import { ExternalSessionReadOnlyOverlay } from "~/t3team/chat/t3team-ExternalSessionReadOnlyOverlay";
 import { useExternalSessionReadOnly } from "~/t3team/chat/t3team-useExternalSessionReadOnly";
@@ -210,7 +211,13 @@ export function ThreadChatView({
           },
         });
       } catch (error) {
-        throw new Error(normalizeForkError(error));
+        // The per-message button fires-and-forgets (void onClick), so surface
+        // failures here — an unthrown error would be a silent no-op.
+        toastManager.add({
+          type: "error",
+          title: "Fork failed",
+          description: normalizeForkError(error),
+        });
       }
     },
     [backend, environmentId, navigate, projectId, serverThread, threadId],
