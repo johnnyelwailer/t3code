@@ -369,7 +369,12 @@ function assertNoWorkspaceSpecs(manifestJson: string, where: string): void {
  * resolves against is missing or uncurated.
  */
 function assertStagingTreeClosure(stagingDir: string): void {
-  const required = TYPECHECKER_DTS_SPOT_CHECK_FILES.map((file) => NodePath.join(stagingDir, file));
+  // The spot-check files are asar-relative; the staging tree places the
+  // server's dist at its root (stagingDir/dist), so the apps/server/ prefix
+  // drops off.
+  const required = TYPECHECKER_DTS_SPOT_CHECK_FILES.map((file) =>
+    NodePath.join(stagingDir, file.replace("apps/server/", "")),
+  );
   for (const file of required) {
     if (!NodeFS.existsSync(file)) {
       throw new OrchestrationBundleClosureError({
