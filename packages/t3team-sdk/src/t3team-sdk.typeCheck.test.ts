@@ -57,6 +57,19 @@ describe("workflow type checking", () => {
     expect(findings).toEqual([]);
   });
 
+  // Regression: the validator's virtual path is extensionless ("<inline>"). TypeScript 6 routes
+  // extensionless root names through its extension-probing path and never asks the host for the
+  // exact name, so the override map keyed on "<inline>" missed and the check degraded to
+  // "unavailable" for EVERY inline workflow. A .ts-suffixed virtual name must behave exactly like
+  // a real one: clean body → no findings, wrong argument type → the real diagnostic.
+  it("typechecks an extensionless virtual path end-to-end (the validator's '<inline>')", () => {
+    expect(typeCheckWorkflowSource({ absolutePath: "<inline>", sourceText: CLEAN })).toEqual([]);
+
+    const broken = CLEAN.replace("await agent(`summarize ${input.topic}`", "await agent(42");
+    const findings = typeCheckWorkflowSource({ absolutePath: "<inline>", sourceText: broken });
+    expect(findings.some((f) => f.facet === "types" && f.rule === "ts2345")).toBe(true);
+  });
+
   // The whole point of the required-`capabilities` work: this is the diagnostic that was invisible.
   it("catches a subagent spawned without capabilities, naming the line", () => {
     const source = CLEAN.replace(', { capabilities: "inherit" }', "");

@@ -817,6 +817,11 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   // staging inputs out of app.asar; they are emitted once at resources/.
   "!apps/desktop/prod-resources/windows-server",
   "!apps/desktop/prod-resources/windows-server/**/*",
+  // The afterPack hook that re-injects the .d.ts files electron-builder strips
+  // from app.asar (and its config) live at the staged app root; keep them out
+  // of the asar itself.
+  "!desktop-asar-dts-afterpack.cjs",
+  "!desktop-asar-dts-afterpack.json",
 ] as const;
 // Windows ships the server tree (bundle + node_modules) as a separate
 // resources/server.asar sidecar instead of loose files: the NSIS installer
@@ -2130,6 +2135,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     artifactName: "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS],
+    // electron-builder strips .d.ts from app.asar with hardcoded, non-configurable
+    // filters (the main matcher's trailing !**/*.d.ts plus the node-module
+    // collector's extension list), which removes the packaged typechecker's
+    // declaration closure. This hook re-injects it after packing, before signing.
+    // See scripts/desktop-asar-dts-afterpack.cjs.
+    afterPack: "./desktop-asar-dts-afterpack.cjs",
     directories: {
       buildResources: "apps/desktop/resources",
     },
@@ -3314,6 +3325,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       electron: electronVersion,
     },
   };
+  // electron-builder resolves a relative afterPack path against the process
+  // CWD (not the project dir) and rejects hook paths outside the workspace
+  // root, so pin the hook to its absolute staged location.
+  stagePackageJson.build.afterPack = path.join(stageAppDir, "desktop-asar-dts-afterpack.cjs");
 
   const stagePackageJsonString = yield* encodeJsonString(stagePackageJson);
   yield* fs.writeFileString(path.join(stageAppDir, "package.json"), `${stagePackageJsonString}\n`);
@@ -3382,6 +3397,23 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       includeTypeScript: true,
     });
   }
+
+  // Stage the afterPack hook (see createBuildConfig's afterPack): electron-builder
+  // resolves it relative to the project dir, so it must live in the staged app
+  // root together with its config (the staged tree still holds every .d.ts the
+  // asar packing strips; the hook re-injects them from there).
+  yield* fs.copyFile(
+    path.join(repoRoot, "scripts", "desktop-asar-dts-afterpack.cjs"),
+    path.join(stageAppDir, "desktop-asar-dts-afterpack.cjs"),
+  );
+  const hookConfigString = yield* encodeJsonString({
+    stageAppDir,
+    repoScriptsPackageJson: path.join(repoRoot, "scripts", "package.json"),
+  });
+  yield* fs.writeFileString(
+    path.join(stageAppDir, "desktop-asar-dts-afterpack.json"),
+    `${hookConfigString}\n`,
+  );
 
   // WSL is Windows-only, so only the Windows artifact carries the server
   // sidecar (which embeds the Linux node-pty prebuild); other platforms

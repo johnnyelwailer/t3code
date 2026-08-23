@@ -39,6 +39,7 @@ import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
 import { Command, Flag } from "effect/unstable/cli";
 
+import * as Asar from "@electron/asar";
 import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
@@ -72,10 +73,20 @@ export class OrchestrationBundleDistMissingError extends Schema.TaggedErrorClass
   }
 }
 
+export class OrchestrationBundleClosureError extends Schema.TaggedErrorClass<OrchestrationBundleClosureError>()(
+  "OrchestrationBundleClosureError",
+  { detail: Schema.String },
+) {
+  override get message(): string {
+    return `The packaged typechecker closure is incomplete: ${this.detail}`;
+  }
+}
+
 interface CheckCliInput {
   readonly distDir: Option.Option<string>;
   readonly keepDir: Option.Option<boolean>;
   readonly verbose: Option.Option<boolean>;
+  readonly asarPath: Option.Option<string>;
 }
 
 const hostPlatformToBuildPlatform = (platform: string): typeof BuildPlatform.Type =>
@@ -140,7 +151,28 @@ if (!badTypes.some((f) => f.rule === "ts2345")) {
   throw new Error("expected ts2345 for the wrong argument type, got: " + JSON.stringify(badTypes));
 }
 
-console.log("orchestration bundle probe: OK (inlined typescript + staged authoring types)");
+// Regression: the validator's virtual path is extensionless ("<inline>").
+// TypeScript 6 routes extensionless root names through its extension-probing
+// path and never asks the host for the exact name, so an override map keyed
+// on "<inline>" misses and EVERY inline workflow degrades to
+// "typecheck-unavailable". The virtual path must behave like a real one:
+// clean body → no findings, wrong argument type → the real diagnostic.
+const inlineClean = auditWorkflowSourceStatic(
+  { absolutePath: "<inline>", sourceText: CLEAN },
+  { typecheck: true },
+);
+if (inlineClean.some((f) => f.facet === "types")) {
+  throw new Error("inline clean workflow produced type findings: " + JSON.stringify(inlineClean));
+}
+const inlineBad = auditWorkflowSourceStatic(
+  { absolutePath: "<inline>", sourceText: BAD },
+  { typecheck: true },
+);
+if (!inlineBad.some((f) => f.facet === "types" && f.rule === "ts2345")) {
+  throw new Error("expected ts2345 for the inline wrong argument type, got: " + JSON.stringify(inlineBad));
+}
+
+console.log("orchestration bundle probe: OK (inlined typescript + staged authoring types + inline virtual path)");
 `;
 
 const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(function* (
@@ -149,6 +181,7 @@ const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(function*
   const distDirFlag = Option.getOrUndefined(input.distDir);
   const keepDir = Option.getOrElse(input.keepDir, () => false);
   const verbose = Option.getOrElse(input.verbose, () => false);
+  const asarPathFlag = Option.getOrUndefined(input.asarPath);
 
   const repoRoot = NodePath.resolve(NodePath.dirname(new URL(import.meta.url).pathname), "..");
   const distDir = NodePath.resolve(
@@ -237,6 +270,16 @@ const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(function*
 
     NodeFS.cpSync(distDir, NodePath.join(stagingDir, "dist"), { recursive: true });
 
+    // The staging tree mirrors the asar's typechecker closure: assert the
+    // pieces electron-builder's hardcoded .d.ts filters strip (and the
+    // afterPack hook re-injects) are present here, and that the curated
+    // authoring types carry no pnpm-protocol specs.
+    assertStagingTreeClosure(stagingDir);
+    if (asarPathFlag !== undefined) {
+      assertAsarClosure(asarPathFlag);
+      yield* Effect.log(`[orchestration-bundle] asar closure OK: ${asarPathFlag}`);
+    }
+
     yield* Effect.log("[orchestration-bundle] Running the probe against the emitted bundle...");
     const probeCommand = yield* resolveSpawnCommand("node", []);
     const probe = yield* spawnAndCollect(
@@ -264,6 +307,116 @@ const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(function*
     if (!keepDir) NodeFS.rmSync(stagingDir, { recursive: true, force: true });
   }
 });
+
+// The typechecker closure the packaged app must resolve: the TypeScript lib
+// declarations beside the chunks (the inlined compiler's getDefaultLibFilePath
+// target), effect's declaration graph, the trimmed typescript copy's API
+// typings, and the curated @t3team/sdk manifest. These are exactly the .d.ts
+// files electron-builder's hardcoded filters strip from app.asar (re-injected
+// by the afterPack hook) — so a missing one here means the packaged
+// typechecker degrades to "typecheck-unavailable" / ts7016 on every workflow.
+const CLOSURE_FILES = ["lib.esnext.d.ts", "lib.dom.d.ts"] as const;
+const CLOSURE_EFFECT_FILE = "dist/Schema.d.ts";
+const CLOSURE_TYPESCRIPT_FILE = "lib/typescript.d.ts";
+const SDK_MANIFEST = "node_modules/@t3team/sdk/package.json";
+// The authoring-type packages the packaged typechecker may resolve from the
+// asar's node_modules. Their PRESENCE is the requirement (module resolution
+// needs the package + its declarations); the manifest's dependency specs are
+// NOT — curation (rewriting workspace:*/catalog: to plain specs) is a
+// build-time input to electron-builder's asar pruning, not something the
+// runtime typechecker reads, and electron-builder's own pnpm pass restores the
+// workspace symlinks after curation. So the asar is asserted on presence, not
+// curation state.
+const ASAR_AUTHORING_TYPE_PACKAGES = [
+  "@t3team/sdk",
+  "@runbook/core",
+  "@runbook/ts",
+  "@runbook/threads",
+  "@runbook/tools",
+  "@runbook/scripts",
+] as const;
+
+/** No pnpm-protocol specs may survive curation in the SDK manifest. */
+function assertNoWorkspaceSpecs(manifestJson: string, where: string): void {
+  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(
+    manifestJson,
+  ) as {
+    readonly dependencies?: Record<string, unknown>;
+  };
+  const leftovers = Object.entries(manifest.dependencies ?? {}).filter(
+    ([, spec]) =>
+      typeof spec === "string" && (spec.startsWith("workspace:") || spec.startsWith("catalog:")),
+  );
+  if (leftovers.length > 0) {
+    throw new OrchestrationBundleClosureError({
+      detail:
+        `${where}: ${SDK_MANIFEST} still carries pnpm-protocol specs: ` +
+        leftovers.map(([name, spec]) => `${name}=${String(spec)}`).join(", "),
+    });
+  }
+}
+
+/**
+ * Assert the probe's staging tree (which mirrors the asar) carries the full
+ * typechecker closure. Fails the probe when a piece the packaged typechecker
+ * resolves against is missing or uncurated.
+ */
+function assertStagingTreeClosure(stagingDir: string): void {
+  const required = [
+    ...CLOSURE_FILES.map((file) => NodePath.join(stagingDir, "dist", "lib", file)),
+    NodePath.join(stagingDir, "node_modules", "effect", CLOSURE_EFFECT_FILE),
+    NodePath.join(stagingDir, "node_modules", "typescript", CLOSURE_TYPESCRIPT_FILE),
+  ];
+  for (const file of required) {
+    if (!NodeFS.existsSync(file)) {
+      throw new OrchestrationBundleClosureError({
+        detail: `staging tree is missing the typechecker closure file: ${file}`,
+      });
+    }
+  }
+  assertNoWorkspaceSpecs(
+    NodeFS.readFileSync(NodePath.join(stagingDir, SDK_MANIFEST), "utf8"),
+    "staging tree",
+  );
+}
+
+/**
+ * Assert an EMITTED app.asar carries the same closure — the .d.ts files
+ * electron-builder strips and the afterPack hook re-injects, plus the curated
+ * authoring types. This is the desktop-build verification for the packaging
+ * gap: run it with `--asar <path to app.asar>` after a desktop build.
+ */
+function assertAsarClosure(asarPath: string): void {
+  if (!NodeFS.existsSync(asarPath)) {
+    throw new OrchestrationBundleClosureError({ detail: `asar not found: ${asarPath}` });
+  }
+  // listPackage prefixes every path with "/"; normalize to asar-relative.
+  const listing = Asar.listPackage(asarPath, { isPack: false }).map((entry) =>
+    entry.startsWith("/") ? entry.slice(1) : entry,
+  );
+  const required = [
+    ...CLOSURE_FILES.map((file) => `apps/server/dist/lib/${file}`),
+    `node_modules/effect/${CLOSURE_EFFECT_FILE}`,
+    `node_modules/typescript/${CLOSURE_TYPESCRIPT_FILE}`,
+  ];
+  const missing = required.filter((file) => !listing.includes(file));
+  if (missing.length > 0) {
+    throw new OrchestrationBundleClosureError({
+      detail: `asar is missing the typechecker closure files: ${missing.join(", ")}`,
+    });
+  }
+  // The authoring-type packages must be present (the typechecker resolves
+  // against them); curation state is not asserted here — see
+  // ASAR_AUTHORING_TYPE_PACKAGES.
+  const missingPackages = ASAR_AUTHORING_TYPE_PACKAGES.filter(
+    (name) => !listing.includes(`node_modules/${name}/package.json`),
+  );
+  if (missingPackages.length > 0) {
+    throw new OrchestrationBundleClosureError({
+      detail: `asar is missing the authoring-type packages: ${missingPackages.join(", ")}`,
+    });
+  }
+}
 
 function readWorkspaceCatalog(repoRoot: string): Record<string, string> {
   const raw = NodeFS.readFileSync(NodePath.join(repoRoot, "pnpm-workspace.yaml"), "utf8");
@@ -314,6 +467,12 @@ const runCommand = Effect.fn("runCommand")(function* (
 const checkOrchestrationBundleCli = Command.make("check-orchestration-bundle", {
   distDir: Flag.string("dist-dir").pipe(
     Flag.withDescription("Server dist directory (default: apps/server/dist)."),
+    Flag.optional,
+  ),
+  asarPath: Flag.string("asar").pipe(
+    Flag.withDescription(
+      "Also assert this emitted app.asar carries the typechecker closure (the .d.ts files electron-builder strips) and the curated authoring types.",
+    ),
     Flag.optional,
   ),
   keepDir: Flag.boolean("keep-dir").pipe(

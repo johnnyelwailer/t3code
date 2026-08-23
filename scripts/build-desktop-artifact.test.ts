@@ -405,6 +405,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**/*",
       "!apps/desktop/prod-resources/windows-server",
       "!apps/desktop/prod-resources/windows-server/**/*",
+      "!desktop-asar-dts-afterpack.cjs",
+      "!desktop-asar-dts-afterpack.json",
     ]);
     assert.equal(WINDOWS_SERVER_RESOURCE_SOURCE_DIR, "apps/desktop/prod-resources/windows-server");
     assert.deepStrictEqual(WINDOWS_SERVER_EXTRA_RESOURCES, [
@@ -452,6 +454,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(mac, "asarUnpack");
       assert.notProperty(linux, "asarUnpack");
       assert.notProperty(win, "asarUnpack");
+      // electron-builder strips .d.ts from app.asar with hardcoded filters;
+      // the afterPack hook re-injects the typechecker's declaration closure
+      // after packing, before signing (scripts/desktop-asar-dts-afterpack.cjs).
+      assert.equal(mac.afterPack, "./desktop-asar-dts-afterpack.cjs");
+      assert.equal(linux.afterPack, "./desktop-asar-dts-afterpack.cjs");
+      assert.equal(win.afterPack, "./desktop-asar-dts-afterpack.cjs");
       assert.deepStrictEqual(win.extraResources, [
         {
           from: "apps/desktop/prod-resources/resource-monitor",

@@ -44,6 +44,24 @@ export interface WorkflowTypeCheckSource {
   readonly sourceText: string;
 }
 
+/** Extensions the compiler host will accept as a source file root name. */
+const SUPPORTED_SOURCE_EXTENSIONS = [".ts", ".tsx", ".d.ts"] as const;
+
+const hasSupportedSourceExtension = (path: string): boolean => {
+  const lower = path.toLowerCase();
+  return SUPPORTED_SOURCE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+};
+
+/**
+ * The file name the compiler program will actually load. TypeScript routes an extensionless root
+ * name through its extension-probing path: it never asks the host for the exact name, only for
+ * `<name>.ts` / `.tsx` / `.d.ts`. Virtual paths (the validator's `"<inline>"`) therefore need a
+ * synthesized `.ts` suffix, or the file never enters the program and the whole check degrades to
+ * "unavailable".
+ */
+const programPathFor = (absolutePath: string): string =>
+  hasSupportedSourceExtension(absolutePath) ? absolutePath : `${absolutePath}.ts`;
+
 const unavailable = (reason: string): WorkflowAuditFinding =>
   findingWithoutPosition({
     facet: "types",
@@ -96,17 +114,13 @@ function collectDiagnostics(
   source: WorkflowTypeCheckSource,
 ): ReadonlyArray<WorkflowAuditFinding> {
   const { ts } = host;
-  host.overrides.set(source.absolutePath, source.sourceText);
-  const program = ts.createProgram(
-    [source.absolutePath],
-    host.options,
-    host.host,
-    host.lastProgram,
-  );
+  const programPath = programPathFor(source.absolutePath);
+  host.overrides.set(programPath, source.sourceText);
+  const program = ts.createProgram([programPath], host.options, host.host, host.lastProgram);
   host.stats.programs += 1;
   host.lastProgram = program;
 
-  const sf = program.getSourceFile(source.absolutePath);
+  const sf = program.getSourceFile(programPath);
   if (sf === undefined) {
     return [unavailable(`the workflow file could not be added to the program`)];
   }
@@ -115,7 +129,7 @@ function collectDiagnostics(
   for (const diagnostic of ts.getPreEmitDiagnostics(program, sf)) {
     // Only this file, and only real problems: a diagnostic in a dependency's declarations, or a
     // suggestion, is not something the workflow's author can or should act on.
-    if (diagnostic.file?.fileName !== source.absolutePath) continue;
+    if (diagnostic.file?.fileName !== programPath) continue;
     if (
       diagnostic.category !== ts.DiagnosticCategory.Error &&
       diagnostic.category !== ts.DiagnosticCategory.Warning
