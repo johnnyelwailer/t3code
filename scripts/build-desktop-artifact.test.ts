@@ -18,6 +18,7 @@ import {
   createStageWorkspaceConfig,
   createStagePatchedDependencies,
   createBuildConfig,
+  extractIssueReferences,
   formatArtifactTimestamp,
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
@@ -32,6 +33,7 @@ import {
   MissingMacPasskeyProvisioningProfileError,
   packWindowsServerAsar,
   renderMacPasskeyEntitlements,
+  renderChangelog,
   resolveClerkPasskeyNativeArtifacts,
   resolveMacPasskeySigningConfiguration,
   resolveDesktopRuntimeDependencies,
@@ -556,6 +558,43 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     const formatted = formatArtifactTimestamp(date);
     assert.equal(formatted, expected);
     assert.match(formatted, /^\d{8}-\d{4}$/u);
+  });
+
+  it("renders the per-build changelog from git log lines and dedupes issue refs", () => {
+    const changelog = renderChangelog({
+      productName: "Nexi Work",
+      version: "0.0.33",
+      distroSha: "d0ac74163abc",
+      vendorSha: "194a33db1abc",
+      vendorLogLines: ["6c26037f1 feat(release): stamp desktop artifact names (#58)"],
+      distroLogLines: ["d0ac74163 chore(vendor): pin t3code 194a33db1 (#57, #58)"],
+      timestamp: "20260823-1645",
+    });
+    assert.match(changelog, /^# Nexi Work 0\.0\.33 — build 20260823-1645\n/u);
+    assert.include(changelog, "- Distro: d0ac74163abc");
+    assert.include(changelog, "- Vendor (t3code): 194a33db1abc");
+    assert.include(changelog, "## Vendor changes since previous build\n\n6c26037f1");
+    // #58 appears in both logs but is listed once, in first-seen order.
+    assert.include(changelog, "## Issue references\n\n- #58\n- #57\n");
+    assert.isTrue(changelog.split("\n").length < 60);
+  });
+
+  it("marks empty changelog sections and extracts unique issue references", () => {
+    const empty = renderChangelog({
+      productName: "T3 Code",
+      version: "0.0.1",
+      distroSha: "unknown",
+      vendorSha: "unknown",
+      vendorLogLines: [],
+      distroLogLines: [],
+      timestamp: "20260823-1645",
+    });
+    assert.include(empty, "## Vendor changes since previous build\n\n(none)");
+    assert.include(empty, "## Issue references\n\n(none)");
+    assert.deepEqual(
+      extractIssueReferences(["abc feat: fix #58 and #57", "def fix: again (#58)"]),
+      ["#58", "#57"],
+    );
   });
 
   it.effect("validates every ASAR-unpacked native in the packaged Windows payload", () =>

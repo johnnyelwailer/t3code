@@ -721,6 +721,94 @@ const resolveGitCommitHash = Effect.fn("resolveGitCommitHash")(function* (repoRo
   return hash.toLowerCase();
 });
 
+// Per-build changelog state, kept in gitignored `.nexi-dev/` so it survives output-dir cleanup.
+const DESKTOP_INSTALLER_STATE_DIR = [".nexi-dev", "desktop-installer"] as const;
+const LAST_BUILD_STATE_FILE = "last-build.json";
+
+const decodeDesktopInstallerLastBuild = Schema.decodeUnknownEffect(
+  Schema.Struct({ distroSha: Schema.String, vendorSha: Schema.String, timestamp: Schema.String }),
+);
+
+/** `git log --oneline`; undefined when git fails (e.g. the range sha is unknown to this clone). */
+const gitLogOneline = Effect.fn("gitLogOneline")(function* (
+  repoRoot: string,
+  args: ReadonlyArray<string>,
+) {
+  const result = yield* spawnAndCollectOutput(
+    ChildProcess.make("git", ["log", "--oneline", ...args], { cwd: repoRoot }),
+  ).pipe(Effect.orElseSucceed(() => ({ stdout: "", stderr: "", exitCode: 1 })));
+  if (result.exitCode !== 0) return undefined;
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+});
+
+const gitLogLinesSince = Effect.fn("gitLogLinesSince")(function* (
+  repoRoot: string,
+  previousSha: string | undefined,
+  currentSha: string,
+  fallbackCount: number,
+) {
+  if (previousSha !== undefined && previousSha !== "unknown" && previousSha !== currentSha) {
+    const ranged = yield* gitLogOneline(repoRoot, [`${previousSha}..${currentSha}`]);
+    if (ranged !== undefined) return ranged;
+  }
+  return (yield* gitLogOneline(repoRoot, [`-${fallbackCount}`])) ?? [];
+});
+
+const emitDesktopBuildChangelog = Effect.fn("emitDesktopBuildChangelog")(function* (input: {
+  readonly repoRoot: string;
+  readonly vendorRepoRoot: string;
+  readonly outputDir: string;
+  readonly productName: string;
+  readonly version: string;
+  readonly distroSha: string;
+  readonly vendorSha: string;
+  readonly timestamp: string;
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const {
+    repoRoot,
+    vendorRepoRoot,
+    outputDir,
+    productName,
+    version,
+    distroSha,
+    vendorSha,
+    timestamp,
+  } = input;
+
+  const stateDir = path.join(repoRoot, ...DESKTOP_INSTALLER_STATE_DIR);
+  const statePath = path.join(stateDir, LAST_BUILD_STATE_FILE);
+  const rawState = yield* fs.readFileString(statePath).pipe(Effect.orElseSucceed(() => undefined));
+  const previous =
+    rawState === undefined
+      ? undefined
+      : yield* decodeDesktopInstallerLastBuild(rawState).pipe(
+          Effect.orElseSucceed(() => undefined),
+        );
+
+  const changelog = renderChangelog({
+    productName,
+    version,
+    distroSha,
+    vendorSha,
+    vendorLogLines: yield* gitLogLinesSince(vendorRepoRoot, previous?.vendorSha, vendorSha, 10),
+    distroLogLines: yield* gitLogLinesSince(repoRoot, previous?.distroSha, distroSha, 5),
+    timestamp,
+  });
+  yield* fs.writeFileString(path.join(outputDir, `CHANGELOG-${timestamp}.md`), changelog);
+
+  yield* fs.makeDirectory(stateDir, { recursive: true });
+  yield* fs.writeFileString(
+    statePath,
+    `${yield* encodeJsonString({ distroSha, vendorSha, timestamp })}\n`,
+  );
+  yield* Effect.log(`[desktop-artifact] Wrote CHANGELOG-${timestamp}.md`);
+});
+
 const resolvePythonForNodeGyp = Effect.fn("resolvePythonForNodeGyp")(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -1082,6 +1170,46 @@ ${associatedDomains}
   </dict>
 </plist>
 `;
+}
+
+export function extractIssueReferences(logLines: ReadonlyArray<string>): string[] {
+  const seen = new Set<string>();
+  for (const line of logLines) {
+    for (const match of line.matchAll(/\B#(\d+)/gu)) {
+      seen.add(`#${match[1]}`);
+    }
+  }
+  return [...seen];
+}
+
+export function renderChangelog(input: {
+  readonly productName: string;
+  readonly version: string;
+  readonly distroSha: string;
+  readonly vendorSha: string;
+  readonly vendorLogLines: ReadonlyArray<string>;
+  readonly distroLogLines: ReadonlyArray<string>;
+  readonly timestamp: string;
+}): string {
+  const section = (heading: string, lines: ReadonlyArray<string>): string[] => [
+    `## ${heading}`,
+    "",
+    ...(lines.length > 0 ? lines : ["(none)"]),
+    "",
+  ];
+  const issueRefs = extractIssueReferences([...input.vendorLogLines, ...input.distroLogLines]).map(
+    (reference) => `- ${reference}`,
+  );
+  return [
+    `# ${input.productName} ${input.version} — build ${input.timestamp}`,
+    "",
+    `- Distro: ${input.distroSha}`,
+    `- Vendor (t3code): ${input.vendorSha}`,
+    "",
+    ...section("Vendor changes since previous build", input.vendorLogLines),
+    ...section("Distro changes since previous build", input.distroLogLines),
+    ...section("Issue references", issueRefs),
+  ].join("\n");
 }
 
 export function resolveFffNativeDependencies(
@@ -3311,6 +3439,8 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     options.platform === "win"
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
+  // One stamp per build: shared by the artifact file names and the emitted CHANGELOG-<stamp>.md.
+  const artifactTimestamp = formatArtifactTimestamp(DateTime.toDate(yield* DateTime.now));
   const stagePackageJson: StagePackageJson = {
     name: "t3code",
     version: appVersion,
@@ -3337,7 +3467,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       options.packsDir,
       options.productName,
       options.iconPng !== undefined,
-      formatArtifactTimestamp(DateTime.toDate(yield* DateTime.now)),
+      artifactTimestamp,
     ),
     dependencies: stageDependencies,
     devDependencies: {
@@ -3588,6 +3718,26 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   yield* Effect.log("[desktop-artifact] Done. Artifacts:").pipe(
     Effect.annotateLogs({ artifacts: copiedArtifacts }),
+  );
+
+  // Best-effort: a changelog failure must not fail the build.
+  const vendorRepoRoot = (yield* fs.exists(path.join(repoRoot, "vendor", "t3code", ".git")))
+    ? path.join(repoRoot, "vendor", "t3code")
+    : repoRoot;
+  const vendorSha = yield* resolveGitCommitHash(vendorRepoRoot);
+  yield* emitDesktopBuildChangelog({
+    repoRoot,
+    vendorRepoRoot,
+    outputDir: options.outputDir,
+    productName: resolveDesktopProductName(appVersion, options.productName),
+    version: appVersion,
+    distroSha: commitHash,
+    vendorSha,
+    timestamp: artifactTimestamp,
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning(`[desktop-artifact] Skipping build changelog: ${String(cause)}`),
+    ),
   );
 });
 
