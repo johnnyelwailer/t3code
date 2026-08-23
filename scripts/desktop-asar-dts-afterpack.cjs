@@ -30,8 +30,10 @@
  *
  * Written into the staged app dir by scripts/build-desktop-artifact.ts, which
  * also writes the `desktop-asar-dts-afterpack.json` config next to this file
- * (stageAppDir + the repo scripts package.json used to resolve
- * `@electron/asar`).
+ * (stageAppDir, the repo scripts package.json used to resolve
+ * `@electron/asar`, and the dtsDirectories/dtsFiles closure lists — the
+ * single source of truth for what gets re-injected lives in
+ * scripts/build-desktop-artifact.ts, so this hook stays data-driven).
  */
 
 const NodeFS = require("node:fs");
@@ -79,7 +81,13 @@ module.exports = async function desktopAsarDtsAfterPack(context) {
     );
     throw err;
   }
-  const { stageAppDir, repoScriptsPackageJson } = config;
+  const { stageAppDir, repoScriptsPackageJson, dtsDirectories, dtsFiles } = config;
+  if (!Array.isArray(dtsDirectories) || !Array.isArray(dtsFiles)) {
+    return fail(
+      `config at ${CONFIG_PATH} is missing the dtsDirectories/dtsFiles closure lists; ` +
+        "re-run the desktop build script that writes this config",
+    );
+  }
 
   let asarPath;
   if (electronPlatformName === "darwin") {
@@ -156,6 +164,8 @@ module.exports = async function desktopAsarDtsAfterPack(context) {
 
   // 2. The .d.ts files electron-builder stripped, sourced from the staged
   //    tree (which still has them — the strips happen during asar packing).
+  //    The closure lists come from the build script via this hook's config
+  //    (desktop-asar-dts-afterpack.json) — do not hardcode them here.
   const additions = [];
   const addDtsFromDir = (stageRel, asarRel) => {
     const dir = NodePath.join(stageAppDir, stageRel);
@@ -169,26 +179,16 @@ module.exports = async function desktopAsarDtsAfterPack(context) {
       });
     }
   };
-  // The TypeScript lib declarations beside the emitted chunks: the inlined
-  // compiler's getDefaultLibFilePath resolves lib.esnext.d.ts / lib.dom.d.ts
-  // here (apps/server's t3team-typescriptLibPackPlugin ships dist/lib/).
-  addDtsFromDir(NodePath.join("apps", "server", "dist", "lib"), "apps/server/dist/lib");
-  // effect's declaration graph: the typecheck facet resolves effect/Schema
-  // against it (a missing .d.ts is ts7016 on every workflow).
-  addDtsFromDir(NodePath.join("node_modules", "effect"), "node_modules/effect");
-  // The trimmed typescript copy's API typings (lib/typescript.js already
-  // survives — only the .d.ts is stripped).
-  const typescriptDts = NodePath.join(
-    stageAppDir,
-    "node_modules",
-    "typescript",
-    "lib",
-    "typescript.d.ts",
-  );
-  if (!NodeFS.existsSync(typescriptDts)) {
-    return fail(`staged trimmed typescript typings missing: ${typescriptDts}`);
+  for (const dir of dtsDirectories) {
+    addDtsFromDir(dir, dir);
   }
-  additions.push({ asarRel: "node_modules/typescript/lib/typescript.d.ts", disk: typescriptDts });
+  for (const file of dtsFiles) {
+    const disk = NodePath.join(stageAppDir, file);
+    if (!NodeFS.existsSync(disk)) {
+      return fail(`staged .d.ts missing: ${disk}`);
+    }
+    additions.push({ asarRel: file, disk });
+  }
 
   const fresh = additions.filter((addition) => !existingFiles.has(addition.asarRel));
   for (const { asarRel, disk } of fresh) {

@@ -47,10 +47,12 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 import { selectCliRuntimeExternalDependencies } from "./lib/cli-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 import {
+  AUTHORING_TYPE_PACKAGES,
   resolveFffNativeDependencies,
   stageAuthoringTypes,
   type BuildArch,
   type BuildPlatform,
+  TYPECHECKER_DTS_SPOT_CHECK_FILES,
 } from "./build-desktop-artifact.ts";
 
 const PROBE_TIMEOUT = Duration.seconds(180);
@@ -315,9 +317,9 @@ const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(function*
 // files electron-builder's hardcoded filters strip from app.asar (re-injected
 // by the afterPack hook) — so a missing one here means the packaged
 // typechecker degrades to "typecheck-unavailable" / ts7016 on every workflow.
-const CLOSURE_FILES = ["lib.esnext.d.ts", "lib.dom.d.ts"] as const;
-const CLOSURE_EFFECT_FILE = "dist/Schema.d.ts";
-const CLOSURE_TYPESCRIPT_FILE = "lib/typescript.d.ts";
+// The spot-check files and the authoring-type package names are imported from
+// scripts/build-desktop-artifact.ts (the single source of truth the afterPack
+// hook's config is written from), not re-declared here.
 // The @t3team/sdk source entry point the packaged typechecker resolves (the
 // package's exports["."].types target). @t3team/sdk ships .ts source, not
 // compiled .d.ts, so the SOURCE file — not a .d.ts — is the closure piece.
@@ -338,14 +340,7 @@ const SDK_MANIFEST = "node_modules/@t3team/sdk/package.json";
 // expected asar state. Do NOT "fix" them or assert their absence: the guard
 // against RC3 recurrence is the positive closure invariant below (the .d.ts/
 // source files the typechecker actually resolves), not a no-leftovers check.
-const ASAR_AUTHORING_TYPE_PACKAGES = [
-  "@t3team/sdk",
-  "@runbook/core",
-  "@runbook/ts",
-  "@runbook/threads",
-  "@runbook/tools",
-  "@runbook/scripts",
-] as const;
+const ASAR_AUTHORING_TYPE_PACKAGES = AUTHORING_TYPE_PACKAGES.map(({ name }) => name);
 
 /** No pnpm-protocol specs may survive curation in the SDK manifest. */
 function assertNoWorkspaceSpecs(manifestJson: string, where: string): void {
@@ -373,11 +368,9 @@ function assertNoWorkspaceSpecs(manifestJson: string, where: string): void {
  * resolves against is missing or uncurated.
  */
 function assertStagingTreeClosure(stagingDir: string): void {
-  const required = [
-    ...CLOSURE_FILES.map((file) => NodePath.join(stagingDir, "dist", "lib", file)),
-    NodePath.join(stagingDir, "node_modules", "effect", CLOSURE_EFFECT_FILE),
-    NodePath.join(stagingDir, "node_modules", "typescript", CLOSURE_TYPESCRIPT_FILE),
-  ];
+  const required = TYPECHECKER_DTS_SPOT_CHECK_FILES.map((file) =>
+    NodePath.join(stagingDir, file),
+  );
   for (const file of required) {
     if (!NodeFS.existsSync(file)) {
       throw new OrchestrationBundleClosureError({
@@ -413,9 +406,7 @@ function assertAsarClosure(asarPath: string): void {
   );
   const required = [
     SDK_SOURCE_ENTRY,
-    ...CLOSURE_FILES.map((file) => `apps/server/dist/lib/${file}`),
-    `node_modules/effect/${CLOSURE_EFFECT_FILE}`,
-    `node_modules/typescript/${CLOSURE_TYPESCRIPT_FILE}`,
+    ...TYPECHECKER_DTS_SPOT_CHECK_FILES,
   ];
   const missing = required.filter((file) => !listing.includes(file));
   if (missing.length > 0) {

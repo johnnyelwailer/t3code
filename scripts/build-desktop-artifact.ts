@@ -2454,6 +2454,41 @@ const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(f
   }
 });
 
+// The .d.ts closure electron-builder strips from app.asar with its hardcoded,
+// non-configurable filters and the afterPack hook
+// (scripts/desktop-asar-dts-afterpack.cjs) re-injects from the staged tree.
+// SINGLE SOURCE OF TRUTH for that closure: the build script writes these lists
+// into desktop-asar-dts-afterpack.json (the hook is data-driven), and the
+// orchestration bundle probe (check-orchestration-bundle.ts) asserts the same
+// paths in its staging tree and the emitted asar. A miss in any copy = silent
+// "typecheck-unavailable" on every workflow.
+//
+// dtsDirectories: every .d.ts file under each asar-relative directory is
+// re-injected. dtsFiles: individual .d.ts files re-injected as-is.
+export const TYPECHECKER_DTS_DIRECTORIES = [
+  // The TypeScript lib declarations beside the emitted chunks: the inlined
+  // compiler's getDefaultLibFilePath resolves lib.esnext.d.ts / lib.dom.d.ts
+  // here (apps/server's t3team-typescriptLibPackPlugin ships dist/lib/).
+  "apps/server/dist/lib",
+  // effect's declaration graph: the typecheck facet resolves effect/Schema
+  // against it (a missing .d.ts is ts7016 on every workflow).
+  "node_modules/effect",
+] as const;
+export const TYPECHECKER_DTS_FILES = [
+  // The trimmed typescript copy's API typings (lib/typescript.js already
+  // survives — only the .d.ts is stripped).
+  "node_modules/typescript/lib/typescript.d.ts",
+] as const;
+// Representative .d.ts files (one per closure piece) the probe spot-checks in
+// the staging tree and the emitted asar: the lib declarations, effect's
+// Schema typings, and the trimmed typescript API typings.
+export const TYPECHECKER_DTS_SPOT_CHECK_FILES = [
+  "apps/server/dist/lib/lib.esnext.d.ts",
+  "apps/server/dist/lib/lib.dom.d.ts",
+  "node_modules/effect/dist/Schema.d.ts",
+  "node_modules/typescript/lib/typescript.d.ts",
+] as const;
+
 // The authoring-type closure the packaged typechecker must resolve from the
 // staged node_modules: the SDK source package, its @runbook/* source
 // dependencies, and the TypeScript compiler. Without them the packaged
@@ -2467,7 +2502,7 @@ const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(f
 // small. Resolution of the copies' own imports walks up to this same
 // node_modules tree, where effect and typescript also live, so no per-package
 // node_modules is needed.
-const AUTHORING_TYPE_PACKAGES = [
+export const AUTHORING_TYPE_PACKAGES = [
   { name: "@t3team/sdk", packageDir: "t3team-sdk" },
   { name: "@runbook/core", packageDir: "runbook-core" },
   { name: "@runbook/ts", packageDir: "runbook-ts" },
@@ -3567,9 +3602,14 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     path.join(repoRoot, "scripts", "desktop-asar-dts-afterpack.cjs"),
     path.join(stageAppDir, "desktop-asar-dts-afterpack.cjs"),
   );
+  // The hook is data-driven: it re-injects exactly the closure lists written
+  // here (TYPECHECKER_DTS_DIRECTORIES / TYPECHECKER_DTS_FILES), so the closure
+  // has one source of truth instead of a hardcoded copy inside the hook.
   const hookConfigString = yield* encodeJsonString({
     stageAppDir,
     repoScriptsPackageJson: path.join(repoRoot, "scripts", "package.json"),
+    dtsDirectories: [...TYPECHECKER_DTS_DIRECTORIES],
+    dtsFiles: [...TYPECHECKER_DTS_FILES],
   });
   yield* fs.writeFileString(
     path.join(stageAppDir, "desktop-asar-dts-afterpack.json"),
