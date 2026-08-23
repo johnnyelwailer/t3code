@@ -33,12 +33,24 @@ export type KindAdapterMap = Partial<
 >;
 
 /**
+ * Optional per-kind routing-info overrides for the mock. Currently only
+ * the host-owned turn inactivity watchdog budget (GHE #113) is exposed —
+ * tests that exercise the per-provider watchdog timeout set it here.
+ */
+export interface AdapterRegistryMockOptions {
+  readonly turnInactivityTimeoutSeconds?: Partial<Record<ProviderDriverKind, number>>;
+}
+
+/**
  * Build a `ProviderAdapterRegistryShape` from a kind-keyed adapter map.
  * Every adapter present in the map is addressable via both the legacy
  * `getByProvider(kind)` path and the new `getByInstance(id)` path (where
  * `id = defaultInstanceIdForDriver(kind)`).
  */
-export const makeAdapterRegistryMock = (adapters: KindAdapterMap): ProviderAdapterRegistryShape => {
+export const makeAdapterRegistryMock = (
+  adapters: KindAdapterMap,
+  options?: AdapterRegistryMockOptions,
+): ProviderAdapterRegistryShape => {
   const byInstanceId = new Map<ProviderInstanceId, ProviderAdapterShape<ProviderAdapterError>>();
   for (const [kind, adapter] of Object.entries(adapters)) {
     if (!adapter) continue;
@@ -77,6 +89,7 @@ export const makeAdapterRegistryMock = (adapters: KindAdapterMap): ProviderAdapt
           driverKind: ProviderDriverKind.make(adapter.provider),
           continuationKey: `${adapter.provider}:instance:${instanceId}`,
         },
+        turnInactivityTimeoutSeconds: options?.turnInactivityTimeoutSeconds?.[adapter.provider],
       });
     },
     listInstances: () => Effect.succeed(Array.from(byInstanceId.keys())),

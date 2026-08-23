@@ -199,7 +199,16 @@ const buildEntry = <R>(input: {
     return {
       kind: "live" as const,
       live: {
-        instance: createResult.success,
+        // The watchdog budget is a host-owned envelope field (GHE #113):
+        // the registry copies it onto the instance so host consumers
+        // (ProviderService's turn watchdog) can read it without touching
+        // the driver-specific config payload.
+        instance: {
+          ...createResult.success,
+          ...(entry.turnInactivityTimeoutSeconds !== undefined
+            ? { turnInactivityTimeoutSeconds: entry.turnInactivityTimeoutSeconds }
+            : {}),
+        },
         scope: childScope,
         entry,
       },

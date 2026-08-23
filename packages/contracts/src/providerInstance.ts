@@ -129,6 +129,17 @@ export const ProviderInstanceConfig = Schema.Struct({
   configurationSource: Schema.optional(Schema.Literal("pack")),
   environment: Schema.optionalKey(ProviderInstanceEnvironment),
   enabled: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Host-owned turn inactivity watchdog budget in seconds (GHE #113).
+   *
+   * This is a host-level knob, not part of the driver-specific `config`
+   * payload: the host arms a watchdog whenever a turn is sent to this
+   * instance and aborts the turn if the provider's stream produces no
+   * activity for this long. A value that is not a positive finite number
+   * falls back to the host default. Optional so existing persisted
+   * envelopes round-trip unchanged.
+   */
+  turnInactivityTimeoutSeconds: Schema.optionalKey(Schema.Number),
   config: Schema.optionalKey(Schema.Unknown),
 });
 export type ProviderInstanceConfig = typeof ProviderInstanceConfig.Type;

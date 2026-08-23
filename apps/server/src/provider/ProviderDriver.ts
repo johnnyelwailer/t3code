@@ -70,6 +70,13 @@ export interface ProviderInstance {
   readonly iconDataUrl?: string | undefined;
   readonly configurationSource?: "pack" | undefined;
   readonly enabled: boolean;
+  /**
+   * Host-owned turn inactivity watchdog budget in seconds (GHE #113),
+   * populated by the registry from the `ProviderInstanceConfig` envelope.
+   * `undefined` means "use the host default". Drivers never read this —
+   * it is consumed by the host-level watchdog in `ProviderService`.
+   */
+  readonly turnInactivityTimeoutSeconds?: number | undefined;
   readonly snapshot: ServerProviderShape;
   readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
   readonly textGeneration: TextGeneration.TextGeneration["Service"];

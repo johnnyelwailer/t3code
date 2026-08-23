@@ -10,9 +10,11 @@
  * @module ProviderServiceLive
  */
 import {
+  EventId,
   ModelSelection,
   NonNegativeInt,
   ThreadId,
+  TurnId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
@@ -24,13 +26,17 @@ import {
   type ProviderRuntimeEvent,
   type ProviderSession,
 } from "@t3tools/contracts";
+import { randomUUID as nodeRandomUUID } from "node:crypto";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
+import * as Scope from "effect/Scope";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 import * as Stream from "effect/Stream";
@@ -58,6 +64,31 @@ import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 const isModelSelection = Schema.is(ModelSelection);
+
+/**
+ * Turn inactivity watchdog (GHE #113) — host-level, provider-agnostic
+ * stuck-turn protection.
+ *
+ * The pack-level watchdog in the Nexplore distribution only covers Pi
+ * sessions; a silently-dead stream from any other provider (OpenCode,
+ * Codex, ...) would otherwise hang the turn forever. The host arms a
+ * budget whenever a turn is sent, resets it on EVERY runtime event the
+ * adapter's `streamEvents` emits for that thread (any event type proves
+ * the provider is alive), and aborts the turn through the
+ * provider-agnostic `interruptTurn` when the budget expires. The
+ * per-instance budget comes from
+ * `ProviderInstanceConfig.turnInactivityTimeoutSeconds`; the default
+ * matches the pack-level watchdog default (600s).
+ */
+const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
+
+interface TurnWatchdogEntry {
+  readonly turnId: TurnId;
+  readonly instanceId: ProviderInstanceId;
+  readonly provider: ProviderDriverKind;
+  readonly timeoutMs: number;
+  readonly timerFiber: Fiber.Fiber<unknown, never>;
+}
 
 /**
  * Hook for tests that want to override the canonical event logger pulled
@@ -241,6 +272,148 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       Effect.asVoid,
     );
 
+  // --- Turn inactivity watchdog (GHE #113) ---------------------------------
+  // One armed entry per thread that has an in-flight turn. Timer fibers are
+  // attached to the service scope (captured below): closing the service
+  // interrupts pending timers, and `runStopAll` (the service finalizer)
+  // clears the map.
+  const serviceScope = yield* Scope.Scope;
+  const turnWatchdogs = yield* Ref.make(new Map<ThreadId, TurnWatchdogEntry>());
+
+  const resolveTurnInactivityTimeoutMs = (instanceId: ProviderInstanceId): Effect.Effect<number> =>
+    registry.getInstanceInfo(instanceId).pipe(
+      Effect.map((info) => info.turnInactivityTimeoutSeconds),
+      Effect.catch(() => Effect.succeed(undefined as number | undefined)),
+      Effect.map((seconds) =>
+        typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0
+          ? Math.round(seconds * 1000)
+          : DEFAULT_TURN_INACTIVITY_TIMEOUT_MS,
+      ),
+    );
+
+  const clearTurnWatchdog = (threadId: ThreadId): Effect.Effect<void> =>
+    Ref.update(turnWatchdogs, (map) => {
+      if (!map.has(threadId)) return map;
+      const next = new Map(map);
+      next.delete(threadId);
+      return next;
+    });
+
+  const fireTurnWatchdog = Effect.fn("ProviderService.turnWatchdog.fire")(function* (
+    threadId: ThreadId,
+    turnId: TurnId,
+    instanceId: ProviderInstanceId,
+    provider: ProviderDriverKind,
+    timeoutMs: number,
+  ) {
+    // Only fire if this exact entry is still armed — a newer turn, a
+    // reset, or a settled turn replaced it in the meantime.
+    const current = yield* Ref.get(turnWatchdogs);
+    if (current.get(threadId)?.turnId !== turnId) return;
+    yield* clearTurnWatchdog(threadId);
+    const inactivitySeconds = Math.round(timeoutMs / 1000);
+    yield* Effect.logWarning("provider.turn.inactivity-watchdog", {
+      threadId: String(threadId),
+      turnId: String(turnId),
+      providerInstanceId: String(instanceId),
+      inactivitySeconds,
+    });
+    // Same observable surface as the pack-level watchdog: a
+    // runtime.warning carrying detail.code "turn.inactivity" and the live
+    // turnId, so host consumers can tell a watchdog abort apart from a
+    // user interrupt.
+    yield* publishRuntimeEvent({
+      eventId: EventId.make(nodeRandomUUID()),
+      provider,
+      providerInstanceId: instanceId,
+      threadId,
+      createdAt: yield* nowIso,
+      turnId,
+      type: "runtime.warning",
+      payload: {
+        message: `Turn stalled: no provider stream activity for ${inactivitySeconds} seconds`,
+        detail: {
+          code: "turn.inactivity",
+          inactivitySeconds,
+          turnId: String(turnId),
+        },
+      },
+    });
+    // Abort through the provider-agnostic interrupt path — whatever the
+    // provider does on interrupt (turn.aborted event, session error, ...)
+    // is its own concern; the host guarantee is that the turn cannot hang
+    // past the budget.
+    const adapter = yield* registry
+      .getByInstance(instanceId)
+      .pipe(Effect.orElseSucceed(() => undefined));
+    if (adapter !== undefined) {
+      yield* adapter.interruptTurn(threadId, turnId).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("provider.turn.inactivity-interrupt-failed", {
+            threadId: String(threadId),
+            turnId: String(turnId),
+            providerInstanceId: String(instanceId),
+            cause,
+          }),
+        ),
+      );
+    }
+  });
+
+  const armTurnWatchdog = Effect.fn("ProviderService.turnWatchdog.arm")(function* (
+    threadId: ThreadId,
+    turnId: TurnId,
+    instanceId: ProviderInstanceId,
+    provider: ProviderDriverKind,
+  ) {
+    const timeoutMs = yield* resolveTurnInactivityTimeoutMs(instanceId);
+    const previousEntry = yield* Ref.get(turnWatchdogs).pipe(
+      Effect.map((map) => map.get(threadId)),
+    );
+    if (previousEntry !== undefined) {
+      yield* Fiber.interrupt(previousEntry.timerFiber).pipe(Effect.ignore);
+    }
+    const timerFiber = yield* Effect.sleep(Duration.millis(timeoutMs)).pipe(
+      Effect.andThen(fireTurnWatchdog(threadId, turnId, instanceId, provider, timeoutMs)),
+      Effect.forkScoped,
+      // Detach the R requirement: the caller (sendTurn / recordTurnActivity)
+      // runs without a Scope in its context, so attach the timer to the
+      // captured service scope instead of the ambient one.
+      Effect.provideService(Scope.Scope, serviceScope),
+    );
+    yield* Ref.update(turnWatchdogs, (map) =>
+      new Map(map).set(threadId, {
+        turnId,
+        instanceId,
+        provider,
+        timeoutMs,
+        timerFiber,
+      }),
+    );
+  });
+
+  /**
+   * Watchdog bookkeeping for every adapter stream event: any event proves
+   * the thread is alive, so re-arm the full budget from it; terminal
+   * events settle the entry. No entry means no in-flight turn — a no-op,
+   * so healthy providers see zero behavior change.
+   */
+  const recordTurnActivity = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
+    Ref.get(turnWatchdogs).pipe(
+      Effect.flatMap((map) => {
+        const entry = map.get(event.threadId);
+        if (entry === undefined) return Effect.void;
+        if (
+          event.type === "turn.completed" ||
+          event.type === "turn.aborted" ||
+          event.type === "session.exited"
+        ) {
+          return clearTurnWatchdog(event.threadId);
+        }
+        return armTurnWatchdog(event.threadId, entry.turnId, entry.instanceId, entry.provider);
+      }),
+    );
+
   const requireBindingInstanceId = (
     operation: string,
     payload: {
@@ -296,7 +469,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         increment(providerRuntimeEventsTotal, {
           provider: canonicalEvent.provider,
           eventType: canonicalEvent.type,
-        }).pipe(Effect.andThen(publishRuntimeEvent(canonicalEvent))),
+        }).pipe(
+          Effect.andThen(publishRuntimeEvent(canonicalEvent)),
+          Effect.andThen(() => recordTurnActivity(canonicalEvent)),
+        ),
       ),
     );
 
@@ -755,6 +931,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       // browser tool calls used to lose the toolkit outright.
       yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
       const turn = yield* routed.adapter.sendTurn(input);
+      // Arm the host-level inactivity watchdog for the in-flight turn
+      // (GHE #113): the budget is per-provider-instance, and every stream
+      // event from this adapter resets it (see recordTurnActivity).
+      yield* armTurnWatchdog(
+        input.threadId,
+        turn.turnId,
+        routed.instanceId,
+        routed.adapter.provider,
+      );
       yield* directory.upsert({
         threadId: input.threadId,
         provider: routed.adapter.provider,
@@ -818,6 +1003,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.turn_id": input.turnId,
         });
         yield* routed.adapter.interruptTurn(routed.threadId, input.turnId);
+        // The user asked for this interrupt — the watchdog must not also
+        // fire for the same turn.
+        yield* clearTurnWatchdog(input.threadId);
         yield* analytics.record("provider.turn.interrupted", {
           provider: routed.adapter.provider,
         });
@@ -929,6 +1117,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           yield* routed.adapter.stopSession(routed.threadId);
         }
         yield* clearMcpSession(input.threadId);
+        yield* clearTurnWatchdog(input.threadId);
         yield* directory.upsert({
           threadId: input.threadId,
           provider: routed.adapter.provider,
@@ -1088,6 +1277,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   });
 
   const runStopAll = Effect.fn("runStopAll")(function* () {
+    yield* Ref.set(turnWatchdogs, new Map());
     const threadIds = yield* directory.listThreadIds();
     const currentAdapters = yield* getAdapterEntries;
     const activeSessions = yield* Effect.forEach(currentAdapters, ([instanceId, adapter]) =>

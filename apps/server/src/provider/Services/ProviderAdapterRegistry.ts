@@ -37,6 +37,11 @@ export interface ProviderInstanceRoutingInfo {
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
   readonly continuationIdentity: ProviderContinuationIdentity;
+  /**
+   * Host-owned turn inactivity watchdog budget in seconds (GHE #113).
+   * `undefined` means the host default applies.
+   */
+  readonly turnInactivityTimeoutSeconds?: number | undefined;
 }
 
 /**
