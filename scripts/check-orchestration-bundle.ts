@@ -47,13 +47,12 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 import { selectCliRuntimeExternalDependencies } from "./lib/cli-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 import {
-  AUTHORING_TYPE_PACKAGES,
   resolveFffNativeDependencies,
-  stageAuthoringTypes,
   type BuildArch,
   type BuildPlatform,
   TYPECHECKER_DTS_SPOT_CHECK_FILES,
 } from "./build-desktop-artifact.ts";
+import { AUTHORING_TYPE_PACKAGES, stageAuthoringTypes } from "./lib/authoring-types.ts";
 
 const PROBE_TIMEOUT = Duration.seconds(180);
 
