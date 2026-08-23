@@ -318,15 +318,26 @@ const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(function*
 const CLOSURE_FILES = ["lib.esnext.d.ts", "lib.dom.d.ts"] as const;
 const CLOSURE_EFFECT_FILE = "dist/Schema.d.ts";
 const CLOSURE_TYPESCRIPT_FILE = "lib/typescript.d.ts";
+// The @t3team/sdk source entry point the packaged typechecker resolves (the
+// package's exports["."].types target). @t3team/sdk ships .ts source, not
+// compiled .d.ts, so the SOURCE file — not a .d.ts — is the closure piece.
+const SDK_SOURCE_ENTRY = "node_modules/@t3team/sdk/src/t3team-sdk.index.ts";
 const SDK_MANIFEST = "node_modules/@t3team/sdk/package.json";
 // The authoring-type packages the packaged typechecker may resolve from the
 // asar's node_modules. Their PRESENCE is the requirement (module resolution
-// needs the package + its declarations); the manifest's dependency specs are
-// NOT — curation (rewriting workspace:*/catalog: to plain specs) is a
-// build-time input to electron-builder's asar pruning, not something the
-// runtime typechecker reads, and electron-builder's own pnpm pass restores the
-// workspace symlinks after curation. So the asar is asserted on presence, not
-// curation state.
+// needs the package + its declarations/source); the manifest's dependency
+// specs are NOT. RC3/#57/#58: the asar's @t3team/sdk/package.json is EXPECTED
+// to still carry pnpm-protocol specs ("effect": "catalog:", "@runbook/*":
+// "workspace:*") and that is HARMLESS. The packaged typechecker resolves with
+// ts.ModuleResolutionKind.Bundler + ts.resolveModuleName, which reads each
+// package's OWN node_modules entry (its exports/types -> .ts/.d.ts), never a
+// parent's dependencies spec — so the "catalog:" spec in @t3team/sdk does not
+// affect resolving `effect` (resolved via node_modules/effect, present in the
+// asar). electron-builder's pnpm pass restores the original workspace
+// manifests by design after curation, so the uncurated specs are the correct,
+// expected asar state. Do NOT "fix" them or assert their absence: the guard
+// against RC3 recurrence is the positive closure invariant below (the .d.ts/
+// source files the typechecker actually resolves), not a no-leftovers check.
 const ASAR_AUTHORING_TYPE_PACKAGES = [
   "@t3team/sdk",
   "@runbook/core",
@@ -381,10 +392,16 @@ function assertStagingTreeClosure(stagingDir: string): void {
 }
 
 /**
- * Assert an EMITTED app.asar carries the same closure — the .d.ts files
- * electron-builder strips and the afterPack hook re-injects, plus the curated
- * authoring types. This is the desktop-build verification for the packaging
- * gap: run it with `--asar <path to app.asar>` after a desktop build.
+ * Positive-invariant guard for the emitted app.asar (RC3/#57/#58): assert the
+ * asar carries the full typechecker closure the packaged app resolves against
+ * — the @t3team/sdk source entry point, the effect/typescript/lib .d.ts files
+ * electron-builder strips (re-injected by the afterPack hook), and the
+ * authoring-type packages. This is the desktop-build verification for the
+ * packaging gap: run it with `--asar <path to app.asar>` after a desktop
+ * build. It asserts PRESENCE of the closure, NOT curation state — the
+ * @t3team/sdk manifest's pnpm-protocol specs (workspace: and catalog:) are
+ * expected and harmless
+ * (see ASAR_AUTHORING_TYPE_PACKAGES).
  */
 function assertAsarClosure(asarPath: string): void {
   if (!NodeFS.existsSync(asarPath)) {
@@ -395,6 +412,7 @@ function assertAsarClosure(asarPath: string): void {
     entry.startsWith("/") ? entry.slice(1) : entry,
   );
   const required = [
+    SDK_SOURCE_ENTRY,
     ...CLOSURE_FILES.map((file) => `apps/server/dist/lib/${file}`),
     `node_modules/effect/${CLOSURE_EFFECT_FILE}`,
     `node_modules/typescript/${CLOSURE_TYPESCRIPT_FILE}`,
@@ -406,8 +424,9 @@ function assertAsarClosure(asarPath: string): void {
     });
   }
   // The authoring-type packages must be present (the typechecker resolves
-  // against them); curation state is not asserted here — see
-  // ASAR_AUTHORING_TYPE_PACKAGES.
+  // against them). Curation state is deliberately NOT asserted here — the
+  // @t3team/sdk manifest's pnpm-protocol specs (workspace: and catalog:) are
+  // expected and harmless; see ASAR_AUTHORING_TYPE_PACKAGES.
   const missingPackages = ASAR_AUTHORING_TYPE_PACKAGES.filter(
     (name) => !listing.includes(`node_modules/${name}/package.json`),
   );
