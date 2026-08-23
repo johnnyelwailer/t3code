@@ -424,33 +424,27 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("applies platform-specific packaging to the build config", () =>
     Effect.gen(function* () {
-      const mac = yield* createBuildConfig(
-        "mac",
-        "dmg",
-        "1.2.3",
-        false,
-        false,
-        undefined,
-        undefined,
-      );
-      const linux = yield* createBuildConfig(
-        "linux",
-        "AppImage",
-        "1.2.3",
-        false,
-        false,
-        undefined,
-        undefined,
-      );
-      const win = yield* createBuildConfig(
-        "win",
-        "nsis",
-        "1.2.3",
-        false,
-        false,
-        undefined,
-        undefined,
-      );
+      const mac = yield* createBuildConfig({
+        platform: "mac",
+        target: "dmg",
+        version: "1.2.3",
+        signed: false,
+        mockUpdates: false,
+      });
+      const linux = yield* createBuildConfig({
+        platform: "linux",
+        target: "AppImage",
+        version: "1.2.3",
+        signed: false,
+        mockUpdates: false,
+      });
+      const win = yield* createBuildConfig({
+        platform: "win",
+        target: "nsis",
+        version: "1.2.3",
+        signed: false,
+        mockUpdates: false,
+      });
 
       // All platforms keep app.asar fully packed; Windows ships the server
       // tree as the hand-packed server.asar sidecar in extraResources instead
@@ -515,19 +509,15 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("stamps one per-build timestamp into every artifact name of a build", () =>
     Effect.gen(function* () {
-      const config = yield* createBuildConfig(
-        "mac",
-        "dmg",
-        "1.2.3",
-        false,
-        false,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        false,
-        "20260823-1645",
-      );
+      const config = yield* createBuildConfig({
+        platform: "mac",
+        target: "dmg",
+        version: "1.2.3",
+        signed: false,
+        mockUpdates: false,
+        includePackagedIconPng: false,
+        artifactTimestamp: "20260823-1645",
+      });
       // The stamp lands in the artifact file names (dmg + zip + blockmaps all
       // derive from artifactName) and in the DMG volume title, so each build
       // of the same version is self-identifying on disk and in Finder.
@@ -1094,9 +1084,16 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("adds passkey entitlements and both renderer protocols to signed macOS builds", () =>
     Effect.gen(function* () {
-      const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
-        entitlementsPath: "/tmp/entitlements.mac.plist",
-        provisioningProfilePath: "/tmp/t3code.provisionprofile",
+      const config = yield* createBuildConfig({
+        platform: "mac",
+        target: "dmg",
+        version: "1.2.3",
+        signed: true,
+        mockUpdates: false,
+        macPasskeySigning: {
+          entitlementsPath: "/tmp/entitlements.mac.plist",
+          provisioningProfilePath: "/tmp/t3code.provisionprofile",
+        },
       });
 
       const mac = config.mac as Record<string, unknown>;
@@ -1111,15 +1108,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("uses the nightly DMG background for nightly macOS builds", () =>
     Effect.gen(function* () {
-      const config = yield* createBuildConfig(
-        "mac",
-        "dmg",
-        "1.2.3-nightly.20260815.1",
-        false,
-        false,
-        undefined,
-        undefined,
-      );
+      const config = yield* createBuildConfig({
+        platform: "mac",
+        target: "dmg",
+        version: "1.2.3-nightly.20260815.1",
+        signed: false,
+        mockUpdates: false,
+      });
 
       assert.equal(
         (config.dmg as Record<string, unknown>).background,
@@ -1130,15 +1125,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("keeps executable resource editing enabled for unsigned Windows builds", () =>
     Effect.gen(function* () {
-      const config = yield* createBuildConfig(
-        "win",
-        "nsis",
-        "1.2.3",
-        false,
-        false,
-        undefined,
-        undefined,
-      );
+      const config = yield* createBuildConfig({
+        platform: "win",
+        target: "nsis",
+        version: "1.2.3",
+        signed: false,
+        mockUpdates: false,
+      });
 
       const win = config.win as Record<string, unknown>;
       assert.equal(win.icon, "icon.ico");

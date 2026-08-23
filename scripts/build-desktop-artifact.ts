@@ -26,10 +26,7 @@ import {
   resolveWebAssetBrandForChannel,
   type WebAssetBrand,
 } from "./lib/brand-assets.ts";
-import {
-  readAuthoringTypeDependencySpecs,
-  stageAuthoringTypes,
-} from "./lib/authoring-types.ts";
+import { readAuthoringTypeDependencySpecs, stageAuthoringTypes } from "./lib/authoring-types.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
   findInlinedExternalPackages,
@@ -103,10 +100,12 @@ const decodeNodePtyManifest = Schema.decodeUnknownEffect(
 );
 const encodeStageWorkspaceConfig = Schema.encodeEffect(fromYaml(StageWorkspaceConfig));
 
-const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* () {
+// Canonical reader for the repo's pnpm-workspace.yaml (fromYaml + Schema).
+// Exported so consumers (e.g. the orchestration bundle probe) parse the file
+// with the same decoder instead of re-rolling a bespoke parser.
+export const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* (repoRoot: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const repoRoot = yield* RepoRoot;
   const workspaceYaml = yield* fs.readFileString(path.join(repoRoot, "pnpm-workspace.yaml"));
   return yield* decodeWorkspaceConfig(workspaceYaml);
 });
@@ -2245,24 +2244,43 @@ interface PackagedDesktopBrandingResource {
   readonly linuxWmClass: string;
 }
 
-export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
-  platform: typeof BuildPlatform.Type,
-  target: string,
-  version: string,
-  signed: boolean,
-  mockUpdates: boolean,
-  mockUpdateServerPort: number | undefined,
-  macPasskeySigning:
+interface BuildConfigOptions {
+  readonly platform: typeof BuildPlatform.Type;
+  readonly target: string;
+  readonly version: string;
+  readonly signed: boolean;
+  readonly mockUpdates: boolean;
+  // Explicit `| undefined` (exactOptionalPropertyTypes): callers pass these
+  // through from Option-derived values that are typed `T | undefined`.
+  readonly mockUpdateServerPort?: number | undefined;
+  readonly macPasskeySigning?:
     | {
         readonly entitlementsPath: string;
         readonly provisioningProfilePath: string;
       }
-    | undefined,
-  packsDir?: string,
-  productNameOverride?: string,
-  includePackagedIconPng = false,
-  artifactTimestamp?: string,
+    | undefined;
+  readonly packsDir?: string | undefined;
+  readonly productNameOverride?: string | undefined;
+  readonly includePackagedIconPng?: boolean | undefined;
+  readonly artifactTimestamp?: string | undefined;
+}
+
+export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
+  options: BuildConfigOptions,
 ) {
+  const {
+    platform,
+    target,
+    version,
+    signed,
+    mockUpdates,
+    mockUpdateServerPort,
+    macPasskeySigning,
+    packsDir,
+    productNameOverride,
+    includePackagedIconPng = false,
+    artifactTimestamp,
+  } = options;
   const resolvedProductName = resolveDesktopProductName(version, productNameOverride);
   // One timestamp per build, stamped into the artifact file names (and the DMG
   // volume title) so successive builds of the same version produce distinct,
@@ -2272,7 +2290,14 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolvedProductName,
-    artifactName: `T3-Code-${"${version}"}-${"${arch}"}${artifactTimestampSuffix}.${"${ext}"}`,
+    // Built by concatenation, not a template literal: the ${version}/${arch}/
+    // ${ext} tokens are electron-builder placeholders that must reach the
+    // manifest VERBATIM for electron-builder to interpolate. A template
+    // literal would require escaping every one of them (\`...${"${version}"}...
+    // \`), which reads like a bug and invites "simplification" that breaks
+    // the escape.
+    artifactName:
+      "T3-Code-" + "${version}" + "-" + "${arch}" + artifactTimestampSuffix + "." + "${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS],
     // electron-builder strips .d.ts from app.asar with hardcoded, non-configurable
@@ -2958,7 +2983,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
   const hostPlatform = yield* HostProcessPlatform;
-  const workspaceConfig = yield* readWorkspaceConfig();
+  const workspaceConfig = yield* readWorkspaceConfig(repoRoot);
   const workspaceCatalog = workspaceConfig.catalog ?? {};
   const workspaceOverrides = workspaceConfig.overrides ?? {};
   const workspacePatchedDependencies = workspaceConfig.patchedDependencies ?? {};
@@ -3323,24 +3348,25 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     description: "T3 Code desktop build",
     author: "T3 Tools",
     main: "apps/desktop/dist-electron/main.cjs",
-    build: yield* createBuildConfig(
-      options.platform,
-      options.target,
-      appVersion,
-      options.signed,
-      options.mockUpdates,
-      options.mockUpdateServerPort,
-      macPasskeySigning && macEntitlementsPath
-        ? {
-            entitlementsPath: macEntitlementsPath,
-            provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
-          }
-        : undefined,
-      options.packsDir,
-      options.productName,
-      options.iconPng !== undefined,
+    build: yield* createBuildConfig({
+      platform: options.platform,
+      target: options.target,
+      version: appVersion,
+      signed: options.signed,
+      mockUpdates: options.mockUpdates,
+      mockUpdateServerPort: options.mockUpdateServerPort,
+      macPasskeySigning:
+        macPasskeySigning && macEntitlementsPath
+          ? {
+              entitlementsPath: macEntitlementsPath,
+              provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
+            }
+          : undefined,
+      packsDir: options.packsDir,
+      productNameOverride: options.productName,
+      includePackagedIconPng: options.iconPng !== undefined,
       artifactTimestamp,
-    ),
+    }),
     dependencies: stageDependencies,
     devDependencies: {
       electron: electronVersion,
