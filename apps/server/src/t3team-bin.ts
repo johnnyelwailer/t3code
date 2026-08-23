@@ -51,6 +51,13 @@ export const cli = Command.make("t3team", { ...sharedServerCommandFlags }).pipe(
   ]),
 );
 
+// Packaged-bundle smoke surface: scripts/check-orchestration-bundle.ts imports
+// these from the emitted dist to prove the inlined TypeScript compiler and the
+// staged authoring types work from the asar context, where no workspace
+// node_modules is reachable.
+export { precheckWorkflowSource } from "./t3team-workflowSourcePrecheck.ts";
+export { auditWorkflowSourceStatic } from "@t3team/sdk";
+
 if (import.meta.main) {
   Command.run(cli, { version: packageJson.version }).pipe(
     Effect.scoped,

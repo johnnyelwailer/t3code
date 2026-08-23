@@ -6,6 +6,7 @@ import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 import packageJson from "./package.json" with { type: "json" };
 import { t3teamRawTextPackPlugin } from "./scripts/t3team-rawTextPackPlugin.ts";
 import { t3teamDistributionPackPlugin } from "./scripts/t3team-distributionPackPlugin.ts";
+import { t3teamTypescriptLibPackPlugin } from "./scripts/t3team-typescriptLibPackPlugin.ts";
 
 // The bundle used to inline only workspace packages, leaving every third-party
 // runtime dep external. External deps must exist on the real filesystem (the WSL
@@ -43,10 +44,19 @@ export default mergeConfig(
       // Without this, source that ships as TEXT could not be authored as a typechecked module.
       // The distribution plugin inlines the compiled-in distribution (see
       // scripts/t3team-distributionPackPlugin.ts) when T3CODE_DISTRIBUTION names one.
-      plugins: [t3teamRawTextPackPlugin(), t3teamDistributionPackPlugin()],
+      plugins: [
+        t3teamRawTextPackPlugin(),
+        t3teamDistributionPackPlugin(),
+        t3teamTypescriptLibPackPlugin(),
+      ],
       outDir: "dist",
       sourcemap: true,
       clean: true,
+      // The inlined TypeScript compiler (packages/runbook-ts/src/typescript.ts
+      // statically imports it) is CJS and reads `__filename` at module init.
+      // Without the CJS shims the emitted chunk crashes before any orchestration
+      // code runs — which is exactly the packaged-app failure this inlining fixes.
+      shims: true,
       deps: {
         // Both halves are required. `alwaysBundle` forces the JS dependencies in
         // (declared deps are external by default, which is what this change is
