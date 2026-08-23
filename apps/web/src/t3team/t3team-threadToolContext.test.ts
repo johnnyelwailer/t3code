@@ -146,8 +146,18 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["read"],
         },
         {
+          id: "t3team.thread.read_message",
+          label: "Read inter-agent message",
+          capabilities: ["read"],
+        },
+        {
           id: "t3team.thread.start_child",
           label: "Start child session",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3team.thread.children",
+          label: "Manage child sessions",
           capabilities: ["write"],
         },
         {

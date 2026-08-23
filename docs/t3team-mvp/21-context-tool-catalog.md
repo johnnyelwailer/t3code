@@ -586,6 +586,7 @@ t3team.orchestration.run
 t3team.widget.show
 t3team.thread.rename
 t3team.thread.search_source
+t3team.thread.read_message
 t3team.thread.read_current
 t3team.thread.rename.draft_update
 t3team.thread.create_context_bound
@@ -597,13 +598,19 @@ t3team.thread.open_full_page
 ```
 
 `t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search_source`,
-`t3team.thread.start_child`, and `t3team.thread.children` are the
+`t3team.thread.read_message`, `t3team.thread.start_child`, and
+`t3team.thread.children` are the
 current live runtime slice used by the broker implementation. The rest of this section
 remains planned catalog scope.
 
 `t3team.thread.search_source` searches the full transcript of the thread the current
 thread was forked from (the fork provenance note carries the source thread id), so the
 middle of a truncated fork stays reachable.
+
+`t3team.thread.read_message` reads the full body of a previously delivered inter-agent
+message in the current thread. Long inter-agent bodies are truncated on delivery to a
+short preview plus a marker carrying the message id; the full body stays persisted on the
+first-class `actor`-role message and this tool retrieves it on demand.
 
 `t3team.thread.start_child` keeps the `t3team` tool id, but uses session-style input and
 result vocabulary aligned with Copilot session tooling:

@@ -280,6 +280,30 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["query"],
     },
   },
+  "t3team.thread.read_message": {
+    id: "t3team.thread.read_message",
+    label: "Read inter-agent message",
+    title: "Read the full body of an inter-agent message",
+    description:
+      "Read the FULL body of a previously delivered inter-agent message (sent with t3team_send_message) in this thread. Long inter-agent bodies are truncated on delivery; the truncation marker in the delivered preview carries the message id. Pass that 'message_id' to retrieve the full persisted text.",
+    capabilities: ["read"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        message_id: {
+          type: "string",
+          description: "Message id from the inter-agent delivery truncation marker.",
+          minLength: 1,
+        },
+      },
+      required: ["message_id"],
+    },
+  },
   "t3team.thread.start_child": {
     id: "t3team.thread.start_child",
     label: "Start child session",

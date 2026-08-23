@@ -307,6 +307,9 @@ describe("T3TeamToolBroker allowed tool groups", () => {
       "t3team.thread.search_source": expect.objectContaining({
         name: "t3team.thread.search_source",
       }),
+      "t3team.thread.read_message": expect.objectContaining({
+        name: "t3team.thread.read_message",
+      }),
     });
     expect(result.readResult.structuredContent).toEqual(
       expect.objectContaining({

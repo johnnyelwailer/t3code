@@ -18,6 +18,7 @@ const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroke
 export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_rename_thread: "t3team.thread.rename",
   t3team_search_source: "t3team.thread.search_source",
+  t3team_read_message: "t3team.thread.read_message",
   t3team_start_child: "t3team.thread.start_child",
   t3team_children: "t3team.thread.children",
   t3team_orchestration_run: "t3team.orchestration.run",
@@ -169,6 +170,24 @@ export const T3TeamSearchSourceTool = Tool.make("t3team_search_source", {
   dependencies,
 });
 
+// Read the full body of a previously delivered inter-agent message. Long
+// inter-agent bodies are truncated on delivery; the truncation marker carries
+// the message id, which this tool takes. Read-only; routes to the
+// t3team.thread.read_message broker tool.
+export const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
+  description:
+    "Read the FULL body of a previously delivered inter-agent message in this thread. Long " +
+    "inter-agent message bodies are truncated on delivery; the truncation marker in the " +
+    "delivered preview carries the message id. Pass that 'message_id' to retrieve the full " +
+    "persisted text.",
+  parameters: Schema.Struct({
+    message_id: Schema.String,
+  }),
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
 // Cross-thread delivery: routes to the dedicated broker.sendMessage capability
 // (not the bound-thread callTool dispatch), which records a first-class actor
 // message and drives the recipient thread to react. The sender is the calling
@@ -178,7 +197,9 @@ export const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
     "Send a message to another agent's thread — e.g. report progress or results " +
     "back to your parent thread, or hand follow-up work to a child thread. The " +
     "recipient agent reacts to it automatically, so prefer this over waiting to be " +
-    "polled. Address it with the target thread id.",
+    "polled. Address it with the target thread id. Keep the body short (telegram " +
+    "style: state, decision, request) — long bodies are truncated on delivery and " +
+    "the recipient retrieves the full text with t3team_read_message.",
   parameters: Schema.Struct({
     to_thread_id: Schema.String,
     text: Schema.String,
@@ -375,6 +396,7 @@ export const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
 export const T3TeamToolkit = Toolkit.make(
   T3TeamRenameThreadTool,
   T3TeamSearchSourceTool,
+  T3TeamReadMessageTool,
   T3TeamStartChildTool,
   T3TeamChildrenTool,
   T3TeamSendMessageTool,

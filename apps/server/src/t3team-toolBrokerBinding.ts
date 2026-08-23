@@ -50,6 +50,11 @@ type CreateBindingInput<
     toolArgs: unknown,
     threadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
+  /** Read the full body of a previously delivered inter-agent message. */
+  readonly readMessageThread?: (
+    toolArgs: unknown,
+    threadId: ThreadId,
+  ) => Effect.Effect<T3TeamToolCallResult>;
   /** Manage this thread's child sessions (list/status/wait/stop/close/help). */
   readonly manageChildren?: (
     toolArgs: unknown,
@@ -109,6 +114,12 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
         ? {
             searchSourceThread: (toolArgs: unknown) =>
               input.searchSourceThread!(toolArgs, input.threadId!),
+          }
+        : {}),
+      ...(input.readMessageThread && input.threadId
+        ? {
+            readMessageThread: (toolArgs: unknown) =>
+              input.readMessageThread!(toolArgs, input.threadId!),
           }
         : {}),
       ...(input.manageChildren && input.threadId

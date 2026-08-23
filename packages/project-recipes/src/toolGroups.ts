@@ -114,6 +114,7 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.thread.read_current": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.rename": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
   "t3team.thread.search_source": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
+  "t3team.thread.read_message": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.rename.draft_update": PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,
   "t3team.thread.create_context_bound": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.thread.start_child": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
