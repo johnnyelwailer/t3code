@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
+import * as DateTime from "effect/DateTime";
 import * as FileSystem from "effect/FileSystem";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -17,6 +18,7 @@ import {
   createStageWorkspaceConfig,
   createStagePatchedDependencies,
   createBuildConfig,
+  formatArtifactTimestamp,
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
@@ -500,9 +502,61 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       for (const config of [mac, linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
+        // Without a per-build stamp the artifact name keeps its historical
+        // shape (the placeholders are electron-builder's, not template
+        // literals).
+        assert.equal(config.artifactName, "T3-Code-${version}-${arch}.${ext}");
       }
+      assert.equal((mac.dmg as { title: string }).title, "T3 Code (Alpha) 1.2.3 Installer");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
+
+  it.effect("stamps one per-build timestamp into every artifact name of a build", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "1.2.3",
+        false,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        false,
+        "20260823-1645",
+      );
+      // The stamp lands in the artifact file names (dmg + zip + blockmaps all
+      // derive from artifactName) and in the DMG volume title, so each build
+      // of the same version is self-identifying on disk and in Finder.
+      assert.equal(config.artifactName, "T3-Code-${version}-${arch}-20260823-1645.${ext}");
+      assert.equal(
+        (config.dmg as { title: string }).title,
+        "T3 Code (Alpha) 1.2.3 20260823-1645 Installer",
+      );
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it("formats the per-build artifact timestamp as local yyyyMMdd-HHmm", () => {
+    // A fixed instant (09:05 UTC); the expected value is derived from ICU's
+    // local rendering of that instant, so the assertion holds in any timezone
+    // without constructing a Date (the repo lints against `new Date`).
+    const date = DateTime.toDate(DateTime.makeUnsafe("2026-08-23T09:05:00Z"));
+    const parts = new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date);
+    const part = (type: Intl.DateTimeFormatPartTypes): string =>
+      parts.find((entry) => entry.type === type)?.value ?? "";
+    const expected = `${part("year")}${part("month")}${part("day")}-${part("hour")}${part("minute")}`;
+    const formatted = formatArtifactTimestamp(date);
+    assert.equal(formatted, expected);
+    assert.match(formatted, /^\d{8}-\d{4}$/u);
+  });
 
   it.effect("validates every ASAR-unpacked native in the packaged Windows payload", () =>
     Effect.scoped(

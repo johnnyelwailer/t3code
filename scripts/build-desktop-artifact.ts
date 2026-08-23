@@ -37,6 +37,7 @@ import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Config from "effect/Config";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -2102,6 +2103,16 @@ function slugifyDesktopName(value: string): string {
   );
 }
 
+/**
+ * The per-build artifact stamp: local `yyyyMMdd-HHmm` (e.g. `20260823-1645`),
+ * computed once per build and shared by every artifact of that build (dmg +
+ * zip + their blockmaps) so a build's outputs are mutually consistent.
+ */
+export function formatArtifactTimestamp(date: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
+}
+
 interface PackagedDesktopBrandingResource {
   readonly baseName: string;
   readonly displayName: string;
@@ -2127,12 +2138,18 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   packsDir?: string,
   productNameOverride?: string,
   includePackagedIconPng = false,
+  artifactTimestamp?: string,
 ) {
   const resolvedProductName = resolveDesktopProductName(version, productNameOverride);
+  // One timestamp per build, stamped into the artifact file names (and the DMG
+  // volume title) so successive builds of the same version produce distinct,
+  // self-identifying artifacts instead of overwriting/colliding with each
+  // other (e.g. 20 mounted "Nexi Work 0.0.33 Installer" volumes).
+  const artifactTimestampSuffix = artifactTimestamp ? `-${artifactTimestamp}` : "";
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolvedProductName,
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    artifactName: `T3-Code-${"${version}"}-${"${arch}"}${artifactTimestampSuffix}.${"${ext}"}`,
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS],
     // electron-builder strips .d.ts from app.asar with hardcoded, non-configurable
@@ -2222,8 +2239,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.dmg = {
       // Give the themed installer its own Finder volume name. Finder caches
       // DMG window backgrounds by volume name, so reusing a generic name can
-      // make a newly built background look unchanged during testing.
-      title: `${resolvedProductName} ${version} Installer`,
+      // make a newly built background look unchanged during testing; the
+      // per-build timestamp keeps each build's volume distinct as well.
+      title: `${resolvedProductName} ${version}${artifactTimestamp ? ` ${artifactTimestamp}` : ""} Installer`,
       background: `dmg/dmg-background-${updateChannel}.png`,
       window: {
         width: 540,
@@ -3319,6 +3337,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       options.packsDir,
       options.productName,
       options.iconPng !== undefined,
+      formatArtifactTimestamp(DateTime.toDate(yield* DateTime.now)),
     ),
     dependencies: stageDependencies,
     devDependencies: {
