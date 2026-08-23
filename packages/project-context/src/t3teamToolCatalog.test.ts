@@ -40,6 +40,7 @@ describe("t3teamToolCatalog", () => {
       "t3team.thread.rename",
       "t3team.thread.search_source",
       "t3team.thread.start_child",
+      "t3team.thread.children",
       "t3team.work_item.refresh_context_bundle",
       "t3team.project.refresh_context_bundle",
       "t3team.backlog.item.assignee.draft_update",
@@ -66,6 +67,7 @@ describe("t3teamToolCatalog", () => {
       "t3team.thread.rename",
       "t3team.thread.search_source",
       "t3team.thread.start_child",
+      "t3team.thread.children",
       "t3team.work_item.refresh_context_bundle",
     ]);
   });

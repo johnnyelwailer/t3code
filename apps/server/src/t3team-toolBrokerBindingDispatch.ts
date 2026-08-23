@@ -67,6 +67,10 @@ export function dispatchT3TeamToolCall(input: {
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  manageChildren?: (
+    toolArgs: unknown,
+    callerThreadId: ThreadId,
+  ) => Effect.Effect<T3TeamToolCallResult>;
   publishDraft?: T3TeamDraftMutationPublisher;
 }): ReturnType<T3TeamToolBinding["callTool"]> {
   const { server, toolArgs, state } = input;
@@ -153,6 +157,12 @@ export function dispatchT3TeamToolCall(input: {
       return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
     }
     return input.searchSourceThread(toolArgs);
+  }
+  if (tool === "t3team.thread.children") {
+    if (!input.manageChildren || !input.threadId) {
+      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
+    }
+    return input.manageChildren(toolArgs, input.threadId);
   }
   if (isT3TeamDraftMutationTool(tool)) {
     return callT3TeamDraftMutationToolEffect({

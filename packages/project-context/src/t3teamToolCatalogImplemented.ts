@@ -293,6 +293,63 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     defaultEnabled: true,
     inputSchema: START_CHILD_INPUT_SCHEMA,
   },
+  "t3team.thread.children": {
+    id: "t3team.thread.children",
+    label: "Manage child sessions",
+    title: "Manage this thread's child sessions",
+    description:
+      "Manage this thread's child sessions (STATE, not content — use send_message to talk to a child). One tool; `op` selects the operation:\n" +
+      "- list: this thread's children with live state (all:true = whole project)\n" +
+      "- status: one thread's current turn state, in-progress work, elapsed\n" +
+      "- wait: durably resume this turn when a child reaches a terminal state (on: terminal|completed|failed; timeout in ms)\n" +
+      "- stop: halt a child's running turn\n" +
+      "- close: mark a child done from this side\n" +
+      "- help: exact schema for one op (op_name)",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        op: {
+          type: "string",
+          description: "The operation to perform: list, status, wait, stop, close, or help.",
+          enum: ["list", "status", "wait", "stop", "close", "help"],
+        },
+        thread_id: {
+          type: "string",
+          description: "Target child thread id. Required for status, wait, stop, and close.",
+          minLength: 1,
+        },
+        on: {
+          type: "string",
+          description: "For wait: which terminal outcome resumes this turn (default terminal).",
+          enum: ["terminal", "completed", "failed"],
+        },
+        timeout: {
+          type: "number",
+          description: "For wait: optional timeout in milliseconds.",
+        },
+        all: {
+          type: "boolean",
+          description:
+            "For list: when true, list the whole project instead of this thread's children.",
+        },
+        reason: {
+          type: "string",
+          description: "For stop: optional reason recorded with the stop.",
+        },
+        op_name: {
+          type: "string",
+          description: "For help: which op's schema to return. Omit for all ops.",
+        },
+      },
+      required: ["op"],
+    },
+  },
   "t3team.work_item.refresh_context_bundle": {
     id: "t3team.work_item.refresh_context_bundle",
     label: "Refresh work item context bundle",

@@ -19,6 +19,7 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_rename_thread: "t3team.thread.rename",
   t3team_search_source: "t3team.thread.search_source",
   t3team_start_child: "t3team.thread.start_child",
+  t3team_children: "t3team.thread.children",
   t3team_orchestration_run: "t3team.orchestration.run",
   t3team_orchestration_status: "t3team.orchestration.status",
   t3team_orchestration_resume: "t3team.orchestration.resume",
@@ -107,6 +108,40 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     effort: Schema.optional(Schema.Literals(["light", "standard", "high"])),
     repo_full_name: Schema.optional(Schema.String),
     repo_ref: Schema.optional(Schema.String),
+  }),
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
+// Child-thread management: ONE meta tool with an `op` discriminator (list /
+// status / wait / stop / close / help) instead of five tools, so the context
+// cost stays one compact description no matter how many ops exist. Per-op
+// detail is discovered on demand via `help` or carried in a malformed call's
+// error message. Routes to the t3team.thread.children broker tool. This tool
+// is STATE (child liveness / completion); child→parent CONTENT still flows
+// through t3team_send_message.
+const CHILDREN_TOOL_DESCRIPTION =
+  "Manage this thread's child sessions (STATE, not content — use send_message to talk to a " +
+  "child). One tool; `op` selects the operation:\n" +
+  "- list: this thread's children with live state (all:true = whole project)\n" +
+  "- status: one thread's current turn state, in-progress work, elapsed\n" +
+  "- wait: durably resume this turn when a child reaches a terminal state (on: " +
+  "terminal|completed|failed; timeout in ms)\n" +
+  "- stop: halt a child's running turn\n" +
+  "- close: mark a child done from this side\n" +
+  "- help: exact schema for one op (op_name)";
+
+export const T3TeamChildrenTool = Tool.make("t3team_children", {
+  description: CHILDREN_TOOL_DESCRIPTION,
+  parameters: Schema.Struct({
+    op: Schema.Literals(["list", "status", "wait", "stop", "close", "help"]),
+    thread_id: Schema.optional(Schema.String),
+    on: Schema.optional(Schema.Literals(["terminal", "completed", "failed"])),
+    timeout: Schema.optional(Schema.Number),
+    all: Schema.optional(Schema.Boolean),
+    reason: Schema.optional(Schema.String),
+    op_name: Schema.optional(Schema.String),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
@@ -338,6 +373,7 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamRenameThreadTool,
   T3TeamSearchSourceTool,
   T3TeamStartChildTool,
+  T3TeamChildrenTool,
   T3TeamSendMessageTool,
   T3TeamOrchestrationRunTool,
   T3TeamOrchestrationStatusTool,

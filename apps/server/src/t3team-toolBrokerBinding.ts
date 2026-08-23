@@ -50,6 +50,11 @@ type CreateBindingInput<
     toolArgs: unknown,
     threadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
+  /** Manage this thread's child sessions (list/status/wait/stop/close/help). */
+  readonly manageChildren?: (
+    toolArgs: unknown,
+    callerThreadId: ThreadId,
+  ) => Effect.Effect<T3TeamToolCallResult>;
   /** Delivers a produced draft to the review surface; only thread-bound bindings have one. */
   readonly publishDraft?: T3TeamDraftMutationPublisher;
 };
@@ -104,6 +109,12 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
         ? {
             searchSourceThread: (toolArgs: unknown) =>
               input.searchSourceThread!(toolArgs, input.threadId!),
+          }
+        : {}),
+      ...(input.manageChildren && input.threadId
+        ? {
+            manageChildren: (toolArgs: unknown, callerThreadId: ThreadId) =>
+              input.manageChildren!(toolArgs, callerThreadId),
           }
         : {}),
       ...(input.publishDraft ? { publishDraft: input.publishDraft } : {}),
