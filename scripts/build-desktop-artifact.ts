@@ -3408,6 +3408,18 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // macOS and Linux run the server from the asar, so the asar's node_modules
   // must carry the authoring-type closure the packaged typechecker resolves
   // against. Windows stages its own copy into the sidecar instead.
+  //
+  // NOTE (verified by experiment): this call is NOT dead weight. The staged
+  // install leaves @t3team/sdk + @runbook/* as pnpm workspace symlinks pointing
+  // OUTSIDE node_modules (../../packages/*), which electron-builder's node
+  // collector cannot pack. stageAuthoringTypes replaces those symlinks with
+  // real curated directories under node_modules so electron-builder can pack
+  // them. Removing this call makes the mac/linux build fail during asar packing
+  // (no app.asar produced). electron-builder's own pnpm pass later renames the
+  // curated dirs to .ignored_* and restores the symlinks, so the asar ends up
+  // with the original (uncurated) manifests — but the curation is still
+  // required for the pack to succeed, and the .d.ts closure it cannot preserve
+  // is re-injected by the afterPack hook.
   if (options.platform !== "win") {
     yield* stageAuthoringTypes({
       repoRoot,
