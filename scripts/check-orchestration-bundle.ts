@@ -47,6 +47,7 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 import { selectCliRuntimeExternalDependencies } from "./lib/cli-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 import {
+  readWorkspaceConfig,
   resolveFffNativeDependencies,
   type BuildArch,
   type BuildPlatform,
@@ -211,7 +212,8 @@ const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(function*
   NodeFS.mkdirSync(stagingDir, { recursive: true });
 
   try {
-    const workspaceCatalog = readWorkspaceCatalog(repoRoot);
+    const workspaceConfig = yield* readWorkspaceConfig(repoRoot);
+    const workspaceCatalog = workspaceConfig.catalog ?? {};
     const resolvedServerDependencies = resolveCatalogDependencies(
       serverPackageJson.dependencies,
       workspaceCatalog,
@@ -367,9 +369,7 @@ function assertNoWorkspaceSpecs(manifestJson: string, where: string): void {
  * resolves against is missing or uncurated.
  */
 function assertStagingTreeClosure(stagingDir: string): void {
-  const required = TYPECHECKER_DTS_SPOT_CHECK_FILES.map((file) =>
-    NodePath.join(stagingDir, file),
-  );
+  const required = TYPECHECKER_DTS_SPOT_CHECK_FILES.map((file) => NodePath.join(stagingDir, file));
   for (const file of required) {
     if (!NodeFS.existsSync(file)) {
       throw new OrchestrationBundleClosureError({
@@ -403,10 +403,7 @@ function assertAsarClosure(asarPath: string): void {
   const listing = Asar.listPackage(asarPath, { isPack: false }).map((entry) =>
     entry.startsWith("/") ? entry.slice(1) : entry,
   );
-  const required = [
-    SDK_SOURCE_ENTRY,
-    ...TYPECHECKER_DTS_SPOT_CHECK_FILES,
-  ];
+  const required = [SDK_SOURCE_ENTRY, ...TYPECHECKER_DTS_SPOT_CHECK_FILES];
   const missing = required.filter((file) => !listing.includes(file));
   if (missing.length > 0) {
     throw new OrchestrationBundleClosureError({
@@ -425,19 +422,6 @@ function assertAsarClosure(asarPath: string): void {
       detail: `asar is missing the authoring-type packages: ${missingPackages.join(", ")}`,
     });
   }
-}
-
-function readWorkspaceCatalog(repoRoot: string): Record<string, string> {
-  const raw = NodeFS.readFileSync(NodePath.join(repoRoot, "pnpm-workspace.yaml"), "utf8");
-  const match = raw.match(/^catalog:\s*\n((?:\s{2,}\S.*\n?)*)/m);
-  const catalog: Record<string, string> = {};
-  if (match?.[1]) {
-    for (const line of match[1].split("\n")) {
-      const entry = line.match(/^\s{2}"?([^":]+)"?:\s*(.+?)\s*$/);
-      if (entry?.[1] && entry[2]) catalog[entry[1]] = entry[2].replace(/^"|"$/g, "");
-    }
-  }
-  return catalog;
 }
 
 const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
