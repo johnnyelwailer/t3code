@@ -58,6 +58,7 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_search_source, input),
   t3team_start_child: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_start_child, input),
+  t3team_children: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_children, input),
   t3team_send_message: (input) => sendMessage(input),
   t3team_orchestration_run: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_run, input),

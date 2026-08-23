@@ -7,6 +7,10 @@
       "types": "./src/t3team-githubActivity.ts",
       "import": "./src/t3team-githubActivity.ts"
     },
+    "./t3team-threadRunStatus": {
+      "types": "./src/t3team-threadRunStatus.ts",
+      "import": "./src/t3team-threadRunStatus.ts"
+    },
     "./themePalettes": {
       "types": "./src/themePalettes.ts",
       "import": "./src/themePalettes.ts"

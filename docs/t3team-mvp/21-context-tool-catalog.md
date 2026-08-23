@@ -590,13 +590,14 @@ t3team.thread.read_current
 t3team.thread.rename.draft_update
 t3team.thread.create_context_bound
 t3team.thread.start_child
+t3team.thread.children
 t3team.thread.send_cross_thread_message
 t3team.thread.attach_context
 t3team.thread.open_full_page
 ```
 
-`t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search_source`, and
-`t3team.thread.start_child` are the
+`t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search_source`,
+`t3team.thread.start_child`, and `t3team.thread.children` are the
 current live runtime slice used by the broker implementation. The rest of this section
 remains planned catalog scope.
 
@@ -618,6 +619,16 @@ result vocabulary aligned with Copilot session tooling:
 `metarepo` means the project workspace that holds project context, references, recipes,
 skills, and cross-repository synthesis. `repository` means a linked implementation
 repository and always runs in a dedicated worktree.
+
+`t3team.thread.children` is ONE meta tool for managing a thread's child sessions, selected
+by an `op` parameter (`list`, `status`, `wait`, `stop`, `close`, `help`) rather than five
+separate tools — the context cost stays one compact description no matter how many ops
+exist, and per-op detail is discovered on demand via `help` or a malformed call's error
+message. It is STATE (child liveness / completion), not content: child→parent content still
+flows through `send_message`. Read-only state (list/status) is derived by the shared
+`deriveThreadRunStatus` primitive (the same source the sidebar needs); `wait` is a durable
+wait (a registered activity + a reactor that resolves it on the child's terminal event or a
+timeout), not a poll loop.
 
 The first live slice creates project-level child sessions with durable parent/child
 activity cards. Visual parent-thread or work-item attachment metadata remains planned.

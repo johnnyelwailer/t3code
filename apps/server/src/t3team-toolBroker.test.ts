@@ -177,6 +177,9 @@ describe("T3TeamToolBrokerLive", () => {
       "t3team.thread.start_child": expect.objectContaining({
         name: "t3team.thread.start_child",
       }),
+      "t3team.thread.children": expect.objectContaining({
+        name: "t3team.thread.children",
+      }),
       "t3team.orchestration.run": expect.objectContaining({ name: "t3team.orchestration.run" }),
       // Ad-hoc widgets are a host tool too — bound for every thread, with or
       // without a stored view context (see genericThreadToolIds).

@@ -19,6 +19,7 @@ import {
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { makeActorSendMessage } from "./t3team-actorSendMessage.ts";
 import { callT3TeamSearchSourceTool } from "./t3team-toolBrokerBindingSearchSource.ts";
+import { makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
 import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3team-toolBrokerStartChild.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
@@ -40,6 +41,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   const genericThreadToolIds = [
     "t3team.thread.rename",
     "t3team.thread.start_child",
+    "t3team.thread.children",
     "t3team.orchestration.run",
     "t3team.orchestration.status",
     "t3team.orchestration.resume",
@@ -116,6 +118,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
         : {}),
     },
   });
+  const manageChildren = makeManageChildrenHandler({ query, orchestration });
 
   const bindSession: T3TeamToolBrokerShape["bindSession"] = ({
     threadId,
@@ -160,6 +163,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
         renameThread: (title) => renameThread(threadId, title),
         renameThreadResult: (title) => ({ ok: true, threadId, title }),
         startChild: (toolArgs) => startChildThread(threadId, toolArgs),
+        manageChildren: (toolArgs, callerThreadId) => manageChildren(toolArgs, callerThreadId),
         setBacklogAssigneeFilter: (mode) =>
           setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,
