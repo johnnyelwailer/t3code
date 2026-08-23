@@ -16,6 +16,9 @@ export function buildStartChildResult(input: {
   readonly provider: string;
   readonly model: string;
   readonly requestedModel?: string;
+  /** Set when a requested provider-agnostic `effort` could not be honored — the launch result
+   * says so explicitly instead of silently downgrading. */
+  readonly effortNote?: string;
   readonly setupScriptStatus: "not-requested" | "no-script" | "started" | "failed";
   readonly requestedKickoffMode?: T3TeamStartChildKickoffMode;
   readonly reasoningEffort?: string;
@@ -40,6 +43,7 @@ export function buildStartChildResult(input: {
     ...(input.requestedModel && input.requestedModel !== input.model
       ? { model_normalized_from: input.requestedModel }
       : {}),
+    ...(input.effortNote ? { effort_note: input.effortNote } : {}),
     setup_script_status: input.setupScriptStatus,
     navigate_to: { target: "project_session", project_session_id: input.childThreadId },
     ...(input.requestedKickoffMode ? { requested_kickoff_mode: input.requestedKickoffMode } : {}),

@@ -62,7 +62,11 @@ export function makeStartChildThread(input: {
         workflowLaunchThreadId: input.services.workflowLaunchThreadForChild?.(thread.id),
       });
       const { listProviders } = input.services;
-      const modelSelection = yield* resolveChildModel(baseModelSelection, args, listProviders);
+      const { modelSelection, effortNote } = yield* resolveChildModel(
+        baseModelSelection,
+        args,
+        listProviders,
+      );
       const interactionMode = mapKickoffModeToInteractionMode(args.kickoffMode);
       const createdAt = DateTime.formatIso(yield* DateTime.now),
         requestedKickoffMode = args.kickoffMode ?? (args.kickoffPrompt ? "interactive" : undefined);
@@ -184,6 +188,7 @@ export function makeStartChildThread(input: {
         provider: modelSelection.instanceId,
         model: modelSelection.model,
         ...(args.model ? { requestedModel: args.model } : {}),
+        ...(effortNote ? { effortNote } : {}),
         setupScriptStatus,
         ...(requestedKickoffMode ? { requestedKickoffMode } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),

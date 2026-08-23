@@ -54,8 +54,11 @@ const ladder = provider(
 );
 const toggle = provider("toggle", ["toggle-a"], booleanCaps());
 const plain = provider("plain", ["plain-a"], null);
+// The Nexplore gateway's shape: the tiers ARE the model slugs (gateway aliases) and no
+// reasoning control is advertised — the effort must land on the closest tier model.
+const nexplore = provider("nexplore", ["no-thinking", "low", "medium", "high"], null);
 
-const providers = [ladder, toggle, plain];
+const providers = [ladder, toggle, plain, nexplore];
 
 const parentOn = (instanceId: string, model: string): ModelSelection =>
   ({ instanceId, model, options: [] }) as unknown as ModelSelection;
@@ -95,6 +98,27 @@ describe("start_child effort — inheriting the parent's provider", () => {
     expect(resolve({ parentModelSelection: onToggle, effort: "light", providers }).options).toEqual(
       [{ id: "thinking", value: false }],
     );
+  });
+
+  it("maps the tier onto the provider's tier models when those are all it exposes (nexplore)", () => {
+    const onFast = parentOn("nexplore", "low");
+    // The bug this guards: a Fast-tier parent + effort 'high' used to silently stay on 'low'
+    // because the nexplore provider advertises no reasoning control to map onto.
+    expect(resolve({ parentModelSelection: onFast, effort: "high", providers }).model).toBe("high");
+    expect(resolve({ parentModelSelection: onFast, effort: "light", providers }).model).toBe("low");
+    expect(resolve({ parentModelSelection: onFast, effort: "standard", providers }).model).toBe(
+      "medium",
+    );
+  });
+
+  it("never swaps the instance when the tier moves the model to another rung", () => {
+    const value = resolve({
+      parentModelSelection: parentOn("nexplore", "low"),
+      effort: "high",
+      providers,
+    });
+    expect(value.instanceId).toBe("nexplore");
+    expect(value.model).toBe("high");
   });
 });
 

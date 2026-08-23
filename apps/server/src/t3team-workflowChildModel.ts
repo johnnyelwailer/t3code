@@ -22,7 +22,8 @@ import { fromWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
  * existed on it).
  *
  * `effort` rides along: a provider-agnostic thinking level applied to whichever selection wins,
- * via {@link applyWorkflowEffort} (a no-op when the provider exposes no reasoning control).
+ * via {@link applyWorkflowEffort} (a no-op when the provider exposes neither a reasoning control
+ * nor tier models).
  *
  * - Neither a `requested` selection nor an `effort` → inherit the run's base model unchanged.
  * - No catalog wired (some test/SDK harnesses don't set one) → fall back to the legacy blind

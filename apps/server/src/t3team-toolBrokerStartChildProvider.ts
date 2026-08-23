@@ -13,7 +13,7 @@ import {
   type T3TeamStartChildArgs,
   type T3TeamStartChildReasoningEffort,
 } from "./t3team-toolBrokerStartChildArgs.ts";
-import { applyWorkflowEffort } from "./t3team-workflowEffortOptions.ts";
+import { applyWorkflowEffort, effortIsHonored } from "./t3team-workflowEffortOptions.ts";
 
 /**
  * Free cross-provider + model resolution for `t3team.thread.start_child`.
@@ -179,12 +179,22 @@ export function resolveStartChildModelSelection(
  * snapshots (empty when the registry is absent), runs the pure resolver, and
  * fails the turn with the resolver's message when the requested provider/model
  * is invalid. Keeps `t3team-toolBrokerStartChild.ts` a single call site.
+ *
+ * Also surfaces an `effortNote` when a provider-agnostic `effort` was requested
+ * but CANNOT be honored (the provider exposes neither a reasoning control nor
+ * tier models): the downgrade then says so in the launch result instead of
+ * silently running the child on whatever model it inherited.
  */
+export type ResolveChildModelResult = {
+  readonly modelSelection: ModelSelection;
+  readonly effortNote?: string;
+};
+
 export function resolveChildModel(
   baseModelSelection: ModelSelection,
   args: Pick<T3TeamStartChildArgs, "provider" | "model" | "reasoningEffort" | "effort">,
   listProviders: (() => Effect.Effect<ReadonlyArray<ServerProvider>>) | undefined,
-): Effect.Effect<ModelSelection, string> {
+): Effect.Effect<ResolveChildModelResult, string> {
   return Effect.gen(function* () {
     if (args.provider && !listProviders) {
       return yield* Effect.fail(
@@ -201,6 +211,15 @@ export function resolveChildModel(
       ...(args.effort ? { effort: args.effort } : {}),
       providers,
     });
-    return result.ok ? result.value : yield* Effect.fail(result.message);
+    if (!result.ok) return yield* Effect.fail(result.message);
+    const effortNote =
+      args.effort !== undefined && !effortIsHonored(result.value, args.effort, providers)
+        ? `effort '${args.effort}' was not honored: provider '${result.value.instanceId}' exposes ` +
+          `no reasoning control and no tier models; the child runs on model '${result.value.model}'.`
+        : undefined;
+    return {
+      modelSelection: result.value,
+      ...(effortNote ? { effortNote } : {}),
+    };
   });
 }

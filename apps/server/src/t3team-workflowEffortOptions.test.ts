@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { setChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { resolveWorkflowChildModel } from "./t3team-workflowChildModel.ts";
-import { applyWorkflowEffort } from "./t3team-workflowEffortOptions.ts";
+import { applyWorkflowEffort, effortIsHonored } from "./t3team-workflowEffortOptions.ts";
 
 const selectCaps = (options: ReadonlyArray<{ id: string; isDefault?: boolean }>) => ({
   optionDescriptors: [
@@ -110,6 +110,62 @@ describe("applyWorkflowEffort — boolean control", () => {
 
   it("leaves standard at the provider default (no-op)", () => {
     expect(applyWorkflowEffort(base, "standard", [claude])).toBe(base);
+  });
+});
+
+describe("applyWorkflowEffort — tier models (nexplore shape)", () => {
+  // The Nexplore gateway exposes its tiers AS the model slugs (gateway aliases) and advertises
+  // no reasoning control at all — the effort must land on the closest tier model, not degrade to
+  // a silent no-op that leaves the child on whatever tier the parent happened to sit on.
+  const nexplore = {
+    instanceId: "nexplore",
+    driver: "nexplore",
+    enabled: true,
+    installed: true,
+    models: [
+      { slug: "no-thinking", name: "Instant", isCustom: false, capabilities: null },
+      { slug: "low", name: "Fast", isCustom: false, capabilities: null },
+      { slug: "medium", name: "Standard", isCustom: false, capabilities: null },
+      { slug: "high", name: "Deep", isCustom: false, capabilities: null },
+    ],
+  } as unknown as ServerProvider;
+  const base = selection("nexplore", "low");
+
+  it("maps high to the highest tier model, never the inherited lower one", () => {
+    expect(applyWorkflowEffort(base, "high", [nexplore]).model).toBe("high");
+  });
+
+  it("maps light to the lowest rung and standard to the middle rung", () => {
+    expect(applyWorkflowEffort(selection("nexplore", "high"), "light", [nexplore]).model).toBe(
+      "low",
+    );
+    expect(applyWorkflowEffort(selection("nexplore", "high"), "standard", [nexplore]).model).toBe(
+      "medium",
+    );
+  });
+
+  it("keeps the instance and unrelated option selections", () => {
+    const result = applyWorkflowEffort(
+      selection("nexplore", "low", [{ id: "serviceTier", value: "fast" }]),
+      "high",
+      [nexplore],
+    );
+    expect(result.instanceId).toBe("nexplore");
+    expect(result.model).toBe("high");
+    expect(result.options).toEqual([{ id: "serviceTier", value: "fast" }]);
+  });
+
+  it("does not treat a single ladder slug as a tier ladder", () => {
+    const single = provider("single", "high", null);
+    const base = selection("single", "high");
+    expect(applyWorkflowEffort(base, "light", [single])).toBe(base);
+  });
+
+  it("reports the tier honored for tier-model providers and un-honored for plain ones", () => {
+    expect(effortIsHonored(selection("nexplore", "low"), "high", [nexplore])).toBe(true);
+    expect(effortIsHonored(selection("plain", "plain-a"), "high", [plain])).toBe(false);
+    expect(effortIsHonored(selection("codex", "codex-a"), "high", [codex])).toBe(true);
+    expect(effortIsHonored(selection("codex", "codex-a"), undefined, [codex])).toBe(true);
   });
 });
 
