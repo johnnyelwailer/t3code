@@ -87,7 +87,10 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     "Create a child t3team session from the current thread. Use `effort` " +
     "('light' | 'standard' | 'high') to ask for a thinking tier WITHOUT naming a provider or " +
     "model — it is mapped onto whatever reasoning control the resolved provider exposes, and " +
-    "is simply ignored by providers that expose none. Only reach for `provider`/`model`/" +
+    "on providers that expose none it falls back to the model tier when the model slugs form " +
+    "the effort ladder (light -> lowest rung, standard -> default/middle rung, high -> highest " +
+    "rung); an effort that cannot be honored surfaces an effort_note in the launch result. " +
+    "Only reach for `provider`/`model`/" +
     "`reasoning_effort` when you genuinely need that exact target.",
   parameters: Schema.Struct({
     name: Schema.String,
