@@ -86,7 +86,7 @@ export const T3TeamRenameThreadTool = Tool.make("t3team_rename_thread", {
 
 export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
   description:
-    "Create a child t3team session from the current thread. Use `effort` " +
+    "Create a child t3team session from the current thread. `isolation` is required and decides where the child works: 'shared' runs it in the project's shared checkout (no new branch), 'own-worktree' gives it a dedicated branch + worktree — of the linked repo named by `repo_full_name` when the project has linked repos, or of the local repository when it does not. Use `effort` " +
     "('light' | 'standard' | 'high') to ask for a thinking tier WITHOUT naming a provider or " +
     "model — it is mapped onto whatever reasoning control the resolved provider exposes, and " +
     "on providers that expose none it falls back to the model tier when the model slugs form " +
@@ -95,24 +95,55 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     "Only reach for `provider`/`model`/" +
     "`reasoning_effort` when you genuinely need that exact target.",
   parameters: Schema.Struct({
-    name: Schema.String,
-    execution_scope: Schema.Literals(["metarepo", "repository"]),
-    ticket_id: Schema.optional(Schema.String),
-    kickoff_prompt: Schema.optional(Schema.String),
-    kickoff_mode: Schema.optional(Schema.Literals(["plan", "interactive", "autopilot"])),
+    name: Schema.String.annotate({
+      description: "Name for the new child session.",
+    }),
+    isolation: Schema.Literals(["shared", "own-worktree"]).annotate({
+      description:
+        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' when the project has linked repos; in a local workspace omit it to isolate in the local repository.",
+    }),
+    ticket_id: Schema.optional(Schema.String).annotate({
+      description:
+        "Optional project ticket ID to attach the child session to. When this differs from the current ticket, the new session is attached directly under that ticket instead of nesting under the current thread.",
+    }),
+    kickoff_prompt: Schema.optional(Schema.String).annotate({
+      description: "Optional first prompt sent to the child session.",
+    }),
+    kickoff_mode: Schema.optional(Schema.Literals(["plan", "interactive", "autopilot"])).annotate({
+      description:
+        "Optional kickoff style. 'plan' maps to plan mode; 'interactive' and 'autopilot' currently map to the default interaction mode.",
+    }),
     // Optional provider instance id to run the child on a DIFFERENT provider than
     // the parent (e.g. spawn a Codex child from a Claude parent for cross-provider
     // review). Omit to inherit the parent's provider; `model` must be one of that
     // provider's models.
-    provider: Schema.optional(Schema.String),
-    model: Schema.optional(Schema.String),
-    reasoning_effort: Schema.optional(Schema.Literals(["low", "medium", "high"])),
+    provider: Schema.optional(Schema.String).annotate({
+      description:
+        "Optional provider instance id to run the child on a DIFFERENT provider than the parent (e.g. spawn a Codex child from a Claude parent for cross-provider review). Omit to inherit the parent's provider; `model` must be one of that provider's models.",
+    }),
+    model: Schema.optional(Schema.String).annotate({
+      description:
+        "Optional canonical model slug override for the child session. Prefer omitting this to inherit the current thread model; if you set it, use a provider-specific canonical slug such as 'gpt-5.4' or 'gpt-5.3-codex', not a generic alias like 'gpt-5'.",
+    }),
+    reasoning_effort: Schema.optional(Schema.Literals(["low", "medium", "high"])).annotate({
+      description:
+        "Optional PROVIDER-SPECIFIC reasoning effort override for the child session. Prefer the provider-agnostic 'effort' unless you need this exact value; 'reasoning_effort' wins when both are given.",
+    }),
     // Provider-agnostic thinking tier — the same ladder workflow child turns use. Prefer this
     // over `reasoning_effort`, which needs the provider's own vocabulary. `reasoning_effort`
     // wins if both are given.
-    effort: Schema.optional(Schema.Literals(["light", "standard", "high"])),
-    repo_full_name: Schema.optional(Schema.String),
-    repo_ref: Schema.optional(Schema.String),
+    effort: Schema.optional(Schema.Literals(["light", "standard", "high"])).annotate({
+      description:
+        "Optional provider-agnostic thinking tier for the child session. Ask for a tier without naming a provider or model: it is mapped onto whatever reasoning control the resolved provider/model exposes, and is ignored when it exposes none.",
+    }),
+    repo_full_name: Schema.optional(Schema.String).annotate({
+      description:
+        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in projects that have linked repos; omit it in a local workspace (no linked repos) to isolate the child in a worktree of the local repository instead.",
+    }),
+    repo_ref: Schema.optional(Schema.String).annotate({
+      description:
+        "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
+    }),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,

@@ -9,11 +9,16 @@ import {
 
 export type T3TeamStartChildKickoffMode = "plan" | "interactive" | "autopilot";
 export type { T3TeamStartChildReasoningEffort };
-export type T3TeamStartChildExecutionScope = "metarepo" | "repository";
+/** Behavior-first isolation choice: 'shared' runs the child in the project's shared checkout;
+ * 'own-worktree' gives it a dedicated branch + worktree (of the linked repo named by
+ * `repo_full_name`, or of the local repository when the project has no linked repos). */
+export type T3TeamStartChildIsolation = "shared" | "own-worktree";
 
 export type T3TeamStartChildArgs = {
   readonly name: string;
-  readonly executionScope: T3TeamStartChildExecutionScope;
+  readonly isolation: T3TeamStartChildIsolation;
+  /** True when the caller used the deprecated `execution_scope` alias instead of `isolation`. */
+  readonly usedLegacyExecutionScope: boolean;
   readonly ticketId?: string;
   readonly kickoffPrompt?: string;
   readonly kickoffMode?: T3TeamStartChildKickoffMode;
@@ -43,10 +48,12 @@ const START_CHILD_KICKOFF_MODES = new Set<T3TeamStartChildKickoffMode>([
   "interactive",
   "autopilot",
 ]);
-const START_CHILD_EXECUTION_SCOPES = new Set<T3TeamStartChildExecutionScope>([
-  "metarepo",
-  "repository",
-]);
+const START_CHILD_ISOLATIONS = new Set<T3TeamStartChildIsolation>(["shared", "own-worktree"]);
+/** Maps the deprecated `execution_scope` values onto the behavior-first `isolation` values. */
+const LEGACY_EXECUTION_SCOPE_TO_ISOLATION: Readonly<Record<string, T3TeamStartChildIsolation>> = {
+  metarepo: "shared",
+  repository: "own-worktree",
+};
 
 /** A non-empty trimmed string from an unknown candidate value, else undefined. */
 const trimmedArg = (value: unknown): string | undefined =>
@@ -66,6 +73,7 @@ export const readStartChildArgs = (value: unknown): T3TeamStartChildArgsResult =
     readonly ticket_id?: unknown;
     readonly kickoff_prompt?: unknown;
     readonly kickoff_mode?: unknown;
+    readonly isolation?: unknown;
     readonly execution_scope?: unknown;
     readonly provider?: unknown;
     readonly model?: unknown;
@@ -84,21 +92,42 @@ export const readStartChildArgs = (value: unknown): T3TeamStartChildArgsResult =
   }
 
   const name = rawName.trim();
-  if (typeof candidate.execution_scope !== "string") {
+  if (typeof candidate.isolation === "string" && typeof candidate.execution_scope === "string") {
     return {
       ok: false,
       message:
-        "t3team.thread.start_child requires 'execution_scope' set to 'metarepo' or 'repository'.",
+        "t3team.thread.start_child accepts either 'isolation' or the deprecated 'execution_scope', not both. Use 'isolation' with 'shared' or 'own-worktree'.",
     };
   }
-  const executionScope = candidate.execution_scope
-    .trim()
-    .toLowerCase() as T3TeamStartChildExecutionScope;
-  if (!START_CHILD_EXECUTION_SCOPES.has(executionScope)) {
+  let isolation: T3TeamStartChildIsolation;
+  let usedLegacyExecutionScope = false;
+  if (typeof candidate.isolation === "string") {
+    const normalized = candidate.isolation.trim().toLowerCase() as T3TeamStartChildIsolation;
+    if (!START_CHILD_ISOLATIONS.has(normalized)) {
+      return {
+        ok: false,
+        message:
+          "t3team.thread.start_child 'isolation' must be exactly 'shared' or 'own-worktree'. Use 'shared' when the child can work in the project's shared checkout (planning, triage, synthesis, read-only review), and 'own-worktree' when it should get its own branch and dedicated worktree (implementation, debugging, tests, PR work).",
+      };
+    }
+    isolation = normalized;
+  } else if (typeof candidate.execution_scope === "string") {
+    const normalized = candidate.execution_scope.trim().toLowerCase();
+    const mapped = LEGACY_EXECUTION_SCOPE_TO_ISOLATION[normalized];
+    if (!mapped) {
+      return {
+        ok: false,
+        message:
+          "t3team.thread.start_child 'execution_scope' (deprecated) must be exactly 'metarepo' or 'repository'. Prefer 'isolation' with 'shared' or 'own-worktree'.",
+      };
+    }
+    isolation = mapped;
+    usedLegacyExecutionScope = true;
+  } else {
     return {
       ok: false,
       message:
-        "t3team.thread.start_child 'execution_scope' must be exactly 'metarepo' or 'repository'. Use 'metarepo' for project planning/triage/synthesis and 'repository' for code, tests, debugging, review, or PR work.",
+        "t3team.thread.start_child requires 'isolation' set to 'shared' or 'own-worktree' (or the deprecated 'execution_scope'). 'shared' keeps the child in the shared checkout; 'own-worktree' gives it a dedicated branch + worktree.",
     };
   }
 
@@ -143,18 +172,14 @@ export const readStartChildArgs = (value: unknown): T3TeamStartChildArgsResult =
   const repoFullName = trimmedArg(candidate.repo_full_name);
   const repoRef = trimmedArg(candidate.repo_ref);
 
-  if (executionScope === "repository" && !repoFullName) {
+  // Whether 'own-worktree' additionally needs 'repo_full_name' depends on the project context
+  // (linked-repo manifest present or not), so that check happens in the start-child context,
+  // not here.
+  if (isolation === "shared" && (repoFullName || repoRef)) {
     return {
       ok: false,
       message:
-        "t3team.thread.start_child with execution_scope='repository' requires 'repo_full_name' so the runtime can create a dedicated linked-repository worktree.",
-    };
-  }
-  if (executionScope === "metarepo" && (repoFullName || repoRef)) {
-    return {
-      ok: false,
-      message:
-        "t3team.thread.start_child with execution_scope='metarepo' must not include 'repo_full_name' or 'repo_ref'; use execution_scope='repository' with 'repo_full_name' for repository work.",
+        "t3team.thread.start_child with isolation='shared' must not include 'repo_full_name' or 'repo_ref'; use isolation='own-worktree' to give the child a dedicated worktree.",
     };
   }
 
@@ -162,7 +187,8 @@ export const readStartChildArgs = (value: unknown): T3TeamStartChildArgsResult =
     ok: true,
     value: {
       name,
-      executionScope,
+      isolation,
+      usedLegacyExecutionScope,
       ...(ticketId ? { ticketId } : {}),
       ...(kickoffPrompt ? { kickoffPrompt } : {}),
       ...(kickoffMode ? { kickoffMode } : {}),

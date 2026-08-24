@@ -624,16 +624,17 @@ first-class `actor`-role message and this tool retrieves it on demand.
 result vocabulary aligned with Copilot session tooling:
 
 - `name` for the child session title
-- required `execution_scope` (`metarepo` or `repository`)
+- required `isolation` (`shared` or `own-worktree`)
 - optional `kickoff_prompt`
 - optional `kickoff_mode` (`plan`, `interactive`, `autopilot`)
 - optional `model` and `reasoning_effort`
-- `repo_full_name` required for `repository` scope and forbidden for `metarepo` scope
+- `repo_full_name` required for `own-worktree` scope when the workspace has linked repositories (omit it in a local workspace to isolate the child in a worktree of the local repository), and forbidden for `shared` scope
 - result metadata including `project_session_id`, navigation hint, and repo/worktree details
 
-`metarepo` means the project workspace that holds project context, references, recipes,
-skills, and cross-repository synthesis. `repository` means a linked implementation
-repository and always runs in a dedicated worktree.
+`shared` means the project's shared checkout — the workspace that holds project context,
+references, recipes, skills, and cross-repository synthesis. `own-worktree` means a
+dedicated branch + worktree: of the linked implementation repository when
+`repo_full_name` is passed, or of the local repository in a local workspace.
 
 `t3team.thread.children` is ONE meta tool for managing a thread's child sessions, selected
 by an `op` parameter (`list`, `status`, `wait`, `stop`, `close`, `help`) rather than five

@@ -127,9 +127,10 @@ conversation-style section, "answer in user-facing terms," "keep exploration int
    internal→user-facing table + the never-say list.
 2. **Explicit child-session scope.** The current "Child Sessions" / "Parent And Child
    Coordination" sections must keep the single `t3team.thread.start_child` tool while
-   requiring `execution_scope`: `metarepo` for planning/triage/synthesis in the project
-   workspace, and `repository` plus `repo_full_name` for implementation, debugging, tests,
-   review, or PR work in a dedicated worktree.
+   requiring `isolation`: `shared` for planning/triage/synthesis in the project's shared
+   checkout, and `own-worktree` for implementation, debugging, tests, review, or PR work in a
+   dedicated worktree — with `repo_full_name` when the workspace has linked repositories, or
+   without it in a local workspace (worktree of the local repository).
 3. **Capabilities not framed as offers.** "Durable Outputs" touches it; the renderer gains
    the full capability-as-offers framing + the proactivity triggers.
 
@@ -193,12 +194,12 @@ Use the project context files internally before asking the user to restate anyth
 ## Working separately
 
 - Treat the current thread as the place you coordinate and synthesize.
-- Use one child-session tool, `t3team.thread.start_child`, and always pass `execution_scope`.
+- Use one child-session tool, `t3team.thread.start_child`, and always pass `isolation`.
 - Decision table:
-  | Work | `execution_scope` | Repository fields |
+  | Work | `isolation` | Repository fields |
   | --- | --- | --- |
-  | Planning, triage, synthesis, project status | `metarepo` | Do not pass `repo_full_name` or `repo_ref` |
-  | Implementation, debugging, tests, review, PR work | `repository` | Pass `repo_full_name`; pass `repo_ref` when the base matters |
+  | Planning, triage, synthesis, project status | `shared` | Do not pass `repo_full_name` or `repo_ref` |
+  | Implementation, debugging, tests, review, PR work | `own-worktree` | Pass `repo_full_name` for a linked repo (omit it in a local workspace to isolate in the local repository); pass `repo_ref` when the base matters |
 - For work that means digging through a repo, changing code, debugging, or reviewing,
   do it in a separate thread scoped to the right repo — keep this thread clean.
 - Tell the user in outcome terms ("I'll look into that separately"), never in mechanics —
