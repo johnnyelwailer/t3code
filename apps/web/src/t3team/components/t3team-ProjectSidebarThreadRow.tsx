@@ -193,3 +193,54 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     </SidebarMenuSubItem>
   );
 });
+
+/**
+ * Memo barrier for `ThreadRow` in the Work-lens lists.
+ *
+ * `ThreadRow` is `memo`-ized, but its list callers used to hand it a fresh
+ * `state` object and fresh `onSelect`/`onDelete`/`onRename` closures on every
+ * render of the list. Because those props changed identity on each render, the
+ * row's `memo` never bailed out and selecting a thread re-rendered the ENTIRE
+ * list (measured: every visible row, ~2.4 s of cascaded effect chains).
+ *
+ * This wrapper receives only referentially-stable props: the thread object, a
+ * primitive `isSelected`, and the stable list handlers. It builds the per-row
+ * `state` and closures inside, so a row re-renders only when its own selection
+ * state changes — not when a sibling thread is selected.
+ */
+export const ProjectSidebarThreadRowItem = memo(function ProjectSidebarThreadRowItem(props: {
+  thread: ProjectThread;
+  isSelected: boolean;
+  workspacePath?: string | null;
+  variant?: "default" | "issue";
+  wrapWithMenuItem?: boolean;
+  projectId: string;
+  onSelectThread: (projectId: string, threadId: string) => void;
+  onDeleteThread: (threadId: string) => void;
+  onRenameThread: (threadId: string, newTitle: string) => void;
+}) {
+  const {
+    thread,
+    isSelected,
+    workspacePath = null,
+    variant,
+    wrapWithMenuItem,
+    projectId,
+    onSelectThread,
+    onDeleteThread,
+    onRenameThread,
+  } = props;
+  const state: SidebarItemState = { isSelected, isOpen: isSelected };
+  return (
+    <ThreadRow
+      thread={thread}
+      {...(variant ? { variant } : {})}
+      state={state}
+      workspacePath={workspacePath}
+      onSelect={() => onSelectThread(projectId, thread.id)}
+      onDelete={() => onDeleteThread(thread.id)}
+      onRename={(newTitle) => onRenameThread(thread.id, newTitle)}
+      {...(wrapWithMenuItem === undefined ? {} : { wrapWithMenuItem })}
+    />
+  );
+});
