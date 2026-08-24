@@ -35,6 +35,7 @@ import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import { T3TeamThreadToolContextEvictionReactor } from "./t3team-threadToolContextEvictionReactor.ts";
 import { getConfiguredDefaultModelSelection } from "./t3team-configuredDefaultModelSelection.ts";
+import { reconcileStaleSessionsAtStartup } from "./t3team-startupSessionReconcile.ts";
 import { forkParked } from "./serverActivation.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import {
@@ -358,6 +359,11 @@ export const make = (options?: StartupOptions) =>
           yield* threadToolContextEvictionReactor.start().pipe(Scope.provide(reactorScope));
         }),
       );
+
+      // t3team: no provider session survives a restart, but the projection
+      // keeps the last session-set — a crash mid-turn leaves threads claiming
+      // "running" forever. Reconcile before clients connect.
+      yield* runStartupPhase("sessions.reconcile", reconcileStaleSessionsAtStartup());
 
       const welcomeBase = yield* resolveWelcomeBase;
       const environment = yield* serverEnvironment.getDescriptor;

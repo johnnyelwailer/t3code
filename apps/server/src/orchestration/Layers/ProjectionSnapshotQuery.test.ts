@@ -263,6 +263,18 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       const snapshot = yield* snapshotQuery.getSnapshot();
 
+      // The command read model must hydrate thread MESSAGES too: rebuilding
+      // threads with messages: [] on boot made message-shape decider
+      // invariants (thread.turn.resume) silently false after every restart.
+      const commandReadModel = yield* snapshotQuery.getCommandReadModel();
+      const commandThread = commandReadModel.threads.find(
+        (candidate) => candidate.id === ThreadId.make("thread-1"),
+      );
+      assert.equal(commandThread?.messages.length, 1);
+      assert.equal(commandThread?.messages[0]?.id, "message-1");
+      assert.equal(commandThread?.messages[0]?.role, "assistant");
+      assert.equal(commandThread?.messages[0]?.text, "hello from projection");
+
       assert.equal(snapshot.snapshotSequence, 5);
       assert.equal(snapshot.updatedAt, "2026-02-24T00:00:09.000Z");
       assert.deepEqual(snapshot.projects, [
