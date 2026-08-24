@@ -169,6 +169,8 @@
     "packages/shared/src/shell.test.ts",
     "packages/shared/src/shell.ts",
     "packages/shared/src/sourceControl.ts",
+    "packages/t3team-pack-api/src/provider-driver.ts",
+    "packages/t3team-packs/src/t3team-packs.providerDriver.ts",
     "pnpm-lock.yaml",
     "pnpm-workspace.yaml",
     "scripts/build-desktop-artifact.ts",
