@@ -8,16 +8,20 @@ import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { useAgentContext } from "~/t3team/hooks/t3team-useAgentContext";
 import { buildTicketSidebarPinnedItemId } from "~/t3team/t3team-sidebarPinningTypes";
 import { ProjectSidebarTicketCard } from "./t3team-ProjectSidebarTicketCard";
-import { ThreadRow } from "./t3team-ProjectSidebarThreadRow";
+import { ProjectSidebarThreadRowItem } from "./t3team-ProjectSidebarThreadRow";
 import {
   getSidebarSurfaceClassName,
-  getSidebarThreadState,
   getSidebarTicketState,
 } from "./t3team-projectSidebarItemState";
 import { buildProjectSidebarThreadTree } from "./t3team-projectSidebarThreadTree";
 import { useProjectSidebarNavItemDnd } from "./t3team-useProjectSidebarNavItemDnd";
 import { useAutoScrollIntoView } from "./t3team-useAutoScrollIntoView";
-import { type ProjectThread, type ProjectTicket, type ViewState } from "~/t3team/t3team-types";
+import {
+  type ProjectThread,
+  type ProjectTicket,
+  type ViewState,
+  readActiveThreadIdFromView,
+} from "~/t3team/t3team-types";
 
 export interface TicketSidebarEntryProps {
   project: ProjectShellProject;
@@ -103,21 +107,22 @@ export function TicketSidebarEntry({
   const rowRef = useAutoScrollIntoView<HTMLAnchorElement>(ticketState.isOpen);
   const threadTree = useMemo(() => buildProjectSidebarThreadTree(ticketThreads), [ticketThreads]);
   const workspaceRoot = project.workspace?.rootPath ?? null;
+  const activeThreadId = readActiveThreadIdFromView(view);
 
   const renderThreadBranch = (thread: ProjectThread): React.ReactNode => {
     const childThreads = threadTree.childThreadsByParentId.get(thread.id) ?? [];
-    const threadState = getSidebarThreadState({ view, threadId: thread.id });
 
     return (
       <div key={thread.id}>
-        <ThreadRow
+        <ProjectSidebarThreadRowItem
           thread={thread}
           variant="issue"
-          state={threadState}
+          isSelected={activeThreadId === thread.id}
           workspacePath={workspaceRoot}
-          onSelect={() => onSelectThread(projectId, thread.id)}
-          onDelete={() => onDeleteThread(thread.id)}
-          onRename={(newTitle) => onRenameThread(thread.id, newTitle)}
+          projectId={projectId}
+          onSelectThread={onSelectThread}
+          onDeleteThread={onDeleteThread}
+          onRenameThread={onRenameThread}
           wrapWithMenuItem={false}
         />
         {childThreads.length > 0 ? (

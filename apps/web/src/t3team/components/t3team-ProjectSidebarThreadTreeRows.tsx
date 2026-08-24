@@ -2,9 +2,9 @@ import { ChevronRightIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
-import { getSidebarThreadState } from "./t3team-projectSidebarItemState";
 import type { ProjectSidebarThreadTree } from "./t3team-projectSidebarThreadTree";
-import { ThreadRow } from "./t3team-ProjectSidebarThreadRow";
+import { ProjectSidebarThreadRowItem } from "./t3team-ProjectSidebarThreadRow";
+import { readActiveThreadIdFromView } from "~/t3team/t3team-types";
 
 type ProjectSidebarThreadTreeRowsProps = {
   projectId: string;
@@ -32,6 +32,7 @@ export function ProjectSidebarThreadTreeRows({
   const [collapsedThreadIds, setCollapsedThreadIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const activeThreadId = readActiveThreadIdFromView(view);
 
   const toggleChildren = (threadId: string) => {
     setCollapsedThreadIds((current) => {
@@ -68,14 +69,15 @@ export function ProjectSidebarThreadTreeRows({
               />
             </button>
           ) : null}
-          <ThreadRow
+          <ProjectSidebarThreadRowItem
             thread={thread}
             {...(variant ? { variant } : {})}
-            state={getSidebarThreadState({ view, threadId: thread.id })}
+            isSelected={activeThreadId === thread.id}
             workspacePath={workspacePath}
-            onSelect={() => onSelectThread(projectId, thread.id)}
-            onDelete={() => onDeleteThread(thread.id)}
-            onRename={(newTitle) => onRenameThread(thread.id, newTitle)}
+            projectId={projectId}
+            onSelectThread={onSelectThread}
+            onDeleteThread={onDeleteThread}
+            onRenameThread={onRenameThread}
             wrapWithMenuItem={false}
           />
         </div>
