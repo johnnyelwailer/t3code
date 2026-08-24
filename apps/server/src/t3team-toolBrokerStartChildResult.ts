@@ -1,7 +1,7 @@
 import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 
 import type {
-  T3TeamStartChildExecutionScope,
+  T3TeamStartChildIsolation,
   T3TeamStartChildKickoffMode,
 } from "./t3team-toolBrokerStartChildArgs.ts";
 
@@ -9,7 +9,8 @@ export function buildStartChildResult(input: {
   readonly projectId: string;
   readonly childThreadId: string;
   readonly name: string;
-  readonly executionScope: T3TeamStartChildExecutionScope;
+  readonly isolation: T3TeamStartChildIsolation;
+  readonly usedLegacyExecutionScope: boolean;
   readonly started: boolean;
   readonly interactionMode: ProviderInteractionMode;
   readonly runtimeMode: RuntimeMode;
@@ -34,7 +35,9 @@ export function buildStartChildResult(input: {
     project_id: input.projectId,
     project_session_id: input.childThreadId,
     name: input.name,
-    execution_scope: input.executionScope,
+    isolation: input.isolation,
+    // Legacy mirror of `isolation` for callers still reading the old field.
+    execution_scope: input.isolation === "shared" ? "metarepo" : "repository",
     started: input.started,
     interaction_mode: input.interactionMode,
     runtime_mode: input.runtimeMode,
@@ -56,5 +59,11 @@ export function buildStartChildResult(input: {
       ? { setup_script_terminal_id: input.setupScriptTerminalId }
       : {}),
     ...(input.startupError ? { startup_error: input.startupError } : {}),
+    ...(input.usedLegacyExecutionScope
+      ? {
+          deprecation_note:
+            "'execution_scope' is deprecated; use 'isolation' ('shared' | 'own-worktree') instead.",
+        }
+      : {}),
   };
 }

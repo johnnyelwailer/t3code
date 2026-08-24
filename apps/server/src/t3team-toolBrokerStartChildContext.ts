@@ -1,12 +1,13 @@
 import type { ServerProvider } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import type * as FileSystem from "effect/FileSystem";
-import type * as Path from "effect/Path";
 
 import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import type { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
+import { ensureWorkspaceGitignore } from "./t3team-project-repository-services.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
@@ -56,6 +57,86 @@ export const hasProjectSetupScriptRunner = (
   services: Partial<T3TeamStartChildServices>,
 ): services is Pick<T3TeamStartChildServices, "projectSetupScriptRunner"> =>
   services.projectSetupScriptRunner !== undefined;
+
+/** Whether the project workspace carries linked-repository metadata — the context switch that
+ * decides which isolation mechanisms `t3team.thread.start_child` can offer. */
+export const linkedRepositoryManifestExists = (input: {
+  readonly services: T3TeamStartChildLinkedRepositoryServices;
+  readonly projectWorkspaceRoot: string;
+}) =>
+  input.services.fileSystem
+    .exists(
+      input.services.path.join(
+        input.projectWorkspaceRoot,
+        HIDDEN_T3TEAM_DIR,
+        REFERENCES_DIR_NAME,
+        MANIFEST_FILE_NAME,
+      ),
+    )
+    .pipe(Effect.orElseSucceed(() => false));
+
+/** Creates a dedicated worktree of the LOCAL repository (or submodule) at the project
+ * workspace root — the isolation path for workspaces without a linked-repository manifest.
+ * Mirrors `resolveLinkedRepositoryWorktree`: same branch naming, same scoped path layout under
+ * `.t3team/child-session-worktrees/`, same base-ref resolution. Ensures `.t3team/` is
+ * gitignored so the worktree stays invisible to the shared checkout. */
+export const resolveLocalRepositoryWorktree = (input: {
+  readonly services: T3TeamStartChildLinkedRepositoryServices;
+  readonly projectWorkspaceRoot: string;
+  readonly repoRef?: string;
+  readonly sessionName: string;
+  readonly childThreadId: string;
+}) =>
+  Effect.gen(function* () {
+    const { fileSystem, path, gitWorkflow, sourceControlProviders } = input.services;
+    const workspaceRoot = input.projectWorkspaceRoot;
+
+    const provider = yield* sourceControlProviders
+      .resolve({ cwd: workspaceRoot })
+      .pipe(
+        Effect.mapError(
+          () =>
+            new Error(
+              `Project workspace '${workspaceRoot}' is not a git repository (or submodule), so a local worktree cannot be created. Use isolation='shared' to run the child in the shared checkout.`,
+            ),
+        ),
+      );
+
+    const baseRef =
+      input.repoRef ??
+      ((yield* provider
+        .getDefaultBranch({ cwd: workspaceRoot })
+        .pipe(Effect.orElseSucceed(() => "main"))) ||
+        "main");
+
+    const scopedWorktreePath = buildScopedChildWorktreePath({
+      path,
+      projectWorkspaceRoot: workspaceRoot,
+      repoFullName: path.basename(workspaceRoot),
+      repoRef: baseRef,
+      childThreadId: input.childThreadId,
+    });
+
+    yield* ensureWorkspaceGitignore(workspaceRoot).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+    );
+
+    yield* fileSystem.makeDirectory(path.dirname(scopedWorktreePath), { recursive: true });
+
+    const worktree = yield* gitWorkflow.createWorktree({
+      cwd: workspaceRoot,
+      refName: baseRef.trim().length > 0 ? baseRef.trim() : "main",
+      newRefName: buildChildBranchName(input.sessionName),
+      path: scopedWorktreePath,
+    });
+
+    return {
+      repoRef: baseRef,
+      branch: worktree.worktree.refName,
+      worktreePath: worktree.worktree.path,
+    };
+  });
 
 export const resolveLinkedRepositoryWorktree = (input: {
   readonly services: T3TeamStartChildLinkedRepositoryServices;

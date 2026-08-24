@@ -9,10 +9,16 @@ const START_CHILD_INPUT_SCHEMA = {
       description: "Name for the new child session.",
       minLength: 1,
     },
+    isolation: {
+      type: "string",
+      description:
+        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' when the project has linked repos; in a local workspace omit it to isolate in the local repository.",
+      enum: ["shared", "own-worktree"],
+    },
     execution_scope: {
       type: "string",
       description:
-        "Required execution scope. Use 'metarepo' for project planning, triage, and synthesis in the project workspace. Use 'repository' for implementation, debugging, tests, review, or PR work in a dedicated linked-repository worktree.",
+        "Deprecated alias for 'isolation' ('metarepo' maps to 'shared', 'repository' maps to 'own-worktree'). Use 'isolation' instead; do not pass both.",
       enum: ["metarepo", "repository"],
     },
     ticket_id: {
@@ -53,17 +59,17 @@ const START_CHILD_INPUT_SCHEMA = {
     repo_full_name: {
       type: "string",
       description:
-        "Required when execution_scope is 'repository' and forbidden when execution_scope is 'metarepo'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'.",
+        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in projects that have linked repos; omit it in a local workspace (no linked repos) to isolate the child in a worktree of the local repository instead.",
       minLength: 1,
     },
     repo_ref: {
       type: "string",
       description:
-        "Optional branch, tag, or commit to use as the base ref for the repository scoped worktree. Only valid when execution_scope is 'repository'. When omitted, the linked repository default branch is used.",
+        "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
       minLength: 1,
     },
   },
-  required: ["name", "execution_scope"],
+  required: ["name", "isolation"],
 } as const;
 
 const BACKLOG_SET_ASSIGNEE_FILTER_INPUT_SCHEMA = {
@@ -343,7 +349,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Start child session",
     title: "Start child session",
     description:
-      "Create a child t3team session from the current thread and optionally start it immediately. execution_scope is required: 'metarepo' stays in the project metarepo workspace without repo_full_name; 'repository' requires repo_full_name and prepares a dedicated scoped worktree for that linked repository.",
+      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not.",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],

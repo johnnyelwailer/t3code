@@ -13,7 +13,9 @@ import {
 import { resolveChildModel } from "./t3team-toolBrokerStartChildProvider.ts";
 import {
   hasLinkedRepositoryStartChildServices,
+  linkedRepositoryManifestExists,
   resolveLinkedRepositoryWorktree,
+  resolveLocalRepositoryWorktree,
   resolveStartChildSetupScript,
   type T3TeamStartChildServices,
 } from "./t3team-toolBrokerStartChildContext.ts";
@@ -76,22 +78,50 @@ export function makeStartChildThread(input: {
         branch: string | null = null,
         worktreePath: string | null = null;
 
-      if (args.repoFullName) {
+      if (args.isolation === "own-worktree") {
         if (!hasLinkedRepositoryStartChildServices(input.services)) {
           return yield* Effect.fail(
-            "t3team.thread.start_child linked repository support is unavailable in this runtime.",
+            "t3team.thread.start_child worktree isolation is unavailable in this runtime.",
           );
         }
 
-        const resolvedRepository = yield* resolveLinkedRepositoryWorktree({
+        const manifestExists = yield* linkedRepositoryManifestExists({
           services: input.services,
           projectWorkspaceRoot: project.workspaceRoot,
-          repoFullName: args.repoFullName,
-          ...(args.repoRef ? { repoRef: args.repoRef } : {}),
-          sessionName: args.name,
-          childThreadId,
         });
-        ({ repoFullName, repoRef, branch, worktreePath } = resolvedRepository);
+
+        if (args.repoFullName) {
+          if (!manifestExists) {
+            return yield* Effect.fail(
+              `This project workspace has no linked repositories, so 'repo_full_name' cannot be used. Omit 'repo_full_name' to isolate the child in a worktree of the local repository, or use isolation='shared' for the shared checkout.`,
+            );
+          }
+
+          const resolvedRepository = yield* resolveLinkedRepositoryWorktree({
+            services: input.services,
+            projectWorkspaceRoot: project.workspaceRoot,
+            repoFullName: args.repoFullName,
+            ...(args.repoRef ? { repoRef: args.repoRef } : {}),
+            sessionName: args.name,
+            childThreadId,
+          });
+          ({ repoFullName, repoRef, branch, worktreePath } = resolvedRepository);
+        } else {
+          if (manifestExists) {
+            return yield* Effect.fail(
+              `This project has linked repositories; pass 'repo_full_name' to choose which one the child isolates in a worktree, or use isolation='shared' to run it in the shared project workspace.`,
+            );
+          }
+
+          const resolvedLocalRepository = yield* resolveLocalRepositoryWorktree({
+            services: input.services,
+            projectWorkspaceRoot: project.workspaceRoot,
+            ...(args.repoRef ? { repoRef: args.repoRef } : {}),
+            sessionName: args.name,
+            childThreadId,
+          });
+          ({ repoRef, branch, worktreePath } = resolvedLocalRepository);
+        }
       }
 
       const childToolContext = createChildThreadToolContext({
@@ -181,7 +211,8 @@ export function makeStartChildThread(input: {
         projectId: thread.projectId,
         childThreadId,
         name: args.name,
-        executionScope: args.executionScope,
+        isolation: args.isolation,
+        usedLegacyExecutionScope: args.usedLegacyExecutionScope,
         started,
         interactionMode,
         runtimeMode: thread.runtimeMode,

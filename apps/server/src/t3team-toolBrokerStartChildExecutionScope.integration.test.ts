@@ -43,8 +43,6 @@ import {
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 
 const EVAL_REPO_FULL_NAME = "eval-owner/eval-repo";
-const parentThreadId = ThreadId.make("parent-thread-eval");
-const projectId = ProjectId.make("project-eval");
 
 type StoredThread = {
   readonly id: ThreadId;
@@ -57,6 +55,7 @@ type StoredThread = {
 const evalRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-start-child-eval-"));
 const projectWorkspaceRoot = NodePath.join(evalRoot, "project-workspace");
 const linkedRepoPath = NodePath.join(evalRoot, "linked-repo");
+const localWorkspaceRoot = NodePath.join(evalRoot, "local-workspace");
 let evalHarnessReady = false;
 
 function runGit(cwd: string, args: ReadonlyArray<string>) {
@@ -68,16 +67,20 @@ function runGit(cwd: string, args: ReadonlyArray<string>) {
   }
 }
 
+function initGitRepo(root: string) {
+  NodeFS.mkdirSync(root, { recursive: true });
+  runGit(root, ["init"]);
+  runGit(root, ["config", "user.email", "eval@test.com"]);
+  runGit(root, ["config", "user.name", "Eval"]);
+  NodeFS.writeFileSync(NodePath.join(root, "README.md"), "# eval repo\n");
+  runGit(root, ["add", "."]);
+  runGit(root, ["commit", "-m", "initial"]);
+  runGit(root, ["branch", "-M", "main"]);
+}
+
 function initLinkedRepo() {
   NodeFS.mkdirSync(projectWorkspaceRoot, { recursive: true });
-  NodeFS.mkdirSync(linkedRepoPath, { recursive: true });
-  runGit(linkedRepoPath, ["init"]);
-  runGit(linkedRepoPath, ["config", "user.email", "eval@test.com"]);
-  runGit(linkedRepoPath, ["config", "user.name", "Eval"]);
-  NodeFS.writeFileSync(NodePath.join(linkedRepoPath, "README.md"), "# eval repo\n");
-  runGit(linkedRepoPath, ["add", "."]);
-  runGit(linkedRepoPath, ["commit", "-m", "initial"]);
-  runGit(linkedRepoPath, ["branch", "-M", "main"]);
+  initGitRepo(linkedRepoPath);
 
   const manifestDir = NodePath.join(projectWorkspaceRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME);
   NodeFS.mkdirSync(manifestDir, { recursive: true });
@@ -96,11 +99,17 @@ function initLinkedRepo() {
   );
 }
 
+/** A project workspace that is itself a git repository, with no linked-repo manifest. */
+function initLocalWorkspace() {
+  initGitRepo(localWorkspaceRoot);
+}
+
 function ensureEvalHarnessReady() {
   if (evalHarnessReady) {
     return;
   }
   initLinkedRepo();
+  initLocalWorkspace();
   evalHarnessReady = true;
 }
 
@@ -108,14 +117,35 @@ afterAll(() => {
   NodeFS.rmSync(evalRoot, { recursive: true, force: true });
 });
 
-function createEvalHarness() {
+type EvalVariant = {
+  readonly projectId: ProjectId;
+  readonly parentThreadId: ThreadId;
+  readonly workspaceRoot: string;
+  readonly projectTitle: string;
+};
+
+const linkedVariant: EvalVariant = {
+  projectId: ProjectId.make("project-eval"),
+  parentThreadId: ThreadId.make("parent-thread-eval"),
+  workspaceRoot: projectWorkspaceRoot,
+  projectTitle: "Eval Project",
+};
+
+const localVariant: EvalVariant = {
+  projectId: ProjectId.make("project-local-eval"),
+  parentThreadId: ThreadId.make("parent-thread-local-eval"),
+  workspaceRoot: localWorkspaceRoot,
+  projectTitle: "Eval Local Project",
+};
+
+function createEvalHarness(variant: EvalVariant = linkedVariant) {
   ensureEvalHarnessReady();
   const threads = new Map<ThreadId, StoredThread>([
     [
-      parentThreadId,
+      variant.parentThreadId,
       {
-        id: parentThreadId,
-        projectId,
+        id: variant.parentThreadId,
+        projectId: variant.projectId,
         title: "Coordinator thread",
         branch: null,
         worktreePath: null,
@@ -144,7 +174,7 @@ function createEvalHarness() {
           };
           threads.set(create.threadId, {
             id: create.threadId,
-            projectId,
+            projectId: variant.projectId,
             title: create.title,
             branch: create.branch ?? null,
             worktreePath: create.worktreePath ?? null,
@@ -165,9 +195,9 @@ function createEvalHarness() {
     getProjectShellById: () =>
       Effect.succeed(
         Option.some({
-          id: projectId,
-          title: "Eval Project",
-          workspaceRoot: projectWorkspaceRoot,
+          id: variant.projectId,
+          title: variant.projectTitle,
+          workspaceRoot: variant.workspaceRoot,
           repositoryIdentity: null,
           defaultModelSelection: null,
           scripts: [],
@@ -264,10 +294,10 @@ function createEvalHarness() {
     state: {
       view: {
         kind: "thread" as const,
-        projectId,
-        projectTitle: "Eval Project",
-        workspaceRoot: projectWorkspaceRoot,
-        threadId: parentThreadId,
+        projectId: variant.projectId,
+        projectTitle: variant.projectTitle,
+        workspaceRoot: variant.workspaceRoot,
+        threadId: variant.parentThreadId,
         threadTitle: "Coordinator thread",
         ticketId: "EVAL-1",
         displayMode: "embedded" as const,
@@ -283,32 +313,40 @@ function createEvalHarness() {
   };
 }
 
-describe("t3team.thread.start_child execution_scope integration eval", () => {
-  it("marks execution_scope required in the published tool schema", () => {
+describe("t3team.thread.start_child isolation integration eval", () => {
+  it("marks isolation required in the published tool schema with a description on every parameter", () => {
     const schema = TOOL_SPECS["t3team.thread.start_child"].inputSchema as {
       required?: ReadonlyArray<string>;
-      properties?: Record<string, { enum?: ReadonlyArray<string> }>;
+      properties?: Record<string, { enum?: ReadonlyArray<string>; description?: string }>;
     };
-    expect(schema.required).toEqual(["name", "execution_scope"]);
-    expect(schema.properties?.execution_scope?.enum).toEqual(["metarepo", "repository"]);
+    expect(schema.required).toEqual(["name", "isolation"]);
+    expect(schema.properties?.isolation?.enum).toEqual(["shared", "own-worktree"]);
+    // Every parameter carries a non-empty, agent-facing description.
+    for (const [key, property] of Object.entries(schema.properties ?? {})) {
+      expect(
+        typeof property.description === "string" && property.description.trim().length > 0,
+        `start_child parameter '${key}' must have a description`,
+      ).toBe(true);
+    }
   });
 
-  it("documents vague planning vs implementation handoffs in AGENTS.md", () => {
+  it("documents the isolation decision table in AGENTS.md", () => {
     const agentsMd = renderAgentsMd(getT3TeamProfile("engineering-copilot"));
-    expect(agentsMd).toContain("execution_scope");
+    expect(agentsMd).toContain("always pass `isolation`");
+    expect(agentsMd).toContain("| Work | `isolation` | Repository fields |");
     expect(agentsMd).toContain("Planning, triage, synthesis, project status");
     expect(agentsMd).toContain("Implementation, debugging, tests, review, PR work");
     expect(agentsMd).toContain("Do not pass `repo_full_name`");
     expect(agentsMd).toContain("Pass `repo_full_name`");
   });
 
-  it("scenario A: vague planning stays metarepo with no worktree", async () => {
+  it("scenario A: vague planning stays in the shared checkout without a worktree", async () => {
     const harness = createEvalHarness();
     const { startResult, childView } = await harness.runBroker(
       Effect.gen(function* () {
         const broker = yield* T3TeamToolBroker;
         const binding = yield* broker.bindSession({
-          threadId: parentThreadId,
+          threadId: linkedVariant.parentThreadId,
           toolContext: harness.toolContext,
         });
         const startResult = yield* binding!.callTool({
@@ -316,7 +354,7 @@ describe("t3team.thread.start_child execution_scope integration eval", () => {
           tool: "t3team.thread.start_child",
           arguments: {
             name: "Plan checkout reliability",
-            execution_scope: "metarepo",
+            isolation: "shared",
             kickoff_mode: "plan",
             kickoff_prompt:
               "Review ticket context and outline how we should improve checkout reliability across linked repos.",
@@ -335,11 +373,13 @@ describe("t3team.thread.start_child execution_scope integration eval", () => {
     );
 
     const structured = startResult.structuredContent as {
+      isolation: string;
       execution_scope: string;
       project_session_id: string;
       worktree_path?: string;
     };
     expect(startResult.isError).toBeUndefined();
+    expect(structured.isolation).toBe("shared");
     expect(structured.execution_scope).toBe("metarepo");
     expect(structured.worktree_path).toBeUndefined();
 
@@ -354,13 +394,13 @@ describe("t3team.thread.start_child execution_scope integration eval", () => {
     expect(view.thread.workspace.worktreePath).toBeNull();
   });
 
-  it("scenario B: implement-it follow-up creates repository scope with real worktree", async () => {
+  it("scenario B: implement-it follow-up creates a linked-repo worktree", async () => {
     const harness = createEvalHarness();
     const { startResult, childView } = await harness.runBroker(
       Effect.gen(function* () {
         const broker = yield* T3TeamToolBroker;
         const binding = yield* broker.bindSession({
-          threadId: parentThreadId,
+          threadId: linkedVariant.parentThreadId,
           toolContext: harness.toolContext,
         });
         const startResult = yield* binding!.callTool({
@@ -368,7 +408,7 @@ describe("t3team.thread.start_child execution_scope integration eval", () => {
           tool: "t3team.thread.start_child",
           arguments: {
             name: "Implement checkout fix",
-            execution_scope: "repository",
+            isolation: "own-worktree",
             repo_full_name: EVAL_REPO_FULL_NAME,
             kickoff_prompt: "Implement the planned checkout reliability fix in this repository.",
           },
@@ -386,6 +426,7 @@ describe("t3team.thread.start_child execution_scope integration eval", () => {
     );
 
     const structured = startResult.structuredContent as {
+      isolation: string;
       execution_scope: string;
       repo_full_name: string;
       project_session_id: string;
@@ -393,6 +434,7 @@ describe("t3team.thread.start_child execution_scope integration eval", () => {
       branch: string;
     };
     expect(startResult.isError).toBeUndefined();
+    expect(structured.isolation).toBe("own-worktree");
     expect(structured.execution_scope).toBe("repository");
     expect(structured.repo_full_name).toBe(EVAL_REPO_FULL_NAME);
     expect(NodeFS.existsSync(structured.worktree_path)).toBe(true);
@@ -427,7 +469,7 @@ describe("t3team.thread.start_child execution_scope integration eval", () => {
         Effect.gen(function* () {
           const broker = yield* T3TeamToolBroker;
           const binding = yield* broker.bindSession({
-            threadId: parentThreadId,
+            threadId: linkedVariant.parentThreadId,
             toolContext: harness.toolContext,
           });
           return yield* binding!.callTool({
@@ -438,34 +480,159 @@ describe("t3team.thread.start_child execution_scope integration eval", () => {
         }),
       );
 
-    const missingScope = await call({ name: "Ambiguous child" });
-    expect(missingScope.isError).toBe(true);
-    expect(missingScope.structuredContent).toEqual(
+    const missingIsolation = await call({ name: "Ambiguous child" });
+    expect(missingIsolation.isError).toBe(true);
+    expect(missingIsolation.structuredContent).toEqual(
       expect.objectContaining({
-        error: expect.stringContaining("requires 'execution_scope'"),
+        error: expect.stringContaining("requires 'isolation'"),
       }),
     );
 
-    const repositoryWithoutRepo = await call({
-      name: "Detached implementation",
-      execution_scope: "repository",
-    });
-    expect(repositoryWithoutRepo.isError).toBe(true);
-    expect(repositoryWithoutRepo.structuredContent).toEqual(
-      expect.objectContaining({
-        error: expect.stringContaining("requires 'repo_full_name'"),
-      }),
-    );
-
-    const metarepoWithRepo = await call({
+    const sharedWithRepo = await call({
       name: "Planning child",
-      execution_scope: "metarepo",
+      isolation: "shared",
       repo_full_name: EVAL_REPO_FULL_NAME,
     });
-    expect(metarepoWithRepo.isError).toBe(true);
-    expect(metarepoWithRepo.structuredContent).toEqual(
+    expect(sharedWithRepo.isError).toBe(true);
+    expect(sharedWithRepo.structuredContent).toEqual(
       expect.objectContaining({
         error: expect.stringContaining("must not include 'repo_full_name'"),
+      }),
+    );
+
+    const ownWorktreeWithoutRepo = await call({
+      name: "Detached implementation",
+      isolation: "own-worktree",
+    });
+    expect(ownWorktreeWithoutRepo.isError).toBe(true);
+    expect(ownWorktreeWithoutRepo.structuredContent).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("pass 'repo_full_name'"),
+      }),
+    );
+  });
+
+  it("scenario D: local workspace isolates in a worktree of the local repository", async () => {
+    const harness = createEvalHarness(localVariant);
+    const { startResult, childView } = await harness.runBroker(
+      Effect.gen(function* () {
+        const broker = yield* T3TeamToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId: localVariant.parentThreadId,
+          toolContext: harness.toolContext,
+        });
+        const startResult = yield* binding!.callTool({
+          server: "t3team",
+          tool: "t3team.thread.start_child",
+          arguments: {
+            name: "Fix local checkout",
+            isolation: "own-worktree",
+            kickoff_prompt: "Fix the checkout bug in this local repository.",
+          },
+        });
+        const structured = startResult.structuredContent as { project_session_id: string };
+        const childBinding = yield* broker.bindSession({
+          threadId: ThreadId.make(structured.project_session_id),
+        });
+        const childView = yield* childBinding!.callTool({
+          server: "t3team",
+          tool: "t3team.view.read",
+        });
+        return { startResult, childView };
+      }),
+    );
+
+    const structured = startResult.structuredContent as {
+      isolation: string;
+      execution_scope: string;
+      project_session_id: string;
+      worktree_path: string;
+      branch: string;
+      repo_full_name?: string;
+    };
+    expect(startResult.isError).toBeUndefined();
+    expect(structured.isolation).toBe("own-worktree");
+    expect(structured.execution_scope).toBe("repository");
+    expect(structured.repo_full_name).toBeUndefined();
+    expect(NodeFS.existsSync(structured.worktree_path)).toBe(true);
+    expect(
+      NodeChildProcess.spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
+        cwd: structured.worktree_path,
+        encoding: "utf8",
+      }).stdout.trim(),
+    ).toBe("true");
+    // The worktree lives inside the local repository and .t3team/ is gitignored.
+    expect(structured.worktree_path.startsWith(localWorkspaceRoot)).toBe(true);
+    expect(structured.worktree_path).toContain("child-session-worktrees");
+    const gitignore = NodeFS.readFileSync(NodePath.join(localWorkspaceRoot, ".gitignore"), "utf8");
+    expect(gitignore).toContain(".t3team/");
+
+    const view = childView.structuredContent as {
+      thread: {
+        executionScope: string;
+        workspace: { worktreePath: string; currentWorkspaceRoot: string; branch: string };
+      };
+    };
+    expect(view.thread.executionScope).toBe("repository");
+    expect(view.thread.workspace.worktreePath).toBe(structured.worktree_path);
+    expect(view.thread.workspace.currentWorkspaceRoot).toBe(structured.worktree_path);
+    expect(view.thread.workspace.branch).toBe(structured.branch);
+  });
+
+  it("scenario E: repo_full_name in a local workspace fails with a clear error", async () => {
+    const harness = createEvalHarness(localVariant);
+    const result = await harness.runBroker(
+      Effect.gen(function* () {
+        const broker = yield* T3TeamToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId: localVariant.parentThreadId,
+          toolContext: harness.toolContext,
+        });
+        return yield* binding!.callTool({
+          server: "t3team",
+          tool: "t3team.thread.start_child",
+          arguments: {
+            name: "Wrong repo child",
+            isolation: "own-worktree",
+            repo_full_name: EVAL_REPO_FULL_NAME,
+          },
+        });
+      }),
+    );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("no linked repositories"),
+      }),
+    );
+  });
+
+  it("scenario F: the deprecated execution_scope alias still works and notes the deprecation", async () => {
+    const harness = createEvalHarness();
+    const result = await harness.runBroker(
+      Effect.gen(function* () {
+        const broker = yield* T3TeamToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId: linkedVariant.parentThreadId,
+          toolContext: harness.toolContext,
+        });
+        return yield* binding!.callTool({
+          server: "t3team",
+          tool: "t3team.thread.start_child",
+          arguments: {
+            name: "Legacy planning child",
+            execution_scope: "metarepo",
+          },
+        });
+      }),
+    );
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual(
+      expect.objectContaining({
+        ok: true,
+        isolation: "shared",
+        execution_scope: "metarepo",
+        deprecation_note: expect.stringContaining("'isolation'"),
       }),
     );
   });

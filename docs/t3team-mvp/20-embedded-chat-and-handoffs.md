@@ -216,7 +216,7 @@ Effective live tool shape:
 ```ts
 type StartChildThreadInput = {
   name: string;
-  execution_scope: "metarepo" | "repository";
+  isolation: "shared" | "own-worktree";
   kickoff_prompt?: string;
   kickoff_mode?: "plan" | "interactive" | "autopilot";
   // Optional provider instance id to run the child on a DIFFERENT provider than the
@@ -234,7 +234,8 @@ type StartChildThreadResult = {
   project_id: string;
   project_session_id: string;
   name: string;
-  execution_scope: "metarepo" | "repository";
+  isolation: "shared" | "own-worktree";
+  execution_scope: "metarepo" | "repository"; // legacy mirror of isolation
   started: boolean;
   interaction_mode: "plan" | "default";
   runtime_mode: "approval-required" | "auto-accept-edits" | "full-access";
@@ -259,9 +260,10 @@ Rules:
 - no user approval required for MVP
 - child thread is created in background
 - current page does not navigate
-- `execution_scope` is required on every call
-- `execution_scope: "repository"` requires `repo_full_name`, selects a linked repository, and creates a fresh worktree/branch
-- `execution_scope: "metarepo"` forbids `repo_full_name` and `repo_ref`, and keeps the child in the project metarepo workspace
+- `isolation` is required on every call — the runtime never defaults it
+- `isolation: "own-worktree"` gives the child a dedicated branch + worktree: with `repo_full_name` it selects a linked repository; without it (local workspace, no linked repos) it isolates the child in a worktree of the local repository
+- `isolation: "shared"` forbids `repo_full_name` and `repo_ref`, and keeps the child in the project's shared checkout
+- legacy `execution_scope` (`metarepo`/`repository`) is accepted as a deprecated alias of `isolation` (`shared`/`own-worktree`) and noted in the result
 - `kickoff_prompt` is optional; when present, the first turn starts immediately
 - a recipe-owned kickoff flow may still pause after thread creation and wait for a structured kickoff submission before the first agent turn starts
 - durable handoff activity cards are recorded on both the parent and child threads
@@ -278,7 +280,7 @@ First live-slice limitation:
 Default depends on the task.
 
 If the handoff is repository work, call `t3team.thread.start_child` with
-`execution_scope: "repository"`, a linked `repo_full_name`, and a new worktree.
+`isolation: "own-worktree"`, a linked `repo_full_name`, and a new worktree.
 
 Example:
 
@@ -288,7 +290,7 @@ Workspace: linked repository payments-api, new worktree required.
 ```
 
 If the handoff is meta-level project work, call `t3team.thread.start_child` with
-`execution_scope: "metarepo"` and no repository fields. The project metarepo is the
+`isolation: "shared"` and no repository fields. The project metarepo is the
 workspace that holds project context, references, recipes, skills, and synthesis outputs;
 it is not a linked implementation repository.
 
