@@ -1,3 +1,8 @@
+// @effect-diagnostics nodeBuiltinImport:off - builds fake distro/vendor layouts on disk for the root-resolution tests.
+import * as NodeChildProcessTest from "node:child_process";
+import * as NodeFSTest from "node:fs";
+import * as NodeOSTest from "node:os";
+import * as NodePathTest from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -19,7 +24,9 @@ import {
   createStagePatchedDependencies,
   createBuildConfig,
   extractIssueReferences,
+  emitDesktopBuildChangelog,
   formatArtifactTimestamp,
+  findNearestAncestorWithMarker,
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
@@ -34,6 +41,7 @@ import {
   packWindowsServerAsar,
   renderMacPasskeyEntitlements,
   renderChangelog,
+  resolveDistroRoot,
   resolveClerkPasskeyNativeArtifacts,
   resolveMacPasskeySigningConfiguration,
   resolveDesktopRuntimeDependencies,
@@ -586,6 +594,167 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       ["#58", "#57"],
     );
   });
+
+  it("walks up to the nearest ancestor carrying the distribution marker", () => {
+    const distro = NodePathTest.resolve("/fake/distro");
+    assert.equal(
+      findNearestAncestorWithMarker("/fake/distro/vendor/t3code/scripts", (dir) => dir === distro),
+      distro,
+    );
+  });
+
+  it("stops at the start dir itself when it carries the marker", () => {
+    const repo = NodePathTest.resolve("/fake/repo");
+    assert.equal(
+      findNearestAncestorWithMarker("/fake/repo/scripts", (dir) => dir === repo),
+      repo,
+    );
+  });
+
+  it("returns undefined when no ancestor carries the marker", () => {
+    assert.isUndefined(
+      findNearestAncestorWithMarker("/fake/distro/vendor/t3code/scripts", () => false),
+    );
+  });
+
+  it.effect("resolves the distribution root from a nested distro/vendor/t3code layout", () =>
+    Effect.gen(function* () {
+      const distro = NodeFSTest.mkdtempSync(NodePathTest.join(NodeOSTest.tmpdir(), "distro-root-"));
+      const bare = NodeFSTest.mkdtempSync(
+        NodePathTest.join(NodeOSTest.tmpdir(), "distro-root-bare-"),
+      );
+      const stateDistro = NodeFSTest.mkdtempSync(
+        NodePathTest.join(NodeOSTest.tmpdir(), "distro-root-state-"),
+      );
+      const shadowed = NodeFSTest.mkdtempSync(
+        NodePathTest.join(NodeOSTest.tmpdir(), "distro-root-shadow-"),
+      );
+      try {
+        // distro/packs/nexplore-global + distro/vendor/t3code/scripts
+        NodeFSTest.mkdirSync(NodePathTest.join(distro, "vendor", "t3code", "scripts"), {
+          recursive: true,
+        });
+        NodeFSTest.mkdirSync(NodePathTest.join(distro, "packs", "nexplore-global"), {
+          recursive: true,
+        });
+        const found = yield* resolveDistroRoot(NodePathTest.join(distro, "vendor", "t3code"));
+        assert.equal(found, NodePathTest.resolve(distro));
+
+        // The .nexi-dev/desktop-installer state dir is a marker on its own.
+        NodeFSTest.mkdirSync(NodePathTest.join(stateDistro, "vendor", "t3code"), {
+          recursive: true,
+        });
+        NodeFSTest.mkdirSync(NodePathTest.join(stateDistro, ".nexi-dev", "desktop-installer"), {
+          recursive: true,
+        });
+        const foundByState = yield* resolveDistroRoot(
+          NodePathTest.join(stateDistro, "vendor", "t3code"),
+        );
+        assert.equal(foundByState, NodePathTest.resolve(stateDistro));
+
+        // No marker anywhere above a bare vendor checkout → undefined, so the
+        // caller falls back to the vendor root with a warning.
+        NodeFSTest.mkdirSync(NodePathTest.join(bare, "vendor", "t3code"), { recursive: true });
+        assert.isUndefined(yield* resolveDistroRoot(NodePathTest.join(bare, "vendor", "t3code")));
+
+        // A stale .nexi-dev/desktop-installer left inside the vendor checkout
+        // by a previous buggy build must not shadow the real distribution root.
+        NodeFSTest.mkdirSync(
+          NodePathTest.join(shadowed, "vendor", "t3code", ".nexi-dev", "desktop-installer"),
+          { recursive: true },
+        );
+        NodeFSTest.mkdirSync(NodePathTest.join(shadowed, "packs", "nexplore-global"), {
+          recursive: true,
+        });
+        const foundShadowed = yield* resolveDistroRoot(
+          NodePathTest.join(shadowed, "vendor", "t3code"),
+        );
+        assert.equal(foundShadowed, NodePathTest.resolve(shadowed));
+      } finally {
+        NodeFSTest.rmSync(distro, { recursive: true, force: true });
+        NodeFSTest.rmSync(bare, { recursive: true, force: true });
+        NodeFSTest.rmSync(stateDistro, { recursive: true, force: true });
+        NodeFSTest.rmSync(shadowed, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect(
+    "writes the changelog and last-build.json under the distro root with distinct SHAs",
+    () =>
+      Effect.gen(function* () {
+        const git = (args: readonly string[], cwd: string): string =>
+          NodeChildProcessTest.execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
+        const makeRepo = (dir: string, message: string): string => {
+          NodeFSTest.mkdirSync(dir, { recursive: true });
+          git(["init", "-q"], dir);
+          git(
+            [
+              "-c",
+              "user.email=build@local",
+              "-c",
+              "user.name=build",
+              "commit",
+              "-q",
+              "--allow-empty",
+              "-m",
+              message,
+            ],
+            dir,
+          );
+          return git(["rev-parse", "--short=12", "HEAD"], dir);
+        };
+        const base = NodeFSTest.mkdtempSync(
+          NodePathTest.join(NodeOSTest.tmpdir(), "distro-root-e2e-"),
+        );
+        try {
+          // distro/packs + distro/vendor/t3code, each its own git repo.
+          const distroRoot = NodePathTest.join(base, "distro");
+          const vendorRoot = NodePathTest.join(distroRoot, "vendor", "t3code");
+          NodeFSTest.mkdirSync(NodePathTest.join(distroRoot, "packs", "nexplore-global"), {
+            recursive: true,
+          });
+          NodeFSTest.mkdirSync(vendorRoot, { recursive: true });
+          const distroSha = makeRepo(distroRoot, "distro: add the nexplore-global pack");
+          const vendorSha = makeRepo(vendorRoot, "vendor: ship the desktop build script");
+          assert.notEqual(distroSha, vendorSha);
+
+          yield* emitDesktopBuildChangelog({
+            distroRoot: NodePathTest.resolve(distroRoot),
+            vendorRoot: NodePathTest.resolve(vendorRoot),
+            productName: "Nexi Work",
+            version: "0.0.33",
+            distroSha,
+            vendorSha,
+            timestamp: "20260823-2251",
+          });
+
+          // State lands under the DISTRO root, not the vendor checkout.
+          const stateDir = NodePathTest.join(distroRoot, ".nexi-dev", "desktop-installer");
+          const state = NodeFSTest.readFileSync(
+            NodePathTest.join(stateDir, "last-build.json"),
+            "utf8",
+          );
+          assert.include(state, `"distroSha":"${distroSha}"`);
+          assert.include(state, `"vendorSha":"${vendorSha}"`);
+          assert.isFalse(
+            NodeFSTest.existsSync(NodePathTest.join(vendorRoot, ".nexi-dev", "desktop-installer")),
+          );
+
+          // The changelog shows the distinct SHAs and each repo's own history.
+          const changelog = NodeFSTest.readFileSync(
+            NodePathTest.join(stateDir, "CHANGELOG-20260823-2251.md"),
+            "utf8",
+          );
+          assert.include(changelog, `- Distro: ${distroSha}`);
+          assert.include(changelog, `- Vendor (t3code): ${vendorSha}`);
+          assert.include(changelog, "distro: add the nexplore-global pack");
+          assert.include(changelog, "vendor: ship the desktop build script");
+        } finally {
+          NodeFSTest.rmSync(base, { recursive: true, force: true });
+        }
+      }),
+  );
 
   it.effect("validates every ASAR-unpacked native in the packaged Windows payload", () =>
     Effect.scoped(

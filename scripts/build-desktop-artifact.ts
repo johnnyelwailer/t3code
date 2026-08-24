@@ -3,6 +3,7 @@
 
 import * as NodeFSP from "node:fs/promises";
 import * as NodeModule from "node:module";
+import * as NodePath from "node:path";
 
 import {
   createPackageWithOptions,
@@ -719,6 +720,65 @@ const resolveGitCommitHash = Effect.fn("resolveGitCommitHash")(function* (repoRo
 const DESKTOP_INSTALLER_STATE_DIR = [".nexi-dev", "desktop-installer"] as const;
 const LAST_BUILD_STATE_FILE = "last-build.json";
 
+/**
+ * Walks up from `start` (inclusive) to the nearest directory for which
+ * `hasMarker` returns true; undefined when no ancestor (or `start` itself)
+ * carries the marker. Pure so the walk-up logic is testable without fs.
+ */
+export function findNearestAncestorWithMarker(
+  start: string,
+  hasMarker: (dir: string) => boolean,
+): string | undefined {
+  let dir = NodePath.resolve(start);
+  for (;;) {
+    if (hasMarker(dir)) return dir;
+    const parent = NodePath.dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
+/**
+ * A distribution repo is the ancestor of a vendor checkout that holds the
+ * distribution's own content: its workspace packs (e.g. `packs/nexplore-global`)
+ * and/or the desktop-installer state dir left by a previous build. The t3code
+ * repo itself has neither, so the walk-up never stops at the vendor root.
+ */
+const hasDistroRootMarker = Effect.fn("hasDistroRootMarker")(function* (dir: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  if (yield* fs.exists(path.join(dir, ...DESKTOP_INSTALLER_STATE_DIR))) return true;
+  const packsDir = path.join(dir, "packs");
+  if (!(yield* fs.exists(packsDir))) return false;
+  const entries = yield* fs
+    .readDirectory(packsDir)
+    .pipe(Effect.orElseSucceed(() => [] as readonly string[]));
+  for (const entry of entries) {
+    const stat = yield* fs.stat(path.join(packsDir, entry)).pipe(Effect.orElseSucceed(() => null));
+    if (stat?.type === "Directory") return true;
+  }
+  return false;
+});
+
+/**
+ * Resolves the distribution root by walking up from the vendor checkout's
+ * parent to the nearest ancestor with the distribution marker. The build may
+ * run with any cwd (the proven DBI recipe runs it from the vendor checkout
+ * itself), so the roots are derived from where the script lives, never from
+ * the process cwd. The vendor checkout itself never counts as a marker, even
+ * if a previous buggy build left `.nexi-dev/desktop-installer` state inside
+ * it — that stale state must not shadow the real distribution root.
+ */
+export const resolveDistroRoot = Effect.fn("resolveDistroRoot")(function* (vendorRoot: string) {
+  let dir = NodePath.dirname(NodePath.resolve(vendorRoot));
+  for (;;) {
+    if (yield* hasDistroRootMarker(dir)) return dir;
+    const parent = NodePath.dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+});
+
 const decodeDesktopInstallerLastBuild = Schema.decodeUnknownEffect(
   Schema.Struct({ distroSha: Schema.String, vendorSha: Schema.String, timestamp: Schema.String }),
 );
@@ -751,10 +811,9 @@ const gitLogLinesSince = Effect.fn("gitLogLinesSince")(function* (
   return (yield* gitLogOneline(repoRoot, [`-${fallbackCount}`])) ?? [];
 });
 
-const emitDesktopBuildChangelog = Effect.fn("emitDesktopBuildChangelog")(function* (input: {
-  readonly repoRoot: string;
-  readonly vendorRepoRoot: string;
-  readonly outputDir: string;
+export const emitDesktopBuildChangelog = Effect.fn("emitDesktopBuildChangelog")(function* (input: {
+  readonly distroRoot: string;
+  readonly vendorRoot: string;
   readonly productName: string;
   readonly version: string;
   readonly distroSha: string;
@@ -763,18 +822,12 @@ const emitDesktopBuildChangelog = Effect.fn("emitDesktopBuildChangelog")(functio
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const {
-    repoRoot,
-    vendorRepoRoot,
-    outputDir,
-    productName,
-    version,
-    distroSha,
-    vendorSha,
-    timestamp,
-  } = input;
+  const { distroRoot, vendorRoot, productName, version, distroSha, vendorSha, timestamp } = input;
 
-  const stateDir = path.join(repoRoot, ...DESKTOP_INSTALLER_STATE_DIR);
+  // State + changelog live under the distribution root so the "since previous
+  // build" delta resolves against the real distro history, even when the build
+  // runs with cwd = the vendor checkout.
+  const stateDir = path.join(distroRoot, ...DESKTOP_INSTALLER_STATE_DIR);
   const statePath = path.join(stateDir, LAST_BUILD_STATE_FILE);
   const rawState = yield* fs.readFileString(statePath).pipe(Effect.orElseSucceed(() => undefined));
   const previous =
@@ -789,18 +842,18 @@ const emitDesktopBuildChangelog = Effect.fn("emitDesktopBuildChangelog")(functio
     version,
     distroSha,
     vendorSha,
-    vendorLogLines: yield* gitLogLinesSince(vendorRepoRoot, previous?.vendorSha, vendorSha, 10),
-    distroLogLines: yield* gitLogLinesSince(repoRoot, previous?.distroSha, distroSha, 5),
+    vendorLogLines: yield* gitLogLinesSince(vendorRoot, previous?.vendorSha, vendorSha, 10),
+    distroLogLines: yield* gitLogLinesSince(distroRoot, previous?.distroSha, distroSha, 5),
     timestamp,
   });
-  yield* fs.writeFileString(path.join(outputDir, `CHANGELOG-${timestamp}.md`), changelog);
 
   yield* fs.makeDirectory(stateDir, { recursive: true });
+  yield* fs.writeFileString(path.join(stateDir, `CHANGELOG-${timestamp}.md`), changelog);
   yield* fs.writeFileString(
     statePath,
     `${yield* encodeJsonString({ distroSha, vendorSha, timestamp })}\n`,
   );
-  yield* Effect.log(`[desktop-artifact] Wrote CHANGELOG-${timestamp}.md`);
+  yield* Effect.log(`[desktop-artifact] Wrote CHANGELOG-${timestamp}.md under ${stateDir}`);
 });
 
 const resolvePythonForNodeGyp = Effect.fn("resolvePythonForNodeGyp")(function* () {
@@ -3624,17 +3677,25 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   );
 
   // Best-effort: a changelog failure must not fail the build.
-  const vendorRepoRoot = (yield* fs.exists(path.join(repoRoot, "vendor", "t3code", ".git")))
-    ? path.join(repoRoot, "vendor", "t3code")
-    : repoRoot;
-  const vendorSha = yield* resolveGitCommitHash(vendorRepoRoot);
+  // The script lives in the t3code (vendor) repo, so `repoRoot` is the vendor
+  // root; the distribution root is the nearest ancestor with the distro
+  // marker (workspace packs and/or the desktop-installer state dir). Never
+  // assume the cwd is the distro — the proven DBI recipe runs from the
+  // vendor checkout.
+  const vendorRoot = repoRoot;
+  const distroRoot =
+    (yield* resolveDistroRoot(vendorRoot)) ??
+    (yield* Effect.logWarning(
+      "[desktop-artifact] No distribution root found above the vendor checkout; using the vendor root for the build changelog",
+    ).pipe(Effect.as(vendorRoot)));
+  const vendorSha = yield* resolveGitCommitHash(vendorRoot);
+  const distroSha = yield* resolveGitCommitHash(distroRoot);
   yield* emitDesktopBuildChangelog({
-    repoRoot,
-    vendorRepoRoot,
-    outputDir: options.outputDir,
+    distroRoot,
+    vendorRoot,
     productName: resolveDesktopProductName(appVersion, options.productName),
     version: appVersion,
-    distroSha: commitHash,
+    distroSha,
     vendorSha,
     timestamp: artifactTimestamp,
   }).pipe(
