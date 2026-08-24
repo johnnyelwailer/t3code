@@ -3,6 +3,10 @@ import * as Effect from "effect/Effect";
 
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
+import {
+  normalizeThreadSearchLimit,
+  searchThreadMessages,
+} from "./t3team-threadMessageSearch.ts";
 
 /**
  * `t3team.thread.search_source` — search the FULL transcript of the thread the
@@ -12,9 +16,6 @@ import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
  */
 
 const SEARCH_SOURCE_TOOL_ID = "t3team.thread.search_source";
-const DEFAULT_MATCH_LIMIT = 10;
-const MAX_MATCH_LIMIT = 25;
-const SNIPPET_RADIUS_CHARS = 200;
 
 type SearchSourceThreadMessage = {
   readonly id: string;
@@ -37,13 +38,6 @@ type SearchSourceArgs = {
   readonly limit?: unknown;
 };
 
-function buildSnippet(text: string, queryLower: string): string {
-  const index = text.toLowerCase().indexOf(queryLower);
-  const start = Math.max(0, index - SNIPPET_RADIUS_CHARS);
-  const end = Math.min(text.length, index + queryLower.length + SNIPPET_RADIUS_CHARS);
-  return (start > 0 ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
-}
-
 export function callT3TeamSearchSourceTool(input: {
   readonly tool: string;
   readonly scopeLabel: string;
@@ -65,10 +59,7 @@ export function callT3TeamSearchSourceTool(input: {
       errorResult(`${SEARCH_SOURCE_TOOL_ID} requires a non-empty 'query' string.`),
     );
   }
-  const limit =
-    typeof args.limit === "number" && Number.isFinite(args.limit)
-      ? Math.min(Math.max(Math.floor(args.limit), 1), MAX_MATCH_LIMIT)
-      : DEFAULT_MATCH_LIMIT;
+  const limit = normalizeThreadSearchLimit(args.limit);
 
   return Effect.gen(function* () {
     const currentRead = yield* loadThreadDetail(threadId).pipe(Effect.result);
@@ -106,36 +97,23 @@ export function callT3TeamSearchSourceTool(input: {
       return errorResult("The original (fork source) thread is no longer available.");
     }
 
-    const queryLower = query.toLowerCase();
-    const matches: Array<{
-      readonly index: number;
-      readonly role: string;
-      readonly createdAt?: string;
-      readonly snippet: string;
-    }> = [];
-    let totalMatches = 0;
-    for (const [index, message] of sourceThread.messages.entries()) {
-      const text = message.text ?? "";
-      if (!text.toLowerCase().includes(queryLower)) continue;
-      totalMatches += 1;
-      if (matches.length < limit) {
-        matches.push({
-          index: index + 1,
-          role: message.role,
-          ...(message.createdAt ? { createdAt: message.createdAt } : {}),
-          snippet: buildSnippet(text, queryLower),
-        });
-      }
-    }
+    const search = searchThreadMessages(sourceThread.messages, { query, limit });
 
     return okResult({
       ok: true,
       sourceThreadId: note.t3teamExt.forkSource.threadId,
       ...(sourceThread.title ? { sourceThreadTitle: sourceThread.title } : {}),
-      totalMatches,
-      returnedMatches: matches.length,
-      matches,
-      ...(totalMatches === 0
+      totalMatches: search.totalMatches,
+      returnedMatches: search.returnedMatches,
+      // Keep the established `search_source` result shape (`index`, no
+      // message id) — the shared scan reports `position` + `messageId`.
+      matches: search.matches.map(({ position, role, createdAt, snippet }) => ({
+        index: position,
+        role,
+        ...(createdAt ? { createdAt } : {}),
+        snippet,
+      })),
+      ...(search.totalMatches === 0
         ? {
             hint: `No message in the original thread contains "${query}". Try a shorter or different term.`,
           }

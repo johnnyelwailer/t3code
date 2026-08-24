@@ -67,6 +67,7 @@ export function dispatchT3TeamToolCall(input: {
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  searchThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readMessageThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   manageChildren?: (
     toolArgs: unknown,
@@ -152,6 +153,12 @@ export function dispatchT3TeamToolCall(input: {
       return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
     }
     return input.showWidget(toolArgs);
+  }
+  if (tool === "t3team.thread.search") {
+    if (!input.searchThread) {
+      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
+    }
+    return input.searchThread(toolArgs);
   }
   if (tool === "t3team.thread.search_source") {
     if (!input.searchSourceThread) {
