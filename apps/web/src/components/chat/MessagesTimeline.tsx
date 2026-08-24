@@ -164,10 +164,11 @@ interface TimelineRowSharedState {
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
-  /** t3team: last user message id with no reply on a settled thread — the row renders a Continue button under it. */
+  /** t3team: unanswered last user message — the timeline offers Continue in the working-indicator slot. */
   resumeMessageId: MessageId | null;
   onResumeThread: (() => void) | undefined;
   isResumingThread: boolean;
+  onDismissThreadError: (() => void) | undefined;
   activeWorkflowInputMessageId: string | null;
   workflowDecisionAnswers: ReadonlyMap<string, T3TeamWorkflowDecisionAnswer>;
   answeredDecisionReplyMessageIds: ReadonlySet<string>;
@@ -258,6 +259,8 @@ interface MessagesTimelineProps {
   resumeMessageId?: MessageId | null;
   onResumeThread?: () => void;
   isResumingThread?: boolean;
+  threadError?: string | null;
+  onDismissThreadError?: () => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
   markdownCwd: string | undefined;
@@ -319,6 +322,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   resumeMessageId = null,
   onResumeThread,
   isResumingThread = false,
+  threadError = null,
+  onDismissThreadError,
   onImageExpand,
   activeThreadEnvironmentId,
   markdownCwd,
@@ -473,6 +478,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         activeTurnStartedAt,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
+        resumeOffer: resumeMessageId !== null,
+        threadError,
       }).filter(
         (row) => !(row.kind === "message" && row.message.t3teamExt?.visibleToUser === false),
       ),
@@ -486,6 +493,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeTurnStartedAt,
       turnDiffSummaryByAssistantMessageId,
       revertTurnCountByUserMessageId,
+      resumeMessageId,
+      threadError,
     ],
   );
   const rows = useStableRows(rawRows);
@@ -622,6 +631,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resumeMessageId,
       onResumeThread,
       isResumingThread,
+      onDismissThreadError,
       onImageExpand,
       onOpenTurnDiff,
       onToggleTurnFold,
@@ -651,6 +661,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resumeMessageId,
       onResumeThread,
       isResumingThread,
+      onDismissThreadError,
       onImageExpand,
       onOpenTurnDiff,
       onToggleTurnFold,
@@ -1131,6 +1142,8 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "turn-plan" ? <TurnPlanTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
+      {row.kind === "resume" ? <ResumeTimelineRow /> : null}
+      {row.kind === "thread-error" ? <ThreadErrorTimelineRow row={row} /> : null}
     </div>
   );
 });
@@ -1230,17 +1243,6 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           markdownCwd={ctx.markdownCwd}
         />
       </div>
-      {ctx.resumeMessageId === row.message.id && ctx.onResumeThread ? (
-        <div className="flex w-full max-w-[80%] justify-end pe-1">
-          <Button
-            size="xs"
-            disabled={ctx.isResumingThread === true}
-            onClick={() => ctx.onResumeThread?.()}
-          >
-            {ctx.isResumingThread ? "Continuing..." : "Continue"}
-          </Button>
-        </div>
-      ) : null}
       <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
@@ -1518,6 +1520,54 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
           <span className="min-w-0 truncate text-muted-foreground/55">· {workingStepLabel}</span>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Continue offer in the working-indicator slot: a bare text button, styled
+ * like agent-side status — no background, no banner (PJ).
+ */
+function ResumeTimelineRow() {
+  const shared = use(TimelineRowCtx);
+  if (!shared.onResumeThread) return null;
+  return (
+    <div className="py-1">
+      <Button
+        size="xs"
+        variant="ghost"
+        disabled={shared.isResumingThread}
+        onClick={() => shared.onResumeThread?.()}
+        className="-ml-1.5 h-6 px-1.5 font-medium text-[13px] text-primary hover:bg-muted/55"
+      >
+        {shared.isResumingThread ? "Continuing..." : "Continue"}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * A turn error rendered like an agent message in the conversation flow, with
+ * Retry (re-runs the last user message) and dismiss — never a top banner (PJ).
+ */
+function ThreadErrorTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "thread-error" }> }) {
+  const shared = use(TimelineRowCtx);
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5 py-1 text-[13px]">
+      <span className="min-w-0 truncate leading-6 text-destructive/90" title={row.error}>
+        {row.error}
+      </span>
+      {shared.onResumeThread ? (
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={shared.isResumingThread}
+          onClick={() => shared.onResumeThread?.()}
+          className="h-auto shrink-0 self-baseline border-none px-1 py-0 font-medium text-[13px] leading-6 text-primary hover:bg-muted/55"
+        >
+          {shared.isResumingThread ? "Retrying..." : "Retry"}
+        </Button>
+      ) : null}
     </div>
   );
 }
