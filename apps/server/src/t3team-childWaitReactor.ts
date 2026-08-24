@@ -7,6 +7,11 @@
  * resolve waits, and (3) arms the host timer for deadlines. Resolution delivery
  * (actor message + resolved activity) lives in t3team-childWaitResolve.ts.
  *
+ * Abnormal-stop notification (GHE #157): when a child's session-set lands on an
+ * abnormal terminal status AND no matching wait resolved for it, the parent is
+ * told via a standalone actor message (t3team-childAbnormalStopNotify.ts) — a
+ * dead child is never silent, even when the parent never registered a wait.
+ *
  * @module t3team-childWaitReactor
  */
 import { ThreadId, type OrchestrationEvent } from "@t3tools/contracts";
@@ -29,6 +34,7 @@ import {
   type ChildWaitOutcome,
   type ChildWaitRecord,
 } from "./t3team-childWait.ts";
+import { makeChildAbnormalStopNotifier } from "./t3team-childAbnormalStopNotify.ts";
 import { makeChildWaitIndex } from "./t3team-childWaitIndex.ts";
 import { makeChildWaitScheduler, type ChildWaitScheduler } from "./t3team-childWaitScheduler.ts";
 import { makeResolveWait } from "./t3team-childWaitResolve.ts";
@@ -43,11 +49,14 @@ export const T3TeamChildWaitReactorLive = Layer.effectDiscard(
     let scheduler: ChildWaitScheduler;
     const rearm = () => scheduler.rearm();
     const resolveWait = makeResolveWait({ engine, query, index, rearm });
+    const notifyAbnormalStop = makeChildAbnormalStopNotifier({ engine, query });
 
+    // Resolves every pending wait matching the child+outcome; returns how many
+    // resolved so the caller can dedup the standalone abnormal-stop message.
     const resolveChildOutcome = (
       childThreadId: string,
       outcome: ChildWaitOutcome,
-    ): Effect.Effect<void> =>
+    ): Effect.Effect<number> =>
       Effect.gen(function* () {
         const matching = index
           .forChild(childThreadId)
@@ -55,6 +64,7 @@ export const T3TeamChildWaitReactorLive = Layer.effectDiscard(
         for (const record of matching) {
           yield* resolveWait(record, outcome);
         }
+        return matching.length;
       });
 
     // A newly registered wait: index it, then resolve immediately if the child
@@ -137,7 +147,22 @@ export const T3TeamChildWaitReactorLive = Layer.effectDiscard(
         case "thread.session-set": {
           const outcome = sessionStatusToWaitOutcome(event.payload.session.status);
           if (outcome === null) return Effect.void;
-          return resolveChildOutcome(event.payload.threadId, outcome);
+          return resolveChildOutcome(event.payload.threadId, outcome).pipe(
+            Effect.flatMap((resolvedWaits) => {
+              // Normal completion: the child reports its own result — no note.
+              if (outcome === "completed") return Effect.void;
+              // A wait already resolved for this child+outcome: its resolution
+              // message (carrying the abnormal detail) already told the parent.
+              if (resolvedWaits > 0) return Effect.void;
+              // Abnormal stop with no matching wait: without this the parent
+              // would never learn the child died (GHE #157).
+              return notifyAbnormalStop({
+                childThreadId: event.payload.threadId,
+                outcome,
+                lastError: event.payload.session.lastError,
+              });
+            }),
+          );
         }
         default:
           return Effect.void;

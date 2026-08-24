@@ -4,7 +4,10 @@
  * drives the parent's agent to react — that is the "resume the parent's turn"
  * mechanism) plus a durable `t3team.child_wait.resolved` activity so
  * rehydration can see the wait is done. A dead child (session error) resolves
- * as `failed`, never silence.
+ * as `failed`, never silence. For abnormal outcomes the message carries the
+ * same detail fragment as the standalone no-wait notification (GHE #157), so a
+ * parent that DID register a wait still learns WHY the child died — in the
+ * single resolution message, not a second one.
  *
  * @module t3team-childWaitResolve
  */
@@ -23,6 +26,7 @@ import * as Option from "effect/Option";
 
 import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { type ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { buildAbnormalStopDetail } from "./t3team-childAbnormalStopNotify.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   CHILD_WAIT_RESOLVED_KIND,
@@ -58,10 +62,21 @@ export const makeResolveWait =
       );
       const fromProjectId = child ? child.projectId : ProjectId.make(record.parentThreadId);
       const fromTitle = child?.title ?? record.childTitle;
+      // Abnormal outcomes fold the reason / last-known state into THIS message
+      // (the dedup: a wait resolving for child+outcome means no standalone
+      // abnormal-stop message is sent for the same stop).
+      const detail =
+        outcome === "failed" || outcome === "aborted"
+          ? buildAbnormalStopDetail({
+              lastError: child?.session?.lastError,
+              childStatus: child?.childStatus,
+            })
+          : null;
       const text =
         `[Child wait ${outcomeLabel}] You were waiting (wait ${record.waitId}) on ` +
-        `child «${fromTitle}» (thread ${record.childThreadId}); it ${outcomeLabel}. ` +
-        `Continue with the result.`;
+        `child «${fromTitle}» (thread ${record.childThreadId}); it ${outcomeLabel}.` +
+        (detail ? ` ${detail}.` : "") +
+        ` Continue with the result.`;
       yield* deps.engine
         .dispatch({
           type: "thread.actor.message",
