@@ -26,6 +26,9 @@ function sources(overrides: Partial<T3TeamComposerMenuSources> = {}): T3TeamComp
     provider: claudeDriver,
     providerSlashCommands,
     skills,
+    // Off in the shared fixture so pre-existing exact-list assertions stay
+    // focused; the dedicated tests below flip it on.
+    showSkillsInSlashMenu: false,
     pathEntries: [
       { path: "apps/web/src/main.tsx", kind: "file" as const },
       { path: "apps/web/src", kind: "directory" as const },
@@ -120,5 +123,28 @@ describe("buildT3TeamComposerMenuItems", () => {
       "plan",
       "default",
     ]);
+  });
+});
+
+describe("showSkillsInSlashMenu", () => {
+  it("lists enabled skills as /skill: entries in the slash menu when on", () => {
+    const items = buildT3TeamComposerMenuItems(
+      triggerFor("/"),
+      sources({ showSkillsInSlashMenu: true }),
+    );
+    const skillItems = items.filter((item) => item.type === "skill");
+    expect(skillItems.map((item) => item.label)).toEqual(["/skill:review", "/skill:docs"]);
+  });
+
+  it("hides provider slash commands shadowed by a same-named visible skill", () => {
+    const items = buildT3TeamComposerMenuItems(
+      triggerFor("/"),
+      sources({
+        showSkillsInSlashMenu: true,
+        providerSlashCommands: [{ name: "review", description: "provider review" }],
+      }),
+    );
+    expect(items.some((item) => item.type === "provider-slash-command")).toBe(false);
+    expect(items.some((item) => item.type === "skill")).toBe(true);
   });
 });

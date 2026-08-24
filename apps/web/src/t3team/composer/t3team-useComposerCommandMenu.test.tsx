@@ -23,6 +23,7 @@ const SOURCES = {
   provider: null,
   providerSlashCommands: [],
   skills: [],
+  showSkillsInSlashMenu: true,
 };
 
 /**

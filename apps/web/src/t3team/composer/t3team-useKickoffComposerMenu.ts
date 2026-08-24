@@ -26,6 +26,8 @@ export type T3TeamKickoffComposerMenuInput = {
   readonly setText: (next: string) => void;
   readonly setCursor: (next: number) => void;
   readonly setInteractionMode: (mode: ProviderInteractionMode) => void;
+  /** Mirrors the `showSkillsInSlashMenu` setting; defaults on, as upstream does. */
+  readonly showSkillsInSlashMenu?: boolean;
   /** Surface-applicable recipe catalog offered as `/`-menu launchers. */
   readonly slashRecipes?: ReadonlyArray<T3TeamSidecarRecipeQuickStart>;
   readonly onSelectRecipe?: (recipe: T3TeamSidecarRecipeQuickStart) => void;
@@ -40,8 +42,9 @@ export function useT3TeamKickoffComposerMenu(input: T3TeamKickoffComposerMenuInp
       provider: provider?.driver ?? null,
       providerSlashCommands: provider?.slashCommands ?? [],
       skills: provider?.skills ?? [],
+      showSkillsInSlashMenu: input.showSkillsInSlashMenu ?? true,
     }),
-    [provider],
+    [input.showSkillsInSlashMenu, provider],
   );
 
   const slashRecipes = input.slashRecipes;

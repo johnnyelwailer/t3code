@@ -70,6 +70,7 @@ function mount() {
         provider: null,
         providerSlashCommands: [],
         skills: [],
+        showSkillsInSlashMenu: true,
       },
       pathSearch: null,
       readSnapshot: () => {
