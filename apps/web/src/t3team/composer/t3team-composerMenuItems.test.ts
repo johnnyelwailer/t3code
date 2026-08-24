@@ -148,3 +148,21 @@ describe("showSkillsInSlashMenu", () => {
     expect(items.some((item) => item.type === "skill")).toBe(true);
   });
 });
+
+describe("slash menu ordering", () => {
+  it("keeps built-in commands first, then provider commands, then skills", () => {
+    const items = buildT3TeamComposerMenuItems(
+      triggerFor("/"),
+      sources({ showSkillsInSlashMenu: true }),
+    );
+    const kinds = items.map((item) => item.type);
+    const firstProvider = kinds.indexOf("provider-slash-command");
+    const firstSkill = kinds.indexOf("skill");
+    const lastBuiltIn = kinds.lastIndexOf("slash-command");
+    // Flat rendering means assembly order IS the display order; a later kind
+    // may never appear before an earlier one, or a project entry could shadow
+    // a host command (docs/t3team-mvp/16-action-recipes.md#menu-grouping).
+    expect(lastBuiltIn).toBeLessThan(firstProvider);
+    expect(firstProvider).toBeLessThan(firstSkill);
+  });
+});

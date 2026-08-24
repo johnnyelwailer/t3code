@@ -132,11 +132,11 @@ function buildSkillItems(sources: T3TeamComposerMenuSources, query: string): Com
 /**
  * Builds the composer command menu items for a detected trigger.
  *
- * Mirrors the chat composer's inline item construction (ChatComposer.tsx
- * `composerMenuItems`) so every composer surface produces the same `/`, `@`
- * and `$` entries. ChatComposer itself is an upstream file the additive guard
- * forbids modifying, so this module is the shared home for new surfaces and
- * for the t3team-owned item kinds layered on top.
+ * The shared item builder for every composer surface, so `/`, `@` and `$`
+ * produce the same entries everywhere. ChatComposer routes through this via
+ * useT3TeamComposerCommandMenu (its old inline builder was removed in the
+ * 2026-08-24 upstream sync); this module is also the home for the
+ * t3team-owned item kinds layered on top.
  */
 export function buildT3TeamComposerMenuItems(
   trigger: ComposerTrigger | null,

@@ -74,6 +74,12 @@ export function useT3TeamComposerCommandMenu(input: T3TeamComposerCommandMenuInp
   const buildExtraItems = input.buildExtraItems;
   const menuItems = useMemo<ReadonlyArray<T3TeamComposerMenuItem>>(() => {
     const extraItems = trigger && buildExtraItems ? buildExtraItems(trigger) : [];
+    // Extra items (recipe launchers) MUST come after the shared items: a
+    // project recipe may never appear to shadow a host command
+    // (docs/t3team-mvp/16-action-recipes.md#menu-grouping). Since the menu
+    // adopted upstream's flat rendering this concatenation order is the only
+    // thing enforcing that — see the ordering test in
+    // t3team-composerMenuItems.test.ts.
     return extraItems.length > 0 ? [...sharedItems, ...extraItems] : sharedItems;
   }, [buildExtraItems, sharedItems, trigger]);
   const searchKey = trigger ? `${trigger.kind}:${trigger.query.trim().toLowerCase()}` : null;
