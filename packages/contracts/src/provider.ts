@@ -75,6 +75,15 @@ export const ProviderSendTurnInput = Schema.Struct({
   ),
   modelSelection: Schema.optional(ModelSelection),
   interactionMode: Schema.optional(ProviderInteractionMode),
+  /**
+   * t3team: who raised this turn — "user" for a typed message, "automated"
+   * for fork automation (actor delivery, workflow step, child kickoff).
+   * Advisory: providers may use it to prioritize interactive turns over
+   * background work (e.g. the Nexplore pack holds automated turns at the
+   * turn boundary while user turns are in flight). Absent means unknown and
+   * must be treated as "user".
+   */
+  turnOrigin: Schema.optional(Schema.Literals(["user", "automated"])),
 });
 export type ProviderSendTurnInput = typeof ProviderSendTurnInput.Type;
 

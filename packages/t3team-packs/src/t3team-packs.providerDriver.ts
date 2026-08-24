@@ -69,6 +69,8 @@ export type PackSendTurnInput = {
   readonly modelSelection?: unknown;
   /** Opaque host `ProviderInteractionMode`; forward verbatim. */
   readonly interactionMode?: unknown;
+  /** "user" for a typed message, "automated" for fork automation; absent = treat as "user". */
+  readonly turnOrigin?: "user" | "automated";
 };
 
 export type PackTurnStartResult = {
