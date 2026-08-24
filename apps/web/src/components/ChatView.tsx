@@ -4643,7 +4643,7 @@ function ChatViewContent(props: ChatViewProps) {
       variant: "info",
       icon: <PlayIcon />,
       title: "Your last message never got a reply",
-      description: "Continue re-runs it as-is — nothing new is added to the thread.",
+      description: "Continue re-runs it as-is.",
       actions: (
         <Button size="xs" disabled={isResumingTurn} onClick={() => void handleResumeThreadTurn()}>
           {isResumingTurn ? "Continuing..." : "Continue"}
