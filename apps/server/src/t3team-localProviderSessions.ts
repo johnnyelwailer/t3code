@@ -82,46 +82,60 @@ export const readLocalProviderSessionFile = Effect.fn("readLocalProviderSessionF
   return session;
 });
 
-export const listLocalProviderSessions = Effect.fn("listLocalProviderSessions")(function* () {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const home = NodeOS.homedir();
-  const [codexPaths, claudePaths] = yield* Effect.all([
-    filesBelow(path.join(home, ".codex", "sessions"), 3),
-    filesBelow(path.join(home, ".claude", "projects"), 2),
-  ]);
-  const paths = [
-    ...codexPaths.map((filePath) => ({ provider: "codex" as const, filePath })),
-    ...claudePaths.map((filePath) => ({ provider: "claudeAgent" as const, filePath })),
-  ];
-  const recentPaths = yield* Effect.forEach(paths, ({ provider, filePath }) =>
-    Effect.gen(function* () {
-      const info = yield* fileSystem.stat(filePath).pipe(Effect.orElseSucceed(() => null));
-      return info
-        ? {
-            provider,
-            filePath,
-            modifiedAt: Option.match(info.mtime, {
-              onNone: () => 0,
-              onSome: (value) => value.getTime(),
-            }),
-          }
-        : null;
-    }),
-  );
-  const recentSessions = (["codex", "claudeAgent"] as const).flatMap((provider) =>
-    recentPaths
-      .filter(
-        (value): value is NonNullable<typeof value> =>
-          value !== null && value.provider === provider,
-      )
-      .sort((left, right) => right.modifiedAt - left.modifiedAt)
-      .slice(0, MAX_SESSIONS_PER_PROVIDER),
-  );
-  const sessions = yield* Effect.forEach(recentSessions, ({ provider, filePath }) =>
-    readLocalProviderSessionFile(provider, filePath),
-  );
-  return sessions
-    .filter((value): value is LocalProviderSession => value !== null)
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-});
+export const listLocalProviderSessions = Effect.fn("listLocalProviderSessions")(
+  function* (options?: {
+    /**
+     * Skip (stat, but do not parse) session files not modified after this
+     * epoch-ms cutoff. The periodic safety sweep passes its previous run time:
+     * parsing EVERY session file under ~/.codex/sessions and ~/.claude/projects
+     * took ~60s per sweep on a real machine and starved the engine (GHE #143).
+     */
+    readonly modifiedAfterMs?: number;
+  }) {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const home = NodeOS.homedir();
+    const [codexPaths, claudePaths] = yield* Effect.all([
+      filesBelow(path.join(home, ".codex", "sessions"), 3),
+      filesBelow(path.join(home, ".claude", "projects"), 2),
+    ]);
+    const paths = [
+      ...codexPaths.map((filePath) => ({ provider: "codex" as const, filePath })),
+      ...claudePaths.map((filePath) => ({ provider: "claudeAgent" as const, filePath })),
+    ];
+    const recentPaths = yield* Effect.forEach(paths, ({ provider, filePath }) =>
+      Effect.gen(function* () {
+        const info = yield* fileSystem.stat(filePath).pipe(Effect.orElseSucceed(() => null));
+        return info
+          ? {
+              provider,
+              filePath,
+              modifiedAt: Option.match(info.mtime, {
+                onNone: () => 0,
+                onSome: (value) => value.getTime(),
+              }),
+            }
+          : null;
+      }),
+    );
+    const recentSessions = (["codex", "claudeAgent"] as const).flatMap((provider) =>
+      recentPaths
+        .filter(
+          (value): value is NonNullable<typeof value> =>
+            value !== null && value.provider === provider,
+        )
+        .sort((left, right) => right.modifiedAt - left.modifiedAt)
+        .slice(0, MAX_SESSIONS_PER_PROVIDER)
+        .filter(
+          (value) =>
+            options?.modifiedAfterMs === undefined || value.modifiedAt > options.modifiedAfterMs,
+        ),
+    );
+    const sessions = yield* Effect.forEach(recentSessions, ({ provider, filePath }) =>
+      readLocalProviderSessionFile(provider, filePath),
+    );
+    return sessions
+      .filter((value): value is LocalProviderSession => value !== null)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  },
+);

@@ -25,9 +25,17 @@ export const LocalProviderSessionsWatcherLive = Layer.effectDiscard(
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const settings = yield* ServerSettingsService;
+    // Incremental sweeps (GHE #143): parsing every session file took ~60s per
+    // sweep and starved the engine. Only files modified since the previous
+    // sweep started get parsed; the first sweep after boot is the full one.
+    let lastSweepStartedMs: number | undefined;
     const syncWhenEnabled = Effect.gen(function* () {
       if (!(yield* settings.getSettings).showLocalProviderSessions) return;
-      const results = yield* syncLocalProviderSessions();
+      const sweepStartedMs = Date.now();
+      const results = yield* syncLocalProviderSessions(
+        lastSweepStartedMs === undefined ? undefined : { modifiedAfterMs: lastSweepStartedMs },
+      );
+      lastSweepStartedMs = sweepStartedMs;
       const created = results.filter((result) => result.status === "created").length;
       if (created > 0) {
         yield* Effect.logInfo("local-provider-sessions.synced", { created });

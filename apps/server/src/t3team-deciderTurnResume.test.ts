@@ -165,6 +165,58 @@ it.layer(NodeServices.layer)("thread turn resume", (it) => {
     }),
   );
 
+  it.effect("accepts after an aborted turn with a trailing partial assistant message", () =>
+    Effect.gen(function* () {
+      const decided = yield* decideOrchestrationCommand({
+        command,
+        readModel: withThread({
+          messages: [
+            message("turn-resume-earlier", "assistant"),
+            message("turn-resume-last-user", "user"),
+            message("turn-resume-partial", "assistant"),
+          ],
+          latestTurn: {
+            turnId: TurnId.make("aborted-turn"),
+            state: "interrupted" as const,
+            requestedAt: now,
+            startedAt: now,
+            completedAt: now,
+            assistantMessageId: null,
+          },
+        }),
+      });
+      const events = Array.isArray(decided) ? decided : [decided];
+      expect(events.map((entry) => entry.type)).toEqual(["thread.turn-start-requested"]);
+      const payload = events[0]!.payload as { messageId: string };
+      expect(payload.messageId).toBe(lastUserMessageId);
+    }),
+  );
+
+  it.effect("rejects a trailing assistant message when the last turn COMPLETED", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command,
+          readModel: withThread({
+            messages: [
+              message("turn-resume-last-user", "user"),
+              message("turn-resume-reply", "assistant"),
+            ],
+            latestTurn: {
+              turnId: TurnId.make("done-turn"),
+              state: "completed" as const,
+              requestedAt: now,
+              startedAt: now,
+              completedAt: now,
+              assistantMessageId: null,
+            },
+          }),
+        }),
+      );
+      expect(error.message).toContain("does not end with unanswered user message");
+    }),
+  );
+
   it.effect("rejects while a turn is in progress", () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(

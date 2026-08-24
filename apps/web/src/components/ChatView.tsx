@@ -4630,13 +4630,28 @@ function ChatViewContent(props: ChatViewProps) {
     activeThread.turnStartPending !== true &&
     (activeThread.session === null ||
       (activeThread.session.status !== "running" && activeThread.session.status !== "starting"));
+  // Resumable shapes: the timeline ends with the user's message, OR the last
+  // turn ended interrupted/errored ("This operation was aborted") — a partial
+  // assistant message may trail it, but the reply never completed.
+  const lastUserThreadMessage = useMemo(() => {
+    for (let index = timelineEntries.length - 1; index >= 0; index -= 1) {
+      const entry = timelineEntries[index];
+      if (entry?.kind === "message" && entry.message.role === "user") return entry.message;
+    }
+    return undefined;
+  }, [timelineEntries]);
+  const lastTurnIncomplete =
+    activeLatestTurn?.state === "interrupted" || activeLatestTurn?.state === "error";
   const lastMessageIsUnansweredUser =
-    lastThreadMessage?.role === "user" &&
+    lastUserThreadMessage !== undefined &&
+    (lastThreadMessage?.id === lastUserThreadMessage.id || lastTurnIncomplete) &&
     resumeThreadIdle &&
     // A locally dispatched send is on its way to the server; the ack that sets
     // turnStartPending has simply not arrived yet.
     localDispatchStartedAt === null;
-  const unansweredMessageId = lastMessageIsUnansweredUser ? (lastThreadMessage?.id ?? null) : null;
+  const unansweredMessageId = lastMessageIsUnansweredUser
+    ? (lastUserThreadMessage?.id ?? null)
+    : null;
   // Debounce the banner: every guard above still leaves sub-second races
   // (send in flight, events streaming in), and a banner that flashes for a
   // split second right after submitting reads as a bug. Only show it once the

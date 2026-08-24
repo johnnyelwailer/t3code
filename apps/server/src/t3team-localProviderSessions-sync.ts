@@ -186,23 +186,25 @@ export function syncLocalProviderSession(session: LocalProviderSession) {
   });
 }
 
-export const syncLocalProviderSessions = Effect.fn("syncLocalProviderSessions")(function* () {
-  const sessions = yield* listLocalProviderSessions();
-  return yield* Effect.forEach(sessions, (session) =>
-    syncLocalProviderSession(session).pipe(
-      Effect.map((result) => ({
-        provider: session.provider,
-        nativeId: session.nativeId,
-        ...result,
-      })),
-      Effect.catch((error) =>
-        Effect.succeed({
+export const syncLocalProviderSessions = Effect.fn("syncLocalProviderSessions")(
+  function* (options?: { readonly modifiedAfterMs?: number }) {
+    const sessions = yield* listLocalProviderSessions(options);
+    return yield* Effect.forEach(sessions, (session) =>
+      syncLocalProviderSession(session).pipe(
+        Effect.map((result) => ({
           provider: session.provider,
           nativeId: session.nativeId,
-          status: "skipped" as const,
-          reason: error instanceof Error ? error.message : "Could not sync session.",
-        }),
+          ...result,
+        })),
+        Effect.catch((error) =>
+          Effect.succeed({
+            provider: session.provider,
+            nativeId: session.nativeId,
+            status: "skipped" as const,
+            reason: error instanceof Error ? error.message : "Could not sync session.",
+          }),
+        ),
       ),
-    ),
-  );
-});
+    );
+  },
+);
