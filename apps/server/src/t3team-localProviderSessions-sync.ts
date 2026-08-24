@@ -101,6 +101,20 @@ export function syncLocalProviderSession(session: LocalProviderSession) {
           worktreePath: session.cwd,
         });
       }
+      // Only mirror native-session messages into threads this SYNC created
+      // (marked localProviderSession in the binding's runtimePayload). An
+      // app-managed thread already persists its transcript live under real
+      // message ids, and importing the same conversation from the provider's
+      // session file duplicated every message under a `local:` id (thread
+      // e3596f60, 2026-08-24) — the id-based dedupe below can't see that.
+      const syncOwnsTranscript =
+        typeof alreadyBound.runtimePayload === "object" &&
+        alreadyBound.runtimePayload !== null &&
+        (alreadyBound.runtimePayload as { localProviderSession?: unknown }).localProviderSession ===
+          true;
+      if (!syncOwnsTranscript) {
+        return { status: "existing" as const, threadId: alreadyBound.threadId };
+      }
       const messageIds = new Set(thread?.messages.map((message) => message.id) ?? []);
       yield* Effect.forEach(session.messages, (message) =>
         Effect.gen(function* () {
