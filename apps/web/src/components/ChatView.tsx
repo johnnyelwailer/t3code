@@ -4614,8 +4614,24 @@ function ChatViewContent(props: ChatViewProps) {
   const lastMessageIsUnansweredUser =
     lastThreadMessage?.role === "user" &&
     activeThread?.turnStartPending !== true &&
-    activeThread?.session?.status !== "starting";
+    activeThread?.session?.status !== "starting" &&
+    // A locally dispatched send is on its way to the server; the ack that sets
+    // turnStartPending has simply not arrived yet.
+    localDispatchStartedAt === null;
   const unansweredMessageId = lastMessageIsUnansweredUser ? (lastThreadMessage?.id ?? null) : null;
+  // Debounce the banner: every guard above still leaves sub-second races
+  // (send in flight, events streaming in), and a banner that flashes for a
+  // split second right after submitting reads as a bug. Only show it once the
+  // unanswered state has held steady.
+  const [showUnansweredBanner, setShowUnansweredBanner] = useState(false);
+  useEffect(() => {
+    if (!lastMessageIsUnansweredUser || !latestTurnSettled) {
+      setShowUnansweredBanner(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowUnansweredBanner(true), 1500);
+    return () => clearTimeout(timer);
+  }, [lastMessageIsUnansweredUser, latestTurnSettled, activeThreadId, unansweredMessageId]);
   const handleResumeThreadTurn = useCallback(async () => {
     if (!activeThreadId) return;
     setIsResumingTurn(true);
@@ -4638,7 +4654,12 @@ function ChatViewContent(props: ChatViewProps) {
     if (!lastMessageIsUnansweredUser || !latestTurnSettled) setIsResumingTurn(false);
   }, [lastMessageIsUnansweredUser, latestTurnSettled, activeThreadId]);
   const unansweredMessageBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
-    if (!activeThreadId || !lastMessageIsUnansweredUser || !latestTurnSettled) {
+    if (
+      !activeThreadId ||
+      !showUnansweredBanner ||
+      !lastMessageIsUnansweredUser ||
+      !latestTurnSettled
+    ) {
       return null;
     }
     return {
@@ -4658,6 +4679,7 @@ function ChatViewContent(props: ChatViewProps) {
     isResumingTurn,
     lastMessageIsUnansweredUser,
     latestTurnSettled,
+    showUnansweredBanner,
   ]);
   const parkedThreadBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (!activeThreadSnoozed && !activeThreadSettled) {
