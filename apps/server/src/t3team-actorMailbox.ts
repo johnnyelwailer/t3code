@@ -30,6 +30,13 @@ export interface T3TeamActorMailboxEntry {
   readonly fromTitle: string;
   readonly fromProjectId: string;
   readonly text: string;
+  /**
+   * Optional short summary of `text` for delivery: when the body exceeds the
+   * delivery cap, the reaction input carries this summary (or an auto-
+   * generated one when absent) plus the message id. See
+   * t3team-actorReactionInput.ts.
+   */
+  readonly summary?: string;
   readonly urgency: "normal" | "urgent";
   readonly hopCount: number;
   readonly rootThreadId: string;
@@ -114,17 +121,13 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
         ),
       );
 
-    const takeNextForDispatch: T3TeamActorMailboxShape["takeNextForDispatch"] = (
-      threadId,
-      cap,
-    ) =>
+    const takeNextForDispatch: T3TeamActorMailboxShape["takeNextForDispatch"] = (threadId, cap) =>
       Ref.modify(state, (map) => {
         const current = read(map, threadId);
         if (current.reacting || current.suppressed || current.queue.length === 0) {
           return [[], map] as const;
         }
-        const limited =
-          cap !== undefined && cap >= 0 ? current.queue.slice(0, cap) : current.queue;
+        const limited = cap !== undefined && cap >= 0 ? current.queue.slice(0, cap) : current.queue;
         const rest = current.queue.slice(limited.length);
         const next = new Map(map);
         next.set(threadId, { ...current, queue: rest, reacting: true });

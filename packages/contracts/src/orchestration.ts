@@ -1182,6 +1182,13 @@ const ThreadActorMessageCommand = Schema.Struct({
   fromTitle: TrimmedNonEmptyString,
   fromProjectId: ProjectId,
   text: Schema.String,
+  /**
+   * Optional short summary of `text` for delivery. When the body exceeds the
+   * delivery cap, the recipient's reaction input carries this summary (or an
+   * auto-generated one when absent) plus the message id, and the full body
+   * stays retrievable on demand. Absent means "derive at delivery time".
+   */
+  summary: Schema.optional(Schema.String),
   urgency: T3TeamActorMessageUrgency,
   hopCount: NonNegativeInt,
   rootThreadId: ThreadId,
@@ -1482,6 +1489,8 @@ export const ThreadActorMessageDeliveredPayload = Schema.Struct({
   fromTitle: TrimmedNonEmptyString,
   fromProjectId: ProjectId,
   text: Schema.String,
+  /** Mirrors the command's optional `summary`; see ThreadActorMessageCommand. */
+  summary: Schema.optional(Schema.String),
   urgency: T3TeamActorMessageUrgency,
   hopCount: NonNegativeInt,
   rootThreadId: ThreadId,

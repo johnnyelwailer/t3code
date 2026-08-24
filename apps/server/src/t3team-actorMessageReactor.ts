@@ -78,7 +78,7 @@ export function resolveActorMessageDebounceMs(): number {
 
 /**
  * Safety valve on a coalesced batch: at most this many deliveries per reaction
- * turn (each body is already truncated on delivery). Anything past the cap
+ * turn (each body is already summarized on delivery). Anything past the cap
  * stays queued and flushes as the next batch after this turn settles.
  * Distribution-tunable via `T3TEAM_ACTOR_MESSAGE_BATCH_MAX`.
  */
@@ -181,6 +181,7 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           fromTitle: payload.fromTitle,
           fromProjectId: payload.fromProjectId,
           text: payload.text,
+          ...(payload.summary !== undefined ? { summary: payload.summary } : {}),
           urgency: payload.urgency,
           hopCount: payload.hopCount,
           rootThreadId: payload.rootThreadId,

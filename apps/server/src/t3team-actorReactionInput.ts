@@ -3,15 +3,19 @@ import type { OrchestrationEvent } from "@t3tools/contracts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 
 /**
- * Inter-agent delivery truncation: a delivered body longer than this many
- * characters reaches the recipient as a short preview plus a marker carrying
+ * Inter-agent delivery summarization: a delivered body longer than this many
+ * characters reaches the recipient as a SHORT SUMMARY plus a marker carrying
  * the message id; the full body stays persisted on the actor-role message and
  * is retrievable with `t3team_read_message`. Distribution-tunable via the
  * `T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS` environment variable.
  */
 export const T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS = 1500;
-/** Preview length kept at the head of a truncated inter-agent body. */
-export const T3TEAM_ACTOR_MESSAGE_DELIVERY_PREVIEW_CHARS = 500;
+/**
+ * Summary length budget: a delivered over-long body is represented by at most
+ * this many characters of summary (sender-provided or auto-generated), never
+ * by a raw head-of-body cut.
+ */
+export const T3TEAM_ACTOR_MESSAGE_DELIVERY_SUMMARY_MAX_CHARS = 300;
 const T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS_ENV = "T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS";
 
 /** Resolve the delivery cap, honoring the distribution-tunable env override. */
@@ -27,22 +31,78 @@ export function resolveActorMessageDeliveryMaxChars(): number {
 }
 
 /**
- * Deliver only a truncated preview of an over-long inter-agent body: the first
- * ~500 characters plus a marker line naming the message id so the recipient
- * can retrieve the full text with `t3team_read_message`. Bodies at or under
- * the cap pass through verbatim — no behavior change for short messages.
+ * Cap a sender-provided summary at the summary budget, cutting at the last
+ * word boundary so a long summary never ends mid-word.
  */
-export function truncateActorMessageForDelivery(
+export function capActorMessageSummary(
+  summary: string,
+  maxChars: number = T3TEAM_ACTOR_MESSAGE_DELIVERY_SUMMARY_MAX_CHARS,
+): string {
+  const trimmed = summary.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  const window = trimmed.slice(0, maxChars);
+  const space = window.lastIndexOf(" ");
+  return space > 0 ? `${window.slice(0, space)}…` : `${window}…`;
+}
+
+/**
+ * Auto-summarize an inter-agent body: the first ~300 characters, cut at the
+ * last sentence boundary (then newline, then word boundary) inside that
+ * window — never a raw mid-word cut. Deterministic and dependency-free; used
+ * when the sender did not provide a summary.
+ */
+export function autoSummarizeActorMessage(
+  text: string,
+  maxChars: number = T3TEAM_ACTOR_MESSAGE_DELIVERY_SUMMARY_MAX_CHARS,
+): string {
+  if (text.length <= maxChars) return text;
+  const window = text.slice(0, maxChars);
+  // Never cut closer than half the window to the start, so a long first
+  // sentence cannot produce a stub summary.
+  const floor = Math.floor(maxChars / 2);
+  let cut = -1;
+  for (const marker of [". ", "! ", "? ", ".\n", "!\n", "?\n"]) {
+    const index = window.lastIndexOf(marker);
+    if (index > cut) cut = index;
+  }
+  if (cut >= floor) {
+    // Drop the trailing punctuation — the ellipsis replaces it.
+    return `${window
+      .slice(0, cut + 1)
+      .trimEnd()
+      .replace(/[.!?]$/, "")}…`;
+  }
+  cut = window.lastIndexOf("\n");
+  if (cut >= floor) return `${window.slice(0, cut).trimEnd()}…`;
+  cut = window.lastIndexOf(" ");
+  if (cut > 0) return `${window.slice(0, cut)}…`;
+  return `${window}…`;
+}
+
+/**
+ * Deliver a SHORT SUMMARY of an over-long inter-agent body instead of a raw
+ * head-of-body cut: the sender-provided summary when present (capped at the
+ * summary budget), otherwise an auto-generated one, plus a marker line naming
+ * the message id so the recipient can retrieve the full text with
+ * `t3team_read_message`. Bodies at or under the cap pass through verbatim —
+ * no behavior change for short messages.
+ */
+export function summarizeActorMessageForDelivery(
   text: string,
   messageId: string,
+  summary?: string,
   maxChars: number = resolveActorMessageDeliveryMaxChars(),
 ): string {
   if (text.length <= maxChars) {
     return text;
   }
-  const preview = text.slice(0, T3TEAM_ACTOR_MESSAGE_DELIVERY_PREVIEW_CHARS);
+  const senderSummary = summary?.trim();
+  const head =
+    senderSummary !== undefined && senderSummary !== ""
+      ? capActorMessageSummary(senderSummary)
+      : autoSummarizeActorMessage(text);
   return (
-    `${preview}\n…[truncated — ${text.length} chars total; message id ${messageId} — ` +
+    `${head}\n…[summarized — ${text.length} chars total; message id ${messageId} — ` +
     "call t3team_read_message with this message id to read the full text]"
   );
 }
@@ -52,14 +112,14 @@ export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string 
     `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +
       `urgency ${entry.urgency}]`,
     "",
-    truncateActorMessageForDelivery(entry.text, entry.messageId),
+    summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
     "",
     "[This message is from another agent actor, not a human user. You are an autonomous " +
       "actor: decide whether and how to act on it, then continue your own work. To reply to " +
       `the sender, use your send-message tool addressed to thread ${entry.fromThreadId}. ` +
       "Keep inter-agent messages short (telegram style: state, decision, request). Put " +
       "details in an attached markdown report or a file the recipient can read on demand; " +
-      "long bodies are truncated on delivery and the recipient retrieves the full text " +
+      "long bodies are summarized on delivery and the recipient retrieves the full text " +
       "with t3team_read_message.]",
   ].join("\n");
 
@@ -71,7 +131,7 @@ export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string 
  * single-message delivery semantics are unchanged, and the restart-rehydrate
  * matching (which compares admitted inputs against the single-entry format)
  * keeps working. Multiple entries get a batch header and one sender-framed
- * section per delivery, each body truncated with its own message id.
+ * section per delivery, each body summarized with its own message id.
  */
 export const buildActorReactionBatchInput = (
   entries: ReadonlyArray<T3TeamActorMailboxEntry>,
@@ -87,7 +147,7 @@ export const buildActorReactionBatchInput = (
       `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +
         `urgency ${entry.urgency}]`,
       "",
-      truncateActorMessageForDelivery(entry.text, entry.messageId),
+      summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
       "",
     ]),
     "[These messages are from other agent actors, not a human user. You are an autonomous " +
@@ -95,7 +155,7 @@ export const buildActorReactionBatchInput = (
       "to a sender, use your send-message tool addressed to that sender's thread. Keep " +
       "inter-agent messages short (telegram style: state, decision, request). Put details " +
       "in an attached markdown report or a file the recipient can read on demand; long " +
-      "bodies are truncated on delivery and the recipient retrieves the full text with " +
+      "bodies are summarized on delivery and the recipient retrieves the full text with " +
       "t3team_read_message.]",
   ].join("\n");
 };
@@ -108,6 +168,7 @@ const fromDelivery = (
   fromTitle: payload.fromTitle,
   fromProjectId: payload.fromProjectId,
   text: payload.text,
+  ...(payload.summary !== undefined ? { summary: payload.summary } : {}),
   urgency: payload.urgency,
   hopCount: payload.hopCount,
   rootThreadId: payload.rootThreadId,

@@ -39,6 +39,7 @@ const callBroker = Effect.fn("T3TeamMcpToolkit.callBroker")(function* (
 const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: {
   readonly to_thread_id: string;
   readonly text: string;
+  readonly summary?: string | undefined;
 }) {
   const invocation = yield* McpInvocationContext.McpInvocationContext;
   const broker = yield* T3TeamToolBroker;
@@ -47,6 +48,7 @@ const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: 
       toThreadId: input.to_thread_id,
       fromThreadId: invocation.threadId,
       text: input.text,
+      ...(input.summary !== undefined ? { summary: input.summary } : {}),
     })
     .pipe(Effect.mapError((message) => new T3TeamMcpToolError({ message })));
 });

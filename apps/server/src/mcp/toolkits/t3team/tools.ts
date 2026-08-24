@@ -223,14 +223,14 @@ export const T3TeamSearchSourceTool = Tool.make("t3team_search_source", {
 });
 
 // Read the full body of a previously delivered inter-agent message. Long
-// inter-agent bodies are truncated on delivery; the truncation marker carries
+// inter-agent bodies are summarized on delivery; the summary marker carries
 // the message id, which this tool takes. Read-only; routes to the
 // t3team.thread.read_message broker tool.
 export const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
   description:
     "Read the FULL body of a previously delivered inter-agent message in this thread. Long " +
-    "inter-agent message bodies are truncated on delivery; the truncation marker in the " +
-    "delivered preview carries the message id. Pass that 'message_id' to retrieve the full " +
+    "inter-agent message bodies are summarized on delivery; the marker in the delivered " +
+    "summary carries the message id. Pass that 'message_id' to retrieve the full " +
     "persisted text.",
   parameters: Schema.Struct({
     message_id: Schema.String,
@@ -250,11 +250,14 @@ export const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
     "back to your parent thread, or hand follow-up work to a child thread. The " +
     "recipient agent reacts to it automatically, so prefer this over waiting to be " +
     "polled. Address it with the target thread id. Keep the body short (telegram " +
-    "style: state, decision, request) — long bodies are truncated on delivery and " +
-    "the recipient retrieves the full text with t3team_read_message.",
+    "style: state, decision, request). For long bodies, provide a short 'summary' " +
+    "(the recipient's reaction input shows the summary, not a raw cut); without " +
+    "one, a summary is auto-generated from the body's opening. The recipient " +
+    "retrieves the full text with t3team_read_message.",
   parameters: Schema.Struct({
     to_thread_id: Schema.String,
     text: Schema.String,
+    summary: Schema.optional(Schema.String),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,

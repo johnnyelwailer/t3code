@@ -1455,6 +1455,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           fromTitle: command.fromTitle,
           fromProjectId: command.fromProjectId,
           text: command.text,
+          ...(command.summary !== undefined ? { summary: command.summary } : {}),
           urgency: command.urgency,
           hopCount: command.hopCount,
           rootThreadId: command.rootThreadId,

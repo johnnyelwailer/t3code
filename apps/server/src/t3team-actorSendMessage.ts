@@ -19,6 +19,7 @@ import * as Option from "effect/Option";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { deriveActorReplyContext } from "./t3team-actorReactionContext.ts";
+import { capActorMessageSummary } from "./t3team-actorReactionInput.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 
 const normalizeError = (error: unknown): string =>
@@ -33,14 +34,24 @@ export function makeActorSendMessage(input: {
     toThreadId,
     fromThreadId,
     text,
+    summary,
   }: {
     readonly toThreadId: string;
     readonly fromThreadId: string;
     readonly text: string;
+    /**
+     * Optional short summary of the body for delivery. Over-long bodies reach
+     * the recipient as a summary plus the message id (full body retrievable
+     * with t3team_read_message); when absent, one is auto-generated from the
+     * body at delivery time. Capped at the summary budget here so a long
+     * sender-supplied summary is never persisted verbatim.
+     */
+    readonly summary?: string;
   }) =>
     Effect.gen(function* () {
       const body = typeof text === "string" ? text.trim() : "";
       if (body.length === 0) return yield* Effect.fail("A non-empty 'text' is required.");
+      const senderSummary = typeof summary === "string" ? capActorMessageSummary(summary) : "";
       if (toThreadId === fromThreadId) {
         return yield* Effect.fail("A thread cannot send an actor message to itself.");
       }
@@ -81,6 +92,7 @@ export function makeActorSendMessage(input: {
         fromTitle: source.title ?? ThreadId.make(fromThreadId),
         fromProjectId: source.projectId,
         text: body,
+        ...(senderSummary !== "" ? { summary: senderSummary } : {}),
         urgency: "normal",
         hopCount: NonNegativeInt.make(hopCount),
         rootThreadId: ThreadId.make(rootThreadId),

@@ -7,7 +7,7 @@ import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 /**
  * `t3team.thread.read_message` — read the FULL body of a previously delivered
  * inter-agent ("actor") message in the current thread. Long inter-agent bodies
- * are truncated on delivery (see t3team-actorReactionInput.ts); the truncation
+ * are summarized on delivery (see t3team-actorReactionInput.ts); the summary
  * marker carries the message id, and this tool makes the full persisted body
  * reachable on demand. The full body is already persisted on the first-class
  * `actor`-role message recorded in the thread — no new storage.
