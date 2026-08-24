@@ -2,6 +2,7 @@ import type { OrchestrationEvent } from "@t3tools/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
+  buildActorReactionBatchInput,
   buildActorReactionInput,
   collectPendingActorDeliveries,
   resolveActorMessageDeliveryMaxChars,
@@ -84,6 +85,47 @@ describe("truncateActorMessageForDelivery", () => {
   });
 });
 
+describe("buildActorReactionBatchInput", () => {
+  const second: T3TeamActorMailboxEntry = {
+    ...entry,
+    messageId: "delivery-b",
+    fromThreadId: "other",
+    fromTitle: "Other",
+    text: "second body",
+    urgency: "urgent",
+    hopCount: 4,
+  };
+
+  it("formats a single-entry batch EXACTLY like the single-message input", () => {
+    expect(buildActorReactionBatchInput([entry])).toBe(buildActorReactionInput(entry));
+  });
+
+  it("lists each delivery with its own sender framing in a batch header", () => {
+    const input = buildActorReactionBatchInput([entry, second]);
+    expect(input.startsWith("[2 messages from peer agents]\n")).toBe(true);
+    expect(input).toContain(
+      "[Message from peer agent «Sender» · thread sender · urgency normal]",
+    );
+    expect(input).toContain(
+      "[Message from peer agent «Other» · thread other · urgency urgent]",
+    );
+    expect(input).toContain("\n\nfirst\n\n");
+    expect(input).toContain("\n\nsecond body\n\n");
+    expect(input).toContain("These messages are from other agent actors, not a human user");
+  });
+
+  it("truncates each over-long body with its own message id", () => {
+    const long: T3TeamActorMailboxEntry = {
+      ...entry,
+      messageId: "msg-long",
+      text: "x".repeat(T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS + 100),
+    };
+    const input = buildActorReactionBatchInput([long, second]);
+    expect(input).toContain("…[truncated — 1600 chars total; message id msg-long");
+    expect(input).toContain("second body");
+  });
+});
+
 const delivered = (messageId: string, text: string): OrchestrationEvent =>
   ({
     type: "thread.actor-message-delivered",
@@ -121,5 +163,64 @@ describe("collectPendingActorDeliveries", () => {
         entry: expect.objectContaining({ messageId: "delivery-b", text: "second" }),
       }),
     ]);
+  });
+
+  it("marks every delivery named in a batched reaction input as reacted", () => {
+    const events = [
+      delivered("delivery-a", "first"),
+      delivered("delivery-b", "second"),
+      delivered("delivery-c", "third"),
+      {
+        type: "thread.message-sent",
+        payload: {
+          threadId: "target",
+          role: "user",
+          text: "batched reaction input",
+          t3teamExt: {
+            visibleToUser: false,
+            actor: {
+              senderThreadId: "sender",
+              urgency: "normal",
+              hopCount: 3,
+              rootThreadId: "root",
+              messageIds: ["delivery-a", "delivery-b"],
+            },
+          },
+        },
+      } as unknown as OrchestrationEvent,
+    ];
+
+    expect(collectPendingActorDeliveries(events, 6)).toEqual([
+      expect.objectContaining({
+        threadId: "target",
+        entry: expect.objectContaining({ messageId: "delivery-c", text: "third" }),
+      }),
+    ]);
+  });
+
+  it("ignores a batched reaction input for another thread", () => {
+    const events = [
+      delivered("delivery-a", "first"),
+      {
+        type: "thread.message-sent",
+        payload: {
+          threadId: "other-thread",
+          role: "user",
+          text: "batched reaction input",
+          t3teamExt: {
+            visibleToUser: false,
+            actor: {
+              senderThreadId: "sender",
+              urgency: "normal",
+              hopCount: 3,
+              rootThreadId: "root",
+              messageIds: ["delivery-a"],
+            },
+          },
+        },
+      } as unknown as OrchestrationEvent,
+    ];
+
+    expect(collectPendingActorDeliveries(events, 6)).toHaveLength(1);
   });
 });

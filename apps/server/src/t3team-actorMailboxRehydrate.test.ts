@@ -116,7 +116,7 @@ it.effect(
         createdAt: "2026-08-11T00:00:00.000Z",
         dispatchAttempts: 0,
       });
-      assert.isUndefined(yield* mailbox.takeNextForDispatch("thread-a"));
+      assert.strictEqual((yield* mailbox.takeNextForDispatch("thread-a")).length, 0);
     }),
 );
 
