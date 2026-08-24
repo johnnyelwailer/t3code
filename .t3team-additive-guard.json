@@ -81,6 +81,7 @@
     "apps/server/src/sourceControl/GitHubSourceControlProvider.ts",
     "apps/server/src/sourceControl/SourceControlProviderRegistry.ts",
     "apps/server/src/sourceControl/gitHubAuthStatus.ts",
+    "apps/server/src/t3team-localProviderSessionsWatcher.ts",
     "apps/server/src/t3team-server.ts",
     "apps/server/src/t3team-toolBroker.test.ts",
     "apps/server/src/t3team-toolBrokerBinding.ts",
