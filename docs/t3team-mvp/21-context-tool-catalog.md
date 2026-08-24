@@ -585,6 +585,7 @@ t3team.recipe.validate
 t3team.orchestration.run
 t3team.widget.show
 t3team.thread.rename
+t3team.thread.search
 t3team.thread.search_source
 t3team.thread.read_message
 t3team.thread.read_current
@@ -597,11 +598,18 @@ t3team.thread.attach_context
 t3team.thread.open_full_page
 ```
 
-`t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search_source`,
-`t3team.thread.read_message`, `t3team.thread.start_child`, and
+`t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search`,
+`t3team.thread.search_source`, `t3team.thread.read_message`, `t3team.thread.start_child`, and
 `t3team.thread.children` are the
 current live runtime slice used by the broker implementation. The rest of this section
 remains planned catalog scope.
+
+`t3team.thread.search` searches the transcript of the CURRENT thread (case-insensitive
+substring, optional `limit` and `role` filter), returning each match with its 1-based
+position, role, a snippet, and `message_id` — so a coordinator can recover a prior
+decision that scrolled out of the (compacted) context window and follow up with
+`t3team.thread.read_message` for the full body. It reuses the same scan/snippet helper
+as `t3team.thread.search_source`.
 
 `t3team.thread.search_source` searches the full transcript of the thread the current
 thread was forked from (the fork provenance note carries the source thread id), so the

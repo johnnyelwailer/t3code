@@ -50,6 +50,11 @@ type CreateBindingInput<
     toolArgs: unknown,
     threadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
+  /** Search the CURRENT (bound) thread's transcript. */
+  readonly searchThread?: (
+    toolArgs: unknown,
+    threadId: ThreadId,
+  ) => Effect.Effect<T3TeamToolCallResult>;
   /** Read the full body of a previously delivered inter-agent message. */
   readonly readMessageThread?: (
     toolArgs: unknown,
@@ -114,6 +119,12 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
         ? {
             searchSourceThread: (toolArgs: unknown) =>
               input.searchSourceThread!(toolArgs, input.threadId!),
+          }
+        : {}),
+      ...(input.searchThread && input.threadId
+        ? {
+            searchThread: (toolArgs: unknown) =>
+              input.searchThread!(toolArgs, input.threadId!),
           }
         : {}),
       ...(input.readMessageThread && input.threadId

@@ -251,6 +251,40 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["title"],
     },
   },
+  "t3team.thread.search": {
+    id: "t3team.thread.search",
+    label: "Search this thread",
+    title: "Search this thread's transcript",
+    description:
+      "Search the messages of the CURRENT thread (its own transcript) — e.g. to recover a prior decision or context that scrolled out of the context window. Pass a case-insensitive 'query' substring, an optional 'limit' (default 10, max 25), and an optional 'role' filter ('user' | 'assistant' | 'actor'). Returns each matching message with its 1-based position, role, a snippet around the match, and message_id (pass message_id to t3team.thread.read_message for the full body).",
+    capabilities: ["read"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        query: {
+          type: "string",
+          description: "Case-insensitive substring to search for in this thread's messages.",
+          minLength: 1,
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of matches to return (default 10, max 25).",
+        },
+        role: {
+          type: "string",
+          description:
+            "Optional role filter: only return messages from this role ('user', 'assistant', or 'actor').",
+          enum: ["user", "assistant", "actor"],
+        },
+      },
+      required: ["query"],
+    },
+  },
   "t3team.thread.search_source": {
     id: "t3team.thread.search_source",
     label: "Search fork source thread",

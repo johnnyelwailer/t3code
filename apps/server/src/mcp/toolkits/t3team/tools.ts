@@ -17,6 +17,7 @@ const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroke
  * in the explicit policy-exclusion set. */
 export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_rename_thread: "t3team.thread.rename",
+  t3team_search_thread: "t3team.thread.search",
   t3team_search_source: "t3team.thread.search_source",
   t3team_read_message: "t3team.thread.read_message",
   t3team_start_child: "t3team.thread.start_child",
@@ -146,6 +147,26 @@ export const T3TeamChildrenTool = Tool.make("t3team_children", {
     all: Schema.optional(Schema.Boolean),
     reason: Schema.optional(Schema.String),
     op_name: Schema.optional(Schema.String),
+  }),
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
+// Search the CURRENT thread's transcript (case-insensitive substring). Read-only;
+// routes to the t3team.thread.search broker tool. Complements t3team_search_source
+// (fork source) and t3team_read_message (full body by message id).
+export const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
+  description:
+    "Search the messages of the CURRENT thread (its own transcript) — e.g. to recover a " +
+    "prior decision or context that scrolled out of the context window. Pass a " +
+    "case-insensitive 'query' substring and an optional 'limit' (default 10, max 25). " +
+    "Returns matching messages with their 1-based position, role, a snippet, and message_id " +
+    "(pass message_id to t3team_read_message to fetch the full body).",
+  parameters: Schema.Struct({
+    query: Schema.String,
+    limit: Schema.optional(Schema.Number),
+    role: Schema.optional(Schema.Literals(["user", "assistant", "actor"])),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
@@ -395,6 +416,7 @@ export const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
 
 export const T3TeamToolkit = Toolkit.make(
   T3TeamRenameThreadTool,
+  T3TeamSearchThreadTool,
   T3TeamSearchSourceTool,
   T3TeamReadMessageTool,
   T3TeamStartChildTool,
