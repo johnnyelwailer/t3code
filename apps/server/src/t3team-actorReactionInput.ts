@@ -63,6 +63,43 @@ export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string 
       "with t3team_read_message.]",
   ].join("\n");
 
+/**
+ * Reaction input for a CLAIMED BATCH of deliveries (inter-agent coalescing):
+ * one reaction turn per batch instead of one turn per message.
+ *
+ * A single-entry batch formats EXACTLY like {@link buildActorReactionInput} —
+ * single-message delivery semantics are unchanged, and the restart-rehydrate
+ * matching (which compares admitted inputs against the single-entry format)
+ * keeps working. Multiple entries get a batch header and one sender-framed
+ * section per delivery, each body truncated with its own message id.
+ */
+export const buildActorReactionBatchInput = (
+  entries: ReadonlyArray<T3TeamActorMailboxEntry>,
+): string => {
+  const [single] = entries;
+  if (entries.length === 1 && single !== undefined) {
+    return buildActorReactionInput(single);
+  }
+  return [
+    `[${entries.length} messages from peer agents]`,
+    "",
+    ...entries.flatMap((entry) => [
+      `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +
+        `urgency ${entry.urgency}]`,
+      "",
+      truncateActorMessageForDelivery(entry.text, entry.messageId),
+      "",
+    ]),
+    "[These messages are from other agent actors, not a human user. You are an autonomous " +
+      "actor: decide whether and how to act on them, then continue your own work. To reply " +
+      "to a sender, use your send-message tool addressed to that sender's thread. Keep " +
+      "inter-agent messages short (telegram style: state, decision, request). Put details " +
+      "in an attached markdown report or a file the recipient can read on demand; long " +
+      "bodies are truncated on delivery and the recipient retrieves the full text with " +
+      "t3team_read_message.]",
+  ].join("\n");
+};
+
 const fromDelivery = (
   payload: Extract<OrchestrationEvent, { type: "thread.actor-message-delivered" }>["payload"],
 ): T3TeamActorMailboxEntry => ({
@@ -94,6 +131,23 @@ export function collectPendingActorDeliveries(
     if (event.type !== "thread.message-sent" || event.payload.role !== "user") continue;
     const actor = event.payload.t3teamExt?.actor;
     if (!actor || event.payload.t3teamExt?.visibleToUser !== false) continue;
+    // A batched reaction turn coalesced several deliveries into ONE admitted
+    // input: its `actor.messageIds` names the whole batch, so every delivery
+    // it carries is already reacted — remove them all.
+    if (actor.messageIds !== undefined) {
+      const reactedIds = new Set(actor.messageIds);
+      for (let i = pending.length - 1; i >= 0; i -= 1) {
+        const candidate = pending[i];
+        if (
+          candidate !== undefined &&
+          candidate.threadId === event.payload.threadId &&
+          reactedIds.has(candidate.entry.messageId)
+        ) {
+          pending.splice(i, 1);
+        }
+      }
+      continue;
+    }
     const index = pending.findIndex(
       ({ threadId, entry }) =>
         threadId === event.payload.threadId &&

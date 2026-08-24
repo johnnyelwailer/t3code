@@ -32,7 +32,7 @@ it.effect(
       assert.strictEqual(enqueued, true);
       assert.strictEqual(yield* mailbox.isSuppressed("thread-a"), true);
       const claimed = yield* mailbox.takeNextForDispatch("thread-a");
-      assert.isUndefined(claimed);
+      assert.strictEqual(claimed.length, 0);
     }),
 );
 
@@ -41,12 +41,12 @@ it.effect("clearing suppression lets a message queued while suppressed dispatch"
     const mailbox = yield* makeT3TeamActorMailbox;
     yield* mailbox.suppress("thread-a");
     yield* mailbox.enqueue("thread-a", entry());
-    assert.isUndefined(yield* mailbox.takeNextForDispatch("thread-a"));
+    assert.strictEqual((yield* mailbox.takeNextForDispatch("thread-a")).length, 0);
 
     yield* mailbox.clearSuppression("thread-a");
     assert.strictEqual(yield* mailbox.isSuppressed("thread-a"), false);
     const claimed = yield* mailbox.takeNextForDispatch("thread-a");
-    assert.strictEqual(claimed?.messageId, "message-1");
+    assert.strictEqual(claimed[0]?.messageId, "message-1");
   }),
 );
 
@@ -56,7 +56,7 @@ it.effect("suppression is per-thread: another thread's mailbox is unaffected", (
     yield* mailbox.suppress("thread-a");
     yield* mailbox.enqueue("thread-b", entry({ messageId: "message-2" }));
     const claimed = yield* mailbox.takeNextForDispatch("thread-b");
-    assert.strictEqual(claimed?.messageId, "message-2");
+    assert.strictEqual(claimed[0]?.messageId, "message-2");
   }),
 );
 
@@ -102,7 +102,7 @@ layer("clearSuppressionForThreadTree", (it) => {
       assert.strictEqual(yield* mailbox.isSuppressed("child"), false);
       assert.deepStrictEqual([...drainCalls].sort(), ["child", "parent"]);
       const claimed = yield* mailbox.takeNextForDispatch("child");
-      assert.strictEqual(claimed?.messageId, "queued-on-child");
+      assert.strictEqual(claimed[0]?.messageId, "queued-on-child");
     }),
   );
 });

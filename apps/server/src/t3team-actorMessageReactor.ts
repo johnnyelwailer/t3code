@@ -16,11 +16,21 @@
  * Phase 1 is `normal` urgency only; `urgent` interrupt + per-pair rate cap are
  * Phase 2 (the seams are already in place).
  *
+ * Coalescing — a burst of inter-agent deliveries is NOT one reaction turn per
+ * message. Every drain first waits a short, configurable debounce window, then
+ * claims the thread's WHOLE pending batch and dispatches it as a single
+ * reaction turn (one framed input listing every delivery). A delivery that
+ * lands after the claim triggers its own drain and flushes the next batch.
+ * The drain is forked (never blocks the domain-event stream) and the
+ * per-thread `reacting` flag + hop cap still bound everything: exactly one
+ * reaction turn per thread in flight, no run-away chains.
+ *
  * @module t3team-actorMessageReactor
  */
 import type { OrchestrationEvent } from "@t3tools/contracts";
 import { ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -45,11 +55,55 @@ import {
  */
 export const T3TEAM_ACTOR_MESSAGE_HOP_CAP = 6;
 
+/**
+ * Inter-agent coalescing: how long a drain waits before claiming the pending
+ * batch, so deliveries arriving within the window group into ONE reaction
+ * turn. Distribution-tunable via `T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS` (0 disables
+ * the window — claims happen immediately, still batched).
+ */
+export const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS = 2000;
+const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS_ENV = "T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS";
+
+/** Resolve the coalescing debounce window, honoring the env override. */
+export function resolveActorMessageDebounceMs(): number {
+  const raw = process.env[T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS_ENV]?.trim();
+  if (raw !== "") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return Math.floor(parsed);
+    }
+  }
+  return T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS;
+}
+
+/**
+ * Safety valve on a coalesced batch: at most this many deliveries per reaction
+ * turn (each body is already truncated on delivery). Anything past the cap
+ * stays queued and flushes as the next batch after this turn settles.
+ * Distribution-tunable via `T3TEAM_ACTOR_MESSAGE_BATCH_MAX`.
+ */
+export const T3TEAM_ACTOR_MESSAGE_BATCH_MAX = 10;
+const T3TEAM_ACTOR_MESSAGE_BATCH_MAX_ENV = "T3TEAM_ACTOR_MESSAGE_BATCH_MAX";
+
+/** Resolve the per-turn batch cap, honoring the env override. */
+export function resolveActorMessageBatchMax(): number {
+  const raw = process.env[T3TEAM_ACTOR_MESSAGE_BATCH_MAX_ENV]?.trim();
+  if (raw !== "") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      return Math.floor(parsed);
+    }
+  }
+  return T3TEAM_ACTOR_MESSAGE_BATCH_MAX;
+}
+
 export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const engine = yield* OrchestrationEngineService;
     const query = yield* ProjectionSnapshotQuery;
     const mailbox = yield* makeT3TeamActorMailbox;
+    const debounceMs = resolveActorMessageDebounceMs();
+    const batchMax = resolveActorMessageBatchMax();
 
     const loadThread = (threadId: string) =>
       query.getThreadDetailById(ThreadId.make(threadId)).pipe(
@@ -69,10 +123,12 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
     };
 
     // Claim-and-dispatch: only when the thread is neither reacting nor otherwise
-    // running does a queued message become a reaction turn. Stream events are
-    // processed sequentially, so this never interleaves with itself for one
-    // thread; the reacting flag guards the projection-lag window across events,
-    // and the projection re-check guards against a stale idle signal.
+    // running does a queued batch become a reaction turn. The drain is FORKED
+    // (a domain-event must never block the stream on the debounce window) and
+    // debounced: it waits the window, then claims the whole pending batch so a
+    // burst of deliveries coalesces into ONE turn. The atomic claim plus the
+    // `reacting` flag keep per-thread serialization: concurrent drains for the
+    // same thread race to the claim, and only the first wins a non-empty batch.
     const tryDrain = (threadId: string) =>
       Effect.gen(function* () {
         if (yield* mailbox.isReacting(threadId)) {
@@ -82,12 +138,30 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         if (!thread || isThreadBusy(thread)) {
           return;
         }
-        const entry = yield* mailbox.takeNextForDispatch(threadId);
-        if (!entry) {
+        // Coalescing window: deliveries enqueued while we wait join this batch.
+        yield* Effect.sleep(Duration.millis(debounceMs));
+        // Re-check after the window: a user turn may have started while we
+        // waited. If so, abort — the turn-settle drain picks the queue up.
+        const settled = yield* loadThread(threadId);
+        if (!settled || isThreadBusy(settled)) {
           return;
         }
-        yield* startActorReaction({ engine, mailbox, threadId, loadThread, entry });
-      });
+        const batch = yield* mailbox.takeNextForDispatch(threadId, batchMax);
+        if (batch.length === 0) {
+          return;
+        }
+        yield* startActorReaction({ engine, mailbox, threadId, loadThread, entries: batch });
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : Effect.logWarning("t3team actor-message drain failed", {
+                threadId,
+                cause: Cause.pretty(cause),
+              }),
+        ),
+        Effect.forkDetach,
+      );
 
     const onDelivered = (
       payload: Extract<OrchestrationEvent, { type: "thread.actor-message-delivered" }>["payload"],

@@ -157,6 +157,13 @@ export const T3TeamActorMessageInfo = Schema.Struct({
   urgency: T3TeamActorMessageUrgency,
   hopCount: Schema.Number,
   rootThreadId: Schema.String,
+  /**
+   * Present when one reaction turn coalesces SEVERAL delivered messages into a
+   * single batched input (inter-agent coalescing): every message id in the
+   * batch, so a restart rehydrate can mark the whole batch as already reacted
+   * instead of re-dispatching each delivery as its own turn.
+   */
+  messageIds: Schema.optional(Schema.Array(Schema.String)),
 });
 export type T3TeamActorMessageInfo = typeof T3TeamActorMessageInfo.Type;
 

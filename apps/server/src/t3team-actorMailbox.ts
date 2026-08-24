@@ -8,11 +8,13 @@
  * which together let {@link T3TeamActorMessageReactorLive} serialize reactions:
  * exactly one reaction turn per thread is in flight at a time.
  *
- * `takeNextForDispatch` is the atomic drain primitive: it hands back the next
- * queued entry (and flips `reacting` on) only when the thread is not already
- * reacting. The reactor pairs it with a read-model "is the thread busy?" check;
- * the `reacting` flag additionally covers the brief window after a reaction is
- * dispatched but before the projection reflects the new running turn.
+ * `takeNextForDispatch` is the atomic drain primitive: it hands back the WHOLE
+ * pending batch (or up to a cap) for a thread (and flips `reacting` on) only
+ * when the thread is not already reacting. The reactor pairs it with a read-
+ * model "is the thread busy?" check; the `reacting` flag additionally covers
+ * the brief window after a reaction is dispatched but before the projection
+ * reflects the new running turn. Batching is what coalesces an inter-agent
+ * message burst into ONE reaction turn instead of one turn per message.
  *
  * State is in-memory and process-local (matching the provider sessions it
  * guards); it is intentionally not persisted.
@@ -55,19 +57,25 @@ export interface T3TeamActorMailboxShape {
   /** Append an actor message to a thread's queue. */
   readonly enqueue: (threadId: string, entry: T3TeamActorMailboxEntry) => Effect.Effect<boolean>;
   /**
-   * Atomically claim the next entry for a thread: if the thread is not already
-   * reacting and has a queued entry, flip `reacting` on and return that entry;
-   * otherwise return `undefined` and leave state untouched.
+   * Atomically claim the pending batch for a thread: if the thread is not
+   * already reacting and has queued entries, flip `reacting` on and return
+   * them all (in arrival order, up to `cap` when given — anything past the
+   * cap stays queued for the next drain); otherwise return `[]` and leave
+   * state untouched.
    */
   readonly takeNextForDispatch: (
     threadId: string,
-  ) => Effect.Effect<T3TeamActorMailboxEntry | undefined>;
+    cap?: number,
+  ) => Effect.Effect<ReadonlyArray<T3TeamActorMailboxEntry>>;
   /** Release the reacting flag (called when the thread's turn ends). */
   readonly clearReacting: (threadId: string) => Effect.Effect<void>;
-  /** Release a failed claim and retry it at the front, up to the attempt cap. */
+  /**
+   * Release a failed claim and requeue the whole batch at the front (preserving
+   * order), retrying up to the per-entry attempt cap.
+   */
   readonly requeueFailed: (
     threadId: string,
-    entry: T3TeamActorMailboxEntry,
+    entries: ReadonlyArray<T3TeamActorMailboxEntry>,
   ) => Effect.Effect<boolean>;
   /** Whether a reaction turn is currently in flight for the thread. */
   readonly isReacting: (threadId: string) => Effect.Effect<boolean>;
@@ -106,16 +114,21 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
         ),
       );
 
-    const takeNextForDispatch: T3TeamActorMailboxShape["takeNextForDispatch"] = (threadId) =>
+    const takeNextForDispatch: T3TeamActorMailboxShape["takeNextForDispatch"] = (
+      threadId,
+      cap,
+    ) =>
       Ref.modify(state, (map) => {
         const current = read(map, threadId);
         if (current.reacting || current.suppressed || current.queue.length === 0) {
-          return [undefined, map] as const;
+          return [[], map] as const;
         }
-        const [head, ...rest] = current.queue;
+        const limited =
+          cap !== undefined && cap >= 0 ? current.queue.slice(0, cap) : current.queue;
+        const rest = current.queue.slice(limited.length);
         const next = new Map(map);
         next.set(threadId, { ...current, queue: rest, reacting: true });
-        return [head, next] as const;
+        return [limited, next] as const;
       });
 
     const clearReacting: T3TeamActorMailboxShape["clearReacting"] = (threadId) =>
@@ -129,20 +142,20 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
         return next;
       });
 
-    const requeueFailed: T3TeamActorMailboxShape["requeueFailed"] = (threadId, entry) =>
+    const requeueFailed: T3TeamActorMailboxShape["requeueFailed"] = (threadId, entries) =>
       Ref.modify(state, (map) => {
         const current = read(map, threadId);
-        const attempts = entry.dispatchAttempts + 1;
-        const retry = attempts < 3;
+        const retried = entries.filter(({ dispatchAttempts }) => dispatchAttempts + 1 < 3);
         const next = new Map(map);
         next.set(threadId, {
           ...current,
-          queue: retry
-            ? [{ ...entry, dispatchAttempts: attempts }, ...current.queue]
-            : current.queue,
+          queue: [
+            ...retried.map((entry) => ({ ...entry, dispatchAttempts: entry.dispatchAttempts + 1 })),
+            ...current.queue,
+          ],
           reacting: false,
         });
-        return [retry, next] as const;
+        return [retried.length > 0, next] as const;
       });
 
     const isReacting: T3TeamActorMailboxShape["isReacting"] = (threadId) =>
