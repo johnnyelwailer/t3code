@@ -82,6 +82,7 @@ const toSendTurnInput = (input: PackSendTurnInput): ProviderSendTurnInput => ({
   ...(input.interactionMode !== undefined
     ? { interactionMode: input.interactionMode as ProviderSendTurnInput["interactionMode"] }
     : {}),
+  ...(input.turnOrigin !== undefined ? { turnOrigin: input.turnOrigin } : {}),
 });
 
 export const providerInstanceToPack = (

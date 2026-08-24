@@ -794,6 +794,7 @@ const make = Effect.gen(function* () {
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
+    readonly turnOrigin?: "user" | "automated";
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThread(input.threadId);
@@ -860,6 +861,7 @@ const make = Effect.gen(function* () {
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
+      ...(input.turnOrigin !== undefined ? { turnOrigin: input.turnOrigin } : {}),
     };
   });
 
@@ -1262,6 +1264,13 @@ const make = Effect.gen(function* () {
         ? { modelSelection: event.payload.modelSelection }
         : {}),
       interactionMode: event.payload.interactionMode,
+      // Same classifier as turn admission (t3team-deciderTurnAdmission):
+      // automated dispatchers stamp an author/actor ext; a typed user message
+      // never carries one. Providers may prioritize interactive turns on it.
+      turnOrigin:
+        message.t3teamExt?.author !== undefined || message.t3teamExt?.actor !== undefined
+          ? ("automated" as const)
+          : ("user" as const),
       createdAt: event.payload.createdAt,
     }).pipe(
       Effect.map(Option.some),

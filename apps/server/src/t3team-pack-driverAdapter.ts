@@ -123,6 +123,7 @@ export const makePackProviderAdapter = (input: {
           ...defined("attachments", turnInput.attachments),
           ...defined("modelSelection", turnInput.modelSelection),
           ...defined("interactionMode", turnInput.interactionMode),
+          ...defined("turnOrigin", turnInput.turnOrigin),
         }),
       ).pipe(
         Effect.flatMap((result) =>
