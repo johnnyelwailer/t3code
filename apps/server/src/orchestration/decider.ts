@@ -1089,11 +1089,22 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // so the last-message invariant can only be enforced when messages are
       // actually hydrated. When they are not, the reactor's SQL-backed lookup
       // of `command.messageId` (must exist, role user) is the gate.
+      //
+      // Two resumable shapes when messages ARE hydrated:
+      //  - the thread ends with the unanswered user message itself, or
+      //  - the last turn ended interrupted/errored ("This operation was
+      //    aborted"): a partial assistant message may trail the user message,
+      //    but the reply never completed, so re-running it is still the ask.
       const lastMessage = targetThread.messages.at(-1);
-      if (
-        targetThread.messages.length > 0 &&
-        (!lastMessage || lastMessage.role !== "user" || lastMessage.id !== command.messageId)
-      ) {
+      const lastUserMessage = targetThread.messages.findLast((entry) => entry.role === "user");
+      const lastTurnIncomplete =
+        targetThread.latestTurn !== null &&
+        (targetThread.latestTurn.state === "interrupted" ||
+          targetThread.latestTurn.state === "error");
+      const resumable =
+        lastUserMessage?.id === command.messageId &&
+        (lastMessage?.id === command.messageId || lastTurnIncomplete);
+      if (targetThread.messages.length > 0 && !resumable) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Thread '${command.threadId}' does not end with unanswered user message '${command.messageId}'.`,
