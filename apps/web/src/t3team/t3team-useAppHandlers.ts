@@ -1,5 +1,5 @@
 /* oxlint-disable eslint/no-unused-expressions -- Existing merged lint debt; keep green while preserving behavior. */
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThreadActions } from "~/hooks/useThreadActions";
 import { useBackend } from "~/t3team/backend/t3team-index";
@@ -37,6 +37,26 @@ export function useAppHandlers({
     onOpenHome,
   });
 
+  // `handleSelectThread` / `handleDeleteThread` feed the memo barrier on the
+  // sidebar thread rows (`ProjectSidebarThreadRowItem`), so their identity must
+  // survive a selection. A selection is exactly when the volatile inputs change:
+  // it mutates the store's `view` (new `store` object) and the route surface
+  // hands the app fresh `onOpen*` arrows on every navigation. Depending on any
+  // of those would hand every row a new handler on each selection and re-render
+  // the whole list. These handlers only run on user interaction (never during
+  // render), so reading the latest values through refs keeps their identity
+  // stable while always acting on current state.
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  const activeViewRef = useRef(activeView);
+  activeViewRef.current = activeView;
+  const onOpenDashboardRef = useRef(onOpenDashboard);
+  onOpenDashboardRef.current = onOpenDashboard;
+  const onOpenTicketRef = useRef(onOpenTicket);
+  onOpenTicketRef.current = onOpenTicket;
+  const onOpenThreadRef = useRef(onOpenThread);
+  onOpenThreadRef.current = onOpenThread;
+
   const handleSelectProject = useCallback(
     (projectId: string) => {
       const resolvedProjectId = store.resolveProjectId(projectId);
@@ -72,14 +92,14 @@ export function useAppHandlers({
   const handleSelectThread = useCallback(
     (projectId: string, threadId: string) =>
       selectProjectThread({
-        onOpenDashboard,
-        onOpenThread,
-        onOpenTicket,
+        onOpenDashboard: onOpenDashboardRef.current,
+        onOpenThread: onOpenThreadRef.current,
+        onOpenTicket: onOpenTicketRef.current,
         projectId,
-        store,
+        store: storeRef.current,
         threadId,
       }),
-    [onOpenDashboard, onOpenThread, onOpenTicket, store],
+    [],
   );
 
   const handleOpenFullThread = useCallback(
@@ -168,15 +188,15 @@ export function useAppHandlers({
   const handleDeleteThread = useCallback(
     (threadId: string) =>
       deleteAppThread({
-        activeView,
+        activeView: activeViewRef.current,
         deleteLiveThread,
         environmentId,
-        onOpenDashboard,
-        onOpenTicket,
-        store,
+        onOpenDashboard: onOpenDashboardRef.current,
+        onOpenTicket: onOpenTicketRef.current,
+        store: storeRef.current,
         threadId,
       }),
-    [activeView, deleteLiveThread, environmentId, onOpenDashboard, onOpenTicket, store],
+    [deleteLiveThread, environmentId],
   );
 
   return {
