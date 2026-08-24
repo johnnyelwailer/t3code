@@ -92,7 +92,9 @@ it.layer(NodeServices.layer)("startup session reconcile", (it) => {
       yield* reconcileStaleSessionsAtStartup().pipe(Effect.provide(makeLayer(dispatched)));
 
       expect(dispatched).toHaveLength(2);
-      const byThread = new Map(dispatched.map((command) => [command.threadId as string, command]));
+      const byThread = new Map(
+        dispatched.map((command) => [(command as { threadId: string }).threadId, command]),
+      );
       expect([...byThread.keys()].sort()).toEqual(["crashed-running", "crashed-starting"]);
       for (const command of dispatched) {
         expect(command.type).toBe("thread.session.set");
