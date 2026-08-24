@@ -1898,6 +1898,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               ),
             ),
           ),
+          listThreadMessageRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listThreadMessages:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listThreadMessages:decodeRows",
+              ),
+            ),
+          ),
           listThreadProposedPlanRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -1934,7 +1942,15 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       )
       .pipe(
         Effect.flatMap(
-          ([projectRows, threadRows, proposedPlanRows, sessionRows, latestTurnRows, stateRows]) =>
+          ([
+            projectRows,
+            threadRows,
+            messageRows,
+            proposedPlanRows,
+            sessionRows,
+            latestTurnRows,
+            stateRows,
+          ]) =>
             // A project's `source` binding must be present here — this read model is what
             // rehydrates the decider's in-memory model on boot, and `requireProjectSourceBindingUnclaimed`
             // reads `project.source` off of it to enforce the no-duplicate-binding invariant across
@@ -1944,6 +1960,35 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 let updatedAt: string | null = null;
                 const projects: OrchestrationProject[] = [];
                 const threads: OrchestrationThread[] = [];
+                // The decider's read model must carry messages: rebuilding
+                // threads with `messages: []` on boot made every message-shape
+                // invariant (thread.turn.resume's last-message check, and any
+                // future one) silently false for pre-restart threads. Loaded
+                // once here; the engine evolves the model per event afterwards
+                // (the projector caps per-thread messages the same way).
+                const messagesByThread = new Map<string, Array<OrchestrationMessage>>();
+                for (const row of messageRows) {
+                  updatedAt = maxIso(updatedAt, row.updatedAt);
+                  const threadMessages = messagesByThread.get(row.threadId) ?? [];
+                  threadMessages.push({
+                    id: row.messageId,
+                    role: row.role,
+                    text: row.text,
+                    ...(row.attachments !== null ? { attachments: row.attachments } : {}),
+                    ...(row.t3teamExt !== null ? { t3teamExt: row.t3teamExt } : {}),
+                    turnId: row.turnId,
+                    streaming: row.isStreaming === 1,
+                    createdAt: row.createdAt,
+                    updatedAt: row.updatedAt,
+                  });
+                  messagesByThread.set(row.threadId, threadMessages);
+                }
+                for (const threadMessages of messagesByThread.values()) {
+                  // Same cap the live projector applies (MAX_THREAD_MESSAGES).
+                  if (threadMessages.length > 2_000) {
+                    threadMessages.splice(0, threadMessages.length - 2_000);
+                  }
+                }
 
                 for (let index = 0; index < projectRows.length; index += 1) {
                   const row = projectRows[index];
@@ -2063,7 +2108,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                     pinOrderKey: row.pinOrderKey ?? null,
                     titleRegeneration: mapTitleRegeneration(row),
                     deletedAt: row.deletedAt,
-                    messages: [],
+                    messages: messagesByThread.get(row.threadId) ?? [],
                     proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
                     activities: [],
                     checkpoints: [],

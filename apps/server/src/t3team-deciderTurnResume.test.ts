@@ -155,7 +155,7 @@ it.layer(NodeServices.layer)("thread turn resume", (it) => {
     Effect.gen(function* () {
       const decided = yield* decideOrchestrationCommand({
         command,
-        readModel: withThread({ settledOverride: { kind: "settled" as const, at: now } }),
+        readModel: withThread({ settledOverride: "settled" as const }),
       });
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events.map((entry) => entry.type)).toEqual([
