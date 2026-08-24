@@ -169,7 +169,6 @@ import {
   ChevronLeftIcon,
   GitBranchIcon,
   PaperclipIcon,
-  PlayIcon,
   WifiOffIcon,
 } from "lucide-react";
 import { cn, randomHex } from "~/lib/utils";
@@ -4610,11 +4609,30 @@ function ChatViewContent(props: ChatViewProps) {
   // message is user and latestTurn is still the PREVIOUS settled turn until
   // session-set arrives, so also require no pending/starting turn machinery —
   // otherwise the banner flashes after every ordinary send.
-  const lastThreadMessage = activeThread?.messages.at(-1);
+  // Derive the last message from the TIMELINE's source, not
+  // activeThread.messages: after a server restart the snapshot thread arrives
+  // with messages: [] (they hydrate through the detail query the timeline
+  // renders from), so activeThread.messages misses exactly the lost-reply
+  // threads this feature exists for.
+  const lastThreadMessage = useMemo(() => {
+    for (let index = timelineEntries.length - 1; index >= 0; index -= 1) {
+      const entry = timelineEntries[index];
+      if (entry?.kind === "message") return entry.message;
+    }
+    return undefined;
+  }, [timelineEntries]);
+  // Idle-for-resume: no live session activity of any kind. Deliberately NOT
+  // latestTurnSettled — a thread whose turn died mid-flight (server kill,
+  // crash) has latestTurn.completedAt === null forever, which is exactly the
+  // lost-reply state the Continue button exists for.
+  const resumeThreadIdle =
+    activeThread !== undefined &&
+    activeThread.turnStartPending !== true &&
+    (activeThread.session === null ||
+      (activeThread.session.status !== "running" && activeThread.session.status !== "starting"));
   const lastMessageIsUnansweredUser =
     lastThreadMessage?.role === "user" &&
-    activeThread?.turnStartPending !== true &&
-    activeThread?.session?.status !== "starting" &&
+    resumeThreadIdle &&
     // A locally dispatched send is on its way to the server; the ack that sets
     // turnStartPending has simply not arrived yet.
     localDispatchStartedAt === null;
@@ -4625,13 +4643,13 @@ function ChatViewContent(props: ChatViewProps) {
   // unanswered state has held steady.
   const [showUnansweredBanner, setShowUnansweredBanner] = useState(false);
   useEffect(() => {
-    if (!lastMessageIsUnansweredUser || !latestTurnSettled) {
+    if (!lastMessageIsUnansweredUser) {
       setShowUnansweredBanner(false);
       return;
     }
     const timer = setTimeout(() => setShowUnansweredBanner(true), 1500);
     return () => clearTimeout(timer);
-  }, [lastMessageIsUnansweredUser, latestTurnSettled, activeThreadId, unansweredMessageId]);
+  }, [lastMessageIsUnansweredUser, activeThreadId, unansweredMessageId]);
   const handleResumeThreadTurn = useCallback(async () => {
     if (!activeThreadId) return;
     setIsResumingTurn(true);
@@ -4648,39 +4666,10 @@ function ChatViewContent(props: ChatViewProps) {
       setIsResumingTurn(false);
     }
   }, [activeThreadId, environmentId, resumeThreadTurnCommand, unansweredMessageId]);
-  // Re-arm the latch whenever the unanswered state goes away (turn started,
-  // reply arrived, or the user switched threads).
+  // Re-arm the resume latch whenever the unanswered state goes away.
   useEffect(() => {
-    if (!lastMessageIsUnansweredUser || !latestTurnSettled) setIsResumingTurn(false);
-  }, [lastMessageIsUnansweredUser, latestTurnSettled, activeThreadId]);
-  const unansweredMessageBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
-    if (
-      !activeThreadId ||
-      !showUnansweredBanner ||
-      !lastMessageIsUnansweredUser ||
-      !latestTurnSettled
-    ) {
-      return null;
-    }
-    return {
-      id: `thread-unanswered:${activeThreadId}`,
-      variant: "info",
-      icon: <PlayIcon />,
-      title: "Continue",
-      actions: (
-        <Button size="xs" disabled={isResumingTurn} onClick={() => void handleResumeThreadTurn()}>
-          {isResumingTurn ? "Continuing..." : "Continue"}
-        </Button>
-      ),
-    };
-  }, [
-    activeThreadId,
-    handleResumeThreadTurn,
-    isResumingTurn,
-    lastMessageIsUnansweredUser,
-    latestTurnSettled,
-    showUnansweredBanner,
-  ]);
+    if (!lastMessageIsUnansweredUser) setIsResumingTurn(false);
+  }, [lastMessageIsUnansweredUser, activeThreadId]);
   const parkedThreadBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (!activeThreadSnoozed && !activeThreadSettled) {
       return null;
@@ -4738,15 +4727,12 @@ function ChatViewContent(props: ChatViewProps) {
       backgroundLivenessBannerItem === null ? [] : [backgroundLivenessBannerItem];
     const wokeThreadItems = wokeThreadBannerItem === null ? [] : [wokeThreadBannerItem];
     const parkedThreadItems = parkedThreadBannerItem === null ? [] : [parkedThreadBannerItem];
-    const unansweredMessageItems =
-      unansweredMessageBannerItem === null ? [] : [unansweredMessageBannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
       return [
         ...urgentSystemItems,
         ...backgroundLivenessItems,
         ...calmSystemItems,
         ...wokeThreadItems,
-        ...unansweredMessageItems,
         ...parkedThreadItems,
       ];
     }
@@ -4755,7 +4741,6 @@ function ChatViewContent(props: ChatViewProps) {
       ...backgroundLivenessItems,
       ...calmSystemItems,
       ...wokeThreadItems,
-      ...unansweredMessageItems,
       {
         id: `branch-mismatch:${activeBranchMismatchKey}`,
         variant: "info",
@@ -4804,7 +4789,6 @@ function ChatViewContent(props: ChatViewProps) {
     isRestoringThreadBranch,
     localCheckoutBranchMismatch,
     parkedThreadBannerItem,
-    unansweredMessageBannerItem,
     showBranchMismatchBanner,
     systemComposerBannerItems,
     wokeThreadBannerItem,
@@ -6619,7 +6603,7 @@ function ChatViewContent(props: ChatViewProps) {
                 key={activeThread.id}
                 isWorking={isWorking}
                 workingStepLabel={workingStepLabel}
-                activeTurnInProgress={isWorking || !latestTurnSettled}
+                activeTurnInProgress={isWorking || (!latestTurnSettled && !resumeThreadIdle)}
                 activeTurnStartedAt={activeWorkStartedAt}
                 listRef={legendListRef}
                 timelineEntries={timelineEntries}
@@ -6635,6 +6619,9 @@ function ChatViewContent(props: ChatViewProps) {
                 onOpenTurnDiff={onOpenTurnDiff}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
+                resumeMessageId={showUnansweredBanner ? unansweredMessageId : null}
+                onResumeThread={() => void handleResumeThreadTurn()}
+                isResumingThread={isResumingTurn}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 markdownCwd={gitCwd ?? undefined}
