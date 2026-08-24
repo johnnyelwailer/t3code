@@ -212,7 +212,9 @@ export type MessagesTimelineRow =
       createdAt: string;
       turnPlan: TurnPlanEntry;
     }
-  | { kind: "working"; id: string; createdAt: string | null };
+  | { kind: "working"; id: string; createdAt: string | null }
+  | { kind: "resume"; id: string }
+  | { kind: "thread-error"; id: string; error: string };
 
 export interface StableMessagesTimelineRowsState {
   byId: Map<string, MessagesTimelineRow>;
@@ -456,6 +458,8 @@ export function deriveMessagesTimelineRows(input: {
   activeTurnStartedAt: string | null;
   turnDiffSummaryByAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>;
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
+  resumeOffer?: boolean;
+  threadError?: string | null;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
@@ -639,6 +643,14 @@ export function deriveMessagesTimelineRows(input: {
       id: "working-indicator-row",
       createdAt: input.activeTurnStartedAt,
     });
+  } else if (input.threadError) {
+    // Errors read like part of the conversation: an agent-side row in the
+    // slot the working indicator occupies, with Retry — never a top banner.
+    nextRows.push({ kind: "thread-error", id: "thread-error-row", error: input.threadError });
+  } else if (input.resumeOffer === true) {
+    // Unanswered last user message: offer Continue exactly where "Working"
+    // would have appeared.
+    nextRows.push({ kind: "resume", id: "resume-offer-row" });
   }
 
   return nextRows;
@@ -671,6 +683,12 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
   switch (a.kind) {
     case "working":
       return a.createdAt === (b as typeof a).createdAt;
+
+    case "resume":
+      return true;
+
+    case "thread-error":
+      return a.error === (b as typeof a).error;
 
     case "turn-fold": {
       const bf = b as typeof a;

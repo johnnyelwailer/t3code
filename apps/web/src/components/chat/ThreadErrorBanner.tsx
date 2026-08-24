@@ -36,9 +36,14 @@ export function isThreadErrorBannerDismissedForSession(bannerKey: string | null)
 export const ThreadErrorBanner = memo(function ThreadErrorBanner({
   error,
   onDismiss,
+  onRetry,
+  isRetrying = false,
 }: {
   error: string | null;
   onDismiss?: () => void;
+  /** Re-runs the message that hit this error (thread.turn.resume). */
+  onRetry?: () => void;
+  isRetrying?: boolean;
 }) {
   if (!error) return null;
   return (
@@ -53,11 +58,18 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
             </TooltipPopup>
           </Tooltip>
         </AlertDescription>
-        {onDismiss && (
+        {(onRetry ?? onDismiss) && (
           <AlertAction>
-            <Button variant="ghost" size="icon-xs" aria-label="Dismiss error" onClick={onDismiss}>
-              <XIcon className="text-destructive" />
-            </Button>
+            {onRetry && (
+              <Button size="xs" variant="outline" disabled={isRetrying} onClick={onRetry}>
+                {isRetrying ? "Retrying..." : "Retry"}
+              </Button>
+            )}
+            {onDismiss && (
+              <Button variant="ghost" size="icon-xs" aria-label="Dismiss error" onClick={onDismiss}>
+                <XIcon className="text-destructive" />
+              </Button>
+            )}
           </AlertAction>
         )}
       </Alert>

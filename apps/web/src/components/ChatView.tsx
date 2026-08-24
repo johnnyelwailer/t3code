@@ -6567,14 +6567,6 @@ function ChatViewContent(props: ChatViewProps) {
           </header>
         )}
 
-        <ThreadErrorBanner
-          error={visibleThreadError}
-          onDismiss={() => {
-            setThreadError(activeThread.id, null);
-            dismissThreadErrorBannerForSession(threadErrorBannerKey);
-            setThreadErrorBannerDismissTick((tick) => tick + 1);
-          }}
-        />
         {/* Main content area with optional plan sidebar */}
         <div className="flex min-h-0 min-w-0 flex-1">
           {/* Chat column */}
@@ -6637,6 +6629,12 @@ function ChatViewContent(props: ChatViewProps) {
                 resumeMessageId={showUnansweredBanner ? unansweredMessageId : null}
                 onResumeThread={() => void handleResumeThreadTurn()}
                 isResumingThread={isResumingTurn}
+                threadError={visibleThreadError}
+                onDismissThreadError={() => {
+                  setThreadError(activeThread.id, null);
+                  dismissThreadErrorBannerForSession(threadErrorBannerKey);
+                  setThreadErrorBannerDismissTick((tick) => tick + 1);
+                }}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 markdownCwd={gitCwd ?? undefined}

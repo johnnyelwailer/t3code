@@ -47,7 +47,7 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
   return (
     <SidebarHeader
       className={cn(
-        "@container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0",
+        "group/sidebar-header @container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0",
         isElectron && "drag-region",
       )}
     >
@@ -83,8 +83,11 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
             upstream's secondary "Code" caption next to a standalone wordmark. */}
         <span className="truncate text-sm font-semibold">{appName}</span>
       </div>
-      <div className="relative z-10 ml-auto flex items-center">
-        <T3TeamLeftSidebarHeaderToggle />
+      {/* `pr-2` matches the icon column's right inset below the header
+          (e.g. `SidebarGroup` content, project-row hover actions), since the
+          header itself drops horizontal padding at `md:px-0`. */}
+      <div className="relative z-10 ml-auto flex items-center pr-2">
+        <T3TeamLeftSidebarHeaderToggle surface="banner" />
       </div>
     </SidebarHeader>
   );
