@@ -999,6 +999,15 @@ export const ThreadTurnResumeCommand = Schema.Struct({
   type: Schema.Literal("thread.turn.resume"),
   commandId: CommandId,
   threadId: ThreadId,
+  /**
+   * The unanswered user message to re-run — supplied by the client, which
+   * renders it. The decider cannot rely on its in-memory `thread.messages`:
+   * after a server restart the rehydrated read model leaves that array EMPTY
+   * (ProjectionSnapshotQuery rebuilds threads with `messages: []`), which is
+   * exactly the state a "lost reply" thread is in. The reactor re-validates
+   * the id against the SQL-backed thread detail.
+   */
+  messageId: MessageId,
   modelSelection: Schema.optional(ModelSelection),
   createdAt: IsoDateTime,
 });
