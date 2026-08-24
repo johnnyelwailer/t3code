@@ -33,9 +33,9 @@ export function isRealUserMessage(
  * restart, new reactor instance) by replaying the event log: a thread is
  * suppressed when its most recent `byUser` `thread.turn-interrupt-requested`
  * is newer than its most recent real-user `thread.message-sent`. Without
- * this, a restart forgets the in-memory `suppressed` flag entirely and
- * `rehydrateActorMailbox`'s drain immediately resumes the exact ping-pong the
- * suppression exists to stop.
+ * this, a restart forgets the in-memory `suppressed` flag entirely and a
+ * stopped thread's queued actor messages auto-dispatch on the next settle —
+ * resuming the exact ping-pong the suppression exists to stop.
  */
 export function collectSuppressedThreadsAtRehydrate(
   events: ReadonlyArray<OrchestrationEvent>,

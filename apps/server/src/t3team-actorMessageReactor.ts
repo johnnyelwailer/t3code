@@ -41,7 +41,8 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { makeT3TeamActorMailbox } from "./t3team-actorMailbox.ts";
 import { rehydrateActorMailbox } from "./t3team-actorMailboxRehydrate.ts";
-import { startActorReaction } from "./t3team-actorMessageReaction.ts";
+import { startActorReaction, startActorRestartHoldSummary } from "./t3team-actorMessageReaction.ts";
+import { loadInterruptedChildThreads } from "./t3team-actorRestartHold.ts";
 import {
   clearSuppressionForThreadTree,
   isRealUserMessage,
@@ -104,6 +105,12 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
     const mailbox = yield* makeT3TeamActorMailbox;
     const debounceMs = resolveActorMessageDebounceMs();
     const batchMax = resolveActorMessageBatchMax();
+    // The restart-held set (GHE #155): captured from rehydrate below; declared
+    // first so surfaceHoldSummary's closure binds it without a use-before-
+    // declaration. Mutable: a thread is consumed (deleted) the first time its
+    // hold is surfaced, so a later clean settle drains normally instead of
+    // re-surfacing a summary (e.g. repeatedly listing a still-stopped child).
+    let heldAtRehydrate: Set<string> = new Set();
 
     const loadThread = (threadId: string) =>
       query.getThreadDetailById(ThreadId.make(threadId)).pipe(
@@ -163,6 +170,59 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         Effect.forkDetach,
       );
 
+    // Restart hold (GHE #155): a RESTART-held thread (suppressed at
+    // rehydrate because it had pending deliveries or a stale running session)
+    // whose turn just settled cleanly was CONTINUED by the user — surface its
+    // held work as ONE summary turn (interrupted children + one line per held
+    // message), not one turn per held message. The user's continue is the
+    // explicit lift: clear suppression, then claim the whole held batch with
+    // the ordinary atomic claim (no cap = everything). A racing live-delivery
+    // drain still loses atomically to exactly one turn. Scoped to the
+    // rehydrate-held set so a user-stop suppression on any other thread keeps
+    // its current semantics (no auto-dispatch until a real user message).
+    // Forked like tryDrain: the descendant walk is SQL and must never block
+    // the domain-event stream.
+    const surfaceHoldSummary = (threadId: string) =>
+      Effect.gen(function* () {
+        if (!heldAtRehydrate.has(threadId)) {
+          return yield* tryDrain(threadId);
+        }
+        // Consume the hold NOW: after this settle the thread is no longer
+        // restart-held, so subsequent clean settles drain normally (no
+        // repeated summaries). The claim below still serializes against any
+        // racing live-delivery drain.
+        heldAtRehydrate.delete(threadId);
+        const interrupted = yield* loadInterruptedChildThreads(threadId, query);
+        const batch = yield* mailbox
+          .clearSuppression(threadId)
+          .pipe(Effect.andThen(() => mailbox.takeNextForDispatch(threadId)));
+        if (batch.length === 0 && interrupted.length === 0) {
+          // Nothing held: the hold is lifted and the thread behaves normally.
+          return;
+        }
+        // If the summary turn fails to start, the claimed entries are requeued
+        // by the dispatcher and the ordinary drain picks them up on the next
+        // settle.
+        yield* startActorRestartHoldSummary({
+          engine,
+          mailbox,
+          threadId,
+          loadThread,
+          entries: batch,
+          interruptedChildren: interrupted,
+        });
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : Effect.logWarning("t3team restart-hold summary failed", {
+                threadId,
+                cause: Cause.pretty(cause),
+              }),
+        ),
+        Effect.forkDetach,
+      );
+
     const onDelivered = (
       payload: Extract<OrchestrationEvent, { type: "thread.actor-message-delivered" }>["payload"],
     ) =>
@@ -200,11 +260,17 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         case "thread.session-set": {
           const status = event.payload.session.status;
           const turnEnded = status !== "running" && status !== "starting";
-          return turnEnded
-            ? mailbox
-                .clearReacting(event.payload.threadId)
-                .pipe(Effect.andThen(tryDrain(event.payload.threadId)))
-            : Effect.void;
+          if (!turnEnded) {
+            return Effect.void;
+          }
+          // A clean settle on a HELD thread is the user's "continue": surface
+          // the held work as ONE summary turn. A stop/error settle keeps the
+          // hold — the user stopped the turn or it failed; nothing
+          // auto-surfaces (and a user stop must never re-open the turn).
+          const onSettle = status === "idle" || status === "ready" ? surfaceHoldSummary : tryDrain;
+          return mailbox
+            .clearReacting(event.payload.threadId)
+            .pipe(Effect.andThen(onSettle(event.payload.threadId)));
         }
         case "thread.turn-diff-completed":
           return tryDrain(event.payload.threadId);
@@ -246,11 +312,10 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
       );
 
     yield* Effect.forkScoped(Stream.runForEach(engine.streamDomainEvents, handleSafely));
-    yield* rehydrateActorMailbox({
+    heldAtRehydrate = yield* rehydrateActorMailbox({
       engine,
       mailbox,
       hopCap: T3TEAM_ACTOR_MESSAGE_HOP_CAP,
-      tryDrain,
     });
   }),
 );

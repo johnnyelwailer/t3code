@@ -8,6 +8,41 @@ import { makeT3TeamActorMailbox } from "./t3team-actorMailbox.ts";
 import { rehydrateActorMailbox } from "./t3team-actorMailboxRehydrate.ts";
 import { collectSuppressedThreadsAtRehydrate } from "./t3team-actorMessageSuppression.ts";
 
+function sessionSet(sequence: number, threadId: string, status: string): OrchestrationEvent {
+  return {
+    sequence,
+    type: "thread.session-set",
+    payload: {
+      threadId,
+      session: { status },
+      createdAt: "2026-08-11T00:00:00.000Z",
+    },
+  } as unknown as OrchestrationEvent;
+}
+
+function actorMessageDelivered(
+  sequence: number,
+  threadId: string,
+  messageId: string,
+): OrchestrationEvent {
+  return {
+    sequence,
+    type: "thread.actor-message-delivered",
+    payload: {
+      threadId,
+      messageId,
+      fromThreadId: `sender-${messageId}`,
+      fromTitle: `Sender ${messageId}`,
+      fromProjectId: "project",
+      text: `body ${messageId}`,
+      urgency: "normal",
+      hopCount: 1,
+      rootThreadId: "root",
+      createdAt: "2026-08-11T00:00:00.000Z",
+    },
+  } as unknown as OrchestrationEvent;
+}
+
 function interruptRequested(
   sequence: number,
   threadId: string,
@@ -99,7 +134,6 @@ it.effect(
         engine: { readEvents: () => Stream.fromIterable(events) },
         mailbox,
         hopCap: 6,
-        tryDrain: () => Effect.void,
       });
 
       assert.strictEqual(yield* mailbox.isSuppressed("thread-a"), true);
@@ -131,8 +165,78 @@ it.effect("rehydrateActorMailbox does not restore suppression once the user has 
       engine: { readEvents: () => Stream.fromIterable(events) },
       mailbox,
       hopCap: 6,
-      tryDrain: () => Effect.void,
     });
     assert.strictEqual(yield* mailbox.isSuppressed("thread-a"), false);
   }),
+);
+
+it.effect(
+  "rehydrateActorMailbox HOLDS pending deliveries: no auto-drain, threads suppressed, entries queued (GHE #155)",
+  () =>
+    Effect.gen(function* () {
+      // N pending inter-agent messages + a stale (running-at-crash) session:
+      // the restart must produce ZERO auto reaction turns.
+      const events: ReadonlyArray<OrchestrationEvent> = [
+        sessionSet(1, "thread-a", "running"),
+        actorMessageDelivered(2, "thread-a", "m1"),
+        actorMessageDelivered(3, "thread-a", "m2"),
+        actorMessageDelivered(4, "thread-b", "m3"),
+      ];
+      const mailbox = yield* makeT3TeamActorMailbox;
+      yield* rehydrateActorMailbox({
+        engine: { readEvents: () => Stream.fromIterable(events) },
+        mailbox,
+        hopCap: 6,
+      });
+
+      // Every thread with held work starts suppressed — no auto-dispatch.
+      assert.strictEqual(yield* mailbox.isSuppressed("thread-a"), true);
+      assert.strictEqual(yield* mailbox.isSuppressed("thread-b"), true);
+      // The ordinary drain claim is refused while held…
+      assert.strictEqual((yield* mailbox.takeNextForDispatch("thread-a")).length, 0);
+      assert.strictEqual((yield* mailbox.takeNextForDispatch("thread-b")).length, 0);
+      // …but the work is still queued and consumable on continue: lifting the
+      // hold (what the reactor's continue path does) claims every held entry.
+      yield* mailbox.clearSuppression("thread-a");
+      assert.strictEqual((yield* mailbox.takeNextForDispatch("thread-a")).length, 2);
+      yield* mailbox.clearSuppression("thread-b");
+      assert.strictEqual((yield* mailbox.takeNextForDispatch("thread-b")).length, 1);
+    }),
+);
+
+it.effect(
+  "rehydrateActorMailbox holds a stale-session thread even without pending deliveries (GHE #155)",
+  () =>
+    Effect.gen(function* () {
+      // A thread still running when the process died: the startup reconcile
+      // stops it and its #157 abnormal-stop notifications arrive live AFTER
+      // rehydrate — it must start suppressed so they are held, not drained.
+      const events: ReadonlyArray<OrchestrationEvent> = [sessionSet(1, "thread-a", "running")];
+      const mailbox = yield* makeT3TeamActorMailbox;
+      yield* rehydrateActorMailbox({
+        engine: { readEvents: () => Stream.fromIterable(events) },
+        mailbox,
+        hopCap: 6,
+      });
+      assert.strictEqual(yield* mailbox.isSuppressed("thread-a"), true);
+      assert.strictEqual((yield* mailbox.takeNextForDispatch("thread-a")).length, 0);
+    }),
+);
+
+it.effect(
+  "rehydrateActorMailbox does not hold a thread whose session settled before the crash (GHE #155)",
+  () =>
+    Effect.gen(function* () {
+      const events: ReadonlyArray<OrchestrationEvent> = [
+        sessionSet(1, "thread-a", "running"),
+        sessionSet(2, "thread-a", "idle"),
+      ];
+      const mailbox = yield* makeT3TeamActorMailbox;
+      yield* rehydrateActorMailbox({
+        engine: { readEvents: () => Stream.fromIterable(events) },
+        mailbox,
+        hopCap: 6,
+      });
+      assert.strictEqual(yield* mailbox.isSuppressed("thread-a"), false);
+    }),
 );
