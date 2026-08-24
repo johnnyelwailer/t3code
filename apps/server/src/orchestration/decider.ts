@@ -21,7 +21,7 @@ import {
   requireThreadNotArchived,
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
-import { admitsTurnStart } from "../t3team-deciderTurnAdmission.ts";
+import { admitsTurnStart, isThreadTurnBusy } from "../t3team-deciderTurnAdmission.ts";
 import { requireProjectSourceBindingUnclaimed } from "./t3team-projectSourceInvariants.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -1066,6 +1066,87 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         });
       }
       return [...lifecycleResetEvents, userMessageEvent, turnStartRequestedEvent];
+    }
+
+    // t3team: re-run the thread's last user message without appending a new
+    // one. Emits ONLY thread.turn-start-requested for the EXISTING message id;
+    // the reactor path is shared with thread.turn.start, so the provider gets
+    // the full thread again and the transcript shows no synthetic message.
+    case "thread.turn.resume": {
+      const targetThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (isThreadTurnBusy(targetThread)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' already has a turn in progress.`,
+        });
+      }
+      const lastMessage = targetThread.messages.at(-1);
+      if (!lastMessage || lastMessage.role !== "user") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' does not end with an unanswered user message.`,
+        });
+      }
+      const resumeEvent: Omit<OrchestrationEvent, "sequence"> = {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.turn-start-requested",
+        payload: {
+          threadId: command.threadId,
+          messageId: lastMessage.id,
+          ...(command.modelSelection !== undefined
+            ? { modelSelection: command.modelSelection }
+            : {}),
+          runtimeMode: targetThread.runtimeMode,
+          interactionMode: targetThread.interactionMode,
+          createdAt: command.createdAt,
+        },
+      };
+      // Resuming is real user activity like turn.start: it must wake a settled
+      // or snoozed thread, or the override survives a running turn (pinned by
+      // decider.settled/snoozed tests for the send path).
+      const resumeLifecycleResetEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      if (targetThread.settledOverride !== null) {
+        resumeLifecycleResetEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.unsettled",
+          payload: {
+            threadId: command.threadId,
+            reason: "activity",
+            updatedAt: command.createdAt,
+          },
+        });
+      }
+      if (targetThread.snoozedUntil != null) {
+        resumeLifecycleResetEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.unsnoozed",
+          payload: {
+            threadId: command.threadId,
+            reason: "activity",
+            updatedAt: command.createdAt,
+          },
+        });
+      }
+      return [...resumeLifecycleResetEvents, resumeEvent];
     }
 
     case "thread.turn.interrupt": {
