@@ -6,6 +6,7 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   ModelSelection,
+  ClientOrchestrationCommand,
   OrchestrationCommand,
   OrchestrationEvent,
   OrchestrationGetFullThreadDiffInput,
@@ -204,6 +205,21 @@ it.effect("rejects command fields that become empty after trim", () =>
       }),
     );
     assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
+it.effect("decodes thread.turn.resume through both command unions", () =>
+  Effect.gen(function* () {
+    const command = {
+      type: "thread.turn.resume",
+      commandId: "cmd-turn-resume-1",
+      threadId: "thread-1",
+      createdAt: "2026-08-24T08:00:00.000Z",
+    };
+    const client = yield* Schema.decodeUnknownEffect(ClientOrchestrationCommand)(command);
+    assert.strictEqual(client.type, "thread.turn.resume");
+    const server = yield* Schema.decodeUnknownEffect(OrchestrationCommand)(command);
+    assert.strictEqual(server.type, "thread.turn.resume");
   }),
 );
 

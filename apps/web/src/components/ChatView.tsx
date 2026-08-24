@@ -4622,10 +4622,18 @@ function ChatViewContent(props: ChatViewProps) {
         environmentId,
         input: { threadId: activeThreadId },
       });
-    } finally {
+      // Deliberately stay disabled on success: the banner disappears once the
+      // turn events arrive, and re-enabling in that gap invites a second
+      // dispatch the decider would only reject noisily.
+    } catch {
       setIsResumingTurn(false);
     }
   }, [activeThreadId, environmentId, resumeThreadTurnCommand]);
+  // Re-arm the latch whenever the unanswered state goes away (turn started,
+  // reply arrived, or the user switched threads).
+  useEffect(() => {
+    if (!lastMessageIsUnansweredUser || !latestTurnSettled) setIsResumingTurn(false);
+  }, [lastMessageIsUnansweredUser, latestTurnSettled, activeThreadId]);
   const unansweredMessageBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (!activeThreadId || !lastMessageIsUnansweredUser || !latestTurnSettled) {
       return null;
