@@ -90,6 +90,8 @@
     "apps/server/src/t3team-actorReactionInput.test.ts",
     "apps/server/src/t3team-actorReactionInput.ts",
     "apps/server/src/t3team-actorSendMessage.ts",
+    "apps/server/src/t3team-childWaitReactor.ts",
+    "apps/server/src/t3team-childWaitResolve.ts",
     "apps/server/src/t3team-localProviderSessions-sync.ts",
     "apps/server/src/t3team-localProviderSessions.ts",
     "apps/server/src/t3team-localProviderSessionsWatcher.ts",
