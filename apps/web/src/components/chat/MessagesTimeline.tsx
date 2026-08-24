@@ -164,6 +164,10 @@ interface TimelineRowSharedState {
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
+  /** t3team: last user message id with no reply on a settled thread — the row renders a Continue button under it. */
+  resumeMessageId: MessageId | null;
+  onResumeThread: (() => void) | undefined;
+  isResumingThread: boolean;
   activeWorkflowInputMessageId: string | null;
   workflowDecisionAnswers: ReadonlyMap<string, T3TeamWorkflowDecisionAnswer>;
   answeredDecisionReplyMessageIds: ReadonlySet<string>;
@@ -251,6 +255,9 @@ interface MessagesTimelineProps {
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
+  resumeMessageId?: MessageId | null;
+  onResumeThread?: () => void;
+  isResumingThread?: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
   markdownCwd: string | undefined;
@@ -309,6 +316,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
   isRevertingCheckpoint,
+  resumeMessageId = null,
+  onResumeThread,
+  isResumingThread = false,
   onImageExpand,
   activeThreadEnvironmentId,
   markdownCwd,
@@ -609,6 +619,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       skills,
       activeThreadEnvironmentId,
       onRevertUserMessage,
+      resumeMessageId,
+      onResumeThread,
+      isResumingThread,
       onImageExpand,
       onOpenTurnDiff,
       onToggleTurnFold,
@@ -635,6 +648,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       skills,
       activeThreadEnvironmentId,
       onRevertUserMessage,
+      resumeMessageId,
+      onResumeThread,
+      isResumingThread,
       onImageExpand,
       onOpenTurnDiff,
       onToggleTurnFold,
@@ -1214,6 +1230,17 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           markdownCwd={ctx.markdownCwd}
         />
       </div>
+      {ctx.resumeMessageId === row.message.id && ctx.onResumeThread ? (
+        <div className="flex w-full max-w-[80%] justify-end pe-1">
+          <Button
+            size="xs"
+            disabled={ctx.isResumingThread === true}
+            onClick={() => ctx.onResumeThread?.()}
+          >
+            {ctx.isResumingThread ? "Continuing..." : "Continue"}
+          </Button>
+        </div>
+      ) : null}
       <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
