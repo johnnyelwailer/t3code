@@ -153,8 +153,6 @@ export function useProjectStore() {
     setView,
   });
 
-  const selectedProject = allProjects.find((project) => project.id === selectedProjectId) ?? null;
-
   const updateThreadDisplayMode = useCallback(
     (threadId: string, displayMode: ProjectThreadDisplayMode) => {
       const fallbackThread =
@@ -170,35 +168,71 @@ export function useProjectStore() {
     [allProjects, getThreadsForProject, threads, updateThreadDisplayModeInternal],
   );
 
-  return {
-    projects: reconciledStoredProjects,
-    looseWorkspaceProjects: visibleLooseWorkspaceProjects,
-    allProjects,
-    selectedProject,
-    selectedProjectId,
-    view,
-    expandedProjectIds,
-    threads,
-    getThreadsForProject,
-    getTicketsForProject,
-    addProject,
-    deleteProject,
-    renameProject,
-    updateProject,
-    toggleProjectExpanded,
-    selectProject,
-    selectTicket,
-    selectThread,
-    selectStandaloneThread,
-    createThread,
-    createThreadForTicket,
-    markThreadKickoffConsumed,
-    deleteThread,
-    renameThread,
-    updateThreadDisplayMode,
-    resolveProjectId,
-    setView,
-  };
+  // Referential stability matters: this object is a dependency of the sidebar
+  // handler `useCallback`s (`useAppHandlers`) and of effects (`useResolvedViewSync`).
+  // Returning a fresh literal on every render gave every consumer a new `store`
+  // identity each render, which defeated the memo barrier on the thread rows and
+  // re-rendered the whole Work-lens list on every selection. Every field below is
+  // already referentially stable (state values or `useCallback` results), so the
+  // memo keeps the object's identity while none of them change.
+  return useMemo(
+    () => ({
+      projects: reconciledStoredProjects,
+      looseWorkspaceProjects: visibleLooseWorkspaceProjects,
+      allProjects,
+      selectedProject: allProjects.find((project) => project.id === selectedProjectId) ?? null,
+      selectedProjectId,
+      view,
+      expandedProjectIds,
+      threads,
+      getThreadsForProject,
+      getTicketsForProject,
+      addProject,
+      deleteProject,
+      renameProject,
+      updateProject,
+      toggleProjectExpanded,
+      selectProject,
+      selectTicket,
+      selectThread,
+      selectStandaloneThread,
+      createThread,
+      createThreadForTicket,
+      markThreadKickoffConsumed,
+      deleteThread,
+      renameThread,
+      updateThreadDisplayMode,
+      resolveProjectId,
+      setView,
+    }),
+    [
+      reconciledStoredProjects,
+      visibleLooseWorkspaceProjects,
+      allProjects,
+      selectedProjectId,
+      view,
+      expandedProjectIds,
+      threads,
+      getThreadsForProject,
+      getTicketsForProject,
+      addProject,
+      deleteProject,
+      renameProject,
+      updateProject,
+      toggleProjectExpanded,
+      selectProject,
+      selectTicket,
+      selectThread,
+      selectStandaloneThread,
+      createThread,
+      createThreadForTicket,
+      markThreadKickoffConsumed,
+      deleteThread,
+      renameThread,
+      updateThreadDisplayMode,
+      resolveProjectId,
+    ],
+  );
 }
 
 export { generateProjectId };
