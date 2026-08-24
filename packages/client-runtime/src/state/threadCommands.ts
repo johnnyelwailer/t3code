@@ -17,6 +17,7 @@ import {
   type SettleThreadInput,
   type SnoozeThreadInput,
   type StartThreadTurnInput,
+  type ResumeThreadTurnInput,
   type StopThreadSessionInput,
   type UnarchiveThreadInput,
   type UnpinThreadInput,
@@ -37,6 +38,7 @@ import {
   settleThread,
   snoozeThread,
   startThreadTurn,
+  resumeThreadTurn,
   stopThreadSession,
   unarchiveThread,
   unpinThread,
@@ -166,6 +168,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     startTurn: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:start-turn",
       execute: (input: StartThreadTurnInput) => startThreadTurn(input),
+      scheduler,
+      concurrency,
+    }),
+    resumeTurn: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:resume-turn",
+      execute: (input: ResumeThreadTurnInput) => resumeThreadTurn(input),
       scheduler,
       concurrency,
     }),

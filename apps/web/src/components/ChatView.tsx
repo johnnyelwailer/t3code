@@ -169,6 +169,7 @@ import {
   ChevronLeftIcon,
   GitBranchIcon,
   PaperclipIcon,
+  PlayIcon,
   WifiOffIcon,
 } from "lucide-react";
 import { cn, randomHex } from "~/lib/utils";
@@ -1282,6 +1283,10 @@ function ChatViewContent(props: ChatViewProps) {
     reportFailure: false,
   });
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const resumeThreadTurnCommand = useAtomCommand(threadEnvironment.resumeTurn, {
+    reportFailure: false,
+  });
+  const [isResumingTurn, setIsResumingTurn] = useState(false);
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, {
     reportFailure: false,
   });
@@ -4598,6 +4603,60 @@ function ChatViewContent(props: ChatViewProps) {
   // settled turns, so a passive "update available" notice must not cover it —
   // then calm system banners, the woke and branch-mismatch notices, and the
   // informational parked-thread banner last — it must never cover another.
+  // t3team: a thread whose LAST item is an unanswered user message (the reply
+  // was lost to a crash, gateway outage, or silent failure) offers a one-click
+  // Continue that re-runs that existing message — no new message is appended.
+  // Guard against the normal turn-start window: right after a send the last
+  // message is user and latestTurn is still the PREVIOUS settled turn until
+  // session-set arrives, so also require no pending/starting turn machinery —
+  // otherwise the banner flashes after every ordinary send.
+  const lastMessageIsUnansweredUser =
+    (activeThread?.messages.at(-1)?.role ?? null) === "user" &&
+    activeThread?.turnStartPending !== true &&
+    activeThread?.session?.status !== "starting";
+  const handleResumeThreadTurn = useCallback(async () => {
+    if (!activeThreadId) return;
+    setIsResumingTurn(true);
+    try {
+      await resumeThreadTurnCommand({
+        environmentId,
+        input: { threadId: activeThreadId },
+      });
+      // Deliberately stay disabled on success: the banner disappears once the
+      // turn events arrive, and re-enabling in that gap invites a second
+      // dispatch the decider would only reject noisily.
+    } catch {
+      setIsResumingTurn(false);
+    }
+  }, [activeThreadId, environmentId, resumeThreadTurnCommand]);
+  // Re-arm the latch whenever the unanswered state goes away (turn started,
+  // reply arrived, or the user switched threads).
+  useEffect(() => {
+    if (!lastMessageIsUnansweredUser || !latestTurnSettled) setIsResumingTurn(false);
+  }, [lastMessageIsUnansweredUser, latestTurnSettled, activeThreadId]);
+  const unansweredMessageBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
+    if (!activeThreadId || !lastMessageIsUnansweredUser || !latestTurnSettled) {
+      return null;
+    }
+    return {
+      id: `thread-unanswered:${activeThreadId}`,
+      variant: "info",
+      icon: <PlayIcon />,
+      title: "Your last message never got a reply",
+      description: "Continue re-runs it as-is — nothing new is added to the thread.",
+      actions: (
+        <Button size="xs" disabled={isResumingTurn} onClick={() => void handleResumeThreadTurn()}>
+          {isResumingTurn ? "Continuing..." : "Continue"}
+        </Button>
+      ),
+    };
+  }, [
+    activeThreadId,
+    handleResumeThreadTurn,
+    isResumingTurn,
+    lastMessageIsUnansweredUser,
+    latestTurnSettled,
+  ]);
   const parkedThreadBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (!activeThreadSnoozed && !activeThreadSettled) {
       return null;
@@ -4655,12 +4714,15 @@ function ChatViewContent(props: ChatViewProps) {
       backgroundLivenessBannerItem === null ? [] : [backgroundLivenessBannerItem];
     const wokeThreadItems = wokeThreadBannerItem === null ? [] : [wokeThreadBannerItem];
     const parkedThreadItems = parkedThreadBannerItem === null ? [] : [parkedThreadBannerItem];
+    const unansweredMessageItems =
+      unansweredMessageBannerItem === null ? [] : [unansweredMessageBannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
       return [
         ...urgentSystemItems,
         ...backgroundLivenessItems,
         ...calmSystemItems,
         ...wokeThreadItems,
+        ...unansweredMessageItems,
         ...parkedThreadItems,
       ];
     }
@@ -4669,6 +4731,7 @@ function ChatViewContent(props: ChatViewProps) {
       ...backgroundLivenessItems,
       ...calmSystemItems,
       ...wokeThreadItems,
+      ...unansweredMessageItems,
       {
         id: `branch-mismatch:${activeBranchMismatchKey}`,
         variant: "info",
@@ -4717,6 +4780,7 @@ function ChatViewContent(props: ChatViewProps) {
     isRestoringThreadBranch,
     localCheckoutBranchMismatch,
     parkedThreadBannerItem,
+    unansweredMessageBannerItem,
     showBranchMismatchBanner,
     systemComposerBannerItems,
     wokeThreadBannerItem,

@@ -988,6 +988,22 @@ const ClientThreadTurnStartCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+/**
+ * t3team: re-run the thread's LAST user message without appending a new one.
+ * For a thread whose final item is an unanswered user message (the reply was
+ * lost to a crash, gateway outage, or silent failure), this emits a
+ * `thread.turn-start-requested` for that existing message — the provider
+ * receives the full thread again, and no synthetic "continue" text is added.
+ */
+export const ThreadTurnResumeCommand = Schema.Struct({
+  type: Schema.Literal("thread.turn.resume"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  modelSelection: Schema.optional(ModelSelection),
+  createdAt: IsoDateTime,
+});
+export type ThreadTurnResumeCommand = typeof ThreadTurnResumeCommand.Type;
+
 const ThreadTurnInterruptCommand = Schema.Struct({
   type: Schema.Literal("thread.turn.interrupt"),
   commandId: CommandId,
@@ -1077,6 +1093,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
+  ThreadTurnResumeCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
   ThreadUserInputRespondCommand,
@@ -1105,6 +1122,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
+  ThreadTurnResumeCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
   ThreadUserInputRespondCommand,
