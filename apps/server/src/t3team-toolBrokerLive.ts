@@ -38,12 +38,16 @@ import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
   // Host tools every provider may call without an explicit `surface:"t3team"`
   // tool-context (e.g. a pack driver reaching the /mcp endpoint): thread rename,
-  // child spawning, running an ephemeral agent orchestration, and inspecting/
-  // validating saved or inline recipe orchestrations.
+  // child spawning, reading the thread's own transcript (search / search_source /
+  // read_message — all read-only), running an ephemeral agent orchestration, and
+  // inspecting/validating saved or inline recipe orchestrations.
   const genericThreadToolIds = [
     "t3team.thread.rename",
     "t3team.thread.start_child",
     "t3team.thread.children",
+    "t3team.thread.search",
+    "t3team.thread.search_source",
+    "t3team.thread.read_message",
     "t3team.orchestration.run",
     "t3team.orchestration.status",
     "t3team.orchestration.resume",

@@ -85,6 +85,37 @@ describe("T3TeamToolBroker allowed tool groups", () => {
     expect(result.writeResult.content[0]?.text).toContain("requires group 'view.state'");
   });
 
+  it("enables transcript read tools for threads without a stored tool context (#168)", async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const broker = yield* T3TeamToolBroker;
+        // No toolContext passed and nothing stored for this thread → the
+        // genericThreadToolIds fallback decides availability.
+        const binding = yield* broker.bindSession({ threadId });
+        const searchResult = yield* binding!.callTool({
+          server: "t3team",
+          tool: "t3team.thread.search",
+          arguments: { query: "anything" },
+        });
+        return { binding, searchResult };
+      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+    );
+
+    const tools = result.binding?.listServers()[0]?.tools ?? {};
+    expect(tools["t3team.thread.search"]).toEqual(
+      expect.objectContaining({ name: "t3team.thread.search" }),
+    );
+    expect(tools["t3team.thread.search_source"]).toEqual(
+      expect.objectContaining({ name: "t3team.thread.search_source" }),
+    );
+    expect(tools["t3team.thread.read_message"]).toEqual(
+      expect.objectContaining({ name: "t3team.thread.read_message" }),
+    );
+    // Passed the availability gate — any failure from here on is the
+    // (expected) missing test fixture, not "not enabled".
+    expect(result.searchResult.content[0]?.text).not.toContain("not enabled");
+  });
+
   it("allows backlog view-state tools when the recipe declares view.state", async () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
