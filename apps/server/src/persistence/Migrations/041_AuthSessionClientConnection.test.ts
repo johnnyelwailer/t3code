@@ -13,8 +13,10 @@ layer("041_AuthSessionClientConnection", (it) => {
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      yield* runMigrations({ toMigrationInclusive: 40 });
-      yield* runMigrations({ toMigrationInclusive: 41 });
+      // Upstream authored this as 040→041; on this fork the migration is
+      // registered as id 55 (see Migrations.ts's renumbering rule).
+      yield* runMigrations({ toMigrationInclusive: 54 });
+      yield* runMigrations({ toMigrationInclusive: 55 });
 
       const columns = yield* sql<{ readonly name: string; readonly notnull: number }>`
         PRAGMA table_info(auth_sessions)

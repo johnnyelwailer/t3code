@@ -16,6 +16,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
+// JSON.parse/JSON.stringify are forbidden by effect(preferSchemaOverJson);
+// these decode/encode an unknown value through a JSON string exactly like the
+// globals would, without widening the diagnostic surface.
+const parseJsonUnknown = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown));
+const stringifyJsonPretty = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }));
+
 export class AuthoringTypesStagingError extends Schema.TaggedErrorClass<AuthoringTypesStagingError>()(
   "AuthoringTypesStagingError",
   { missingPath: Schema.String },
@@ -68,7 +74,7 @@ export const readAuthoringTypeDependencySpecs = Effect.fn(
     const manifestRaw = yield* fs.readFileString(
       path.join(input.repoRoot, "packages", packageDir, "package.json"),
     );
-    specs[name] = (JSON.parse(manifestRaw) as { readonly version: string }).version;
+    specs[name] = (parseJsonUnknown(manifestRaw) as { readonly version: string }).version;
   }
   // The compiler ships as a trimmed copy (see stageAuthoringTypes); declare it
   // with the catalog range so the manifest stays honest about what is staged.
@@ -107,7 +113,7 @@ export const stageAuthoringTypes = Effect.fn("desktopArtifact.stageAuthoringType
       // (electron-builder reads it for the asar pruning closure) plus src/.
       yield* fs.remove(targetDir).pipe(Effect.orElseSucceed(() => undefined));
       yield* fs.makeDirectory(targetDir, { recursive: true });
-      const manifest = JSON.parse(
+      const manifest = parseJsonUnknown(
         yield* fs.readFileString(path.join(sourceDir, "package.json")),
       ) as { readonly dependencies?: Record<string, unknown>; [key: string]: unknown };
       const curated = {
@@ -123,7 +129,7 @@ export const stageAuthoringTypes = Effect.fn("desktopArtifact.stageAuthoringType
       };
       yield* fs.writeFileString(
         path.join(targetDir, "package.json"),
-        `${JSON.stringify(curated, null, 2)}\n`,
+        `${stringifyJsonPretty(curated)}\n`,
       );
       yield* fs.copy(path.join(sourceDir, "src"), path.join(targetDir, "src"));
     }
@@ -182,4 +188,3 @@ export const stageAuthoringTypes = Effect.fn("desktopArtifact.stageAuthoringType
     );
   },
 );
-

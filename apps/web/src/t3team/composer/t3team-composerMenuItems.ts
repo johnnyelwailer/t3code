@@ -1,4 +1,5 @@
 import {
+  formatProviderSkillDisplayName,
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
 } from "@t3tools/client-runtime/providerSkills";
@@ -13,7 +14,6 @@ import type { ComposerSlashCommand, ComposerTrigger } from "~/composer-logic";
 import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu";
 import { searchSlashCommandItems } from "~/components/chat/composerSlashCommandSearch";
 import { basenameOfPath } from "~/pierre-icons";
-import { formatProviderSkillDisplayName } from "~/providerSkillPresentation";
 import { searchProviderSkills } from "~/providerSkillSearch";
 
 export type T3TeamComposerBuiltInSlashCommand = {

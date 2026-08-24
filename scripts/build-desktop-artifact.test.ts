@@ -1384,6 +1384,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         mockUpdates: Option.none(),
         mockUpdateServerPort: Option.none(),
         wslPrebuild: Option.none(),
+        packsDir: Option.none(),
+        productName: Option.none(),
+        iconPng: Option.none(),
       }).pipe(
         Effect.provide(
           Layer.mergeAll(
@@ -1424,6 +1427,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
             mockUpdates: Option.none(),
             mockUpdateServerPort: Option.none(),
             wslPrebuild: Option.none(),
+            packsDir: Option.none(),
+            productName: Option.none(),
+            iconPng: Option.none(),
           }),
         );
 
@@ -1448,6 +1454,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         mockUpdates: Option.some(false),
         mockUpdateServerPort: Option.none(),
         wslPrebuild: Option.none(),
+        packsDir: Option.none(),
+        productName: Option.none(),
+        iconPng: Option.none(),
       }).pipe(
         Effect.provide(
           ConfigProvider.layer(

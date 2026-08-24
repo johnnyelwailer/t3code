@@ -56,6 +56,12 @@ const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "com.t3tools.t3code";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
+// JSON.parse/JSON.stringify are forbidden by effect(preferSchemaOverJson);
+// these decode/encode an unknown value through a JSON string exactly like the
+// globals would, without widening the diagnostic surface.
+const parseJsonUnknown = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown));
+const stringifyJsonPretty = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }));
+
 export const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
 export const BuildArch = Schema.Literals(["arm64", "x64", "universal"]);
 
@@ -2229,7 +2235,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 export function resolveDesktopProductName(version: string, productNameOverride?: string): string {
   const override = productNameOverride?.trim() || process.env.T3CODE_DESKTOP_PRODUCT_NAME?.trim();
   if (override) {
-    console.error(`[desktop-artifact] Using product name override: ${override}`);
+    Effect.runSync(Effect.logError(`[desktop-artifact] Using product name override: ${override}`));
     return override;
   }
   const baseName = desktopPackageJson.productName || "T3 Code";
@@ -3287,7 +3293,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     };
     yield* fs.writeFileString(
       path.join(stageProdResourcesDir, "desktop-branding.json"),
-      `${JSON.stringify(brandingResource, null, 2)}\n`,
+      `${stringifyJsonPretty(brandingResource)}\n`,
     );
   }
 
@@ -3341,7 +3347,8 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const packApiManifestRaw = yield* fs.readFileString(
     path.join(repoRoot, "packages", "t3team-pack-api", "package.json"),
   );
-  const packApiVersion = (JSON.parse(packApiManifestRaw) as { readonly version: string }).version;
+  const packApiVersion = (parseJsonUnknown(packApiManifestRaw) as { readonly version: string })
+    .version;
   const stageDependencies =
     options.platform === "win"
       ? { ...resolvedDesktopRuntimeDependencies, "@t3team/pack-api": packApiVersion }
@@ -3457,9 +3464,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   );
   // Patch package.json to export the compiled .mjs
   const pkgJsonPath = path.join(packApiDir, "package.json");
-  const pkgJson = JSON.parse(yield* fs.readFileString(pkgJsonPath));
+  const pkgJson = parseJsonUnknown(yield* fs.readFileString(pkgJsonPath)) as Record<
+    string,
+    unknown
+  >;
   pkgJson.exports = { ".": { import: "./index.mjs" } };
-  yield* fs.writeFileString(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + "\n");
+  yield* fs.writeFileString(pkgJsonPath, stringifyJsonPretty(pkgJson) + "\n");
 
   // macOS and Linux run the server from the asar, so the asar's node_modules
   // must carry the authoring-type closure the packaged typechecker resolves

@@ -11,29 +11,20 @@ import {
 } from "@t3tools/contracts";
 import {
   BlocksIcon,
-  BotIcon,
   FolderIcon,
   PackageIcon,
   SettingsIcon,
-  SparklesIcon,
   UserRoundIcon,
   type LucideIcon,
 } from "lucide-react";
-import { memo, useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useLayoutEffect, useRef } from "react";
 
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
 import { cn } from "~/lib/utils";
 import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import { Badge } from "../ui/badge";
-import {
-  Command,
-  CommandGroup,
-  CommandGroupLabel,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from "../ui/command";
+import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 
 export type ComposerCommandItem =
@@ -84,68 +75,11 @@ export type ComposerCommandItem =
       description: string;
     };
 
-type ComposerCommandGroup = {
-  id: string;
-  label: string | null;
-  items: ReadonlyArray<ComposerCommandItem>;
-};
-
-function SkillGlyph(props: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.85"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={props.className}
-      aria-hidden="true"
-    >
-      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-      <path d="m3.3 7 8.7 5 8.7-5" />
-      <path d="M12 22V12" />
-    </svg>
-  );
-}
-
-function groupCommandItems(
-  items: ReadonlyArray<ComposerCommandItem>,
-  triggerKind: ComposerTriggerKind | null,
-  groupSlashCommandSections: boolean,
-): ComposerCommandGroup[] {
-  if (triggerKind === "skill") {
-    return items.length > 0 ? [{ id: "skills", label: "Skills", items }] : [];
-  }
-  if (triggerKind !== "slash-command" || !groupSlashCommandSections) {
-    return [{ id: "default", label: null, items }];
-  }
-
-  const builtInItems = items.filter((item) => item.type === "slash-command");
-  const providerItems = items.filter((item) => item.type === "provider-slash-command");
-  const recipeItems = items.filter((item) => item.type === "recipe-slash-command");
-
-  const groups: ComposerCommandGroup[] = [];
-  if (builtInItems.length > 0) {
-    groups.push({ id: "built-in", label: "Built-in", items: builtInItems });
-  }
-  if (providerItems.length > 0) {
-    groups.push({ id: "provider", label: "Provider", items: providerItems });
-  }
-  // Recipes come last so a project recipe can never appear to shadow a host
-  // command (docs/t3team-mvp/16-action-recipes.md#menu-grouping).
-  if (recipeItems.length > 0) {
-    groups.push({ id: "recipes", label: "Recipes", items: recipeItems });
-  }
-  return groups;
-}
-
 export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
   items: ReadonlyArray<ComposerCommandItem>;
   resolvedTheme: "light" | "dark";
   isLoading: boolean;
   triggerKind: ComposerTriggerKind | null;
-  groupSlashCommandSections?: boolean;
   emptyStateText?: string;
   /**
    * Enables the listbox/option ARIA wiring. The caller owns the id because it
@@ -158,11 +92,6 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
   onSelect: (item: ComposerCommandItem) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
-  const groups = useMemo(
-    () =>
-      groupCommandItems(props.items, props.triggerKind, props.groupSlashCommandSections ?? true),
-    [props.groupSlashCommandSections, props.items, props.triggerKind],
-  );
 
   const listboxId = props.listboxId;
   useLayoutEffect(() => {
@@ -197,34 +126,24 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
         {props.items.length > 0 ? (
           <CommandList
             {...(props.listboxId ? { id: props.listboxId, role: "listbox" as const } : {})}
-            className="max-h-72 scroll-pb-6 not-empty:py-3"
+            className="max-h-72 scroll-pb-6"
           >
-            {groups.map((group, groupIndex) => (
-              <div key={group.id}>
-                {groupIndex > 0 ? <CommandSeparator className="my-0.5" /> : null}
-                <CommandGroup>
-                  {group.label ? (
-                    <CommandGroupLabel className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary-label">
-                      {group.label}
-                    </CommandGroupLabel>
-                  ) : null}
-                  {group.items.map((item) => (
-                    <ComposerCommandMenuItem
-                      key={item.id}
-                      item={item}
-                      triggerKind={props.triggerKind}
-                      resolvedTheme={props.resolvedTheme}
-                      isActive={props.activeItemId === item.id}
-                      {...(props.listboxId
-                        ? { optionDomId: t3teamComposerMenuOptionDomId(props.listboxId, item.id) }
-                        : {})}
-                      onHighlight={props.onHighlightedItemChange}
-                      onSelect={props.onSelect}
-                    />
-                  ))}
-                </CommandGroup>
-              </div>
-            ))}
+            <CommandGroup>
+              {props.items.map((item) => (
+                <ComposerCommandMenuItem
+                  key={item.id}
+                  item={item}
+                  triggerKind={props.triggerKind}
+                  resolvedTheme={props.resolvedTheme}
+                  isActive={props.activeItemId === item.id}
+                  {...(props.listboxId
+                    ? { optionDomId: t3teamComposerMenuOptionDomId(props.listboxId, item.id) }
+                    : {})}
+                  onHighlight={props.onHighlightedItemChange}
+                  onSelect={props.onSelect}
+                />
+              ))}
+            </CommandGroup>
           </CommandList>
         ) : (
           <div className="px-5 pt-3.5 pb-7">
@@ -295,22 +214,6 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           kind={props.item.pathKind}
           theme={props.resolvedTheme}
         />
-      ) : null}
-      {props.item.type === "slash-command" ? (
-        <BotIcon className="size-4 shrink-0 text-icon-muted" />
-      ) : null}
-      {props.item.type === "provider-slash-command" ? (
-        <span className="inline-flex size-4 shrink-0 items-center justify-center text-icon-muted">
-          <SkillGlyph className="size-3.5" />
-        </span>
-      ) : null}
-      {props.item.type === "skill" ? (
-        <span className="inline-flex size-4 shrink-0 items-center justify-center text-icon-muted">
-          <SkillGlyph className="size-3.5" />
-        </span>
-      ) : null}
-      {props.item.type === "recipe-slash-command" ? (
-        <SparklesIcon className="size-4 shrink-0 text-muted-foreground/80" />
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="min-w-0 max-w-[45%] shrink-0 truncate font-sans text-xs font-medium">

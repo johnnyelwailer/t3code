@@ -18,6 +18,9 @@
  * This guard runs on every CI pass and prevents the pattern from silently
  * re-appearing during a future refactor or upstream sync.
  */
+// @effect-diagnostics nodeBuiltinImport:off
+// A static source guard: reads a sibling file's text synchronously at collect
+// time, exactly like the repo's other regression guards (-chatIndexTitlebar).
 import * as fs from "node:fs";
 import * as path from "node:path";
 

@@ -2872,10 +2872,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     resolvedTheme={resolvedTheme}
                     isLoading={isComposerMenuLoading}
                     triggerKind={composerTriggerKind}
-                    groupSlashCommandSections={
-                      composerTrigger?.kind === "slash-command" &&
-                      composerTrigger.query.trim().length === 0
-                    }
                     emptyStateText={composerMenuEmptyState}
                     listboxId={composerMenuListboxId}
                     activeItemId={composerMenu.activeItemId}

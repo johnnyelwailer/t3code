@@ -57,6 +57,10 @@ import { AUTHORING_TYPE_PACKAGES, stageAuthoringTypes } from "./lib/authoring-ty
 
 const PROBE_TIMEOUT = Duration.seconds(180);
 
+// JSON.stringify is forbidden by effect(preferSchemaOverJson); this encodes
+// an unknown value through a JSON string exactly like the global would.
+const stringifyJsonPretty = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }));
+
 export class OrchestrationBundleProbeError extends Schema.TaggedErrorClass<OrchestrationBundleProbeError>()(
   "OrchestrationBundleProbeError",
   { exitCode: Schema.Number, output: Schema.String },
@@ -81,6 +85,15 @@ export class OrchestrationBundleClosureError extends Schema.TaggedErrorClass<Orc
 ) {
   override get message(): string {
     return `The packaged typechecker closure is incomplete: ${this.detail}`;
+  }
+}
+
+export class OrchestrationBundleStagingDirError extends Schema.TaggedErrorClass<OrchestrationBundleStagingDirError>()(
+  "OrchestrationBundleStagingDirError",
+  { cause: Schema.Unknown },
+) {
+  override get message(): string {
+    return `Could not create the staging directory: ${String(this.cause)}`;
   }
 }
 
@@ -206,7 +219,7 @@ const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(function*
     : yield* Effect.tryPromise({
         try: () =>
           NodeFS.promises.mkdtemp(NodePath.join(NodeOS.tmpdir(), "orchestration-bundle-check-")),
-        catch: (cause) => new Error(`Could not create the staging directory: ${String(cause)}`),
+        catch: (cause) => new OrchestrationBundleStagingDirError({ cause }),
       });
   if (keepDir) NodeFS.rmSync(stagingDir, { recursive: true, force: true });
   NodeFS.mkdirSync(stagingDir, { recursive: true });
@@ -233,16 +246,12 @@ const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(function*
 
     NodeFS.writeFileSync(
       NodePath.join(stagingDir, "package.json"),
-      `${JSON.stringify(
-        {
-          name: "orchestration-bundle-check",
-          version: "0.0.0",
-          private: true,
-          dependencies: probeDependencies,
-        },
-        null,
-        2,
-      )}\n`,
+      `${stringifyJsonPretty({
+        name: "orchestration-bundle-check",
+        version: "0.0.0",
+        private: true,
+        dependencies: probeDependencies,
+      })}\n`,
     );
     // pnpm 11 fails the install (non-zero exit) when a dependency's build
     // script is not explicitly allowed; the native prebuilds need theirs to

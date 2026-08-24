@@ -41,8 +41,13 @@ describe("thread sidebar width", () => {
       "utf8",
     );
 
-    expect(sidebarSource).toContain("hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1");
-    expect(sidebarSource).toContain("md:flex");
+    // The fork routes brand visibility through the `.sidebar-brand` container
+    // query (index.css) instead of upstream's inline `hidden ... md:flex`, so
+    // the wordmark stays visible down to the sidebar's minimum width.
+    expect(sidebarSource).toContain("sidebar-brand");
+    const indexCss = NodeFS.readFileSync(new URL("../index.css", import.meta.url), "utf8");
+    expect(indexCss).toContain(".sidebar-brand");
+    expect(indexCss).toContain("@container sidebar-header (min-width: 13.5rem)");
     expect(THREAD_SIDEBAR_MIN_WIDTH).toBe(13 * 16);
   });
 });
