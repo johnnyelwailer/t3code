@@ -10,6 +10,9 @@
  * - Workflow expansion is presentation state. A live run stays expanded when
  *   it settles; older collapsed runs can still be opened at run granularity.
  * - Static status dots, DOM-write elapsed timers, plain token counters.
+ * - One bounded scroll container holds the roster AND the fork section in both
+ *   branches; the 'No agents yet' hero renders only when there is genuinely
+ *   nothing (no native agents, no fork content).
  */
 import { useAtomValue } from "@effect/atom-react";
 import type {
@@ -526,10 +529,11 @@ export function AgentsPanel({
   environmentId = null,
   threadId = null,
   // Fork seam: a fork-owned section (sub-run child threads, recipe workflow runs — concepts
-  // upstream's roster model has no field for) rendered below the native roster. See
+  // upstream's roster model has no field for) rendered inside the SAME bounded scroll container
+  // as the native roster, so fork content scrolls with it in both branches. See
   // `T3TeamAgentsPanelForkSection` for why this is a separate section instead of adapted
-  // `RuntimeSubagent` rows. Renders in BOTH branches below so fork content still surfaces when
-  // this thread has no native subagents/workflows.
+  // `RuntimeSubagent` rows. Pass null when the fork has nothing to show so the empty state below
+  // is the only thing rendered — the hero and fork content must never share the panel.
   forkSection = null,
 }: {
   model: AgentPanelModel;
@@ -537,7 +541,7 @@ export function AgentsPanel({
   threadId?: ThreadId | null;
   forkSection?: ReactNode;
 }) {
-  if (!model.hasAgents) {
+  if (!model.hasAgents && forkSection === null) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
@@ -548,7 +552,6 @@ export function AgentsPanel({
             status, activity, and token usage.
           </p>
         </div>
-        {forkSection}
       </div>
     );
   }
@@ -556,40 +559,44 @@ export function AgentsPanel({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-2 p-2">
-          {model.workflows.map((group) => (
-            <WorkflowSection
-              key={group.workflow.id}
-              group={group}
-              environmentId={environmentId}
-              threadId={threadId}
-            />
-          ))}
-          {model.directAgents.length > 0 ? (
-            <section>
-              <div className="px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
-                Direct spawns
-              </div>
-              {model.directAgents.map((agent) => (
-                <AgentRow key={agent.id} agent={agent} />
-              ))}
-            </section>
-          ) : null}
-        </div>
+        {model.hasAgents ? (
+          <div className="flex flex-col gap-2 p-2">
+            {model.workflows.map((group) => (
+              <WorkflowSection
+                key={group.workflow.id}
+                group={group}
+                environmentId={environmentId}
+                threadId={threadId}
+              />
+            ))}
+            {model.directAgents.length > 0 ? (
+              <section>
+                <div className="px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                  Direct spawns
+                </div>
+                {model.directAgents.map((agent) => (
+                  <AgentRow key={agent.id} agent={agent} />
+                ))}
+              </section>
+            ) : null}
+          </div>
+        ) : null}
         {forkSection}
       </ScrollArea>
-      <footer className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 font-mono text-[.7rem] text-muted-foreground">
-        <span className="flex items-center gap-2">
-          {model.runningCount + model.waitingCount > 0 ? (
-            <span className="text-info-foreground">
-              ● {model.runningCount + model.waitingCount} working
-            </span>
-          ) : null}
-          {model.idleCount > 0 ? <span>{model.idleCount} idle</span> : null}
-          {model.settledCount > 0 ? <span>{model.settledCount} settled</span> : null}
-        </span>
-        <span className="tabular-nums">Σ {formatSubagentTokenCount(model.totalTokens)} tok</span>
-      </footer>
+      {model.hasAgents ? (
+        <footer className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 font-mono text-[.7rem] text-muted-foreground">
+          <span className="flex items-center gap-2">
+            {model.runningCount + model.waitingCount > 0 ? (
+              <span className="text-info-foreground">
+                ● {model.runningCount + model.waitingCount} working
+              </span>
+            ) : null}
+            {model.idleCount > 0 ? <span>{model.idleCount} idle</span> : null}
+            {model.settledCount > 0 ? <span>{model.settledCount} settled</span> : null}
+          </span>
+          <span className="tabular-nums">Σ {formatSubagentTokenCount(model.totalTokens)} tok</span>
+        </footer>
+      ) : null}
     </div>
   );
 }

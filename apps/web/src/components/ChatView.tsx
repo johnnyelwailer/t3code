@@ -6455,12 +6455,17 @@ function ChatViewContent(props: ChatViewProps) {
         environmentId={activeThreadRef?.environmentId ?? null}
         threadId={activeThreadRef?.threadId ?? null}
         forkSection={
-          <T3TeamAgentsPanelForkSection
-            childThreads={t3teamAgentsPanelSubRuns}
-            onOpenChildThread={onOpenThread ?? t3teamNoopOpenThread}
-            workflowRuns={activeWorkflowDockItems}
-            onOpenWorkflowRun={openWorkflowCard}
-          />
+          // Gate on real content so AgentsPanel's empty-state hero only renders when there is
+          // genuinely nothing to show (the hero and fork content must never share the panel).
+          t3teamAgentsPanelSubRuns.length > 0 || activeWorkflowDockItems.length > 0 ? (
+            <T3TeamAgentsPanelForkSection
+              childThreadsByParentId={t3teamChildThreadsByParentId}
+              rootThreadId={activeThread?.id ?? null}
+              onOpenChildThread={onOpenThread ?? t3teamNoopOpenThread}
+              workflowRuns={activeWorkflowDockItems}
+              onOpenWorkflowRun={openWorkflowCard}
+            />
+          ) : null
         }
       />
     ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
