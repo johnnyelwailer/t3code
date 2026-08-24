@@ -1084,11 +1084,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Thread '${command.threadId}' already has a turn in progress.`,
         });
       }
+      // Post-restart the rehydrated read model has `messages: []` for every
+      // pre-existing thread (snapshot threads are rebuilt without messages),
+      // so the last-message invariant can only be enforced when messages are
+      // actually hydrated. When they are not, the reactor's SQL-backed lookup
+      // of `command.messageId` (must exist, role user) is the gate.
       const lastMessage = targetThread.messages.at(-1);
-      if (!lastMessage || lastMessage.role !== "user") {
+      if (
+        targetThread.messages.length > 0 &&
+        (!lastMessage || lastMessage.role !== "user" || lastMessage.id !== command.messageId)
+      ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Thread '${command.threadId}' does not end with an unanswered user message.`,
+          detail: `Thread '${command.threadId}' does not end with unanswered user message '${command.messageId}'.`,
         });
       }
       const resumeEvent: Omit<OrchestrationEvent, "sequence"> = {
@@ -1101,7 +1109,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         type: "thread.turn-start-requested",
         payload: {
           threadId: command.threadId,
-          messageId: lastMessage.id,
+          messageId: command.messageId,
           ...(command.modelSelection !== undefined
             ? { modelSelection: command.modelSelection }
             : {}),

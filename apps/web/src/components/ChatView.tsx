@@ -4610,17 +4610,20 @@ function ChatViewContent(props: ChatViewProps) {
   // message is user and latestTurn is still the PREVIOUS settled turn until
   // session-set arrives, so also require no pending/starting turn machinery —
   // otherwise the banner flashes after every ordinary send.
+  const lastThreadMessage = activeThread?.messages.at(-1);
   const lastMessageIsUnansweredUser =
-    (activeThread?.messages.at(-1)?.role ?? null) === "user" &&
+    lastThreadMessage?.role === "user" &&
     activeThread?.turnStartPending !== true &&
     activeThread?.session?.status !== "starting";
+  const unansweredMessageId = lastMessageIsUnansweredUser ? (lastThreadMessage?.id ?? null) : null;
   const handleResumeThreadTurn = useCallback(async () => {
     if (!activeThreadId) return;
     setIsResumingTurn(true);
     try {
+      if (!unansweredMessageId) return;
       await resumeThreadTurnCommand({
         environmentId,
-        input: { threadId: activeThreadId },
+        input: { threadId: activeThreadId, messageId: unansweredMessageId },
       });
       // Deliberately stay disabled on success: the banner disappears once the
       // turn events arrive, and re-enabling in that gap invites a second
@@ -4628,7 +4631,7 @@ function ChatViewContent(props: ChatViewProps) {
     } catch {
       setIsResumingTurn(false);
     }
-  }, [activeThreadId, environmentId, resumeThreadTurnCommand]);
+  }, [activeThreadId, environmentId, resumeThreadTurnCommand, unansweredMessageId]);
   // Re-arm the latch whenever the unanswered state goes away (turn started,
   // reply arrived, or the user switched threads).
   useEffect(() => {
@@ -4642,8 +4645,7 @@ function ChatViewContent(props: ChatViewProps) {
       id: `thread-unanswered:${activeThreadId}`,
       variant: "info",
       icon: <PlayIcon />,
-      title: "Your last message never got a reply",
-      description: "Continue re-runs it as-is.",
+      title: "Continue",
       actions: (
         <Button size="xs" disabled={isResumingTurn} onClick={() => void handleResumeThreadTurn()}>
           {isResumingTurn ? "Continuing..." : "Continue"}

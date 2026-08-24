@@ -214,6 +214,7 @@ it.effect("decodes thread.turn.resume through both command unions", () =>
       type: "thread.turn.resume",
       commandId: "cmd-turn-resume-1",
       threadId: "thread-1",
+      messageId: "msg-1",
       createdAt: "2026-08-24T08:00:00.000Z",
     };
     const client = yield* Schema.decodeUnknownEffect(ClientOrchestrationCommand)(command);

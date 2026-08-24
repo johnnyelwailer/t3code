@@ -88,6 +88,7 @@ const command = {
   type: "thread.turn.resume" as const,
   commandId: CommandId.make("turn-resume-command"),
   threadId,
+  messageId: lastUserMessageId,
   createdAt: now,
 };
 
@@ -118,16 +119,35 @@ it.layer(NodeServices.layer)("thread turn resume", (it) => {
           }),
         }),
       );
-      expect(error.message).toContain("does not end with an unanswered user message");
+      expect(error.message).toContain("does not end with unanswered user message");
     }),
   );
 
-  it.effect("rejects when the thread has no messages at all", () =>
+  // Post-restart the rehydrated read model has messages: [] for every
+  // pre-existing thread — exactly the lost-reply threads this feature exists
+  // for. The decider must defer to the reactor's SQL-backed message lookup.
+  it.effect("accepts when messages are not hydrated (post-restart read model)", () =>
+    Effect.gen(function* () {
+      const decided = yield* decideOrchestrationCommand({
+        command,
+        readModel: withThread({ messages: [] }),
+      });
+      const events = Array.isArray(decided) ? decided : [decided];
+      expect(events.map((entry) => entry.type)).toEqual(["thread.turn-start-requested"]);
+      const payload = events[0]!.payload as { messageId: string };
+      expect(payload.messageId).toBe(lastUserMessageId);
+    }),
+  );
+
+  it.effect("rejects a stale messageId that is no longer the last message", () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
-        decideOrchestrationCommand({ command, readModel: withThread({ messages: [] }) }),
+        decideOrchestrationCommand({
+          command: { ...command, messageId: MessageId.make("turn-resume-earlier") },
+          readModel,
+        }),
       );
-      expect(error.message).toContain("does not end with an unanswered user message");
+      expect(error.message).toContain("does not end with unanswered user message");
     }),
   );
 
