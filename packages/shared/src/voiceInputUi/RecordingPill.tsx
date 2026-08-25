@@ -51,7 +51,6 @@ export function RecordingPill({
     >
       <button
         type="button"
-        disabled={disabled}
         onClick={onToggle}
         aria-label="Aufnahme beenden"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-l-full"
