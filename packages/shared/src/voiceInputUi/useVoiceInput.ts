@@ -60,6 +60,8 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
   const barElsRef = useRef<Array<HTMLSpanElement | null>>([]);
   const autoResumeRef = useRef(false);
   const startRecordingRef = useRef<() => void>(() => {});
+  const silenceTimerRef = useRef(0);
+  const levelNowRef = useRef(0);
 
   const transition = useCallback(
     (next: VoiceState) => {
@@ -78,6 +80,8 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
   const stopRecording = useCallback(
     (cancelled: boolean, autoSubmit?: boolean) => {
       if (stateRef.current === "idle") return;
+      window.clearInterval(silenceTimerRef.current);
+      silenceTimerRef.current = 0;
       transition("idle");
 
       barsStopRef.current?.();
@@ -160,22 +164,31 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     autoStop.prime(Date.now());
     transition("recording");
 
+    // Silence auto-stop runs on a 250ms timer, NOT on the rAF loop: rAF is
+    // throttled or paused when the tab loses focus, and auto-send must keep
+    // working even when the user alt-tabs away mid-recording.
+    window.clearInterval(silenceTimerRef.current);
+    silenceTimerRef.current = window.setInterval(() => {
+      if (stateRef.current !== "recording") return;
+      if (autoStop.observe(levelNowRef.current, Date.now())) {
+        if (accumulatedRef.current.trim()) {
+          // Something was said: commit + send, then stay in voice mode.
+          stopRecording(false, true);
+        } else {
+          // Nothing to send yet: keep listening, reset the silence clock.
+          autoStop.prime(Date.now());
+        }
+      }
+    }, 250);
+
     barsStopRef.current = startVoiceBars({
       audioContext: audioCtx,
       bars: () => barElsRef.current,
       clock: () => performance.now(),
       cssFrame: () => frameFromClock(Date.now(), BAR_COUNT),
       onEnergy: (level) => {
+        levelNowRef.current = level;
         onLevel?.(level);
-        if (autoStop.observe(level, Date.now())) {
-          if (accumulatedRef.current.trim()) {
-            // Something was said: commit + send, then stay in voice mode.
-            stopRecording(false, true);
-          } else {
-            // Nothing to send yet: keep listening, reset the silence clock.
-            autoStop.prime(Date.now());
-          }
-        }
       },
       onFrameError: (error) => {
         console.warn("[voice-input] Waveform/Analyse-Fehler (CSS-Fallback aktiv):", error);
@@ -192,6 +205,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     setSupported(VoiceRecognitionSession.isSupported());
     return () => {
       autoResumeRef.current = false;
+      window.clearInterval(silenceTimerRef.current);
       sessionRef.current?.stop();
       sessionRef.current = null;
       barsStopRef.current?.();
