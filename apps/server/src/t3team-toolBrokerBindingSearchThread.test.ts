@@ -23,9 +23,7 @@ const run = (
   toolArgs: unknown,
   overrides?: Partial<{
     threadId: ThreadId;
-    loadThreadDetail: (
-      threadId: ThreadId,
-    ) => Effect.Effect<SearchThreadDetail | undefined, string>;
+    loadThreadDetail: (threadId: ThreadId) => Effect.Effect<SearchThreadDetail | undefined, string>;
   }>,
 ) =>
   Effect.runPromise(
@@ -62,7 +60,10 @@ describe("callT3TeamSearchThreadTool", () => {
   });
 
   it("errors when the current thread cannot be read", async () => {
-    const result = await run({ query: "auth" }, { loadThreadDetail: () => Effect.succeed(undefined) });
+    const result = await run(
+      { query: "auth" },
+      { loadThreadDetail: () => Effect.succeed(undefined) },
+    );
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("Could not read the current thread");
   });
@@ -116,7 +117,10 @@ describe("callT3TeamSearchThreadTool", () => {
       expect.objectContaining({ totalMatches: 30, returnedMatches: 25 }),
     );
 
-    const defaulted = await run({ query: "needle" }, { loadThreadDetail: () => Effect.succeed(many) });
+    const defaulted = await run(
+      { query: "needle" },
+      { loadThreadDetail: () => Effect.succeed(many) },
+    );
     expect(defaulted.structuredContent).toEqual(
       expect.objectContaining({ totalMatches: 30, returnedMatches: 10 }),
     );

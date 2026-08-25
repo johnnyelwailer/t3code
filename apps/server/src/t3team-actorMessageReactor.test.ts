@@ -214,9 +214,7 @@ describe("T3TeamActorMessageReactorLive (coalescing)", () => {
       const eventStream = Stream.concat(
         Stream.fromIterable([delivery("m1")]),
         Stream.fromEffect(Deferred.await(release)).pipe(
-          Stream.flatMap(() =>
-            Stream.fromIterable([sessionSet("idle"), delivery("m2")]),
-          ),
+          Stream.flatMap(() => Stream.fromIterable([sessionSet("idle"), delivery("m2")])),
         ),
       );
       const engine = makeEngine(eventStream, dispatches);

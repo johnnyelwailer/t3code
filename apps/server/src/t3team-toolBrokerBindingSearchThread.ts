@@ -3,10 +3,7 @@ import * as Effect from "effect/Effect";
 
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
-import {
-  normalizeThreadSearchLimit,
-  searchThreadMessages,
-} from "./t3team-threadMessageSearch.ts";
+import { normalizeThreadSearchLimit, searchThreadMessages } from "./t3team-threadMessageSearch.ts";
 
 /**
  * `t3team.thread.search` — search the transcript of the CURRENT (bound)
@@ -86,13 +83,15 @@ export function callT3TeamSearchThreadTool(input: {
       ok: true,
       totalMatches: search.totalMatches,
       returnedMatches: search.returnedMatches,
-      matches: search.matches.map(({ position, role: matchRole, createdAt, messageId, snippet }) => ({
-        position,
-        role: matchRole,
-        ...(createdAt ? { createdAt } : {}),
-        message_id: messageId,
-        snippet,
-      })),
+      matches: search.matches.map(
+        ({ position, role: matchRole, createdAt, messageId, snippet }) => ({
+          position,
+          role: matchRole,
+          ...(createdAt ? { createdAt } : {}),
+          message_id: messageId,
+          snippet,
+        }),
+      ),
       ...(search.totalMatches === 0
         ? {
             hint: `No message in this thread contains "${query}". Try a shorter or different term.`,
