@@ -7,12 +7,9 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
-import {
-  EMPTY_ACTIVE_AGENTS,
-  T3TeamActiveAgentsIndicator,
-  T3TeamActiveAgentsStepLabel,
-  type ActiveAgentEntry,
-} from "~/t3team/chat/t3team-activeAgentsIndicator";
+import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
+import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
+import { T3TeamActiveAgentsStepLabel } from "~/t3team/chat/t3team-activeAgentsStepLabel";
 import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   emptyAgentPanelModel,

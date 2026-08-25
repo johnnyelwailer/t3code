@@ -413,7 +413,7 @@ import {
 import { deriveT3TeamWorkflowStepRuns } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { T3TeamAgentsPanelForkSection } from "~/t3team/chat/t3team-AgentsPanelForkSection";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
-import { mergeActiveAgentsAndChildren } from "~/t3team/chat/t3team-activeAgentsIndicator";
+import { mergeActiveAgentsAndChildren } from "~/t3team/chat/t3team-activeAgentsCore";
 import type { ProjectThread as T3TeamProjectThread } from "~/t3team/t3team-types";
 
 const EMPTY_T3TEAM_CHILD_THREADS: ReadonlyArray<T3TeamProjectThread> = [];

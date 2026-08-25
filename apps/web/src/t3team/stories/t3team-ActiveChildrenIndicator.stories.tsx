@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { TurnId } from "@t3tools/contracts";
 import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
-import type { ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsIndicator";
+import type { ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 
 /**
  * DESIGN → INTEGRATION (GHE #201): the active-agents indicator in the
@@ -297,7 +297,8 @@ function ActiveAgentsIndicatorStory({
           components/chat/MessagesTimeline.tsx — the &ldquo;Working for …&rdquo; timer is its own.
           The dots (<code className="text-foreground/70">T3TeamActiveAgentsIndicator</code>) and the
           flip label (<code className="text-foreground/70">T3TeamActiveAgentsStepLabel</code>) are
-          the real production components from t3team-activeAgentsIndicator.tsx, fed through
+          the real production components (t3team-activeAgentsCore / Indicator / StepLabel), fed
+          through
           <code className="text-foreground/70"> TimelineRowActivityCtx.activeAgents</code> exactly
           as ChatView does: merged running child threads (sub-runs) + live in-thread subagents,
           placed directly after &ldquo;Working for …&rdquo; and before the step label. Dots are

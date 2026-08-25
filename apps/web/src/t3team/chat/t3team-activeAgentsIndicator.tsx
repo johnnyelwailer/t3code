@@ -1,110 +1,16 @@
-import type {
-  AgentPanelModel,
-  RuntimeSubagent,
-} from "@t3tools/client-runtime/state/subagentRuntime";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ProjectThread } from "~/t3team/t3team-types";
+import { useEffect, useRef, useState } from "react";
+import { setActiveAgentHover, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 
 /**
- * GHE #201 — compact ACTIVE-agents indicator for the conversation working row.
+ * GHE #201 — the dots of the active-agents indicator, rendered directly
+ * after "Working for …" in the conversation working row.
  *
- * Merges the two live-agent sources of a thread:
- * - child threads that are running (`ProjectThread.status === "running"`), and
- * - in-thread subagents that are live (status `running` | `waiting`) from the
- *   agent panel model.
- *
- * One still dot per active agent. Dots are completely still between events;
- * when an agent's live activity changes, its dot performs ONE slow pendulum
- * move and its brightness decays (recency). Hover scales the dot up and flips
- * the working row's step label to that agent's live status (the label flips
- * back on unhover). Group click opens the Agents panel.
+ * One still dot per active agent; dots are completely still between events.
+ * When an agent's live activity changes (activityKey), its dot performs ONE
+ * slow pendulum move and its brightness decays (recency). 5 dots max, then
+ * "+n". Hover scales the dot up (and flips the step label — separate
+ * component, shared hover store). Group click opens the Agents panel.
  */
-
-export interface ActiveAgentEntry {
-  readonly id: string;
-  readonly source: "child" | "subagent";
-  readonly title: string;
-  /** #40-style live label: what this agent is doing right now. */
-  readonly statusLabel: string;
-  /** Changes on every live-output event; drives the one-shot dot pulse. */
-  readonly activityKey: string;
-}
-
-export const EMPTY_ACTIVE_AGENTS: readonly ActiveAgentEntry[] = [];
-
-function subagentStatusLabel(agent: RuntimeSubagent): string {
-  if (agent.status === "waiting") return "Waiting";
-  return agent.progress ?? agent.lastToolName ?? "Working";
-}
-
-export function mergeActiveAgentsAndChildren({
-  childThreads,
-  agentPanelModel,
-}: {
-  childThreads: readonly ProjectThread[];
-  agentPanelModel: AgentPanelModel;
-}): readonly ActiveAgentEntry[] {
-  const entries: ActiveAgentEntry[] = [];
-  for (const thread of childThreads) {
-    if (thread.status !== "running") continue;
-    entries.push({
-      id: `child:${thread.id}`,
-      source: "child",
-      title: thread.title,
-      statusLabel: thread.activityLabel ?? "Working",
-      activityKey: `${thread.childStatusUpdatedAt ?? ""}|${thread.lastMessageAt}|${thread.activityLabel ?? ""}`,
-    });
-  }
-  const pushSubagent = (agent: RuntimeSubagent) => {
-    if (agent.status !== "running" && agent.status !== "waiting") return;
-    entries.push({
-      id: `agent:${agent.id}`,
-      source: "subagent",
-      title: agent.title,
-      statusLabel: subagentStatusLabel(agent),
-      activityKey: `${agent.updatedAt}|${agent.progress ?? ""}|${agent.lastToolName ?? ""}|${agent.status}`,
-    });
-  };
-  for (const agent of agentPanelModel.directAgents) pushSubagent(agent);
-  for (const group of agentPanelModel.workflows) {
-    for (const phase of group.phases) {
-      for (const member of phase.members) pushSubagent(member);
-    }
-    for (const member of group.unphasedMembers) pushSubagent(member);
-  }
-  return entries.length > 0 ? entries : EMPTY_ACTIVE_AGENTS;
-}
-
-// ---------------------------------------------------------------------------
-// Hover coordination: the dots and the step label live in the same working
-// row but are separate subtrees, so the hovered agent is shared through a
-// tiny external store (the t3team idiom for cross-tree UI state).
-// ---------------------------------------------------------------------------
-
-let hoveredEntry: ActiveAgentEntry | null = null;
-const hoverSubscribers = new Set<() => void>();
-
-export function setActiveAgentHover(entry: ActiveAgentEntry | null): void {
-  if (hoveredEntry === entry) return;
-  hoveredEntry = entry;
-  hoverSubscribers.forEach((listener) => listener());
-}
-
-export function useActiveAgentHover(): ActiveAgentEntry | null {
-  return useSyncExternalStore(
-    (subscribe) => {
-      hoverSubscribers.add(subscribe);
-      return () => {
-        hoverSubscribers.delete(subscribe);
-      };
-    },
-    () => hoveredEntry,
-  );
-}
-
-// ---------------------------------------------------------------------------
-// The dots
-// ---------------------------------------------------------------------------
 
 const DOT_HUE_CLASSES = [
   "bg-sky-500 dark:bg-sky-300/90",
@@ -116,10 +22,6 @@ const DOT_HUE_CLASSES = [
 
 const MAX_VISIBLE_DOTS = 5;
 
-/**
- * One still dot per active agent, directly after "Working for …" in the
- * working row. 5 dots max, then "+n".
- */
 export function T3TeamActiveAgentsIndicator({
   entries,
   onOpenAgents,
@@ -220,74 +122,6 @@ export function T3TeamActiveAgentsIndicator({
             +{overflow}
           </span>
         ) : null}
-      </span>
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// The step label: debounced base + hover override, sequential FLIP switch
-// ---------------------------------------------------------------------------
-
-function useDebouncedValue(value: string, ms: number): string {
-  const [stable, setStable] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setStable(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return stable;
-}
-
-/**
- * "· <label>" for the working row. The base value (the plan step label) is
- * debounced 900ms so fast intermediate updates never flicker; hovering an
- * agent dot flips the SAME label to that agent's live status instead of
- * appending text. The switch is sequential FLIP: the old text rotates fully
- * out first, then the new text rotates in. One line, ellipsis-clamped, so
- * the row layout never shifts.
- */
-export function T3TeamActiveAgentsStepLabel({ label }: { label: string | null }) {
-  const hover = useActiveAgentHover();
-  const stable = useDebouncedValue(label ?? "", 900);
-  const target = hover ? `${hover.title} — ${hover.statusLabel}` : stable;
-  const [shown, setShown] = useState(target);
-  const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
-
-  useEffect(() => {
-    if (target === shown) {
-      setPhase("idle");
-      return;
-    }
-    if (phase === "idle") setPhase("out");
-  }, [target, shown, phase]);
-  useEffect(() => {
-    if (phase === "out") {
-      const t = setTimeout(() => {
-        setShown(target);
-        setPhase("in");
-      }, 460);
-      return () => clearTimeout(t);
-    }
-    if (phase === "in") {
-      const t = setTimeout(() => setPhase("idle"), 460);
-      return () => clearTimeout(t);
-    }
-  }, [phase, target, shown]);
-
-  if (target === "") return null;
-  return (
-    <span className="t3team-aci-step ml-2 text-muted-foreground/55">
-      ·{" "}
-      <span
-        className={
-          phase === "out"
-            ? "t3team-aci-flip-out"
-            : phase === "in"
-              ? "t3team-aci-flip-in"
-              : undefined
-        }
-      >
-        {shown}
       </span>
     </span>
   );
