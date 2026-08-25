@@ -84,12 +84,33 @@ const isModelSelection = Schema.is(ModelSelection);
  */
 const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
 
+/**
+ * Host-side re-issue budget for watchdog aborts on providers that do NOT
+ * own turn-stall recovery (capability `turnStallRecoveryOwned`). 3, because
+ * these paths have no pack-side retry ladder to lean on and a re-issue of a
+ * genuinely dead stream only burns another full inactivity budget: 3 bounds
+ * total loss to four consecutive stalls while still out-waiting one-off
+ * transient hangs (GHE #175/#176). Drivers that own recovery (pack
+ * providers) never enter this budget — their in-session retry is the sole
+ * recovery on that path, by construction.
+ */
+const HOST_TURN_STALL_REISSUE_BUDGET = 3;
+
 interface TurnWatchdogEntry {
   readonly turnId: TurnId;
   readonly instanceId: ProviderInstanceId;
   readonly provider: ProviderDriverKind;
   readonly timeoutMs: number;
   readonly timerFiber: Fiber.Fiber<unknown, never>;
+  /** Monotonic per-thread counter so a superseded timer can tell stale from live at fire time. */
+  readonly generation: number;
+  /**
+   * The original sendTurn input (attachment paths already inlined) — what a
+   * watchdog re-issue re-submits, byte-identical to the first attempt.
+   */
+  readonly sendTurnInput: ProviderSendTurnInput;
+  /** How many watchdog re-issues have already happened for this stall. */
+  readonly retryCount: number;
 }
 
 /**
@@ -352,82 +373,196 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       return next;
     });
 
-  const fireTurnWatchdog = Effect.fn("ProviderService.turnWatchdog.fire")(function* (
+  // Annotated explicitly: `fireTurnWatchdog` and `armTurnWatchdog` reference
+  // each other (a re-issue re-arms; a new timer may fire the same entry),
+  // so inference through `Effect.fn` would otherwise collapse to `any`.
+  const fireTurnWatchdog: (
     threadId: ThreadId,
-    turnId: TurnId,
-    instanceId: ProviderInstanceId,
-    provider: ProviderDriverKind,
-    timeoutMs: number,
-  ) {
-    // Only fire if this exact entry is still armed — a newer turn, a
-    // reset, or a settled turn replaced it in the meantime.
-    const current = yield* Ref.get(turnWatchdogs);
-    if (current.get(threadId)?.turnId !== turnId) return;
-    yield* clearTurnWatchdog(threadId);
-    const inactivitySeconds = Math.round(timeoutMs / 1000);
-    yield* Effect.logWarning("provider.turn.inactivity-watchdog", {
-      threadId: String(threadId),
-      turnId: String(turnId),
-      providerInstanceId: String(instanceId),
-      inactivitySeconds,
-    });
-    // Same observable surface as the pack-level watchdog: a
-    // runtime.warning carrying detail.code "turn.inactivity" and the live
-    // turnId, so host consumers can tell a watchdog abort apart from a
-    // user interrupt.
-    yield* publishRuntimeEvent({
-      eventId: EventId.make(nodeRandomUUID()),
-      provider,
-      providerInstanceId: instanceId,
-      threadId,
-      createdAt: yield* nowIso,
-      turnId,
-      type: "runtime.warning",
-      payload: {
-        message: `Turn stalled: no provider stream activity for ${inactivitySeconds} seconds`,
-        detail: {
-          code: "turn.inactivity",
-          inactivitySeconds,
-          turnId: String(turnId),
+    entry: TurnWatchdogEntry,
+  ) => Effect.Effect<void, never, never> = Effect.fn("ProviderService.turnWatchdog.fire")(
+    function* (threadId, entry) {
+      // Only fire if this exact entry is still armed — a newer turn, a
+      // reset, or a settled turn replaced it in the meantime.
+      const current = yield* Ref.get(turnWatchdogs);
+      if (current.get(threadId) !== entry) return;
+      yield* clearTurnWatchdog(threadId);
+      const inactivitySeconds = Math.round(entry.timeoutMs / 1000);
+      yield* Effect.logWarning("provider.turn.inactivity-watchdog", {
+        threadId: String(threadId),
+        turnId: String(entry.turnId),
+        providerInstanceId: String(entry.instanceId),
+        inactivitySeconds,
+      });
+      // Same observable surface as the pack-level watchdog: a
+      // runtime.warning carrying detail.code "turn.inactivity" and the live
+      // turnId, so host consumers can tell a watchdog abort apart from a
+      // user interrupt.
+      yield* publishRuntimeEvent({
+        eventId: EventId.make(nodeRandomUUID()),
+        provider: entry.provider,
+        providerInstanceId: entry.instanceId,
+        threadId,
+        createdAt: yield* nowIso,
+        turnId: entry.turnId,
+        type: "runtime.warning",
+        payload: {
+          message: `Turn stalled: no provider stream activity for ${inactivitySeconds} seconds`,
+          detail: {
+            code: "turn.inactivity",
+            inactivitySeconds,
+            turnId: String(entry.turnId),
+          },
         },
-      },
-    });
-    // Abort through the provider-agnostic interrupt path — whatever the
-    // provider does on interrupt (turn.aborted event, session error, ...)
-    // is its own concern; the host guarantee is that the turn cannot hang
-    // past the budget.
-    const adapter = yield* registry
-      .getByInstance(instanceId)
-      .pipe(Effect.orElseSucceed(() => undefined));
-    if (adapter !== undefined) {
-      yield* adapter.interruptTurn(threadId, turnId).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("provider.turn.inactivity-interrupt-failed", {
-            threadId: String(threadId),
-            turnId: String(turnId),
-            providerInstanceId: String(instanceId),
-            cause,
-          }),
-        ),
+      });
+      // Abort through the provider-agnostic interrupt path — whatever the
+      // provider does on interrupt (turn.aborted event, session error, ...)
+      // is its own concern; the host guarantee is that the turn cannot hang
+      // past the budget. "watchdog" marks this as non-user intent so drivers
+      // that own turn-stall recovery can chain the abort into their own
+      // bounded recovery instead of settling it as a user stop (GHE #175).
+      const adapter = yield* registry
+        .getByInstance(entry.instanceId)
+        .pipe(Effect.orElseSucceed(() => undefined));
+      if (adapter !== undefined) {
+        yield* adapter.interruptTurn(threadId, entry.turnId, "watchdog").pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("provider.turn.inactivity-interrupt-failed", {
+              threadId: String(threadId),
+              turnId: String(entry.turnId),
+              providerInstanceId: String(entry.instanceId),
+              cause,
+            }),
+          ),
+        );
+      }
+
+      // Recovery ownership (GHE #175/#176): exactly ONE retry owner per
+      // provider path. Drivers that declare `turnStallRecoveryOwned` retry
+      // inside their own session in response to the "watchdog" interrupt and
+      // visualize it themselves — the host must NOT re-issue on top of that
+      // or the same stall gets two ladders. Everyone else gets the host's
+      // bounded re-issue below.
+      if (adapter?.capabilities.turnStallRecoveryOwned === true) return;
+      if (entry.retryCount >= HOST_TURN_STALL_REISSUE_BUDGET) {
+        yield* Effect.logWarning("provider.turn.stall-retry-exhausted", {
+          threadId: String(threadId),
+          turnId: String(entry.turnId),
+          providerInstanceId: String(entry.instanceId),
+          retries: entry.retryCount,
+        });
+        return;
+      }
+      if (adapter === undefined) return;
+      const attempt = entry.retryCount + 1;
+      // Re-issue the ORIGINAL input byte-identical (attachments already
+      // inlined, turnOrigin preserved). The adapter returns a fresh turnId;
+      // the watchdog re-arms on the new entry below.
+      const retryTurn = yield* adapter
+        .sendTurn(entry.sendTurnInput)
+        .pipe(Effect.orElseSucceed(() => undefined));
+      if (retryTurn === undefined) {
+        // The re-issue itself failed (e.g. the session died in the meantime).
+        // The interrupted turn's own terminal event settles the thread; do not
+        // arm a watchdog for a turn that does not exist.
+        yield* Effect.logWarning("provider.turn.stall-reissue-failed", {
+          threadId: String(threadId),
+          turnId: String(entry.turnId),
+          providerInstanceId: String(entry.instanceId),
+          attempt,
+        });
+        return;
+      }
+      yield* McpSessionRegistry.touchActiveMcpThread(threadId);
+      // Same observable surface as the pack-side gateway-retry chain: a
+      // runtime.warning "Retrying (attempt n of m)" with detail.code
+      // "provider.retry", so existing work-log consumers render it identically
+      // regardless of which layer owns the retry.
+      yield* publishRuntimeEvent({
+        eventId: EventId.make(nodeRandomUUID()),
+        provider: entry.provider,
+        providerInstanceId: entry.instanceId,
+        threadId,
+        createdAt: yield* nowIso,
+        turnId: retryTurn.turnId,
+        type: "runtime.warning",
+        payload: {
+          message: `Retrying (attempt ${attempt} of ${HOST_TURN_STALL_REISSUE_BUDGET}): turn stalled — no provider stream activity for ${inactivitySeconds} seconds`,
+          detail: {
+            code: "provider.retry",
+            attempt,
+            maxAttempts: HOST_TURN_STALL_REISSUE_BUDGET,
+            delayMs: 0,
+            cause: "turn.inactivity",
+          },
+        },
+      });
+      yield* directory
+        .upsert({
+          threadId,
+          provider: entry.provider,
+          providerInstanceId: entry.instanceId,
+          status: "running",
+          runtimePayload: {
+            activeTurnId: retryTurn.turnId,
+            lastRuntimeEvent: "provider.watchdog-reissue",
+            lastRuntimeEventAt: yield* nowIso,
+          },
+        })
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("provider.watchdog-reissue-persist-failed", {
+              threadId: String(threadId),
+              turnId: String(retryTurn.turnId),
+              providerInstanceId: String(entry.instanceId),
+              cause,
+            }),
+          ),
+        );
+      yield* analytics.record("provider.turn.stall-reissue", {
+        provider: entry.provider,
+        attempt,
+        inactivitySeconds,
+      });
+      yield* armTurnWatchdog(
+        threadId,
+        retryTurn.turnId,
+        entry.instanceId,
+        entry.provider,
+        entry.sendTurnInput,
+        entry.retryCount + 1,
       );
-    }
-  });
+    },
+  );
 
   const armTurnWatchdog = Effect.fn("ProviderService.turnWatchdog.arm")(function* (
     threadId: ThreadId,
     turnId: TurnId,
     instanceId: ProviderInstanceId,
     provider: ProviderDriverKind,
+    sendTurnInput: ProviderSendTurnInput,
+    retryCount: number,
   ) {
     const timeoutMs = yield* resolveTurnInactivityTimeoutMs(instanceId);
     const previousEntry = yield* Ref.get(turnWatchdogs).pipe(
       Effect.map((map) => map.get(threadId)),
     );
+    // Bump the generation so the timer being replaced cannot fire against
+    // the new entry (its closure carries the old generation).
+    const generation = (previousEntry?.generation ?? 0) + 1;
     if (previousEntry !== undefined) {
       yield* Fiber.interrupt(previousEntry.timerFiber).pipe(Effect.ignore);
     }
     const timerFiber = yield* Effect.sleep(Duration.millis(timeoutMs)).pipe(
-      Effect.andThen(fireTurnWatchdog(threadId, turnId, instanceId, provider, timeoutMs)),
+      Effect.andThen(
+        Ref.get(turnWatchdogs).pipe(
+          Effect.flatMap((map) => {
+            const armed = map.get(threadId);
+            return armed?.generation === generation
+              ? fireTurnWatchdog(threadId, armed)
+              : Effect.void;
+          }),
+        ),
+      ),
       Effect.forkScoped,
       // Detach the R requirement: the caller (sendTurn / recordTurnActivity)
       // runs without a Scope in its context, so attach the timer to the
@@ -441,6 +576,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         provider,
         timeoutMs,
         timerFiber,
+        generation,
+        sendTurnInput,
+        retryCount,
       }),
     );
   });
@@ -456,14 +594,34 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       Effect.flatMap((map) => {
         const entry = map.get(event.threadId);
         if (entry === undefined) return Effect.void;
+        // A watchdog re-issue replaces the armed turn with a NEW turnId. The
+        // interrupted turn's terminal event (turn.aborted) arrives on the
+        // stream AFTER the re-issue has re-armed; settling on it would kill
+        // the retry that just started. Terminal events only settle the armed
+        // turn; activity only resets it. session.exited settles regardless —
+        // the session itself is gone, so no re-armed turn can survive it.
+        const isArmedTurn =
+          event.turnId === undefined || String(event.turnId) === String(entry.turnId);
         if (
           event.type === "turn.completed" ||
           event.type === "turn.aborted" ||
           event.type === "session.exited"
         ) {
-          return clearTurnWatchdog(event.threadId);
+          if (event.type === "session.exited" || isArmedTurn) {
+            return clearTurnWatchdog(event.threadId);
+          }
+          return Effect.void;
         }
-        return armTurnWatchdog(event.threadId, entry.turnId, entry.instanceId, entry.provider);
+        return isArmedTurn
+          ? armTurnWatchdog(
+              event.threadId,
+              entry.turnId,
+              entry.instanceId,
+              entry.provider,
+              entry.sendTurnInput,
+              entry.retryCount,
+            )
+          : Effect.void;
       }),
     );
 
@@ -986,12 +1144,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const turn = yield* routed.adapter.sendTurn(input);
       // Arm the host-level inactivity watchdog for the in-flight turn
       // (GHE #113): the budget is per-provider-instance, and every stream
-      // event from this adapter resets it (see recordTurnActivity).
+      // event from this adapter resets it (see recordTurnActivity). The
+      // stored input is what a watchdog re-issue re-submits (GHE #175).
       yield* armTurnWatchdog(
         input.threadId,
         turn.turnId,
         routed.instanceId,
         routed.adapter.provider,
+        input,
+        0,
       );
       yield* directory.upsert({
         threadId: input.threadId,
@@ -1055,7 +1216,11 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.thread_id": input.threadId,
           "provider.turn_id": input.turnId,
         });
-        yield* routed.adapter.interruptTurn(routed.threadId, input.turnId);
+        yield* routed.adapter.interruptTurn(
+          routed.threadId,
+          input.turnId,
+          input.interruptReason === "watchdog" ? "watchdog" : "user",
+        );
         // The user asked for this interrupt — the watchdog must not also
         // fire for the same turn.
         yield* clearTurnWatchdog(input.threadId);

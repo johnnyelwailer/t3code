@@ -97,7 +97,14 @@ export const makePackProviderAdapter = (input: {
 
   return {
     provider: driverKind,
-    capabilities: { sessionModelSwitch: "unsupported" },
+    capabilities: {
+      sessionModelSwitch: "unsupported",
+      // Pack drivers that own turn-stall recovery opt out of the host's
+      // watchdog re-issue (GHE #175/#176): they chain the watchdog abort into
+      // their own bounded recovery and visualize it themselves. Without the
+      // flag, the host re-issues stalled turns on its own budget.
+      ...(packInstance.ownsTurnStallRecovery ? { turnStallRecoveryOwned: true } : {}),
+    },
     startSession: (startInput: ProviderSessionStartInput) =>
       attempt("startSession", () =>
         packInstance.startSession({
@@ -132,8 +139,8 @@ export const makePackProviderAdapter = (input: {
           ),
         ),
       ),
-    interruptTurn: (threadId, turnId) =>
-      attempt("interruptTurn", () => packInstance.interruptTurn(threadId, turnId)),
+    interruptTurn: (threadId, turnId, interruptReason) =>
+      attempt("interruptTurn", () => packInstance.interruptTurn(threadId, turnId, interruptReason)),
     respondToRequest: (threadId, requestId, decision) =>
       attempt("respondToRequest", () =>
         packInstance.respondToRequest(threadId, requestId, decision),

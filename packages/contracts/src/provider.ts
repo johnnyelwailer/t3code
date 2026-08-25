@@ -97,6 +97,16 @@ export type ProviderTurnStartResult = typeof ProviderTurnStartResult.Type;
 export const ProviderInterruptTurnInput = Schema.Struct({
   threadId: ThreadId,
   turnId: Schema.optional(TurnId),
+  /**
+   * Who requested the interrupt.
+   * - "user" (the default): an explicit user/agent stop. Providers must settle
+   *   the turn as aborted and must NOT auto-recover it.
+   * - "watchdog": the host's turn inactivity watchdog fired. Drivers that own
+   *   turn-stall recovery (capability `turnStallRecoveryOwned`) chain this
+   *   into their existing recovery chain instead of treating it as a user
+   *   stop. Absent is always "user".
+   */
+  interruptReason: Schema.optional(Schema.Literals(["user", "watchdog"])),
 });
 export type ProviderInterruptTurnInput = typeof ProviderInterruptTurnInput.Type;
 

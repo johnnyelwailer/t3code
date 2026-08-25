@@ -32,6 +32,15 @@ export interface ProviderAdapterCapabilities {
    * Declares whether changing the model on an existing session is supported.
    */
   readonly sessionModelSwitch: ProviderSessionModelSwitchMode;
+  /**
+   * Declares that this driver OWNS turn-stall recovery end to end (detects
+   * via the host watchdog abort, retries inside its own session, and
+   * visualizes it). The host's inactivity watchdog still DETECTS and
+   * ABORTS such turns — it just never re-issues the turn itself, so a
+   * stall can never be retried twice by two ladders. Adapters that do not
+   * declare this get the host's bounded re-issue on watchdog abort.
+   */
+  readonly turnStallRecoveryOwned?: boolean | undefined;
 }
 
 export interface ProviderThreadTurnSnapshot {
@@ -68,7 +77,11 @@ export interface ProviderAdapterShape<TError> {
   /**
    * Interrupt an active turn.
    */
-  readonly interruptTurn: (threadId: ThreadId, turnId?: TurnId) => Effect.Effect<void, TError>;
+  readonly interruptTurn: (
+    threadId: ThreadId,
+    turnId?: TurnId,
+    interruptReason?: "user" | "watchdog",
+  ) => Effect.Effect<void, TError>;
 
   /**
    * Respond to an interactive approval request.

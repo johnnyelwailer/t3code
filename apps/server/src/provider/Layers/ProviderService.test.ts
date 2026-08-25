@@ -952,7 +952,11 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(routing.codex.sendTurn.mock.calls.length, 1);
 
       yield* provider.interruptTurn({ threadId: session.threadId });
-      assert.deepEqual(routing.codex.interruptTurn.mock.calls, [[session.threadId, undefined]]);
+      // An explicit stop carries the "user" reason so drivers never mistake
+      // it for a watchdog abort (GHE #175).
+      assert.deepEqual(routing.codex.interruptTurn.mock.calls, [
+        [session.threadId, undefined, "user"],
+      ]);
 
       yield* provider.respondToRequest({
         threadId: session.threadId,

@@ -178,7 +178,17 @@ export type PackProviderInstance = {
   subscribeSnapshot?(listener: (snapshot: PackProviderSnapshot) => void): () => void;
   startSession(input: PackSessionStartInput): Promise<PackProviderSession>;
   sendTurn(input: PackSendTurnInput): Promise<PackTurnStartResult>;
-  interruptTurn(threadId: string, turnId?: string): Promise<void>;
+  /**
+   * `interruptReason` is "watchdog" when the host's turn inactivity watchdog
+   * fired: drivers that own turn-stall recovery chain that abort into their
+   * own recovery (re-issue/continue), bounded by their own budget. Absent
+   * or "user" is an explicit stop — never auto-recover it.
+   */
+  interruptTurn(
+    threadId: string,
+    turnId?: string,
+    interruptReason?: "user" | "watchdog",
+  ): Promise<void>;
   respondToRequest(threadId: string, requestId: string, decision: unknown): Promise<void>;
   respondToUserInput(threadId: string, requestId: string, answers: unknown): Promise<void>;
   stopSession(threadId: string): Promise<void>;
@@ -187,6 +197,14 @@ export type PackProviderInstance = {
   readThread(threadId: string): Promise<PackThreadSnapshot>;
   rollbackThread(threadId: string, numTurns: number): Promise<PackThreadSnapshot>;
   readonly textGeneration?: PackTextGeneration;
+  /**
+   * Declares that this driver owns turn-stall recovery end to end. The host
+   * watchdog still detects and aborts such turns, but never re-issues them;
+   * the driver retries inside its own session and visualizes the retries.
+   * Without this flag the host re-issues a stalled turn, bounded by its own
+   * host-side budget.
+   */
+  readonly ownsTurnStallRecovery?: boolean;
   stopAll(): Promise<void>;
   events(): AsyncIterable<unknown>;
   dispose(): Promise<void>;
