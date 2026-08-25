@@ -3234,7 +3234,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
                   <ComposerVoiceInput
                     onTranscript={(text) => insertComposerTextAtEnd(text)}
-                    onPartialTranscript={(text) => insertComposerTextAtEnd(text)}
                     disabled={isConnecting || isComposerApprovalState || projectSelectionRequired}
                   />
 

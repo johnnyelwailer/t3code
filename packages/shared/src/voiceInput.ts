@@ -10,12 +10,7 @@
 // Types
 // ---------------------------------------------------------------------------
 
-export type VoiceInputState =
-  | "idle"
-  | "recording"
-  | "processing"
-  | "error"
-  | "unsupported";
+export type VoiceInputState = "idle" | "recording" | "processing" | "error" | "unsupported";
 
 export interface VoiceInputError {
   code: string;
@@ -136,6 +131,7 @@ export class VoiceInputController {
         let finalChunk = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
+          if (!result) continue;
           if (result.isFinal) {
             finalChunk += result[0].transcript;
           } else {
@@ -228,15 +224,11 @@ export class VoiceInputController {
 
   private _restartIfContinuous(recognition: SpeechRecognitionLike) {
     if (this._options.singleUtterance) return;
-    // Small delay to avoid rapid-fire restart loops on permission loss.
-    setTimeout(() => {
-      if (this._state !== "recording") return;
-      try {
-        recognition.start();
-      } catch {
-        this._setState("idle");
-      }
-    }, 100);
+    try {
+      recognition.start();
+    } catch {
+      this._setState("idle");
+    }
   }
 }
 
@@ -244,27 +236,21 @@ export class VoiceInputController {
 // Helpers
 // ---------------------------------------------------------------------------
 
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: new () => SpeechRecognitionLike;
+  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+};
+
 function isVoiceInputSupported(): boolean {
   if (typeof window === "undefined") return false;
-  return !!(
-    window.SpeechRecognition ||
-    (window as any).webkitSpeechRecognition
-  );
+  const win = window as SpeechRecognitionWindow;
+  return !!(win.SpeechRecognition || win.webkitSpeechRecognition);
 }
 
 function getSpeechRecognitionCtor(): new () => SpeechRecognitionLike {
   if (typeof window === "undefined") throw new Error("No window");
-  const Ctor =
-    window.SpeechRecognition ||
-    (window as any).webkitSpeechRecognition;
+  const win = window as SpeechRecognitionWindow;
+  const Ctor = win.SpeechRecognition ?? win.webkitSpeechRecognition;
   if (!Ctor) throw new Error("SpeechRecognition not available");
-  return Ctor as new () => SpeechRecognitionLike;
+  return Ctor;
 }
-
-// ---------------------------------------------------------------------------
-// Convenience: one-shot promise
-// ---------------------------------------------------------------------------
-
-/**
- * Promise-based helper: resolve with the final transcript,
- * reject 

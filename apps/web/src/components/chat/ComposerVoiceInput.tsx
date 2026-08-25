@@ -1,101 +1,71 @@
 /**
  * ComposerVoiceInput - mic button for the chat composer footer.
  *
- * Uses the shared VoiceInputController to transcribe speech into
- * the composer text field via the Web Speech API.
+ * Uses the shared VoiceInputController to transcribe speech via the Web
+ * Speech API; the accumulated transcript is inserted into the composer when
+ * recording stops.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { VoiceInputController } from "@t3tools/shared/voiceInput";
-import { cn } from "../../lib/cn";
+import { cn } from "../../lib/utils";
 
 export interface ComposerVoiceInputProps {
   onTranscript: (text: string) => void;
-  onPartialTranscript?: (text: string) => void;
   disabled?: boolean;
   className?: string;
 }
 
 export function ComposerVoiceInput({
   onTranscript,
-  onPartialTranscript,
   disabled = false,
   className,
 }: ComposerVoiceInputProps) {
   const [isRecording, setIsRecording] = useState(false);
-  const [supported, setSupported] = useState(true);
+  const [isSupported, setIsSupported] = useState(true);
   const controllerRef = useRef<VoiceInputController | null>(null);
-  const accumulatedRef = useRef("");
 
   useEffect(() => {
-    const Ctor =
-      typeof window !== "undefined"
-        ? window.SpeechRecognition || (window as any).webkitSpeechRecognition
-        : null;
-    if (!Ctor) setSupported(false);
+    const controller = new VoiceInputController({
+      onStateChange: (state) => setIsRecording(state === "recording"),
+    });
+    controllerRef.current = controller;
+    setIsSupported(controller.supported);
     return () => {
-      controllerRef.current?.cancel();
+      controller.cancel();
       controllerRef.current = null;
     };
   }, []);
 
-  const startRecording = useCallback(() => {
-    if (!controllerRef.current) {
-      controllerRef.current = new VoiceInputController(
-        {
-          onStateChange: (state) => {
-            if (state === "recording") setIsRecording(true);
-            else setIsRecording(false);
-          },
-          onFinalTranscript: (text) => {
-            accumulatedRef.current += text;
-            onPartialTranscript?.(accumulatedRef.current);
-          },
-          onPartialTranscript: (text) => {
-            onPartialTranscript?.(accumulatedRef.current + text);
-          },
-          onError: () => setIsRecording(false),
-        },
-        { singleUtterance: false },
-      );
-    }
-    accumulatedRef.current = "";
-    controllerRef.current.start();
-  }, [onPartialTranscript]);
-
-  const stopRecording = useCallback(() => {
+  const toggle = useCallback(() => {
     const controller = controllerRef.current;
     if (!controller) return;
-    controller.stop();
-    const full = controller.finalTranscript || accumulatedRef.current;
-    if (full.trim()) onTranscript(full.trim());
-    accumulatedRef.current = "";
+    if (controller.state === "recording") {
+      controller.stop();
+      const transcript = controller.finalTranscript.trim();
+      if (transcript) onTranscript(transcript);
+    } else {
+      controller.start();
+    }
   }, [onTranscript]);
-
-  const toggle = useCallback(() => {
-    if (isRecording) stopRecording();
-    else startRecording();
-  }, [isRecording, startRecording, stopRecording]);
 
   useEffect(() => {
     if (!isRecording) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        controllerRef.current?.cancel();
-        setIsRecording(false);
-        accumulatedRef.current = "";
-      }
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      controllerRef.current?.cancel();
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", cancelOnEscape);
+    return () => window.removeEventListener("keydown", cancelOnEscape);
   }, [isRecording]);
 
-  if (!supported) return null;
+  if (!isSupported) return null;
 
   return (
     <button
       type="button"
       onClick={toggle}
       disabled={disabled}
+      aria-label={isRecording ? "Stop recording" : "Start voice input"}
       className={cn(
         "flex size-8 shrink-0 items-center justify-center rounded-full transition-all duration-200",
         isRecording
@@ -104,10 +74,18 @@ export function ComposerVoiceInput({
         disabled && "opacity-40 cursor-not-allowed",
         className,
       )}
-      aria-label={isRecording ? "Stop recording" : "Start voice input"}
-      title={isRecording ? "Stop recording" : "Voice input"}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <rect x="9" y="2" width="6" height="12" rx="3" />
         <path d="M5 10v1a7 7 0 0 0 14 0v-1" />
         <line x1="12" y1="18" x2="12" y2="22" />
@@ -116,5 +94,3 @@ export function ComposerVoiceInput({
     </button>
   );
 }
-
-export default ComposerVoiceInput;
