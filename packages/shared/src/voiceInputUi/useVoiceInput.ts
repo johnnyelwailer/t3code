@@ -148,7 +148,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     barsStopRef.current = startVoiceBars({
       audioContext: audioCtx,
       bars: () => barElsRef.current,
-      clock: performance.now,
+      clock: () => performance.now(),
       cssFrame: () => frameFromClock(Date.now(), BAR_COUNT),
       onEnergy: (level) => {
         onLevel?.(level);
