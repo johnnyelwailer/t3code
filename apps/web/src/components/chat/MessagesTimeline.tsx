@@ -509,6 +509,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         expandedWorkGroupIds,
         isWorking,
         activeTurnStartedAt,
+        idleActiveAgentsPresent: activeAgents.length > 0,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
         resumeOffer: resumeMessageId !== null,
@@ -524,6 +525,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       expandedWorkGroupIds,
       isWorking,
       activeTurnStartedAt,
+      activeAgents,
       turnDiffSummaryByAssistantMessageId,
       revertTurnCountByUserMessageId,
       resumeMessageId,
@@ -1583,13 +1585,25 @@ const TurnPlanTimelineRow = memo(function TurnPlanTimelineRow({
 });
 
 export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { workingStepLabel, activeAgents, onOpenAgents } = use(TimelineRowActivityCtx);
+  const { isWorking, workingStepLabel, activeAgents, onOpenAgents } = use(TimelineRowActivityCtx);
   const hasActiveAgents = activeAgents.length > 0;
+  // GHE #201: main turn idle but agents active — the row leads with the
+  // count instead of a (nonexistent) timer, and the label defaults to the
+  // most recent agent's live status.
+  const idleAgentSummary = (() => {
+    if (isWorking || !hasActiveAgents) return null;
+    const last = activeAgents[activeAgents.length - 1];
+    return last ? `${last.title} — ${last.statusLabel}` : null;
+  })();
   return (
     <div>
       <div className="border-b border-border/60 pb-2 pt-1">
         <div className="px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
-          {row.createdAt ? (
+          {!isWorking && hasActiveAgents ? (
+            <>
+              {activeAgents.length} active agent{activeAgents.length === 1 ? "" : "s"}
+            </>
+          ) : row.createdAt ? (
             <>
               Working for <WorkingTimer createdAt={row.createdAt} />
             </>
@@ -1600,7 +1614,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
             <T3TeamActiveAgentsIndicator entries={activeAgents} onOpenAgents={onOpenAgents} />
           ) : null}
           {hasActiveAgents ? (
-            <T3TeamActiveAgentsStepLabel label={workingStepLabel} />
+            <T3TeamActiveAgentsStepLabel label={workingStepLabel ?? idleAgentSummary} />
           ) : workingStepLabel ? (
             <span className="ml-2 text-muted-foreground/55">· {workingStepLabel}</span>
           ) : null}

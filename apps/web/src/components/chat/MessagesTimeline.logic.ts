@@ -714,6 +714,12 @@ export function deriveMessagesTimelineRows(input: {
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
   resumeOffer?: boolean;
   threadError?: string | null;
+  /**
+   * GHE #201: the main turn is idle but active agents (running child threads
+   * / live subagents) exist — render the working-row surface for the
+   * active-agents indicator even without a "Working..." prefix.
+   */
+  idleActiveAgentsPresent?: boolean;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
@@ -1090,6 +1096,15 @@ export function deriveMessagesTimelineRows(input: {
     // Unanswered last user message: offer Continue exactly where "Working"
     // would have appeared.
     nextRows.push({ kind: "resume", id: "resume-offer-row" });
+  } else if (input.idleActiveAgentsPresent === true) {
+    // GHE #201: main turn idle but agents are active — the active-agents
+    // indicator still renders, in the working-row slot, without a timer.
+    nextRows.push({
+      kind: "working",
+      id: "working-indicator-row",
+      createdAt: null,
+      showThinking: false,
+    });
   }
 
   return nextRows;

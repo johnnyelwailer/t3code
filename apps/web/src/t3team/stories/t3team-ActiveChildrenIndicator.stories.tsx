@@ -96,6 +96,7 @@ type ActiveAgentsIndicatorStoryProps = {
   activeSubagents: number;
   liveStream: boolean;
   reducedMotion: boolean;
+  mainThreadIdle: boolean;
 };
 
 function StoryFrame({ children }: { children: React.ReactNode }) {
@@ -128,15 +129,17 @@ function RealWorkingRow({
   activeAgents,
   workingStepLabel,
   onOpenAgents,
+  mainThreadIdle = false,
 }: {
   activeAgents: readonly ActiveAgentEntry[];
   workingStepLabel: string | null;
   onOpenAgents: () => void;
+  mainThreadIdle?: boolean;
 }) {
   return (
     <TimelineRowActivityCtx.Provider
       value={{
-        isWorking: true,
+        isWorking: !mainThreadIdle,
         isRevertingCheckpoint: false,
         latestTurnId: "turn-design-pass" as TurnId,
         workingStepLabel,
@@ -180,6 +183,7 @@ function ActiveAgentsIndicatorStory({
   activeSubagents,
   liveStream,
   reducedMotion,
+  mainThreadIdle,
 }: ActiveAgentsIndicatorStoryProps) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [ticks, setTicks] = useState<ReadonlyMap<string, number>>(() => new Map());
@@ -267,8 +271,9 @@ function ActiveAgentsIndicatorStory({
           </div>
           <RealWorkingRow
             activeAgents={entries}
-            workingStepLabel={label}
+            workingStepLabel={mainThreadIdle ? null : label}
             onOpenAgents={() => setPanelOpen((current) => !current)}
+            mainThreadIdle={mainThreadIdle}
           />
           <DemoAgentsPanel entries={entries} expanded={panelOpen} />
         </div>
@@ -304,6 +309,27 @@ function ActiveAgentsIndicatorStory({
           count-scaling rows is the overflow counter: 5 dots max.
         </div>
       </Card>
+
+      {mainThreadIdle ? (
+        <Card title="Main thread idle — agents still active">
+          <div className="rounded-lg border border-border/50 bg-card p-3">
+            <RealWorkingRow
+              activeAgents={entries}
+              workingStepLabel={null}
+              onOpenAgents={() => setPanelOpen((current) => !current)}
+              mainThreadIdle
+            />
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            No &ldquo;Working for …&rdquo; when the main turn is idle: the same row surface leads
+            with the active-agent count, and the label defaults to the most recent agent&rsquo;s
+            live status (hover flips it, as usual). In the app, this row is appended by
+            deriveMessagesTimelineRows via
+            <code className="text-foreground/70"> idleActiveAgentsPresent</code> (thread-error /
+            resume offers keep priority).
+          </div>
+        </Card>
+      ) : null}
 
       <Card title="Count scaling (real rows, idle)">
         <div className="flex flex-col gap-2">
@@ -341,7 +367,13 @@ function ActiveAgentsIndicatorStory({
 const meta = {
   title: "T3Team/Conversation/Active Agents Indicator (GHE #201)",
   component: ActiveAgentsIndicatorStory,
-  args: { activeChildren: 3, activeSubagents: 1, liveStream: true, reducedMotion: false },
+  args: {
+    activeChildren: 3,
+    activeSubagents: 1,
+    liveStream: true,
+    reducedMotion: false,
+    mainThreadIdle: false,
+  },
   argTypes: {
     activeChildren: {
       control: { type: "number", min: 0, max: 8 },
@@ -359,6 +391,11 @@ const meta = {
       control: "boolean",
       description: "Force the reduced-motion fallback (brightness only, no moves).",
     },
+    mainThreadIdle: {
+      control: "boolean",
+      description:
+        "Main turn idle: no Working… row; the indicator renders anyway with the count prefix.",
+    },
   },
 } satisfies Meta<typeof ActiveAgentsIndicatorStory>;
 
@@ -367,6 +404,9 @@ type Story = StoryObj<typeof meta>;
 
 export const MergedSources: Story = {
   args: { activeChildren: 3, activeSubagents: 1, liveStream: true },
+};
+export const MainThreadIdle: Story = {
+  args: { activeChildren: 3, activeSubagents: 1, liveStream: true, mainThreadIdle: true },
 };
 export const ManyAgentsCollapsed: Story = {
   args: { activeChildren: 5, activeSubagents: 2, liveStream: true },
