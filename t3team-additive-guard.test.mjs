@@ -55,6 +55,29 @@ describe("t3team additive guard loc classification", () => {
     expect(result?.message).toContain("warning only due to upstream counterpart");
   });
 
+  it("allows sync-baselined files without allowing further growth", () => {
+    const atBaseline = classifyPrefixedLocResult({
+      filePath: "apps/server/src/t3team-legacy.ts",
+      loc: 221,
+      locWarnThreshold: 150,
+      locFailThreshold: 200,
+      counterpartPath: null,
+      locBaseline: 221,
+    });
+    const aboveBaseline = classifyPrefixedLocResult({
+      filePath: "apps/server/src/t3team-legacy.ts",
+      loc: 222,
+      locWarnThreshold: 150,
+      locFailThreshold: 200,
+      counterpartPath: null,
+      locBaseline: 221,
+    });
+
+    expect(atBaseline?.kind).toBe("warning");
+    expect(atBaseline?.message).toContain("within its sync baseline");
+    expect(aboveBaseline?.kind).toBe("violation");
+  });
+
   it("uses higher thresholds for additive test artifacts", () => {
     const result = classifyPrefixedLocResult({
       filePath: "apps/web/src/t3team/t3team-projectDashboardKanbanMatrix.test.ts",

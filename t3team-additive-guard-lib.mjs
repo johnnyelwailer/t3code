@@ -92,6 +92,7 @@ export function classifyPrefixedLocResult({
   locWarnThreshold,
   locFailThreshold,
   counterpartPath,
+  locBaseline,
 }) {
   const baseName = NodePath.basename(filePath);
   const usesNonProductionThresholds = NON_PRODUCTION_LOC_PATTERNS.some((pattern) =>
@@ -105,6 +106,14 @@ export function classifyPrefixedLocResult({
     : locFailThreshold;
 
   if (loc > effectiveFailThreshold) {
+    if (typeof locBaseline === "number" && loc <= locBaseline) {
+      return {
+        kind: "warning",
+        message:
+          `Prefixed file exceeds ${effectiveFailThreshold} LOC but remains within its sync baseline: ` +
+          `${filePath} (${loc}/${locBaseline} non-empty lines).`,
+      };
+    }
     if (counterpartPath) {
       return {
         kind: "warning",

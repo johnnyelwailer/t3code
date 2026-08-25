@@ -117,6 +117,7 @@ function main() {
         locWarnThreshold: config.locWarnThreshold,
         locFailThreshold: config.locFailThreshold,
         counterpartPath,
+        locBaseline: config.prefixedLocBaselines[filePath],
       });
       if (result?.kind === "violation") {
         violations.push(result.message);

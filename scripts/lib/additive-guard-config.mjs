@@ -32,5 +32,6 @@ export function loadAdditiveGuardConfig(cwd) {
     allowedModifiedFiles: parsed.allowedModifiedFiles ?? [],
     allowedModifiedFileGlobs: parsed.allowedModifiedFileGlobs ?? [],
     allowedUnprefixedNewFiles: parsed.allowedUnprefixedNewFiles ?? [],
+    prefixedLocBaselines: parsed.prefixedLocBaselines ?? {},
   };
 }

@@ -27,7 +27,7 @@ import {
   type ProviderRuntimeEvent,
   type ProviderSession,
 } from "@t3tools/contracts";
-import { randomUUID as nodeRandomUUID } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -376,7 +376,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     // turnId, so host consumers can tell a watchdog abort apart from a
     // user interrupt.
     yield* publishRuntimeEvent({
-      eventId: EventId.make(nodeRandomUUID()),
+      eventId: EventId.make(NodeCrypto.randomUUID()),
       provider,
       providerInstanceId: instanceId,
       threadId,
