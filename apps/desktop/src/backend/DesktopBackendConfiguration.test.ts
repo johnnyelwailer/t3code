@@ -282,6 +282,9 @@ describe("DesktopBackendConfiguration", () => {
         yield* fileSystem.makeDirectory(path.join(packsDir, "nexplore-global"), {
           recursive: true,
         });
+        const packagedCaPath = path.join(packsDir, "nexplore-global", "certs", "nexplore-ca.pem");
+        yield* fileSystem.makeDirectory(path.dirname(packagedCaPath), { recursive: true });
+        yield* fileSystem.writeFileString(packagedCaPath, "test-ca");
         yield* fileSystem.writeFileString(
           path.join(resourcesPath, ".env"),
           "T3WORK_ATLASSIAN_CLIENT_ID=test-client-id\nT3WORK_ATLASSIAN_CLIENT_SECRET=test-client-secret\n",
@@ -311,6 +314,8 @@ describe("DesktopBackendConfiguration", () => {
 
         assert.equal(config.entryPath, serverEntryPath);
         assert.equal(config.env.T3TEAM_PACKS_DIR, packsDir);
+        assert.equal(config.env.NODE_EXTRA_CA_CERTS, packagedCaPath);
+        assert.equal(config.env.NODE_USE_SYSTEM_CA, "1");
         assert.equal(config.env.T3WORK_ATLASSIAN_CLIENT_ID, "test-client-id");
         assert.equal(config.env.T3WORK_ATLASSIAN_CLIENT_SECRET, "test-client-secret");
       }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),

@@ -117,23 +117,36 @@ function parseEnvLine(line: string): [key: string, value: string] | null {
 }
 
 /**
- * If a distribution ships a CA bundle under `<home>/.t3/userdata/certs/`,
- * forward it to the backend child so `NODE_EXTRA_CA_CERTS` is set before
- * the Node runtime initialises its TLS trust store.  Without this, any
- * provider that terminates TLS with a private-CA cert (e.g. Nexplore's
- * gateway) fails with "self-signed certificate in certificate chain".
+ * Resolve one PEM bundle before the backend child starts. User-installed
+ * certificates win, followed by certificates bundled in loose distribution
+ * packs. NODE_EXTRA_CA_CERTS is read only during Node startup, so pack
+ * activation is too late to establish trust for a provider's first request.
  */
-const resolveExtraCaCerts = (): string | undefined => {
+const resolveExtraCaCerts = (homeDirectory: string, resourcesPath: string): string | undefined => {
   try {
     const fs = NodeFS;
     const path = NodePath;
-    const certsDir = path.join(NodeOS.homedir(), ".t3", "userdata", "certs");
-    if (!fs.existsSync(certsDir)) return undefined;
-    const pem = fs
-      .readdirSync(certsDir)
-      .filter((f) => f.endsWith(".pem"))
-      .map((f) => path.join(certsDir, f));
-    return pem.length > 0 ? pem.join(":") : undefined;
+    const explicit = process.env.NODE_EXTRA_CA_CERTS?.trim();
+    if (explicit) return explicit;
+
+    const certDirectories = [path.join(homeDirectory, ".t3", "userdata", "certs")];
+    const packsDir = path.join(resourcesPath, "packs");
+    if (fs.existsSync(packsDir)) {
+      for (const packName of fs.readdirSync(packsDir).toSorted()) {
+        const packCertsDir = path.join(packsDir, packName, "certs");
+        if (fs.existsSync(packCertsDir)) certDirectories.push(packCertsDir);
+      }
+    }
+
+    for (const certsDir of certDirectories) {
+      if (!fs.existsSync(certsDir)) continue;
+      const pemName = fs
+        .readdirSync(certsDir)
+        .filter((fileName) => fileName.toLowerCase().endsWith(".pem"))
+        .toSorted()[0];
+      if (pemName !== undefined) return path.join(certsDir, pemName);
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -468,10 +481,13 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       env: {
         ...backendChildEnvPatch(),
         ELECTRON_RUN_AS_NODE: "1",
+        // Secure corporate-CA fallback. Unlike NODE_TLS_REJECT_UNAUTHORIZED=0,
+        // this keeps certificate verification enabled and adds the OS trust store.
+        NODE_USE_SYSTEM_CA: process.env.NODE_USE_SYSTEM_CA?.trim() || "1",
         ...(hasBundledPacks && packsDir !== null ? { T3TEAM_PACKS_DIR: packsDir } : {}),
         ...atlassianEnv,
         ...(() => {
-          const ca = resolveExtraCaCerts();
+          const ca = resolveExtraCaCerts(environment.homeDirectory, environment.resourcesPath);
           return ca !== undefined ? { NODE_EXTRA_CA_CERTS: ca } : {};
         })(),
       },
