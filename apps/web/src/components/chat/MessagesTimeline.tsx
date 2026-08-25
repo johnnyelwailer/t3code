@@ -7,6 +7,12 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
+import {
+  EMPTY_ACTIVE_AGENTS,
+  T3TeamActiveAgentsIndicator,
+  T3TeamActiveAgentsStepLabel,
+  type ActiveAgentEntry,
+} from "~/t3team/chat/t3team-activeAgentsIndicator";
 import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   emptyAgentPanelModel,
@@ -199,10 +205,16 @@ interface TimelineRowActivityState {
   latestTurnId: TurnId | null;
   /** Current plan step label for the working row, when the turn has a plan. */
   workingStepLabel: string | null;
+  /** GHE #201: active agents (running child threads + live subagents). */
+  activeAgents: readonly ActiveAgentEntry[];
+  /** GHE #201: opens the Agents panel from the working-row indicator. */
+  onOpenAgents: () => void;
 }
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
-const TimelineRowActivityCtx = createContext<TimelineRowActivityState>(null!);
+// Exported for the GHE #201 design-pass story (active-children indicator);
+// the live timeline renders without it, exactly as before.
+export const TimelineRowActivityCtx = createContext<TimelineRowActivityState>(null!);
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
 const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
 
@@ -249,6 +261,8 @@ const TIMELINE_MAINTAIN_SCROLL_AT_END = {
 
 interface MessagesTimelineProps {
   agentPanelModel?: AgentPanelModel;
+  /** GHE #201: active agents for the working row (running child threads + live subagents). */
+  activeAgents?: readonly ActiveAgentEntry[];
   onOpenAgents?: () => void;
   isWorking: boolean;
   workingStepLabel?: string | null;
@@ -314,6 +328,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   workingStepLabel = null,
   activeTurnStartedAt,
   agentPanelModel = EMPTY_AGENT_PANEL_MODEL,
+  /** GHE #201: active agents for the working row (running child threads + live subagents). */
+  activeAgents = EMPTY_ACTIVE_AGENTS,
   onOpenAgents = NOOP_OPEN_AGENTS,
   listRef,
   timelineEntries,
@@ -713,8 +729,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isRevertingCheckpoint,
       latestTurnId: latestTurn?.turnId ?? null,
       workingStepLabel,
+      activeAgents,
+      onOpenAgents,
     }),
-    [isRevertingCheckpoint, isWorking, latestTurn?.turnId, workingStepLabel],
+    [
+      activeAgents,
+      isRevertingCheckpoint,
+      isWorking,
+      latestTurn?.turnId,
+      onOpenAgents,
+      workingStepLabel,
+    ],
   );
 
   // Stable renderItem — no closure deps. Row components read shared state
@@ -1557,8 +1582,9 @@ const TurnPlanTimelineRow = memo(function TurnPlanTimelineRow({
   );
 });
 
-function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { workingStepLabel } = use(TimelineRowActivityCtx);
+export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
+  const { workingStepLabel, activeAgents, onOpenAgents } = use(TimelineRowActivityCtx);
+  const hasActiveAgents = activeAgents.length > 0;
   return (
     <div>
       <div className="border-b border-border/60 pb-2 pt-1">
@@ -1570,7 +1596,12 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
           ) : (
             "Working..."
           )}
-          {workingStepLabel ? (
+          {hasActiveAgents ? (
+            <T3TeamActiveAgentsIndicator entries={activeAgents} onOpenAgents={onOpenAgents} />
+          ) : null}
+          {hasActiveAgents ? (
+            <T3TeamActiveAgentsStepLabel label={workingStepLabel} />
+          ) : workingStepLabel ? (
             <span className="ml-2 text-muted-foreground/55">· {workingStepLabel}</span>
           ) : null}
         </div>

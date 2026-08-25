@@ -413,6 +413,7 @@ import {
 import { deriveT3TeamWorkflowStepRuns } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { T3TeamAgentsPanelForkSection } from "~/t3team/chat/t3team-AgentsPanelForkSection";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
+import { mergeActiveAgentsAndChildren } from "~/t3team/chat/t3team-activeAgentsIndicator";
 import type { ProjectThread as T3TeamProjectThread } from "~/t3team/t3team-types";
 
 const EMPTY_T3TEAM_CHILD_THREADS: ReadonlyArray<T3TeamProjectThread> = [];
@@ -2404,6 +2405,12 @@ function ChatViewContent(props: ChatViewProps) {
   const t3teamAgentsPanelSubRuns =
     (activeThread ? t3teamChildThreadsByParentId.get(activeThread.id) : undefined) ??
     EMPTY_T3TEAM_CHILD_THREADS;
+  // GHE #201: merged ACTIVE agents for the working-row indicator — running
+  // child threads (sub-runs) + live in-thread subagents, both live sources.
+  const activeAgents = useMemo(
+    () => mergeActiveAgentsAndChildren({ childThreads: t3teamAgentsPanelSubRuns, agentPanelModel }),
+    [agentPanelModel, t3teamAgentsPanelSubRuns],
+  );
   const pendingApprovals = useMemo(
     () => derivePendingApprovals(threadActivities),
     [threadActivities],
@@ -7199,6 +7206,7 @@ function ChatViewContent(props: ChatViewProps) {
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
                 agentPanelModel={agentPanelModel}
+                activeAgents={activeAgents}
                 onOpenAgents={addAgentsSurface}
                 key={activeThread.id}
                 isWorking={isWorking}
