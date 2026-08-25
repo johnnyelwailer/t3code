@@ -460,7 +460,25 @@ const WorkflowEngineDurabilityLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provide(PersistenceLayerLive),
 );
 
-const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
+export const mountT3TeamBrokerBeforeRuntimeServices = <A, E, R, A2, E2, R2>(
+  runtimeHead: Layer.Layer<A, E, R>,
+  brokerLayer: Layer.Layer<A2, E2, R2>,
+) => runtimeHead.pipe(Layer.provideMerge(brokerLayer));
+
+const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
+  ReactorLayerLive,
+  T3TeamToolBrokerLive.pipe(
+    Layer.provideMerge(T3TeamThreadToolContextStoreLive),
+    Layer.provideMerge(T3TeamWidgetRegistryLive),
+    Layer.provideMerge(T3TeamContextRefreshServiceLive),
+    Layer.provide(OrchestrationLayerLive),
+    Layer.provide(WorkflowEngineDurabilityLive),
+    Layer.provide(ProviderRegistryLive),
+  ),
+).pipe(
+  // The broker reads several capabilities through serviceOption at construction time. Keep it
+  // before the runtime services so the later provideMerges expose the production singletons to
+  // it as well as to the reactor, rather than constructing a dependency-blind broker.
   // Core Services
   Layer.provideMerge(ServerSettingsLayerLive),
   Layer.provideMerge(CheckpointingLayerLive),
@@ -472,28 +490,6 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(PersistenceLayerLive),
   Layer.provideMerge(Keybindings.layer),
   Layer.provideMerge(ProviderRegistryLive),
-  Layer.provideMerge(
-    T3TeamToolBrokerLive.pipe(
-      Layer.provideMerge(T3TeamThreadToolContextStoreLive),
-      Layer.provideMerge(T3TeamWidgetRegistryLive),
-      Layer.provideMerge(T3TeamContextRefreshServiceLive),
-      Layer.provide(OrchestrationLayerLive),
-      // t3team.orchestration.run (ephemeral workflows) drives the same durable-engine singletons;
-      // memoized by reference, so this shares the registry/repo/store/scheduler instances.
-      Layer.provide(WorkflowEngineDurabilityLive),
-      // ProviderRegistryLive appears EARLIER in the outer pipe below, but `provideMerge`
-      // only feeds a layer's output into layers accumulated BEFORE it in the chain — the
-      // broker (which resolves ProviderRegistry via `Effect.serviceOption`) never saw it, so
-      // `t3team.thread.start_child` with an explicit provider always failed with "Unknown
-      // provider instance … Available: none". Providing it directly here shares the outer
-      // instance via layer memoization; its own requirements (config, instance registry,
-      // platform) are satisfied by the later outer provideMerges. NOTE: GitWorkflowService/
-      // SourceControlProviderRegistry/ProjectSetupScriptRunner have the same visibility gap,
-      // but providing VcsLayerLive here would leak its ProjectionSnapshotQuery/
-      // TerminalManager requirements out of this composed layer — fix separately.
-      Layer.provide(ProviderRegistryLive),
-    ),
-  ),
   // Shared singletons: the launch route registers parked runs in the registry and writes the
   // run record + journal through the repo/store; the workflow-engine reactor + boot rehydration
   // resolve the same instances. See WorkflowEngineDurabilityLive above.
