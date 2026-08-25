@@ -736,6 +736,13 @@ describe("ProviderCommandReactor", () => {
     // Thread pinned to claudeAgent; settings.textGenerationModelSelection defaults to codex.
     // No Nexplore policy env configured, so the thread's own (enabled) instance must win — see
     // resolveAuxTextGenerationModelSelection in ProviderCommandReactor.ts.
+    //
+    // Host-environment gate: the Nexplore distribution pack pins aux generation on-prem by
+    // exporting T3TEAM_TEXT_GENERATION_MODEL_INSTANCE_ID / _MODEL (packs/nexplore-global/
+    // activate.ts, the GHE #142 fix). The reactor honors that policy unconditionally over the
+    // thread's own model, so on any host where the pack has run the thread-model-wins premise
+    // no longer holds. Isolate both vars for the test's duration and restore them afterwards,
+    // mirroring the policy-wins test below.
     const harness = await createHarness({
       threadModelSelection: {
         instanceId: ProviderInstanceId.make("claudeAgent"),
@@ -745,31 +752,48 @@ describe("ProviderCommandReactor", () => {
     const now = "2026-01-01T00:00:00.000Z";
     harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "Generated title" }));
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.turn.start",
-        commandId: CommandId.make("cmd-turn-start-thread-model-wins"),
-        threadId: ThreadId.make("thread-1"),
-        message: {
-          messageId: asMessageId("user-message-thread-model-wins"),
-          role: "user",
-          text: "Investigate the thread-model-wins scenario.",
-          attachments: [],
-        },
-        titleSeed: "Thread",
-        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-        runtimeMode: "approval-required",
-        createdAt: now,
-      }),
-    );
+    const previousInstanceId = process.env.T3TEAM_TEXT_GENERATION_MODEL_INSTANCE_ID;
+    const previousModel = process.env.T3TEAM_TEXT_GENERATION_MODEL;
+    delete process.env.T3TEAM_TEXT_GENERATION_MODEL_INSTANCE_ID;
+    delete process.env.T3TEAM_TEXT_GENERATION_MODEL;
+    try {
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-turn-start-thread-model-wins"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId("user-message-thread-model-wins"),
+            role: "user",
+            text: "Investigate the thread-model-wins scenario.",
+            attachments: [],
+          },
+          titleSeed: "Thread",
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        }),
+      );
 
-    await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
-    expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
-      modelSelection: {
-        instanceId: ProviderInstanceId.make("claudeAgent"),
-        model: "claude-sonnet-4-6",
-      },
-    });
+      await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
+      expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("claudeAgent"),
+          model: "claude-sonnet-4-6",
+        },
+      });
+    } finally {
+      if (previousInstanceId === undefined) {
+        delete process.env.T3TEAM_TEXT_GENERATION_MODEL_INSTANCE_ID;
+      } else {
+        process.env.T3TEAM_TEXT_GENERATION_MODEL_INSTANCE_ID = previousInstanceId;
+      }
+      if (previousModel === undefined) {
+        delete process.env.T3TEAM_TEXT_GENERATION_MODEL;
+      } else {
+        process.env.T3TEAM_TEXT_GENERATION_MODEL = previousModel;
+      }
+    }
   });
 
   it("prefers the Nexplore env policy over the thread's own model when generating a title", async () => {
