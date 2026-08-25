@@ -155,7 +155,10 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
         if (autoStop.observe(level, Date.now())) stopRecording(false, true);
       },
       onFrameError: (error) => {
-        console.warn("[voice-input] Waveform/Analyse-Fehler:", error);
+        console.warn("[voice-input] Waveform/Analyse-Fehler (CSS-Fallback aktiv):", error);
+      },
+      onAudioActive: () => {
+        console.info("[voice-input] Audio-Analyse aktiv — Bars & Glow reagieren auf die Stimme");
       },
     });
   }, [currentLang, onLevel, onPartialTranscript, stopMode, stopRecording, transition]);
