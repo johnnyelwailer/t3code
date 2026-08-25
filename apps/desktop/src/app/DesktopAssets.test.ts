@@ -62,6 +62,94 @@ describe("DesktopAssets", () => {
     }),
   );
 
+  it.effect("prefers the distribution's icon override for the unpackaged png", () =>
+    Effect.gen(function* () {
+      const distributionIcon = "/distro/packs/assets/nexplore-mark-1024.png";
+      const developmentEnvironmentLayer = DesktopEnvironment.layer({
+        dirname: "/repo/apps/desktop/dist-electron",
+        homeDirectory: "/Users/alice",
+        platform: "darwin",
+        processArch: "arm64",
+        appVersion: "1.2.3",
+        appPath: "/repo",
+        isPackaged: false,
+        resourcesPath: "/repo/apps/desktop/resources",
+        runningUnderArm64Translation: false,
+      }).pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            NodeServices.layer,
+            DesktopConfig.layerTest({
+              VITE_DEV_SERVER_URL: "http://localhost:5733",
+              T3CODE_DESKTOP_ICON_PNG: distributionIcon,
+            }),
+          ),
+        ),
+      );
+      const fileSystemLayer = FileSystem.layerNoop({
+        exists: (path) =>
+          Effect.succeed(
+            String(path) === distributionIcon || String(path).includes("/assets/dev/"),
+          ),
+      });
+      const assets = yield* DesktopAssets.DesktopAssets.pipe(
+        Effect.provide(
+          DesktopAssets.layer.pipe(
+            Layer.provide(Layer.merge(fileSystemLayer, developmentEnvironmentLayer)),
+          ),
+        ),
+      );
+
+      const icons = yield* assets.iconPaths;
+
+      assert.equal(Option.getOrThrow(icons.png), distributionIcon);
+      // The ico keeps the source-tree brand asset; only the png is overridden.
+      assert.match(Option.getOrThrow(icons.ico), /assets\/dev\/blueprint-windows\.ico$/);
+      assert.isTrue(Option.isNone(icons.icns));
+    }),
+  );
+
+  it.effect("falls back when the distribution's icon override is missing on disk", () =>
+    Effect.gen(function* () {
+      const distributionIcon = "/distro/packs/assets/missing.png";
+      const developmentEnvironmentLayer = DesktopEnvironment.layer({
+        dirname: "/repo/apps/desktop/dist-electron",
+        homeDirectory: "/Users/alice",
+        platform: "darwin",
+        processArch: "arm64",
+        appVersion: "1.2.3",
+        appPath: "/repo",
+        isPackaged: false,
+        resourcesPath: "/repo/apps/desktop/resources",
+        runningUnderArm64Translation: false,
+      }).pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            NodeServices.layer,
+            DesktopConfig.layerTest({
+              VITE_DEV_SERVER_URL: "http://localhost:5733",
+              T3CODE_DESKTOP_ICON_PNG: distributionIcon,
+            }),
+          ),
+        ),
+      );
+      const fileSystemLayer = FileSystem.layerNoop({
+        exists: (path) => Effect.succeed(String(path).includes("/assets/dev/")),
+      });
+      const assets = yield* DesktopAssets.DesktopAssets.pipe(
+        Effect.provide(
+          DesktopAssets.layer.pipe(
+            Layer.provide(Layer.merge(fileSystemLayer, developmentEnvironmentLayer)),
+          ),
+        ),
+      );
+
+      const icons = yield* assets.iconPaths;
+
+      assert.match(Option.getOrThrow(icons.png), /assets\/dev\/blueprint-macos-1024\.png$/);
+    }),
+  );
+
   it.effect("preserves the failed asset candidate and filesystem cause", () =>
     Effect.gen(function* () {
       const fileName = "custom.bin";

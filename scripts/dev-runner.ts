@@ -1,6 +1,9 @@
 #!/usr/bin/env node
+// @effect-diagnostics nodeBuiltinImport:off - the distribution manifest read below is a plain file lookup that runs outside any Effect runtime.
 
+import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -70,6 +73,38 @@ export function isProxiableBindHost(host: string): boolean {
 export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(NodeOS.homedir(), ".t3"),
 );
+
+/**
+ * The distribution's desktop icon (GHE #29). When `T3CODE_DISTRIBUTION` names a
+ * distribution whose `distribution.json` declares `branding.iconPng`, the dev
+ * desktop flow exports it as `T3CODE_DESKTOP_ICON_PNG` — the source icon the
+ * macOS launcher (bundle .icns) and the main process (Dock icon) use in
+ * unpackaged builds. An explicitly set `T3CODE_DESKTOP_ICON_PNG` always wins.
+ * Returns `undefined` (no override) whenever nothing usable is configured.
+ */
+export function resolveDistributionDesktopIconPng(
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  if (env.T3CODE_DESKTOP_ICON_PNG?.trim()) return undefined;
+  const distributionDir = env.T3CODE_DISTRIBUTION?.trim();
+  if (!distributionDir) return undefined;
+  const manifestPath = NodePath.join(distributionDir, "distribution.json");
+  let raw: string;
+  try {
+    raw = NodeFS.readFileSync(manifestPath, "utf8");
+  } catch {
+    return undefined;
+  }
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  const iconPng = (manifest as { branding?: { iconPng?: unknown } }).branding?.iconPng;
+  if (typeof iconPng !== "string" || !iconPng.trim()) return undefined;
+  return NodePath.resolve(distributionDir, iconPng.trim());
+}
 
 const MODE_ARGS = {
   dev: [
@@ -338,6 +373,15 @@ export function createDevRunnerEnv({
       output.T3CODE_HOME = resolvedBaseDir;
     } else {
       delete output.T3CODE_HOME;
+    }
+
+    if (isDesktopMode) {
+      // The launcher and the main process read T3CODE_DESKTOP_ICON_PNG to swap
+      // the distribution's icon into the dev bundle and the Dock (GHE #29).
+      const distributionIconPng = resolveDistributionDesktopIconPng(baseEnv);
+      if (distributionIconPng !== undefined) {
+        output.T3CODE_DESKTOP_ICON_PNG = distributionIconPng;
+      }
     }
 
     // A dev-runner server is never launcher-managed. When the shell that runs

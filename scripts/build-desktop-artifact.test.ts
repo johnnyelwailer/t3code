@@ -185,6 +185,23 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
   });
 
+  it("lets T3CODE_DESKTOP_ICON_PNG override the mac and linux icon sources", () => {
+    const previous = process.env.T3CODE_DESKTOP_ICON_PNG;
+    process.env.T3CODE_DESKTOP_ICON_PNG = "/distro/packs/assets/nexplore-mark-1024.png";
+    try {
+      for (const version of ["0.0.17", "0.0.17-nightly.20260413.42"]) {
+        assert.deepStrictEqual(resolveDesktopBuildIconAssets(version), {
+          macIconPng: "/distro/packs/assets/nexplore-mark-1024.png",
+          linuxIconPng: "/distro/packs/assets/nexplore-mark-1024.png",
+          windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+        });
+      }
+    } finally {
+      if (previous !== undefined) process.env.T3CODE_DESKTOP_ICON_PNG = previous;
+      else delete process.env.T3CODE_DESKTOP_ICON_PNG;
+    }
+  });
+
   it("switches the bundled splash and favicon branding for nightly versions", () => {
     assert.equal(resolveDesktopWebAssetBrand("0.0.17"), "production");
     assert.equal(resolveDesktopWebAssetBrand("0.0.17-nightly.20260413.42"), "nightly");

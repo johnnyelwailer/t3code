@@ -99,6 +99,27 @@ const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (
 > {
   const fileSystem = yield* FileSystem.FileSystem;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
+  // A distribution's desktop icon (GHE #29): the dev-runner exports
+  // T3CODE_DESKTOP_ICON_PNG when T3CODE_DISTRIBUTION names a distribution that
+  // declares branding.iconPng. It wins over the source-tree brand icon; a
+  // missing file falls through to the source tree, then the resource lookup.
+  if (ext === "png" && Option.isSome(environment.desktopIconPngOverride)) {
+    const overridePath = environment.desktopIconPngOverride.value;
+    const overrideExists = yield* fileSystem.exists(overridePath).pipe(
+      Effect.mapError(
+        (cause) =>
+          new DesktopAssetProbeError({
+            fileName: "icon.png",
+            candidatePath: overridePath,
+            cause,
+          }),
+      ),
+    );
+    if (overrideExists) {
+      return Option.some(overridePath);
+    }
+  }
+
   const sourceTreeIconPath = resolveSourceTreeIconPath(environment, ext);
   if (sourceTreeIconPath !== undefined) {
     const sourceTreeIconExists = yield* fileSystem.exists(sourceTreeIconPath).pipe(

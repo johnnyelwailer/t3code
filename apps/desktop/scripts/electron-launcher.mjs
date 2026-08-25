@@ -177,8 +177,15 @@ function registerMacLauncherBundle(appBundlePath) {
 }
 
 export function resolveMacLauncherIconPaths(runtimeDir, development = isDevelopment) {
+  // A distribution's desktop icon (GHE #29): the dev-runner exports
+  // T3CODE_DESKTOP_ICON_PNG when T3CODE_DISTRIBUTION names a distribution that
+  // declares branding.iconPng. An explicit value always wins over the
+  // source-tree brand icon.
+  const distributionIconPng = process.env.T3CODE_DESKTOP_ICON_PNG?.trim();
+  const sourceIconPath =
+    distributionIconPng || (development ? developmentMacIconPngPath : productionMacIconPngPath);
   return {
-    sourceIconPath: development ? developmentMacIconPngPath : productionMacIconPngPath,
+    sourceIconPath,
     generatedIconPath: NodePath.join(runtimeDir, development ? "icon-dev.icns" : "icon-prod.icns"),
   };
 }
@@ -191,9 +198,14 @@ function ensureMacIconIcns(runtimeDir) {
     throw new Error(`Desktop macOS icon source is missing at ${sourceIconPath}`);
   }
 
+  const sourceMarkerPath = `${generatedIconPath}.source`;
+  const sourceMarker = NodeFS.existsSync(sourceMarkerPath)
+    ? NodeFS.readFileSync(sourceMarkerPath, "utf8")
+    : undefined;
   const sourceMtimeMs = NodeFS.statSync(sourceIconPath).mtimeMs;
   if (
     NodeFS.existsSync(generatedIconPath) &&
+    sourceMarker === sourceIconPath &&
     NodeFS.statSync(generatedIconPath).mtimeMs >= sourceMtimeMs
   ) {
     return generatedIconPath;
@@ -226,6 +238,10 @@ function ensureMacIconIcns(runtimeDir) {
     }
 
     runChecked("iconutil", ["-c", "icns", iconsetDir, "-o", generatedIconPath]);
+    // Record which source produced the cache so a switched source (e.g. a
+    // distribution icon appearing or disappearing) regenerates instead of
+    // serving a stale icon whose mtime happens to be newer.
+    NodeFS.writeFileSync(sourceMarkerPath, sourceIconPath);
     return generatedIconPath;
   } finally {
     NodeFS.rmSync(iconsetRoot, { recursive: true, force: true });

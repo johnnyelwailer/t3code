@@ -43,6 +43,9 @@ export const DesktopConfig = Config.all({
   devBackendEntryPath: trimmedString("T3CODE_DEV_BACKEND_ENTRY_PATH"),
   configuredBackendPort: Config.port("T3CODE_PORT").pipe(Config.option),
   commitHashOverride: trimmedString("T3CODE_COMMIT_HASH"),
+  // A distribution's desktop source icon (GHE #29). Unpackaged builds only:
+  // the packaged bundle already carries the distribution's staged icon.
+  desktopIconPngOverride: trimmedString("T3CODE_DESKTOP_ICON_PNG"),
   desktopLanHostOverride: trimmedString("T3CODE_DESKTOP_LAN_HOST"),
   desktopHttpsEndpointUrls: commaSeparatedStrings("T3CODE_DESKTOP_HTTPS_ENDPOINTS"),
   otlpTracesUrl: trimmedString("T3CODE_OTLP_TRACES_URL"),
