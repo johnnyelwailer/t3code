@@ -238,6 +238,10 @@
     "./voiceInput": {
       "types": "./src/voiceInput.ts",
       "import": "./src/voiceInput.ts"
+    },
+    "./voiceInputUi": {
+      "types": "./src/voiceInputUi.tsx",
+      "import": "./src/voiceInputUi.tsx"
     }
   },
   "scripts": {
@@ -250,12 +254,14 @@
     "@t3tools/contracts": "workspace:*",
     "effect": "catalog:",
     "jose": "catalog:",
+    "react": "19.2.6",
     "yaml": "catalog:"
   },
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
+    "@types/react": "~19.2.14",
     "vite-plus": "catalog:"
   }
 }

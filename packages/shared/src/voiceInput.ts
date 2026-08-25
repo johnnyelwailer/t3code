@@ -35,25 +35,25 @@ export interface VoiceInputOptions {
 // Browser globals (typed loosely to avoid needing a DOM lib in shared)
 // ---------------------------------------------------------------------------
 
-interface SpeechRecognitionAlternative {
+export interface SpeechRecognitionAlternative {
   transcript: string;
   confidence: number;
 }
-interface SpeechRecognitionResult {
+export interface SpeechRecognitionResult {
   isFinal: boolean;
   0: SpeechRecognitionAlternative;
 }
-interface SpeechRecognitionEvent extends Event {
+export interface SpeechRecognitionEvent extends Event {
   resultIndex: number;
   results: {
     [index: number]: SpeechRecognitionResult;
     length: number;
   };
 }
-interface SpeechRecognitionErrorEvent extends Event {
+export interface SpeechRecognitionErrorEvent extends Event {
   error: string;
 }
-interface SpeechRecognitionLike {
+export interface SpeechRecognitionLike {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
@@ -236,7 +236,7 @@ export class VoiceInputController {
 // Helpers
 // ---------------------------------------------------------------------------
 
-type SpeechRecognitionWindow = Window & {
+export type SpeechRecognitionWindow = Window & {
   SpeechRecognition?: new () => SpeechRecognitionLike;
   webkitSpeechRecognition?: new () => SpeechRecognitionLike;
 };

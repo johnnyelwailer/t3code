@@ -1,7 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "jsx": "react-jsx",
     "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    // Browser React UI: Date.now/setTimeout/requestAnimationFrame are the
+    // right browser primitives here. The Effect language-service rules that
+    // ban them (tsconfig.base.json) are for Effect code; each consuming app
+    // typechecks this file under its own tsconfig (apps/web relaxes exactly
+    // these rules for browser components).
+    "src/voiceInputUi.tsx"
+  ]
 }
