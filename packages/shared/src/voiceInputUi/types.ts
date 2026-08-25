@@ -45,7 +45,7 @@ export const BAR_COUNT = 6;
 // -- auto-send tuning --------------------------------------------------------
 
 /** Average level below which the stream counts as silence. */
-export const SILENCE_ENERGY_THRESHOLD = 0.02;
+export const SILENCE_ENERGY_THRESHOLD = 0.2;
 /** Silence duration that triggers auto-send. */
 export const AUTO_SEND_PAUSE_MS: Record<Extract<StopMode, "auto">, number> = {
   auto: 3000,

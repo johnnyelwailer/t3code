@@ -30,7 +30,9 @@ export function frameFromAudioLevel(
   }
   energy /= buffer.length;
   void barCount;
-  return { level: Math.min(1, energy * 4) };
+  // RMS (perceptual loudness) with a gain tuned so normal speech lands at
+  // 0.3..1.0; silence sits around 0.05..0.1.
+  return { level: Math.min(1, Math.sqrt(energy) * 5) };
 }
 
 /**

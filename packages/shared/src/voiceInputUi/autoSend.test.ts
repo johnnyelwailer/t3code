@@ -15,7 +15,7 @@ describe("SilenceAutoStop", () => {
     autoStop.prime(0);
     // Speech keeps the clock current...
     expect(autoStop.observe(0.5, 2000)).toBe(false);
-    expect(autoStop.observe(0.1, 4000)).toBe(false);
+    expect(autoStop.observe(0.3, 4000)).toBe(false);
     // ...so 3 s of silence is measured from the LAST audio, not the start.
     expect(autoStop.observe(0, 6999)).toBe(false);
     expect(autoStop.observe(0, 7000)).toBe(true);
@@ -34,8 +34,8 @@ describe("SilenceAutoStop", () => {
   it("stays silent for energy at or above the threshold", () => {
     const autoStop = new SilenceAutoStop("auto");
     autoStop.prime(0);
-    // 0.02 is the silence threshold; anything at/above counts as audio.
-    expect(autoStop.observe(0.02, 4000)).toBe(false);
+    // 0.2 is the silence threshold; anything at/above counts as audio.
+    expect(autoStop.observe(0.2, 4000)).toBe(false);
     expect(autoStop.observe(0.5, 9000)).toBe(false);
   });
 });
