@@ -112,6 +112,11 @@ function iconResizeSpawnerLayer(
   );
 }
 
+const mockSuccessfulChildProcessLayer = Layer.succeed(
+  ChildProcessSpawner.ChildProcessSpawner,
+  ChildProcessSpawner.make(() => Effect.succeed(mockProcess(0))),
+);
+
 const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(function* (input: {
   readonly copyUnpackedNatives: boolean;
   readonly serverEntrySource?: string;
@@ -199,6 +204,25 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     } finally {
       if (previous !== undefined) process.env.T3CODE_DESKTOP_ICON_PNG = previous;
       else delete process.env.T3CODE_DESKTOP_ICON_PNG;
+    }
+  });
+
+  it("lets T3CODE_DESKTOP_ICON_ICO override the Windows icon source", () => {
+    const previousPng = process.env.T3CODE_DESKTOP_ICON_PNG;
+    const previousIco = process.env.T3CODE_DESKTOP_ICON_ICO;
+    process.env.T3CODE_DESKTOP_ICON_PNG = "/distro/packs/assets/nexplore-mark-1024.png";
+    process.env.T3CODE_DESKTOP_ICON_ICO = "/distro/packs/assets/nexplore-mark.ico";
+    try {
+      assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17"), {
+        macIconPng: "/distro/packs/assets/nexplore-mark-1024.png",
+        linuxIconPng: "/distro/packs/assets/nexplore-mark-1024.png",
+        windowsIconIco: "/distro/packs/assets/nexplore-mark.ico",
+      });
+    } finally {
+      if (previousPng !== undefined) process.env.T3CODE_DESKTOP_ICON_PNG = previousPng;
+      else delete process.env.T3CODE_DESKTOP_ICON_PNG;
+      if (previousIco !== undefined) process.env.T3CODE_DESKTOP_ICON_ICO = previousIco;
+      else delete process.env.T3CODE_DESKTOP_ICON_ICO;
     }
   });
 
@@ -532,6 +556,36 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
+  it.effect("packages distribution env files consistently on every desktop platform", () =>
+    Effect.gen(function* () {
+      for (const [platform, target] of [
+        ["mac", "dmg"],
+        ["linux", "AppImage"],
+        ["win", "nsis"],
+      ] as const) {
+        const config = yield* createBuildConfig({
+          platform,
+          target,
+          version: "1.2.3",
+          signed: false,
+          mockUpdates: false,
+          includePackagedEnvFiles: true,
+        });
+        const envResources = config.extraResources.filter(
+          (resource) =>
+            typeof resource === "object" &&
+            resource !== null &&
+            (resource.to === ".env" || resource.to === ".env.local"),
+        );
+
+        assert.deepStrictEqual(envResources, [
+          { from: "apps/desktop/prod-resources/.env", to: ".env" },
+          { from: "apps/desktop/prod-resources/.env.local", to: ".env.local" },
+        ]);
+      }
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
   it.effect("stamps one per-build timestamp into every artifact name of a build", () =>
     Effect.gen(function* () {
       const config = yield* createBuildConfig({
@@ -800,7 +854,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.isBelow(result.fileCount, WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT);
         assert.deepStrictEqual(secondAsar, firstAsar);
       }),
-    ),
+    ).pipe(Effect.provide(mockSuccessfulChildProcessLayer)),
   );
 
   it.effect("probes fff through the packaged Windows primary instead of helper executables", () => {
@@ -1023,6 +1077,30 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect("keeps distribution pack files outside the fixed Windows runtime budget", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+        const packsDir = path.join(fixture.packagedAppDir, "resources", "packs", "nexplore-global");
+        yield* fs.makeDirectory(packsDir, { recursive: true });
+        for (let index = 0; index < 100; index += 1) {
+          yield* fs.writeFileString(path.join(packsDir, `asset-${String(index)}.txt`), "pack");
+        }
+
+        const result = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+          fileLimit: 10,
+        });
+
+        assert.isAbove(result.fileCount, 100);
+      }),
+    ).pipe(Effect.provide(mockSuccessfulChildProcessLayer)),
+  );
+
   it.effect("rejects a sidecar whose extracted server bundle cannot resolve", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -1033,7 +1111,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         const error = yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
-          targetArch: "x64",
+          // Skip the host-native probe for this fixture: this assertion is
+          // specifically about the later self-containment check.
+          targetArch: "arm64",
         }).pipe(Effect.flip);
 
         assert.instanceOf(error, BundleNotSelfContainedError);

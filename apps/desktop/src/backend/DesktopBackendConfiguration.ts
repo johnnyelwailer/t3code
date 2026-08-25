@@ -418,7 +418,13 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
     const backendExposure = yield* serverExposure.backendConfig;
 
     const packsDir = environment.isPackaged
-      ? environment.path.join(environment.serverRoot, "apps", "desktop", "packs")
+      ? ([
+          environment.path.join(environment.serverRoot, "apps", "desktop", "packs"),
+          // Windows keeps the executable server in server.asar but ships
+          // distribution packs as loose resources for inspection and runtime
+          // loading. They therefore cannot be resolved below serverRoot.
+          environment.path.join(environment.resourcesPath, "packs"),
+        ].find((candidate) => NodeFS.existsSync(candidate)) ?? null)
       : null;
     // Electron's asar patch does not cover fs.access, so Effect's default
     // FileSystem.exists (built on access) reports false for paths inside the
