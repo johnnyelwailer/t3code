@@ -6,11 +6,19 @@
   },
   "include": ["src"],
   "exclude": [
-    // Browser React UI: Date.now/setTimeout/requestAnimationFrame are the
-    // right browser primitives here. The Effect language-service rules that
-    // ban them (tsconfig.base.json) are for Effect code; each consuming app
-    // typechecks this file under its own tsconfig (apps/web relaxes exactly
-    // these rules for browser components).
-    "src/voiceInputUi.tsx"
+    // Browser voice UI modules that use browser globals (Date.now/setTimeout).
+    // The Effect language-service rules that ban them (tsconfig.base.json)
+    // target Effect code; each consuming app typechecks these files under its
+    // own tsconfig (apps/web relaxes exactly these rules for browser
+    // components). Pure modules (types.ts, autoSend.ts, waveform.ts) and the
+    // presentational RecordingBar.tsx stay in Effect-lint scope.
+    "src/voiceInputUi.tsx",
+    "src/voiceInputUi/useVoiceInput.ts",
+    // recognition.ts uses setTimeout (language-switch delay) and is imported
+    // by its own test — both stay out of Effect-lint scope for the same
+    // reason; the tests still run under vitest.
+    "src/voiceInputUi/recognition.ts",
+    "src/voiceInputUi/recognition.test.ts",
+    "src/voiceInputUi/recognitionLanguage.test.ts"
   ]
 }
