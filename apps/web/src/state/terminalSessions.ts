@@ -9,7 +9,7 @@ import {
 import { ThreadId, type EnvironmentId, type TerminalAttachInput } from "@t3tools/contracts";
 import { useMemo } from "react";
 
-import { useEnvironmentQuery } from "./query";
+import { useEnvironmentQuery, useEnvironmentQueryData } from "./query";
 import { terminalEnvironment } from "./terminal";
 
 export function useAttachedTerminalSession(input: {
@@ -52,7 +52,11 @@ export function useKnownTerminalSessions(input: {
   readonly environmentId: EnvironmentId | null;
   readonly threadId: ThreadId | null;
 }): ReadonlyArray<KnownTerminalSession> {
-  const metadata = useEnvironmentQuery(
+  // Data-only subscription: every sidebar thread row calls this against the
+  // same per-environment metadata atom, so the full query view (with its
+  // `waiting` flips and per-emission object identity) re-rendered every row
+  // whenever anything refreshed terminal metadata (GHE #61).
+  const metadataData = useEnvironmentQueryData(
     input.environmentId === null
       ? null
       : terminalEnvironment.metadata({
@@ -64,7 +68,7 @@ export function useKnownTerminalSessions(input: {
     if (input.environmentId === null) {
       return [];
     }
-    return (metadata.data ?? [])
+    return (metadataData ?? [])
       .filter((summary) => input.threadId === null || summary.threadId === input.threadId)
       .map((summary) => ({
         target: {
@@ -79,7 +83,7 @@ export function useKnownTerminalSessions(input: {
           numeric: true,
         }),
       );
-  }, [input.environmentId, input.threadId, metadata.data]);
+  }, [input.environmentId, input.threadId, metadataData]);
 }
 
 export function useThreadRunningTerminalIds(input: {
