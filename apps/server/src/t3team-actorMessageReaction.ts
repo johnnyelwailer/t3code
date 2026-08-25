@@ -17,7 +17,11 @@ import * as Effect from "effect/Effect";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { T3TeamActorMailboxEntry, T3TeamActorMailboxShape } from "./t3team-actorMailbox.ts";
-import { buildActorReactionBatchInput } from "./t3team-actorReactionInput.ts";
+import {
+  appendActorReactionUserReturnInstruction,
+  buildActorReactionTurnInput,
+  detectUserFacingOpenState,
+} from "./t3team-actorReactionVisibility.ts";
 import {
   buildActorRestartHoldSummary,
   type InterruptedChildThread,
@@ -71,7 +75,9 @@ export function startActorReaction(input: {
         message: {
           messageId: MessageId.make(t3teamRandomUUID()),
           role: "user",
-          text: buildActorReactionBatchInput(entries),
+          // GHE #156: wrap the delivery with the user-return instruction when the
+          // user-facing exchange is open, so the reaction turn cannot bury it.
+          text: buildActorReactionTurnInput(entries, detectUserFacingOpenState(thread.messages)),
           attachments: [],
           t3teamExt: {
             visibleToUser: false,
@@ -152,7 +158,12 @@ export function startActorRestartHoldSummary(input: {
         message: {
           messageId: MessageId.make(t3teamRandomUUID()),
           role: "user",
-          text: buildActorRestartHoldSummary({ entries, interruptedChildren }),
+          // GHE #156: wrap the restart-hold summary too (it is a reaction turn).
+          // Rehydrate matches via `actor.messageIds` (batch path), so the suffix is safe.
+          text: appendActorReactionUserReturnInstruction(
+            buildActorRestartHoldSummary({ entries, interruptedChildren }),
+            detectUserFacingOpenState(thread.messages),
+          ),
           attachments: [],
           t3teamExt: {
             visibleToUser: false,

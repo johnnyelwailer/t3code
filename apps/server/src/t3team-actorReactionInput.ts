@@ -215,7 +215,9 @@ export function collectPendingActorDeliveries(
         entry.fromThreadId === actor.senderThreadId &&
         entry.hopCount === actor.hopCount &&
         entry.rootThreadId === actor.rootThreadId &&
-        buildActorReactionInput(entry) === event.payload.text,
+        // GHE #156: the admitted input may carry the user-return instruction as a
+        // SUFFIX after the stable framing, so match the base framing as a PREFIX.
+        event.payload.text.startsWith(buildActorReactionInput(entry)),
     );
     if (index >= 0) pending.splice(index, 1);
   }
