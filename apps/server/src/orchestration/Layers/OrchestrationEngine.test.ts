@@ -569,6 +569,70 @@ describe("OrchestrationEngine", () => {
     await system.dispose();
   });
 
+  it("round-trips the live activity label through meta updates (GHE #40)", async () => {
+    const system = await createOrchestrationSystem();
+    const { engine } = system;
+    const createdAt = now();
+
+    await system.run(
+      engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("cmd-label-project-create"),
+        projectId: asProjectId("project-label"),
+        title: "Label Project",
+        workspaceRoot: "/tmp/project-label",
+        defaultModelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        createdAt,
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-label-thread-create"),
+        threadId: ThreadId.make("thread-label"),
+        projectId: asProjectId("project-label"),
+        title: "Label Thread",
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      }),
+    );
+
+    await system.run(
+      engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-label-set"),
+        threadId: ThreadId.make("thread-label"),
+        activityLabel: "Reading contracts",
+      }),
+    );
+    let thread = (await system.readModel()).threads.find((t) => t.id === "thread-label");
+    expect(thread?.activityLabel).toBe("Reading contracts");
+
+    // Idle/terminal: the label clears so it never renders stale on the next turn.
+    await system.run(
+      engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-label-clear"),
+        threadId: ThreadId.make("thread-label"),
+        activityLabel: null,
+      }),
+    );
+    thread = (await system.readModel()).threads.find((t) => t.id === "thread-label");
+    expect(thread?.activityLabel ?? null).toBeNull();
+
+    await system.dispose();
+  });
+
   it("allows authoritative worktree bootstrap to assign a temporary branch", async () => {
     const system = await createOrchestrationSystem();
     const { engine } = system;

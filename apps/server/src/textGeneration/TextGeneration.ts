@@ -74,6 +74,22 @@ export interface ThreadTitleGenerationResult {
   title: string;
 }
 
+export interface ActivityLabelGenerationInput {
+  cwd: string;
+  /**
+   * Tiny, hard-capped context: the last few meaningful activities plus an
+   * optional one-line user-intent gist. NEVER the whole thread or tool
+   * results — the prompt builder re-caps it as a second line of defence.
+   */
+  context: string;
+  /** What model and provider to use for generation. */
+  modelSelection: ModelSelection;
+}
+
+export interface ActivityLabelGenerationResult {
+  label: string;
+}
+
 export type StructuredGenerationInput<S extends Schema.Top> = {
   readonly cwd: string;
   readonly prompt: string;
@@ -88,6 +104,14 @@ export interface TextGenerationService {
   generatePrContent(input: PrContentGenerationInput): Promise<PrContentGenerationResult>;
   generateBranchName(input: BranchNameGenerationInput): Promise<BranchNameGenerationResult>;
   generateThreadTitle(input: ThreadTitleGenerationInput): Promise<ThreadTitleGenerationResult>;
+  /**
+   * Generate a 2–4 word "working on" label for an active thread from its
+   * most recent activities (GHE #40). Drivers MUST not attach a reasoning
+   * effort / thinking budget to this call.
+   */
+  generateActivityLabel(
+    input: ActivityLabelGenerationInput,
+  ): Promise<ActivityLabelGenerationResult>;
   generateStructured?<S extends Schema.Top>(
     input: StructuredGenerationInput<S>,
   ): Promise<S["Type"]>;
@@ -124,6 +148,13 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    /** Generate a live 2–4 word activity label for what the thread is doing now (GHE #40).
+     *  Optional like `generateStructured`: hosts without a supporting driver leave the
+     *  thread on the static "Working" pill (fail-open). */
+    readonly generateActivityLabel?: (
+      input: ActivityLabelGenerationInput,
+    ) => Effect.Effect<ActivityLabelGenerationResult, TextGenerationError>;
     readonly generateStructured?: <S extends Schema.Top>(
       input: StructuredGenerationInput<S>,
     ) => Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]>;
@@ -138,6 +169,7 @@ type TextGenerationOp =
   | "generatePrContent"
   | "generateBranchName"
   | "generateThreadTitle"
+  | "generateActivityLabel"
   | "generateStructured";
 
 const resolveInstance = (
@@ -177,6 +209,19 @@ export const makeTextGenerationFromRegistry = (
     generateThreadTitle: (input) =>
       resolveInstance(registry, "generateThreadTitle", input.modelSelection.instanceId).pipe(
         Effect.flatMap((textGeneration) => textGeneration.generateThreadTitle(input)),
+      ),
+    generateActivityLabel: (input) =>
+      resolveInstance(registry, "generateActivityLabel", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) =>
+          textGeneration.generateActivityLabel
+            ? textGeneration.generateActivityLabel(input)
+            : Effect.fail(
+                new TextGenerationError({
+                  operation: "generateActivityLabel",
+                  detail: "The resolved provider does not support activity labels.",
+                }),
+              ),
+        ),
       ),
     generateStructured: (input) =>
       resolveInstance(registry, "generateStructured", input.modelSelection.instanceId).pipe(

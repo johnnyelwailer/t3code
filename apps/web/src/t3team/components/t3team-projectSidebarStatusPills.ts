@@ -13,11 +13,15 @@ import {
   formatSleepingUntil,
 } from "~/t3team/components/t3team-projectSidebarTimeLabels";
 
-export function resolveThreadStatusPill(thread: {
-  status: ProjectThread["status"];
-  sleepingUntil?: string;
-  workflowRunStatus?: ProjectThread["workflowRunStatus"];
-}): ThreadStatusPill | null {
+export function resolveThreadStatusPill(
+  thread: {
+    status: ProjectThread["status"];
+    sleepingUntil?: string;
+    workflowRunStatus?: ProjectThread["workflowRunStatus"];
+    activityLabel?: string | null;
+  },
+  options: { readonly activityLabelsEnabled?: boolean } = {},
+): ThreadStatusPill | null {
   const run = thread.workflowRunStatus;
   if (run !== undefined) {
     const waitingSince = formatRelativeTime(run.updatedAt);
@@ -111,13 +115,21 @@ export function resolveThreadStatusPill(thread: {
     };
   }
   switch (thread.status) {
-    case "running":
+    case "running": {
+      // GHE #40: the live activity label replaces the static "Working" while the
+      // flag is on and a label is present; otherwise today's static pill.
+      const activityLabel =
+        options.activityLabelsEnabled !== false && typeof thread.activityLabel === "string"
+          ? thread.activityLabel.trim() || undefined
+          : undefined;
       return {
         label: "Working",
+        ...(activityLabel ? { activityLabel } : {}),
         colorClass: "text-sky-600 dark:text-sky-300/80",
         dotClass: "bg-sky-500 dark:bg-sky-300/80",
         pulse: true,
       };
+    }
     case "completed":
       return {
         label: "Completed",
@@ -137,7 +149,10 @@ export function resolveThreadStatusPill(thread: {
   }
 }
 
-export function resolveProjectStatusIndicator(threads: ProjectThread[]): ThreadStatusPill | null {
+export function resolveProjectStatusIndicator(
+  threads: ProjectThread[],
+  options: { readonly activityLabelsEnabled?: boolean } = {},
+): ThreadStatusPill | null {
   const priority: Record<ThreadStatusPill["label"], number> = {
     Running: 3,
     "Waiting for agent": 2,
@@ -156,7 +171,7 @@ export function resolveProjectStatusIndicator(threads: ProjectThread[]): ThreadS
   };
   let highest: ThreadStatusPill | null = null;
   for (const thread of threads) {
-    const pill = resolveThreadStatusPill(thread);
+    const pill = resolveThreadStatusPill(thread, options);
     if (!pill) continue;
     if (!highest || priority[pill.label] > priority[highest.label]) {
       highest = pill;

@@ -631,6 +631,21 @@ export const ServerSettings = Schema.Struct({
    * between a desktop window and a phone attached to the same server.
    */
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  /**
+   * Whether active threads get a short LLM-generated "working on" label (GHE #40)
+   * instead of the static "Working" pill. Server-authoritative like
+   * `enableAgentBrowserAccess`: the activity-label summarizer (inference side)
+   * and the sidebar pills (display side) must agree, and the answer must not
+   * differ between clients attached to the same server.
+   *
+   * ON by default for this distribution: generation is light by construction
+   * (tiny hard-capped payload, non-thinking model selection, ~20s debounce,
+   * skip-when-unchanged) and fail-open — when off or on any error the thread
+   * simply shows the static "Working" exactly as before.
+   */
+  t3teamActivityLabelsEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
   backgroundActivity: BackgroundActivitySettings,
   // Legacy flat fields retained for old settings files and old clients. New
   // consumers should resolve `backgroundActivity` instead.
@@ -843,6 +858,7 @@ export const ServerSettingsPatch = Schema.Struct({
   enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
+  t3teamActivityLabelsEnabled: Schema.optionalKey(Schema.Boolean),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
       schemaVersion: Schema.optionalKey(Schema.Literal(1)),

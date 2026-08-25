@@ -126,7 +126,7 @@ export function LocalWorkspaceSidebarRow({
           {!expanded && projectStatus ? (
             <span
               aria-hidden="true"
-              title={projectStatus.label}
+              title={projectStatus.activityLabel ?? projectStatus.label}
               className={`-ml-0.5 relative inline-flex size-3.5 shrink-0 items-center justify-center ${projectStatus.colorClass}`}
             >
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">

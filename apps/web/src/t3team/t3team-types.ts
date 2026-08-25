@@ -73,6 +73,9 @@ export type ProjectThread = {
   };
   /** Compact server-generated summary for a child thread; never a chat message. */
   childStatus?: string | null;
+  /** GHE #40: live LLM-generated 2–4 word label for what an active thread is working
+   *  on NOW; rendered on the Working pill while present. Absent/idle = static "Working". */
+  activityLabel?: string | null;
   childStatusUpdatedAt?: string | null;
 };
 

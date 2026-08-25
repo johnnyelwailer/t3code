@@ -316,3 +316,39 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
   return { prompt, outputSchema };
 }
+
+// ---------------------------------------------------------------------------
+// Activity label
+// ---------------------------------------------------------------------------
+
+/**
+ * Hard cap on the context a caller may attach to an activity-label request
+ * (GHE #40, requirement: VERY LIGHT ON INFERENCE). The payload is only the
+ * last few meaningful activities plus an optional one-line user-intent gist —
+ * never the whole thread, never tool results.
+ */
+export const ACTIVITY_LABEL_CONTEXT_MAX_CHARS = 400;
+
+export interface ActivityLabelPromptInput {
+  /** Pre-capped, tiny context: recent activity lines + optional user-intent gist. */
+  context: string;
+}
+
+const ACTIVITY_LABEL_INSTRUCTION = `Given the most recent actions of an agent, produce a 2-4 word phrase describing what it is working on now.
+Return JSON with exactly one key: label.
+Rules:
+- 2-4 words, present tense, no full sentence, no preamble, no trailing punctuation.
+- Name the actual work (feature, bug, task), not the tool being used.
+- Do not claim the work is complete.`;
+
+export function buildActivityLabelPrompt(input: ActivityLabelPromptInput) {
+  // The cap is applied HERE as well as by the summarizer, so no caller can
+  // accidentally ship a whole-thread payload even if it forgets its own cap.
+  const context = limitSection(input.context, ACTIVITY_LABEL_CONTEXT_MAX_CHARS);
+  const prompt = `${ACTIVITY_LABEL_INSTRUCTION}\n\nRecent activity:\n${context}`;
+  const outputSchema = Schema.Struct({
+    label: Schema.String,
+  });
+
+  return { prompt, outputSchema };
+}

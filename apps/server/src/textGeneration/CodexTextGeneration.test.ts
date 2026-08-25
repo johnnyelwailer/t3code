@@ -461,6 +461,28 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
     ),
   );
 
+  it.effect("generates activity labels with reasoning effort forced to none (no-thinking)", () =>
+    withFakeCodexEnv(
+      {
+        output: JSON.stringify({
+          label: '  "Reading contracts."  \nignored line',
+        }),
+        requireReasoningEffort: "none",
+      },
+      (textGeneration) =>
+        Effect.gen(function* () {
+          expect(textGeneration.generateActivityLabel).toBeDefined();
+          const generated = yield* textGeneration.generateActivityLabel!({
+            cwd: process.cwd(),
+            context: "- tool.started: Reading packages/contracts/src/orchestration.ts",
+            modelSelection: DEFAULT_TEST_MODEL_SELECTION,
+          });
+
+          expect(generated.label).toBe("Reading contracts");
+        }),
+    ),
+  );
+
   it.effect("omits attachment metadata section when no attachments are provided", () =>
     withFakeCodexEnv(
       {

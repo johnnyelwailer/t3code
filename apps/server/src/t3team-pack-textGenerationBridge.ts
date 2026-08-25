@@ -63,6 +63,12 @@ export const bridgePackTextGeneration = (
       attempt("generateBranchName", () => service.generateBranchName(input)),
     generateThreadTitle: (input) =>
       attempt("generateThreadTitle", () => service.generateThreadTitle(input)),
+    ...(service.generateActivityLabel
+      ? {
+          generateActivityLabel: (input) =>
+            attempt("generateActivityLabel", () => service.generateActivityLabel!(input)),
+        }
+      : {}),
     ...(service.generateStructured
       ? {
           generateStructured: (input) =>

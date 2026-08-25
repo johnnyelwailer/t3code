@@ -13,12 +13,14 @@ import { extractJsonObject } from "@t3tools/shared/schemaJson";
 import { TextGenerationError } from "@t3tools/contracts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
+  buildActivityLabelPrompt,
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
+  sanitizeActivityLabel,
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
@@ -53,6 +55,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
+      | "generateActivityLabel"
       | "generateStructured";
     cwd: string;
     prompt: string;
@@ -252,6 +255,26 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  // The Grok ACP path carries no reasoning-effort or thinking-budget parameter
+  // (the aux model selection is option-stripped by the caller), so the
+  // light-inference requirement for this op holds by construction.
+  const generateActivityLabel: TextGeneration.TextGeneration["Service"]["generateActivityLabel"] =
+    Effect.fn("GrokTextGeneration.generateActivityLabel")(function* (input) {
+      const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
+
+      const generated = yield* runGrokJson({
+        operation: "generateActivityLabel",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return {
+        label: sanitizeActivityLabel(generated.label),
+      } satisfies TextGeneration.ActivityLabelGenerationResult;
+    });
+
   const generateStructured: TextGeneration.TextGeneration["Service"]["generateStructured"] = (
     input,
   ) =>
@@ -268,6 +291,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateActivityLabel,
     generateStructured,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

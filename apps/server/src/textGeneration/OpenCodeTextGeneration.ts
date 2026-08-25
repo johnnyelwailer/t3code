@@ -19,6 +19,7 @@ import { extractJsonObject } from "@t3tools/shared/schemaJson";
 import * as ServerConfig from "../config.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
 import {
+  buildActivityLabelPrompt,
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
@@ -26,6 +27,7 @@ import {
 } from "./TextGenerationPrompts.ts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
+  sanitizeActivityLabel,
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
@@ -39,6 +41,7 @@ const OpenCodeTextGenerationOperation = Schema.Literals([
   "generatePrContent",
   "generateBranchName",
   "generateThreadTitle",
+  "generateActivityLabel",
   "generateStructured",
 ]);
 
@@ -255,6 +258,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
+      | "generateActivityLabel"
       | "generateStructured";
   }) =>
     sharedServerMutex.withPermit(
@@ -618,6 +622,25 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       };
     });
 
+  // The OpenCode session API carries no reasoning-effort or thinking-budget
+  // parameter (the aux model selection is option-stripped by the caller), so
+  // the light-inference requirement for this op holds by construction.
+  const generateActivityLabel: TextGeneration.TextGeneration["Service"]["generateActivityLabel"] =
+    Effect.fn("OpenCodeTextGeneration.generateActivityLabel")(function* (input) {
+      const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
+      const generated = yield* runOpenCodeJson({
+        operation: "generateActivityLabel",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return {
+        label: sanitizeActivityLabel(generated.label),
+      } satisfies TextGeneration.ActivityLabelGenerationResult;
+    });
+
   const generateStructured: TextGeneration.TextGeneration["Service"]["generateStructured"] = (
     input,
   ) =>
@@ -634,6 +657,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateActivityLabel,
     generateStructured,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

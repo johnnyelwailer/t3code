@@ -2028,6 +2028,34 @@ export function GeneralSettingsPanel() {
         ) : null}
 
         <SettingsRow
+          {...searchableSetting("live-activity-labels")}
+          description="Show a short AI-generated label for what active threads are working on instead of the static “Working” text. Generation is tiny, debounced, and non-thinking; labels clear when a thread goes idle."
+          resetAction={
+            settings.t3teamActivityLabelsEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.t3teamActivityLabelsEnabled ? (
+              <SettingResetButton
+                label="live activity labels"
+                onClick={() =>
+                  updateSettings({
+                    t3teamActivityLabelsEnabled:
+                      DEFAULT_UNIFIED_SETTINGS.t3teamActivityLabelsEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.t3teamActivityLabelsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ t3teamActivityLabelsEnabled: Boolean(checked) })
+              }
+              aria-label="Live activity labels"
+            />
+          }
+        />
+
+        <SettingsRow
           {...searchableSetting("time-format")}
           description="System default follows your browser or OS clock preference."
           resetAction={

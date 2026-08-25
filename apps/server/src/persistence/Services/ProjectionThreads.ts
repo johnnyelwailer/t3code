@@ -55,6 +55,8 @@ export const ProjectionThread = Schema.Struct({
   deletedAt: Schema.NullOr(IsoDateTime),
   childStatus: Schema.optional(Schema.NullOr(Schema.String)),
   childStatusUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  activityLabel: Schema.optional(Schema.NullOr(Schema.String)),
+  activityLabelUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
 });
 export type ProjectionThread = typeof ProjectionThread.Type;
 

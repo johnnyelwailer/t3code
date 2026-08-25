@@ -12,6 +12,8 @@ import {
 
 type ProjectStatus = {
   label: string;
+  /** GHE #40: live activity label of the most active thread; shown instead of `label`. */
+  activityLabel?: string;
   colorClass: string;
   dotClass: string;
   pulse?: boolean;
@@ -78,7 +80,7 @@ export function ProjectSidebarProjectHeader({
           {!expanded && projectStatus ? (
             <span
               aria-hidden
-              title={projectStatus.label}
+              title={projectStatus.activityLabel ?? projectStatus.label}
               className={`relative inline-flex size-3.5 items-center justify-center ${projectStatus.colorClass}`}
             >
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">

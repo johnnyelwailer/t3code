@@ -465,6 +465,12 @@ export function projectEvent(
                   childStatusUpdatedAt: payload.childStatusUpdatedAt ?? payload.updatedAt,
                 }
               : {}),
+            ...(payload.activityLabel !== undefined
+              ? {
+                  activityLabel: payload.activityLabel,
+                  activityLabelUpdatedAt: payload.activityLabelUpdatedAt ?? payload.updatedAt,
+                }
+              : {}),
             ...(payload.linkedPullRequest !== undefined
               ? { linkedPullRequest: payload.linkedPullRequest }
               : {}),

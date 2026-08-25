@@ -60,7 +60,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           has_actionable_proposed_plan,
           deleted_at,
           child_status,
-          child_status_updated_at
+          child_status_updated_at,
+          activity_label,
+          activity_label_updated_at
         )
         VALUES (
           ${row.threadId},
@@ -91,7 +93,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.hasActionableProposedPlan},
           ${row.deletedAt},
           ${row.childStatus ?? null},
-          ${row.childStatusUpdatedAt ?? null}
+          ${row.childStatusUpdatedAt ?? null},
+          ${row.activityLabel ?? null},
+          ${row.activityLabelUpdatedAt ?? null}
         )
         ON CONFLICT (thread_id)
         DO UPDATE SET
@@ -122,7 +126,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           has_actionable_proposed_plan = excluded.has_actionable_proposed_plan,
           deleted_at = excluded.deleted_at,
           child_status = excluded.child_status,
-          child_status_updated_at = excluded.child_status_updated_at
+          child_status_updated_at = excluded.child_status_updated_at,
+          activity_label = excluded.activity_label,
+          activity_label_updated_at = excluded.activity_label_updated_at
       `,
   });
 
@@ -160,7 +166,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           deleted_at AS "deletedAt",
           child_status AS "childStatus",
-          child_status_updated_at AS "childStatusUpdatedAt"
+          child_status_updated_at AS "childStatusUpdatedAt",
+          activity_label AS "activityLabel",
+          activity_label_updated_at AS "activityLabelUpdatedAt"
         FROM projection_threads
         WHERE thread_id = ${threadId}
       `,
@@ -200,7 +208,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           deleted_at AS "deletedAt",
           child_status AS "childStatus",
-          child_status_updated_at AS "childStatusUpdatedAt"
+          child_status_updated_at AS "childStatusUpdatedAt",
+          activity_label AS "activityLabel",
+          activity_label_updated_at AS "activityLabelUpdatedAt"
         FROM projection_threads
         WHERE project_id = ${projectId}
         ORDER BY created_at ASC, thread_id ASC

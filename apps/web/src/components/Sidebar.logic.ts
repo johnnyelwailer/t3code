@@ -133,6 +133,9 @@ export interface ThreadStatusPill {
     | "Pending Approval"
     | "Awaiting Input"
     | "Plan Ready";
+  /** GHE #40: live LLM-generated "working on" phrase. Rendered instead of `label`
+   *  while the thread is active; `label` stays the stable status key. */
+  activityLabel?: string;
   colorClass: string;
   dotClass: string;
   pulse: boolean;
@@ -160,6 +163,7 @@ type ThreadStatusInput = Pick<
   | "latestTurn"
   | "session"
   | "backgroundLiveness"
+  | "activityLabel"
 > & {
   lastVisitedAt?: string | undefined;
 };
@@ -644,8 +648,13 @@ export function formatWorkingDurationLabel(elapsedMs: number): string {
 
 export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
+  /** GHE #40: when false, active threads keep the static "Working" pill even if a
+   *  live activity label is present on the thread. */
+  activityLabelsEnabled?: boolean;
 }): ThreadStatusPill | null {
-  const { thread } = input;
+  const { thread, activityLabelsEnabled } = input;
+  const activityLabel =
+    activityLabelsEnabled !== false && thread.activityLabel ? thread.activityLabel : undefined;
 
   if (thread.hasPendingApprovals) {
     return {
@@ -668,6 +677,7 @@ export function resolveThreadStatusPill(input: {
   if (thread.session?.status === "running") {
     return {
       label: "Working",
+      ...(activityLabel ? { activityLabel } : {}),
       colorClass: "text-sky-600 dark:text-sky-300/80",
       dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: true,
@@ -706,6 +716,7 @@ export function resolveThreadStatusPill(input: {
   if (thread.backgroundLiveness === "working") {
     return {
       label: "Working",
+      ...(activityLabel ? { activityLabel } : {}),
       colorClass: "text-sky-600 dark:text-sky-300/80",
       dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: true,

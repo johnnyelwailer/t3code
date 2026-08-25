@@ -169,6 +169,7 @@ import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.
 import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
 import { T3TeamThreadStopCascadeReactorLive } from "./t3team-threadStopCascadeReactor.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
+import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts";
 import { T3TeamChildWaitReactorLive } from "./t3team-childWait.ts";
 import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactor.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
@@ -834,6 +835,7 @@ export const makeServerLayer = Layer.unwrap(
       T3TeamActorMessageReactorLive,
       T3TeamThreadStopCascadeReactorLive,
       T3TeamChildStatusReactorLive,
+      T3TeamActivityLabelReactorLive,
       T3TeamChildWaitReactorLive,
       T3TeamThreadSilenceWatchReactorLive,
       T3TeamWorkflowEngineRehydrateLive,

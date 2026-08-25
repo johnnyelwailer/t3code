@@ -65,7 +65,9 @@ const isProviderDriverKind = Schema.is(ProviderDriverKind);
 //   3. settings.textGenerationModelSelection.
 // Options (effort/thinking/fastMode/ultracode) are stripped — aux generation only needs
 // { instanceId, model }.
-const resolveAuxTextGenerationModelSelection = (
+// Shared with the activity-label reactor (t3team-activityLabelReactor.ts) so both aux
+// generators resolve their model selection identically.
+export const resolveAuxTextGenerationModelSelection = (
   settings: ServerSettings,
   threadModelSelection: ModelSelection | undefined,
 ): ModelSelection => {

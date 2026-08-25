@@ -495,7 +495,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
+          deleted_at AS "deletedAt",
+          activity_label AS "activityLabel",
+          activity_label_updated_at AS "activityLabelUpdatedAt"
         FROM projection_threads
         ORDER BY created_at ASC, thread_id ASC
       `,
@@ -533,7 +535,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
+          deleted_at AS "deletedAt",
+          activity_label AS "activityLabel",
+          activity_label_updated_at AS "activityLabelUpdatedAt"
         FROM projection_threads
         WHERE deleted_at IS NULL
           AND archived_at IS NULL
@@ -574,7 +578,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
+          deleted_at AS "deletedAt",
+          activity_label AS "activityLabel",
+          activity_label_updated_at AS "activityLabelUpdatedAt"
         FROM projection_threads
         WHERE deleted_at IS NULL
           AND archived_at IS NOT NULL
@@ -1055,7 +1061,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
+          deleted_at AS "deletedAt",
+          activity_label AS "activityLabel",
+          activity_label_updated_at AS "activityLabelUpdatedAt"
         FROM projection_threads
         WHERE thread_id = ${threadId}
           AND deleted_at IS NULL
@@ -1897,6 +1905,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 pinnedAt: row.pinnedAt,
                 pinOrderKey: row.pinOrderKey ?? null,
                 titleRegeneration: mapTitleRegeneration(row),
+                ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
+                ...(row.childStatusUpdatedAt != null
+                  ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
+                  : {}),
+                ...(row.activityLabel != null ? { activityLabel: row.activityLabel } : {}),
+                ...(row.activityLabelUpdatedAt != null
+                  ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
+                  : {}),
                 deletedAt: row.deletedAt,
                 messages: messagesByThread.get(row.threadId) ?? [],
                 proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
@@ -2363,6 +2379,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   ...(row.childStatusUpdatedAt != null
                     ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
                     : {}),
+                  ...(row.activityLabel != null ? { activityLabel: row.activityLabel } : {}),
+                  ...(row.activityLabelUpdatedAt != null
+                    ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
+                    : {}),
                   ...(sleepingUntil !== undefined ? { sleepingUntil } : {}),
                   ...(workflowRunStatusByThread.has(row.threadId)
                     ? { workflowRunStatus: workflowRunStatusByThread.get(row.threadId)! }
@@ -2522,6 +2542,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
                   ...(row.childStatusUpdatedAt != null
                     ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
+                    : {}),
+                  ...(row.activityLabel != null ? { activityLabel: row.activityLabel } : {}),
+                  ...(row.activityLabelUpdatedAt != null
+                    ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
                     : {}),
                 }),
               ),
@@ -2845,6 +2869,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           : {}),
         ...(threadRow.value.childStatusUpdatedAt != null
           ? { childStatusUpdatedAt: threadRow.value.childStatusUpdatedAt }
+          : {}),
+        ...(threadRow.value.activityLabel != null
+          ? { activityLabel: threadRow.value.activityLabel }
+          : {}),
+        ...(threadRow.value.activityLabelUpdatedAt != null
+          ? { activityLabelUpdatedAt: threadRow.value.activityLabelUpdatedAt }
           : {}),
         ...(Option.isSome(sleepingRow) ? { sleepingUntil: sleepingRow.value.wakeAt } : {}),
       } satisfies OrchestrationThreadShell);

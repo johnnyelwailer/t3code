@@ -193,7 +193,11 @@ import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrom
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
-import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
+import {
+  useClientSettings,
+  usePrimarySettings,
+  useUpdateClientSettings,
+} from "~/hooks/useSettings";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import {
   derivePhysicalProjectKey,
@@ -378,6 +382,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   const threadKey = scopedThreadKey(threadRef);
   const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
+  const activityLabelsEnabled = usePrimarySettings(
+    (settings) => settings.t3teamActivityLabelsEnabled,
+  );
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: thread.environmentId,
     threadId: thread.id,
@@ -457,6 +464,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       ...thread,
       lastVisitedAt,
     },
+    activityLabelsEnabled,
   });
   const linkedPullRequestStatus = useLinkedThreadPullRequest(
     thread.environmentId,
@@ -1214,6 +1222,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   sidebarThreadByKeyRef.current = sidebarThreadByKey;
   const projectThreads = sidebarThreads;
   const projectPreferenceKeys = useMemo(() => projectExpansionPreferenceKeys(project), [project]);
+  const activityLabelsEnabled = usePrimarySettings(
+    (settings) => settings.t3teamActivityLabelsEnabled,
+  );
   const projectExpanded = useUiStateStore((state) =>
     resolveProjectExpanded(state.projectExpandedById, projectPreferenceKeys),
   );
@@ -1284,6 +1295,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           ...thread,
           ...(lastVisitedAt !== null && lastVisitedAt !== undefined ? { lastVisitedAt } : {}),
         },
+        activityLabelsEnabled,
       });
     };
     const visibleProjectThreads = sortThreads(
@@ -1336,6 +1348,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           ...thread,
           ...(lastVisitedAt !== null && lastVisitedAt !== undefined ? { lastVisitedAt } : {}),
         },
+        activityLabelsEnabled,
       });
     };
     const hasOverflowingThreads = visibleProjectThreads.length > sidebarThreadPreviewCount;

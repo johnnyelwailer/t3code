@@ -63,6 +63,33 @@ export function sanitizeThreadTitle(raw: string): string {
   return `${normalized.slice(0, 47).trimEnd()}...`;
 }
 
+/**
+ * Normalize a raw activity label to a compact 2–4 word, sidebar-safe phrase.
+ * Returns "" when the model output is unusable — callers treat that as
+ * "no label" and fall back to the static "Working" (fail-open).
+ */
+export function sanitizeActivityLabel(raw: string): string {
+  const normalized = raw
+    .trim()
+    .split(/\r?\n/g)[0]
+    ?.trim()
+    .replace(/^["'`\[>+]+|["'`\]][\s\S]*$/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!normalized) {
+    return "";
+  }
+
+  // Tolerate one word of model overshoot, then hard-cap: the pill must stay
+  // a compact phrase, and a runaway sentence would read as a different status.
+  const words = normalized.split(" ");
+  const capped = (words.length > 6 ? words.slice(0, 6).join(" ") : normalized).slice(0, 40);
+  const trimmed = capped.replace(/[\.,;:!?]+$/g, "").trim();
+  const nonEmpty = trimmed.split(" ").filter((word) => word.length > 0);
+  return nonEmpty.length >= 2 ? nonEmpty.join(" ") : trimmed;
+}
+
 /** CLI name to human-readable label, e.g. "codex" → "Codex CLI (`codex`)" */
 function cliLabel(cliName: string): string {
   const capitalized = cliName.charAt(0).toUpperCase() + cliName.slice(1);

@@ -114,6 +114,13 @@ export type PackTextGeneration = {
     readonly attachments?: readonly unknown[] | undefined;
     readonly modelSelection: unknown;
   }): Promise<{ readonly title: string }>;
+  /** Short "what is this thread working on NOW" label (GHE #40); host hard-caps `context`.
+   *  Packs without this method leave the thread on the static "Working" pill. */
+  generateActivityLabel?(input: {
+    readonly cwd: string;
+    readonly context: string;
+    readonly modelSelection: unknown;
+  }): Promise<{ readonly label: string }>;
   /** Out-of-band structured generation; host validates against its requested schema. */
   generateStructured?(input: {
     readonly cwd: string;

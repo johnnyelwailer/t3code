@@ -867,6 +867,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.childStatus !== undefined
             ? { childStatus: command.childStatus, childStatusUpdatedAt: occurredAt }
             : {}),
+          ...(command.activityLabel !== undefined
+            ? { activityLabel: command.activityLabel, activityLabelUpdatedAt: occurredAt }
+            : {}),
           ...(command.linkedPullRequest !== undefined
             ? { linkedPullRequest: command.linkedPullRequest }
             : {}),

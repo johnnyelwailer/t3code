@@ -4,6 +4,7 @@ import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { SidebarMenuSubButton, SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
 import { readLocalApi } from "~/localApi";
+import { usePrimarySettings } from "~/hooks/useSettings";
 import { formatRelativeTime, resolveThreadStatusPill } from "./t3team-projectSidebarShared";
 import {
   getSidebarSurfaceClassName,
@@ -50,7 +51,10 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     submit: handleRenameSubmit,
   } = useThreadRowRename({ title: thread.title, onRename });
   const rowRef = useAutoScrollIntoView<HTMLAnchorElement>(state.isOpen);
-  const statusPill = resolveThreadStatusPill(thread);
+  const activityLabelsEnabled = usePrimarySettings(
+    (settings) => settings.t3teamActivityLabelsEnabled,
+  );
+  const statusPill = resolveThreadStatusPill(thread, { activityLabelsEnabled });
   const externalActive = isExternalSessionActive({
     providerKind: thread.providerKind,
     lastMessageAt: thread.lastMessageAt,
@@ -120,7 +124,9 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
           <span
             className={`inline-flex size-1.5 shrink-0 rounded-full ${statusPill.dotClass} ${statusPill.pulse ? "animate-pulse" : ""}`}
             title={
-              statusPill.detail ? `${statusPill.label} ${statusPill.detail}` : statusPill.label
+              statusPill.detail
+                ? `${statusPill.activityLabel ?? statusPill.label} ${statusPill.detail}`
+                : (statusPill.activityLabel ?? statusPill.label)
             }
           />
         )}

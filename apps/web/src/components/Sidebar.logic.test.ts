@@ -1125,6 +1125,23 @@ describe("resolveThreadStatusPill", () => {
     ).toMatchObject({ label: "Working", pulse: true });
   });
 
+  it("carries the live activity label on a running thread (GHE #40)", () => {
+    expect(
+      resolveThreadStatusPill({
+        thread: { ...baseThread, activityLabel: "Reading contracts" },
+      }),
+    ).toMatchObject({ label: "Working", activityLabel: "Reading contracts", pulse: true });
+  });
+
+  it("drops the activity label when the settings flag is off", () => {
+    const pill = resolveThreadStatusPill({
+      thread: { ...baseThread, activityLabel: "Reading contracts" },
+      activityLabelsEnabled: false,
+    });
+    expect(pill).toMatchObject({ label: "Working", pulse: true });
+    expect(pill?.activityLabel).toBeUndefined();
+  });
+
   it("shows plan ready when a settled plan turn has a proposed plan ready for follow-up", () => {
     expect(
       resolveThreadStatusPill({

@@ -20,6 +20,7 @@ import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import { TextGenerationError } from "@t3tools/contracts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
+  buildActivityLabelPrompt,
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
@@ -27,6 +28,7 @@ import {
 } from "./TextGenerationPrompts.ts";
 import {
   normalizeCliError,
+  sanitizeActivityLabel,
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
@@ -86,6 +88,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
+      | "generateActivityLabel"
       | "generateStructured",
     value: unknown,
     detail: string,
@@ -111,17 +114,25 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     prompt,
     outputSchemaJson,
     modelSelection,
+    noThinking = false,
   }: {
     operation:
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
+      | "generateActivityLabel"
       | "generateStructured";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
     modelSelection: ModelSelection;
+    /**
+     * The activity-label op (GHE #40 light-inference) passes true: force
+     * `alwaysThinkingEnabled: false` in the CLI settings and skip the effort
+     * flag entirely — no thinking budget on a tiny payload.
+     */
+    noThinking?: boolean;
   }): Effect.fn.Return<S["Type"], TextGenerationError, S["DecodingServices"]> {
     const jsonSchemaStr = yield* encodeJsonForOperation(
       operation,
@@ -135,8 +146,11 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     });
     const findDescriptor = (id: string) => descriptors.find((descriptor) => descriptor.id === id);
     const rawEffortSelection = getModelSelectionStringOptionValue(modelSelection, "effort");
-    const resolvedEffort = resolveClaudeEffort(caps, rawEffortSelection);
-    const cliEffort = normalizeClaudeCliEffort(resolvedEffort, modelSelection.model);
+    const resolvedEffort = noThinking ? null : resolveClaudeEffort(caps, rawEffortSelection);
+    const cliEffort =
+      resolvedEffort === null
+        ? undefined
+        : normalizeClaudeCliEffort(resolvedEffort, modelSelection.model);
     const ultracode = isClaudeUltracodeEffort(resolvedEffort);
     const thinkingDescriptor = findDescriptor("thinking");
     const fastModeDescriptor = findDescriptor("fastMode");
@@ -145,7 +159,10 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     const fastMode =
       fastModeDescriptor?.type === "boolean" ? fastModeDescriptor.currentValue : undefined;
     const settings = {
-      ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
+      // noThinking hard-disables the thinking budget for the activity-label
+      // op regardless of any descriptor default (GHE #40).
+      ...(noThinking ? { alwaysThinkingEnabled: false } : {}),
+      ...(typeof thinking === "boolean" && !noThinking ? { alwaysThinkingEnabled: thinking } : {}),
       ...(fastMode ? { fastMode: true } : {}),
       ...(ultracode ? { ultracode: true } : {}),
     };
@@ -361,6 +378,24 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       };
     });
 
+  const generateActivityLabel: TextGeneration.TextGeneration["Service"]["generateActivityLabel"] =
+    Effect.fn("ClaudeTextGeneration.generateActivityLabel")(function* (input) {
+      const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
+
+      const generated = yield* runClaudeJson({
+        operation: "generateActivityLabel",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+        noThinking: true,
+      });
+
+      return {
+        label: sanitizeActivityLabel(generated.label),
+      } satisfies TextGeneration.ActivityLabelGenerationResult;
+    });
+
   const generateStructured: TextGeneration.TextGeneration["Service"]["generateStructured"] = (
     input,
   ) =>
@@ -377,6 +412,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateActivityLabel,
     generateStructured,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

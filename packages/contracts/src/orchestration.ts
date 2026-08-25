@@ -532,6 +532,13 @@ export const OrchestrationThread = Schema.Struct({
   /** Background-only summary of meaningful child-thread work. Never enters chat context. */
   childStatus: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   childStatusUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  /**
+   * Live, LLM-generated 2–4 word label for what the thread is working on NOW
+   * (GHE #40). Ephemeral UI state only: cleared on idle/terminal and never
+   * enters chat context. Optional so old servers/clients interop; null = idle.
+   */
+  activityLabel: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  activityLabelUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
 });
 export type OrchestrationThread = typeof OrchestrationThread.Type;
 
@@ -608,6 +615,13 @@ export const OrchestrationThreadShell = Schema.Struct({
    * live work. Optional so old servers/clients interop; absent = none.
    */
   backgroundLiveness: Schema.optional(Schema.NullOr(Schema.Literals(["working", "monitoring"]))),
+  /**
+   * Live, LLM-generated 2–4 word label for what the thread is working on NOW
+   * (GHE #40), surfaced on the Working status pill. Ephemeral: cleared on
+   * idle/terminal. Optional so old servers/clients interop; null = idle.
+   */
+  activityLabel: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  activityLabelUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   /**
    * Current plan step while a turn runs, for the Working indicators
    * (sidebar row, in-chat working line). Cleared when the turn settles —
@@ -909,6 +923,8 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   expectedBranch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   childStatus: Schema.optional(TrimmedNonEmptyString),
+  /** Live activity label (GHE #40): absent = leave unchanged, null = clear, string = set. */
+  activityLabel: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
 }).check(
   Schema.makeFilter(
@@ -1475,6 +1491,8 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   childStatus: Schema.optional(TrimmedNonEmptyString),
   childStatusUpdatedAt: Schema.optional(IsoDateTime),
+  activityLabel: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  activityLabelUpdatedAt: Schema.optional(IsoDateTime),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   updatedAt: IsoDateTime,
 });

@@ -22,6 +22,7 @@ import { expandHomePath } from "../pathExpansion.ts";
 import { codexExecLaunchArgs, resolveCodexLaunchArgs } from "../provider/Layers/codexLaunchArgs.ts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
+  buildActivityLabelPrompt,
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
@@ -29,6 +30,7 @@ import {
 } from "./TextGenerationPrompts.ts";
 import {
   normalizeCliError,
+  sanitizeActivityLabel,
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
@@ -102,6 +104,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
+      | "generateActivityLabel"
       | "generateStructured",
     value: unknown,
   ): Effect.Effect<string, TextGenerationError> =>
@@ -121,7 +124,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateActivityLabel",
     attachments: TextGeneration.BranchNameGenerationInput["attachments"],
   ): Effect.fn.Return<MaterializedImageAttachments, TextGenerationError> {
     if (!attachments || attachments.length === 0) {
@@ -158,12 +162,14 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     imagePaths = [],
     cleanupPaths = [],
     modelSelection,
+    reasoningEffortOverride,
   }: {
     operation:
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
+      | "generateActivityLabel"
       | "generateStructured";
     cwd: string;
     prompt: string;
@@ -171,6 +177,12 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     imagePaths?: ReadonlyArray<string>;
     cleanupPaths?: ReadonlyArray<string>;
     modelSelection: ModelSelection;
+    /**
+     * Force a specific reasoning effort for this call. The activity-label op
+     * passes "none": it must not spend a thinking budget on a tiny payload
+     * (GHE #40 light-inference requirement).
+     */
+    reasoningEffortOverride?: string;
   }): Effect.fn.Return<S["Type"], TextGenerationError, S["DecodingServices"]> {
     const schemaJson = yield* encodeJsonForOperation(
       operation,
@@ -182,6 +194,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     const runCodexCommand = Effect.fn("runCodexJson.runCodexCommand")(function* () {
       const launchArgs = resolveCodexLaunchArgs(codexConfig.launchArgs, resolvedEnvironment);
       const reasoningEffort =
+        reasoningEffortOverride ??
         getModelSelectionStringOptionValue(modelSelection, "reasoningEffort") ??
         DEFAULT_TEXT_GENERATION_REASONING_EFFORT;
       const serviceTier = getCodexServiceTierOptionValue(modelSelection);
@@ -407,6 +420,26 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateActivityLabel: TextGeneration.TextGeneration["Service"]["generateActivityLabel"] =
+    Effect.fn("CodexTextGeneration.generateActivityLabel")(function* (input) {
+      const { prompt, outputSchema } = buildActivityLabelPrompt({ context: input.context });
+
+      const generated = yield* runCodexJson({
+        operation: "generateActivityLabel",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+        // No-thinking by construction: the label is a tiny single-shot task and
+        // must not spend a reasoning budget (GHE #40 light-inference).
+        reasoningEffortOverride: "none",
+      });
+
+      return {
+        label: sanitizeActivityLabel(generated.label),
+      } satisfies TextGeneration.ActivityLabelGenerationResult;
+    });
+
   const generateStructured: TextGeneration.TextGeneration["Service"]["generateStructured"] = (
     input,
   ) =>
@@ -423,6 +456,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateActivityLabel,
     generateStructured,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

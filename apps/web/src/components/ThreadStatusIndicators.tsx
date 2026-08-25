@@ -18,6 +18,7 @@ import { vcsEnvironment } from "../state/vcs";
 import { useUiStateStore } from "../uiStateStore";
 import { resolveChangeRequestPresentation } from "../sourceControlPresentation";
 import { resolveThreadStatusPill, type ThreadStatusPill } from "./Sidebar.logic";
+import { usePrimarySettings } from "~/hooks/useSettings";
 import type { SidebarThreadSummary } from "../types";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -470,13 +471,16 @@ export function ThreadStatusLabel({
   status: ThreadStatusPill;
   compact?: boolean;
 }) {
+  // GHE #40: the live activity label replaces "Working" while present; the
+  // stable `label` is the fallback (flag off / no label yet).
+  const displayLabel = status.activityLabel ?? status.label;
   if (compact) {
     return (
       <Tooltip>
         <TooltipTrigger
           render={
             <span
-              aria-label={status.label}
+              aria-label={displayLabel}
               className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
             />
           }
@@ -487,7 +491,7 @@ export function ThreadStatusLabel({
             }`}
           />
         </TooltipTrigger>
-        <TooltipPopup side="top">{status.label}</TooltipPopup>
+        <TooltipPopup side="top">{displayLabel}</TooltipPopup>
       </Tooltip>
     );
   }
@@ -497,7 +501,7 @@ export function ThreadStatusLabel({
       <TooltipTrigger
         render={
           <span
-            aria-label={status.label}
+            aria-label={displayLabel}
             className={`inline-flex items-center gap-1 text-[10px] ${status.colorClass}`}
           />
         }
@@ -507,9 +511,9 @@ export function ThreadStatusLabel({
             status.pulse ? "animate-status-pulse" : ""
           }`}
         />
-        <span className="hidden md:inline">{status.label}</span>
+        <span className="hidden md:inline">{displayLabel}</span>
       </TooltipTrigger>
-      <TooltipPopup side="top">{status.label}</TooltipPopup>
+      <TooltipPopup side="top">{displayLabel}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -559,6 +563,7 @@ export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummar
       ...thread,
       lastVisitedAt,
     },
+    activityLabelsEnabled: usePrimarySettings((settings) => settings.t3teamActivityLabelsEnabled),
   });
 
   if (!prStatus && !threadStatus) {
