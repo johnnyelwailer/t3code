@@ -151,12 +151,12 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
 });
 
 // Child-thread management: ONE meta tool with an `op` discriminator (list /
-// status / wait / stop / close / help) instead of five tools, so the context
-// cost stays one compact description no matter how many ops exist. Per-op
-// detail is discovered on demand via `help` or carried in a malformed call's
-// error message. Routes to the t3team.thread.children broker tool. This tool
-// is STATE (child liveness / completion); child→parent CONTENT still flows
-// through t3team_send_message.
+// status / wait / watch / unwatch / stop / close / help) instead of a tool
+// per operation, so the context cost stays one compact description no matter
+// how many ops exist. Per-op detail is discovered on demand via `help` or
+// carried in a malformed call's error message. Routes to the t3team.thread.
+// children broker tool. This tool is STATE (child liveness / completion);
+// child→parent CONTENT still flows through t3team_send_message.
 const CHILDREN_TOOL_DESCRIPTION =
   "Manage this thread's child sessions (STATE, not content — use send_message to talk to a " +
   "child). One tool; `op` selects the operation:\n" +
@@ -164,6 +164,11 @@ const CHILDREN_TOOL_DESCRIPTION =
   "- status: one thread's current turn state, in-progress work, elapsed\n" +
   "- wait: durably resume this turn when a child reaches a terminal state (on: " +
   "terminal|completed|failed; timeout in ms)\n" +
+  "- watch: silence-watch a thread — this thread is notified when the target has had no " +
+  "activity for `timeout` ms (default 900000; per-subscription), re-notified at each multiple " +
+  "while it stays silent; the note flags a pending tool call (legitimate long op) vs. no " +
+  "active tool (the stuck signal)\n" +
+  "- unwatch: cancel all silence watches on the target\n" +
   "- stop: halt a child's running turn\n" +
   "- close: mark a child done from this side\n" +
   "- help: exact schema for one op (op_name)";
@@ -171,7 +176,7 @@ const CHILDREN_TOOL_DESCRIPTION =
 export const T3TeamChildrenTool = Tool.make("t3team_children", {
   description: CHILDREN_TOOL_DESCRIPTION,
   parameters: Schema.Struct({
-    op: Schema.Literals(["list", "status", "wait", "stop", "close", "help"]),
+    op: Schema.Literals(["list", "status", "wait", "watch", "unwatch", "stop", "close", "help"]),
     thread_id: Schema.optional(Schema.String),
     on: Schema.optional(Schema.Literals(["terminal", "completed", "failed"])),
     timeout: Schema.optional(Schema.Number),

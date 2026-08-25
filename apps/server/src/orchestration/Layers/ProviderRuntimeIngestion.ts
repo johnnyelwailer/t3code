@@ -36,6 +36,7 @@ import { isGitRepository } from "../../git/Utils.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
+import { ThreadSilenceWatchdogService } from "../ThreadSilenceWatchdog.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
   ProviderRuntimeIngestionService,
@@ -878,6 +879,7 @@ export function runtimeEventToActivities(
 const make = Effect.gen(function* () {
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
   const threadPlanProgress = yield* ThreadPlanProgressService;
+  const threadSilenceWatchdog = yield* ThreadSilenceWatchdogService;
   const crypto = yield* Crypto.Crypto;
   const orchestrationEngine = yield* OrchestrationEngineService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
@@ -1486,6 +1488,10 @@ const make = Effect.gen(function* () {
       const thread = yield* resolveThreadShell(event.threadId);
       if (!thread) return;
 
+      // Thread silence watchdog (GHE #63): ANY runtime event is activity -
+      // this is the lightweight last-activity hook on the existing event bus.
+      threadSilenceWatchdog.recordActivity(thread.id);
+
       let loadedThreadDetail: OrchestrationThread | null | undefined;
       const getLoadedThreadDetail = () =>
         Effect.gen(function* () {
@@ -2004,6 +2010,22 @@ const make = Effect.gen(function* () {
           break;
         default:
           break;
+      }
+
+      // Thread silence watchdog (GHE #63): in-progress tool items feed the
+      // pending-tool distinction (silence WITH a pending tool call is a
+      // legitimate long operation); session death drops the thread's state.
+      if (event.type === "item.started" || event.type === "item.completed") {
+        if (isToolLifecycleItemType(event.payload.itemType)) {
+          if (event.type === "item.started") {
+            threadSilenceWatchdog.recordToolItemStarted(thread.id);
+          } else {
+            threadSilenceWatchdog.recordToolItemCompleted(thread.id);
+          }
+        }
+      }
+      if (event.type === "session.exited") {
+        threadSilenceWatchdog.clearThread(thread.id);
       }
 
       let taskTitle: string | undefined;

@@ -1,8 +1,10 @@
 /**
  * Mutating ops for `t3team.thread.children` (GHE #55): `wait` (durably register
  * a wait that resumes this turn on the child's terminal event or a timeout),
- * `stop` (halt a child's running turn), and `close` (mark a child done from
- * this side — bookkeeping once its final report has arrived).
+ * `watch`/`unwatch` (silence watchdog, GHE #63 - durably register/cancel a
+ * per-subscription silence watch on a target thread), `stop` (halt a child's
+ * running turn), and `close` (mark a child done from this side - bookkeeping
+ * once its final report has arrived).
  *
  * @module t3team-toolBrokerChildrenLifecycle
  */
@@ -19,6 +21,8 @@ import {
   type T3TeamChildrenToolDeps,
 } from "./t3team-toolBrokerChildrenTypes.ts";
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
+
+export { opWatch, opUnwatch } from "./t3team-toolBrokerChildrenWatch.ts";
 
 export function opWait(
   deps: T3TeamChildrenToolDeps,

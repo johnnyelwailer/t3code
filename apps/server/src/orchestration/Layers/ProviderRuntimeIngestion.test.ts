@@ -47,6 +47,7 @@ import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
+import * as ThreadSilenceWatchdog from "../ThreadSilenceWatchdog.ts";
 import { ProviderRuntimeIngestionLive } from "./ProviderRuntimeIngestion.ts";
 import { DEFAULT_THREAD_TITLE } from "../threadTitles.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
@@ -196,7 +197,10 @@ async function waitForThread(
 
 describe("ProviderRuntimeIngestion", () => {
   let runtime: ManagedRuntime.ManagedRuntime<
-    OrchestrationEngineService | ProviderRuntimeIngestionService | ProjectionSnapshotQuery,
+    | OrchestrationEngineService
+    | ProviderRuntimeIngestionService
+    | ProjectionSnapshotQuery
+    | ThreadSilenceWatchdog.ThreadSilenceWatchdogService,
     unknown
   > | null = null;
   let scope: Scope.Closeable | null = null;
@@ -248,6 +252,7 @@ describe("ProviderRuntimeIngestion", () => {
       // engine, and the snapshot query (reader).
       Layer.provideMerge(ThreadBackgroundLiveness.layer),
       Layer.provideMerge(ThreadPlanProgress.layer),
+      Layer.provideMerge(ThreadSilenceWatchdog.layer),
       Layer.provideMerge(SqlitePersistenceMemory),
       Layer.provideMerge(Layer.succeed(ProviderService, provider.service)),
       Layer.provideMerge(makeTestServerSettingsLayer(options?.serverSettings)),
@@ -258,6 +263,9 @@ describe("ProviderRuntimeIngestion", () => {
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
     const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
     const ingestion = await runtime.runPromise(Effect.service(ProviderRuntimeIngestionService));
+    const silenceWatchdog = await runtime.runPromise(
+      Effect.service(ThreadSilenceWatchdog.ThreadSilenceWatchdogService),
+    );
     scope = await Effect.runPromise(Scope.make("sequential"));
     await Effect.runPromise(ingestion.start().pipe(Scope.provide(scope)));
     const drain = () => Effect.runPromise(ingestion.drain);
@@ -323,6 +331,7 @@ describe("ProviderRuntimeIngestion", () => {
       emit: provider.emit,
       setProviderSession: provider.setSession,
       drain,
+      silenceWatchdog,
     };
   }
 
@@ -3607,5 +3616,61 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("runtime still processed");
+  });
+
+  it("feeds the thread silence watchdog: any event is activity, tool items track pending tools, session exit clears", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const watchdog = harness.silenceWatchdog;
+    expect(watchdog.getActivityState("thread-1")).toBeUndefined();
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-watchdog-delta"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-1"),
+      payload: { streamKind: "assistant_text", delta: "hello" },
+    });
+    await harness.drain();
+    let state = watchdog.getActivityState("thread-1");
+    expect(state).toBeDefined();
+    expect(state?.lastActivityAtMs).toBeGreaterThan(0);
+
+    harness.emit({
+      type: "item.started",
+      eventId: asEventId("evt-watchdog-tool-started"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-1"),
+      payload: { itemType: "command_execution", status: "in_progress", title: "Run tests" },
+    });
+    await harness.drain();
+    expect(watchdog.getActivityState("thread-1")?.pendingToolCount).toBe(1);
+
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-watchdog-tool-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-1"),
+      payload: { itemType: "command_execution", status: "completed", title: "Run tests" },
+    });
+    await harness.drain();
+    expect(watchdog.getActivityState("thread-1")?.pendingToolCount).toBe(0);
+
+    harness.emit({
+      type: "session.exited",
+      eventId: asEventId("evt-watchdog-session-exited"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      payload: { kind: "graceful" },
+    });
+    await harness.drain();
+    expect(watchdog.getActivityState("thread-1")).toBeUndefined();
   });
 });

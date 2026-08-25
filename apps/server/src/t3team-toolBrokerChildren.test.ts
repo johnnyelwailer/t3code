@@ -214,6 +214,66 @@ describe("children tool — wait", () => {
   });
 });
 
+describe("children tool — watch (silence watchdog, GHE #63)", () => {
+  it("requires thread_id", async () => {
+    const out = await run(makeDeps(), { op: "watch" });
+    expect(out.isError).toBe(true);
+    expect(out.text).toContain("thread_id' is required");
+  });
+
+  it("rejects a non-positive timeout", async () => {
+    const out = await run(makeDeps(), { op: "watch", thread_id: CHILD, timeout: 0 });
+    expect(out.isError).toBe(true);
+    expect(out.text).toContain("positive number of milliseconds");
+  });
+
+  it("registers a durable watch activity with the per-subscription timeout (default 15m)", async () => {
+    const deps = makeDeps();
+    const out = await run(deps, { op: "watch", thread_id: CHILD });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.status).toBe("watching");
+    expect(out.structured.watchId).toBe("wait-1");
+    expect(out.structured.timeoutMs).toBe(900_000);
+    const registered = deps.__appended.find(
+      (a) => a.kind === "t3team.thread_silence.watch.registered",
+    );
+    expect(registered).toBeDefined();
+    expect(registered?.threadId).toBe(CALLER);
+    expect((registered?.payload as Record<string, unknown>).targetThreadId).toBe(CHILD);
+    expect((registered?.payload as Record<string, unknown>).timeoutMs).toBe(900_000);
+  });
+
+  it("honors an explicit per-subscription timeout", async () => {
+    const deps = makeDeps();
+    const out = await run(deps, { op: "watch", thread_id: CHILD, timeout: 1_800_000 });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.timeoutMs).toBe(1_800_000);
+    const registered = deps.__appended.find(
+      (a) => a.kind === "t3team.thread_silence.watch.registered",
+    );
+    expect((registered?.payload as Record<string, unknown>).timeoutMs).toBe(1_800_000);
+  });
+
+  it("unwatch records a durable cancel activity on the caller", async () => {
+    const deps = makeDeps();
+    const out = await run(deps, { op: "unwatch", thread_id: CHILD });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.status).toBe("unwatched");
+    const cancelled = deps.__appended.find(
+      (a) => a.kind === "t3team.thread_silence.watch.cancelled",
+    );
+    expect(cancelled).toBeDefined();
+    expect(cancelled?.threadId).toBe(CALLER);
+    expect((cancelled?.payload as Record<string, unknown>).targetThreadId).toBe(CHILD);
+  });
+
+  it("unwatch requires thread_id", async () => {
+    const out = await run(makeDeps(), { op: "unwatch" });
+    expect(out.isError).toBe(true);
+    expect(out.text).toContain("thread_id' is required");
+  });
+});
+
 describe("children tool — stop", () => {
   it("requires thread_id", async () => {
     const out = await run(makeDeps(), { op: "stop" });

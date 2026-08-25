@@ -18,6 +18,9 @@
  *   list   — this thread's children with live state (`all: true` = whole project)
  *   status — one child's current turn state, in-progress work, elapsed, activity tail
  *   wait   — durably resume this turn when a child reaches a terminal state
+ *   watch  — silence-watch a thread: notified when it has no activity for a
+ *            per-subscription timeout (GHE #63); re-notified at each multiple
+ *   unwatch — cancel all silence watches this thread has on the target
  *   stop   — halt a child's running turn
  *   close  — mark a child done from this side (bookkeeping)
  *   help   — the exact schema for one op
@@ -32,7 +35,13 @@ import * as Effect from "effect/Effect";
 import { okResult, errorResult } from "./t3team-toolBrokerHelpers.ts";
 import { opUsage, readString } from "./t3team-toolBrokerChildrenShared.ts";
 import { opList, opStatus } from "./t3team-toolBrokerChildrenStatus.ts";
-import { opClose, opStop, opWait } from "./t3team-toolBrokerChildrenLifecycle.ts";
+import {
+  opClose,
+  opStop,
+  opUnwatch,
+  opWatch,
+  opWait,
+} from "./t3team-toolBrokerChildrenLifecycle.ts";
 import {
   T3TEAM_CHILD_OPS,
   T3TEAM_CHILDREN_TOOL_ID,
@@ -99,6 +108,10 @@ export function callT3TeamChildrenTool(input: {
       return opStatus(deps, args);
     case "wait":
       return opWait(deps, args);
+    case "watch":
+      return opWatch(deps, args);
+    case "unwatch":
+      return opUnwatch(deps, args);
     case "stop":
       return opStop(deps, args);
     case "close":

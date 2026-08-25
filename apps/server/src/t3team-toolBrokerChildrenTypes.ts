@@ -13,7 +13,16 @@ import { type ThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
 
 export const T3TEAM_CHILDREN_TOOL_ID = "t3team.thread.children";
 
-export const T3TEAM_CHILD_OPS = ["list", "status", "wait", "stop", "close", "help"] as const;
+export const T3TEAM_CHILD_OPS = [
+  "list",
+  "status",
+  "wait",
+  "watch",
+  "unwatch",
+  "stop",
+  "close",
+  "help",
+] as const;
 export type T3TeamChildOp = (typeof T3TEAM_CHILD_OPS)[number];
 
 export const T3TEAM_CHILD_WAIT_OUTCOMES = ["terminal", "completed", "failed"] as const;

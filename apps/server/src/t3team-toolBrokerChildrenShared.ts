@@ -30,6 +30,8 @@ const OP_USAGE: Record<T3TeamChildOp, string> = {
   list: `children({ op: "list", all?: boolean }) — this thread's child sessions with live state (name, state, provider+model, created/last-activity, worktree+branch when isolated, last-message summary). all:true lists the whole project instead.`,
   status: `children({ op: "status", thread_id }) — one thread's current turn state, in-progress work, elapsed time, and a recent activity tail.`,
   wait: `children({ op: "wait", thread_id, on?: "terminal"|"completed"|"failed", timeout?: number }) — durably resume this turn when the target thread reaches a terminal state (default on:"terminal"); a dead child resolves as failed. timeout is milliseconds.`,
+  watch: `children({ op: "watch", thread_id, timeout?: number }) — watch a thread for silence (GHE #63): this thread is notified when the target has had no activity for timeout ms (default 900000 = 15m; per-subscription), re-notified at each multiple of the timeout while it stays silent. The notification flags whether a tool call was still in progress (legitimate long operation vs. the real stuck signal). If the target stops (terminal state) the watch closes with a stopped note.`,
+  unwatch: `children({ op: "unwatch", thread_id }) — cancel all silence watches this thread has on the target thread.`,
   stop: `children({ op: "stop", thread_id, reason?: string }) — halt the target thread's running turn.`,
   close: `children({ op: "close", thread_id }) — mark the target child done from this side (bookkeeping once its final report has arrived).`,
   help: `children({ op: "help", op_name?: string }) — the exact schema/usage for one op; omit op_name for all ops.`,
