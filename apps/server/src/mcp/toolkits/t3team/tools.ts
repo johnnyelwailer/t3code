@@ -251,10 +251,14 @@ export const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
 // thread; the recipient reacts and can reply back the same way.
 export const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
   description:
-    "Send a message to another agent's thread — e.g. report progress or results " +
-    "back to your parent thread, or hand follow-up work to a child thread. The " +
-    "recipient agent reacts to it automatically, so prefer this over waiting to be " +
-    "polled. Address it with the target thread id. Keep the body short (telegram " +
+    "Send a message to another agent's thread. Use ONLY when you have content the " +
+    "recipient does not already have and can act on: a final result for your parent, " +
+    "a follow-up task or handoff for a child, or a question/command directed at the " +
+    "recipient. NEVER send acknowledgment, thanks, status-only, or 'noted/received' " +
+    "messages — if your reply would not change what the recipient does, do not send " +
+    "it. The recipient reacts to every message automatically, so an ack triggers " +
+    "another turn on the other side. Address it with the target thread id. Keep the " +
+    "body short (telegram " +
     "style: state, decision, request). For long bodies, provide a short 'summary' " +
     "(the recipient's reaction input shows the summary, not a raw cut); without " +
     "one, a summary is auto-generated from the body's opening. The recipient " +
