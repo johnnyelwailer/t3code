@@ -2,7 +2,12 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { readThemePreference, writeThemePreference } from "~/hooks/useTheme";
-import { getCustomThemes, getThemeColorsForMode, invalidateCustomThemes } from "~/themePalette";
+import {
+  getCustomThemes,
+  getThemeColorsForMode,
+  invalidateCustomThemes,
+  toCanonicalThemeColor,
+} from "~/themePalette";
 
 import { applyT3TeamPackAppearance } from "./t3team-packAppearance";
 import { t3teamPackThemeId } from "./t3team-packThemeDefinition";
@@ -42,8 +47,8 @@ describe("pack appearance", () => {
     expect(css).not.toContain("--primary:");
     expect(document.documentElement.dataset.themeId).toBe(t3teamPackThemeId("nexplore"));
     const installed = getCustomThemes().find((theme) => theme.id === t3teamPackThemeId("nexplore"));
-    expect(installed?.variants?.light?.messageAction).toBe("#f05a00");
-    expect(installed?.variants?.dark?.messageAction).toBe("#ff6a0a");
+    expect(installed?.variants?.light?.messageAction).toBe(toCanonicalThemeColor("#f05a00"));
+    expect(installed?.variants?.dark?.messageAction).toBe(toCanonicalThemeColor("#ff6a0a"));
   });
 
   // Regression: the pack theme must SURVIVE a storage round-trip. Upstream re-validates stored
@@ -65,8 +70,12 @@ describe("pack appearance", () => {
     // Assert through the resolver, not the stored shape: upstream drops the variant that matches
     // the base appearance (the base `colors` already carries that half), so checking
     // `variants.light` directly would fail on a theme that is perfectly intact.
-    expect(getThemeColorsForMode(reloaded!, "light")?.messageAction).toBe("#f05a00");
-    expect(getThemeColorsForMode(reloaded!, "dark")?.messageAction).toBe("#ff6a0a");
+    expect(getThemeColorsForMode(reloaded!, "light")?.messageAction).toBe(
+      toCanonicalThemeColor("#f05a00"),
+    );
+    expect(getThemeColorsForMode(reloaded!, "dark")?.messageAction).toBe(
+      toCanonicalThemeColor("#ff6a0a"),
+    );
   });
 
   // Regression: selecting the pack theme must resolve the appearance, not default to the
@@ -90,7 +99,9 @@ describe("pack appearance", () => {
         colors: { light: { background: "#ffffff" }, dark: { background: "#000000" } },
       });
       expect(document.documentElement.classList.contains("dark")).toBe(true);
-      expect(document.documentElement.style.getPropertyValue("--app-theme-canvas")).toBe("#000000");
+      expect(document.documentElement.style.getPropertyValue("--app-theme-canvas")).toBe(
+        toCanonicalThemeColor("#000000"),
+      );
     } finally {
       window.matchMedia = matchMedia;
       document.documentElement.classList.remove("dark");
@@ -152,9 +163,9 @@ describe("pack appearance", () => {
 
     // Sidebar colors have upstream roles, so they travel with the theme…
     const installed = getCustomThemes().find((theme) => theme.id === t3teamPackThemeId("nexplore"));
-    expect(installed?.variants?.light?.sidebar).toBe("#fafafa");
-    expect(installed?.variants?.light?.sidebarRowHover).toBe("#eeeeee");
-    expect(installed?.variants?.dark?.sidebar).toBe("#111111");
+    expect(installed?.variants?.light?.sidebar).toBe(toCanonicalThemeColor("#fafafa"));
+    expect(installed?.variants?.light?.sidebarRowHover).toBe(toCanonicalThemeColor("#eeeeee"));
+    expect(installed?.variants?.dark?.sidebar).toBe(toCanonicalThemeColor("#111111"));
 
     // …while the tokens upstream deliberately leaves independent stay on the fork's element.
     const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";

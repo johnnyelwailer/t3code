@@ -80,6 +80,10 @@ import Migration0052 from "./Migrations/038_ProjectionThreadsPinOrderKey.ts";
 // rather than taking upstream's numbers, which this fork already uses — see the rule above.
 import Migration0053 from "./Migrations/039_ProjectionProjectsDefaultThreadEnvMode.ts";
 import Migration0054 from "./Migrations/040_ProjectionProjectFaviconPath.ts";
+// New from the 2026-08-25 upstream sync (upstream 041/042). Appended above the fork's maximum id
+// rather than taking upstream's numbers, which this fork already uses — see the rule above.
+import Migration0055 from "./Migrations/041_AuthSessionClientConnection.ts";
+import Migration0056 from "./Migrations/042_ProjectionThreadLinkedPullRequest.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -146,6 +150,8 @@ export const migrationEntries = [
   [52, "ProjectionThreadsPinOrderKey", Migration0052],
   [53, "ProjectionProjectsDefaultThreadEnvMode", Migration0053],
   [54, "ProjectionProjectFaviconPath", Migration0054],
+  [55, "AuthSessionClientConnection", Migration0055],
+  [56, "ProjectionThreadLinkedPullRequest", Migration0056],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

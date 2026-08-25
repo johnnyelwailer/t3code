@@ -46,11 +46,16 @@ export interface InterruptedChildThread {
 
 /**
  * The session statuses that mark a thread as crash-interrupted at summary
- * time: the startup reconcile (t3team-startupSessionReconcile.ts) stops every
- * stale running/starting session with `stopped`, and a turn interrupted in
- * place reads `interrupted`.
+ * time: the startup reconcile (reconcileProviderSessions in
+ * serverRuntimeStartup.ts) settles every stale running/starting session with
+ * `error` (orphaned provider session), a turn interrupted in place reads
+ * `interrupted`, and `stopped` covers the pre-reconcile settle shape.
  */
-const INTERRUPTED_SESSION_STATUSES: ReadonlySet<string> = new Set(["stopped", "interrupted"]);
+const INTERRUPTED_SESSION_STATUSES: ReadonlySet<string> = new Set([
+  "stopped",
+  "interrupted",
+  "error",
+]);
 
 /**
  * Replay the event log and return the threads whose most recent

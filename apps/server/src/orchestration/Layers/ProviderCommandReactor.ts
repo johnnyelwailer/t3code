@@ -21,6 +21,7 @@ import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -358,6 +359,7 @@ const make = Effect.gen(function* () {
   const providerService = yield* ProviderService;
   const providerRegistry = yield* ProviderRegistry;
   const gitWorkflow = yield* GitWorkflowService;
+  const fileSystem = yield* FileSystem.FileSystem;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
@@ -479,6 +481,52 @@ const make = Effect.gen(function* () {
     return yield* projectionSnapshotQuery
       .getProjectShellById(projectId)
       .pipe(Effect.map(Option.getOrUndefined));
+  });
+
+  /**
+   * Recreates a thread's worktree from its branch when the directory has
+   * disappeared. Provider sessions resume into the persisted cwd, so a missing
+   * worktree makes every later turn fail as a bogus "session not found".
+   * Best-effort: on failure the turn proceeds and reports the real error.
+   */
+  const ensureThreadWorktree = Effect.fnUntraced(function* (thread: {
+    readonly id: ThreadId;
+    readonly projectId: ProjectId;
+    readonly branch: string | null;
+    readonly worktreePath: string | null;
+  }) {
+    const { worktreePath, branch } = thread;
+    if (!worktreePath || !branch) {
+      return;
+    }
+    const exists = yield* fileSystem.exists(worktreePath).pipe(Effect.orElseSucceed(() => true));
+    if (exists) {
+      return;
+    }
+    const project = yield* resolveProject(thread.projectId);
+    if (!project) {
+      return;
+    }
+    const cwd = project.workspaceRoot;
+    yield* Effect.logWarning("provider command reactor recreating missing worktree", {
+      threadId: thread.id,
+      worktreePath,
+      branch,
+    });
+    // A directory deleted without `git worktree remove` leaves an admin entry
+    // that makes `git worktree add` refuse the path; prune clears it.
+    yield* gitWorkflow.pruneWorktrees({ cwd }).pipe(
+      Effect.andThen(gitWorkflow.createWorktree({ cwd, refName: branch, path: worktreePath })),
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning("provider command reactor failed to recreate worktree", {
+              threadId: thread.id,
+              worktreePath,
+              cause: Cause.pretty(cause),
+            }),
+      ),
+    );
   });
 
   const resolveThread = Effect.fnUntraced(function* (threadId: ThreadId) {
@@ -1189,6 +1237,8 @@ const make = Effect.gen(function* () {
       return;
     }
 
+    yield* ensureThreadWorktree(thread);
+
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
     if (isFirstUserMessageTurn) {
@@ -1293,8 +1343,8 @@ const make = Effect.gen(function* () {
     if (!thread) {
       return;
     }
-    const hasSession = thread.session && thread.session.status !== "stopped";
-    if (!hasSession) {
+    const session = thread.session;
+    if (!session || session.status === "stopped") {
       return yield* appendProviderFailureActivity({
         threadId: event.payload.threadId,
         kind: "provider.turn.interrupt.failed",
@@ -1305,41 +1355,85 @@ const make = Effect.gen(function* () {
       });
     }
 
-    // Orchestration turn ids are not provider turn ids, so interrupt by session.
-    // The adapter's turn.aborted event only clears plan progress; it does not
-    // clear activeTurnId or update the thread session status in the projection.
-    // If the adapter's in-memory session is gone (e.g., after a server restart),
-    // interruptTurn fails — fall back to stopSession, which clears activeTurnId
-    // in the directory. Either way we must settle the session here so the
-    // "Working" badge clears.
-    yield* providerService.interruptTurn({ threadId: event.payload.threadId }).pipe(
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause)) {
-          return Effect.interrupt;
-        }
-        return Effect.logWarning("provider.turn.interrupt.fallback-to-stop", {
-          threadId: event.payload.threadId,
-          cause,
-        }).pipe(Effect.andThen(providerService.stopSession({ threadId: event.payload.threadId })));
-      }),
-    );
+    const recoverInterruptFailure = (cause: Cause.Cause<unknown>) => {
+      if (Cause.hasInterruptsOnly(cause)) {
+        return Effect.interrupt;
+      }
 
-    yield* setThreadSession({
-      threadId: event.payload.threadId,
-      session: {
-        threadId: event.payload.threadId,
-        status: "stopped",
-        providerName: thread.session?.providerName ?? null,
-        ...(thread.session?.providerInstanceId !== undefined
-          ? { providerInstanceId: thread.session.providerInstanceId }
-          : {}),
-        runtimeMode: thread.session?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
-        activeTurnId: null,
-        lastError: null,
-        updatedAt: event.payload.createdAt,
-      },
-      createdAt: event.payload.createdAt,
-    });
+      const detail = formatFailureDetail(cause);
+      return Effect.gen(function* () {
+        const latestThread = yield* resolveThread(event.payload.threadId);
+        const latestSession = latestThread?.session;
+        if (
+          !latestSession ||
+          latestSession.status === "stopped" ||
+          latestSession.status === "ready" ||
+          (event.payload.turnId !== undefined &&
+            latestSession.activeTurnId !== null &&
+            latestSession.activeTurnId !== event.payload.turnId)
+        ) {
+          return;
+        }
+
+        yield* providerService.stopSession({ threadId: event.payload.threadId }).pipe(
+          Effect.catchCause((stopCause) => {
+            if (Cause.hasInterruptsOnly(stopCause)) {
+              return Effect.interrupt;
+            }
+            return Effect.logWarning(
+              "provider command reactor failed to stop session after interrupt failure",
+              {
+                threadId: event.payload.threadId,
+                cause: Cause.pretty(stopCause),
+                originalCause: Cause.pretty(cause),
+              },
+            );
+          }),
+        );
+        const stoppedThread = yield* resolveThread(event.payload.threadId);
+        const stoppedSession = stoppedThread?.session;
+        if (
+          !stoppedSession ||
+          stoppedSession.status === "stopped" ||
+          stoppedSession.status === "ready" ||
+          (event.payload.turnId !== undefined &&
+            stoppedSession.activeTurnId !== null &&
+            stoppedSession.activeTurnId !== event.payload.turnId)
+        ) {
+          return;
+        }
+
+        yield* setThreadSession({
+          threadId: event.payload.threadId,
+          session: {
+            ...stoppedSession,
+            status: "stopped",
+            activeTurnId: null,
+            lastError: detail,
+            updatedAt: event.payload.createdAt,
+          },
+          createdAt: event.payload.createdAt,
+        });
+        yield* appendProviderFailureActivity({
+          threadId: event.payload.threadId,
+          kind: "provider.turn.interrupt.failed",
+          summary: "Provider turn interrupt failed",
+          detail,
+          turnId: event.payload.turnId ?? null,
+          createdAt: event.payload.createdAt,
+        });
+      });
+    };
+
+    // Orchestration turn ids are not provider turn ids, so interrupt by session.
+    // Upstream's recoverInterruptFailure supersedes the fork's inline
+    // fallback-to-stopSession (fork #30): on interrupt failure it stops the
+    // session, settles it with the failure detail, and records a failure
+    // activity — covering the "adapter session gone after restart" case the
+    // fork fix targeted, without clobbering lastError on the success path.
+    yield* providerService
+      .interruptTurn({ threadId: event.payload.threadId })
+      .pipe(Effect.catchCause(recoverInterruptFailure));
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (
