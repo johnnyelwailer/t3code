@@ -1,3 +1,8 @@
+import {
+  formatProviderSkillDisplayName,
+  getProviderSkillsForSlashMenu,
+  getProviderSlashCommandsForSlashMenu,
+} from "@t3tools/client-runtime/providerSkills";
 import type {
   ProjectEntry,
   ProviderDriverKind,
@@ -9,7 +14,6 @@ import type { ComposerSlashCommand, ComposerTrigger } from "~/composer-logic";
 import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu";
 import { searchSlashCommandItems } from "~/components/chat/composerSlashCommandSearch";
 import { basenameOfPath } from "~/pierre-icons";
-import { formatProviderSkillDisplayName } from "@t3tools/client-runtime/providerSkills";
 import { searchProviderSkills } from "~/providerSkillSearch";
 
 export type T3TeamComposerBuiltInSlashCommand = {
@@ -39,6 +43,12 @@ export type T3TeamComposerMenuSources = {
   readonly provider: ProviderDriverKind | null;
   readonly providerSlashCommands: ReadonlyArray<ServerProviderSlashCommand>;
   readonly skills: ReadonlyArray<ServerProviderSkill>;
+  /**
+   * Mirrors upstream's `showSkillsInSlashMenu` setting (#8009): with it on,
+   * enabled skills also list in the `/` menu as `/skill:` entries, and provider
+   * slash commands shadowed by a same-named skill are hidden.
+   */
+  readonly showSkillsInSlashMenu: boolean;
   readonly pathEntries: ReadonlyArray<T3TeamComposerPathEntry>;
 };
 
@@ -65,17 +75,35 @@ function buildSlashCommandItems(
     label: `/${builtIn.command}`,
     description: builtIn.description,
   }));
+  const slashMenuSkills = provider
+    ? getProviderSkillsForSlashMenu(sources.skills, sources.showSkillsInSlashMenu)
+    : [];
   const providerItems = provider
-    ? sources.providerSlashCommands.map((command) => ({
-        id: `provider-slash-command:${provider}:${command.name}`,
-        type: "provider-slash-command" as const,
+    ? getProviderSlashCommandsForSlashMenu(sources.providerSlashCommands, slashMenuSkills).map(
+        (command) => ({
+          id: `provider-slash-command:${provider}:${command.name}`,
+          type: "provider-slash-command" as const,
+          provider,
+          command,
+          label: `/${command.name}`,
+          description: command.description ?? command.input?.hint ?? "Run provider command",
+        }),
+      )
+    : [];
+  const skillItems = provider
+    ? slashMenuSkills.map((skill) => ({
+        id: `skill:${provider}:${skill.name}`,
+        type: "skill" as const,
         provider,
-        command,
-        label: `/${command.name}`,
-        description: command.description ?? command.input?.hint ?? "Run provider command",
+        skill,
+        label: `/skill:${skill.name}`,
+        description:
+          skill.shortDescription ??
+          skill.description ??
+          (skill.scope ? `${skill.scope} skill` : ""),
       }))
     : [];
-  const slashCommandItems = [...builtInItems, ...providerItems];
+  const slashCommandItems = [...builtInItems, ...providerItems, ...skillItems];
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) {
     return slashCommandItems;

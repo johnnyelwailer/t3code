@@ -268,11 +268,6 @@ import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
 import { deriveLatestContextWindowSnapshot } from "../../lib/contextWindow";
-import {
-  formatProviderSkillDisplayName,
-  getProviderSlashCommandsForSlashMenu,
-  getProviderSkillsForSlashMenu,
-} from "@t3tools/client-runtime/providerSkills";
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
@@ -1177,8 +1172,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       provider: selectedProvider,
       providerSlashCommands: selectedProviderStatus?.slashCommands ?? [],
       skills: selectedProviderStatus?.skills ?? [],
+      showSkillsInSlashMenu: settings.showSkillsInSlashMenu,
     }),
-    [planModeUiEnabled, selectedProvider, selectedProviderStatus],
+    [planModeUiEnabled, selectedProvider, selectedProviderStatus, settings.showSkillsInSlashMenu],
   );
   const composerPathSearchScope = useMemo(
     () => ({ environmentId, cwd: gitCwd }),

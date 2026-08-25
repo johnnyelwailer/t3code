@@ -40,6 +40,10 @@ export function useT3TeamKickoffComposerMenu(input: T3TeamKickoffComposerMenuInp
       provider: provider?.driver ?? null,
       providerSlashCommands: provider?.slashCommands ?? [],
       skills: provider?.skills ?? [],
+      // The kickoff composer cannot reach the thread-scoped settings; the
+      // upstream `showSkillsInSlashMenu` default is `true` (settings.ts), so
+      // skills list in the `/` menu there until this gets settings access.
+      showSkillsInSlashMenu: true,
     }),
     [provider],
   );

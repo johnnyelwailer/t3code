@@ -23,6 +23,9 @@ const SOURCES = {
   provider: null,
   providerSlashCommands: [],
   skills: [],
+  // Off in the shared fixture so pre-existing exact-list assertions stay
+  // focused; t3team-composerMenuItems.test.ts flips it on in dedicated tests.
+  showSkillsInSlashMenu: false,
 };
 
 /**

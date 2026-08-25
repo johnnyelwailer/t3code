@@ -26,6 +26,9 @@ function sources(overrides: Partial<T3TeamComposerMenuSources> = {}): T3TeamComp
     provider: claudeDriver,
     providerSlashCommands,
     skills,
+    // Off in the shared fixture so pre-existing exact-list assertions stay
+    // focused; the dedicated tests below flip it on.
+    showSkillsInSlashMenu: false,
     pathEntries: [
       { path: "apps/web/src/main.tsx", kind: "file" as const },
       { path: "apps/web/src", kind: "directory" as const },
@@ -120,5 +123,46 @@ describe("buildT3TeamComposerMenuItems", () => {
       "plan",
       "default",
     ]);
+  });
+});
+
+describe("showSkillsInSlashMenu", () => {
+  it("lists enabled skills as /skill: entries in the slash menu when on", () => {
+    const items = buildT3TeamComposerMenuItems(
+      triggerFor("/"),
+      sources({ showSkillsInSlashMenu: true }),
+    );
+    const skillItems = items.filter((item) => item.type === "skill");
+    expect(skillItems.map((item) => item.label)).toEqual(["/skill:review", "/skill:docs"]);
+  });
+
+  it("hides provider slash commands shadowed by a same-named visible skill", () => {
+    const items = buildT3TeamComposerMenuItems(
+      triggerFor("/"),
+      sources({
+        showSkillsInSlashMenu: true,
+        providerSlashCommands: [{ name: "review", description: "provider review" }],
+      }),
+    );
+    expect(items.some((item) => item.type === "provider-slash-command")).toBe(false);
+    expect(items.some((item) => item.type === "skill")).toBe(true);
+  });
+});
+
+describe("slash menu ordering", () => {
+  it("keeps built-in commands first, then provider commands, then skills", () => {
+    const items = buildT3TeamComposerMenuItems(
+      triggerFor("/"),
+      sources({ showSkillsInSlashMenu: true }),
+    );
+    const kinds = items.map((item) => item.type);
+    const firstProvider = kinds.indexOf("provider-slash-command");
+    const firstSkill = kinds.indexOf("skill");
+    const lastBuiltIn = kinds.lastIndexOf("slash-command");
+    // Flat rendering means assembly order IS the display order; a later kind
+    // may never appear before an earlier one, or a project entry could shadow
+    // a host command (docs/t3team-mvp/16-action-recipes.md#menu-grouping).
+    expect(lastBuiltIn).toBeLessThan(firstProvider);
+    expect(firstProvider).toBeLessThan(firstSkill);
   });
 });
