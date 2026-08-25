@@ -66,6 +66,7 @@ function makeDeps(overrides: Partial<T3TeamChildrenToolDeps> = {}): TestDeps {
     loadThreadShell: (id) =>
       Effect.succeed(id === CALLER ? childShell : id === CHILD ? childShell : undefined),
     listProjectThreadShells: () => Effect.succeed([childShell]),
+    listChildThreadIds: () => Effect.succeed([CHILD]),
     appendActivity: (threadId, input) =>
       Effect.sync(() => {
         appended.push({ threadId, kind: input.kind, payload: input.payload });
@@ -146,11 +147,45 @@ describe("children tool — list", () => {
   it("reports no children with a hint", async () => {
     const deps = makeDeps({
       loadThreadDetail: () => Effect.succeed({ ...callerDetail, activities: [] }),
+      listChildThreadIds: () => Effect.succeed([]),
     });
     const out = await run(deps, { op: "list" });
     expect(out.isError).toBeFalsy();
     expect(out.structured.count).toBe(0);
     expect(out.structured.hint).toContain("t3team_start_child");
+  });
+
+  it("lists children from the parent/child relation even when the caller has no handoff.started activity (GHE #178)", async () => {
+    // The child was created via the orchestration engine: only the child-side
+    // t3team.handoff.created exists (payload.parentThreadId), so the caller's
+    // own activity load contains no t3team.handoff.started rows. The list op
+    // must still surface the child — it derives from listChildThreadIds, not
+    // from the caller's activities.
+    const deps = makeDeps({
+      loadThreadDetail: () => Effect.succeed({ ...callerDetail, activities: [] }),
+      listChildThreadIds: () => Effect.succeed([CHILD]),
+    });
+    const out = await run(deps, { op: "list" });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.scope).toBe("children");
+    expect(out.structured.count).toBe(1);
+    const rows = out.structured.threads as Array<Record<string, unknown>>;
+    expect(rows[0]!.threadId).toBe(CHILD);
+    expect(rows[0]!.state).toBe("completed");
+  });
+
+  it("marks a child whose shell is gone as unavailable", async () => {
+    const deps = makeDeps({
+      listChildThreadIds: () => Effect.succeed([CHILD]),
+      loadThreadShell: () => Effect.succeed(undefined),
+    });
+    const out = await run(deps, { op: "list" });
+    expect(out.isError).toBeFalsy();
+    const rows = out.structured.threads as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.threadId).toBe(CHILD);
+    expect(rows[0]!.state).toBe("unknown");
+    expect(rows[0]!.note).toContain("no longer available");
   });
 });
 

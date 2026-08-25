@@ -63,6 +63,17 @@ export interface T3TeamChildrenToolDeps {
   readonly listProjectThreadShells: (
     projectId: ProjectId,
   ) => Effect.Effect<ReadonlyArray<ChildThreadShell>, string>;
+  /**
+   * The active child thread ids of a parent, derived from the durable
+   * parent/child relation (handoff.created parentThreadId / handoff.started
+   * childThreadId) rather than the parent's own activity load — so a
+   * coordinator with a large child fleet lists every child, matching the
+   * sidebar/fork section. Newest first. (GHE #178)
+   */
+  readonly listChildThreadIds: (
+    parentThreadId: ThreadIdType,
+    projectId: ProjectId,
+  ) => Effect.Effect<ReadonlyArray<string>, string>;
   /** Append a durable activity to a thread (wait registration, close marker). */
   readonly appendActivity: (
     threadId: ThreadIdType,

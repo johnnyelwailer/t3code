@@ -15,7 +15,6 @@ import { okResult, errorResult } from "./t3team-toolBrokerHelpers.ts";
 import {
   childStatusFromDetail,
   childStatusFromShell,
-  directChildren,
   elapsedMs,
   formatElapsed,
   loadTarget,
@@ -65,21 +64,26 @@ export function opList(
           errorResult("Could not read the current thread to list its children."),
         );
       }
-      const children = directChildren(caller);
-      return Effect.forEach(children, (child) =>
-        deps.loadThreadShell(ThreadId.make(child.threadId)).pipe(
-          Effect.map((shell) =>
-            shell
-              ? { threadId: child.threadId, ...childStatusFromShell(shell) }
-              : {
-                  threadId: child.threadId,
-                  ...(child.title ? { title: child.title } : {}),
-                  state: "unknown" as const,
-                  note: "Child thread is no longer available.",
-                },
+      // Children come from the durable parent/child relation (handoff.created /
+      // handoff.started), not the caller's own activity load — a coordinator
+      // with a large child fleet must list every child, matching the sidebar
+      // and fork section (GHE #178).
+      return deps.listChildThreadIds(deps.callerThreadId, deps.callerProjectId).pipe(
+        Effect.flatMap((childIds) =>
+          Effect.forEach(childIds, (threadId) =>
+            deps.loadThreadShell(ThreadId.make(threadId)).pipe(
+              Effect.map((shell) =>
+                shell
+                  ? { threadId, ...childStatusFromShell(shell) }
+                  : {
+                      threadId,
+                      state: "unknown" as const,
+                      note: "Child thread is no longer available.",
+                    },
+              ),
+            ),
           ),
         ),
-      ).pipe(
         Effect.map((rows) =>
           okResult({
             ok: true,

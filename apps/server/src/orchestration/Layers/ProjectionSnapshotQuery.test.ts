@@ -1961,6 +1961,92 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       );
     }),
   );
+
+  it.effect("lists child thread ids from the durable parent/child relation (GHE #178)", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM projection_projects`;
+      yield* sql`DELETE FROM projection_threads`;
+      yield* sql`DELETE FROM projection_thread_activities`;
+
+      yield* sql`
+        INSERT INTO projection_projects (
+          project_id, title, workspace_root, default_model_selection_json,
+          scripts_json, created_at, updated_at, deleted_at
+        )
+        VALUES (
+          'project-178', 'Project 178', '/tmp/project-178',
+          '{"provider":"codex","model":"gpt-5-codex"}', '[]',
+          '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:01.000Z', NULL
+        )
+      `;
+      const insertThread = (threadId: string, updatedAt: string) =>
+        sql`
+          INSERT INTO projection_threads (
+            thread_id, project_id, title, model_selection_json, runtime_mode,
+            interaction_mode, branch, worktree_path, latest_turn_id,
+            latest_user_message_at, pending_approval_count, pending_user_input_count,
+            has_actionable_proposed_plan, created_at, updated_at, deleted_at
+          )
+          VALUES (
+            ${threadId}, 'project-178', ${threadId},
+            '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default',
+            NULL, NULL, NULL, NULL, 0, 0, 0,
+            '2026-06-01T00:00:00.000Z', ${updatedAt}, NULL
+          )
+        `;
+      yield* insertThread("parent-178", "2026-06-01T00:00:05.000Z");
+      yield* insertThread("child-created-178", "2026-06-01T00:00:09.000Z");
+      yield* insertThread("child-started-178", "2026-06-01T00:00:07.000Z");
+      yield* insertThread("unrelated-178", "2026-06-01T00:00:08.000Z");
+
+      // Child-side relation only: the parent's own activity load has no
+      // t3team.handoff.started row for this child.
+      yield* sql`
+        INSERT INTO projection_thread_activities (
+          activity_id, thread_id, turn_id, tone, kind, summary, payload_json, created_at
+        )
+        VALUES (
+          'activity-created-178', 'child-created-178', NULL, 'info',
+          't3team.handoff.created', 'Child session created',
+          '{"parentThreadId":"parent-178"}', '2026-06-01T00:00:06.000Z'
+        )
+      `;
+      // Parent-side relation only.
+      yield* sql`
+        INSERT INTO projection_thread_activities (
+          activity_id, thread_id, turn_id, tone, kind, summary, payload_json, created_at
+        )
+        VALUES (
+          'activity-started-178', 'parent-178', NULL, 'info',
+          't3team.handoff.started', 'Started child session',
+          '{"childThreadId":"child-started-178","childTitle":"Child"}',
+          '2026-06-01T00:00:06.000Z'
+        )
+      `;
+
+      const childIds = yield* snapshotQuery.listChildThreadIdsByParent(
+        ThreadId.make("parent-178"),
+        asProjectId("project-178"),
+      );
+      // Newest (by updated_at) first; the unrelated thread is excluded.
+      assert.deepStrictEqual(
+        childIds.map((id) => String(id)),
+        ["child-created-178", "child-started-178"],
+      );
+
+      // A thread with no children at all lists none.
+      assert.deepStrictEqual(
+        (yield* snapshotQuery.listChildThreadIdsByParent(
+          ThreadId.make("unrelated-178"),
+          asProjectId("project-178"),
+        )).map((id) => String(id)),
+        [],
+      );
+    }),
+  );
 });
 
 it.effect(

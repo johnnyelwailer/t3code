@@ -141,6 +141,20 @@ export interface ProjectionSnapshotQueryShape {
   ) => Effect.Effect<Option.Option<ThreadId>, ProjectionRepositoryError>;
 
   /**
+   * List the active child thread ids of a parent thread, derived from the
+   * durable parent/child relation (a child's t3team.handoff.created
+   * parentThreadId, or a t3team.handoff.started childThreadId on the parent)
+   * rather than the parent's own activity load. Same project, non-deleted,
+   * newest (by updated_at) first. This is the relation the sidebar/fork
+   * section render; the `t3team.thread.children` list op uses it so the tool
+   * agrees with the UI (GHE #178).
+   */
+  readonly listChildThreadIdsByParent: (
+    parentThreadId: ThreadId,
+    projectId: ProjectId,
+  ) => Effect.Effect<ReadonlyArray<ThreadId>, ProjectionRepositoryError>;
+
+  /**
    * Read the checkpoint context needed to resolve a single thread diff.
    */
   readonly getThreadCheckpointContext: (

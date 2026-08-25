@@ -143,6 +143,10 @@ const ProjectIdLookupInput = Schema.Struct({
 const ThreadIdLookupInput = Schema.Struct({
   threadId: ThreadId,
 });
+const ChildThreadIdsByParentInput = Schema.Struct({
+  parentThreadId: ThreadId,
+  projectId: ProjectId,
+});
 // Windowed reads order turns by the stable keyset (anchor, turn key), where
 // anchor is requested_at and turn key is
 // COALESCE(turn_id, ''). Both are event-derived, so cursors survive the
@@ -956,6 +960,42 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           AND archived_at IS NULL
         ORDER BY created_at ASC, thread_id ASC
         LIMIT 1
+      `,
+  });
+
+  // The children of a parent thread, derived from the durable parent/child
+  // relation rather than the parent's own (potentially truncated) activity
+  // load: a child is any active thread in the project whose parentThreadId is
+  // the given parent, sourced from either the child's own t3team.handoff.created
+  // activity (payload.parentThreadId) or a t3team.handoff.started activity on the
+  // parent (payload.childThreadId). Newest (by updated_at) first. This is what
+  // the sidebar/fork section render; the tool's `list` op must agree with it.
+  const listChildThreadIdsByParentQuery = SqlSchema.findAll({
+    Request: ChildThreadIdsByParentInput,
+    Result: ProjectionThreadIdLookupRowSchema,
+    execute: ({ parentThreadId, projectId }) =>
+      sql`
+        SELECT t.thread_id AS "threadId"
+        FROM projection_threads AS t
+        WHERE t.project_id = ${projectId}
+          AND t.deleted_at IS NULL
+          AND (
+            EXISTS (
+              SELECT 1
+              FROM projection_thread_activities AS a
+              WHERE a.thread_id = t.thread_id
+                AND a.kind = 't3team.handoff.created'
+                AND json_extract(a.payload_json, '$.parentThreadId') = ${parentThreadId}
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM projection_thread_activities AS a
+              WHERE a.thread_id = ${parentThreadId}
+                AND a.kind = 't3team.handoff.started'
+                AND json_extract(a.payload_json, '$.childThreadId') = t.thread_id
+            )
+          )
+        ORDER BY t.updated_at DESC, t.thread_id ASC
       `,
   });
 
@@ -2622,6 +2662,20 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         Effect.map(Option.map((row) => row.threadId)),
       );
 
+  const listChildThreadIdsByParent: ProjectionSnapshotQueryShape["listChildThreadIdsByParent"] = (
+    parentThreadId,
+    projectId,
+  ) =>
+    listChildThreadIdsByParentQuery({ parentThreadId, projectId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.listChildThreadIdsByParent:query",
+          "ProjectionSnapshotQuery.listChildThreadIdsByParent:decodeRows",
+        ),
+      ),
+      Effect.map((rows) => rows.map((row) => row.threadId)),
+    );
+
   const getThreadCheckpointContext: ProjectionSnapshotQueryShape["getThreadCheckpointContext"] = (
     threadId,
   ) =>
@@ -3136,6 +3190,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getActiveProjectByWorkspaceRoot,
     getProjectShellById,
     getFirstActiveThreadIdByProjectId,
+    listChildThreadIdsByParent,
     getThreadCheckpointContext,
     getFullThreadDiffContext,
     getThreadShellById,

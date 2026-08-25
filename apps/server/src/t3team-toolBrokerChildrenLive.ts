@@ -48,6 +48,14 @@ export function makeManageChildrenHandler(input: {
       Effect.map((snapshot) => snapshot.threads.filter((thread) => thread.projectId === projectId)),
       Effect.mapError(normalizeError),
     );
+  const listChildThreadIds: T3TeamChildrenToolDeps["listChildThreadIds"] = (
+    parentThreadId,
+    projectId,
+  ) =>
+    query.listChildThreadIdsByParent(parentThreadId, projectId).pipe(
+      Effect.map((ids) => ids.map((id) => id as unknown as string)),
+      Effect.mapError(normalizeError),
+    );
   const appendActivity: T3TeamChildrenToolDeps["appendActivity"] = (threadId, activity) =>
     appendThreadActivity(orchestration, threadId, {
       kind: activity.kind,
@@ -78,6 +86,7 @@ export function makeManageChildrenHandler(input: {
           loadThreadDetail: loadDetail,
           loadThreadShell: loadShell,
           listProjectThreadShells: listProjectShells,
+          listChildThreadIds,
           appendActivity,
           interruptTurn,
           nowIso,
