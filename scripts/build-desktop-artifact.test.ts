@@ -1096,6 +1096,25 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
     return Effect.scoped(
       Effect.gen(function* () {
+        // Host-environment gate: the self-containment check below runs with
+        // `env: { ...process.env, NODE_PATH: "" }`, so it inherits the host's
+        // environment. A machine that exports ELECTRON_RUN_AS_NODE itself
+        // (e.g. one running this suite from an Electron-node shell) would
+        // make the probe's marker indistinguishable and break the assertion
+        // below. Isolate it for the test's duration and restore on scope
+        // close; the probe sets ELECTRON_RUN_AS_NODE explicitly, so the
+        // discriminator stays valid when the probe does run.
+        const previousElectronRunAsNode = process.env.ELECTRON_RUN_AS_NODE;
+        delete process.env.ELECTRON_RUN_AS_NODE;
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            if (previousElectronRunAsNode === undefined) {
+              delete process.env.ELECTRON_RUN_AS_NODE;
+            } else {
+              process.env.ELECTRON_RUN_AS_NODE = previousElectronRunAsNode;
+            }
+          }),
+        );
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
         yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
