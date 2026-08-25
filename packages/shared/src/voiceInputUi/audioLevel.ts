@@ -14,8 +14,10 @@ export interface VoiceBarsOptions {
   /** Clock for the idle-drift phase (injected at the call site). */
   clock: () => number;
   onEnergy?: (level: number) => void;
-  /** Reporting hook for analyser failures (CSS fallback start or frame errors). */
+  /** Reporting hook for analyser failures (the CSS loop keeps running). */
   onFrameError?: (error: unknown) => void;
+  /** Called exactly once when the analyser takes over from the CSS loop. */
+  onAudioActive?: () => void;
   /**
    * CSS fallback frame provider (typically
    * `() => frameFromClock(clock(), barCount)`).
@@ -24,8 +26,13 @@ export interface VoiceBarsOptions {
 }
 
 /**
- * Start the live waveform for a recording: analyser-driven when the audio
- * context (and microphone) are available, CSS fallback otherwise.
+ * Start the live waveform for a recording.
+ *
+ * CSS-first: the clock-driven loop starts immediately, so the bars are
+ * alive from the first frame. When the analyser connects (or a suspended
+ * context resumes), it takes over and the CSS loop stops. If the audio
+ * path never comes up (permission prompt, flat context), the bars keep
+ * drifting — visibly distinguishing "analyser dead" from "loop dead".
  * Returns a stop function.
  */
 export function startVoiceBars(options: VoiceBarsOptions): () => void {
@@ -39,32 +46,47 @@ export function startVoiceBars(options: VoiceBarsOptions): () => void {
       ...(options.onEnergy ? { onEnergy: options.onEnergy } : {}),
       ...(options.onFrameError ? { onFrameError: options.onFrameError } : {}),
     });
-  const cssStop = (): (() => void) => animate(options.cssFrame);
-  if (!options.audioContext) return cssStop();
 
-  const audioCtx = options.audioContext;
-  let running: (() => void) | null = null;
   let settled = false;
-  attachAudioLevel(audioCtx, barCount)
-    .then(async (frame) => {
-      if (audioCtx.state !== "running") {
-        // Suspended context produces flat analyser data (dead bars, no
-        // energy for auto-send) — resume before the first frame.
-        await audioCtx.resume();
-      }
-      return frame;
-    })
-    .then((frame) => {
-      if (settled) return;
-      running = animate(frame);
-    })
-    .catch((error: unknown) => {
-      if (settled) return;
-      options.onFrameError?.(error);
-      running = cssStop();
-    });
+  let cssRunning: (() => void) | null = null;
+  let audioRunning: (() => void) | null = null;
+
+  const stopCss = (): void => {
+    cssRunning?.();
+    cssRunning = null;
+  };
+  const stopAudio = (): void => {
+    audioRunning?.();
+    audioRunning = null;
+  };
+
+  cssRunning = animate(options.cssFrame);
+  if (options.audioContext) {
+    const audioCtx = options.audioContext;
+    attachAudioLevel(audioCtx, barCount)
+      .then(async (frame) => {
+        if (audioCtx.state !== "running") {
+          // Suspended context produces flat analyser data (no level for the
+          // bars or the auto-send detector) — resume before it takes over.
+          await audioCtx.resume();
+        }
+        return frame;
+      })
+      .then((frame) => {
+        if (settled) return;
+        stopCss();
+        audioRunning = animate(frame);
+        options.onAudioActive?.();
+      })
+      .catch((error: unknown) => {
+        if (settled) return;
+        options.onFrameError?.(error);
+      });
+  }
+
   return () => {
     settled = true;
-    running?.();
+    stopCss();
+    stopAudio();
   };
 }
