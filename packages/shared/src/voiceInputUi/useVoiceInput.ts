@@ -58,6 +58,8 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const accumulatedRef = useRef("");
   const barElsRef = useRef<Array<HTMLSpanElement | null>>([]);
+  const autoResumeRef = useRef(false);
+  const startRecordingRef = useRef<() => void>(() => {});
 
   const transition = useCallback(
     (next: VoiceState) => {
@@ -93,7 +95,20 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
       if (cancelled) return;
       if (!text) console.info("[voice-input] Aufnahme beendet, kein Transkript erhalten");
       onTranscript(text);
-      if (autoSubmit) onAutoSubmit?.();
+      if (autoSubmit) {
+        onAutoSubmit?.();
+        // Stay in voice mode: right after the auto-send, start listening
+        // again (new session, new silence clock). Only a manual tap or Esc
+        // actually leaves voice mode. The ref breaks the callback cycle
+        // between stopRecording and startRecording.
+        autoResumeRef.current = true;
+        window.setTimeout(() => {
+          if (!autoResumeRef.current) return;
+          autoResumeRef.current = false;
+          if (stateRef.current !== "idle") return;
+          startRecordingRef.current();
+        }, 150);
+      }
     },
     [onLevel, onTranscript, onAutoSubmit, transition],
   );
@@ -152,7 +167,15 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
       cssFrame: () => frameFromClock(Date.now(), BAR_COUNT),
       onEnergy: (level) => {
         onLevel?.(level);
-        if (autoStop.observe(level, Date.now())) stopRecording(false, true);
+        if (autoStop.observe(level, Date.now())) {
+          if (accumulatedRef.current.trim()) {
+            // Something was said: commit + send, then stay in voice mode.
+            stopRecording(false, true);
+          } else {
+            // Nothing to send yet: keep listening, reset the silence clock.
+            autoStop.prime(Date.now());
+          }
+        }
       },
       onFrameError: (error) => {
         console.warn("[voice-input] Waveform/Analyse-Fehler (CSS-Fallback aktiv):", error);
@@ -162,11 +185,13 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
       },
     });
   }, [currentLang, onLevel, onPartialTranscript, stopMode, stopRecording, transition]);
+  startRecordingRef.current = startRecording;
 
   // Support detection + full teardown on unmount.
   useEffect(() => {
     setSupported(VoiceRecognitionSession.isSupported());
     return () => {
+      autoResumeRef.current = false;
       sessionRef.current?.stop();
       sessionRef.current = null;
       barsStopRef.current?.();
