@@ -126,17 +126,15 @@ export function resolveThreadStatusPill(
           ? thread.activityLabel.trim() || undefined
           : undefined;
       const activityState = thread.activityState ?? undefined;
+      const statePill = activityState ? resolveActivityStatePill(activityState) : undefined;
       return {
         label: "Working",
         ...(activityLabel ? { activityLabel } : {}),
         ...(activityState ? { activityState } : {}),
-        colorClass: activityState
-          ? resolveActivityStatePill(activityState).colorClass
-          : "text-sky-600 dark:text-sky-300/80",
-        dotClass: activityState
-          ? resolveActivityStatePill(activityState).dotClass
-          : "bg-sky-500 dark:bg-sky-300/80",
-        pulse: activityState ? resolveActivityStatePill(activityState).pulse : true,
+        colorClass: statePill?.colorClass ?? "text-sky-600 dark:text-sky-300/80",
+        dotClass: statePill?.dotClass ?? "bg-sky-500 dark:bg-sky-300/80",
+        pulse: statePill ? statePill.pulse : true,
+        ...(statePill?.pulseClass ? { pulseClass: statePill.pulseClass } : {}),
       };
     }
     case "completed":

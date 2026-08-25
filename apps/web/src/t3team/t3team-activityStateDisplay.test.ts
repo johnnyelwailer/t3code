@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   ACTIVITY_STATE_WORDS,
+  activityPulseClass,
   resolveActivityPillDisplay,
   resolveActivityStatePill,
 } from "./t3team-activityStateDisplay";
@@ -59,10 +60,25 @@ describe("activity state display (GHE #208)", () => {
     expect(resolveActivityPillDisplay({ label: "Completed" })).toBe("Completed");
   });
 
-  it("waiting rests (no pulse) with the calm dormant palette", () => {
-    expect(resolveActivityStatePill("waiting")).toMatchObject({ pulse: false, label: "Waiting" });
+  it("waiting is quieter: dim slate + the slower pulse variant", () => {
+    expect(resolveActivityStatePill("waiting")).toMatchObject({
+      pulse: true,
+      pulseClass: "animate-status-pulse-slow",
+      label: "Waiting",
+    });
     for (const state of ["thinking", "writing", "working"] as const) {
-      expect(resolveActivityStatePill(state)).toMatchObject({ pulse: true });
+      const pill = resolveActivityStatePill(state);
+      expect(pill).toMatchObject({ pulse: true });
+      expect(pill.pulseClass).toBeUndefined();
     }
+  });
+
+  it("activityPulseClass: pulse off → none, override wins, else the standard pulse", () => {
+    expect(activityPulseClass({ pulse: false })).toBe("");
+    expect(activityPulseClass({ pulse: false, pulseClass: "animate-status-pulse-slow" })).toBe("");
+    expect(activityPulseClass({ pulse: true })).toBe("animate-status-pulse");
+    expect(activityPulseClass({ pulse: true, pulseClass: "animate-status-pulse-slow" })).toBe(
+      "animate-status-pulse-slow",
+    );
   });
 });

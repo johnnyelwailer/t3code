@@ -148,6 +148,13 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   /* Duty-cycled indicator animations: long holds with stepped ramps, so the
      compositor updates discrete frames instead of every vsync. */
   --animate-status-pulse: status-pulse 2s infinite;
+  /* GHE #208: the `waiting` state reads as quieter than the active states —
+     same duty-cycle shape as status-pulse but slower and shallower. */
+  --animate-status-pulse-slow: status-pulse-slow 3.2s infinite;
+  /* GHE #208: soft fade when the activity label text changes, so state-word
+     transitions never hard-swap. One-shot (not infinite), duty-cycle style
+     matching the indicator animations above. */
+  --animate-label-fade: label-fade 240ms;
   --animate-ghost-pulse: ghost-pulse 2.4s infinite;
   --animate-status-ping: status-ping 2s infinite;
   --color-warning-foreground: var(--warning-foreground);
@@ -245,6 +252,32 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     90% {
       opacity: 0.5;
       animation-timing-function: steps(6);
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  /* GHE #208: waiting — slower period, shallower dip, longer hold. */
+  @keyframes status-pulse-slow {
+    0%,
+    55% {
+      opacity: 1;
+      animation-timing-function: steps(4);
+    }
+    65%,
+    95% {
+      opacity: 0.7;
+      animation-timing-function: steps(4);
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  /* GHE #208: activity label text change — quick stepped fade-in. */
+  @keyframes label-fade {
+    0% {
+      opacity: 0.3;
+      animation-timing-function: steps(3);
     }
     100% {
       opacity: 1;
@@ -2602,6 +2635,8 @@ code {
    and RM readers get a steady dot at its resting opacity instead. */
 @media (prefers-reduced-motion: reduce) {
   .animate-status-pulse,
+  .animate-status-pulse-slow,
+  .animate-label-fade,
   .animate-pulse {
     animation: none;
   }

@@ -31,4 +31,6 @@ export type ThreadStatusPill = {
   colorClass: string;
   dotClass: string;
   pulse: boolean;
+  /** GHE #208: `waiting` uses the slower, shallower `animate-status-pulse-slow`. */
+  pulseClass?: string;
 };

@@ -8,6 +8,7 @@ import {
   resolveThreadStatusPill,
 } from "~/t3team/components/t3team-projectSidebarStatusPills";
 import {
+  activityPulseClass,
   resolveActivityPillDisplay,
   type ActivityState,
 } from "~/t3team/t3team-activityStateDisplay";
@@ -27,7 +28,8 @@ import type { ProjectThread } from "~/t3team/t3team-types";
  *
  * The 4 states: thinking (reasoning deltas flowing), writing (assistant text
  * streaming), working (a tool call in flight), waiting (30s output gap with no
- * tool in flight). `waiting` rests — no pulse. Under `prefers-reduced-motion`
+ * tool in flight). `waiting` is quieter — the slower, shallower pulse plus a
+ * dim slate, so it reads as idle but not dead. Under `prefers-reduced-motion`
  * every pulse is disabled globally (index.css media guard), so all stories
  * render static in a reduced-motion environment; the ReducedMotion story
  * documents that.
@@ -50,6 +52,7 @@ function upstreamPill(t3Pill: {
   colorClass: string;
   dotClass: string;
   pulse: boolean;
+  pulseClass?: string;
 }): ThreadStatusPill {
   return {
     label: t3Pill.label as ThreadStatusPill["label"],
@@ -58,6 +61,7 @@ function upstreamPill(t3Pill: {
     colorClass: t3Pill.colorClass,
     dotClass: t3Pill.dotClass,
     pulse: t3Pill.pulse,
+    ...(t3Pill.pulseClass ? { pulseClass: t3Pill.pulseClass } : {}),
   };
 }
 
@@ -85,9 +89,7 @@ function T3SidebarDot({ thread, flag }: { thread: T3Thread; flag: boolean }) {
   return (
     <div className="flex items-center gap-1.5 rounded-md bg-accent/40 px-2 py-1.5">
       <span
-        className={`inline-flex size-1.5 shrink-0 rounded-full ${pill.dotClass} ${
-          pill.pulse ? "animate-pulse" : ""
-        }`}
+        className={`inline-flex size-1.5 shrink-0 rounded-full ${pill.dotClass} ${activityPulseClass(pill)}`}
         title={resolveActivityPillDisplay(pill)}
       />
       <span className="min-w-0 truncate text-xs">Refactor the settings panel</span>
@@ -104,9 +106,7 @@ function ProjectRollupRow({ threads, flag }: { threads: T3Thread[]; flag: boolea
   return (
     <div className="flex items-center gap-1.5 rounded-md bg-accent/40 px-2 py-1.5">
       <span
-        className={`inline-flex size-[9px] shrink-0 rounded-full ${rollup.dotClass} ${
-          rollup.pulse ? "animate-pulse" : ""
-        }`}
+        className={`inline-flex size-[9px] shrink-0 rounded-full ${rollup.dotClass} ${activityPulseClass(rollup)}`}
       />
       <span className="truncate text-xs">Alpha — settings overhaul</span>
       <span className="ml-auto text-[10px] text-muted-foreground/40">
@@ -165,7 +165,7 @@ export const StateWriting: Story = {
 export const StateWorking: Story = {
   args: { thread: { status: "running", activityState: "working" }, flag: true },
 };
-/** `waiting`: 30s output gap with no tool in flight — rests, no pulse. */
+/** `waiting`: 30s output gap with no tool in flight — quieter: slower, shallower pulse + dim slate. */
 export const StateWaiting: Story = {
   args: { thread: { status: "running", activityState: "waiting" }, flag: true },
 };

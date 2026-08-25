@@ -142,6 +142,13 @@ export interface ThreadStatusPill {
   colorClass: string;
   dotClass: string;
   pulse: boolean;
+  /**
+   * GHE #208: which pulse animation to run when `pulse` is true. Defaults to
+   * `animate-status-pulse`; the `waiting` state overrides it with the slower,
+   * shallower `animate-status-pulse-slow` so it reads as quieter than the
+   * active states.
+   */
+  pulseClass?: string;
 }
 
 // Rollup order mirrors the per-thread resolver exactly: attention states,

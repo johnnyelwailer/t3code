@@ -75,8 +75,11 @@ describe("resolveThreadStatusPill (activity state, GHE #208)", () => {
       expect(pill).toMatchObject({
         label: "Working",
         activityState,
-        pulse: activityState !== "waiting",
+        pulse: true,
       });
+      expect(pill?.pulseClass).toBe(
+        activityState === "waiting" ? "animate-status-pulse-slow" : undefined,
+      );
     }
   });
 
@@ -100,9 +103,10 @@ describe("resolveThreadStatusPill (activity state, GHE #208)", () => {
     expect(resolveActivityPillDisplay(pill!)).toBe("Writing");
   });
 
-  it("waiting rests: no pulse, dormant palette", () => {
+  it("waiting is quieter: slower pulse variant + dim slate", () => {
     const pill = resolveThreadStatusPill({ status: "running", activityState: "waiting" });
-    expect(pill?.pulse).toBe(false);
+    expect(pill?.pulse).toBe(true);
+    expect(pill?.pulseClass).toBe("animate-status-pulse-slow");
   });
 
   it("no state word: pre-#208 pill (old servers keep working)", () => {

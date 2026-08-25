@@ -18,6 +18,8 @@ type ProjectStatus = {
   colorClass: string;
   dotClass: string;
   pulse?: boolean;
+  /** GHE #208: the `waiting` state's slower pulse variant. */
+  pulseClass?: string;
 };
 
 type ProjectSidebarProjectHeaderProps = {
@@ -86,7 +88,7 @@ export function ProjectSidebarProjectHeader({
             >
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
                 <span
-                  className={`size-[9px] rounded-full ${projectStatus.dotClass} ${projectStatus.pulse ? "animate-pulse" : ""}`}
+                  className={`size-[9px] rounded-full ${projectStatus.dotClass} ${projectStatus.pulse ? (projectStatus.pulseClass ?? "animate-pulse") : ""}`}
                 />
               </span>
               <ChevronRightIcon className="absolute inset-0 m-auto size-3.5 opacity-0 transition-opacity duration-150 group-hover/project-header:opacity-100" />

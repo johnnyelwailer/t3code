@@ -30,22 +30,24 @@ export const ACTIVITY_STATE_WORDS: Record<ActivityState, string> = {
 /**
  * Colors: thinking/writing/working are active work (sky, pulsing — same hue as
  * the "Working" pill, so the state word reads as the same status with a live
- * verb). `waiting` is stalled-quiet: no pulse (a permanently pulsing "Waiting"
- * would be the exact noise the state word replaces) and a calmer slate,
- * matching the Queued/Scheduled dormant pills.
+ * verb). `waiting` is stalled-quiet: a calmer slate with a SLOWER, shallower
+ * pulse (`animate-status-pulse-slow`) so it reads as idle but not dead —
+ * dimmer and quieter than the active states, matching the dormant pills.
  */
 export function resolveActivityStatePill(state: ActivityState): {
   readonly label: string;
   readonly colorClass: string;
   readonly dotClass: string;
   readonly pulse: boolean;
+  readonly pulseClass?: string;
 } {
   if (state === "waiting") {
     return {
       label: "Waiting",
       colorClass: "text-slate-500 dark:text-slate-300/80",
       dotClass: "bg-slate-400 dark:bg-slate-300/80",
-      pulse: false,
+      pulse: true,
+      pulseClass: "animate-status-pulse-slow",
     };
   }
   return {
@@ -75,4 +77,18 @@ export function resolveActivityPillDisplay(pill: {
   }
   const detail = pill.activityLabel?.trim();
   return detail || pill.label;
+}
+
+/**
+ * The pulse animation class for a status pill: nothing when `pulse` is false,
+ * the pill's own override when present (e.g. `waiting` → the slower,
+ * shallower `animate-status-pulse-slow`), else the standard
+ * `animate-status-pulse`. Same animation the #40 pill already ran; the state
+ * word just picks which variant.
+ */
+export function activityPulseClass(pill: {
+  readonly pulse: boolean;
+  readonly pulseClass?: string;
+}): string {
+  return pill.pulse ? (pill.pulseClass ?? "animate-status-pulse") : "";
 }
