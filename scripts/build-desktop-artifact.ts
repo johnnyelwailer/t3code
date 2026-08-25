@@ -2149,7 +2149,7 @@ export function stageLinuxIconSize(
   );
 }
 
-function stageWindowsIcons(stageResourcesDir: string, sourceIco: string) {
+function stageWindowsIcons(stageResourcesDir: string, sourceIco: string, sourcePng: string) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -2160,8 +2160,19 @@ function stageWindowsIcons(stageResourcesDir: string, sourceIco: string) {
       });
     }
 
+    if (!(yield* fs.exists(sourcePng))) {
+      return yield* new DesktopIconSourceMissingError({
+        platform: "win",
+        sourcePath: sourcePng,
+      });
+    }
+
     const iconPath = path.join(stageResourcesDir, "icon.ico");
+    const iconPngPath = path.join(stageResourcesDir, "icon.png");
     yield* fs.copyFile(sourceIco, iconPath);
+    // The executable and installer consume icon.ico, while the frameless
+    // desktop title bar consumes the packaged PNG at Resources/icon.png.
+    yield* fs.copyFile(sourcePng, iconPngPath);
   });
 }
 
@@ -2258,11 +2269,12 @@ export function resolveDesktopBuildIconAssets(
   iconPngOverride?: string,
 ): DesktopBuildIconAssets {
   const iconOverride = iconPngOverride?.trim() || process.env.T3CODE_DESKTOP_ICON_PNG?.trim();
+  const windowsIconOverride = process.env.T3CODE_DESKTOP_ICON_ICO?.trim();
   if (iconOverride) {
     return {
       macIconPng: iconOverride,
       linuxIconPng: iconOverride,
-      windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+      windowsIconIco: windowsIconOverride || BRAND_ASSET_PATHS.productionWindowsIconIco,
     };
   }
   if (resolveDesktopUpdateChannel(version) === "nightly") {
@@ -2356,6 +2368,7 @@ interface BuildConfigOptions {
   readonly packsDir?: string | undefined;
   readonly productNameOverride?: string | undefined;
   readonly includePackagedIconPng?: boolean | undefined;
+  readonly includePackagedEnvFiles?: boolean | undefined;
   readonly artifactTimestamp?: string | undefined;
 }
 
@@ -2373,6 +2386,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     packsDir,
     productNameOverride,
     includePackagedIconPng = false,
+    includePackagedEnvFiles = false,
     artifactTimestamp,
   } = options;
   const resolvedProductName = resolveDesktopProductName(version, productNameOverride);
@@ -2416,6 +2430,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
               from: "apps/desktop/prod-resources/packs",
               to: "packs",
             },
+          ]),
+      ...(includePackagedEnvFiles
+        ? [
             {
               from: "apps/desktop/prod-resources/.env",
               to: ".env",
@@ -2424,7 +2441,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
               from: "apps/desktop/prod-resources/.env.local",
               to: ".env.local",
             },
-          ]),
+          ]
+        : []),
       ...(productNameOverride === undefined
         ? []
         : [
@@ -2567,7 +2585,7 @@ const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(f
   }
 
   if (platform === "win") {
-    yield* stageWindowsIcons(stageResourcesDir, iconAssets.windowsIconIco);
+    yield* stageWindowsIcons(stageResourcesDir, iconAssets.windowsIconIco, iconAssets.linuxIconPng);
   }
 });
 
@@ -2772,7 +2790,13 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
     path.join(serverStageDir, "pnpm-workspace.yaml"),
     sidecarWorkspaceConfigString,
   );
-  yield* fs.copy(path.join(input.repoRoot, "packages"), path.join(serverStageDir, "packages"));
+  const serverPackagesDir = path.join(serverStageDir, "packages");
+  yield* fs.copy(path.join(input.repoRoot, "packages"), serverPackagesDir);
+  for (const packageDir of yield* fs.readDirectory(serverPackagesDir)) {
+    yield* fs
+      .remove(path.join(serverPackagesDir, packageDir, "node_modules"), { recursive: true })
+      .pipe(Effect.orElseSucceed(() => undefined));
+  }
   if (Object.keys(sidecarPatchedDependencies).length > 0) {
     yield* fs.copy(path.join(input.repoRoot, "patches"), path.join(serverStageDir, "patches"));
   }
@@ -3050,11 +3074,21 @@ export const validateWindowsPackagedPayload = Effect.fn(
   }
 
   const fileCount = yield* countPayloadFiles(packagedAppDir);
-  if (fileCount > fileLimit) {
+  // Distribution packs are intentionally loose resources: they contain
+  // recipes, themes, and branding assets whose count varies by distro. Keep
+  // the fixed-runtime budget focused on Electron and native payload growth.
+  const bundledPacksDir = path.join(resourcesDir, "packs");
+  const bundledPackFileCount = (yield* fs
+    .exists(bundledPacksDir)
+    .pipe(Effect.orElseSucceed(() => false)))
+    ? yield* countPayloadFiles(bundledPacksDir)
+    : 0;
+  const guardedFileCount = fileCount - bundledPackFileCount;
+  if (guardedFileCount > fileLimit) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "file-limit-exceeded",
       packagedAppDir,
-      fileCount,
+      fileCount: guardedFileCount,
       fileLimit,
     });
   }
@@ -3073,7 +3107,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
   });
 
   yield* Effect.log(
-    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files, ${String(unpackedFiles.length)} sidecar natives).`,
+    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files including ${String(bundledPackFileCount)} distribution-pack files, ${String(unpackedFiles.length)} sidecar natives).`,
   );
   return { packagedAppDir, fileCount, unpackedFiles } as const;
 });
@@ -3336,16 +3370,26 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
   const stageProdResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
+  const packagedEnvSourceDir =
+    options.packsDir !== undefined
+      ? path.join(options.packsDir, "..", "vendor", "t3code")
+      : process.env.T3CODE_DISTRIBUTION?.trim()
+        ? repoRoot
+        : undefined;
+  let includePackagedEnvFiles = false;
   if (options.packsDir !== undefined) {
     // Packs at Resources/packs (for backward compat and easy inspection)
     yield* fs.copy(options.packsDir, path.join(stageProdResourcesDir, "packs"));
     // Packs inside app.asar at apps/desktop/packs/ — shares the asar's
     // node_modules tree. The server resolves these via ELECTRON_RUN_AS_NODE.
     yield* fs.copy(options.packsDir, path.join(stageAppDir, "apps", "desktop", "packs"));
+  }
+  if (packagedEnvSourceDir !== undefined) {
     for (const envFile of [".env", ".env.local"]) {
-      const sourcePath = path.join(options.packsDir, "..", "vendor", "t3code", envFile);
+      const sourcePath = path.join(packagedEnvSourceDir, envFile);
       if (yield* fs.exists(sourcePath).pipe(Effect.orElseSucceed(() => false))) {
         yield* fs.copy(sourcePath, path.join(stageProdResourcesDir, envFile));
+        includePackagedEnvFiles = true;
       }
     }
   }
@@ -3479,6 +3523,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       packsDir: options.packsDir,
       productNameOverride: options.productName,
       includePackagedIconPng: options.iconPng !== undefined,
+      includePackagedEnvFiles,
       artifactTimestamp,
     }),
     dependencies: stageDependencies,
@@ -3529,16 +3574,22 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // from inside the asar or from Resources/packs/.
   yield* Effect.log("[desktop-artifact] Compiling @t3team/pack-api for packaging...");
   const packApiDir = path.join(stageAppDir, "node_modules", "@t3team", "pack-api");
-  const repoEsbuild = path.join(repoRoot, "node_modules", ".bin", "esbuild");
+  const repoEsbuild =
+    hostPlatform === "win32"
+      ? path.join(repoRoot, "node_modules", ".pnpm", "node_modules", ".bin", "esbuild")
+      : path.join(repoRoot, "node_modules", ".bin", "esbuild");
+  const esbuildCommand = yield* resolveSpawnCommand(repoEsbuild, [
+    path.join(packApiDir, "src", "index.ts"),
+    "--bundle",
+    "--format=esm",
+    "--platform=node",
+    "--target=node22",
+    `--outfile=${path.join(packApiDir, "index.mjs")}`,
+  ]);
   yield* runCommand(
-    ChildProcess.make(repoEsbuild, [
-      path.join(packApiDir, "src", "index.ts"),
-      "--bundle",
-      "--format=esm",
-      "--platform=node",
-      "--target=node22",
-      `--outfile=${path.join(packApiDir, "index.mjs")}`,
-    ]),
+    ChildProcess.make(esbuildCommand.command, esbuildCommand.args, {
+      shell: esbuildCommand.shell,
+    }),
     { label: "esbuild @t3team/pack-api", verbose: options.verbose },
   );
   // Patch package.json to export the compiled .mjs
@@ -3585,8 +3636,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const hookConfigString = yield* encodeJsonString({
     stageAppDir,
     repoScriptsPackageJson: path.join(repoRoot, "scripts", "package.json"),
-    dtsDirectories: [...TYPECHECKER_DTS_DIRECTORIES],
-    dtsFiles: [...TYPECHECKER_DTS_FILES],
+    // Windows keeps this closure in the manually packed server.asar sidecar,
+    // not Electron's app.asar, so the afterPack hook has nothing to restore.
+    dtsDirectories: options.platform === "win" ? [] : [...TYPECHECKER_DTS_DIRECTORIES],
+    dtsFiles: options.platform === "win" ? [] : [...TYPECHECKER_DTS_FILES],
   });
   yield* fs.writeFileString(
     path.join(stageAppDir, "desktop-asar-dts-afterpack.json"),

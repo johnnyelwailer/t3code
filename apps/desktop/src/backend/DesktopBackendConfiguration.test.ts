@@ -166,10 +166,11 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolvePrimary starts from server.asar without materializing the WSL tree", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
-      const resourcesPath = `${baseDir}/resources`;
+      const resourcesPath = path.join(baseDir, "resources");
 
       const config = yield* Effect.gen(function* () {
         const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
@@ -201,7 +202,7 @@ describe("DesktopBackendConfiguration", () => {
 
       assert.equal(
         config.entryPath,
-        `${resourcesPath}/server.asar/apps/server/dist/t3team-bin.mjs`,
+        path.join(resourcesPath, "server.asar", "apps/server/dist/t3team-bin.mjs"),
       );
       assert.equal(config.env.ELECTRON_RUN_AS_NODE, "1");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
@@ -256,6 +257,68 @@ describe("DesktopBackendConfiguration", () => {
       );
       assert.equal(config.bootstrap.t3Home, expectedBrandedDir);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect(
+    "resolvePrimary finds loose Windows distribution packs and loads packaged Atlassian env",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-desktop-backend-config-test-",
+        });
+        const resourcesPath = path.join(baseDir, "resources");
+        const appPath = path.join(resourcesPath, "app.asar");
+        const packsDir = path.join(resourcesPath, "packs");
+        const serverEntryPath = path.join(
+          resourcesPath,
+          "server.asar",
+          "apps/server/dist/t3team-bin.mjs",
+        );
+
+        yield* fileSystem.makeDirectory(path.dirname(serverEntryPath), { recursive: true });
+        yield* fileSystem.writeFileString(serverEntryPath, "");
+        yield* fileSystem.makeDirectory(path.join(packsDir, "nexplore-global"), {
+          recursive: true,
+        });
+        const packagedCaPath = path.join(packsDir, "nexplore-global", "certs", "nexplore-ca.pem");
+        yield* fileSystem.makeDirectory(path.dirname(packagedCaPath), { recursive: true });
+        yield* fileSystem.writeFileString(packagedCaPath, "test-ca");
+        yield* fileSystem.writeFileString(
+          path.join(resourcesPath, ".env"),
+          "T3WORK_ATLASSIAN_CLIENT_ID=test-client-id\nT3WORK_ATLASSIAN_CLIENT_SECRET=test-client-secret\n",
+        );
+
+        const config = yield* Effect.gen(function* () {
+          const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+          return yield* configuration.resolvePrimary;
+        }).pipe(
+          Effect.provide(
+            DesktopBackendConfiguration.layer.pipe(
+              Layer.provideMerge(serverExposureLayer),
+              Layer.provideMerge(DesktopAppSettings.layerTest()),
+              Layer.provideMerge(DesktopWslEnvironment.layerTest()),
+              Layer.provideMerge(DesktopWslServerTree.layerTest()),
+              Layer.provideMerge(
+                makeEnvironmentLayer(baseDir, {
+                  appPath,
+                  isPackaged: true,
+                  platform: "win32",
+                  resourcesPath,
+                }),
+              ),
+            ),
+          ),
+        );
+
+        assert.equal(config.entryPath, serverEntryPath);
+        assert.equal(config.env.T3TEAM_PACKS_DIR, packsDir);
+        assert.equal(config.env.NODE_EXTRA_CA_CERTS, packagedCaPath);
+        assert.equal(config.env.NODE_USE_SYSTEM_CA, "1");
+        assert.equal(config.env.T3WORK_ATLASSIAN_CLIENT_ID, "test-client-id");
+        assert.equal(config.env.T3WORK_ATLASSIAN_CLIENT_SECRET, "test-client-secret");
+      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
   it.effect("resolveWsl reuses the primary's bootstrap token", () =>
@@ -877,18 +940,20 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("prefers the external packaged resource monitor over the copy inside the asar", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
-      const resourcesPath = `${baseDir}/resources`;
-      const dirname = `${resourcesPath}/app.asar/apps/desktop/dist-electron`;
-      const embeddedMonitorPath = `${resourcesPath}/app.asar/apps/desktop/prod-resources/resource-monitor/t3-resource-monitor`;
-      const monitorPath = `${resourcesPath}/resource-monitor/t3-resource-monitor`;
-      yield* fileSystem.makeDirectory(
-        `${resourcesPath}/app.asar/apps/desktop/prod-resources/resource-monitor`,
-        { recursive: true },
+      const resourcesPath = path.join(baseDir, "resources");
+      const dirname = path.join(resourcesPath, "app.asar", "apps/desktop/dist-electron");
+      const embeddedMonitorPath = path.join(
+        resourcesPath,
+        "app.asar",
+        "apps/desktop/prod-resources/resource-monitor/t3-resource-monitor",
       );
-      yield* fileSystem.makeDirectory(`${resourcesPath}/resource-monitor`, {
+      const monitorPath = path.join(resourcesPath, "resource-monitor/t3-resource-monitor");
+      yield* fileSystem.makeDirectory(path.dirname(embeddedMonitorPath), { recursive: true });
+      yield* fileSystem.makeDirectory(path.dirname(monitorPath), {
         recursive: true,
       });
       yield* fileSystem.writeFileString(embeddedMonitorPath, "embedded");
@@ -910,7 +975,7 @@ describe("DesktopBackendConfiguration", () => {
             Layer.provideMerge(DesktopWslEnvironment.layerTest()),
             Layer.provideMerge(
               makeEnvironmentLayer(baseDir, {
-                appPath: `${resourcesPath}/app.asar`,
+                appPath: path.join(resourcesPath, "app.asar"),
                 dirname,
                 isPackaged: true,
                 resourcesPath,
