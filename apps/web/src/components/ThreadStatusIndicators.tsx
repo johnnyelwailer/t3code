@@ -19,6 +19,7 @@ import { useUiStateStore } from "../uiStateStore";
 import { resolveChangeRequestPresentation } from "../sourceControlPresentation";
 import { resolveThreadStatusPill, type ThreadStatusPill } from "./Sidebar.logic";
 import { usePrimarySettings } from "~/hooks/useSettings";
+import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import type { SidebarThreadSummary } from "../types";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -471,9 +472,10 @@ export function ThreadStatusLabel({
   status: ThreadStatusPill;
   compact?: boolean;
 }) {
-  // GHE #40: the live activity label replaces "Working" while present; the
-  // stable `label` is the fallback (flag off / no label yet).
-  const displayLabel = status.activityLabel ?? status.label;
+  // GHE #40/#208: the deterministic state word is the base label (always
+  // available, zero inference); the live LLM label is optional enrichment
+  // appended as "{state} · {detail}". `label` stays the stable status key.
+  const displayLabel = resolveActivityPillDisplay(status);
   if (compact) {
     return (
       <Tooltip>

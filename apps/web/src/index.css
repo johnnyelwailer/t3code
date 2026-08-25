@@ -2596,3 +2596,13 @@ code {
     transform: scaleX(0.9);
   }
 }
+
+/* GHE #208: the status indicators animate on the reduced-motion opt-out —
+   a permanently pulsing dot is exactly the noise the state words replace,
+   and RM readers get a steady dot at its resting opacity instead. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-status-pulse,
+  .animate-pulse {
+    animation: none;
+  }
+}

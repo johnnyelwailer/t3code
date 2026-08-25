@@ -297,6 +297,25 @@ describe("remapProjectThreadToStoredProject", () => {
     ]);
   });
 
+  it("carries the live activity state + enrichment onto ProjectThread (GHE #208)", () => {
+    const mapped = mapLiveThreadToProjectThread({
+      id: "thread-activity",
+      projectId: ProjectId.make("live-saved"),
+      title: "Investigate regression",
+      messages: [],
+      createdAt: "2026-05-22T09:00:00.000Z",
+      updatedAt: "2026-05-22T10:00:00.000Z",
+      environmentId: "env-local" as EnvironmentId,
+      defaultModelSelection: null,
+      activityLabel: "editing the retry test",
+      activityState: "working",
+      activityStateUpdatedAt: "2026-05-22T10:00:01.000Z",
+    } as never);
+    expect(mapped.activityLabel).toBe("editing the retry test");
+    expect(mapped.activityState).toBe("working");
+    expect(mapped.activityStateUpdatedAt).toBe("2026-05-22T10:00:01.000Z");
+  });
+
   it("maps durable parent and ticket metadata from live threads", () => {
     expect(
       mapLiveThreadToProjectThread({

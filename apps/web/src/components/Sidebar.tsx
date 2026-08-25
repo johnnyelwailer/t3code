@@ -192,6 +192,7 @@ import {
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
 import { runT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigationOverride";
+import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
@@ -903,9 +904,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const topStatus =
     status === "working"
       ? {
-          // GHE #40: the live activity label replaces the static "Working" while the
-          // flag is on and a label is present.
-          label: activityLabelsEnabled && thread.activityLabel ? thread.activityLabel : "Working",
+          // GHE #40/#208: the deterministic state word is the base label; the
+          // live activity label is optional enrichment appended after it
+          // ("{state} · {detail}") while the flag is on.
+          label: resolveActivityPillDisplay({
+            label: "Working",
+            ...(thread.activityState && thread.activityState !== null
+              ? { activityState: thread.activityState }
+              : {}),
+            ...(activityLabelsEnabled && thread.activityLabel
+              ? { activityLabel: thread.activityLabel }
+              : {}),
+          }),
           icon: "working" as const,
           // No shimmer: a label that animates forever is noise in a sidebar
           // full of them (and repaints every vsync on high-refresh displays).

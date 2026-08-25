@@ -21,6 +21,7 @@ import {
   type OrchestrationProject,
   type OrchestrationSession,
   type OrchestrationThreadActivity,
+  type OrchestrationThreadActivityState,
   type OrchestrationThreadShell,
   ModelSelection,
   ProjectId,
@@ -77,6 +78,20 @@ const decodeThread = Schema.decodeUnknownEffect(OrchestrationThread);
 // activity window. Applying the limit in SQL avoids decoding an unbounded
 // payload_json set before the projector can enforce that invariant.
 const THREAD_DETAIL_ACTIVITY_LIMIT = 500;
+
+/**
+ * The `activity_state` column is free TEXT written by the server classifier; the
+ * shell contract types it as the 4-state union. Narrow the value, and treat a
+ * corrupt value as null (fail-open: the state word is simply absent) instead
+ * of failing the whole snapshot decode.
+ */
+const READABLE_ACTIVITY_STATES: readonly string[] = ["thinking", "writing", "working", "waiting"];
+const readableActivityState = (
+  value: string | null | undefined,
+): OrchestrationThreadActivityState | undefined =>
+  value !== null && value !== undefined && READABLE_ACTIVITY_STATES.includes(value)
+    ? (value as OrchestrationThreadActivityState)
+    : undefined;
 const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
   Struct.assign({
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
@@ -497,7 +512,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           deleted_at AS "deletedAt",
           activity_label AS "activityLabel",
-          activity_label_updated_at AS "activityLabelUpdatedAt"
+          activity_label_updated_at AS "activityLabelUpdatedAt",
+          activity_state AS "activityState",
+          activity_state_updated_at AS "activityStateUpdatedAt"
         FROM projection_threads
         ORDER BY created_at ASC, thread_id ASC
       `,
@@ -537,7 +554,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           deleted_at AS "deletedAt",
           activity_label AS "activityLabel",
-          activity_label_updated_at AS "activityLabelUpdatedAt"
+          activity_label_updated_at AS "activityLabelUpdatedAt",
+          activity_state AS "activityState",
+          activity_state_updated_at AS "activityStateUpdatedAt"
         FROM projection_threads
         WHERE deleted_at IS NULL
           AND archived_at IS NULL
@@ -580,7 +599,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           deleted_at AS "deletedAt",
           activity_label AS "activityLabel",
-          activity_label_updated_at AS "activityLabelUpdatedAt"
+          activity_label_updated_at AS "activityLabelUpdatedAt",
+          activity_state AS "activityState",
+          activity_state_updated_at AS "activityStateUpdatedAt"
         FROM projection_threads
         WHERE deleted_at IS NULL
           AND archived_at IS NOT NULL
@@ -1063,7 +1084,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           deleted_at AS "deletedAt",
           activity_label AS "activityLabel",
-          activity_label_updated_at AS "activityLabelUpdatedAt"
+          activity_label_updated_at AS "activityLabelUpdatedAt",
+          activity_state AS "activityState",
+          activity_state_updated_at AS "activityStateUpdatedAt"
         FROM projection_threads
         WHERE thread_id = ${threadId}
           AND deleted_at IS NULL
@@ -1913,6 +1936,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 ...(row.activityLabelUpdatedAt != null
                   ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
                   : {}),
+                ...(readableActivityState(row.activityState) !== undefined
+                  ? { activityState: readableActivityState(row.activityState)! }
+                  : {}),
+                ...(row.activityStateUpdatedAt != null
+                  ? { activityStateUpdatedAt: row.activityStateUpdatedAt }
+                  : {}),
                 deletedAt: row.deletedAt,
                 messages: messagesByThread.get(row.threadId) ?? [],
                 proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
@@ -2383,6 +2412,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   ...(row.activityLabelUpdatedAt != null
                     ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
                     : {}),
+                  ...(readableActivityState(row.activityState) !== undefined
+                    ? { activityState: readableActivityState(row.activityState)! }
+                    : {}),
+                  ...(row.activityStateUpdatedAt != null
+                    ? { activityStateUpdatedAt: row.activityStateUpdatedAt }
+                    : {}),
                   ...(sleepingUntil !== undefined ? { sleepingUntil } : {}),
                   ...(workflowRunStatusByThread.has(row.threadId)
                     ? { workflowRunStatus: workflowRunStatusByThread.get(row.threadId)! }
@@ -2546,6 +2581,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   ...(row.activityLabel != null ? { activityLabel: row.activityLabel } : {}),
                   ...(row.activityLabelUpdatedAt != null
                     ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
+                    : {}),
+                  ...(readableActivityState(row.activityState) !== undefined
+                    ? { activityState: readableActivityState(row.activityState)! }
+                    : {}),
+                  ...(row.activityStateUpdatedAt != null
+                    ? { activityStateUpdatedAt: row.activityStateUpdatedAt }
                     : {}),
                 }),
               ),
@@ -2875,6 +2916,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           : {}),
         ...(threadRow.value.activityLabelUpdatedAt != null
           ? { activityLabelUpdatedAt: threadRow.value.activityLabelUpdatedAt }
+          : {}),
+        ...(readableActivityState(threadRow.value.activityState) !== undefined
+          ? { activityState: readableActivityState(threadRow.value.activityState)! }
+          : {}),
+        ...(threadRow.value.activityStateUpdatedAt != null
+          ? { activityStateUpdatedAt: threadRow.value.activityStateUpdatedAt }
           : {}),
         ...(Option.isSome(sleepingRow) ? { sleepingUntil: sleepingRow.value.wakeAt } : {}),
       } satisfies OrchestrationThreadShell);

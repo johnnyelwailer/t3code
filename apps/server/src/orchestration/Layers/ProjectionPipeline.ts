@@ -846,6 +846,13 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
                     event.payload.activityLabelUpdatedAt ?? event.payload.updatedAt,
                 }
               : {}),
+            ...(event.payload.activityState !== undefined
+              ? {
+                  activityState: event.payload.activityState,
+                  activityStateUpdatedAt:
+                    event.payload.activityStateUpdatedAt ?? event.payload.updatedAt,
+                }
+              : {}),
             ...(event.payload.linkedPullRequest !== undefined
               ? { linkedPullRequest: event.payload.linkedPullRequest }
               : {}),

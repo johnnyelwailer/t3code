@@ -103,6 +103,39 @@ Prefix policy:
 - `apps/server/src/orchestration/Layers/CheckpointReactor.ts`
   - One extra disjunct so messages mirrored from an external Codex/Claude session (`messageId` prefixed `local:`) are checkpointed like any other turn. Without it a session adopted from the native tool has no pre-turn baseline and cannot be reverted. Three lines; the reactor's own logic is untouched.
 
+## GHE #208 — deterministic 4-state activity word + throttled LLM enrichment
+
+- `packages/shared/src/t3team-threadRunStatus.ts`
+  - Expose `activityState` on `ThreadRunStatus` so the running-thread rollup carries the deterministic state word alongside the label.
+- `apps/server/src/t3team-activityLabelReactor.ts`
+  - Mount the deterministic state tracker on `ProviderService.streamEvents` (always on, ungated) and feed coarse state changes to the throttled LLM summarizer; the `t3teamActivityLabelsEnabled` flag now gates only the enrichment.
+- `apps/server/src/t3team-activityLabelSummarizer.ts`
+  - Replace the per-kind-class immediate flush with a coarse-state-change trigger plus a 60s minimum regenerate cadence; carry `activityState` into the generation context.
+- `apps/server/src/t3team-activityLabelSummarizer.test.ts`
+  - Re-base the kind-class immediacy test onto the new state-change trigger and cover the minimum regenerate cadence.
+- `apps/web/src/t3team/t3team-types.ts`
+  - Add `activityState` / `activityStateUpdatedAt` to `ProjectThread` for the sidebar pills.
+- `apps/web/src/t3team/t3team-threadStatusPillTypes.ts`
+  - Add `activityState` to the thread status pill so resolvers and rows share one shape.
+- `apps/web/src/t3team/components/t3team-projectSidebarStatusPills.ts`
+  - Resolve the state word, its per-state color/pulse (`waiting` rests), and carry both into the pill and project rollup.
+- `apps/web/src/t3team/components/t3team-projectSidebarStatusPills.test.ts`
+  - Cover the 4 states through the resolver, the `{state} · {detail}` composition, flag-off word-only, and the no-state pre-#208 fallback.
+- `apps/web/src/t3team/components/t3team-ProjectSidebarThreadRow.tsx`
+  - Render the composed pill text (`{state} · {detail}`) instead of label-only in the row tooltip.
+- `apps/web/src/t3team/components/t3team-ProjectSidebarProjectHeader.tsx`
+  - Same composed text in the project-rollup tooltip.
+- `apps/web/src/t3team/components/t3team-LocalWorkspaceSidebarRow.tsx`
+  - Same composed text in the local-workspace row tooltip.
+- `apps/web/src/t3team/hooks/t3team-threadBridge.ts`
+  - Map live `activityState` / `activityLabel` / `activityStateUpdatedAt` onto `ProjectThread` so the pills update without a reload.
+- `apps/web/src/t3team/hooks/t3team-threadBridge.test.ts`
+  - Cover the live-thread → `ProjectThread` state mapping.
+- `apps/web/src/t3team/t3team-threadToolContextEquality.ts`
+  - Diff `activityState` / `activityLabel` through the upsert equality gate or state transitions would not re-render rows.
+- `apps/web/src/t3team/stories/t3team-ActivityLabelPill.stories.tsx`
+  - Extend the #40 stories: one story per state word, enrichment composition, flag-off, idle-cleared, and reduced-motion.
+
 ## Allowed Unprefixed New Files
 
 Whole trees the fork owns outright. The `t3team-` prefix exists so a file added by

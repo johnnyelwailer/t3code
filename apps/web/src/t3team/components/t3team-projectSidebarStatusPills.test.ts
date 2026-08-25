@@ -4,6 +4,7 @@ import {
   resolveProjectStatusIndicator,
   resolveThreadStatusPill,
 } from "./t3team-projectSidebarStatusPills";
+import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 
 const runningThread: Pick<ProjectThread, "status" | "activityLabel"> = {
   status: "running",
@@ -64,5 +65,53 @@ describe("resolveProjectStatusIndicator (activity label rollup)", () => {
     const pill = resolveProjectStatusIndicator(threads, { activityLabelsEnabled: false });
     expect(pill).toMatchObject({ label: "Working" });
     expect(pill?.activityLabel).toBeUndefined();
+  });
+});
+
+describe("resolveThreadStatusPill (activity state, GHE #208)", () => {
+  it("carries the deterministic state word on a running thread", () => {
+    for (const activityState of ["thinking", "writing", "working", "waiting"] as const) {
+      const pill = resolveThreadStatusPill({ status: "running", activityState });
+      expect(pill).toMatchObject({
+        label: "Working",
+        activityState,
+        pulse: activityState !== "waiting",
+      });
+    }
+  });
+
+  it("renders '{state} · {detail}' through the shared display helper", () => {
+    const pill = resolveThreadStatusPill({
+      status: "running",
+      activityState: "working",
+      activityLabel: "editing the retry test",
+    });
+    expect(pill?.activityState).toBe("working");
+    expect(resolveActivityPillDisplay(pill!)).toBe("Working · editing the retry test");
+  });
+
+  it("state word stands alone when the flag is off (enrichment gated)", () => {
+    const pill = resolveThreadStatusPill(
+      { status: "running", activityState: "writing", activityLabel: "editing the retry test" },
+      { activityLabelsEnabled: false },
+    );
+    expect(pill?.activityLabel).toBeUndefined();
+    expect(pill?.activityState).toBe("writing");
+    expect(resolveActivityPillDisplay(pill!)).toBe("Writing");
+  });
+
+  it("waiting rests: no pulse, dormant palette", () => {
+    const pill = resolveThreadStatusPill({ status: "running", activityState: "waiting" });
+    expect(pill?.pulse).toBe(false);
+  });
+
+  it("no state word: pre-#208 pill (old servers keep working)", () => {
+    const pill = resolveThreadStatusPill({ status: "running", activityLabel: "Reading contracts" });
+    expect(pill?.activityState).toBeUndefined();
+    expect(pill).toMatchObject({
+      label: "Working",
+      activityLabel: "Reading contracts",
+      pulse: true,
+    });
   });
 });
