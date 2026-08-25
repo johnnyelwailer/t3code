@@ -21,3 +21,30 @@ body {
   height: auto;
   min-height: 100%;
 }
+
+/*
+ * The main-app `ThreadStatusLabel` pulses its dot with `animate-status-pulse`, a keyframe defined
+ * in the main app stylesheet (`src/index.css`). The Storybook preview only loads the t3team
+ * build's stylesheet (`t3team-index.css`), so stories that render the app-level pill show a
+ * non-pulsing dot. Mirror the app keyframe here so the story matches what the app shows.
+ * Storybook-only — the app stylesheet keeps its own definition.
+ */
+@keyframes status-pulse {
+  0%,
+  40% {
+    opacity: 1;
+    animation-timing-function: steps(6);
+  }
+  50%,
+  90% {
+    opacity: 0.5;
+    animation-timing-function: steps(6);
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-status-pulse {
+  animation: status-pulse 2s infinite;
+}
