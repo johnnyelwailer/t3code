@@ -108,6 +108,7 @@ import {
 } from "../composerFooterLayout";
 import { type ComposerPromptEditorHandle, ComposerPromptEditor } from "../ComposerPromptEditor";
 import { ProviderModelPicker } from "./ProviderModelPicker";
+import { ComposerVoiceInput } from "./ComposerVoiceInput";
 import { ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
@@ -3230,6 +3231,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       onInstanceModelChange={onProviderModelSelect}
                     />
                   )}
+
+                  <ComposerVoiceInput
+                    onTranscript={(text) => insertComposerTextAtEnd(text)}
+                    onPartialTranscript={(text) => insertComposerTextAtEnd(text)}
+                    disabled={isConnecting || isComposerApprovalState || projectSelectionRequired}
+                  />
 
                   {isComposerFooterCompact ? (
                     <CompactComposerControlsMenu
