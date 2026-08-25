@@ -75,34 +75,54 @@ describe("buildSubRunTree", () => {
 });
 
 describe("sortSubRunNodes", () => {
-  it("orders running, error, completed, idle — most recent first within a status", () => {
+  it("orders most recently active first (newest-to-oldest), status only breaking ties", () => {
     const now = Date.now();
     const at = (offsetMinutes: number) => new Date(now + offsetMinutes * 60_000).toISOString();
     const nodes = [
-      { thread: createThread({ id: "idle", status: "idle", lastMessageAt: at(50) }), children: [] },
       {
-        thread: createThread({ id: "old-done", status: "completed", lastMessageAt: at(0) }),
+        thread: createThread({ id: "old-settled", status: "completed", lastMessageAt: at(0) }),
         children: [],
       },
       {
-        thread: createThread({ id: "error", status: "error", lastMessageAt: at(10) }),
+        thread: createThread({ id: "error", status: "error", lastMessageAt: at(20) }),
         children: [],
       },
       {
-        thread: createThread({ id: "new-done", status: "completed", lastMessageAt: at(20) }),
+        thread: createThread({ id: "running", status: "running", lastMessageAt: at(10) }),
         children: [],
       },
       {
-        thread: createThread({ id: "running", status: "running", lastMessageAt: at(-10) }),
+        thread: createThread({ id: "settled", status: "completed", lastMessageAt: at(40) }),
         children: [],
       },
+    ];
+    // Recency wins over status: the settled (completed) thread is the most recent and comes first,
+    // even though a running thread would have won under the old status-priority order.
+    expect(sortSubRunNodes(nodes).map((node) => node.thread.id)).toEqual([
+      "settled",
+      "error",
+      "running",
+      "old-settled",
+    ]);
+  });
+
+  it("breaks ties on equal last-activity by status priority", () => {
+    const at = new Date().toISOString();
+    const nodes = [
+      {
+        thread: createThread({ id: "completed", status: "completed", lastMessageAt: at }),
+        children: [],
+      },
+      {
+        thread: createThread({ id: "running", status: "running", lastMessageAt: at }),
+        children: [],
+      },
+      { thread: createThread({ id: "error", status: "error", lastMessageAt: at }), children: [] },
     ];
     expect(sortSubRunNodes(nodes).map((node) => node.thread.id)).toEqual([
       "running",
       "error",
-      "new-done",
-      "old-done",
-      "idle",
+      "completed",
     ]);
   });
 

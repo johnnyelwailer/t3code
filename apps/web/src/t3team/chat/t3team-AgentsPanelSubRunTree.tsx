@@ -25,6 +25,14 @@ const CHILD_STATUS: Record<ProjectThread["status"], { dot: string; label: string
 
 const INDENT_CLASS = "ml-3 border-l border-border/40 pl-2";
 
+/**
+ * How many non-idle sub-runs render at once before a "Show more" disclosure. A coordinator with
+ * many children (dozens of sub-runs) would otherwise render every row on expand; the user only
+ * wants the most recent active ones up front. Idle threads are unaffected — they collapse into
+ * their own disclosure regardless of this limit.
+ */
+const VISIBLE_SUB_RUN_LIMIT = 10;
+
 function Chevron({ open, className }: { open: boolean; className?: string }) {
   return open ? (
     <ChevronDown aria-hidden className={cn("size-3 text-muted-foreground/60", className)} />
@@ -116,14 +124,30 @@ function SubRunChildrenGroup({
   nodes: ReadonlyArray<SubRunNode>;
   onOpen: SubRunOpenCallback;
 }) {
+  const [showAll, setShowAll] = useState(false);
   const sorted = sortSubRunNodes(nodes);
   const idleNodes = sorted.filter((node) => node.thread.status === "idle");
-  const visibleNodes = sorted.filter((node) => node.thread.status !== "idle");
+  const activeNodes = sorted.filter((node) => node.thread.status !== "idle");
+  // Newest-to-oldest (see sortSubRunNodes); render only the most recent VISIBLE_SUB_RUN_LIMIT
+  // up front, with a "Show more" disclosure for the rest so a large fleet never floods the panel.
+  const visibleActive = showAll ? activeNodes : activeNodes.slice(0, VISIBLE_SUB_RUN_LIMIT);
+  const hiddenCount = activeNodes.length - visibleActive.length;
   return (
     <div className="flex flex-col">
-      {visibleNodes.map((node) => (
+      {visibleActive.map((node) => (
         <SubRunNodeView key={node.thread.id} node={node} onOpen={onOpen} />
       ))}
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          aria-expanded={false}
+          className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground hover:bg-accent/40"
+        >
+          <ChevronRight aria-hidden className="size-3 shrink-0" />
+          <span>Show {hiddenCount} more</span>
+        </button>
+      ) : null}
       {idleNodes.length > 0 ? <IdleSubRunDisclosure nodes={idleNodes} onOpen={onOpen} /> : null}
     </div>
   );

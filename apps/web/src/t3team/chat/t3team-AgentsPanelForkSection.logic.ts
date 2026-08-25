@@ -45,11 +45,16 @@ export function buildSubRunTree(
   return build(rootThreadId, new Set([rootThreadId]));
 }
 
-/** Status-priority order; within a status, most recently active first. */
+/**
+ * Most recently active first (newest-to-oldest by lastMessageAt); status-priority only breaks
+ * ties between threads that share a last-activity timestamp. The panel caps how many of these
+ * are rendered at once (see `t3team-AgentsPanelSubRunTree.tsx`), so the top of this order is the
+ * "most recent active" set the user actually wants to see.
+ */
 export function sortSubRunNodes(nodes: ReadonlyArray<SubRunNode>): SubRunNode[] {
   return [...nodes].sort(
     (a, b) =>
-      STATUS_PRIORITY[a.thread.status] - STATUS_PRIORITY[b.thread.status] ||
-      Date.parse(b.thread.lastMessageAt) - Date.parse(a.thread.lastMessageAt),
+      Date.parse(b.thread.lastMessageAt) - Date.parse(a.thread.lastMessageAt) ||
+      STATUS_PRIORITY[a.thread.status] - STATUS_PRIORITY[b.thread.status],
   );
 }
