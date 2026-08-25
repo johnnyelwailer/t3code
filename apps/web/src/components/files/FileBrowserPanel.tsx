@@ -15,7 +15,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useComposerHandleContext } from "~/composerHandleContext";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { useTheme } from "~/hooks/useTheme";
-import { cn } from "~/lib/utils";
+import { cn, isWindowsPlatform } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
 import { T3_PIERRE_ICONS } from "~/pierre-icons";
 
@@ -34,6 +34,17 @@ interface FileBrowserPanelProps {
   onRefreshSelectedFile?: () => void;
 }
 
+/**
+ * Node rows render at 12px in the app's sans stack: San Francisco on macOS,
+ * Segoe UI on Windows. Windows' ClearType subpixel rendering makes 400-weight
+ * text at this size read visibly heavier than macOS' grayscale antialiasing,
+ * so on Windows the tree's regular weight is pinned one step down (Segoe UI
+ * Light) so the node text matches the macOS weight. macOS and Linux keep the
+ * explicit 400 baseline. nexplore.ghe.com/pj/nexi-distribution#195
+ */
+const TREE_REGULAR_FONT_WEIGHT =
+  typeof navigator !== "undefined" && isWindowsPlatform(navigator.platform) ? 300 : 400;
+
 const TREE_UNSAFE_CSS = `
   :host {
     --trees-bg-override: transparent;
@@ -42,6 +53,7 @@ const TREE_UNSAFE_CSS = `
     --trees-border-color-override: color-mix(in srgb, currentColor 14%, transparent);
     --trees-font-family-override: var(--font-sans);
     --trees-font-size-override: 12px;
+    --trees-font-weight-regular-override: ${TREE_REGULAR_FONT_WEIGHT};
   }
   button[data-type='item'] { border-radius: 5px; }
 `;
