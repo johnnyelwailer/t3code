@@ -110,7 +110,7 @@ import { useProjects, useThreadShells } from "../state/entities";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
-import { useEnvironmentQuery } from "../state/query";
+import { useEnvironmentQuery, useEnvironmentQueryData } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import {
   buildThreadRouteParams,
@@ -166,6 +166,7 @@ import { ProviderInstanceIcon } from "./chat/ProviderInstanceIcon";
 import { getTriggerDisplayModelLabel } from "./chat/providerIconUtils";
 import {
   deriveProviderInstanceEntries,
+  providerInstanceEntryMapsRenderEqual,
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../providerInstances";
@@ -185,6 +186,7 @@ import {
   InboxThreadAttribution,
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
+import { runT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigationOverride";
 import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
@@ -826,7 +828,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const terminalProcessCount = runningTerminalIds.length;
 
   const gitCwd = thread.worktreePath ?? props.projectCwd;
-  const gitStatus = useEnvironmentQuery(
+  // Data-only subscription: threads of one project share the vcs.status atom
+  // for the same cwd, so subscribing to the full query view re-rendered EVERY
+  // row on every emission (waiting flips included) whenever any one thread
+  // refreshed it — the dominant cause of the whole sidebar re-rendering on
+  // thread selection (GHE #61).
+  const gitStatusData = useEnvironmentQueryData(
     (thread.branch != null || thread.worktreePath !== null) && gitCwd !== null
       ? vcsEnvironment.status({
           environmentId: thread.environmentId,
@@ -837,7 +844,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const retainTerminalOnBranchMismatch = thread.worktreePath === null;
   const pr = resolveDisplayedThreadPr({
     threadBranch: thread.branch,
-    gitStatus: gitStatus.data,
+    gitStatus: gitStatusData,
     snapshot: changeRequestSnapshot,
     retainTerminalOnBranchMismatch,
   });
@@ -931,11 +938,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
     activeWorktreePath: thread.worktreePath,
     activeThreadBranch: thread.branch,
-    currentGitBranch: gitStatus.data?.refName ?? null,
+    currentGitBranch: gitStatusData?.refName ?? null,
   });
   const prProvider = resolveDisplayedThreadPrProvider({
     threadBranch: thread.branch,
-    gitStatus: gitStatus.data,
+    gitStatus: gitStatusData,
     snapshot: changeRequestSnapshot,
     retainTerminalOnBranchMismatch,
   });
@@ -944,7 +951,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   useEffect(() => {
     const nextSnapshot = nextThreadChangeRequestSnapshot({
       threadBranch: thread.branch,
-      gitStatus: gitStatus.data,
+      gitStatus: gitStatusData,
       snapshot: changeRequestSnapshot,
       retainTerminalOnBranchMismatch,
     });
@@ -952,7 +959,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     onChangeRequestSnapshot(threadKey, nextSnapshot);
   }, [
     changeRequestSnapshot,
-    gitStatus.data,
+    gitStatusData,
     onChangeRequestSnapshot,
     retainTerminalOnBranchMismatch,
     thread.branch,
@@ -2036,7 +2043,7 @@ export default function Sidebar() {
     [sidebarProjectSortOrder, threads, unsortedProjectGroups],
   );
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
-  const providerEntryByInstanceId = useMemo(
+  const providerEntryByInstanceIdLatest = useMemo(
     () =>
       new Map(
         deriveProviderInstanceEntries(serverProviders).map(
@@ -2045,6 +2052,21 @@ export default function Sidebar() {
       ),
     [serverProviders],
   );
+  // Provider snapshots republish on session/turn lifecycle, so this map got a
+  // fresh identity several times per thread selection and, passed as a prop,
+  // defeated the memo on every thread row (GHE #61). Keep the previous
+  // reference while nothing render-relevant changed.
+  const providerEntryByInstanceIdRef = useRef(providerEntryByInstanceIdLatest);
+  if (
+    providerEntryByInstanceIdRef.current !== providerEntryByInstanceIdLatest &&
+    !providerInstanceEntryMapsRenderEqual(
+      providerEntryByInstanceIdRef.current,
+      providerEntryByInstanceIdLatest,
+    )
+  ) {
+    providerEntryByInstanceIdRef.current = providerEntryByInstanceIdLatest;
+  }
+  const providerEntryByInstanceId = providerEntryByInstanceIdRef.current;
   const projectCwdByKey = useMemo(
     () =>
       new Map(
@@ -2498,6 +2520,12 @@ export default function Sidebar() {
       if (isMobile) {
         setOpenMobile(false);
       }
+      // t3team: inside the Team shell, navigating to the upstream thread route
+      // would leave (and unmount) the /t3team tree; the shell handles the
+      // navigation in-tree instead (GHE #61).
+      if (runT3TeamThreadNavigationOverride(threadRef)) {
+        return;
+      }
       void router.navigate({
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams(threadRef),
@@ -2607,29 +2635,35 @@ export default function Sidebar() {
     [updateThreadMetadata],
   );
 
-  const handleThreadClick = useCallback(
-    (event: ReactMouseEvent, threadRef: ScopedThreadRef) => {
-      if (isSidebarNestedLinkClick(event.target)) return;
-      const isMac = isMacPlatform(navigator.platform);
-      const isModClick = isMac ? event.metaKey : event.ctrlKey;
-      const threadKey = scopedThreadKey(threadRef);
-      if (isModClick) {
-        event.preventDefault();
-        toggleThreadSelection(threadKey);
-        return;
-      }
-      if (event.shiftKey) {
-        event.preventDefault();
-        rangeSelectTo(threadKey, orderedThreadKeysRef.current);
-        return;
-      }
-      if (isTrailingDoubleClick(event.detail)) {
-        return;
-      }
-      navigateToThread(threadRef);
-    },
-    [navigateToThread, rangeSelectTo, toggleThreadSelection],
-  );
+  // `handleThreadClick` is a prop of every memoized thread row, so its
+  // identity must survive re-renders of the sidebar (GHE #61). It only runs on
+  // user interaction, so reading the latest callbacks through refs is safe.
+  const navigateToThreadRef = useRef(navigateToThread);
+  navigateToThreadRef.current = navigateToThread;
+  const rangeSelectToRef = useRef(rangeSelectTo);
+  rangeSelectToRef.current = rangeSelectTo;
+  const toggleThreadSelectionRef = useRef(toggleThreadSelection);
+  toggleThreadSelectionRef.current = toggleThreadSelection;
+  const handleThreadClick = useCallback((event: ReactMouseEvent, threadRef: ScopedThreadRef) => {
+    if (isSidebarNestedLinkClick(event.target)) return;
+    const isMac = isMacPlatform(navigator.platform);
+    const isModClick = isMac ? event.metaKey : event.ctrlKey;
+    const threadKey = scopedThreadKey(threadRef);
+    if (isModClick) {
+      event.preventDefault();
+      toggleThreadSelectionRef.current(threadKey);
+      return;
+    }
+    if (event.shiftKey) {
+      event.preventDefault();
+      rangeSelectToRef.current(threadKey, orderedThreadKeysRef.current);
+      return;
+    }
+    if (isTrailingDoubleClick(event.detail)) {
+      return;
+    }
+    navigateToThreadRef.current(threadRef);
+  }, []);
 
   // A settle per thread at a time: double clicks and repeated menu picks
   // must not dispatch a second settle that fails and toasts a false error.
