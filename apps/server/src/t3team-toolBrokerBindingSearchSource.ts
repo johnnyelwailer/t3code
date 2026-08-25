@@ -3,10 +3,7 @@ import * as Effect from "effect/Effect";
 
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
-import {
-  normalizeThreadSearchLimit,
-  searchThreadMessages,
-} from "./t3team-threadMessageSearch.ts";
+import { normalizeThreadSearchLimit, searchThreadMessages } from "./t3team-threadMessageSearch.ts";
 
 /**
  * `t3team.thread.search_source` — search the FULL transcript of the thread the

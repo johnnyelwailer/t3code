@@ -234,6 +234,10 @@
     "./usageFormat": {
       "types": "./src/usageFormat.ts",
       "import": "./src/usageFormat.ts"
+    },
+    "./voiceInput": {
+      "types": "./src/voiceInput.ts",
+      "import": "./src/voiceInput.ts"
     }
   },
   "scripts": {

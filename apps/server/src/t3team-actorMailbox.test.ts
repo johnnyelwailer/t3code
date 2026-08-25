@@ -3,7 +3,10 @@ import * as Effect from "effect/Effect";
 
 import { makeT3TeamActorMailbox, type T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 
-const entry = (messageId: string, overrides: Partial<T3TeamActorMailboxEntry> = {}): T3TeamActorMailboxEntry => ({
+const entry = (
+  messageId: string,
+  overrides: Partial<T3TeamActorMailboxEntry> = {},
+): T3TeamActorMailboxEntry => ({
   messageId,
   fromThreadId: "sender",
   fromTitle: "Sender",

@@ -123,8 +123,7 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
         : {}),
       ...(input.searchThread && input.threadId
         ? {
-            searchThread: (toolArgs: unknown) =>
-              input.searchThread!(toolArgs, input.threadId!),
+            searchThread: (toolArgs: unknown) => input.searchThread!(toolArgs, input.threadId!),
           }
         : {}),
       ...(input.readMessageThread && input.threadId
