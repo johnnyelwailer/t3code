@@ -1,12 +1,114 @@
 import { describe, expect, it } from "vite-plus/test";
+import { MessageId, TurnId } from "@t3tools/contracts";
+import type { ChatMessage } from "../../types";
 import {
   computeStableMessagesTimelineRows,
   computeMessageDurationStart,
+  deriveInterAgentReactionTurnIds,
   deriveMessagesTimelineRows,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
   shouldPreserveAssistantLineBreaks,
 } from "./MessagesTimeline.logic";
+import type { TimelineEntry as LogicTimelineEntry } from "../../session-logic";
+
+function msg(
+  overrides: Omit<Partial<ChatMessage>, "id"> & { role: ChatMessage["role"]; id?: string },
+): ChatMessage {
+  return {
+    id: MessageId.make(overrides.id ?? "m"),
+    text: "body",
+    turnId: null,
+    streaming: false,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    ...overrides,
+  } as ChatMessage;
+}
+
+function entry(e: LogicTimelineEntry): LogicTimelineEntry {
+  return e;
+}
+
+describe("deriveInterAgentReactionTurnIds", () => {
+  it("marks a turn a reaction turn when its triggering user message has t3teamExt.actor", () => {
+    const userTurn = TurnId.make("user-turn");
+    const reactionTurn = TurnId.make("reaction-turn");
+    const entries: LogicTimelineEntry[] = [
+      entry({
+        id: "u1",
+        kind: "message",
+        createdAt: "2026-01-01T00:00:00Z",
+        message: msg({ id: "u1", role: "user", text: "do the thing" }),
+      }),
+      entry({
+        id: "a1",
+        kind: "message",
+        createdAt: "2026-01-01T00:00:05Z",
+        message: msg({ id: "a1", role: "assistant", turnId: userTurn }),
+      }),
+      entry({
+        id: "au1",
+        kind: "message",
+        createdAt: "2026-01-01T00:01:00Z",
+        message: msg({
+          id: "au1",
+          role: "user",
+          text: "[Message from peer agent ...]",
+          t3teamExt: {
+            visibleToUser: false,
+            actor: {
+              senderThreadId: "s",
+              urgency: "normal",
+              hopCount: 1,
+              rootThreadId: "r",
+            },
+          },
+        }),
+      }),
+      entry({
+        id: "a2",
+        kind: "message",
+        createdAt: "2026-01-01T00:01:05Z",
+        message: msg({ id: "a2", role: "assistant", turnId: reactionTurn }),
+      }),
+    ];
+    const ids = deriveInterAgentReactionTurnIds(entries);
+    expect(ids.has(reactionTurn)).toBe(true);
+    expect(ids.has(userTurn)).toBe(false);
+  });
+
+  it("does not mark a turn when the triggering user message is a real user message", () => {
+    const userTurn = TurnId.make("user-turn");
+    const entries: LogicTimelineEntry[] = [
+      entry({
+        id: "u1",
+        kind: "message",
+        createdAt: "2026-01-01T00:00:00Z",
+        message: msg({ id: "u1", role: "user", text: "hi" }),
+      }),
+      entry({
+        id: "a1",
+        kind: "message",
+        createdAt: "2026-01-01T00:00:05Z",
+        message: msg({ id: "a1", role: "assistant", turnId: userTurn }),
+      }),
+    ];
+    expect(deriveInterAgentReactionTurnIds(entries).has(userTurn)).toBe(false);
+  });
+
+  it("returns an empty set when there are no assistant turns", () => {
+    const entries: LogicTimelineEntry[] = [
+      entry({
+        id: "u1",
+        kind: "message",
+        createdAt: "2026-01-01T00:00:00Z",
+        message: msg({ id: "u1", role: "user", text: "hi" }),
+      }),
+    ];
+    expect(deriveInterAgentReactionTurnIds(entries).size).toBe(0);
+  });
+});
 
 describe("shouldPreserveAssistantLineBreaks", () => {
   it("preserves Claude insight formatting without changing regular markdown", () => {

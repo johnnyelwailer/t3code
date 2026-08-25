@@ -317,6 +317,50 @@ function deriveUnsettledTurnId(
 }
 
 /**
+ * GHE #156 (part d): which turns are INTER-AGENT REACTION turns, derived from
+ * message origin (turn-level surfacing of the message-level origin the
+ * projection already carries on `t3teamExt`).
+ *
+ * A reaction turn is started by the hidden `role:"user"` framing the actor
+ * reactor stores with `t3teamExt.actor` set (see t3team-actorMessageReactor.ts).
+ * That framing is the user message that immediately precedes the turn's
+ * assistant output, so we associate each turn with the user message that kicked
+ * it off and mark it a reaction turn when that message carries
+ * `t3teamExt.actor`. This lets the timeline de-emphasize inter-agent reaction
+ * turns and keep user-originated turns prominent, with no transcript scan.
+ */
+export function deriveInterAgentReactionTurnIds(
+  timelineEntries: ReadonlyArray<TimelineEntry>,
+): ReadonlySet<TurnId> {
+  const reactionTurnIds = new Set<TurnId>();
+  const assigned = new Set<TurnId>();
+  let pendingUserMessage: ChatMessage | null = null;
+  for (const entry of timelineEntries) {
+    if (entry.kind !== "message") {
+      continue;
+    }
+    const { message } = entry;
+    if (message.role === "user") {
+      pendingUserMessage = message;
+      continue;
+    }
+    if (message.role !== "assistant") {
+      continue;
+    }
+    const turnId = message.turnId;
+    if (turnId === null || assigned.has(turnId)) {
+      continue;
+    }
+    assigned.add(turnId);
+    if (pendingUserMessage?.t3teamExt?.actor !== undefined) {
+      reactionTurnIds.add(turnId);
+    }
+    pendingUserMessage = null;
+  }
+  return reactionTurnIds;
+}
+
+/**
  * Settled turns fold their commentary and tool activity behind a
  * "Worked for ..." row anchored at the turn's first foldable entry; the
  * terminal assistant message stays visible below the fold.

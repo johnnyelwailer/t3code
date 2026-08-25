@@ -75,6 +75,7 @@ import { MessageCopyButton } from "./MessageCopyButton";
 import { MessageForkButton } from "./MessageForkButton";
 import {
   computeStableMessagesTimelineRows,
+  deriveInterAgentReactionTurnIds,
   deriveMessagesTimelineRows,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
@@ -182,6 +183,12 @@ interface TimelineRowSharedState {
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
   agentPanelModel: AgentPanelModel;
   onOpenAgents: () => void;
+  /**
+   * GHE #156: turn ids whose triggering user message carried `t3teamExt.actor`
+   * (inter-agent reaction turns). Their assistant output is de-emphasized as
+   * "background activity" so user-originated turns stay prominent.
+   */
+  reactionTurnIds: ReadonlySet<TurnId>;
 }
 
 interface TimelineRowActivityState {
@@ -617,6 +624,14 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [threadActivities],
   );
 
+  // GHE #156: which turns are inter-agent reaction turns, so their assistant
+  // output can be de-emphasized as "background activity" while user-originated
+  // turns stay prominent. Derived from message origin, not a transcript scan.
+  const reactionTurnIds = useMemo(
+    () => deriveInterAgentReactionTurnIds(timelineEntries),
+    [timelineEntries],
+  );
+
   const sharedState = useMemo<TimelineRowSharedState>(
     () => ({
       timestampFormat,
@@ -648,6 +663,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
+      reactionTurnIds,
     }),
     [
       timestampFormat,
@@ -678,6 +694,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
+      reactionTurnIds,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -1320,10 +1337,21 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
     : row.message.streaming
       ? ""
       : "(empty response)";
+  // GHE #156: this turn was started by an inter-agent delivery (its triggering
+  // user message carried `t3teamExt.actor`). De-emphasize it as "background
+  // activity" so user-originated turns stay prominent and the user's own
+  // response is not buried under the reaction.
+  const isReactionTurn = row.message.turnId !== null && ctx.reactionTurnIds.has(row.message.turnId);
 
   return (
     <>
-      <div className="relative min-w-0 px-1 py-0.5">
+      {isReactionTurn ? (
+        <div className="mb-1 flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground/70">
+          <ZapIcon className="size-3 shrink-0" aria-hidden />
+          <span>Background activity — reacted to an inter-agent message</span>
+        </div>
+      ) : null}
+      <div className={cn("relative min-w-0 px-1 py-0.5", isReactionTurn && "opacity-75")}>
         <ChatMarkdown
           text={messageText}
           cwd={ctx.markdownCwd}

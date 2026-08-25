@@ -858,4 +858,91 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("lucide-x");
     expect(markup).toContain('aria-label="Tool call failed"');
   });
+
+  it("de-emphasizes inter-agent reaction turns as background activity while user turns stay prominent (GHE #156)", () => {
+    const userTurnId = TurnId.make("user-turn");
+    const reactionTurnId = TurnId.make("reaction-turn");
+    const assistant = (id: string, text: string, turnId: TurnId) => ({
+      id: MessageId.make(id),
+      role: "assistant" as const,
+      text,
+      turnId,
+      createdAt: MESSAGE_CREATED_AT,
+      updatedAt: MESSAGE_CREATED_AT,
+      streaming: false,
+    });
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "entry-u1",
+            kind: "message",
+            createdAt: MESSAGE_CREATED_AT,
+            message: {
+              id: MessageId.make("msg-u1"),
+              role: "user",
+              text: "Do the thing for me.",
+              turnId: null,
+              createdAt: MESSAGE_CREATED_AT,
+              updatedAt: MESSAGE_CREATED_AT,
+              streaming: false,
+            },
+          },
+          {
+            id: "entry-a1",
+            kind: "message",
+            createdAt: MESSAGE_CREATED_AT,
+            message: assistant("msg-a1", "Here is the answer to your question.", userTurnId),
+          },
+          {
+            // The hidden inter-agent framing (visibleToUser: false) that starts
+            // the reaction turn. It is filtered from the visible rows but still
+            // drives the turn-origin derivation.
+            id: "entry-au1",
+            kind: "message",
+            createdAt: MESSAGE_CREATED_AT,
+            message: {
+              id: MessageId.make("msg-au1"),
+              role: "user",
+              text: "[Message from peer agent «Child» · thread child-1 · urgency normal]",
+              turnId: null,
+              createdAt: MESSAGE_CREATED_AT,
+              updatedAt: MESSAGE_CREATED_AT,
+              streaming: false,
+              t3teamExt: {
+                visibleToUser: false,
+                actor: {
+                  senderThreadId: "child-1",
+                  urgency: "normal",
+                  hopCount: 1,
+                  rootThreadId: "root-1",
+                },
+              },
+            },
+          },
+          {
+            id: "entry-a2",
+            kind: "message",
+            createdAt: MESSAGE_CREATED_AT,
+            message: assistant("msg-a2", "Handled the inter-agent follow-up.", reactionTurnId),
+          },
+        ]}
+      />,
+    );
+
+    // The reaction turn is labeled as background activity exactly once...
+    expect(markup).toContain("Background activity — reacted to an inter-agent message");
+    const backgroundLabels =
+      markup.split("Background activity — reacted to an inter-agent message").length - 1;
+    expect(backgroundLabels).toBe(1);
+    // ...and its assistant output is de-emphasized (opacity-75), while the
+    // user-originated turn's assistant output is not.
+    const deEmphasized = markup.split('class="relative min-w-0 px-1 py-0.5 opacity-75"').length - 1;
+    expect(deEmphasized).toBe(1);
+    const normalAssistant = markup.split('class="relative min-w-0 px-1 py-0.5"').length - 1;
+    expect(normalAssistant).toBeGreaterThanOrEqual(1);
+    // The user's own answer stays prominent (not behind the background label).
+    expect(markup).toContain("Here is the answer to your question.");
+  });
 });
