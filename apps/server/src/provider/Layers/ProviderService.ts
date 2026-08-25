@@ -598,8 +598,14 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         // interrupted turn's terminal event (turn.aborted) arrives on the
         // stream AFTER the re-issue has re-armed; settling on it would kill
         // the retry that just started. Terminal events only settle the armed
-        // turn; activity only resets it. session.exited settles regardless —
-        // the session itself is gone, so no re-armed turn can survive it.
+        // turn; session.exited settles regardless — the session itself is
+        // gone, so no re-armed turn can survive it.
+        //
+        // Liveness events re-arm on ANY event for the thread, even one whose
+        // turnId the host entry doesn't know: pack recovery turns run under
+        // pack-side turnIds the host never saw a sendTurn for, and they
+        // must count as activity or the host watchdog would fire into a
+        // healthy recovery turn.
         const isArmedTurn =
           event.turnId === undefined || String(event.turnId) === String(entry.turnId);
         if (
@@ -612,16 +618,14 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           }
           return Effect.void;
         }
-        return isArmedTurn
-          ? armTurnWatchdog(
-              event.threadId,
-              entry.turnId,
-              entry.instanceId,
-              entry.provider,
-              entry.sendTurnInput,
-              entry.retryCount,
-            )
-          : Effect.void;
+        return armTurnWatchdog(
+          event.threadId,
+          entry.turnId,
+          entry.instanceId,
+          entry.provider,
+          entry.sendTurnInput,
+          entry.retryCount,
+        );
       }),
     );
 

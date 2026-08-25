@@ -507,6 +507,60 @@ makeWatchdogHarness({ [CODEX_DRIVER]: staleAbortFake.adapter }).layer(
   },
 );
 
+const recoveryLivenessFake = makeFakeAdapter(CODEX_DRIVER);
+makeWatchdogHarness({ [CODEX_DRIVER]: recoveryLivenessFake.adapter }).layer(
+  "turn inactivity watchdog: pack recovery-turn liveness",
+  (it) => {
+    it.effect("liveness activity under an unknown pack-side turnId re-arms the watchdog", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const threadId = asThreadId("thread-recovery-liveness");
+
+        yield* startCodexSession(provider, threadId);
+        yield* provider.sendTurn({ threadId, input: "work", attachments: [] });
+        yield* drainFibers;
+
+        // Halfway through the budget, activity arrives under a turnId the
+        // host entry never saw a sendTurn for (a pack recovery turn).
+        yield* advanceTestClock(300_000);
+        yield* drainFibers;
+        recoveryLivenessFake.emit({
+          type: "message.delta",
+          eventId: asEventId("liveness-1"),
+          provider: CODEX_DRIVER,
+          createdAt: "2026-01-01T00:01:00.000Z",
+          threadId,
+          turnId: String(asTurnId(`turn-recovery-${String(threadId)}`)),
+          payload: { text: "chunk" },
+        });
+        yield* drainFibers;
+
+        // The liveness event must have RE-ARMED the full budget: silence
+        // from the event up to just under the next full budget is safe.
+        // (Without the re-arm the original timer would have fired halfway
+        // through this advance.)
+        yield* advanceTestClock(599_000);
+        yield* drainFibers;
+        assert.equal(
+          recoveryLivenessFake.interruptTurnCalls.length,
+          0,
+          "foreign-turn liveness re-armed the watchdog — no early fire",
+        );
+
+        // …and the full re-armed budget still bounds the silence.
+        yield* advanceTestClock(1_000);
+        yield* drainFibers;
+        assert.equal(recoveryLivenessFake.interruptTurnCalls.length, 1);
+        assert.equal(
+          recoveryLivenessFake.sendTurnCalls.length,
+          2,
+          "the re-armed watchdog re-issued the stalled turn",
+        );
+      }),
+    );
+  },
+);
+
 const userInterruptFake = makeFakeAdapter(CODEX_DRIVER);
 makeWatchdogHarness({ [CODEX_DRIVER]: userInterruptFake.adapter }).layer(
   "turn inactivity watchdog: host re-issue chain",
