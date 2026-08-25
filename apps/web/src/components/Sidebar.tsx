@@ -188,6 +188,10 @@ import {
 import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
+import {
+  pageSubRunThreads,
+  SIDEBAR_SUB_RUN_LIMIT,
+} from "~/t3team/components/t3team-projectSidebarThreadTree";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
@@ -1825,6 +1829,10 @@ export default function Sidebar() {
   // the user opened stays open across reload (see t3team-useExpandedSubRuns.ts).
   const expandedSubRunParentIds = useExpandedSubRunsStore((store) => store.expandedParentIds);
   const ensureSubRunExpanded = useExpandedSubRunsStore((store) => store.ensureExpanded);
+  // t3team: which expanded parents are showing their FULL sub-run list (beyond the
+  // SIDEBAR_SUB_RUN_LIMIT cap). Presentation-only, not persisted — a fresh expand
+  // always starts capped so the most recent active children lead.
+  const [showAllSubRunParentIds, setShowAllSubRunParentIds] = useState<Set<string>>(new Set());
   // t3team: auto-expand a parent the moment one of its children starts
   // running, so active sub-run work is never invisible behind a collapsed
   // chip — additive only (ensureExpanded never removes), and only fired on
@@ -3993,9 +4001,16 @@ export default function Sidebar() {
                   // in practice, since sub-runbooks never cross environments).
                   const renderSubRunRows = (parentThread: EnvironmentThreadShell): ReactNode[] => {
                     if (!expandedSubRunParentIds.has(parentThread.id)) return [];
-                    const children = childThreadsByParentId.get(parentThread.id);
-                    if (!children || children.length === 0) return [];
-                    return children.map((child) => {
+                    const allChildren = childThreadsByParentId.get(parentThread.id);
+                    if (!allChildren || allChildren.length === 0) return [];
+                    // Newest-to-oldest (most recent active first), capped at SIDEBAR_SUB_RUN_LIMIT
+                    // with a "Show N more" disclosure so a parent with a large fleet (dozens of
+                    // sub-runs) never floods the sidebar on expand. See pageSubRunThreads.
+                    const { visible, hiddenCount } = pageSubRunThreads(
+                      allChildren,
+                      showAllSubRunParentIds.has(parentThread.id),
+                    );
+                    const rows: ReactNode[] = visible.map((child) => {
                       const childEnvironmentId =
                         threadShellById.get(child.id as ThreadId)?.environmentId ??
                         parentThread.environmentId;
@@ -4011,6 +4026,28 @@ export default function Sidebar() {
                         />
                       );
                     });
+                    if (hiddenCount > 0) {
+                      rows.push(
+                        <li
+                          key={`sub-run-more:${parentThread.id}`}
+                          role="presentation"
+                          className="list-none"
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowAllSubRunParentIds((prev) =>
+                                new Set(prev).add(parentThread.id),
+                              )
+                            }
+                            className="flex h-7 w-full items-center rounded-md ps-[calc(var(--sidebar-content-inset)+1.5rem)] text-left text-xs text-muted-foreground/70 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                          >
+                            Show {hiddenCount} more
+                          </button>
+                        </li>,
+                      );
+                    }
+                    return rows;
                   };
                   const renderThreadRowWithChildren = (
                     thread: EnvironmentThreadShell,

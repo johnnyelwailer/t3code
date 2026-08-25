@@ -7,6 +7,7 @@ import { ProjectSidebarThreadTreeRows } from "./t3team-ProjectSidebarThreadTreeR
 import {
   buildProjectSidebarThreadTree,
   countProjectSidebarThreadBranches,
+  pageSubRunThreads,
 } from "./t3team-projectSidebarThreadTree";
 
 function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
@@ -81,5 +82,50 @@ describe("buildProjectSidebarThreadTree", () => {
     expect(markup).toContain('aria-label="Collapse child threads for Parent"');
     expect(markup).toContain('aria-expanded="true"');
     expect(markup).toContain("Child");
+  });
+});
+
+describe("pageSubRunThreads", () => {
+  const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
+
+  it("sorts newest-to-oldest and caps at the limit with a hidden count", () => {
+    // 14 threads; most recent is s-0 (0m ago), oldest s-13 (13m ago).
+    const threads = Array.from({ length: 14 }, (_, i) =>
+      createThread({ id: `s-${i}`, title: `Sub-run ${i}`, lastMessageAt: at(i) }),
+    );
+    const page = pageSubRunThreads(threads, false);
+    expect(page.visible.length).toBe(10);
+    expect(page.visible[0]!.id).toBe("s-0"); // most recent first
+    expect(page.visible[9]!.id).toBe("s-9");
+    expect(page.hiddenCount).toBe(4);
+    expect(page.visible.some((t) => t.id === "s-10")).toBe(false);
+  });
+
+  it("shows all threads when showAll is true (no cap, no hidden)", () => {
+    const threads = Array.from({ length: 14 }, (_, i) =>
+      createThread({ id: `s-${i}`, lastMessageAt: at(i) }),
+    );
+    const page = pageSubRunThreads(threads, true);
+    expect(page.visible.length).toBe(14);
+    expect(page.hiddenCount).toBe(0);
+    expect(page.visible[0]!.id).toBe("s-0");
+  });
+
+  it("does not cap when within the limit", () => {
+    const threads = Array.from({ length: 3 }, (_, i) =>
+      createThread({ id: `s-${i}`, lastMessageAt: at(i) }),
+    );
+    const page = pageSubRunThreads(threads, false);
+    expect(page.visible.length).toBe(3);
+    expect(page.hiddenCount).toBe(0);
+  });
+
+  it("does not mutate its input", () => {
+    const input = [
+      createThread({ id: "a", lastMessageAt: at(5) }),
+      createThread({ id: "b", lastMessageAt: at(1) }),
+    ];
+    pageSubRunThreads(input, false);
+    expect(input.map((t) => t.id)).toEqual(["a", "b"]);
   });
 });
