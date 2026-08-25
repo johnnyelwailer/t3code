@@ -39,3 +39,5 @@ export {
 export { markdownToAdf } from "./markdownToAdf.ts";
 
 export { walkAdf, collectAdfNodeTypes, extractAdfText } from "./traverse.ts";
+
+export { convertAdfToMarkdown, type AdfMarkLike, type AdfNodeLike } from "./toMarkdown.ts";
