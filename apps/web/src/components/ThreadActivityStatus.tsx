@@ -136,7 +136,7 @@ function StatusWidth({
   const [width, setWidth] = useState<number | undefined>(undefined);
   useLayoutEffect(() => {
     const el = ref.current?.querySelector<HTMLElement>("[data-width-sizer]");
-    if (el) setWidth(el.offsetWidth);
+    if (el) setWidth(el.getBoundingClientRect().width);
   }, [id, slideW, duration]);
   return (
     <span
@@ -154,7 +154,7 @@ function StatusWidth({
             <span className="font-medium">{label}</span>
           )}
           {duration ? (
-            <span aria-hidden className="ml-0.5">
+            <span aria-hidden className="ml-1">
               {duration}
             </span>
           ) : null}
@@ -197,7 +197,7 @@ function SlideCycleLabel({
   const [textW, setTextW] = useState<number | undefined>(undefined);
   useLayoutEffect(() => {
     const el = sizerRef.current;
-    if (el) setTextW(el.offsetWidth);
+    if (el) setTextW(el.getBoundingClientRect().width);
   }, [text]);
 
   const labelRef = useRef<HTMLSpanElement>(null);
@@ -210,11 +210,20 @@ function SlideCycleLabel({
     let loop: Animation | null = null;
     let landT1 = 0;
     let landInt = 0;
+    let loopStartT = 0;
     const fireLand = () => onLandRef.current?.();
     const startLoop = () => {
-      // travel: just far enough for the right end of the text to dock at
-      // the window's right edge (never farther, never less)
-      const travel = textW - slideW;
+      // travel, measured from the live geometry (label at rest): exactly how
+      // far the right end of the text must move to dock at the window's
+      // right edge — sub-pixel exact, no rounding drift
+      const labelEl = labelRef.current;
+      const winEl = labelEl?.parentElement;
+      const travel = Math.max(
+        4,
+        labelEl
+          ? labelEl.getBoundingClientRect().right - (winEl?.getBoundingClientRect().right ?? 0)
+          : 0,
+      );
       const leg = Math.round((travel / LOOP_SPEED) * 1000); // px / (px/s) * 1000 = ms
       // the label never leaves the window: rest at start → slide left →
       // hold at the far end → straight back to the start → rest → repeat
@@ -258,7 +267,10 @@ function SlideCycleLabel({
     animRef.current = enter;
     enter.onfinish = () => {
       if (animRef.current !== enter) return;
-      startLoop();
+      // start the loop only after the container's width glide has settled
+      // (it ends at 0.82s), so the dock distance is measured against the
+      // FINAL window width — the label rests at 0 until then
+      loopStartT = window.setTimeout(startLoop, 250);
     };
     return () => {
       enter.onfinish = null;
@@ -266,6 +278,7 @@ function SlideCycleLabel({
       loop?.cancel();
       window.clearTimeout(landT1);
       window.clearInterval(landInt);
+      window.clearTimeout(loopStartT);
       animRef.current = null;
     };
   }, [slideW, reduced, text, textW]);
@@ -384,7 +397,11 @@ export function ThreadActivityStatus({
         <span className="inline-flex items-center gap-1">
           <span style={{ width: CHROME_ICON_W, height: 16 }} />
           <span className="font-medium">{label}</span>
-          {timer ? <span aria-hidden>{timer}</span> : null}
+          {timer ? (
+            <span aria-hidden className="ml-1">
+              {timer}
+            </span>
+          ) : null}
         </span>
       </span>
       <StatusWidth
@@ -414,7 +431,7 @@ export function ThreadActivityStatus({
           )}
         </span>
         {timer !== null && timer !== undefined ? (
-          <span aria-hidden className="ml-0.5 shrink-0 opacity-70">
+          <span aria-hidden className="ml-1 shrink-0 opacity-70">
             {timer}
           </span>
         ) : null}
