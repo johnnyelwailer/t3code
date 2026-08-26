@@ -26,8 +26,9 @@
  *     draws on/off) instead of swapping or rolling
  *   - FIT GATE: when a label is longer than the space the card can offer,
  *     it defaults to a plain STATIC, truncated label (ellipsis). It
- *     periodically slides out to the right edge of its window, pauses,
- *     and slides back to the start — one element, one slow speed,
+ *     it periodically scrolls out to the LEFT (the full text passes the
+ *     window), pauses off-screen, and slides back in to the start — one
+ *     element, one slow speed,
  *     no text swap
  *     — the timer stays anchored the whole time
  *   - child rows: the label never flies in. Fits → docked to the right,
@@ -882,7 +883,7 @@ export const PlacementVariants: Story = {
               </div>
               <RailLabel
                 keyLabel="A+"
-                caption="long label: static truncated, then slides out to the right edge, pauses, slides back to the start — repeating at one slow speed"
+                caption="long label: static truncated, then it scrolls out to the left (full text passes), pauses, and slides back to the start — repeating at one slow speed"
               />
             </div>
             <div className="flex items-center">
@@ -918,7 +919,7 @@ export const PlacementVariants: Story = {
               <RailLabel
                 keyLabel="S"
                 caption="state machine, cycled live: short label → LONG label → Waiting → Done → …"
-                note="the long label stays static + truncated, periodically slides out to the right edge of its window, pauses, and slides back to the start — one element, one slow speed; short labels just roll; the icon never rolls, the timer stays anchored"
+                note="the long label stays static + truncated, periodically scrolls out to the left, pauses, and slides back to the start — one element, one slow speed; short labels just roll; the icon never rolls, the timer stays anchored"
               />
             </div>
           </div>
@@ -1108,8 +1109,8 @@ export const ProductionComponent: Story = {
         {DIVIDER}
         <div className="space-y-1.5">
           <SectionTitle>
-            fit gate: label wider than the space → static truncated, then it slides out to the right
-            edge, pauses, and slides back (loop ≈ 29s)
+            fit gate: label wider than the space → static truncated, then it scrolls out to the
+            left, pauses, and slides back (loop ≈ 23s)
           </SectionTitle>
           <ProdFitGateDemo />
         </div>
