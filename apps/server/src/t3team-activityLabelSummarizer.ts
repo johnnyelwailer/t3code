@@ -9,17 +9,32 @@ import {
 } from "./t3team-activityLabelContext.ts";
 
 /**
- * Out-of-band live-activity-label coordinator for active threads (GHE #40).
+ * Out-of-band live-activity-label coordinator for active threads (GHE #40, extended
+ * by GHE #208).
  *
- * Sibling of `t3team-childStatusSummarizer.ts`, with two added light-inference
- * guarantees: the payload is a hard-capped tiny window (the last few
- * meaningful activities + a one-line user-intent gist — never the thread or
- * tool results), and generation is SKIPPED when that window is byte-identical
- * to the one already labelled. Fail-open: on any error, or when the settings
- * flag is off, nothing is persisted and the UI keeps the static "Working" pill.
- * Callers provide a model invocation and a dedicated projection writer; this
- * module never dispatches a chat message, activity, or provider turn. The
- * pure payload helpers live in `t3team-activityLabelContext.ts`.
+ * The deterministic 4-state word (thinking/writing/working/waiting) is the base
+ * label and updates instantly with zero inference (see `t3team-activityState.ts`).
+ * This module produces only the OPTIONAL free-text enrichment rendered after it
+ * (`{state} · {detail}`), with throttled light-inference guarantees:
+ *
+ * - TINY payload: a hard-capped tiny window (the last few meaningful
+ *   activities + a one-line user-intent gist — never the thread or tool
+ *   results).
+ * - DEBOUNCED (~20s) after the last activity, plus a MINIMUM REGENERATE
+ *   cadence (`minRegenerateMs`, ~60s between generated labels): the detail is
+ *   a lazy catch-up layer, so it refreshes on a slow cadence rather than per
+ *   event. A coarse state change (one of the four base words) is the only
+ *   immediate-regeneration trigger, and even it honors the minimum cadence
+ *   by deferring into the remaining window instead of bursting.
+ * - SKIPPED when the recent-activity window is unchanged since the last
+ *   generation; CLEARED on idle/terminal.
+ *
+ * The settings flag now governs the enrichment only: off = no LLM calls, and
+ * the UI shows just the state word. Fail-open: on any error, nothing is
+ * persisted and the UI shows just the state word — never a static "Working",
+ * never an error state. Callers provide a model invocation and a dedicated
+ * projection writer; this module never dispatches a chat message, activity,
+ * or provider turn. The pure payload helpers live in `t3team-activityLabelContext.ts`.
  */
 
 interface PendingLabel {
@@ -31,15 +46,23 @@ interface PendingLabel {
   model: ModelSelection;
   userGist: string | null;
   lastGeneratedHash: string | null;
-  /** Activity-kind class (the first dot-segment, e.g. "tool" / "read" / "turn")
-   *  of the last noted activity — a class change is a "significant state
-   *  change" and regenerates immediately instead of waiting out the debounce. */
-  lastKindClass?: string;
+  /** Instant (ms) the last generation successfully persisted — the minimum-cadence anchor. */
+  lastGeneratedAt?: number;
+  /** The deterministic 4-state word last observed — a coarse change is the
+   *  only immediate-regeneration trigger (GHE #208). */
+  lastState?: string | null;
   timer?: ReturnType<typeof setTimeout>;
 }
 
 export function createActivityLabelSummarizer(input: {
   readonly debounceMs?: number;
+  /**
+   * Minimum cadence between generated labels (GHE #208 throttle): no new
+   * generation starts until this many ms have passed since the last one
+   * persisted. Immediate (state-change) flushes defer into the remaining
+   * window instead of bursting. Default 60s.
+   */
+  readonly minRegenerateMs?: number;
   /** Settings gate: when false, note() and clear() are no-ops that just drop pending work. */
   readonly isActive: () => boolean;
   readonly generate: ActivityLabelGeneration;
@@ -49,11 +72,14 @@ export function createActivityLabelSummarizer(input: {
     readonly generation: number;
   }) => Promise<void>;
   readonly onError: (cause: unknown) => void;
+  readonly now?: () => number;
   readonly setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   readonly clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
 }) {
   const pending = new Map<string, PendingLabel>();
   const windowByThread = new Map<string, Array<{ kind: string; summary: string }>>();
+  const minRegenerateMs = input.minRegenerateMs ?? 60_000;
+  const now = input.now ?? Date.now;
   const setTimer = input.setTimer ?? setTimeout;
   const clearTimer = input.clearTimer ?? clearTimeout;
 
@@ -73,6 +99,7 @@ export function createActivityLabelSummarizer(input: {
     }
     await input.persist({ threadId, label, generation });
     current.lastGeneratedHash = hash;
+    current.lastGeneratedAt = now();
   };
 
   return {
@@ -83,6 +110,9 @@ export function createActivityLabelSummarizer(input: {
       readonly kind: string;
       readonly summary: string;
       readonly userGist?: string | null;
+      /** The deterministic 4-state word (GHE #208); a coarse change is the
+       *  only immediate-regeneration trigger. */
+      readonly activityState?: string | null;
     }) => {
       const summary = normalizeSummary(input_.summary);
       const window = windowByThread.get(input_.threadId) ?? [];
@@ -97,9 +127,16 @@ export function createActivityLabelSummarizer(input: {
       const prior = pending.get(input_.threadId);
       if (prior?.timer) clearTimer(prior.timer);
       const generation = (prior?.generation ?? 0) + 1;
-      // A NEW kind of activity (new tool started, plan updated, …) is a
-      // significant state change: regenerate now instead of after the debounce.
-      const kindClass = input_.kind.split(".")[0] ?? input_.kind;
+      // GHE #208: the only immediate-regeneration trigger is a COARSE state
+      // change (one of the four base words) — not every activity kind change.
+      // Even that honors the minimum cadence by deferring into the remaining
+      // window, so the LLM detail refreshes on a slow cadence and never per
+      // event while the deterministic word updates instantly.
+      const stateChanged =
+        prior !== undefined &&
+        prior.lastState !== undefined &&
+        input_.activityState !== undefined &&
+        prior.lastState !== input_.activityState;
       const next: PendingLabel = {
         generation,
         hash,
@@ -107,7 +144,8 @@ export function createActivityLabelSummarizer(input: {
         model: input_.modelSelection,
         userGist: input_.userGist ?? null,
         lastGeneratedHash: prior?.lastGeneratedHash ?? null,
-        lastKindClass: kindClass,
+        lastState: input_.activityState ?? prior?.lastState ?? null,
+        ...(prior?.lastGeneratedAt !== undefined ? { lastGeneratedAt: prior.lastGeneratedAt } : {}),
       };
       pending.set(input_.threadId, next);
       // Regenerate only when the recent activity actually changed since the last
@@ -115,15 +153,14 @@ export function createActivityLabelSummarizer(input: {
       if (next.lastGeneratedHash === hash) {
         return;
       }
-      const immediate =
-        prior !== undefined &&
-        prior.lastKindClass !== undefined &&
-        prior.lastKindClass !== kindClass;
+      const baseDelay = stateChanged ? 0 : (input.debounceMs ?? 20_000);
+      const remainingUntilNext =
+        next.lastGeneratedAt !== undefined ? next.lastGeneratedAt + minRegenerateMs - now() : 0;
       next.timer = setTimer(
         () => {
           void run(input_.threadId, generation, hash).catch(input.onError);
         },
-        immediate ? 0 : (input.debounceMs ?? 20_000),
+        Math.max(baseDelay, remainingUntilNext),
       );
     },
     /** Idle/terminal: drop pending work and clear the stored label. */
@@ -154,6 +191,7 @@ export function createActivityLabelEventReactor(input: {
   readonly isActive: () => boolean;
   readonly onError: (cause: unknown) => void;
   readonly debounceMs?: number;
+  readonly minRegenerateMs?: number;
   readonly setTimer?: Parameters<typeof createActivityLabelSummarizer>[0]["setTimer"];
   readonly clearTimer?: Parameters<typeof createActivityLabelSummarizer>[0]["clearTimer"];
 }) {
@@ -163,6 +201,7 @@ export function createActivityLabelEventReactor(input: {
     isActive: input.isActive,
     onError: input.onError,
     ...(input.debounceMs === undefined ? {} : { debounceMs: input.debounceMs }),
+    ...(input.minRegenerateMs === undefined ? {} : { minRegenerateMs: input.minRegenerateMs }),
     ...(input.setTimer === undefined ? {} : { setTimer: input.setTimer }),
     ...(input.clearTimer === undefined ? {} : { clearTimer: input.clearTimer }),
   });
@@ -173,6 +212,8 @@ export function createActivityLabelEventReactor(input: {
       readonly threadId: string;
       readonly kind: string;
       readonly summary: string;
+      /** The deterministic 4-state word at note time (GHE #208). */
+      readonly activityState?: string | null;
     }) => {
       if (!input.isActive()) return;
       const thread = await input.loadThread(event.threadId);
@@ -183,6 +224,7 @@ export function createActivityLabelEventReactor(input: {
         kind: event.kind,
         summary: event.summary,
         userGist: thread.userGist,
+        ...(event.activityState !== undefined ? { activityState: event.activityState } : {}),
       });
     },
     /** The thread went idle or terminal: clear the label. */

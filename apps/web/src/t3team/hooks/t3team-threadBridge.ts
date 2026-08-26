@@ -67,6 +67,13 @@ export function mapLiveThreadToProjectThread(
     ...(thread.childStatusUpdatedAt !== undefined
       ? { childStatusUpdatedAt: thread.childStatusUpdatedAt }
       : {}),
+    // GHE #40/#208: live LLM enrichment + deterministic 4-state word for the
+    // sidebar pills; both absent/idle on settled threads.
+    ...(thread.activityLabel !== undefined ? { activityLabel: thread.activityLabel } : {}),
+    ...(thread.activityState !== undefined ? { activityState: thread.activityState } : {}),
+    ...(thread.activityStateUpdatedAt !== undefined
+      ? { activityStateUpdatedAt: thread.activityStateUpdatedAt }
+      : {}),
   };
 }
 

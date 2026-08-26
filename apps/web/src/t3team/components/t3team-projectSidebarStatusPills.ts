@@ -12,6 +12,7 @@ import {
   formatRelativeTime,
   formatSleepingUntil,
 } from "~/t3team/components/t3team-projectSidebarTimeLabels";
+import { resolveActivityStatePill, type ActivityState } from "~/t3team/t3team-activityStateDisplay";
 
 export function resolveThreadStatusPill(
   thread: {
@@ -19,6 +20,7 @@ export function resolveThreadStatusPill(
     sleepingUntil?: string;
     workflowRunStatus?: ProjectThread["workflowRunStatus"];
     activityLabel?: string | null;
+    activityState?: ActivityState | null;
   },
   options: { readonly activityLabelsEnabled?: boolean } = {},
 ): ThreadStatusPill | null {
@@ -116,18 +118,23 @@ export function resolveThreadStatusPill(
   }
   switch (thread.status) {
     case "running": {
-      // GHE #40: the live activity label replaces the static "Working" while the
-      // flag is on and a label is present; otherwise today's static pill.
+      // GHE #40/#208: the live activity label is enrichment; the base word is the
+      // deterministic state (thinking/writing/working/waiting) while present, else
+      // today's static "Working" pill word.
       const activityLabel =
         options.activityLabelsEnabled !== false && typeof thread.activityLabel === "string"
           ? thread.activityLabel.trim() || undefined
           : undefined;
+      const activityState = thread.activityState ?? undefined;
+      const statePill = activityState ? resolveActivityStatePill(activityState) : undefined;
       return {
         label: "Working",
         ...(activityLabel ? { activityLabel } : {}),
-        colorClass: "text-sky-600 dark:text-sky-300/80",
-        dotClass: "bg-sky-500 dark:bg-sky-300/80",
-        pulse: true,
+        ...(activityState ? { activityState } : {}),
+        colorClass: statePill?.colorClass ?? "text-sky-600 dark:text-sky-300/80",
+        dotClass: statePill?.dotClass ?? "bg-sky-500 dark:bg-sky-300/80",
+        pulse: statePill ? statePill.pulse : true,
+        ...(statePill?.pulseClass ? { pulseClass: statePill.pulseClass } : {}),
       };
     }
     case "completed":

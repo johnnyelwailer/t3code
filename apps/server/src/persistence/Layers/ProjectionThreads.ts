@@ -62,7 +62,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           child_status,
           child_status_updated_at,
           activity_label,
-          activity_label_updated_at
+          activity_label_updated_at,
+          activity_state,
+          activity_state_updated_at
         )
         VALUES (
           ${row.threadId},
@@ -95,7 +97,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.childStatus ?? null},
           ${row.childStatusUpdatedAt ?? null},
           ${row.activityLabel ?? null},
-          ${row.activityLabelUpdatedAt ?? null}
+          ${row.activityLabelUpdatedAt ?? null},
+          ${row.activityState ?? null},
+          ${row.activityStateUpdatedAt ?? null}
         )
         ON CONFLICT (thread_id)
         DO UPDATE SET
@@ -128,7 +132,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           child_status = excluded.child_status,
           child_status_updated_at = excluded.child_status_updated_at,
           activity_label = excluded.activity_label,
-          activity_label_updated_at = excluded.activity_label_updated_at
+          activity_label_updated_at = excluded.activity_label_updated_at,
+          activity_state = excluded.activity_state,
+          activity_state_updated_at = excluded.activity_state_updated_at
       `,
   });
 
@@ -168,7 +174,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           child_status AS "childStatus",
           child_status_updated_at AS "childStatusUpdatedAt",
           activity_label AS "activityLabel",
-          activity_label_updated_at AS "activityLabelUpdatedAt"
+          activity_label_updated_at AS "activityLabelUpdatedAt",
+          activity_state AS "activityState",
+          activity_state_updated_at AS "activityStateUpdatedAt"
         FROM projection_threads
         WHERE thread_id = ${threadId}
       `,
@@ -210,7 +218,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           child_status AS "childStatus",
           child_status_updated_at AS "childStatusUpdatedAt",
           activity_label AS "activityLabel",
-          activity_label_updated_at AS "activityLabelUpdatedAt"
+          activity_label_updated_at AS "activityLabelUpdatedAt",
+          activity_state AS "activityState",
+          activity_state_updated_at AS "activityStateUpdatedAt"
         FROM projection_threads
         WHERE project_id = ${projectId}
         ORDER BY created_at ASC, thread_id ASC

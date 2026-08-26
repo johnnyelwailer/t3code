@@ -85,6 +85,7 @@ import Migration0054 from "./Migrations/040_ProjectionProjectFaviconPath.ts";
 import Migration0055 from "./Migrations/041_AuthSessionClientConnection.ts";
 import Migration0056 from "./Migrations/042_ProjectionThreadLinkedPullRequest.ts";
 import Migration0057 from "./Migrations/t3team-049_ProjectionThreadActivityLabel.ts";
+import Migration0058 from "./Migrations/t3team-050_ProjectionThreadActivityState.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -154,6 +155,7 @@ export const migrationEntries = [
   [55, "AuthSessionClientConnection", Migration0055],
   [56, "ProjectionThreadLinkedPullRequest", Migration0056],
   [57, "ProjectionThreadActivityLabel", Migration0057],
+  [58, "ProjectionThreadActivityState", Migration0058],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

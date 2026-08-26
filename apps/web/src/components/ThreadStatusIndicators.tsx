@@ -19,6 +19,10 @@ import { useUiStateStore } from "../uiStateStore";
 import { resolveChangeRequestPresentation } from "../sourceControlPresentation";
 import { resolveThreadStatusPill, type ThreadStatusPill } from "./Sidebar.logic";
 import { usePrimarySettings } from "~/hooks/useSettings";
+import {
+  activityPulseClass,
+  resolveActivityPillDisplay,
+} from "~/t3team/t3team-activityStateDisplay";
 import type { SidebarThreadSummary } from "../types";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -471,9 +475,10 @@ export function ThreadStatusLabel({
   status: ThreadStatusPill;
   compact?: boolean;
 }) {
-  // GHE #40: the live activity label replaces "Working" while present; the
-  // stable `label` is the fallback (flag off / no label yet).
-  const displayLabel = status.activityLabel ?? status.label;
+  // GHE #40/#208: the deterministic state word is the base label (always
+  // available, zero inference); the live LLM label is optional enrichment
+  // appended as "{state} · {detail}". `label` stays the stable status key.
+  const displayLabel = resolveActivityPillDisplay(status);
   if (compact) {
     return (
       <Tooltip>
@@ -486,9 +491,7 @@ export function ThreadStatusLabel({
           }
         >
           <span
-            className={`size-[9px] rounded-full ${status.dotClass} ${
-              status.pulse ? "animate-status-pulse" : ""
-            }`}
+            className={`size-[9px] rounded-full transition-colors duration-200 ${status.dotClass} ${activityPulseClass(status)}`}
           />
         </TooltipTrigger>
         <TooltipPopup side="top">{displayLabel}</TooltipPopup>
@@ -507,11 +510,13 @@ export function ThreadStatusLabel({
         }
       >
         <span
-          className={`h-1.5 w-1.5 rounded-full ${status.dotClass} ${
-            status.pulse ? "animate-status-pulse" : ""
-          }`}
+          className={`h-1.5 w-1.5 rounded-full transition-colors duration-200 ${status.dotClass} ${activityPulseClass(status)}`}
         />
-        <span className="hidden md:inline">{displayLabel}</span>
+        {/* GHE #208: keyed so the soft fade (animate-label-fade) restarts on a label
+            change — state-word transitions never hard-swap. */}
+        <span key={displayLabel} className="hidden animate-label-fade md:inline">
+          {displayLabel}
+        </span>
       </TooltipTrigger>
       <TooltipPopup side="top">{displayLabel}</TooltipPopup>
     </Tooltip>
@@ -629,9 +634,7 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
               />
             }
           >
-            <TerminalIcon
-              className={`size-3 ${terminalStatus.pulse ? "animate-status-pulse" : ""}`}
-            />
+            <TerminalIcon className={`size-3 ${activityPulseClass(terminalStatus)}`} />
           </TooltipTrigger>
           <TooltipPopup side="top">{terminalStatus.label}</TooltipPopup>
         </Tooltip>

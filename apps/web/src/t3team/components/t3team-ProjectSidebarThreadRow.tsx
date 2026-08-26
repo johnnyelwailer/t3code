@@ -12,6 +12,7 @@ import {
   type SidebarItemState,
 } from "./t3team-projectSidebarItemState";
 import { useAutoScrollIntoView } from "./t3team-useAutoScrollIntoView";
+import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import { useThreadRowMenuHandlers } from "~/t3team/components/t3team-threadRowMenuHandlers";
 import { useThreadRowRename } from "~/t3team/components/t3team-useThreadRowRename";
 import {
@@ -122,11 +123,11 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
         ) : null}
         {statusPill && (
           <span
-            className={`inline-flex size-1.5 shrink-0 rounded-full ${statusPill.dotClass} ${statusPill.pulse ? "animate-pulse" : ""}`}
+            className={`inline-flex size-1.5 shrink-0 rounded-full ${statusPill.dotClass} ${statusPill.pulse ? (statusPill.pulseClass ?? "animate-pulse") : ""}`}
             title={
               statusPill.detail
-                ? `${statusPill.activityLabel ?? statusPill.label} ${statusPill.detail}`
-                : (statusPill.activityLabel ?? statusPill.label)
+                ? `${resolveActivityPillDisplay(statusPill)} ${statusPill.detail}`
+                : resolveActivityPillDisplay(statusPill)
             }
           />
         )}

@@ -99,7 +99,69 @@ describe("activity label summarizer", () => {
     expect(generations).toBe(1);
   });
 
-  it("regenerates immediately when a new activity kind class starts", async () => {
+  it("regenerates immediately when the coarse activity state changes", async () => {
+    const timers = makeTimers();
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Running tests",
+      persist: async () => undefined,
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+      activityState: "working",
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Editing contracts.ts",
+      activityState: "writing",
+    });
+    // First note waits out the default debounce; the coarse state change
+    // (working → writing, the only immediate trigger in GHE #208) fires now.
+    expect(timers.delays).toEqual([20_000, 0]);
+    await timers.fire(1);
+  });
+
+  it("throttles: state changes within the minimum cadence defer into the remaining window", async () => {
+    let nowMs = 0;
+    const timers = makeTimers();
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Running tests",
+      persist: async () => undefined,
+      isActive: () => true,
+      onError: () => undefined,
+      now: () => nowMs,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+      activityState: "working",
+    });
+    await timers.fire(0); // generation persists at t=0
+    // t=10s: a new window + state change would regenerate immediately pre-#208;
+    // now it defers to 60s minus the 10s already elapsed.
+    nowMs = 10_000;
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Editing contracts.ts",
+      activityState: "writing",
+    });
+    expect(timers.delays).toEqual([20_000, 50_000]);
+    await timers.fire(1);
+  });
+
+  it("regenerates on a new activity kind class only after the debounce (no per-event flush)", async () => {
     const timers = makeTimers();
     const summarizer = createActivityLabelSummarizer({
       generate: async () => "Running tests",
@@ -120,8 +182,9 @@ describe("activity label summarizer", () => {
       kind: "execute.started",
       summary: "npm test",
     });
-    // First note waits out the default debounce; the kind-class change fires now.
-    expect(timers.delays).toEqual([20_000, 0]);
+    // GHE #208: a kind-class change alone no longer flushes the LLM detail;
+    // only a coarse state change does. Both notes wait out the debounce.
+    expect(timers.delays).toEqual([20_000, 20_000]);
     await timers.fire(1);
   });
 

@@ -40,6 +40,7 @@ export type ThreadRunStatusInput = Pick<
   | "backgroundLiveness"
   | "planProgress"
   | "childStatus"
+  | "activityState"
 >;
 
 export interface ThreadRunStatus {
@@ -60,6 +61,8 @@ export interface ThreadRunStatus {
   readonly inProgressToolCall: string | null;
   /** Background-only summary of meaningful child work, when present. */
   readonly childStatus: string | null;
+  /** Deterministic 4-state activity state while a turn runs (GHE #208); null when idle. */
+  readonly activityState: string | null;
 }
 
 /**
@@ -128,5 +131,6 @@ export function deriveThreadRunStatus(shell: ThreadRunStatusInput): ThreadRunSta
     latestTurnCompletedAt: shell.latestTurn?.completedAt ?? null,
     inProgressToolCall: shell.planProgress?.step ?? null,
     childStatus: shell.childStatus ?? null,
+    activityState: shell.activityState ?? null,
   };
 }

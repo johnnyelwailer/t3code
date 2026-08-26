@@ -87,6 +87,11 @@ export function projectThreadsEqual(left: ProjectThread, right: ProjectThread): 
     kickoffWorkflowEqual(left.kickoffWorkflow, right.kickoffWorkflow) &&
     left.status === right.status &&
     left.sleepingUntil === right.sleepingUntil &&
+    // GHE #40/#208 live pills: the enrichment label and the deterministic
+    // state word must diff through the equality gate or state transitions
+    // would not re-render the row.
+    left.activityLabel === right.activityLabel &&
+    left.activityState === right.activityState &&
     projectThreadArraysEqual(left.selectedToolIds, right.selectedToolIds)
   );
 }

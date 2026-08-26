@@ -424,6 +424,22 @@ export const OrchestrationThreadActivity = Schema.Struct({
 });
 export type OrchestrationThreadActivity = typeof OrchestrationThreadActivity.Type;
 
+/**
+ * Deterministic 4-state classification of what a thread's turn is doing NOW (GHE #208):
+ * derived on the server from the provider runtime event stream — no inference.
+ * `thinking`/`writing` track reasoning vs. assistant-text content deltas; `working`
+ * means a tool-lifecycle item is in flight; `waiting` means the output gap exceeded
+ * the idle threshold with no tool in flight. A driver that never emits reasoning
+ * deltas simply never reports `thinking` — that is correct, not a bug.
+ */
+export const OrchestrationThreadActivityState = Schema.Literals([
+  "thinking",
+  "writing",
+  "working",
+  "waiting",
+]);
+export type OrchestrationThreadActivityState = typeof OrchestrationThreadActivityState.Type;
+
 const OrchestrationLatestTurnState = Schema.Literals([
   "running",
   "interrupted",
@@ -539,6 +555,14 @@ export const OrchestrationThread = Schema.Struct({
    */
   activityLabel: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activityLabelUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  /**
+   * Deterministic 4-state activity state (GHE #208): the state word is always
+   * available (zero inference); the LLM label is optional enrichment on top of it.
+   * Ephemeral UI state: cleared on idle/terminal. Optional so old
+   * servers/clients interop; null = idle.
+   */
+  activityState: Schema.optional(Schema.NullOr(OrchestrationThreadActivityState)),
+  activityStateUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
 });
 export type OrchestrationThread = typeof OrchestrationThread.Type;
 
@@ -622,6 +646,14 @@ export const OrchestrationThreadShell = Schema.Struct({
    */
   activityLabel: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activityLabelUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  /**
+   * Deterministic 4-state activity state (GHE #208), surfaced on the Working
+   * pill as the base word ("Thinking" / "Writing" / "Working" / "Waiting").
+   * Ephemeral: cleared on idle/terminal. Readable by the active-children
+   * indicator too. Optional so old servers/clients interop; null = idle.
+   */
+  activityState: Schema.optional(Schema.NullOr(OrchestrationThreadActivityState)),
+  activityStateUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   /**
    * Current plan step while a turn runs, for the Working indicators
    * (sidebar row, in-chat working line). Cleared when the turn settles —
@@ -925,6 +957,8 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   childStatus: Schema.optional(TrimmedNonEmptyString),
   /** Live activity label (GHE #40): absent = leave unchanged, null = clear, string = set. */
   activityLabel: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  /** Live activity state (GHE #208): absent = leave unchanged, null = clear, state = set. */
+  activityState: Schema.optional(Schema.NullOr(OrchestrationThreadActivityState)),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
 }).check(
   Schema.makeFilter(
@@ -1493,6 +1527,8 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   childStatusUpdatedAt: Schema.optional(IsoDateTime),
   activityLabel: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activityLabelUpdatedAt: Schema.optional(IsoDateTime),
+  activityState: Schema.optional(Schema.NullOr(OrchestrationThreadActivityState)),
+  activityStateUpdatedAt: Schema.optional(IsoDateTime),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   updatedAt: IsoDateTime,
 });

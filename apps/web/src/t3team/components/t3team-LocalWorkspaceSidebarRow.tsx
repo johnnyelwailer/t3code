@@ -1,6 +1,7 @@
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { ChevronRightIcon, FolderIcon } from "lucide-react";
 import { useMemo } from "react";
@@ -126,12 +127,12 @@ export function LocalWorkspaceSidebarRow({
           {!expanded && projectStatus ? (
             <span
               aria-hidden="true"
-              title={projectStatus.activityLabel ?? projectStatus.label}
+              title={resolveActivityPillDisplay(projectStatus)}
               className={`-ml-0.5 relative inline-flex size-3.5 shrink-0 items-center justify-center ${projectStatus.colorClass}`}
             >
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
                 <span
-                  className={`size-[9px] rounded-full ${projectStatus.dotClass} ${projectStatus.pulse ? "animate-pulse" : ""}`}
+                  className={`size-[9px] rounded-full ${projectStatus.dotClass} ${projectStatus.pulse ? (projectStatus.pulseClass ?? "animate-pulse") : ""}`}
                 />
               </span>
               <ChevronRightIcon className="absolute inset-0 m-auto size-3.5 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-hover/project-header:opacity-100" />
