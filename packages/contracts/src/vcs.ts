@@ -83,7 +83,10 @@ export type VcsProcessExitFailureKind = typeof VcsProcessExitFailureKind.Type;
 
 export interface VcsProcessExitFailure {
   readonly exitCode: number;
+  /** Retained (already redacted, see redactCommandArgs) stderr. */
   readonly stderr: string;
+  /** Length of the ORIGINAL, pre-redaction stderr. */
+  readonly originalStderrLength: number;
   readonly stderrTruncated: boolean;
 }
 
@@ -119,12 +122,16 @@ export class VcsProcessExitError extends Schema.TaggedErrorClass<VcsProcessExitE
     exitCode: Schema.Number,
     detail: Schema.String,
     failureKind: Schema.optional(VcsProcessExitFailureKind),
+    /** Truncated (< 4KB) stderr — the diagnostics that make a non-zero exit actionable. */
+    stderr: Schema.optional(Schema.String),
     stderrLength: Schema.optional(NonNegativeInt),
     stderrTruncated: Schema.optional(Schema.Boolean),
   },
 ) {
   override get message(): string {
-    return `VCS process failed in ${this.operation}: ${this.command} (${this.cwd}) exited with ${this.exitCode} - ${this.detail}`;
+    return `VCS process failed in ${this.operation}: ${this.command} (${this.cwd}) exited with ${this.exitCode} - ${this.detail}${
+      this.stderr !== undefined ? `\nstderr: ${this.stderr}` : ""
+    }`;
   }
 
   static fromProcessExit(
@@ -145,15 +152,26 @@ export class VcsProcessExitError extends Schema.TaggedErrorClass<VcsProcessExitE
                 : "VCS resource not found."
             : "Process exited with a non-zero status.";
 
+    const trimmedStderr = error.stderr.trim();
     return new VcsProcessExitError({
       ...context,
       exitCode: error.exitCode,
       detail,
       failureKind,
-      stderrLength: error.stderr.length,
-      stderrTruncated: error.stderrTruncated,
+      ...(trimmedStderr.length > 0 ? { stderr: truncateVcsProcessStderr(trimmedStderr) } : {}),
+      stderrLength: error.originalStderrLength,
+      stderrTruncated: error.stderrTruncated || trimmedStderr.length > VCS_PROCESS_STDERR_CAP,
     });
   }
+}
+
+/** Keep process-exit diagnostics bounded in the error channel. */
+export const VCS_PROCESS_STDERR_CAP = 4_096;
+
+export function truncateVcsProcessStderr(stderr: string): string {
+  return stderr.length <= VCS_PROCESS_STDERR_CAP
+    ? stderr
+    : `${stderr.slice(0, VCS_PROCESS_STDERR_CAP)}…`;
 }
 
 export class VcsProcessTimeoutError extends Schema.TaggedErrorClass<VcsProcessTimeoutError>()(

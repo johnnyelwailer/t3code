@@ -711,7 +711,9 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         assert.notInclude(error.detail, secret);
         assert.notInclude(error.message, secret);
         assert.notProperty(error, "args");
-        assert.notProperty(error, "stderr");
+        // Retained stderr is diagnosable but redacted of argument values.
+        assert.isString(error.stderr);
+        assert.notInclude(error.stderr ?? "", secret);
       }),
     );
 

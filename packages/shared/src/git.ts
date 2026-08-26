@@ -183,6 +183,27 @@ function deriveLocalBranchNameCandidatesFromRemoteRef(
 /**
  * Hide `origin/*` remote refs when a matching local refName already exists.
  */
+/**
+ * Replaces command argument values in process output so retained stderr
+ * cannot echo secrets. Git echoes unknown `--opt=value` arguments verbatim
+ * but STRIPS the leading dashes, and any command may echo a plain argument,
+ * so every argument >= 4 chars (and the dash-less form of `--opt=value`
+ * arguments) is redacted. Short tokens ("-e", ".", "-A") are left alone.
+ */
+export function redactCommandArgs(text: string, args: readonly string[]): string {
+  let out = text;
+  for (const arg of args) {
+    if (arg.length < 4) {
+      continue;
+    }
+    out = out.split(arg).join("[redacted]");
+    if (arg.startsWith("--") && arg.includes("=")) {
+      out = out.split(arg.slice(2)).join("[redacted]");
+    }
+  }
+  return out;
+}
+
 export function dedupeRemoteBranchesWithLocalMatches(
   refs: ReadonlyArray<VcsRef>,
 ): ReadonlyArray<VcsRef> {

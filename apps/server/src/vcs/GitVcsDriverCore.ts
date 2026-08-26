@@ -26,7 +26,12 @@ import {
   type ReviewDiffPreviewSource,
   type VcsRef,
 } from "@t3tools/contracts";
-import { dedupeRemoteBranchesWithLocalMatches, normalizeGitRemoteUrl } from "@t3tools/shared/git";
+import {
+  dedupeRemoteBranchesWithLocalMatches,
+  normalizeGitRemoteUrl,
+  redactCommandArgs,
+} from "@t3tools/shared/git";
+import { truncate } from "@t3tools/shared/String";
 import { compactTraceAttributes } from "@t3tools/shared/observability";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
 import { gitCommandDuration, gitCommandsTotal, withMetrics } from "../observability/Metrics.ts";
@@ -45,6 +50,17 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const WORKTREE_ADD_TIMEOUT_MS = 300_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
 const OUTPUT_TRUNCATED_MARKER = "\n\n[truncated]";
+
+/** Keep stderr diagnostics in GitCommandError bounded (4KB). */
+const GIT_COMMAND_STDERR_CAP = 4_096;
+
+const gitCommandStderr = (
+  stderr: string,
+  args: readonly string[],
+): { readonly stderr: string } | {} => {
+  const trimmed = redactCommandArgs(stderr, args).trim();
+  return trimmed.length > 0 ? { stderr: truncate(trimmed, GIT_COMMAND_STDERR_CAP) } : {};
+};
 const PREPARED_COMMIT_PATCH_MAX_OUTPUT_BYTES = 49_000;
 const RANGE_COMMIT_SUMMARY_MAX_OUTPUT_BYTES = 19_000;
 const RANGE_DIFF_SUMMARY_MAX_OUTPUT_BYTES = 19_000;
@@ -811,12 +827,21 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         yield* trace2Monitor.flush;
 
         if (!input.allowNonZeroExit && exitCode !== 0) {
+          const trimmedStderr = stderr.text.trim();
           return yield* new GitCommandError({
             ...gitCommandContext(commandInput),
             detail: "Git command exited with a non-zero status.",
             exitCode,
             stdoutLength: stdout.text.length,
             stderrLength: stderr.text.length,
+            ...(trimmedStderr.length > 0
+              ? {
+                  stderr: truncate(
+                    redactCommandArgs(trimmedStderr, commandInput.args ?? []),
+                    GIT_COMMAND_STDERR_CAP,
+                  ),
+                }
+              : {}),
           });
         }
 
@@ -902,6 +927,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             ...(result.exitCode === null ? {} : { exitCode: result.exitCode }),
             stdoutLength: result.stdout.length,
             stderrLength: result.stderr.length,
+            ...gitCommandStderr(result.stderr, args),
           }),
         );
       }),

@@ -65,6 +65,39 @@ runVcsDriverContractSuite<GitVcsDriver.GitVcsDriver, GitContractError>({
   },
 });
 
+it.effect("GitVcsDriver.execute preserves redacted stderr in GitCommandError", () => {
+  const secret = "secret-token-value";
+
+  return Effect.gen(function* () {
+    const driver = yield* GitVcsDriver.GitVcsDriver;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-git-stderr-" });
+
+    yield* driver.execute({
+      operation: "GitVcsDriver.test.initRepo",
+      cwd,
+      args: ["init"],
+    });
+
+    const error = yield* driver
+      .execute({
+        operation: "GitVcsDriver.test.stderrPreserved",
+        cwd,
+        args: ["status", `--unknown-option=${secret}`],
+      })
+      .pipe(Effect.flip);
+
+    assert.strictEqual(error._tag, "GitCommandError");
+    assert.isNumber(error.exitCode);
+    // Retained stderr keeps the diagnostics but redacts argument values.
+    assert.isString(error.stderr);
+    assert.ok(error.stderr!.includes("unknown option"));
+    assert.notInclude(error.stderr!, secret);
+    assert.notInclude(error.message, secret);
+  }).pipe(Effect.provide(GitContractLayer));
+});
+
 it.effect("GitVcsDriver forwards execute env to the VCS process", () => {
   let observedEnv: NodeJS.ProcessEnv | undefined;
   let observedAppendTruncationMarker: boolean | undefined;
