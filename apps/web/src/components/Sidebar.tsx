@@ -39,7 +39,6 @@ import {
   ChevronDownIcon,
   CircleAlertIcon,
   CircleCheckIcon,
-  CircleDashedIcon,
   ClockIcon,
   FolderIcon,
   FolderPlusIcon,
@@ -60,6 +59,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -121,6 +121,7 @@ import {
 } from "../threadRoutes";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat";
 import type { SidebarThreadSummary } from "../types";
+import { ThreadActivityStatus } from "./ThreadActivityStatus";
 import { cn } from "~/lib/utils";
 import { buildThreadActionMenuItems } from "./threadActionMenu.logic";
 import {
@@ -871,6 +872,30 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const activityLabelsEnabled = usePrimarySettings(
     (settings) => settings.t3teamActivityLabelsEnabled,
   );
+  // GHE #40/#208: the text the status cluster shows while working — the
+  // deterministic state word is the base label; the live activity label is
+  // optional enrichment appended after it ("{state} · {detail}") while the
+  // flag is on.
+  const activityLabelText = resolveActivityPillDisplay({
+    label: "Working",
+    ...(thread.activityState && thread.activityState !== null
+      ? { activityState: thread.activityState }
+      : {}),
+    ...(activityLabelsEnabled && thread.activityLabel
+      ? { activityLabel: thread.activityLabel }
+      : {}),
+  });
+  // One icon spin per live→live label update (not on mount, not on kind
+  // changes): remember the last shown label and bump the tick on change.
+  const lastActivityLabelRef = useRef<string | undefined>(undefined);
+  const [activitySpinTick, setActivitySpinTick] = useState(0);
+  useEffect(() => {
+    const prev = lastActivityLabelRef.current;
+    lastActivityLabelRef.current = activityLabelText;
+    if (prev !== undefined && prev !== activityLabelText && status === "working") {
+      setActivitySpinTick((tick) => tick + 1);
+    }
+  }, [activityLabelText, status]);
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so the pill clears only when the user re-engages:
@@ -898,24 +923,36 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     status === "working" || status === "monitoring" || status === "approval" || status === "input";
   const shouldRecede =
     (status === "ready" || isInFlight) && !isUnread && !isWoke && !props.isActive && !isSelected;
+  // GHE #40 fit gate: the space this row can offer the status cluster
+  // (row width − content insets − favicon − gap − the project title at its
+  // natural width). Measured live (ResizeObserver) so sidebar resizes are
+  // honored; the hidden sizer mirrors the title's font context.
+  const statusRowRef = useRef<HTMLDivElement>(null);
+  const statusTitleSizerRef = useRef<HTMLSpanElement>(null);
+  const [statusAvail, setStatusAvail] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const row = statusRowRef.current;
+    const sizerRoot = statusTitleSizerRef.current ?? null;
+    if (!row) return;
+    const measure = () => {
+      const title = sizerRoot?.querySelector<HTMLElement>("[data-title-sizer]");
+      const w = row.getBoundingClientRect().width;
+      setStatusAvail(Math.max(0, Math.floor(w) - 20 - 16 - 6 - (title ? title.offsetWidth : 0)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    return () => ro.disconnect();
+  }, [props.projectTitle, shouldRecede]);
   // Status hues follow the system-wide convention set by sidebar v1 and the
   // mobile Live Activity/widgets (amber approval, indigo input, sky working)
   // so a thread reads the same color everywhere it surfaces.
   const topStatus =
     status === "working"
       ? {
-          // GHE #40/#208: the deterministic state word is the base label; the
-          // live activity label is optional enrichment appended after it
-          // ("{state} · {detail}") while the flag is on.
-          label: resolveActivityPillDisplay({
-            label: "Working",
-            ...(thread.activityState && thread.activityState !== null
-              ? { activityState: thread.activityState }
-              : {}),
-            ...(activityLabelsEnabled && thread.activityLabel
-              ? { activityLabel: thread.activityLabel }
-              : {}),
-          }),
+          // GHE #40/#208: the state word + optional live enrichment (see
+          // activityLabelText above); the motion cluster renders it below.
+          label: activityLabelText,
           icon: "working" as const,
           // No shimmer: a label that animates forever is noise in a sidebar
           // full of them (and repaints every vsync on high-refresh displays).
@@ -1469,6 +1506,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             <div
               role="button"
               tabIndex={0}
+              ref={statusRowRef}
               data-testid="sidebar-row-card"
               aria-busy={isRegeneratingTitle || undefined}
               className={rowSurfaceClassName}
@@ -1480,6 +1518,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           }
         >
           <div className="relative z-10 h-[4.875rem] px-[var(--sidebar-row-content-inset)] py-[var(--sidebar-content-inset)]">
+            {/* GHE #40 fit-gate sizer: the project title at its natural
+                width, same font context as the visible one */}
+            {props.projectTitle ? (
+              <span
+                ref={statusTitleSizerRef}
+                aria-hidden
+                className="pointer-events-none absolute left-0 top-0 h-px overflow-hidden opacity-0"
+              >
+                <span
+                  data-title-sizer
+                  className={cn(
+                    "inline-block whitespace-nowrap text-secondary-label text-xs",
+                    shouldRecede ? "font-normal" : "font-medium",
+                  )}
+                >
+                  {props.projectTitle}
+                </span>
+              </span>
+            ) : null}
             <div className="flex h-5 min-w-0 items-center gap-1.5">
               <ProjectFavicon
                 environmentId={thread.environmentId}
@@ -1538,6 +1595,28 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                         />
                         <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                       </Tooltip>
+                    ) : status === "working" ? (
+                      /* GHE #40: the live activity label with the approved
+                         motion language — the label rolls on update, the
+                         icon morphs/pulses/spins, the timer stays anchored,
+                         and long labels fall back to the fit-gate slide. */
+                      <ThreadActivityStatus
+                        kind="live"
+                        label={activityLabelText}
+                        timer={<WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />}
+                        avail={statusAvail}
+                        spinTick={activitySpinTick}
+                        className={topStatus.className}
+                      />
+                    ) : topStatus.icon === "done" ? (
+                      /* Same node as the live state above, so working → done
+                          reads as the icon morphing to the check while the
+                          text rolls to “Done” instead of popping. */
+                      <ThreadActivityStatus
+                        kind="done"
+                        label="Done"
+                        className={topStatus.className}
+                      />
                     ) : (
                       <span
                         className={cn(
@@ -1545,20 +1624,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           topStatus.className,
                         )}
                       >
-                        {topStatus.icon === "working" ? (
-                          <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
-                        ) : topStatus.icon === "done" ? (
-                          <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
-                        ) : null}
                         {/* The label alone is the live region: a role="status"
                             wrapper around the ticking duration would make
                             screen readers announce every second. */}
                         <span role="status">{topStatus.label}</span>
-                        {status === "working" ? (
-                          <span aria-hidden>
-                            <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
-                          </span>
-                        ) : null}
                       </span>
                     )
                   ) : (
@@ -1811,6 +1880,34 @@ const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
   onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
 }) {
   const { child } = props;
+  // GHE #40: sub-run labels never animate — fit → static dock on the right,
+  // no fit → the title flips to the status text (measured once per change,
+  // no timers).
+  const activityLabelsEnabled = usePrimarySettings(
+    (settings) => settings.t3teamActivityLabelsEnabled,
+  );
+  const childLabel =
+    activityLabelsEnabled && child.status === "running"
+      ? (child.activityLabel ?? undefined)
+      : undefined;
+  const subRowRef = useRef<HTMLButtonElement>(null);
+  const subSizersRef = useRef<HTMLSpanElement>(null);
+  const [childLabelMode, setChildLabelMode] = useState<"dock" | "flip" | null>(null);
+  useLayoutEffect(() => {
+    const row = subRowRef.current;
+    const sizers = subSizersRef.current;
+    if (!row || !sizers || childLabel === undefined) {
+      setChildLabelMode(null);
+      return;
+    }
+    const label = sizers.querySelector<HTMLElement>("[data-sizer='__label']");
+    const time = sizers.querySelector<HTMLElement>("[data-sizer='__time']");
+    const w = row.getBoundingClientRect().width;
+    // row chrome: ps inset 24px + pe 10px + status dot 6px + 3 × gap 6px
+    const avail = w - 24 - 10 - 6 - 18 - (time ? time.offsetWidth : 0);
+    const labelW = label ? label.offsetWidth : 0;
+    setChildLabelMode(labelW <= avail ? "dock" : "flip");
+  }, [childLabel, child.title, child.lastMessageAt]);
   const handleContextMenu = useCallback(
     (event: ReactMouseEvent) => {
       event.preventDefault();
@@ -1832,21 +1929,51 @@ const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
     <li role="presentation" className="list-none">
       <button
         type="button"
+        ref={subRowRef}
         onClick={props.onNavigate}
         onContextMenu={handleContextMenu}
         aria-current={props.isActive ? "page" : undefined}
         className={cn(
-          "flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-[calc(var(--sidebar-content-inset)+1rem)] text-left text-xs outline-none",
+          "relative flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-[calc(var(--sidebar-content-inset)+1rem)] text-left text-xs outline-none",
           props.isActive
             ? "bg-sidebar-row-active text-sidebar-foreground"
             : "text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
         )}
       >
         {statusDot}
-        <span className="min-w-0 flex-1 truncate">{child.title}</span>
+        <span
+          className="min-w-0 flex-1 truncate"
+          title={childLabelMode === "flip" ? child.title : undefined}
+        >
+          {childLabelMode === "flip" ? (
+            <span className="t3team-label-shimmer">{childLabel}</span>
+          ) : (
+            child.title
+          )}
+        </span>
+        {childLabelMode === "dock" ? (
+          <span className="shrink-0 text-sky-600 dark:text-sky-400">
+            <span className="t3team-label-shimmer">{childLabel}</span>
+          </span>
+        ) : null}
         <span className="shrink-0 text-[0.6875rem] text-muted-foreground/55 tabular-nums">
           {compactSidebarTimeLabel(formatRelativeTimeLabel(child.lastMessageAt))}
         </span>
+        {/* sizers for the dock/flip decision (natural widths, hidden) */}
+        {childLabel !== undefined ? (
+          <span
+            ref={subSizersRef}
+            aria-hidden
+            className="pointer-events-none absolute left-0 top-0 h-px overflow-hidden opacity-0"
+          >
+            <span data-sizer="__label" className="inline-block whitespace-nowrap">
+              {childLabel}
+            </span>
+            <span data-sizer="__time" className="inline-block whitespace-nowrap text-[0.6875rem]">
+              {compactSidebarTimeLabel(formatRelativeTimeLabel(child.lastMessageAt))}
+            </span>
+          </span>
+        ) : null}
       </button>
     </li>
   );

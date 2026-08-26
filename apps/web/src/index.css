@@ -2595,6 +2595,153 @@ code {
   animation: ultrathink-chroma-shift 10s linear infinite;
 }
 
+/*
+ * GHE #40 — live activity label motion language (component:
+ * components/ThreadActivityStatus.tsx). Rules: only TEXT rolls (3D
+ * split-flap style, out finishes before in starts), the icon never rolls
+ * (it pulses, morphs on kind change, spins once via WAAPI on update), the
+ * timer is anchored at the cluster's right edge, and long labels use the
+ * fit-gate slide cycle instead of squeezing the row. Calm: slow, regular,
+ * mostly still. Everything below is disabled under prefers-reduced-motion.
+ */
+
+/*
+ * Shimmer for LIVE status texts: a soft highlight band sweeps through the
+ * glyphs once every cycle, then rests (background-clip: text). The
+ * element's own color is replaced by the gradient, so set the surrounding
+ * text color where needed.
+ */
+@keyframes t3team-label-shimmer {
+  0%,
+  18% {
+    background-position: 0% 0;
+  }
+  58%,
+  100% {
+    background-position: 100% 0;
+  }
+}
+
+.t3team-label-shimmer {
+  --shimmer-base: #0369a1; /* sky-700 */
+  --shimmer-glow: #7dd3fc; /* sky-300 */
+  background-image: linear-gradient(
+    100deg,
+    var(--shimmer-base) 42%,
+    var(--shimmer-glow) 50%,
+    var(--shimmer-base) 58%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t3team-label-shimmer 5.5s ease-in-out infinite;
+}
+
+.dark .t3team-label-shimmer {
+  --shimmer-base: #38bdf8; /* sky-400 */
+  --shimmer-glow: #bae6fd; /* sky-200 */
+}
+
+/*
+ * State-change motion: a 3D ROLL around the horizontal axis. Choreography
+ * with perceptible beats: 0.00–0.30s the outgoing label flips away →
+ * 0.42–0.82s a beat, then the width glide moves the icon into place →
+ * 0.78–1.10s the incoming label flips in → ~1.05s the icon's one-shot
+ * spin.
+ */
+@keyframes t3team-status-roll-out {
+  0% {
+    transform: rotateX(0deg) translateZ(0);
+    opacity: 1;
+  }
+  45% {
+    transform: rotateX(-42deg) translateZ(14px);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(-90deg) translateZ(4px);
+    opacity: 0;
+  }
+}
+
+@keyframes t3team-status-roll-in {
+  0% {
+    transform: rotateX(90deg) translateZ(14px);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(0deg) translateZ(0);
+    opacity: 1;
+  }
+}
+
+.t3team-status-roll-out {
+  transform-origin: top center;
+  backface-visibility: hidden;
+  animation: t3team-status-roll-out 0.3s cubic-bezier(0.6, 0, 0.9, 0.4) 0s both;
+}
+
+.t3team-status-roll-in {
+  transform-origin: bottom center;
+  backface-visibility: hidden;
+  animation: t3team-status-roll-in 0.32s cubic-bezier(0.18, 0.89, 0.32, 1.15) 0.78s both;
+}
+
+/* shared 3D stage for rolls: closer perspective = stronger depth */
+.t3team-roll-stage {
+  perspective: 160px;
+  transform-style: preserve-3d;
+}
+
+/* slow fade pulse while the thread is live (nothing rotates or scales) */
+@keyframes t3team-icon-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.t3team-icon-pulse {
+  animation: t3team-icon-pulse 3.2s ease-in-out infinite;
+}
+
+/* quick fade for the duration timer appearing/disappearing */
+@keyframes t3team-icon-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.t3team-icon-fade-in {
+  animation: t3team-icon-fade-in 0.2s ease-out 0.1s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t3team-label-shimmer,
+  .t3team-status-roll-in,
+  .t3team-icon-pulse,
+  .t3team-icon-fade-in {
+    animation: none;
+  }
+
+  .t3team-status-roll-out {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 @keyframes preview-loading-progress {
   from {
     transform: scaleX(0.04);

@@ -1,10 +1,30 @@
-import type { Preview } from "@storybook/react";
+import type { Decorator, Preview } from "@storybook/react";
 
 import "~/t3team/t3team-index.css";
 // Must come after the app stylesheet so it wins on the canvas-scrolling rules.
 import "~/t3team/storybook/t3team-storybook-canvas.css";
 
+/*
+ * The app's dark theme is driven by a `.dark` class on an ancestor (see the
+ * @custom-variant in t3team-index.css); the app bootstrap that normally adds
+ * it does not run on the Storybook canvas. Honor the `theme` global
+ * (globals=theme:dark) so both themes can be verified here.
+ */
+const themeDecorator: Decorator = (Story, context) => {
+  document.documentElement.classList.toggle("dark", context.globals.theme === "dark");
+  return Story({});
+};
+
 const preview: Preview = {
+  globalTypes: {
+    theme: {
+      type: "select",
+      options: ["light", "dark"],
+      initialValue: "light",
+      description: "Canvas theme (drives the app's .dark class).",
+    },
+  } as unknown as NonNullable<Preview["globalTypes"]>,
+  decorators: [themeDecorator],
   parameters: {
     layout: "fullscreen",
     controls: {

@@ -48,3 +48,180 @@ body {
 .animate-status-pulse {
   animation: status-pulse 2s infinite;
 }
+
+/*
+ * GHE-40 variants story: fit-gate slide strip (Storybook-only for now; if
+ * this ships, the keyframes move with it into the app stylesheet).
+ */
+
+/*
+ * Shimmer for LIVE status texts: a soft highlight band sweeps through the
+ * glyphs once every cycle, then rests (background-clip: text; the band
+ * travels 18%→58% of a 5.5s clock, so the sweep itself takes ~2.2s and
+ * stays off-screen the rest of the time). Theme-aware via custom props —
+ * light defaults, .dark overrides. The element's own `color` is replaced
+ * by the gradient, so set the surrounding text color where needed.
+ */
+@keyframes t3team-label-shimmer {
+  0%,
+  18% {
+    background-position: 0% 0;
+  }
+  58%,
+  100% {
+    background-position: 100% 0;
+  }
+}
+
+.t3team-label-shimmer {
+  --shimmer-base: #0369a1; /* sky-700 */
+  --shimmer-glow: #7dd3fc; /* sky-300 */
+  background-image: linear-gradient(
+    100deg,
+    var(--shimmer-base) 42%,
+    var(--shimmer-glow) 50%,
+    var(--shimmer-base) 58%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t3team-label-shimmer 5.5s ease-in-out infinite;
+}
+
+.dark .t3team-label-shimmer {
+  --shimmer-base: #38bdf8; /* sky-400 */
+  --shimmer-glow: #bae6fd; /* sky-200 */
+}
+
+/*
+ * State-change motion (no popping): a 3D ROLL around the horizontal axis,
+ * like a split-flap display — the outgoing status stays pinned at its top
+ * edge, lifts toward the viewer mid-flip, and rotates away; the incoming
+ * one stays pinned at its bottom edge and rolls down into place. Two
+ * orchestration modes:
+ *   - same-kind swap (label → label): ONLY the label rolls. Its container
+ *     width animates (see the AnimatedWidthLabel pattern in the story), so
+ *     the icon and timer GLIDE to their new positions instead of jumping.
+ *   - kind change (live → Waiting → Done): the whole status unit rolls.
+ * The parent supplies the perspective; out keeps its invisible end state
+ * via fill: both.
+ */
+@keyframes t3team-status-roll-out {
+  0% {
+    transform: rotateX(0deg) translateZ(0);
+    opacity: 1;
+  }
+  45% {
+    transform: rotateX(-42deg) translateZ(14px);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(-90deg) translateZ(4px);
+    opacity: 0;
+  }
+}
+
+@keyframes t3team-status-roll-in {
+  0% {
+    transform: rotateX(90deg) translateZ(14px);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(0deg) translateZ(0);
+    opacity: 1;
+  }
+}
+
+.t3team-status-roll-out {
+  transform-origin: top center;
+  backface-visibility: hidden;
+  animation: t3team-status-roll-out 0.3s cubic-bezier(0.6, 0, 0.9, 0.4) 0s both;
+}
+
+.t3team-status-roll-in {
+  transform-origin: bottom center;
+  backface-visibility: hidden;
+  animation: t3team-status-roll-in 0.32s cubic-bezier(0.18, 0.89, 0.32, 1.15) 0.78s both;
+}
+
+/*
+ * Choreography (with perceptible beats):
+ *   0.00–0.30s  outgoing label flips away — fully gone at 0.30s
+ *   0.42–0.82s  a beat of stillness, then the width glide slides the
+ *               icon + timer into place
+ *   0.78–1.10s  the incoming label flips in as the move finishes
+ *   ~1.05s      the icon's one-shot spin (after it has settled)
+ */
+
+/* shared 3D stage for rolls: closer perspective = stronger depth */
+.t3team-roll-stage {
+  perspective: 160px;
+  transform-style: preserve-3d;
+}
+
+/*
+ * Status icons (the dashed “working” circle on cards and child rows):
+ *   - SLOW FADE PULSE while the thread is live: a simple, calm opacity
+ *     breathe (1 → 0.55 → 1 over 3.2s) on the icon itself. Nothing
+ *     rotates, nothing scales.
+ *   - on UPDATE: the icon does ONE quick springy 360° spin. It runs via
+ *     the Web Animations API in the story (see MorphIcon), so no
+ *     keyframes live here.
+ */
+@keyframes t3team-icon-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.t3team-icon-pulse {
+  animation: t3team-icon-pulse 3.2s ease-in-out infinite;
+}
+
+/*
+ * Icon shape change (dashed ↔ check, i.e. running ↔ done): the icon NEVER
+ * rolls — only text rolls. The shape MORPHS instead (see MorphIcon in the
+ * story: one persistent SVG whose ring dashes merge into a solid circle
+ * while the check stroke draws on/off), plus the position motion from the
+ * width glide (StatusWidth) sliding it to where the next text needs it.
+ * A quick fade remains for the duration timer appearing/disappearing.
+ */
+@keyframes t3team-icon-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.t3team-icon-fade-in {
+  animation: t3team-icon-fade-in 0.2s ease-out 0.1s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t3team-label-shimmer {
+    animation: none;
+  }
+  .t3team-status-roll-in {
+    animation: none;
+  }
+  .t3team-status-roll-out {
+    animation: none;
+    opacity: 0;
+  }
+  .t3team-icon-pulse,
+  .t3team-icon-fade-in {
+    animation: none;
+  }
+}
