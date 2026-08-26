@@ -68,3 +68,18 @@ export class ServerCliBuildAssetMissingError extends Schema.TaggedErrorClass<Ser
     return `Missing build asset: ${this.assetPath}. Run the build subcommand first.`;
   }
 }
+
+export class ServerCliWebClientMissingError extends Schema.TaggedErrorClass<ServerCliWebClientMissingError>()(
+  "ServerCliWebClientMissingError",
+  {
+    webDist: Schema.String,
+  },
+) {
+  override get message(): string {
+    return (
+      `The web client was not built into ${this.webDist} even after running the web build; ` +
+      `the packed server cannot serve its UI (first boot would answer 503 on "/"). ` +
+      `Fix the web build and re-run the server build.`
+    );
+  }
+}
