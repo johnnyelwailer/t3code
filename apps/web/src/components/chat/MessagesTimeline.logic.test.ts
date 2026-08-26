@@ -10,6 +10,10 @@ import {
   resolveAssistantMessageCopyState,
   shouldPreserveAssistantLineBreaks,
 } from "./MessagesTimeline.logic";
+import {
+  EMPTY_ACTIVE_AGENTS,
+  mergeActiveAgentsAndChildren,
+} from "../../t3team/chat/t3team-activeAgentsCore";
 import type { TimelineEntry as LogicTimelineEntry } from "../../session-logic";
 
 function msg(
@@ -1778,5 +1782,184 @@ describe("computeStableMessagesTimelineRows", () => {
 
     expect(reordered).not.toBe(initial);
     expect(reordered.result).toEqual([initial.result[1], initial.result[0]]);
+  });
+});
+
+describe("deriveMessagesTimelineRows: idle active-agents row (GHE #201)", () => {
+  const baseInput = {
+    timelineEntries: [] as never[],
+    isWorking: false,
+    activeTurnStartedAt: null,
+    turnDiffSummaryByAssistantMessageId: new Map() as never,
+    revertTurnCountByUserMessageId: new Map() as never,
+  };
+
+  it("appends the working-row surface when the main turn is idle but agents are present", () => {
+    const rows = deriveMessagesTimelineRows({
+      ...baseInput,
+      idleActiveAgentsPresent: true,
+    });
+    expect(rows).toEqual([
+      { kind: "working", id: "working-indicator-row", createdAt: null, showThinking: false },
+    ]);
+  });
+
+  it("omits the row when the main turn is idle and no agents are present", () => {
+    const rows = deriveMessagesTimelineRows({ ...baseInput, idleActiveAgentsPresent: false });
+    expect(rows).toEqual([]);
+  });
+
+  it("keeps thread-error ahead of the idle active-agents row", () => {
+    const rows = deriveMessagesTimelineRows({
+      ...baseInput,
+      threadError: "something failed",
+      idleActiveAgentsPresent: true,
+    });
+    expect(rows.map((row) => row.kind)).toEqual(["thread-error"]);
+  });
+
+  it("keeps the resume offer ahead of the idle active-agents row", () => {
+    const rows = deriveMessagesTimelineRows({
+      ...baseInput,
+      resumeOffer: true,
+      idleActiveAgentsPresent: true,
+    });
+    expect(rows.map((row) => row.kind)).toEqual(["resume"]);
+  });
+});
+
+describe("mergeActiveAgentsAndChildren (GHE #201)", () => {
+  const child = (overrides: Record<string, unknown>) =>
+    ({
+      id: "child-1",
+      title: "Fix the retry test",
+      status: "running",
+      activityLabel: null,
+      childStatusUpdatedAt: null,
+      lastMessageAt: null,
+      ...overrides,
+    }) as unknown as Parameters<typeof mergeActiveAgentsAndChildren>[0]["childThreads"][number];
+
+  const subagent = (overrides: Record<string, unknown>) =>
+    ({
+      id: "agent-1",
+      title: "Review release risks",
+      status: "running",
+      progress: null,
+      lastToolName: null,
+      updatedAt: null,
+      ...overrides,
+    }) as unknown as Parameters<
+      typeof mergeActiveAgentsAndChildren
+    >[0]["agentPanelModel"]["directAgents"][number];
+
+  const model = (overrides: Record<string, unknown> = {}) =>
+    ({ directAgents: [], workflows: [], ...overrides }) as never;
+
+  it("merges only active agents: running child threads + running/waiting subagents", () => {
+    const entries = mergeActiveAgentsAndChildren({
+      childThreads: [
+        child({ id: "c-run", title: "Running child" }),
+        child({ id: "c-idle", status: "idle" }),
+        child({ id: "c-done", status: "completed" }),
+        child({ id: "c-err", status: "error" }),
+      ],
+      agentPanelModel: model({
+        directAgents: [
+          subagent({ id: "a-run", title: "Running agent" }),
+          subagent({ id: "a-wait", status: "waiting" }),
+          subagent({ id: "a-ok", status: "success" }),
+          subagent({ id: "a-err", status: "error" }),
+        ],
+      }),
+    });
+    expect(entries.map((entry) => entry.id)).toEqual([
+      "child:c-run",
+      "agent:a-run",
+      "agent:a-wait",
+    ]);
+    expect(entries[0]).toMatchObject({
+      source: "child",
+      title: "Running child",
+      statusLabel: "Working",
+    });
+    expect(entries[1]).toMatchObject({
+      source: "subagent",
+      title: "Running agent",
+      statusLabel: "Working",
+    });
+    expect(entries[2]).toMatchObject({ source: "subagent", statusLabel: "Waiting" });
+  });
+
+  it("prefers the live subagent label (progress > lastToolName > Working)", () => {
+    const entries = mergeActiveAgentsAndChildren({
+      childThreads: [],
+      agentPanelModel: model({
+        directAgents: [
+          subagent({ id: "a-p", progress: "Extracting the schema" }),
+          subagent({ id: "a-t", progress: null, lastToolName: "bash" }),
+          subagent({ id: "a-bare" }),
+        ],
+      }),
+    });
+    expect(entries.map((entry) => entry.statusLabel)).toEqual([
+      "Extracting the schema",
+      "bash",
+      "Working",
+    ]);
+  });
+
+  it("walks workflow phases and unphased members", () => {
+    const entries = mergeActiveAgentsAndChildren({
+      childThreads: [],
+      agentPanelModel: model({
+        workflows: [
+          {
+            workflow: subagent({ id: "wf" }),
+            phases: [
+              {
+                index: 0,
+                title: "Phase A",
+                members: [
+                  subagent({ id: "a-in-phase", title: "In phase" }),
+                  subagent({ id: "a-settled", status: "success" }),
+                ],
+                state: "running",
+                activeCount: 1,
+                settledCount: 1,
+              },
+            ],
+            unphasedMembers: [subagent({ id: "a-orphan", status: "waiting", title: "Orphan" })],
+          },
+        ],
+      }),
+    });
+    expect(entries.map((entry) => entry.id)).toEqual(["agent:a-in-phase", "agent:a-orphan"]);
+  });
+
+  it("returns the stable empty array when nothing is active", () => {
+    const entries = mergeActiveAgentsAndChildren({
+      childThreads: [child({ id: "c-idle", status: "idle" })],
+      agentPanelModel: model({ directAgents: [subagent({ id: "a-ok", status: "success" })] }),
+    });
+    expect(entries).toEqual([]);
+    expect(entries).toBe(EMPTY_ACTIVE_AGENTS);
+  });
+
+  it("changes the child activityKey when any live field changes", () => {
+    const base = mergeActiveAgentsAndChildren({
+      childThreads: [
+        child({ id: "c", lastMessageAt: "2026-01-01T00:00:00Z", activityLabel: "Reading" }),
+      ],
+      agentPanelModel: model(),
+    })[0];
+    const updated = mergeActiveAgentsAndChildren({
+      childThreads: [
+        child({ id: "c", lastMessageAt: "2026-01-01T00:00:05Z", activityLabel: "Reading" }),
+      ],
+      agentPanelModel: model(),
+    })[0];
+    expect(base && updated).toBeTruthy();
+    expect(updated!.activityKey).not.toBe(base!.activityKey);
   });
 });
