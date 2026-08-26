@@ -75,6 +75,10 @@ type LegacyProviderRuntimeEvent = {
 function makeFakeAdapter(provider: ProviderDriverKind) {
   const sessions = new Map<ThreadId, ProviderSession>();
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
+  // Distinct turn id per sendTurn so multi-turn scenarios (e.g. a superseded
+  // turn) get real turn ids; the first turn keeps the historical
+  // `turn-<threadId>` shape existing tests compare against.
+  const turnsPerThread = new Map<ThreadId, number>();
 
   const startSession = (
     input: ProviderSessionStartInput,
@@ -111,9 +115,13 @@ function makeFakeAdapter(provider: ProviderDriverKind) {
         }),
       );
     }
+    const n = (turnsPerThread.get(input.threadId) ?? 0) + 1;
+    turnsPerThread.set(input.threadId, n);
     return Effect.succeed({
       threadId: input.threadId,
-      turnId: asTurnId(`turn-${String(input.threadId)}`),
+      turnId: asTurnId(
+        n === 1 ? `turn-${String(input.threadId)}` : `turn-${String(input.threadId)}-${String(n)}`,
+      ),
     });
   };
 
@@ -354,6 +362,60 @@ stalledHarness.layer("turn inactivity watchdog: stalled turn", (it) => {
       assert.equal(codexStalled.interruptTurnCalls.length, 1);
       assert.equal(codexStalled.interruptTurnCalls[0]?.[1], undefined);
     }),
+  );
+
+  it.effect(
+    "a terminal event for an older superseded turn does not clear the current turn's watchdog",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        codexStalled.interruptTurnCalls.length = 0;
+
+        yield* startCodexSession(provider, asThreadId("thread-supersede"));
+        const firstTurn = yield* provider.sendTurn({
+          threadId: asThreadId("thread-supersede"),
+          input: "stuck message",
+          attachments: [],
+        });
+        // The user sends a NEW message: the host arms the watchdog for the
+        // new turn (replacing the entry).
+        const secondTurn = yield* provider.sendTurn({
+          threadId: asThreadId("thread-supersede"),
+          input: "fresh message",
+          attachments: [],
+        });
+        yield* drainFibers;
+
+        // The pack settles the SUPERSEDED first turn (turn.aborted /
+        // "superseded by a new message") AFTER the new turn was armed. That
+        // stale terminal event must NOT clear the new turn's watchdog entry —
+        // otherwise the new turn loses its stall backstop the moment it
+        // starts (the observed "new message doesn't recover a stuck turn").
+        codexStalled.emit({
+          type: "turn.aborted",
+          eventId: asEventId("superseded-abort"),
+          provider: CODEX_DRIVER,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          threadId: asThreadId("thread-supersede"),
+          turnId: firstTurn.turnId,
+          payload: { reason: "superseded by a new message" },
+        });
+        yield* drainFibers;
+
+        // The new turn is still armed: advancing past the budget fires the
+        // watchdog for the CURRENT turn, not for the superseded one.
+        yield* advanceTestClock(600_000);
+        yield* drainFibers;
+        assert.equal(
+          codexStalled.interruptTurnCalls.length,
+          1,
+          "watchdog still armed for the new turn",
+        );
+        assert.deepEqual(codexStalled.interruptTurnCalls[0], [
+          asThreadId("thread-supersede"),
+          secondTurn.turnId,
+        ]);
+      }),
   );
 });
 

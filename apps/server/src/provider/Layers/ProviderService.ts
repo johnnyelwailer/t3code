@@ -450,17 +450,31 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
    * the thread is alive, so re-arm the full budget from it; terminal
    * events settle the entry. No entry means no in-flight turn — a no-op,
    * so healthy providers see zero behavior change.
+   *
+   * Turn-scoped terminal events (turn.completed / turn.aborted) only settle
+   * the entry when they belong to the turn the entry is armed for. A
+   * SUPERSeded turn's late `turn.aborted` must not clear the watchdog of the
+   * turn that replaced it — otherwise a new user message that interrupts a
+   * stuck turn would disarm the backstop for exactly the turn now in flight
+   * (GHE #256: pack emits the old turn's `turn.aborted` "superseded by a
+   * new message" alongside the new turn's `turn.started`). `session.exited`
+   * is thread-scoped and always settles.
    */
   const recordTurnActivity = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
     Ref.get(turnWatchdogs).pipe(
       Effect.flatMap((map) => {
         const entry = map.get(event.threadId);
         if (entry === undefined) return Effect.void;
-        if (
-          event.type === "turn.completed" ||
-          event.type === "turn.aborted" ||
-          event.type === "session.exited"
-        ) {
+        if (event.type === "session.exited") {
+          return clearTurnWatchdog(event.threadId);
+        }
+        if (event.type === "turn.completed" || event.type === "turn.aborted") {
+          // Only the armed turn's own terminal event settles it; a terminal
+          // event for an older/superseded turn is ignored so it cannot clear
+          // the watchdog of the turn that is now in flight.
+          if (event.turnId !== undefined && event.turnId !== entry.turnId) {
+            return Effect.void;
+          }
           return clearTurnWatchdog(event.threadId);
         }
         return armTurnWatchdog(event.threadId, entry.turnId, entry.instanceId, entry.provider);
