@@ -10,6 +10,7 @@ import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
 import { T3TeamActiveAgentsStepLabel } from "~/t3team/chat/t3team-activeAgentsStepLabel";
+import { ACTIVITY_STATE_WORDS, type ActivityState } from "~/t3team/t3team-activityStateDisplay";
 import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   emptyAgentPanelModel,
@@ -218,6 +219,14 @@ interface TimelineRowActivityState {
   activeAgents: readonly ActiveAgentEntry[];
   /** GHE #201: opens the Agents panel from the working-row indicator. */
   onOpenAgents: () => void;
+  /**
+   * GHE #236/#208: the thread's deterministic activity state. Bases the
+   * working row's status word so the conversation renders ONE state-driven
+   * live element instead of a static "Working" line plus a second
+   * "Thinking" row. Null/absent (old servers, idle) falls back to the
+   * pre-#208 "Working" base word.
+   */
+  threadActivityState?: ActivityState | null;
 }
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
@@ -276,6 +285,8 @@ interface MessagesTimelineProps {
   isWorking: boolean;
   workingStepLabel?: string | null;
   activeTurnStartedAt: string | null;
+  /** GHE #236/#208: thread activity state — bases the working row's status word. */
+  threadActivityState?: ActivityState | null;
   listRef: React.RefObject<LegendListRef | null>;
   timelineEntries: ReturnType<typeof deriveTimelineEntries>;
   latestTurn: TimelineLatestTurn | null;
@@ -336,6 +347,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   isWorking,
   workingStepLabel = null,
   activeTurnStartedAt,
+  threadActivityState = null,
   agentPanelModel = EMPTY_AGENT_PANEL_MODEL,
   /** GHE #201: active agents for the working row (running child threads + live subagents). */
   activeAgents = EMPTY_ACTIVE_AGENTS,
@@ -751,6 +763,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workingStepLabel,
       activeAgents,
       onOpenAgents,
+      threadActivityState,
     }),
     [
       activeAgents,
@@ -758,6 +771,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isWorking,
       latestTurn?.turnId,
       onOpenAgents,
+      threadActivityState,
       workingStepLabel,
     ],
   );
@@ -1603,7 +1617,8 @@ const TurnPlanTimelineRow = memo(function TurnPlanTimelineRow({
 });
 
 export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { isWorking, workingStepLabel, activeAgents, onOpenAgents } = use(TimelineRowActivityCtx);
+  const { isWorking, workingStepLabel, activeAgents, onOpenAgents, threadActivityState } =
+    use(TimelineRowActivityCtx);
   const hasActiveAgents = activeAgents.length > 0;
   // GHE #201: main turn idle but agents active — the row leads with the
   // count instead of a (nonexistent) timer, and the label defaults to the
@@ -1613,6 +1628,11 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     const last = activeAgents[activeAgents.length - 1];
     return last ? `${last.title} — ${last.statusLabel}` : null;
   })();
+  // GHE #236: one live status element per turn. The deterministic state word
+  // (GHE #208) is the base; "Working" stands in only when no state word is
+  // available (old servers / stale idle state). The second "Thinking" row
+  // that #7152 rendered beneath this line is gone — it was a duplicate.
+  const stateWord = threadActivityState ? ACTIVITY_STATE_WORDS[threadActivityState] : "Working";
   return (
     <div>
       <div className="border-b border-border/60 pb-2 pt-1">
@@ -1623,10 +1643,10 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
             </>
           ) : row.createdAt ? (
             <>
-              Working for <WorkingTimer createdAt={row.createdAt} />
+              {stateWord} for <WorkingTimer createdAt={row.createdAt} />
             </>
           ) : (
-            "Working..."
+            `${stateWord}...`
           )}
           {hasActiveAgents ? (
             <T3TeamActiveAgentsIndicator entries={activeAgents} onOpenAgents={onOpenAgents} />
@@ -1638,11 +1658,6 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
           ) : null}
         </div>
       </div>
-      {row.showThinking ? (
-        <div className="mt-1">
-          <ThinkingActivityRow />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -1803,10 +1818,6 @@ function LiveActivityRow({
       </div>
     </div>
   );
-}
-
-function ThinkingActivityRow() {
-  return <LiveActivityRow label="Thinking" />;
 }
 
 function LiveActivityContent({

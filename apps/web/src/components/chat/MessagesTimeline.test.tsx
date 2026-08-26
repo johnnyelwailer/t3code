@@ -1232,7 +1232,27 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("tool call failed");
   });
 
-  it("aligns the iconless Thinking row with the working timer", () => {
+  it("renders exactly ONE live status row: the state word bases it, no duplicate Thinking row (GHE #236)", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="thinking"
+        timelineEntries={[]}
+      />,
+    );
+
+    // One live status element per turn: the state word (GHE #208) is the base
+    // of the working row itself — not a second row beneath it.
+    expect(markup.split("Thinking for").length - 1).toBe(1);
+    // The pre-#236 duplicate: an iconless "Thinking" LiveActivityRow rendered
+    // under the "Working" line. It no longer exists.
+    expect(markup).not.toContain("live-activity-focus");
+    expect(markup).not.toContain("gap-1.5 py-0.5 px-1");
+  });
+
+  it("falls back to the 'Working' base word when no activity state is available", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
@@ -1243,8 +1263,39 @@ describe("MessagesTimeline", () => {
     );
 
     expect(markup).toContain("Working for");
-    expect(markup).toContain("Thinking");
-    expect(markup).toContain("gap-1.5 py-0.5 px-1");
+    // No second live row of any kind.
+    expect(markup).not.toContain("live-activity-focus");
+  });
+
+  it("pins the live working row to the bottom, after content the turn already streamed (GHE #236)", () => {
+    const turnId = TurnId.make("turn-working-pinned");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        latestTurn={{
+          turnId,
+          state: "running",
+          startedAt: MESSAGE_CREATED_AT,
+          completedAt: null,
+        }}
+        runningTurnId={turnId}
+        timelineEntries={[
+          buildUserTimelineEntry("First ask"),
+          {
+            ...buildAssistantTimelineEntry("Part of the answer."),
+            message: { ...buildAssistantTimelineEntry("Part of the answer.").message, turnId },
+          },
+        ]}
+      />,
+    );
+
+    const messageIndex = markup.indexOf("Part of the answer.");
+    const workingIndex = markup.indexOf("Working for");
+    expect(workingIndex).toBeGreaterThan(messageIndex);
+    // Still exactly one live status element.
+    expect(markup.split("Working for").length - 1).toBe(1);
   });
 
   it("renders review comment contexts as structured cards instead of raw tags", () => {

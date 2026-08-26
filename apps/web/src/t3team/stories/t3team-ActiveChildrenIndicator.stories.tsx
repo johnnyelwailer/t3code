@@ -117,7 +117,6 @@ const WORKING_ROW = {
   kind: "working" as const,
   id: "working-indicator-row",
   createdAt: "2026-08-25T16:58:00.000Z",
-  showThinking: false,
 };
 
 /**

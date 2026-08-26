@@ -967,10 +967,12 @@ describe("deriveMessagesTimelineRows", () => {
     });
 
     expect(rows.some((row) => row.kind === "turn-fold")).toBe(false);
+    // GHE #236: the working row is pinned to the BOTTOM — after everything the
+    // active turn has already streamed — never at the turn start mid-conversation.
     expect(rows.map((row) => row.id)).toEqual([
-      "working-indicator-row",
       "assistant-thought-entry",
       "work-live:work-entry-1",
+      "working-indicator-row",
     ]);
   });
 
@@ -1035,7 +1037,7 @@ describe("deriveMessagesTimelineRows", () => {
       revertTurnCountByUserMessageId: new Map(),
     });
 
-    expect(rows.map((row) => row.kind)).toEqual(["working", "work-live"]);
+    expect(rows.map((row) => row.kind)).toEqual(["work-live", "working"]);
     expect(rows.find((row) => row.kind === "work-live")).toMatchObject({
       entry: { id: "running-command" },
       groupedEntries: [
@@ -1106,7 +1108,7 @@ describe("deriveMessagesTimelineRows", () => {
       revertTurnCountByUserMessageId: new Map(),
     });
 
-    expect(rows.map((row) => row.kind)).toEqual(["working", "work-toggle", "message", "work-live"]);
+    expect(rows.map((row) => row.kind)).toEqual(["work-toggle", "message", "work-live", "working"]);
     expect(rows.find((row) => row.kind === "work-toggle")).toMatchObject({
       hiddenCount: 1,
       summary: "Ran 1 command",
@@ -1173,7 +1175,7 @@ describe("deriveMessagesTimelineRows", () => {
       revertTurnCountByUserMessageId: new Map(),
     });
 
-    expect(rows.map((row) => row.kind)).toEqual(["working", "work-live", "message", "work-live"]);
+    expect(rows.map((row) => row.kind)).toEqual(["work-live", "message", "work-live", "working"]);
     expect(rows.filter((row) => row.kind === "work-live").map((row) => row.entry.id)).toEqual([
       "first-running",
       "second-running",
@@ -1317,7 +1319,7 @@ describe("deriveMessagesTimelineRows", () => {
       revertTurnCountByUserMessageId: new Map(),
     });
 
-    expect(rows.map((row) => row.kind)).toEqual(["working", "work-live"]);
+    expect(rows.map((row) => row.kind)).toEqual(["work-live", "working"]);
     expect(rows.find((row) => row.kind === "work-live")).toMatchObject({
       entry: { id: "latest-command" },
       groupedEntries: [{ id: "latest-command" }],
@@ -1799,9 +1801,7 @@ describe("deriveMessagesTimelineRows: idle active-agents row (GHE #201)", () => 
       ...baseInput,
       idleActiveAgentsPresent: true,
     });
-    expect(rows).toEqual([
-      { kind: "working", id: "working-indicator-row", createdAt: null, showThinking: false },
-    ]);
+    expect(rows).toEqual([{ kind: "working", id: "working-indicator-row", createdAt: null }]);
   });
 
   it("omits the row when the main turn is idle and no agents are present", () => {

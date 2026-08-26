@@ -7212,6 +7212,7 @@ function ChatViewContent(props: ChatViewProps) {
                 isWorking={isWorking}
                 workingStepLabel={workingStepLabel}
                 activeTurnStartedAt={activeWorkStartedAt}
+                threadActivityState={activeThread.activityState ?? null}
                 listRef={legendListRef}
                 timelineEntries={timelineEntries}
                 latestTurn={activeLatestTurn}
