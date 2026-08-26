@@ -1636,25 +1636,32 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   return (
     <div>
       <div className="border-b border-border/60 pb-2 pt-1">
-        <div className="px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
-          {!isWorking && hasActiveAgents ? (
-            <>
-              {activeAgents.length} active agent{activeAgents.length === 1 ? "" : "s"}
-            </>
-          ) : row.createdAt ? (
-            <>
-              {stateWord} for <WorkingTimer createdAt={row.createdAt} />
-            </>
-          ) : (
-            `${stateWord}...`
-          )}
+        {/* GHE #238: single-line, no wrap. The row is a flex line; the timer
+            text and the dots never shrink, and the step label is the sole
+            shrink/truncate point (it clips internally via .t3team-aci-step). */}
+        <div className="flex items-baseline px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
+          <span className="shrink-0">
+            {!isWorking && hasActiveAgents ? (
+              <>
+                {activeAgents.length} active agent{activeAgents.length === 1 ? "" : "s"}
+              </>
+            ) : row.createdAt ? (
+              <>
+                {stateWord} for <WorkingTimer createdAt={row.createdAt} />
+              </>
+            ) : (
+              `${stateWord}...`
+            )}
+          </span>
           {hasActiveAgents ? (
             <T3TeamActiveAgentsIndicator entries={activeAgents} onOpenAgents={onOpenAgents} />
           ) : null}
           {hasActiveAgents ? (
             <T3TeamActiveAgentsStepLabel label={workingStepLabel ?? idleAgentSummary} />
           ) : workingStepLabel ? (
-            <span className="ml-2 text-muted-foreground/55">{workingStepLabel}</span>
+            <span className="ml-2 min-w-0 truncate text-muted-foreground/55">
+              {workingStepLabel}
+            </span>
           ) : null}
         </div>
       </div>
