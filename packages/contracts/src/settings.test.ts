@@ -427,3 +427,33 @@ describe("ServerSettingsPatch string normalization", () => {
     expect(encoded.providers?.codex?.launchArgs).toBe("--strict-config");
   });
 });
+
+describe("ServerSettings agentInstructions", () => {
+  it("defaults to empty (driver built-in default) and round-trips a value", () => {
+    expect(decodeServerSettings({}).agentInstructions).toBe("");
+
+    const value = "Keep replies short and practical. Prefer examples over long prose.";
+    const decoded = decodeServerSettings({ agentInstructions: `  ${value}  ` });
+    expect(decoded.agentInstructions).toBe(value);
+    expect(encodeServerSettings(decoded).agentInstructions).toBe(value);
+  });
+
+  it("rejects values above the cap at the settings boundary", () => {
+    expect(() => decodeServerSettings({ agentInstructions: "x".repeat(20_001) })).toThrow();
+    expect(decodeServerSettings({ agentInstructions: "x".repeat(20_000) }).agentInstructions).toBe(
+      "x".repeat(20_000),
+    );
+  });
+
+  it("accepts the patch with and without the field", () => {
+    expect(decodeServerSettingsPatch({ agentInstructions: "be brief" }).agentInstructions).toBe(
+      "be brief",
+    );
+    expect(decodeServerSettingsPatch({}).agentInstructions).toBeUndefined();
+    expect(() => decodeServerSettingsPatch({ agentInstructions: "x".repeat(20_001) })).toThrow();
+  });
+
+  it("keeps the decoded default in DEFAULT_SERVER_SETTINGS", () => {
+    expect(DEFAULT_SERVER_SETTINGS.agentInstructions).toBe("");
+  });
+});

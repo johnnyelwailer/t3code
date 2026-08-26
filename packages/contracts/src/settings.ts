@@ -628,9 +628,39 @@ export const BackgroundActivitySettings = Schema.Struct({
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type BackgroundActivitySettings = typeof BackgroundActivitySettings.Type;
 
+/**
+ * Free-form global agent instructions / personality override. Empty string
+ * (the default) means "use the driver's built-in default". Bounded so a
+ * settings file cannot smuggle a whole prompt into a single field.
+ */
+export const MAX_AGENT_INSTRUCTIONS_CHARS = 20_000;
+export const AgentInstructions = Schema.String.pipe(
+  Schema.check(Schema.isMaxLength(MAX_AGENT_INSTRUCTIONS_CHARS)),
+  Schema.decodeTo(
+    Schema.String,
+    SchemaTransformation.transformOrFail({
+      decode: (value) => Effect.succeed(value.trim()),
+      encode: (value) => Effect.succeed(value.trim()),
+    }),
+  ),
+);
+export type AgentInstructions = typeof AgentInstructions.Type;
+
 export const ServerSettings = Schema.Struct({
   // Watch the official Codex and Claude profile folders and surface matching sessions.
   showLocalProviderSessions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /**
+   * Global "Personality / Instructions" override for agent sessions.
+   * Empty (default) = the provider driver's built-in default; a non-empty
+   * value replaces that default for every new agent session on this server
+   * without touching the driver's fixed operational rules (drivers own
+   * whether any of those can be overridden at all).
+   *
+   * Server-authoritative rather than client-local: prompt construction
+   * happens on the server, and the answer must not differ between a desktop
+   * window and a phone attached to the same server.
+   */
+  agentInstructions: AgentInstructions.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   // Legacy token-by-token assistant output. Deliberately a fresh key (was
   // `enableAssistantStreaming`): decoding drops the old key, so everyone,
   // including prior opt-ins, resets to the buffered default.
@@ -880,6 +910,7 @@ const OpenCodeSettingsPatch = Schema.Struct({
 export const ServerSettingsPatch = Schema.Struct({
   // Server settings
   showLocalProviderSessions: Schema.optionalKey(Schema.Boolean),
+  agentInstructions: Schema.optionalKey(AgentInstructions),
   enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),

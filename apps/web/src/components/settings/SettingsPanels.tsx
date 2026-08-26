@@ -127,6 +127,7 @@ import {
   isProviderUpdateActive,
   type ProviderUpdateCandidate,
 } from "../ProviderUpdateLaunchNotification.logic";
+import { AgentInstructionsSettingRow } from "./AgentInstructionsSetting";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
 import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
@@ -1923,6 +1924,10 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection title="General">
+        <AgentInstructionsSettingRow
+          value={settings.agentInstructions}
+          onChange={(agentInstructions) => updateSettings({ agentInstructions })}
+        />
         <SettingsRow
           {...searchableSetting("project-grouping")}
           description="Combine matching repositories across environments."
