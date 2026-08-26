@@ -88,12 +88,15 @@ export function T3TeamActiveAgentsIndicator({
   const overflow = entries.length - visible.length;
   const groupLabel = `${entries.length} active agent${entries.length === 1 ? "" : "s"} — open agents`;
 
+  // No title attribute on the group: the native hover tooltip was redundant —
+  // the working row already renders the status word + step label right next to
+  // the dots, and hovering a dot flips that label to the agent's live status.
+  // aria-label keeps the info for screen readers.
   return (
     <span
       role="button"
       tabIndex={0}
       aria-label={groupLabel}
-      title={groupLabel}
       onClick={onOpenAgents}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
