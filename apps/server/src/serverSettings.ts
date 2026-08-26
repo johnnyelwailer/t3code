@@ -419,7 +419,7 @@ const make = Effect.gen(function* () {
   // persisted file (otherwise the user file would pin it and defeat the load-time policy), while
   // upstream's used-provider restoration needs both enabled states of cursor/grok/opencode kept,
   // because provider history cannot recover a new opt-in.
-  const persistedDefaultServerSettings: ServerSettings = {
+  const persistedDefaultServerSettings = {
     ...configuredDefaultServerSettings,
     providers: {
       ...configuredDefaultServerSettings.providers,

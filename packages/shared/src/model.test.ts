@@ -16,7 +16,6 @@ import {
   getProviderOptionDescriptors,
   getProviderOptionBooleanSelectionValue,
   getProviderOptionStringSelectionValue,
-  applyClaudePromptEffortPrefix,
   isClaudeUltrathinkPrompt,
   normalizeCustomModelSlug,
   normalizeModelSlug,
