@@ -248,6 +248,10 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     else startRecording();
   }, [state, startRecording, stopRecording]);
 
+  // Public stop: commits the transcript and exits voice mode WITHOUT the
+  // auto-resume that auto-sends trigger (a manual send ends voice mode).
+  const stop = useCallback(() => stopRecording(false), [stopRecording]);
+
   return {
     supported,
     state,
@@ -257,5 +261,6 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     toggle,
     switchLang,
     setBarEl,
+    stop,
   };
 }
