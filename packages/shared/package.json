@@ -242,6 +242,10 @@
     "./voiceInputUi": {
       "types": "./src/voiceInputUi.tsx",
       "import": "./src/voiceInputUi.tsx"
+    },
+    "./claudeCompaction": {
+      "types": "./src/claudeCompaction.ts",
+      "import": "./src/claudeCompaction.ts"
     }
   },
   "scripts": {

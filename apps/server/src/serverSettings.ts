@@ -42,6 +42,7 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { writeFileStringAtomically } from "./atomicWrite.ts";
 import * as ServerConfig from "./config.ts";
 import { type DeepPartial, deepMerge } from "@t3tools/shared/Struct";
@@ -242,6 +243,66 @@ export const layerTest = (overrides: DeepPartial<ServerSettings> = {}) =>
 
 const ServerSettingsJson = fromLenientJson(ServerSettings);
 const decodeServerSettingsJsonExit = Schema.decodeUnknownExit(ServerSettingsJson);
+const PersistedOptionalProviderSettings = Schema.Struct({
+  providers: Schema.optionalKey(
+    Schema.Struct({
+      cursor: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
+      grok: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
+      opencode: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
+    }),
+  ),
+});
+const decodePersistedOptionalProviderSettingsJsonExit = Schema.decodeUnknownExit(
+  fromLenientJson(PersistedOptionalProviderSettings),
+);
+
+function restoreUsedProviders(
+  settings: ServerSettings,
+  persisted: typeof PersistedOptionalProviderSettings.Type,
+  providerHistory: ReadonlyArray<{
+    readonly providerName: string;
+    readonly providerInstanceId: string | null;
+  }>,
+): ServerSettings {
+  const usedProviders = new Set(providerHistory.map(({ providerName }) => providerName));
+  const usedProviderInstances = new Set(
+    providerHistory.map(
+      ({ providerName, providerInstanceId }) => providerInstanceId ?? providerName,
+    ),
+  );
+  const providerInstances = Object.fromEntries(
+    Object.entries(settings.providerInstances).map(([instanceId, instance]) => [
+      instanceId,
+      instance.enabled === undefined &&
+      (instance.driver === "cursor" ||
+        instance.driver === "grok" ||
+        instance.driver === "opencode") &&
+      usedProviderInstances.has(instanceId)
+        ? { ...instance, enabled: true }
+        : instance,
+    ]),
+  );
+
+  return {
+    ...settings,
+    providers: {
+      ...settings.providers,
+      cursor: {
+        ...settings.providers.cursor,
+        enabled: persisted.providers?.cursor?.enabled ?? usedProviders.has("cursor"),
+      },
+      grok: {
+        ...settings.providers.grok,
+        enabled: persisted.providers?.grok?.enabled ?? usedProviders.has("grok"),
+      },
+      opencode: {
+        ...settings.providers.opencode,
+        enabled: persisted.providers?.opencode?.enabled ?? usedProviders.has("opencode"),
+      },
+    },
+    providerInstances,
+  };
+}
 
 /**
  * Whether a model selection targets a provider that is currently enabled.
@@ -343,6 +404,7 @@ const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const secretStore = yield* ServerSecretStore.ServerSecretStore;
+  const sql = yield* SqlClient.SqlClient;
   const writeSemaphore = yield* Semaphore.make(1);
   const cacheKey = "settings" as const;
   const changesPubSub = yield* PubSub.unbounded<ServerSettings>();
@@ -352,6 +414,19 @@ const make = Effect.gen(function* () {
   const configuredDefaultServerSettings: ServerSettings = {
     ...DEFAULT_SERVER_SETTINGS,
     textGenerationModelSelection: getConfiguredDefaultModelSelection(DEFAULT_TEXT_GENERATION_MODEL),
+  };
+  // Sparse-write defaults: the Nexplore-configured text-generation selection is stripped from the
+  // persisted file (otherwise the user file would pin it and defeat the load-time policy), while
+  // upstream's used-provider restoration needs both enabled states of cursor/grok/opencode kept,
+  // because provider history cannot recover a new opt-in.
+  const persistedDefaultServerSettings: ServerSettings = {
+    ...configuredDefaultServerSettings,
+    providers: {
+      ...configuredDefaultServerSettings.providers,
+      cursor: { ...configuredDefaultServerSettings.providers.cursor, enabled: undefined },
+      grok: { ...configuredDefaultServerSettings.providers.grok, enabled: undefined },
+      opencode: { ...configuredDefaultServerSettings.providers.opencode, enabled: undefined },
+    },
   };
   yield* Effect.addFinalizer(() => Scope.close(watcherScope, Exit.void));
 
@@ -381,32 +456,76 @@ const make = Effect.gen(function* () {
   );
 
   const loadSettingsFromDisk = Effect.gen(function* () {
-    if (!(yield* readConfigExists)) {
-      return configuredDefaultServerSettings;
+    // Nexplore policy: start from the configured defaults (pack-aware text-generation model
+    // selection) and only move off them when the user persisted settings.
+    let settings = configuredDefaultServerSettings;
+    let persisted: typeof PersistedOptionalProviderSettings.Type = {};
+    let rawSettings = Option.none<{
+      readonly textGenerationModelSelection?: unknown;
+    }>();
+
+    if (yield* readConfigExists) {
+      const raw = yield* readRawConfig;
+      rawSettings = decodeRawServerSettings(raw);
+      const decoded = decodeServerSettingsJsonExit(raw);
+      const persistedSettings = decodePersistedOptionalProviderSettingsJsonExit(raw);
+      if (persistedSettings._tag === "Success") {
+        persisted = persistedSettings.value;
+      }
+      if (decoded._tag === "Failure" || persistedSettings._tag === "Failure") {
+        const failure = decoded._tag === "Failure" ? decoded : persistedSettings;
+        if (failure._tag === "Failure") {
+          yield* Effect.logWarning("failed to parse settings.json, using defaults", {
+            path: settingsPath,
+            issues: Cause.pretty(failure.cause),
+            cause: failure.cause,
+          });
+        }
+      } else {
+        settings = decoded.value;
+      }
     }
 
-    const raw = yield* readRawConfig;
-    const decoded = decodeServerSettingsJsonExit(raw);
-    if (decoded._tag === "Failure") {
-      yield* Effect.logWarning("failed to parse settings.json, using defaults", {
-        path: settingsPath,
-        issues: Cause.pretty(decoded.cause),
-        cause: decoded.cause,
-      });
-      return configuredDefaultServerSettings;
-    }
-    const rawSettings = decodeRawServerSettings(raw);
-    const hasPersistedTextGenerationSelection = Option.exists(rawSettings, (settings) =>
-      Object.hasOwn(settings, "textGenerationModelSelection"),
+    const providerHistory = yield* sql<{
+      readonly providerName: string;
+      readonly providerInstanceId: string | null;
+    }>`
+      SELECT DISTINCT
+        provider_name AS "providerName",
+        provider_instance_id AS "providerInstanceId"
+      FROM projection_thread_sessions
+      WHERE provider_name IN ('cursor', 'grok', 'opencode')
+      UNION
+      SELECT DISTINCT
+        provider_name AS "providerName",
+        provider_instance_id AS "providerInstanceId"
+      FROM provider_session_runtime
+      WHERE provider_name IN ('cursor', 'grok', 'opencode')
+    `.pipe(
+      Effect.mapError(
+        (cause) =>
+          new ServerSettingsError({
+            settingsPath,
+            operation: "read-provider-history",
+            cause,
+          }),
+      ),
     );
-    const folded = foldProviderInstanceEnabledFlags(decoded.value);
+
+    // Nexplore policy override: pin the text-generation model selection to the configured
+    // default unless the user explicitly persisted one. Runs after upstream's used-provider
+    // restoration, which only touches provider enabled flags / providerInstances.
+    const restored = restoreUsedProviders(settings, persisted, providerHistory);
+    const hasPersistedTextGenerationSelection = Option.exists(rawSettings, (raw) =>
+      Object.hasOwn(raw, "textGenerationModelSelection"),
+    );
     return hasPersistedTextGenerationSelection
-      ? folded
-      : {
-          ...folded,
+      ? foldProviderInstanceEnabledFlags(restored)
+      : foldProviderInstanceEnabledFlags({
+          ...restored,
           textGenerationModelSelection:
             configuredDefaultServerSettings.textGenerationModelSelection,
-        };
+        });
   });
 
   const settingsCache = yield* Cache.make<typeof cacheKey, ServerSettings, ServerSettingsError>({
@@ -582,7 +701,7 @@ const make = Effect.gen(function* () {
   const writeSettingsAtomically = Effect.fnUntraced(
     function* (settings: ServerSettings) {
       const sparseSettingsJson = yield* encodeServerSettingsJson(
-        stripDefaultServerSettings(settings, configuredDefaultServerSettings) ?? {},
+        stripDefaultServerSettings(settings, persistedDefaultServerSettings) ?? {},
       );
 
       return yield* writeFileStringAtomically({
