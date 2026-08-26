@@ -14,6 +14,9 @@
     // presentational RecordingBar.tsx stay in Effect-lint scope.
     "src/voiceInputUi.tsx",
     "src/voiceInputUi/useVoiceInput.ts",
+    // Same scope: the component render test imports the browser voice UI
+    // modules above (excluded here) and uses react-dom/server.
+    "src/voiceInputUi.test.ts",
     // recognition.ts uses setTimeout (language-switch delay) and is imported
     // by its own test — both stay out of Effect-lint scope for the same
     // reason; the tests still run under vitest.

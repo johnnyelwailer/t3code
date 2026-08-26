@@ -109,6 +109,7 @@ import {
 import { type ComposerPromptEditorHandle, ComposerPromptEditor } from "../ComposerPromptEditor";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { ComposerVoiceInput } from "./ComposerVoiceInput";
+import { isElectron } from "../../env";
 import { ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
@@ -3303,6 +3304,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   <ComposerVoiceInput
                     onTranscript={(text) => insertComposerTextAtEnd(text)}
                     disabled={isConnecting || isComposerApprovalState || projectSelectionRequired}
+                    available={!isElectron}
                   />
 
                   {isComposerFooterCompact ? (

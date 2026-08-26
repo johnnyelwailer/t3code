@@ -48,6 +48,16 @@ export interface ComposerVoiceInputHandle {
 }
 
 export interface ComposerVoiceInputProps {
+  /**
+   * Host override for whether voice input is usable at all; when false the
+   * component renders nothing. Default true.
+   *
+   * Browsers expose `SpeechRecognition` even without a reachable backend
+   * (Electron on-prem: Chromium API present, Google STT network unreachable),
+   * so hosts that know voice can never work gate on this instead of
+   * `voice.supported`.
+   */
+  available?: boolean;
   onTranscript: (text: string) => void;
   onPartialTranscript?: (text: string) => void;
   onAutoSubmit?: () => void;
@@ -69,6 +79,7 @@ export interface ComposerVoiceInputProps {
 }
 
 export function ComposerVoiceInput({
+  available = true,
   onTranscript,
   onPartialTranscript,
   onAutoSubmit,
@@ -91,7 +102,7 @@ export function ComposerVoiceInput({
 
   useImperativeHandle(ref, () => ({ stop: voice.stop }), [voice.stop]);
 
-  if (!voice.supported) return null;
+  if (available === false || !voice.supported) return null;
 
   const isRecording = voice.state === "recording";
 
