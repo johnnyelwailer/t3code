@@ -4,9 +4,10 @@
  * "N idle · expand" disclosure row, nested sub-runs indented + collapsible.
  * Tree building/ordering live in `t3team-AgentsPanelForkSection.logic.ts`.
  */
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleAlertIcon, CircleCheckIcon } from "lucide-react";
 import { useState } from "react";
 
+import { ThreadActivityMorphIcon } from "~/components/ThreadActivityStatus";
 import { cn } from "~/lib/utils";
 import { formatRelativeTime } from "~/t3team/components/t3team-projectSidebarTimeLabels";
 import type { ProjectThread } from "~/t3team/t3team-types";
@@ -16,12 +17,41 @@ import {
   type SubRunOpenCallback,
 } from "./t3team-AgentsPanelForkSection.logic";
 
-const CHILD_STATUS: Record<ProjectThread["status"], { dot: string; label: string }> = {
-  idle: { dot: "bg-muted-foreground/50", label: "Idle" },
-  running: { dot: "bg-info", label: "Running" },
-  completed: { dot: "bg-success", label: "Completed" },
-  error: { dot: "bg-destructive", label: "Error" },
+const CHILD_STATUS: Record<ProjectThread["status"], { label: string }> = {
+  idle: { label: "Idle" },
+  running: { label: "Running" },
+  completed: { label: "Completed" },
+  error: { label: "Error" },
 };
+
+/**
+ * GHE #254: sub-run rows use the SAME status language as the parent card and the sidebar
+ * sub-run rows (t3team-SidebarSubRunRow) — the morphing ring while running, a check when
+ * done, a compact mark otherwise. Previously this tree rendered a plain colored dot for
+ * every state, so a running child looked identical to an idle one.
+ */
+function SubRunStatusIcon({ status }: { status: ProjectThread["status"] }) {
+  if (status === "running") {
+    return (
+      <span className="shrink-0 text-sky-600 dark:text-sky-400">
+        <ThreadActivityMorphIcon solid={false} size="sm" pulse />
+      </span>
+    );
+  }
+  if (status === "completed") {
+    return <CircleCheckIcon aria-hidden className="size-3 shrink-0 text-success" />;
+  }
+  if (status === "error") {
+    return <CircleAlertIcon aria-hidden className="size-3 shrink-0 text-destructive" />;
+  }
+  // GHE #254: idle keeps the SAME ring, faded + static, so every state reads
+  // at the ring's size instead of a shrunk dot.
+  return (
+    <span className="shrink-0 text-muted-foreground/40">
+      <ThreadActivityMorphIcon solid={false} size="sm" />
+    </span>
+  );
+}
 
 const INDENT_CLASS = "ml-3 border-l border-border/40 pl-2";
 
@@ -74,10 +104,7 @@ function SubRunRow({
         onClick={() => onOpen({ projectId: thread.projectId, threadId: thread.id })}
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
       >
-        <span
-          aria-hidden
-          className={cn("size-1.5 shrink-0 rounded-full", CHILD_STATUS[thread.status].dot)}
-        />
+        <SubRunStatusIcon status={thread.status} />
         <span className="min-w-0 flex-1 truncate text-sm">{thread.title}</span>
         <span className="shrink-0 font-mono text-[.7rem] text-muted-foreground/80">
           {CHILD_STATUS[thread.status].label}

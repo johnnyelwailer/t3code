@@ -1,4 +1,4 @@
-import { CircleCheckIcon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -99,11 +99,15 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
         <ThreadActivityMorphIcon solid={false} size="sm" pulse />
       </span>
     ) : child.status === "error" ? (
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />
+      <CircleAlertIcon aria-hidden className="size-3 shrink-0 text-destructive" />
     ) : child.status === "completed" ? (
       <CircleCheckIcon aria-hidden className="size-3 shrink-0 text-sidebar-muted-foreground/70" />
     ) : (
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-sidebar-muted-foreground/40" />
+      // GHE #254: idle keeps the SAME ring, just faded + static, so every
+      // state reads at the ring's size instead of a shrunk dot next to it.
+      <span className="shrink-0 text-sidebar-muted-foreground/40">
+        <ThreadActivityMorphIcon solid={false} size="sm" />
+      </span>
     );
   return (
     <li role="presentation" className="list-none">
@@ -114,7 +118,7 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
         onContextMenu={handleContextMenu}
         aria-current={props.isActive ? "page" : undefined}
         className={cn(
-          "relative flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-[calc(var(--sidebar-content-inset)+1rem)] text-left text-xs outline-none",
+          "relative flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-[calc(var(--sidebar-content-inset)+0.5rem)] text-left text-xs outline-none",
           props.isActive
             ? "bg-sidebar-row-active text-sidebar-foreground"
             : "text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
