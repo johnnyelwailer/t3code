@@ -399,11 +399,15 @@ function getEffectiveClaudeAgentEffort(
   return normalized ? (normalized as ClaudeSdkEffort) : null;
 }
 
-function isClaudeInterruptedMessage(message: string): boolean {
+export function isClaudeInterruptedMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
     normalized.includes("all fibers interrupted without error") ||
     normalized.includes("request was aborted") ||
+    // DOMException AbortError phrasing (undici/fetch layer): a mid-tool-call
+    // abort surfaces here and must read as an interruption, not a provider
+    // fault that fails the turn.
+    normalized.includes("this operation was aborted") ||
     normalized.includes("interrupted by user")
   );
 }

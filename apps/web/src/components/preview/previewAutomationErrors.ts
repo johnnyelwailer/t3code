@@ -134,6 +134,55 @@ export class PreviewAutomationTargetNotEditableHostError extends Schema.TaggedEr
   }
 }
 
+/**
+ * The renderer-side target died mid-operation: the tab/browser context was
+ * closed (CDP "Target closed"), or the operation's own fetch was aborted
+ * (DOMException AbortError, "This operation was aborted"). Typed so the
+ * model and work log see an actionable target-lost error instead of a bare
+ * DOMException message.
+ */
+export class PreviewAutomationHostTargetLostError extends Schema.TaggedErrorClass<PreviewAutomationHostTargetLostError>()(
+  "PreviewAutomationHostTargetLostError",
+  {
+    requestId: TrimmedNonEmptyString,
+    operation: PreviewAutomationOperation,
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+    tabId: Schema.NullOr(PreviewTabId),
+    reason: Schema.Literals(["aborted", "target-closed"]),
+  },
+) {
+  get responseTag() {
+    return "PreviewAutomationTargetLostError" as const;
+  }
+
+  override get message(): string {
+    return `The preview target was lost during ${this.operation} request ${this.requestId} (tab ${this.tabId ?? "unassigned"}): the tab or browser context was ${this.reason === "target-closed" ? "closed" : "aborted"}. Reopen or rebind the preview tab, then retry.`;
+  }
+}
+
+const CAUSE_TARGET_CLOSED =
+  /target (closed|page, context|crashed)|session closed|browser has been closed/i;
+
+const isAbortedCause = (cause: unknown): boolean =>
+  cause instanceof Error &&
+  (cause.name === "AbortError" || /operation (was )?aborted/i.test(cause.message));
+
+const isTargetClosedCause = (cause: unknown): boolean =>
+  cause instanceof Error && CAUSE_TARGET_CLOSED.test(cause.message);
+
+/**
+ * Classify a failed preview operation into the target-lost reason, or `null`
+ * when the failure has a different shape (kept for PreviewAutomationOperationError).
+ */
+export const previewAutomationTargetLostReason = (
+  cause: unknown,
+): "aborted" | "target-closed" | null => {
+  if (isAbortedCause(cause)) return "aborted";
+  if (isTargetClosedCause(cause)) return "target-closed";
+  return null;
+};
+
 const targetNotEditableDiagnostics = (
   cause: unknown,
 ): {
@@ -183,6 +232,17 @@ export class PreviewAutomationOperationError extends Schema.TaggedErrorClass<Pre
     input: PreviewAutomationOperationContext & { readonly cause: unknown },
   ): PreviewAutomationHostError {
     if (isPreviewAutomationHostError(input.cause)) return input.cause;
+    const targetLostReason = previewAutomationTargetLostReason(input.cause);
+    if (targetLostReason !== null) {
+      return new PreviewAutomationHostTargetLostError({
+        requestId: input.requestId,
+        operation: input.operation,
+        environmentId: input.environmentId,
+        threadId: input.threadId,
+        tabId: input.tabId,
+        reason: targetLostReason,
+      });
+    }
     const diagnostics = targetNotEditableDiagnostics(input.cause);
     return diagnostics
       ? new PreviewAutomationTargetNotEditableHostError({
@@ -212,6 +272,7 @@ export const PreviewAutomationHostError = Schema.Union([
   PreviewAutomationTargetUnavailableError,
   PreviewAutomationRecordingNotActiveError,
   PreviewAutomationTargetNotEditableHostError,
+  PreviewAutomationHostTargetLostError,
   PreviewAutomationOperationError,
 ]);
 export type PreviewAutomationHostError = typeof PreviewAutomationHostError.Type;
