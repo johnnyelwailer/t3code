@@ -31,6 +31,7 @@ import {
   type VcsStatusResult,
 } from "@t3tools/contracts";
 import { makeGitVcsDriverCore } from "./GitVcsDriverCore.ts";
+import { indexCheckpointPaths } from "./GitVcsDriverCheckpointIndex.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 
@@ -740,11 +741,14 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           });
         }
 
-        yield* execute({
+        yield* indexCheckpointPaths({
           operation,
           cwd: input.cwd,
-          args: ["add", "-A", "--", "."],
+          gitCommonDir,
           env: commitEnv,
+          execute,
+          fileSystem,
+          path,
         });
 
         const writeTreeResult = yield* execute({
