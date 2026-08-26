@@ -47,11 +47,14 @@ export function ThreadActivityMorphIcon({
   pulse = false,
   spinTick = 0,
   spin = false,
+  instant = false,
 }: {
   solid: boolean;
   pulse?: boolean;
   spinTick?: number;
   spin?: boolean;
+  /** true = spin now (label just landed); false = wait for the move to finish */
+  instant?: boolean;
 }) {
   const ref = useRef<SVGSVGElement | null>(null);
   useEffect(() => {
@@ -65,11 +68,11 @@ export function ThreadActivityMorphIcon({
       ],
       {
         duration: 600,
-        delay: 1150, // after width glide (0.82s) + roll-in (1.10s) is done
+        delay: instant ? 0 : 1150, // delayed: after width glide (0.82s) + roll-in (1.10s)
         easing: "cubic-bezier(0.34, 1.4, 0.44, 1)",
       },
     );
-  }, [spinTick, spin]);
+  }, [spinTick, spin, instant]);
   return (
     <svg
       ref={ref}
@@ -165,19 +168,26 @@ function StatusWidth({
 
 /**
  * Slide-mode label (fit-gated, GHE #40): on first appearance the label
- * slides in from the left edge to its start position; then it scrolls
- * out to the left (the full text passes through the window, tail entering
- * from the right), pauses once fully out, and slides back in from the
- * left to the start — repeating. One element, one steady slow speed, no
- * text swap. The travel is the label's own width, so the window shows
- * text the whole way (never "disappears into nothing").
+ * slides in from the left edge to its start position; then, periodically,
+ * it rests, slides to the left just far enough that the RIGHT END of the
+ * text docks at the window's right edge, and slides straight back to the
+ * start — repeating. One element, one slow eased pass each way, no text
+ * swap, no off-screen pause — the window shows text the whole way.
  */
-const LOOP_PAUSE = 2000; // ms held fully out before sliding back
-const LOOP_DWELL = 4000; // ms held at the start position before scrolling out
+const LOOP_DWELL = 4000; // ms held at the start position before sliding
 const LOOP_SPEED = 30; // px per second — the slow cadence
 const ENTER_DURATION = 700; // ms for the first-appearance slide-in
 
-function SlideCycleLabel({ text, slideW }: { text: string; slideW: number }) {
+function SlideCycleLabel({
+  text,
+  slideW,
+  onLand,
+}: {
+  text: string;
+  slideW: number;
+  /** called when the label lands back at its start position */
+  onLand?: () => void;
+}) {
   const [reduced] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   // natural width of the full label = the scroll-out distance
@@ -190,36 +200,45 @@ function SlideCycleLabel({ text, slideW }: { text: string; slideW: number }) {
 
   const labelRef = useRef<HTMLSpanElement>(null);
   const animRef = useRef<Animation | null>(null);
+  const onLandRef = useRef(onLand);
+  onLandRef.current = onLand;
   useEffect(() => {
     const el = labelRef.current;
     if (!el || reduced || slideW <= 0 || textW === undefined || textW <= 0) return;
     let loop: Animation | null = null;
+    let landT1 = 0;
+    let landInt = 0;
+    const fireLand = () => onLandRef.current?.();
     const startLoop = () => {
-      const leg = Math.round((textW / LOOP_SPEED) * 1000); // px / (px/s) * 1000 = ms
-      const total = leg * 2 + LOOP_PAUSE + LOOP_DWELL;
+      // travel: just far enough for the right end of the text to dock at
+      // the window's right edge (never farther, never less)
+      const travel = textW - slideW;
+      const leg = Math.round((travel / LOOP_SPEED) * 1000); // px / (px/s) * 1000 = ms
+      // the label never leaves the window: rest → slide left → straight
+      // back to the start → rest → repeat
+      const total = leg * 2 + LOOP_DWELL * 2;
       loop = el.animate(
         [
-          { transform: "translateX(0px)", easing: "ease-in-out" },
+          { transform: "translateX(0px)", offset: 0 },
+          { transform: "translateX(0px)", offset: LOOP_DWELL / total, easing: "ease-in-out" },
           {
-            transform: `translateX(${-textW}px)`,
-            offset: leg / total,
-            easing: "linear",
-          },
-          {
-            transform: `translateX(${-textW}px)`,
-            offset: (leg + LOOP_PAUSE) / total,
+            transform: `translateX(${-travel}px)`,
+            offset: (LOOP_DWELL + leg) / total,
             easing: "ease-in-out",
           },
           {
             transform: "translateX(0px)",
-            offset: (leg * 2 + LOOP_PAUSE) / total,
-            easing: "linear",
+            offset: (LOOP_DWELL + leg * 2) / total,
+            easing: "ease-in-out",
           },
           { transform: "translateX(0px)" },
         ],
         { duration: total, iterations: Infinity },
       );
       animRef.current = loop;
+      // each return to the start position is a "landing" → one icon spin
+      landT1 = window.setTimeout(fireLand, total - LOOP_DWELL);
+      landInt = window.setInterval(fireLand, total);
     };
     const enter = el.animate(
       [{ transform: `translateX(${-slideW}px)` }, { transform: "translateX(0px)" }],
@@ -238,6 +257,8 @@ function SlideCycleLabel({ text, slideW }: { text: string; slideW: number }) {
       enter.onfinish = null;
       enter.cancel();
       loop?.cancel();
+      window.clearTimeout(landT1);
+      window.clearInterval(landInt);
       animRef.current = null;
     };
   }, [slideW, reduced, text, textW]);
@@ -328,6 +349,12 @@ export function ThreadActivityStatus({
   // FIT GATE: compare the natural cluster width against the offered space.
   const sizerRef = useRef<HTMLSpanElement>(null);
   const [over, setOver] = useState(false);
+  // spin trigger state: label changes spin after the move (delayed),
+  // slide landings spin immediately
+  const [spinState, setSpinState] = useState({ tick: 0, instant: false });
+  useEffect(() => {
+    if (spinTick > 0) setSpinState((s) => ({ tick: s.tick + 1, instant: false }));
+  }, [spinTick]);
   useLayoutEffect(() => {
     if (kind !== "live" || avail === undefined) {
       setOver(false);
@@ -364,12 +391,17 @@ export function ThreadActivityStatus({
             solid={kind === "done"}
             pulse={kind === "live"}
             spin={kind === "live"}
-            spinTick={spinTick}
+            spinTick={spinState.tick}
+            instant={spinState.instant}
           />
         </span>
         <span className="relative min-w-0 flex-1 font-medium">
           {slideW !== undefined ? (
-            <SlideCycleLabel text={label} slideW={slideW} />
+            <SlideCycleLabel
+              text={label}
+              slideW={slideW}
+              onLand={() => setSpinState((s) => ({ tick: s.tick + 1, instant: true }))}
+            />
           ) : (
             <RollLabel text={label} shimmer={shimmer} />
           )}

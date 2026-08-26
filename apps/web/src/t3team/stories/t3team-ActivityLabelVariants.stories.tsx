@@ -26,8 +26,9 @@
  *     draws on/off) instead of swapping or rolling
  *   - FIT GATE: when a label is longer than the space the card can offer,
  *     it defaults to a plain STATIC, truncated label (ellipsis). It
- *     it periodically scrolls out to the LEFT (the full text passes the
- *     window), pauses off-screen, and slides back in to the start — one
+ *     it periodically slides out to the LEFT (the right end of the text
+ *     docks at the window's right edge), and slides straight back in to
+ *     the start — one
  *     element, one slow speed,
  *     no text swap
  *     — the timer stays anchored the whole time
@@ -183,12 +184,15 @@ function MorphIcon({
   pulse = false,
   spinTick = 0,
   spin = false,
+  instant = false,
 }: {
   solid: boolean;
   size?: "md" | "sm";
   pulse?: boolean;
   spinTick?: number | undefined;
   spin?: boolean;
+  /** true = spin now (label just landed); false = wait for the move to finish */
+  instant?: boolean;
 }) {
   const ref = useRef<SVGSVGElement | null>(null);
   useEffect(() => {
@@ -202,11 +206,11 @@ function MorphIcon({
       ],
       {
         duration: 600,
-        delay: 1150, // after width glide (0.82s) + roll-in (1.10s) is done
+        delay: instant ? 0 : 1150, // delayed: after width glide (0.82s) + roll-in (1.10s)
         easing: "cubic-bezier(0.34, 1.4, 0.44, 1)",
       },
     );
-  }, [spinTick, spin]);
+  }, [spinTick, spin, instant]);
   return (
     <svg
       ref={ref}
@@ -293,7 +297,15 @@ function ProjectSizer({ refHost }: { refHost: Ref<HTMLSpanElement> }) {
  * starts). Under prefers-reduced-motion the roll is skipped entirely —
  * just the static truncated label.
  */
-function SlideCycleLabel({ text, slideW }: { text: string; slideW: number }) {
+function SlideCycleLabel({
+  text,
+  slideW,
+  onLand,
+}: {
+  text: string;
+  slideW: number;
+  onLand?: () => void;
+}) {
   const [reduced] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   // natural width of the full label = the scroll-out distance
@@ -306,36 +318,41 @@ function SlideCycleLabel({ text, slideW }: { text: string; slideW: number }) {
 
   const labelRef = useRef<HTMLSpanElement>(null);
   const animRef = useRef<Animation | null>(null);
+  const onLandRef = useRef(onLand);
+  onLandRef.current = onLand;
   useEffect(() => {
     const el = labelRef.current;
     if (!el || reduced || slideW <= 0 || textW === undefined || textW <= 0) return;
     let loop: Animation | null = null;
+    let landT1 = 0;
+    let landInt = 0;
+    const fireLand = () => onLandRef.current?.();
     const startLoop = () => {
-      const leg = Math.round((textW / 30) * 1000); // px / (px/s) * 1000 = ms
-      const total = leg * 2 + 2000 + 4000;
+      // travel: just far enough for the right end of the text to dock at
+      // the window's right edge (never farther, never less)
+      const travel = textW - slideW;
+      const leg = Math.round((travel / 30) * 1000); // px / (px/s) * 1000 = ms
+      // the label never leaves the window: rest → slide left → straight
+      // back to the start → rest → repeat
+      const total = leg * 2 + 4000 * 2;
       loop = el.animate(
         [
-          { transform: "translateX(0px)", easing: "ease-in-out" },
+          { transform: "translateX(0px)", offset: 0 },
+          { transform: "translateX(0px)", offset: 4000 / total, easing: "ease-in-out" },
           {
-            transform: `translateX(${-textW}px)`,
-            offset: leg / total,
-            easing: "linear",
-          },
-          {
-            transform: `translateX(${-textW}px)`,
-            offset: (leg + 2000) / total,
+            transform: `translateX(${-travel}px)`,
+            offset: (4000 + leg) / total,
             easing: "ease-in-out",
           },
-          {
-            transform: "translateX(0px)",
-            offset: (leg * 2 + 2000) / total,
-            easing: "linear",
-          },
+          { transform: "translateX(0px)", offset: (4000 + leg * 2) / total, easing: "ease-in-out" },
           { transform: "translateX(0px)" },
         ],
         { duration: total, iterations: Infinity },
       );
       animRef.current = loop;
+      // each return to the start position is a "landing" → one icon spin
+      landT1 = window.setTimeout(fireLand, total - 4000);
+      landInt = window.setInterval(fireLand, total);
     };
     const enter = el.animate(
       [{ transform: `translateX(${-slideW}px)` }, { transform: "translateX(0px)" }],
@@ -350,6 +367,8 @@ function SlideCycleLabel({ text, slideW }: { text: string; slideW: number }) {
       enter.onfinish = null;
       enter.cancel();
       loop?.cancel();
+      window.clearTimeout(landT1);
+      window.clearInterval(landInt);
       animRef.current = null;
     };
   }, [slideW, reduced, text, textW]);
@@ -445,9 +464,16 @@ function ThreadCard({
               duration={showDuration ? DURATION : undefined}
               slideW={slide ? slideWindow || undefined : undefined}
             >
-              {/* icon glides with the width transition; spins on each update */}
+              {/* icon glides with the width transition; spins on each update
+                  (and, in slide mode, instantly on every label landing) */}
               <span className="shrink-0 text-sky-600 dark:text-sky-400">
-                <MorphIcon solid={false} pulse spin={cycles} spinTick={spinTick} />
+                <MorphIcon
+                  solid={false}
+                  pulse
+                  spin={cycles || slide}
+                  spinTick={spinTick}
+                  instant={slide}
+                />
               </span>
               <span className="relative min-w-0 flex-1 font-medium text-sky-600 dark:text-sky-400">
                 {idle ? (
@@ -456,9 +482,14 @@ function ThreadCard({
                   </span>
                 ) : slide ? (
                   /* FIT GATE: static truncated label by default; a while in
-                     it slides out to the left, pauses, and slides
-                     back — the timer stays anchored the whole time */
-                  <SlideCycleLabel text={label} slideW={slideWindow} />
+                     it slides out to the left and straight back — the
+                     timer stays anchored the whole time; the
+                     icon spins on every landing */
+                  <SlideCycleLabel
+                    text={label}
+                    slideW={slideWindow}
+                    onLand={() => setSpinTick((v) => v + 1)}
+                  />
                 ) : (
                   /* the label rolls; width glide happens on the container */
                   <span className="t3team-roll-stage relative block">
@@ -634,7 +665,7 @@ type DemoState = (typeof DEMO_STATES)[number];
 /** Card that cycles live → live → Waiting → Done on its own timer. */
 function StateCycleCard() {
   const [i, setI] = useState(0);
-  const [spins, setSpins] = useState(0);
+  const [spinState, setSpinState] = useState({ tick: 0, instant: false });
   const [measure, setMeasure] = useState<{ avail: number; labelW: Record<string, number> } | null>(
     null,
   );
@@ -648,7 +679,7 @@ function StateCycleCard() {
         lastRef.current = v;
         return (v + 1) % DEMO_STATES.length;
       });
-      setSpins((v) => v + 1);
+      setSpinState((s) => ({ tick: s.tick + 1, instant: false }));
       const next = DEMO_STATES[(lastRef.current! + 1) % DEMO_STATES.length];
       // the long label stays long enough to show its full cycle
       t = window.setTimeout(tick, next?.key === "live2" ? 47000 : 6000);
@@ -659,6 +690,7 @@ function StateCycleCard() {
   const state = DEMO_STATES[i] ?? (DEMO_STATES[0] as DemoState);
   const last = lastRef.current;
   const previous = last === null ? null : (DEMO_STATES[last] ?? null);
+  const liveToLive = previous?.kind === "live" && state.kind === "live";
   /* FIT GATE: the demo states are static, so every natural width is measured
      ONCE at mount (hidden sizers, same font context as the status) and the
      gate is a pure comparison at render time:
@@ -730,8 +762,9 @@ function StateCycleCard() {
                 <MorphIcon
                   solid={state.kind === "done"}
                   pulse={state.kind !== "done"}
-                  spinTick={previous?.kind === "live" && state.kind === "live" ? spins : 0}
-                  spin={previous?.kind === "live" && state.kind === "live"}
+                  spinTick={liveToLive ? spinState.tick : 0}
+                  spin={liveToLive}
+                  instant={spinState.instant}
                 />
               </span>
               <span
@@ -743,11 +776,13 @@ function StateCycleCard() {
               >
                 {over && state.kind === "live" ? (
                   /* FIT GATE: static truncated label by default; a while in
-                     it slides out to the left, pauses, and slides back.
-                     live2 stays long enough to show a full cycle. */
+                     it slides out to the left and straight back.
+                     live2 stays long enough to show a full cycle; the icon
+                     spins on every landing */
                   <SlideCycleLabel
                     text={state.text}
                     slideW={Math.max(measure?.avail ?? 0, 120) || 120}
+                    onLand={() => setSpinState((s) => ({ tick: s.tick + 1, instant: true }))}
                   />
                 ) : (
                   <span className="t3team-roll-stage relative block">
@@ -883,7 +918,7 @@ export const PlacementVariants: Story = {
               </div>
               <RailLabel
                 keyLabel="A+"
-                caption="long label: static truncated, then it scrolls out to the left (full text passes), pauses, and slides back to the start — repeating at one slow speed"
+                caption="long label: static truncated, then it slides out to the left (right end docks at the window's right edge) and straight back to the start — repeating at one slow speed"
               />
             </div>
             <div className="flex items-center">
@@ -919,7 +954,7 @@ export const PlacementVariants: Story = {
               <RailLabel
                 keyLabel="S"
                 caption="state machine, cycled live: short label → LONG label → Waiting → Done → …"
-                note="the long label stays static + truncated, periodically scrolls out to the left, pauses, and slides back to the start — one element, one slow speed; short labels just roll; the icon never rolls, the timer stays anchored"
+                note="the long label stays static + truncated, periodically slides out to the left (right end docking at the window's right edge) and straight back to the start — one element, one slow speed; short labels just roll; the icon never rolls, the timer stays anchored"
               />
             </div>
           </div>
@@ -1109,8 +1144,8 @@ export const ProductionComponent: Story = {
         {DIVIDER}
         <div className="space-y-1.5">
           <SectionTitle>
-            fit gate: label wider than the space → static truncated, then it scrolls out to the
-            left, pauses, and slides back (loop ≈ 23s)
+            fit gate: label wider than the space → static truncated, then it slides out to the left
+            (right end docks at the right edge) and straight back to the start (loop ≈ 27s)
           </SectionTitle>
           <ProdFitGateDemo />
         </div>
