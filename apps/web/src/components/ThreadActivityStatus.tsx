@@ -195,7 +195,7 @@ function SlideCycleLabel({ text, slideW }: { text: string; slideW: number }) {
     if (!el || reduced || slideW <= 0 || textW === undefined || textW <= 0) return;
     let loop: Animation | null = null;
     const startLoop = () => {
-      const leg = Math.round(textW / LOOP_SPEED);
+      const leg = Math.round((textW / LOOP_SPEED) * 1000); // px / (px/s) * 1000 = ms
       const total = leg * 2 + LOOP_PAUSE + LOOP_DWELL;
       loop = el.animate(
         [
