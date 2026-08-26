@@ -1645,12 +1645,24 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
               <>
                 {activeAgents.length} active agent{activeAgents.length === 1 ? "" : "s"}
               </>
-            ) : row.createdAt ? (
-              <>
-                {stateWord} for <WorkingTimer createdAt={row.createdAt} />
-              </>
             ) : (
-              `${stateWord}...`
+              <>
+                {/* upstream progress dots: three staggered pulses, restored */}
+                <span className="mr-1.5 inline-flex items-center gap-[3px]" aria-hidden>
+                  <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse motion-reduce:animate-none" />
+                  <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:200ms] motion-reduce:animate-none" />
+                  <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:400ms] motion-reduce:animate-none" />
+                </span>
+                <span className="t3team-label-shimmer [--shimmer-base:var(--muted-foreground)] [--shimmer-glow:var(--foreground)]">
+                  {row.createdAt ? (
+                    <>
+                      {stateWord} for <WorkingTimer createdAt={row.createdAt} />
+                    </>
+                  ) : (
+                    `${stateWord}...`
+                  )}
+                </span>
+              </>
             )}
           </span>
           {hasActiveAgents ? (
