@@ -1634,7 +1634,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
           {hasActiveAgents ? (
             <T3TeamActiveAgentsStepLabel label={workingStepLabel ?? idleAgentSummary} />
           ) : workingStepLabel ? (
-            <span className="ml-2 text-muted-foreground/55">· {workingStepLabel}</span>
+            <span className="ml-2 text-muted-foreground/55">{workingStepLabel}</span>
           ) : null}
         </div>
       </div>

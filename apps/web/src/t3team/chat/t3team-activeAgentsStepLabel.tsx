@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useActiveAgentHover } from "~/t3team/chat/t3team-activeAgentsCore";
 
 /**
- * GHE #201 — "· <label>" for the conversation working row.
+ * GHE #201 — the "<label>" for the conversation working row.
  *
  * The base value (the plan step label, or the most recent agent's live
  * status when the main turn is idle) is debounced 900ms so fast
@@ -31,7 +31,14 @@ export function T3TeamActiveAgentsStepLabel({ label }: { label: string | null })
 
   useEffect(() => {
     if (target === shown) {
-      setPhase("idle");
+      // The "in" phase settles itself via its own timer. Guarding on
+      // phase !== "in" is what makes the sequential FLIP work: when the
+      // out-timer commits setShown(target) + setPhase("in"), this effect
+      // re-runs with target === shown ALREADY TRUE — without the guard it
+      // would drop the phase back to "idle" within the same commit cycle
+      // and strip the flip-in class after a single frame, so the new text
+      // never spins and just pops in at full opacity.
+      if (phase !== "in") setPhase("idle");
       return;
     }
     if (phase === "idle") setPhase("out");
@@ -53,8 +60,8 @@ export function T3TeamActiveAgentsStepLabel({ label }: { label: string | null })
   if (target === "") return null;
   return (
     <span className="t3team-aci-step ml-2 text-muted-foreground/55">
-      ·{" "}
       <span
+        key={shown}
         className={
           phase === "out"
             ? "t3team-aci-flip-out"
