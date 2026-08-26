@@ -30,8 +30,9 @@ export interface VoiceInput {
   /**
    * Stop the recording, commit the transcript and exit voice mode WITHOUT
    * the auto-resume that auto-sends trigger (used by normal typed sends).
+   * Returns the committed text ("" when idle).
    */
-  stop: () => void;
+  stop: () => string;
   switchLang: (code: string) => void;
   /** Ref callback for the i-th waveform bar element. */
   setBarEl: (index: number, el: HTMLSpanElement | null) => void;
@@ -255,7 +256,13 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 
   // Public stop: commits the transcript and exits voice mode WITHOUT the
   // auto-resume that auto-sends trigger (a manual send ends voice mode).
-  const stop = useCallback(() => stopRecording(false), [stopRecording]);
+  // Returns the committed text ("" when idle) so callers can send it in
+  // the same tick without waiting for the state round-trip.
+  const stop = useCallback((): string => {
+    const text = stateRef.current === "idle" ? "" : accumulatedRef.current;
+    stopRecording(false);
+    return text;
+  }, [stopRecording]);
 
   return {
     supported,

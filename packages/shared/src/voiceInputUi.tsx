@@ -42,8 +42,9 @@ export interface ComposerVoiceInputHandle {
    * Stop the recording, commit the transcript and leave voice mode —
    * without the auto-resume that auto-sends trigger. Apps call this on a
    * NORMAL (typed) send, which ends the voice conversation.
+   * Returns the committed text ("" when idle).
    */
-  stop: () => void;
+  stop: () => string;
 }
 
 export interface ComposerVoiceInputProps {
