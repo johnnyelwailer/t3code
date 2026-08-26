@@ -32,6 +32,7 @@ export function T3TeamActiveAgentsIndicator({
   const [pulseCounts, setPulseCounts] = useState<ReadonlyMap<string, number>>(() => new Map());
   const [hotIds, setHotIds] = useState<ReadonlySet<string>>(() => new Set());
   const seenActivity = useRef<ReadonlyMap<string, string> | null>(null);
+  const decayTimers = useRef<Map<string, number>>(new Map());
 
   // Event detection: when a merged entry's activityKey changes, replay its
   // one-shot pendulum and open the ~1.2s hot-brightness window.
@@ -52,15 +53,36 @@ export function T3TeamActiveAgentsIndicator({
       return updated;
     });
     setHotIds((current) => new Set([...current, ...fired]));
-    const timer = setTimeout(() => {
-      setHotIds((current) => {
-        const updated = new Set(current);
-        for (const id of fired) updated.delete(id);
-        return updated;
-      });
-    }, 1200);
-    return () => clearTimeout(timer);
+    // One decay timer PER entry id, reset when that entry fires again. A
+    // single shared timer would be cleared by this effect's cleanup on the
+    // next event and leak the hot (bright) state of entries that didn't
+    // refire (the review's "brightness-decay leak under live event streams").
+    const timers = decayTimers.current;
+    for (const id of fired) {
+      const pending = timers.get(id);
+      if (pending !== undefined) clearTimeout(pending);
+      timers.set(
+        id,
+        window.setTimeout(() => {
+          timers.delete(id);
+          setHotIds((current) => {
+            const updated = new Set(current);
+            updated.delete(id);
+            return updated;
+          });
+        }, 1200),
+      );
+    }
   }, [entries]);
+
+  // Clear any pending decay timers on unmount.
+  useEffect(() => {
+    const timers = decayTimers.current;
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
+    };
+  }, []);
 
   const visible = entries.slice(0, MAX_VISIBLE_DOTS);
   const overflow = entries.length - visible.length;
