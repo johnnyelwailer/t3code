@@ -27,6 +27,11 @@ export interface VoiceInput {
   stopMode: StopMode;
   pickStopMode: (mode: StopMode) => void;
   toggle: () => void;
+  /**
+   * Stop the recording, commit the transcript and exit voice mode WITHOUT
+   * the auto-resume that auto-sends trigger (used by normal typed sends).
+   */
+  stop: () => void;
   switchLang: (code: string) => void;
   /** Ref callback for the i-th waveform bar element. */
   setBarEl: (index: number, el: HTMLSpanElement | null) => void;
