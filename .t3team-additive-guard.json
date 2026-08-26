@@ -201,6 +201,7 @@
     "packages/client-runtime/package.json",
     "packages/client-runtime/src/operations/commands.ts",
     "packages/client-runtime/src/rpc/client.ts",
+    "packages/client-runtime/src/state/models.ts",
     "packages/client-runtime/src/state/threadCommands.ts",
     "packages/client-runtime/src/state/threadDetail.ts",
     "packages/client-runtime/src/state/threadReducer.ts",

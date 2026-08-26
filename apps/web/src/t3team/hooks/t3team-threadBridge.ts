@@ -2,6 +2,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { Project, Thread } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
+import { deriveThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
 import {
   mergeProjectThreadLocalState,
   upsertProjectThreadLocalState,
@@ -42,14 +43,30 @@ export function mapLiveThreadToProjectThread(
     messageCount: thread.messages.length,
     lastMessageAt: thread.latestTurn?.completedAt ?? thread.updatedAt ?? thread.createdAt,
     createdAt: thread.createdAt,
+    // GHE #52 (active-children live-sync follow-up to GHE #234): the running
+    // determination mirrors the canonical server primitive `deriveThreadRunState`
+    // (packages/shared/t3team-threadRunStatus) — the one read-model source for
+    // "is this thread running". It additionally reads the live-running signals
+    // a plain session check misses: a turn in flight before the provider session
+    // registers, and native background work (subagents/workflow children) that
+    // stays alive after the turn settles. Without them those children read
+    // "idle" and the active-children indicator never lights for them. The
+    // lastError/stopped/archived branches above keep the t3team sidebar's
+    // historical vocabulary (error/completed) intact.
     status: thread.session?.lastError
       ? "error"
-      : thread.session?.status === "running" || thread.session?.status === "starting"
-        ? "running"
+      : thread.session?.status === "stopped" || thread.archivedAt
+        ? "completed"
         : thread.session?.status === "error"
           ? "error"
-          : thread.session?.status === "stopped" || thread.archivedAt
-            ? "completed"
+          : deriveThreadRunState({
+                session: thread.session,
+                latestTurn: thread.latestTurn,
+                ...(thread.backgroundLiveness !== undefined
+                  ? { backgroundLiveness: thread.backgroundLiveness }
+                  : {}),
+              }) === "running"
+            ? "running"
             : "idle",
     ...(thread.retention !== undefined ? { retention: thread.retention } : {}),
     // A clock-parked routine (Epic 27): carry the server-computed wake instant so the sidebar

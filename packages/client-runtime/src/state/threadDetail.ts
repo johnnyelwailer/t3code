@@ -30,6 +30,15 @@ const EMPTY_CHECKPOINTS: ReadonlyArray<OrchestrationCheckpointSummary> = Object.
  * consumers must use the shell branch/worktree/project fields so they do not target
  * a stale checkout while retaining messages, activities, plans, and checkpoints
  * from the detail subscription.
+ *
+ * The shell is also authoritative for the live/ephemeral state fields
+ * (session, latest turn, background liveness, activity label/state, child status,
+ * plan progress, sleeping instant, workflow run status): those update on every
+ * `thread-upserted` shell event, while the detail subscription for a thread that
+ * is not currently open may carry none of them or carry stale ones. Falling
+ * through to the cached detail's values there is what kept the active-children
+ * indicator (and sidebar labels) stale for threads that were opened at least
+ * once (GHE #52/#201 follow-up).
  */
 export function mergeEnvironmentThread(
   detail: EnvironmentThread | null,
@@ -74,6 +83,29 @@ export function mergeEnvironmentThread(
     pinnedAt: shell.pinnedAt,
     pinOrderKey: shell.pinOrderKey,
     session: shell.session,
+    // Live/ephemeral shell fields — see the note above. Each is present on the
+    // shell only when the server knows it, so spreads keep the cached detail
+    // value through old-server interop instead of wiping it.
+    ...(shell.backgroundLiveness !== undefined
+      ? { backgroundLiveness: shell.backgroundLiveness }
+      : {}),
+    ...(shell.planProgress !== undefined ? { planProgress: shell.planProgress } : {}),
+    ...(shell.childStatus !== undefined ? { childStatus: shell.childStatus } : {}),
+    ...(shell.childStatusUpdatedAt !== undefined
+      ? { childStatusUpdatedAt: shell.childStatusUpdatedAt }
+      : {}),
+    ...(shell.activityLabel !== undefined ? { activityLabel: shell.activityLabel } : {}),
+    ...(shell.activityLabelUpdatedAt !== undefined
+      ? { activityLabelUpdatedAt: shell.activityLabelUpdatedAt }
+      : {}),
+    ...(shell.activityState !== undefined ? { activityState: shell.activityState } : {}),
+    ...(shell.activityStateUpdatedAt !== undefined
+      ? { activityStateUpdatedAt: shell.activityStateUpdatedAt }
+      : {}),
+    ...(shell.sleepingUntil !== undefined ? { sleepingUntil: shell.sleepingUntil } : {}),
+    ...(shell.workflowRunStatus !== undefined
+      ? { workflowRunStatus: shell.workflowRunStatus }
+      : {}),
   };
 }
 

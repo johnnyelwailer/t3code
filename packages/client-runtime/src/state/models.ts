@@ -20,6 +20,13 @@ export type EnvironmentMessage = OrchestrationMessage;
 
 export interface EnvironmentThread extends OrchestrationThread {
   readonly environmentId: EnvironmentId;
+  /**
+   * Shell-sourced live state that only exists on the merged thread (see
+   * `mergeEnvironmentThread`): the detail stream does not carry it. Absent
+   * while only the cached detail is known.
+   */
+  readonly backgroundLiveness?: OrchestrationThreadShell["backgroundLiveness"];
+  readonly planProgress?: OrchestrationThreadShell["planProgress"];
 }
 
 export function scopeProject(
