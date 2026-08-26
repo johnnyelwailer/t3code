@@ -25,6 +25,7 @@
  *   VoiceBars.tsx       - the six live bars (presentational)
  *   types.ts            - shared types + tuning constants
  */
+import { useImperativeHandle, type Ref } from "react";
 import { LanguageChips } from "./voiceInputUi/LanguageChips.tsx";
 import { RecordingPill } from "./voiceInputUi/RecordingPill.tsx";
 import { VoiceBars } from "./voiceInputUi/VoiceBars.tsx";
@@ -35,6 +36,15 @@ import {
   type VoiceLanguageOption,
   type VoiceState,
 } from "./voiceInputUi/types.ts";
+
+export interface ComposerVoiceInputHandle {
+  /**
+   * Stop the recording, commit the transcript and leave voice mode —
+   * without the auto-resume that auto-sends trigger. Apps call this on a
+   * NORMAL (typed) send, which ends the voice conversation.
+   */
+  stop: () => void;
+}
 
 export interface ComposerVoiceInputProps {
   onTranscript: (text: string) => void;
@@ -53,6 +63,8 @@ export interface ComposerVoiceInputProps {
   languages?: readonly VoiceLanguageOption[];
   /** Recognition language to start with (default: "en-US"). */
   initialLanguage?: string;
+  /** Imperative handle: stop the recording and exit voice mode. */
+  ref?: Ref<ComposerVoiceInputHandle>;
 }
 
 export function ComposerVoiceInput({
@@ -65,6 +77,7 @@ export function ComposerVoiceInput({
   className,
   languages = DEFAULT_VOICE_LANGUAGES,
   initialLanguage = DEFAULT_LANGUAGE_CODE,
+  ref,
 }: ComposerVoiceInputProps) {
   const voice = useVoiceInput({
     onTranscript,
@@ -74,6 +87,8 @@ export function ComposerVoiceInput({
     onLevel,
     initialLanguage,
   });
+
+  useImperativeHandle(ref, () => ({ stop: voice.stop }), [voice.stop]);
 
   if (!voice.supported) return null;
 
