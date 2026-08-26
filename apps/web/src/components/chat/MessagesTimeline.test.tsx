@@ -1,4 +1,10 @@
-import { CheckpointRef, EnvironmentId, MessageId, TurnId } from "@t3tools/contracts";
+import {
+  CheckpointRef,
+  EnvironmentId,
+  MessageId,
+  TurnId,
+  type OrchestrationThreadActivity,
+} from "@t3tools/contracts";
 import { codexFeedbackMessage } from "@t3tools/client-runtime/state/threads";
 import { createRef, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -345,6 +351,45 @@ describe("MessagesTimeline", () => {
 
     expect(markup).toContain("Worked for 8.0s");
     expect(markup).toContain("px-1 text-sm leading-relaxed text-muted-foreground");
+  });
+
+  it("renders outbound inter-agent sends in the sender's timeline (GHE #209)", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        threadActivities={[
+          {
+            id: "handoff-created",
+            createdAt: MESSAGE_CREATED_AT,
+            tone: "info",
+            kind: "t3team.handoff.created",
+            summary: "Created from Parent",
+            payload: { parentThreadId: "parent-1", childThreadId: "me", childTitle: "Me" },
+          } as OrchestrationThreadActivity,
+        ]}
+        timelineEntries={[
+          buildUserTimelineEntry("Do the thing"),
+          {
+            id: "entry-send",
+            kind: "work",
+            createdAt: MESSAGE_CREATED_AT,
+            entry: {
+              id: "work-send-1",
+              createdAt: MESSAGE_CREATED_AT,
+              label: "MCP tool call",
+              tone: "tool",
+              itemType: "mcp_tool_call",
+              detail: 't3team_send_message: {"to_thread_id":"parent-1","text":"done"}',
+            },
+          },
+        ]}
+      />,
+    );
+
+    // The sender-side outbound entry gets a subtle, factual label instead of
+    // the raw tool JSON — and instead of being invisible.
+    expect(markup).toContain("→ Sent message to parent");
+    expect(markup).not.toContain('{"to_thread_id":"parent-1"');
   });
 
   it("uses the larger leading inset only when the top fade is enabled", () => {

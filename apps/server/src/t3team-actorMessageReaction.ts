@@ -27,6 +27,10 @@ import {
   type InterruptedChildThread,
 } from "./t3team-actorRestartHold.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
+import {
+  appendHumanSteeringInstruction,
+  humanSteeringInstructionForThread,
+} from "./t3team-actorSteeringContext.ts";
 
 export function startActorReaction(input: {
   readonly engine: OrchestrationEngineShape;
@@ -66,7 +70,8 @@ export function startActorReaction(input: {
       rootThreadId: first.rootThreadId,
       ...(entries.length > 1 ? { messageIds: entries.map((entry) => entry.messageId) } : {}),
     };
-    const createdAt = DateTime.formatIso(yield* DateTime.now);
+    const now = yield* DateTime.now;
+    const createdAt = DateTime.formatIso(now);
     yield* engine
       .dispatch({
         type: "thread.turn.start",
@@ -75,9 +80,11 @@ export function startActorReaction(input: {
         message: {
           messageId: MessageId.make(t3teamRandomUUID()),
           role: "user",
-          // GHE #156: wrap the delivery with the user-return instruction when the
-          // user-facing exchange is open, so the reaction turn cannot bury it.
-          text: buildActorReactionTurnInput(entries, detectUserFacingOpenState(thread.messages)),
+          // GHE #156 + #209: user-return + human-steering SUFFIXES; rehydrate prefix-matching kept.
+          text: appendHumanSteeringInstruction(
+            buildActorReactionTurnInput(entries, detectUserFacingOpenState(thread.messages)),
+            humanSteeringInstructionForThread(thread, DateTime.toEpochMillis(now)),
+          ),
           attachments: [],
           t3teamExt: {
             visibleToUser: false,
@@ -158,11 +165,13 @@ export function startActorRestartHoldSummary(input: {
         message: {
           messageId: MessageId.make(t3teamRandomUUID()),
           role: "user",
-          // GHE #156: wrap the restart-hold summary too (it is a reaction turn).
-          // Rehydrate matches via `actor.messageIds` (batch path), so the suffix is safe.
-          text: appendActorReactionUserReturnInstruction(
-            buildActorRestartHoldSummary({ entries, interruptedChildren }),
-            detectUserFacingOpenState(thread.messages),
+          // GHE #156 + #209: user-return + human-steering suffixes (batch rehydrate).
+          text: appendHumanSteeringInstruction(
+            appendActorReactionUserReturnInstruction(
+              buildActorRestartHoldSummary({ entries, interruptedChildren }),
+              detectUserFacingOpenState(thread.messages),
+            ),
+            humanSteeringInstructionForThread(thread, DateTime.toEpochMillis(yield* DateTime.now)),
           ),
           attachments: [],
           t3teamExt: {

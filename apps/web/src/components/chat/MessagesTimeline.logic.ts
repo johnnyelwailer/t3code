@@ -10,6 +10,7 @@ import {
 } from "../../session-logic";
 import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
 import { type MessageId, type OrchestrationLatestTurn, type TurnId } from "@t3tools/contracts";
+import { isActorOutboundSendMessageEntry } from "../../t3team/chat/t3team-actorOutbound";
 
 export const MAX_VISIBLE_WORK_LOG_ENTRIES = 1;
 export const TIMELINE_MINIMAP_ITEM_SPACING = 8;
@@ -883,6 +884,23 @@ export function deriveMessagesTimelineRows(input: {
     }
 
     if (timelineEntry.kind === "work") {
+      // GHE #209: an outbound inter-agent send is a communication event, not
+      // tool usage. It must always surface as its own visible row in the
+      // sender's timeline — it never folds into a "+N tool calls" toggle, and
+      // the tool run around it never swallows it. Render it standalone and
+      // let the grouping loop below stop at it.
+      if (isActorOutboundSendMessageEntry(timelineEntry.entry)) {
+        nextRows.push({
+          kind: "work",
+          id: timelineEntry.id,
+          createdAt: timelineEntry.createdAt,
+          groupedEntries: [timelineEntry.entry],
+          isExpandedToolGroupEntry: false,
+          isLastExpandedToolGroupEntry: false,
+        });
+        continue;
+      }
+
       const groupedEntries = [timelineEntry.entry];
       let cursor = index + 1;
       while (cursor < input.timelineEntries.length) {
@@ -892,7 +910,9 @@ export function deriveMessagesTimelineRows(input: {
           nextEntry.kind !== "work" ||
           activeWorkEntryIds.has(nextEntry.id) ||
           collapsedEntryIds.has(nextEntry.id) ||
-          foldsByAnchorEntryId.has(nextEntry.id)
+          foldsByAnchorEntryId.has(nextEntry.id) ||
+          // GHE #209: a send ends the tool run so it renders on its own row.
+          isActorOutboundSendMessageEntry(nextEntry.entry)
         ) {
           break;
         }

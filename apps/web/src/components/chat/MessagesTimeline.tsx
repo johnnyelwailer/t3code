@@ -148,6 +148,11 @@ import {
   deriveT3TeamWorkflowStepRuns,
   type T3TeamWorkflowRunProgress,
 } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import {
+  deriveActorOutboundRelations,
+  describeActorOutboundSend,
+  type ActorOutboundRelations,
+} from "~/t3team/chat/t3team-actorOutbound";
 import { useThreadShell } from "~/state/entities";
 
 // ---------------------------------------------------------------------------
@@ -194,6 +199,13 @@ interface TimelineRowSharedState {
    * "background activity" so user-originated turns stay prominent.
    */
   reactionTurnIds: ReadonlySet<TurnId>;
+  /**
+   * GHE #209: this thread's inter-agent relations (parent id, direct children
+   * by title) derived from its durable handoff activities — names the target
+   * of outbound `t3team_send_message` tool rows in the sender's timeline.
+   * Null when activities are unavailable (nothing to resolve).
+   */
+  actorOutboundRelations: ActorOutboundRelations | null;
 }
 
 interface TimelineRowActivityState {
@@ -657,6 +669,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [timelineEntries],
   );
 
+  // GHE #209: sender-side inter-agent relations (parent / direct children),
+  // so an outbound t3team_send_message work row can name its target.
+  const actorOutboundRelations = useMemo<ActorOutboundRelations | null>(
+    () => (threadActivities === undefined ? null : deriveActorOutboundRelations(threadActivities)),
+    [threadActivities],
+  );
+
   const sharedState = useMemo<TimelineRowSharedState>(
     () => ({
       timestampFormat,
@@ -689,6 +708,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       agentPanelModel,
       onOpenAgents,
       reactionTurnIds,
+      actorOutboundRelations,
     }),
     [
       timestampFormat,
@@ -720,6 +740,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       agentPanelModel,
       onOpenAgents,
       reactionTurnIds,
+      actorOutboundRelations,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -2968,7 +2989,15 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
   const showFailedIndicator = workEntryDisplayIndicatesToolFailure(workEntry);
   const entryIconName =
     showWarningIndicator || showFailedIndicator ? "x" : workEntryIconName(workEntry);
-  const displayText = workEntryPreview(workEntry, workspaceRoot) ?? toolWorkEntryHeading(workEntry);
+  // GHE #209: an outbound inter-agent send renders as a subtle factual row in
+  // the SENDER's timeline (received sends already render as actor cards in the
+  // target's) — same visual weight class as the work rows around it.
+  const outboundLabel = ctx.actorOutboundRelations
+    ? describeActorOutboundSend(workEntry, ctx.actorOutboundRelations)
+    : null;
+  const displayText = outboundLabel
+    ? `→ ${outboundLabel}`
+    : (workEntryPreview(workEntry, workspaceRoot) ?? toolWorkEntryHeading(workEntry));
   const expandedBody = buildToolCallExpandedBody(workEntry, workspaceRoot);
   const canExpand = expandedBody !== null;
   const showDestructiveRowStyle =

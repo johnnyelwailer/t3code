@@ -52,6 +52,11 @@ const idleThread = {
   modelSelection: null,
   runtimeMode: null,
   interactionMode: null,
+  // The real loadThread is getThreadDetailById: the detail projection carries
+  // both, and startActorReaction reads them (user-return + human-steering
+  // context, parent lookup via handoff activities).
+  messages: [],
+  activities: [],
 } as unknown as OrchestrationThread;
 
 const entryFor = (messageId: string): T3TeamActorMailboxEntry => ({
