@@ -27,8 +27,8 @@
  *   - FIT GATE: when a label is longer than the space the card can offer,
  *     it defaults to a plain STATIC, truncated label (ellipsis). It
  *     it periodically slides out to the LEFT (the right end of the text
- *     docks at the window's right edge), and slides straight back in to
- *     the start — one
+ *     docks at the window's right edge), stays there, and slides straight
+ *     back in to the start — one
  *     element, one slow speed,
  *     no text swap
  *     — the timer stays anchored the whole time
@@ -332,9 +332,9 @@ function SlideCycleLabel({
       // the window's right edge (never farther, never less)
       const travel = textW - slideW;
       const leg = Math.round((travel / 30) * 1000); // px / (px/s) * 1000 = ms
-      // the label never leaves the window: rest → slide left → straight
-      // back to the start → rest → repeat
-      const total = leg * 2 + 4000 * 2;
+      // the label never leaves the window: rest at start → slide left →
+      // hold at the far end → straight back to the start → rest → repeat
+      const total = leg * 2 + 4000 * 2 + 4000; // 4000 = hold at the far end
       loop = el.animate(
         [
           { transform: "translateX(0px)", offset: 0 },
@@ -344,7 +344,16 @@ function SlideCycleLabel({
             offset: (4000 + leg) / total,
             easing: "ease-in-out",
           },
-          { transform: "translateX(0px)", offset: (4000 + leg * 2) / total, easing: "ease-in-out" },
+          {
+            transform: `translateX(${-travel}px)`,
+            offset: (4000 + leg + 4000) / total,
+            easing: "ease-in-out",
+          },
+          {
+            transform: "translateX(0px)",
+            offset: (4000 + leg * 2 + 4000) / total,
+            easing: "ease-in-out",
+          },
           { transform: "translateX(0px)" },
         ],
         { duration: total, iterations: Infinity },
@@ -918,7 +927,7 @@ export const PlacementVariants: Story = {
               </div>
               <RailLabel
                 keyLabel="A+"
-                caption="long label: static truncated, then it slides out to the left (right end docks at the window's right edge) and straight back to the start — repeating at one slow speed"
+                caption="long label: static truncated, then it slides out to the left (right end docks at the window's right edge), stays there, and slides back to the start — repeating at one slow speed"
               />
             </div>
             <div className="flex items-center">
@@ -954,7 +963,7 @@ export const PlacementVariants: Story = {
               <RailLabel
                 keyLabel="S"
                 caption="state machine, cycled live: short label → LONG label → Waiting → Done → …"
-                note="the long label stays static + truncated, periodically slides out to the left (right end docking at the window's right edge) and straight back to the start — one element, one slow speed; short labels just roll; the icon never rolls, the timer stays anchored"
+                note="the long label stays static + truncated, periodically slides out to the left (right end docking at the window's right edge), stays there, and slides back to the start — one element, one slow speed; short labels just roll; the icon never rolls, the timer stays anchored"
               />
             </div>
           </div>
@@ -1145,7 +1154,7 @@ export const ProductionComponent: Story = {
         <div className="space-y-1.5">
           <SectionTitle>
             fit gate: label wider than the space → static truncated, then it slides out to the left
-            (right end docks at the right edge) and straight back to the start (loop ≈ 27s)
+            (right end docks at the right edge), stays, and slides back to the start (loop ≈ 17s)
           </SectionTitle>
           <ProdFitGateDemo />
         </div>

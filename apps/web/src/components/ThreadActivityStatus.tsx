@@ -170,11 +170,13 @@ function StatusWidth({
  * Slide-mode label (fit-gated, GHE #40): on first appearance the label
  * slides in from the left edge to its start position; then, periodically,
  * it rests, slides to the left just far enough that the RIGHT END of the
- * text docks at the window's right edge, and slides straight back to the
- * start — repeating. One element, one slow eased pass each way, no text
- * swap, no off-screen pause — the window shows text the whole way.
+ * text docks at the window's right edge, stays there for a while, and
+ * slides straight back to the start — repeating. One element, one slow
+ * eased pass each way, no text swap, no off-screen phase — the window
+ * shows text the whole way.
  */
 const LOOP_DWELL = 4000; // ms held at the start position before sliding
+const FAR_DWELL = 4000; // ms held at the far (right-docked) end before sliding back
 const LOOP_SPEED = 30; // px per second — the slow cadence
 const ENTER_DURATION = 700; // ms for the first-appearance slide-in
 
@@ -214,9 +216,9 @@ function SlideCycleLabel({
       // the window's right edge (never farther, never less)
       const travel = textW - slideW;
       const leg = Math.round((travel / LOOP_SPEED) * 1000); // px / (px/s) * 1000 = ms
-      // the label never leaves the window: rest → slide left → straight
-      // back to the start → rest → repeat
-      const total = leg * 2 + LOOP_DWELL * 2;
+      // the label never leaves the window: rest at start → slide left →
+      // hold at the far end → straight back to the start → rest → repeat
+      const total = leg * 2 + LOOP_DWELL * 2 + FAR_DWELL;
       loop = el.animate(
         [
           { transform: "translateX(0px)", offset: 0 },
@@ -227,8 +229,13 @@ function SlideCycleLabel({
             easing: "ease-in-out",
           },
           {
+            transform: `translateX(${-travel}px)`,
+            offset: (LOOP_DWELL + leg + FAR_DWELL) / total,
+            easing: "ease-in-out",
+          },
+          {
             transform: "translateX(0px)",
-            offset: (LOOP_DWELL + leg * 2) / total,
+            offset: (LOOP_DWELL + leg * 2 + FAR_DWELL) / total,
             easing: "ease-in-out",
           },
           { transform: "translateX(0px)" },
