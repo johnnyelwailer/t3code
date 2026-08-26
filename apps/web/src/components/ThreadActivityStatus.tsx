@@ -48,6 +48,7 @@ export function ThreadActivityMorphIcon({
   spinTick = 0,
   spin = false,
   instant = false,
+  size = "md",
 }: {
   solid: boolean;
   pulse?: boolean;
@@ -55,6 +56,10 @@ export function ThreadActivityMorphIcon({
   spin?: boolean;
   /** true = spin now (label just landed); false = wait for the move to finish */
   instant?: boolean;
+  /** "md" (size-4) matches the card's icon; "sm" (size-3) for the denser
+   *  sub-run rows, which render the SAME ring so child and parent read as
+   *  one status language. */
+  size?: "md" | "sm";
 }) {
   const ref = useRef<SVGSVGElement | null>(null);
   useEffect(() => {
@@ -83,7 +88,7 @@ export function ThreadActivityMorphIcon({
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
-      className={cn("size-4 shrink-0", pulse && "t3team-icon-pulse")}
+      className={cn(size === "sm" ? "size-3" : "size-4", "shrink-0", pulse && "t3team-icon-pulse")}
     >
       <circle
         cx="12"

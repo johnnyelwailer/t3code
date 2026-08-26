@@ -38,7 +38,6 @@ import {
   CheckIcon,
   ChevronDownIcon,
   CircleAlertIcon,
-  CircleCheckIcon,
   ClockIcon,
   FolderIcon,
   FolderPlusIcon,
@@ -59,7 +58,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -121,6 +119,7 @@ import {
 } from "../threadRoutes";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat";
 import type { SidebarThreadSummary } from "../types";
+import { compactSidebarTimeLabel, SidebarSubRunRow } from "./t3team-SidebarSubRunRow";
 import { ThreadActivityStatus } from "./ThreadActivityStatus";
 import { cn } from "~/lib/utils";
 import { buildThreadActionMenuItems } from "./threadActionMenu.logic";
@@ -202,7 +201,6 @@ import {
   SIDEBAR_SUB_RUN_LIMIT,
 } from "~/t3team/components/t3team-projectSidebarThreadTree";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
-import type { ProjectThread } from "~/t3team/t3team-types";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import {
@@ -244,11 +242,6 @@ function writePersistedProjectScopeKey(value: string | null): void {
   } catch {
     // sessionStorage unavailable (private mode, quota) — degrade to in-memory only.
   }
-}
-
-function compactSidebarTimeLabel(label: string): string {
-  if (label === "just now") return "now";
-  return label.endsWith(" ago") ? label.slice(0, -4) : label;
 }
 
 function threadTimeLabel(thread: SidebarThreadSummary): string {
@@ -1860,121 +1853,6 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
           terminalProcessCount={runningTerminalIds.length}
         />
       </Tooltip>
-    </li>
-  );
-});
-
-/**
- * t3team: one-line row for a sub-runbook child thread (Epic: first-class
- * sub-runbooks, tree v2). Rendered directly below its parent's row when the
- * parent's "N sub-runs" chip is expanded (`InboxSubRunsChip`) — never in the
- * flat row list itself, per `useT3TeamChildThreadRelations`'s orphan rule.
- * Deliberately minimal: no project/branch/meta line, just enough to tell
- * sub-runs apart and jump into one.
- */
-const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
-  child: ProjectThread;
-  childRef: ScopedThreadRef;
-  isActive: boolean;
-  onNavigate: () => void;
-  onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
-}) {
-  const { child } = props;
-  // GHE #40: sub-run labels never animate — fit → static dock on the right,
-  // no fit → the title flips to the status text (measured once per change,
-  // no timers).
-  const activityLabelsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamActivityLabelsEnabled,
-  );
-  const childLabel =
-    activityLabelsEnabled && child.status === "running"
-      ? (child.activityLabel ?? undefined)
-      : undefined;
-  const subRowRef = useRef<HTMLButtonElement>(null);
-  const subSizersRef = useRef<HTMLSpanElement>(null);
-  const [childLabelMode, setChildLabelMode] = useState<"dock" | "flip" | null>(null);
-  useLayoutEffect(() => {
-    const row = subRowRef.current;
-    const sizers = subSizersRef.current;
-    if (!row || !sizers || childLabel === undefined) {
-      setChildLabelMode(null);
-      return;
-    }
-    const label = sizers.querySelector<HTMLElement>("[data-sizer='__label']");
-    const time = sizers.querySelector<HTMLElement>("[data-sizer='__time']");
-    const w = row.getBoundingClientRect().width;
-    // row chrome: ps inset 24px + pe 10px + status dot 6px + 3 × gap 6px
-    const avail = w - 24 - 10 - 6 - 18 - (time ? time.offsetWidth : 0);
-    const labelW = label ? label.offsetWidth : 0;
-    setChildLabelMode(labelW <= avail ? "dock" : "flip");
-  }, [childLabel, child.title, child.lastMessageAt]);
-  const handleContextMenu = useCallback(
-    (event: ReactMouseEvent) => {
-      event.preventDefault();
-      props.onContextMenu(props.childRef, { x: event.clientX, y: event.clientY });
-    },
-    [props.childRef, props.onContextMenu],
-  );
-  const statusDot =
-    child.status === "running" ? (
-      <span aria-hidden className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary" />
-    ) : child.status === "error" ? (
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />
-    ) : child.status === "completed" ? (
-      <CircleCheckIcon aria-hidden className="size-3 shrink-0 text-sidebar-muted-foreground/70" />
-    ) : (
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-sidebar-muted-foreground/40" />
-    );
-  return (
-    <li role="presentation" className="list-none">
-      <button
-        type="button"
-        ref={subRowRef}
-        onClick={props.onNavigate}
-        onContextMenu={handleContextMenu}
-        aria-current={props.isActive ? "page" : undefined}
-        className={cn(
-          "relative flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-[calc(var(--sidebar-content-inset)+1rem)] text-left text-xs outline-none",
-          props.isActive
-            ? "bg-sidebar-row-active text-sidebar-foreground"
-            : "text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
-        )}
-      >
-        {statusDot}
-        <span
-          className="min-w-0 flex-1 truncate"
-          title={childLabelMode === "flip" ? child.title : undefined}
-        >
-          {childLabelMode === "flip" ? (
-            <span className="t3team-label-shimmer">{childLabel}</span>
-          ) : (
-            child.title
-          )}
-        </span>
-        {childLabelMode === "dock" ? (
-          <span className="shrink-0 text-sky-600 dark:text-sky-400">
-            <span className="t3team-label-shimmer">{childLabel}</span>
-          </span>
-        ) : null}
-        <span className="shrink-0 text-[0.6875rem] text-muted-foreground/55 tabular-nums">
-          {compactSidebarTimeLabel(formatRelativeTimeLabel(child.lastMessageAt))}
-        </span>
-        {/* sizers for the dock/flip decision (natural widths, hidden) */}
-        {childLabel !== undefined ? (
-          <span
-            ref={subSizersRef}
-            aria-hidden
-            className="pointer-events-none absolute left-0 top-0 h-px overflow-hidden opacity-0"
-          >
-            <span data-sizer="__label" className="inline-block whitespace-nowrap">
-              {childLabel}
-            </span>
-            <span data-sizer="__time" className="inline-block whitespace-nowrap text-[0.6875rem]">
-              {compactSidebarTimeLabel(formatRelativeTimeLabel(child.lastMessageAt))}
-            </span>
-          </span>
-        ) : null}
-      </button>
     </li>
   );
 });
