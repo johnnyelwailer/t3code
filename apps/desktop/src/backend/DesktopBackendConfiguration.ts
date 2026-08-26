@@ -81,6 +81,74 @@ const WSL_FORWARDED_ENV_NAMES = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"] as const
 
 const WSL_SERVER_SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
+/**
+ * A SQLite file this small has a header and no user data. A real workspace DB
+ * is orders of magnitude larger, so this cleanly separates "the branded home
+ * was created by a launch that found nothing" from "the branded home is in
+ * use". Deliberately generous: 8 KiB is two SQLite pages.
+ */
+const EMPTY_STATE_DB_MAX_BYTES = 8 * 1024;
+
+const fileSizeOrZero = (candidate: string): number => {
+  try {
+    return NodeFS.statSync(candidate).size;
+  } catch {
+    return 0;
+  }
+};
+
+/**
+ * Move a pre-branding home (`~/.t3`) into the branded one, once.
+ *
+ * A build with bundled packs stores state under
+ * `<appData>/<userDataDirName>`, while an unbundled build uses `~/.t3`. Before
+ * this migration existed, installing a branded build over an existing install
+ * silently started with a BLANK workspace: the old database was never opened,
+ * never migrated, and never surfaced — the app simply looked wiped.
+ *
+ * The move is a rename, so on the normal same-volume case it is instant even
+ * with large `worktrees/` trees. Anything that already exists in the branded
+ * home is left untouched, so a real branded workspace can never be clobbered.
+ * A blank state DB left behind by such a first launch does not block adoption
+ * — it is moved aside rather than deleted, because discarding user-adjacent
+ * data on startup is never the right default.
+ *
+ * Returns the directory the backend should actually use. On any failure
+ * (cross-device rename, permissions) it returns the legacy directory so the
+ * user keeps a working app instead of an empty one.
+ */
+export const migrateLegacyHomeIfNeeded = (input: {
+  readonly legacyDir: string;
+  readonly brandedDir: string;
+  readonly join: (first: string, ...segments: string[]) => string;
+  readonly stamp: string;
+}): string => {
+  const { legacyDir, brandedDir, join, stamp } = input;
+  if (legacyDir === brandedDir) return brandedDir;
+
+  const legacyState = join(legacyDir, "userdata", "state.sqlite");
+  if (fileSizeOrZero(legacyState) === 0) return brandedDir;
+
+  const brandedUserdata = join(brandedDir, "userdata");
+  const brandedStateBytes = fileSizeOrZero(join(brandedUserdata, "state.sqlite"));
+  if (brandedStateBytes > EMPTY_STATE_DB_MAX_BYTES) return brandedDir;
+
+  try {
+    NodeFS.mkdirSync(brandedDir, { recursive: true });
+    if (NodeFS.existsSync(brandedUserdata)) {
+      NodeFS.renameSync(brandedUserdata, `${brandedUserdata}.empty-${stamp}`);
+    }
+    for (const entry of NodeFS.readdirSync(legacyDir)) {
+      const target = join(brandedDir, entry);
+      if (NodeFS.existsSync(target)) continue;
+      NodeFS.renameSync(join(legacyDir, entry), target);
+    }
+    return brandedDir;
+  } catch {
+    return legacyDir;
+  }
+};
+
 const backendChildEnvPatch = (): Record<string, string | undefined> =>
   Object.fromEntries(DESKTOP_BACKEND_ENV_NAMES.map((name) => [name, undefined]));
 
@@ -452,12 +520,21 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       : environment.baseDir;
 
     const explicitT3Home = process.env.T3CODE_HOME?.trim();
+    // An explicit T3CODE_HOME is an operator decision and is never migrated.
+    const resolvedHomeDir =
+      explicitT3Home ??
+      migrateLegacyHomeIfNeeded({
+        legacyDir: environment.baseDir,
+        brandedDir: brandedHomeDir,
+        join: environment.path.join,
+        stamp: `${input.bootstrapToken.slice(0, 8)}`,
+      });
 
     const bootstrap = {
       mode: "desktop" as const,
       noBrowser: true,
       port: backendExposure.port,
-      t3Home: explicitT3Home ?? brandedHomeDir,
+      t3Home: resolvedHomeDir,
       host: backendExposure.bindHost,
       desktopBootstrapToken: input.bootstrapToken,
       tailscaleServeEnabled: backendExposure.tailscaleServeEnabled,

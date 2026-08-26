@@ -3580,10 +3580,34 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // from inside the asar or from Resources/packs/.
   yield* Effect.log("[desktop-artifact] Compiling @t3team/pack-api for packaging...");
   const packApiDir = path.join(stageAppDir, "node_modules", "@t3team", "pack-api");
-  const repoEsbuild =
-    hostPlatform === "win32"
-      ? path.join(repoRoot, "node_modules", ".pnpm", "node_modules", ".bin", "esbuild")
-      : path.join(repoRoot, "node_modules", ".bin", "esbuild");
+  // esbuild is a TRANSITIVE dependency, so pnpm does not always link it into
+  // the repo-root .bin — where it lands depends on the pnpm version and the
+  // hoisting settings that produced node_modules. Probing both known locations
+  // is platform-independent and survives a re-install; keying off hostPlatform
+  // did not, and a fresh macOS install failed the packaging step with
+  // `spawn .../node_modules/.bin/esbuild ENOENT`.
+  const esbuildCandidates = [
+    path.join(repoRoot, "node_modules", ".bin", "esbuild"),
+    path.join(repoRoot, "node_modules", ".pnpm", "node_modules", ".bin", "esbuild"),
+  ];
+  let repoEsbuild: string | undefined;
+  for (const candidate of esbuildCandidates) {
+    const found = yield* Effect.tryPromise(() => NodeFSP.access(candidate)).pipe(
+      Effect.as(true),
+      Effect.orElseSucceed(() => false),
+    );
+    if (found) {
+      repoEsbuild = candidate;
+      break;
+    }
+  }
+  if (repoEsbuild === undefined) {
+    return yield* Effect.die(
+      new Error(
+        `esbuild not found. Looked in:\n  ${esbuildCandidates.join("\n  ")}\nRun a dependency install in ${repoRoot} first.`,
+      ),
+    );
+  }
   const esbuildCommand = yield* resolveSpawnCommand(repoEsbuild, [
     path.join(packApiDir, "src", "index.ts"),
     "--bundle",
