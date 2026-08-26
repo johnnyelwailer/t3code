@@ -24,6 +24,11 @@ describe("claude-gateway-retry", () => {
     expect(isTransientGatewayErrorText("")).toBe(false);
     expect(isTransientGatewayErrorText("Invalid API key (401 Unauthorized)")).toBe(false);
     expect(isTransientGatewayErrorText("Malformed request body (400 Bad Request)")).toBe(false);
+    // "request too large" is 413 phrasing — a permanent error, not throttling.
+    expect(isTransientGatewayErrorText("413 Request Entity Too Large: request too large")).toBe(
+      false,
+    );
+    expect(isTransientGatewayErrorText("HTTP status 413: request too large")).toBe(false);
     expect(isTransientGatewayErrorText("tool not found: preview_navigate")).toBe(false);
     expect(isTransientGatewayErrorText("max_turns reached")).toBe(false);
   });

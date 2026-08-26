@@ -177,15 +177,30 @@ describe("applyGitStatusStreamEvent", () => {
     it("redacts option arguments with embedded values echoed in stderr", () => {
       const stderr = "error: unknown option `--token=abc-secret'\nusage: git push\n";
       expect(redactCommandArgs(stderr, ["push", "--token=abc-secret"])).toBe(
-        "error: unknown option `[redacted]'\nusage: git [redacted]\n",
+        "error: unknown option `[redacted]'\nusage: git push\n",
       );
     });
 
-    it("redacts plain argument values echoed in stderr", () => {
-      const stderr = "remote rejected super-secret-token\n";
-      expect(redactCommandArgs(stderr, ["-e", "script", "super-secret-token"])).toBe(
-        "remote rejected [redacted]\n",
+    it("leaves plain arguments (remotes, branch names, paths) readable", () => {
+      const stderr =
+        "error: upstream branch 'main' of 'origin' does not match\nfatal: push rejected\n";
+      expect(
+        redactCommandArgs(stderr, ["push", "-u", "origin", "main", "--", "src/feature.ts"]),
+      ).toBe(stderr);
+    });
+
+    it("redacts the bare value of an option argument when echoed alone", () => {
+      const stderr = "remote: rejected credential abc-secret\n";
+      expect(redactCommandArgs(stderr, ["push", "--token=abc-secret"])).toBe(
+        "remote: rejected credential [redacted]\n",
       );
+    });
+
+    it("redacts the separate value of known secret flags", () => {
+      const stderr = "fatal: could not authenticate with hunter2\n";
+      expect(
+        redactCommandArgs(stderr, ["clone", "-pass", "hunter2", "https://example.com/r"]),
+      ).toBe("fatal: could not authenticate with [redacted]\n");
     });
 
     it("leaves short flags and absent tokens alone so diagnostics stay readable", () => {

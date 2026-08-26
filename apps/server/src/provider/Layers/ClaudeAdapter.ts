@@ -23,6 +23,7 @@ import {
 import {
   MAX_TRANSIENT_GATEWAY_RETRIES,
   gatewayRetrySteerMessage,
+  isTransientGatewayErrorText,
   transientGatewayRetryDelayMs,
 } from "./claude-gateway-retry.ts";
 import { parseCliArgs } from "@t3tools/shared/cliArgs";
@@ -3040,7 +3041,14 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     const status = turnStatusFromResult(message);
     const errorMessage = resultUserFacingError(message);
 
-    if (status === "failed" && context.transientGatewayRetries < MAX_TRANSIENT_GATEWAY_RETRIES) {
+    // Re-drive only on failures classified as transient gateway errors:
+    // any other failure (401 auth, 400/413, max turns, CLI crash) fails the
+    // turn immediately — permanent errors are never retried here.
+    if (
+      status === "failed" &&
+      isTransientGatewayErrorText(resultErrorsText(message)) &&
+      context.transientGatewayRetries < MAX_TRANSIENT_GATEWAY_RETRIES
+    ) {
       // Transient gateway error (423 capacity reservation, 429, 5xx): honor
       // the gateway's retry directive, keep the turn visibly running, then
       // re-drive the session with an automatic continue message. Only a

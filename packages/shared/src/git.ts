@@ -184,21 +184,59 @@ function deriveLocalBranchNameCandidatesFromRemoteRef(
  * Hide `origin/*` remote refs when a matching local refName already exists.
  */
 /**
- * Replaces command argument values in process output so retained stderr
+ * Replace command argument VALUES in process output so retained stderr
  * cannot echo secrets. Git echoes unknown `--opt=value` arguments verbatim
- * but STRIPS the leading dashes, and any command may echo a plain argument,
- * so every argument >= 4 chars (and the dash-less form of `--opt=value`
- * arguments) is redacted. Short tokens ("-e", ".", "-A") are left alone.
+ * but STRIPS the leading dashes, so attached values are redacted in the
+ * dash form, the dash-less form, and as the bare value (any process may
+ * echo just the value). Flags with separate secret values (`-pass hunter2`)
+ * redact that following argument instead. Plain arguments — subcommand
+ * verbs, remote names, branch names, paths — are left intact: they are the
+ * diagnostics these errors exist to carry.
  */
+const REDACTED_ARG = "[redacted]";
+
+/** Flags whose separate value argument is a credential. */
+const SECRET_VALUE_FLAGS = new Set<string>([
+  "auth",
+  "authorization",
+  "client-secret",
+  "key",
+  "pass",
+  "password",
+  "secret",
+  "token",
+]);
+
+const replaceAll = (text: string, needle: string, replacement: string): string =>
+  needle.length > 0 ? text.split(needle).join(replacement) : text;
+
 export function redactCommandArgs(text: string, args: readonly string[]): string {
   let out = text;
-  for (const arg of args) {
-    if (arg.length < 4) {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === undefined) {
       continue;
     }
-    out = out.split(arg).join("[redacted]");
-    if (arg.startsWith("--") && arg.includes("=")) {
-      out = out.split(arg.slice(2)).join("[redacted]");
+    // `--opt=value` / `-o=value`: redact the value at every position it
+    // can be echoed (longest forms first, so later replacements still hit).
+    const attached = /^--?([A-Za-z][A-Za-z0-9._-]*)=(.+)$/.exec(arg);
+    if (attached !== null) {
+      const flag = attached[1] ?? "";
+      const value = attached[2] ?? "";
+      out = replaceAll(out, arg, REDACTED_ARG);
+      out = replaceAll(out, `${flag}=${value}`, REDACTED_ARG);
+      if (value.length >= 4) {
+        out = replaceAll(out, value, REDACTED_ARG);
+      }
+      continue;
+    }
+    const bareFlag = /^--?([A-Za-z][A-Za-z0-9._-]*)$/.exec(arg);
+    const bareFlagName = bareFlag?.[1]?.toLowerCase() ?? "";
+    if (bareFlagName !== "" && SECRET_VALUE_FLAGS.has(bareFlagName)) {
+      const value = args[i + 1];
+      if (value !== undefined && value.length >= 4 && !value.startsWith("-")) {
+        out = replaceAll(out, value, REDACTED_ARG);
+      }
     }
   }
   return out;

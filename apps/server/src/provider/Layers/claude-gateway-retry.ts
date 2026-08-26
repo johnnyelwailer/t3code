@@ -18,7 +18,7 @@ export const MAX_TRANSIENT_GATEWAY_RETRIES = 5;
 const MAX_RETRY_DELAY_SECONDS = 60;
 
 const TRANSIENT_GATEWAY_ERROR =
-  /\b(retry_after_seconds|retry-after|gpu_reserved|reservation_error|rate.?limit(?:ed)?|capacity\s+(?:is\s+)?reserved|server (?:overloaded|error)|internal server error|bad gateway|service unavailable|gateway time[d]? ?out|request (?:was )?(?:throttled|too large))\b|http(?:\s+status)?[^0-9\n]{0,12}\b(423|429|502|503|504)\b/i;
+  /\b(retry_after_seconds|retry-after|gpu_reserved|reservation_error|rate.?limit(?:ed)?|capacity\s+(?:is\s+)?reserved|server (?:overloaded|error)|internal server error|bad gateway|service unavailable|gateway time[d]? ?out|request was throttled)\b|http(?:\s+status)?[^0-9\n]{0,12}\b(423|429|502|503|504)\b/i;
 
 export function isTransientGatewayErrorText(text: string): boolean {
   if (text.length === 0) return false;

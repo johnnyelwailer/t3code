@@ -68,8 +68,14 @@ const fail = (
     }),
   );
 
-const listPaths = (execute: ExecuteGit, operation: string, cwd: string, args: readonly string[]) =>
-  execute({ operation, cwd, args, env: process.env, allowNonZeroExit: true }).pipe(
+const listPaths = (
+  execute: ExecuteGit,
+  operation: string,
+  cwd: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+) =>
+  execute({ operation, cwd, args, env, allowNonZeroExit: true }).pipe(
     Effect.flatMap((result) =>
       result.exitCode === 0
         ? Effect.succeed(result.stdout.split("\0").filter((part) => part.length > 0))
@@ -106,8 +112,8 @@ export const indexCheckpointPaths = (deps: {
     // Fallback: add an explicit NUL-separated pathspec file (argv has a
     // length limit; a pathspec file does not).
     const [tracked, untracked] = yield* Effect.all([
-      listPaths(execute, operation, cwd, ["ls-files", "-z"]),
-      listPaths(execute, operation, cwd, ["ls-files", "--others", "--exclude-standard", "-z"]),
+      listPaths(execute, operation, cwd, ["ls-files", "-z"], env),
+      listPaths(execute, operation, cwd, ["ls-files", "--others", "--exclude-standard", "-z"], env),
     ]);
     const candidatePaths = [...untracked, ...tracked];
     if (candidatePaths.length === 0) {
@@ -126,7 +132,7 @@ export const indexCheckpointPaths = (deps: {
     );
     const cleanupPathspec = fileSystem.remove(pathspecPath, { force: true }).pipe(Effect.ignore);
 
-    const addViaPathspec = (paths: readonly string[]) =>
+    const writePathspec = (paths: readonly string[]) =>
       fileSystem.writeFile(pathspecPath, Buffer.from(paths.join("\0"), "utf8")).pipe(
         Effect.mapError(
           () =>
@@ -138,43 +144,51 @@ export const indexCheckpointPaths = (deps: {
               detail: `Could not write the checkpoint pathspec file at ${pathspecPath}.`,
             }),
         ),
-        Effect.flatMap(() =>
-          // -A so deletions inside the pathspec are also applied to the
-          // temp index (it was seeded from HEAD, so deletions exist there).
-          run(["add", "-A", "--pathspec-from-file", pathspecPath, "--pathspec-file-nul"]),
-        ),
       );
 
-    const firstAdd = yield* addViaPathspec(candidatePaths);
-    if (firstAdd.exitCode === 0) {
-      return yield* cleanupPathspec;
-    }
+    // Phase 2 owns the temp pathspec file: the cleanup runs on success,
+    // failure, and interrupt alike (ensuring), so the file can never
+    // outlive this capture — including the all-unindexable failure below.
+    return yield* Effect.gen(function* () {
+      yield* writePathspec(candidatePaths);
+      const addViaPathspec = (paths: readonly string[]) =>
+        writePathspec(paths).pipe(
+          Effect.flatMap(() =>
+            // -A so deletions inside the pathspec are also applied to the
+            // temp index (it was seeded from HEAD, so deletions exist there).
+            run(["add", "-A", "--pathspec-from-file", pathspecPath, "--pathspec-file-nul"]),
+          ),
+        );
 
-    // Second fallback: drop the paths the host cannot index at all
-    // (Windows-reserved device names) and add the rest.
-    const indexablePaths = candidatePaths.filter((repoPath) => !isUnindexableHostPath(repoPath));
-    if (indexablePaths.length === 0) {
-      return yield* fail(
-        operation,
-        cwd,
-        "git add -A failed and every candidate path is unindexable on this host; nothing was added to the checkpoint index.",
-        boundedStderr(broadAdd.stderr, ["add", "-A", "--", "."]),
-        broadAdd.exitCode ?? 0,
-      );
-    }
-    const secondAdd = yield* addViaPathspec(indexablePaths);
-    if (secondAdd.exitCode !== 0) {
-      yield* cleanupPathspec;
-      return yield* fail(
-        operation,
-        cwd,
-        `git add -A failed and the explicit pathspec fallback could not index ${candidatePaths.length} paths (${candidatePaths.length - indexablePaths.length} unindexable paths were skipped).`,
-        boundedStderr(secondAdd.stderr, ["add", "-A"]),
-        secondAdd.exitCode ?? 0,
-      );
-    }
-    yield* Effect.logWarning("checkpoint.index.partial", {
-      detail: `skipped ${candidatePaths.length - indexablePaths.length} unindexable path(s) in checkpoint index for ${cwd}`,
-    });
-    return yield* cleanupPathspec;
+      const firstAdd = yield* addViaPathspec(candidatePaths);
+      if (firstAdd.exitCode === 0) {
+        return;
+      }
+
+      // Second fallback: drop the paths the host cannot index at all
+      // (Windows-reserved device names) and add the rest.
+      const indexablePaths = candidatePaths.filter((repoPath) => !isUnindexableHostPath(repoPath));
+      if (indexablePaths.length === 0) {
+        return yield* fail(
+          operation,
+          cwd,
+          "git add -A failed and every candidate path is unindexable on this host; nothing was added to the checkpoint index.",
+          boundedStderr(broadAdd.stderr, ["add", "-A", "--", "."]),
+          broadAdd.exitCode ?? 0,
+        );
+      }
+      const secondAdd = yield* addViaPathspec(indexablePaths);
+      if (secondAdd.exitCode !== 0) {
+        return yield* fail(
+          operation,
+          cwd,
+          `git add -A failed and the explicit pathspec fallback could not index ${candidatePaths.length} paths (${candidatePaths.length - indexablePaths.length} unindexable paths were skipped).`,
+          boundedStderr(secondAdd.stderr, ["add", "-A"]),
+          secondAdd.exitCode ?? 0,
+        );
+      }
+      yield* Effect.logWarning("checkpoint.index.partial", {
+        detail: `skipped ${candidatePaths.length - indexablePaths.length} unindexable path(s) in checkpoint index for ${cwd}`,
+      });
+    }).pipe(Effect.ensuring(cleanupPathspec));
   });

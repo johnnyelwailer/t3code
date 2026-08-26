@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - the mock git runner inspects the
 // pathspec files the driver writes on disk.
 // @effect-diagnostics globalDate:off - temp directory naming only.
-import * as NodeFs from "node:fs";
-import * as NodeOs from "node:os";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -85,7 +85,7 @@ const DriverLayer = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pi
           }
           if (args[0] === "add" && args.includes("--pathspec-from-file")) {
             const pathspecFile = args[args.indexOf("--pathspec-from-file") + 1];
-            const contents = NodeFs.readFileSync(pathspecFile!, "utf8");
+            const contents = NodeFS.readFileSync(pathspecFile!, "utf8");
             pathspecReads.push(contents);
             // The unfiltered pathspec still fails; the filtered one succeeds.
             return contents.split("\0").includes("nul")
@@ -112,7 +112,7 @@ const DriverLayer = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pi
 );
 
 it.effect("captureCheckpoint skips an unindexable reserved-name file instead of failing", () => {
-  const repoDir = NodePath.join(NodeOs.tmpdir(), `t3-ckpt-index-test-${Date.now()}`);
+  const repoDir = NodePath.join(NodeOS.tmpdir(), `t3-ckpt-index-test-${Date.now()}`);
 
   return Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
@@ -138,7 +138,7 @@ it.effect("captureCheckpoint skips an unindexable reserved-name file instead of 
     assert.ok(secondPathspec.includes("src/a.ts"));
     assert.ok(secondPathspec.includes("src/b.ts"));
     // The temp pathspec file is cleaned up.
-    const leftovers = NodeFs.readdirSync(path.join(repoDir, ".git")).filter((name) =>
+    const leftovers = NodeFS.readdirSync(path.join(repoDir, ".git")).filter((name) =>
       name.startsWith("t3-checkpoint-pathspec-"),
     );
     assert.strictEqual(leftovers.length, 0);
@@ -147,7 +147,7 @@ it.effect("captureCheckpoint skips an unindexable reserved-name file instead of 
     Effect.ensuring(
       Effect.sync(() => {
         try {
-          NodeFs.rmSync(repoDir, { recursive: true, force: true });
+          NodeFS.rmSync(repoDir, { recursive: true, force: true });
         } catch {
           // best-effort cleanup
         }
@@ -155,3 +155,101 @@ it.effect("captureCheckpoint skips an unindexable reserved-name file instead of 
     ),
   );
 });
+
+/** Driver layer for a repo where EVERY candidate path is a reserved name. */
+const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pipe(
+  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-git-ckpt-index-unidx-" })),
+  Layer.provideMerge(
+    Layer.succeed(VcsProcess.VcsProcess, {
+      run: (input) =>
+        Effect.sync(() => {
+          const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+          if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
+            return ok(".git\n");
+          }
+          if (args[0] === "rev-parse" && args[1] === "--verify") {
+            return ok("head-oid\n");
+          }
+          if (
+            args[0] === "add" &&
+            args.includes("-A") &&
+            args.includes("--") &&
+            args.includes(".")
+          ) {
+            return failed(
+              128,
+              "fatal: short read while indexing nul\nfatal: unable to index 'nul'\n",
+            );
+          }
+          if (args[0] === "ls-files" && args.includes("--others")) {
+            return ok("nul\0");
+          }
+          if (args[0] === "ls-files") {
+            return ok("com1\0");
+          }
+          if (args[0] === "add" && args.includes("--pathspec-from-file")) {
+            const pathspecFile = args[args.indexOf("--pathspec-from-file") + 1];
+            NodeFS.readFileSync(pathspecFile!, "utf8");
+            return failed(128, "fatal: unable to index 'nul'\n");
+          }
+          return failed(128, `unexpected git args: ${args.join(" ")}\n`);
+        }),
+    }),
+  ),
+  Layer.provideMerge(NodeServices.layer),
+);
+
+it.effect(
+  "fails when every candidate path is unindexable and removes the temp pathspec file",
+  () => {
+    const repoDir = NodePath.join(NodeOS.tmpdir(), `t3-ckpt-index-unidx-test-${Date.now()}`);
+
+    return Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const driver = yield* VcsDriver.VcsDriver;
+
+      yield* fileSystem.makeDirectory(path.join(repoDir, ".git"), { recursive: true });
+
+      assert.isNotNull(driver.checkpoints);
+      const result = yield* driver
+        .checkpoints!.captureCheckpoint({
+          cwd: repoDir,
+          checkpointRef: "refs/t3/checkpoints/test-unidx" as never,
+        })
+        .pipe(
+          Effect.match({
+            onSuccess: () => "succeeded" as const,
+            onFailure: (error) => error,
+          }),
+        );
+
+      if (result === "succeeded") {
+        assert.fail("expected the capture to fail when every candidate path is unindexable");
+      }
+      if (result._tag !== "VcsProcessExitError") {
+        assert.fail(`expected VcsProcessExitError, got ${result._tag}`);
+      }
+      assert.ok(
+        result.detail.includes("every candidate path is unindexable"),
+        `unexpected detail: ${result.detail}`,
+      );
+      // The temp pathspec file must be gone even on this failure branch.
+      const leftovers = NodeFS.readdirSync(path.join(repoDir, ".git")).filter((name) =>
+        name.startsWith("t3-checkpoint-pathspec-"),
+      );
+      assert.strictEqual(leftovers.length, 0);
+    }).pipe(
+      Effect.provide(DriverLayerAllUnindexable),
+      Effect.ensuring(
+        Effect.sync(() => {
+          try {
+            NodeFS.rmSync(repoDir, { recursive: true, force: true });
+          } catch {
+            // best-effort cleanup
+          }
+        }),
+      ),
+    );
+  },
+);
