@@ -17,10 +17,21 @@
  * For typechecking and source runs (dev/tests), `@t3code/distribution` resolves via tsconfig
  * `paths` to `t3team-distribution.ts`, a stub with empty values, so the bootstrap no-ops and the
  * runtime pack loader (T3TEAM_PACKS_DIR) handles the distribution as it does today.
+ *
+ * Resolution guarantee: because the pack is compiled in, its bare imports are resolved against this
+ * workspace (the server package), never against an ancestor node_modules of the distribution
+ * checkout. An import that cannot be inlined from here fails the build with an actionable error
+ * instead of becoming an external that crashes the packed server on first boot. See
+ * `createDistributionResolver` below.
  */
 
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
+
+import {
+  createDistributionImportResolver,
+  isBareSpecifier,
+} from "./t3team-distributionImportResolver.ts";
 
 const VIRTUAL_ID = "\0@t3code/distribution";
 const SPECIFIER = "@t3code/distribution";
@@ -148,19 +159,44 @@ const distributionModule = (dir: string): string => {
   );
 };
 
+/**
+ * The canonical distribution directory the pack is compiled from, or undefined when building
+ * without a distribution (the stub path). The bundler reports importers by their canonical
+ * (symlink-resolved) path — e.g. /private/tmp on macOS — so canonicalize here or the prefix check
+ * in `resolveId` compares different spellings of the same path.
+ */
+const distributionDir = (): string | undefined => {
+  const dir = process.env.T3CODE_DISTRIBUTION?.trim();
+  if (!dir) return undefined;
+  const resolved = NodePath.resolve(dir);
+  try {
+    return NodeFS.realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
+};
+
 export function t3teamDistributionPackPlugin(): {
   readonly name: string;
-  resolveId(source: string): string | null;
+  resolveId(source: string, importer?: string): string | null;
   load(id: string): string | null;
 } {
+  const resolvePackImport = createDistributionImportResolver();
   return {
     name: "t3code-distribution",
-    resolveId(source) {
-      return source === SPECIFIER ? VIRTUAL_ID : null;
+    resolveId(source, importer) {
+      if (source === SPECIFIER) return VIRTUAL_ID;
+      const dir = distributionDir();
+      if (!dir || !importer || !isBareSpecifier(source)) return null;
+      // Only imports made by distribution modules (the compiled-in pack), never imports from the
+      // server's own source, which already resolve in this workspace.
+      const importerPath = NodePath.resolve(importer);
+      if (!importerPath.startsWith(dir + NodePath.sep)) return null;
+      return resolvePackImport(source, importerPath);
     },
     load(id) {
       if (id !== VIRTUAL_ID) return null;
-      const dir = process.env.T3CODE_DISTRIBUTION?.trim();
+      const dir = distributionDir();
       return dir ? distributionModule(dir) : stubModule();
     },
   };

@@ -27,6 +27,7 @@ import {
   ServerCliDevelopmentIconTargetMissingError,
   ServerCliPublishIconSourceMissingError,
   ServerCliPublishIconTargetMissingError,
+  ServerCliWebClientMissingError,
 } from "./cliErrors.ts";
 
 interface PackageJson {
@@ -165,13 +166,29 @@ const buildCmd = Command.make(
       const webDist = path.join(repoRoot, "apps/web/dist");
       const clientTarget = path.join(serverDir, "dist/client");
 
-      if (yield* fs.exists(webDist)) {
-        yield* fs.copy(webDist, clientTarget);
-        yield* applyDevelopmentIconOverrides(repoRoot, serverDir);
-        yield* Effect.log("[cli] Bundled web app into dist/client");
-      } else {
-        yield* Effect.logWarning("[cli] Web dist not found — skipping client bundle.");
+      // The packed server serves the web client from dist/client. If the workspace has no built
+      // web client yet (fresh checkout, or a task run that did not reach @t3tools/web#build),
+      // build it here: a release artifact must never ship a server whose first boot answers 503
+      // on "/" because the client bundle was skipped.
+      if (!(yield* fs.exists(webDist))) {
+        yield* Effect.log("[cli] Web dist not found — building the web client first...");
+        const webSpawn = yield* resolveSpawnCommand("vp", ["build"]);
+        yield* runCommand(
+          ChildProcess.make(webSpawn.command, webSpawn.args, {
+            cwd: path.join(repoRoot, "apps/web"),
+            stdout: config.verbose ? "inherit" : "ignore",
+            stderr: "inherit",
+            shell: webSpawn.shell,
+          }),
+        );
       }
+      if (!(yield* fs.exists(path.join(webDist, "index.html")))) {
+        return yield* new ServerCliWebClientMissingError({ webDist });
+      }
+
+      yield* fs.copy(webDist, clientTarget);
+      yield* applyDevelopmentIconOverrides(repoRoot, serverDir);
+      yield* Effect.log("[cli] Bundled web app into dist/client");
     }),
 ).pipe(Command.withDescription("Build the server package (tsdown + bundle web client)."));
 
