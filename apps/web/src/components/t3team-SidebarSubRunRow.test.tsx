@@ -78,6 +78,10 @@ function ringSvg(): SVGSVGElement | null {
   );
 }
 
+function allStatusSvgs(): SVGSVGElement[] {
+  return Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
+}
+
 afterEach(() => {
   settingsState.activityLabelsEnabled = true;
   if (root) {
@@ -144,5 +148,29 @@ describe("SidebarSubRunRow status treatment", () => {
     expect(container!.querySelector("button svg path")).not.toBeNull();
     expect(container!.querySelector("span.t3team-label-shimmer")).toBeNull();
     expect(button().textContent).toContain("Sub-run thread");
+  });
+
+  it("GHE #254: an idle sub-run keeps the ring at size-3 (faded + static), not the old size-1.5 dot", () => {
+    render(createThread({ status: "idle" }));
+    const svg = ringSvg();
+    expect(svg, "idle keeps the dashed ring icon").toBeTruthy();
+    expect(svg!.className.baseVal).toContain("size-3");
+    // faded, and static: the idle wrapper is muted and the svg has no pulse class
+    const wrapper = svg!.parentElement;
+    expect(wrapper!.className).toContain("text-sidebar-muted-foreground/40");
+    expect(svg!.className.baseVal).not.toContain("t3team-icon-pulse");
+    // the old idle treatment: a size-1.5 rounded-full dot — must be gone
+    expect(container!.querySelector("button .size-1\\.5")).toBeNull();
+  });
+
+  it("GHE #254: an errored sub-run renders the alert icon at size-3, not the old size-1.5 dot", () => {
+    render(createThread({ status: "error" }));
+    // CircleAlertIcon = bare circle + exclamation <line> (CircleCheckIcon has no line)
+    const svgs = allStatusSvgs().filter((svg) => svg.querySelector("line"));
+    expect(svgs.length, "CircleAlertIcon svg present").toBe(1);
+    const alert = svgs[0]!;
+    expect(alert.className.baseVal).toContain("size-3");
+    expect(alert.className.baseVal).toContain("text-destructive");
+    expect(container!.querySelector("button .size-1\\.5")).toBeNull();
   });
 });
