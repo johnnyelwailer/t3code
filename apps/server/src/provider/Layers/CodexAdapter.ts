@@ -1787,6 +1787,13 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     input: ProviderSendTurnInput,
     attachment: NonNullable<ProviderSendTurnInput["attachments"]>[number],
   ) {
+    // Only images are inlined; non-image attachments reach the agent through
+    // the '[Attached file "name" is saved at: path]' line ProviderService
+    // injects into the turn text, so the Codex agent reads them with its file
+    // tools instead of receiving a fake base64 image block.
+    if (attachment.type !== "image") {
+      return undefined;
+    }
     const attachmentPath = resolveAttachmentPath({
       attachmentsDir: serverConfig.attachmentsDir,
       attachment,
@@ -1816,10 +1823,14 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   });
 
   const sendTurn: CodexAdapterShape["sendTurn"] = Effect.fn("sendTurn")(function* (input) {
-    const codexAttachments = yield* Effect.forEach(
+    const resolvedAttachments = yield* Effect.forEach(
       input.attachments ?? [],
       (attachment) => resolveAttachment(input, attachment),
       { concurrency: 1 },
+    );
+    const codexAttachments = resolvedAttachments.filter(
+      (attachment): attachment is { readonly type: "image"; readonly url: string } =>
+        attachment !== undefined,
     );
 
     const session = yield* requireSession(input.threadId);

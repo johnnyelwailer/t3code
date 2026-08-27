@@ -1149,6 +1149,47 @@ routing.layer("ProviderServiceLive routing", (it) => {
     }),
   );
 
+  it.effect("appends the saved path of file attachments to the turn input text", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+
+      const session = yield* provider.startSession(asThreadId("thread-file-attach"), {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId: asThreadId("thread-file-attach"),
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+
+      const file = {
+        type: "file" as const,
+        id: "thread-file-attach-12345678-1234-1234-1234-123456789abc",
+        name: "notes.txt",
+        mimeType: "text/plain",
+        sizeBytes: 123,
+      };
+
+      routing.codex.sendTurn.mockClear();
+      yield* provider.sendTurn({
+        threadId: session.threadId,
+        input: "read these notes",
+        attachments: [file],
+      });
+
+      const turnInput = routing.codex.sendTurn.mock.calls[0]?.[0] as ProviderSendTurnInput;
+      const turnText = turnInput.input ?? "";
+      assert.equal(turnText.startsWith("read these notes"), true);
+      assert.include(turnText, '[Attached file "notes.txt" is saved at: ');
+      assert.equal(turnText.endsWith(`${file.id}.bin]`), true);
+
+      // File attachments reach the adapter unmodified — the adapter must not
+      // inline them, only the path line carries them to the model.
+      assert.deepEqual(turnInput.attachments, [file]);
+
+      yield* provider.stopSession({ threadId: session.threadId });
+    }),
+  );
+
   it.effect("recovers stale persisted sessions for rollback by resuming thread identity", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;

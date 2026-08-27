@@ -173,13 +173,15 @@ export function isProviderSendTurnSupportedImageMimeType(mimeType: string): bool
 }
 const PROVIDER_SEND_TURN_MAX_IMAGE_DATA_URL_CHARS = 14_000_000;
 /**
- * Arbitrary (non-image) files are never inlined into a model prompt: they are
- * stored on disk and the agent reads them through its file tools, so the cap
- * only needs to stay reasonable for the upload round-trip, not for base64
- * payload encoding.
+ * Arbitrary (non-image) files are not inlined into model prompts — providers
+ * receive the shared '[Attached file … is saved at: path]' line instead — but
+ * the dataUrl fallback path still base64-encodes the full file, so this cap
+ * is paired with PROVIDER_SEND_TURN_MAX_FILE_BYTES the same way the image
+ * caps are: 20 MiB of bytes base64-encodes to ~27.96M characters plus the
+ * data-URL prefix, so the cap must clear that.
  */
 export const PROVIDER_SEND_TURN_MAX_FILE_BYTES = 20 * 1024 * 1024;
-const PROVIDER_SEND_TURN_MAX_FILE_DATA_URL_CHARS = 27_300_000;
+const PROVIDER_SEND_TURN_MAX_FILE_DATA_URL_CHARS = 28_000_000;
 // RFC 6838 type/subtype with the character sets in use; keeps the contract
 // generic (no per-vendor mime allow-list) while rejecting garbage.
 const CHAT_FILE_MIME_TYPE_PATTERN = /^[a-z0-9][a-z0-9.+-]*\/[^\s/]+$/i;
