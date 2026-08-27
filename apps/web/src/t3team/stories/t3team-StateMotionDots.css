@@ -1,0 +1,564 @@
+/* ===========================================================================
+ * GHE #201 follow-up — STATUS-ROW STATE-MOTION DOTS (chosen direction).
+ *
+ * Story-only styles for t3team-StateMotionDots.stories.tsx. Do NOT import
+ * into production modules.
+ *
+ * The chosen direction: STATE-TEXTURED DOTS + HUE — the working row's
+ * motion AND color are driven off the deterministic 4-state activity word
+ * (GHE #208, `OrchestrationThreadActivityState` + "settled"/idle):
+ *   thinking → slow smooth sine wave (~1.6s, low amplitude), cool hue
+ *   writing  → same wave, slightly slower, cooler
+ *   working  → snappy fast pulses (~0.9s, brighter), warm hue (tool heat)
+ *   waiting  → one soft opacity swell (~3.2s, low brightness), muted hue
+ *   settled  → dim + still
+ *
+ * Integrations (both opt-in via story controls):
+ *   - "breathing ring" (from the breathing-ring exploration): in `waiting`,
+ *     a single soft ring swells around the dot cluster on the shared spring
+ *     easing, synced to the breath.
+ *   - "proximity springs" (from the mouse-proximity exploration): the
+ *     row's dots are masses on springs; the cursor repels them within a
+ *     radius and "excites" (brighter, looser). Driven by the story's rAF
+ *     loop writing transform/opacity on the production elements.
+ *
+ * These rules restyle the REAL production working row
+ * (components/chat/MessagesTimeline.tsx → WorkingTimelineRow):
+ *   - the three upstream progress dots:  `.h-1.w-1`
+ *     (inside `span[aria-hidden="true"].inline-flex`)
+ *   - the GHE #201 agent dots:           `.t3team-aci-dot`
+ *     (inside `button.t3team-aci-cell`, one per active agent)
+ * Scope classes (.sdv-*) are applied to the story-card wrapper div, so the
+ * baseline card (no scope class) renders the unmodified production row.
+ * Sizes, gap and line height are whatever the real components already use —
+ * nothing here invents new chrome.
+ *
+ * Shared motion language: the spring easing cubic-bezier(0.22, 1, 0.36, 1)
+ * is the same curve t3team-index-transitions.css uses for the panel
+ * view-transitions.
+ * ========================================================================= */
+
+/* --- keyframes ------------------------------------------------------------ */
+
+/* thinking: slow smooth wave, cool. */
+@keyframes t3team-sdv-wave {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-1.5px);
+  }
+  55% {
+    transform: translateY(0.4px);
+  }
+  75% {
+    transform: translateY(-0.35px);
+  }
+}
+
+/* acting/tool: snappy pulse, brighter. Spring-eased rise. */
+@keyframes t3team-sdv-snap {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  12% {
+    transform: translateY(-1px);
+    opacity: 1;
+  }
+  32% {
+    transform: translateY(0);
+    opacity: 0.75;
+  }
+}
+
+/* waiting: one soft opacity swell across the row, low brightness. */
+@keyframes t3team-sdv-breathe {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.62;
+  }
+}
+
+/* ===========================================================================
+ * Single-state cards (baseline-styled progress dots) — the three upstream
+ * progress dots carry the state's motion + hue.
+ * ========================================================================= */
+
+.sdv-solo.sdv-st-thinking .h-1.w-1 {
+  background: #38bdf8;
+  opacity: 0.8;
+  animation: t3team-sdv-wave 1.6s ease-in-out infinite;
+}
+
+.sdv-solo.sdv-st-thinking .h-1.w-1:nth-child(2) {
+  animation-delay: -0.25s;
+}
+
+.sdv-solo.sdv-st-thinking .h-1.w-1:nth-child(3) {
+  animation-delay: -0.5s;
+}
+
+.dark .sdv-solo.sdv-st-thinking .h-1.w-1 {
+  background: #7dd3fc;
+}
+
+.sdv-solo.sdv-st-writing .h-1.w-1 {
+  background: #818cf8;
+  opacity: 0.8;
+  animation: t3team-sdv-wave 1.75s ease-in-out infinite;
+}
+
+.sdv-solo.sdv-st-writing .h-1.w-1:nth-child(2) {
+  animation-delay: -0.27s;
+}
+
+.sdv-solo.sdv-st-writing .h-1.w-1:nth-child(3) {
+  animation-delay: -0.54s;
+}
+
+.dark .sdv-solo.sdv-st-writing .h-1.w-1 {
+  background: #a5b4fc;
+}
+
+.sdv-solo.sdv-st-working .h-1.w-1 {
+  background: #f59e0b;
+  opacity: 0.7;
+  animation: t3team-sdv-snap 0.9s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.sdv-solo.sdv-st-working .h-1.w-1:nth-child(2) {
+  animation-delay: -0.11s;
+}
+
+.sdv-solo.sdv-st-working .h-1.w-1:nth-child(3) {
+  animation-delay: -0.22s;
+}
+
+.dark .sdv-solo.sdv-st-working .h-1.w-1 {
+  background: #fbbf24;
+}
+
+.sdv-solo.sdv-st-waiting .h-1.w-1 {
+  background: #94a3b8;
+  animation: t3team-sdv-breathe 3.2s ease-in-out infinite;
+}
+
+.sdv-solo.sdv-st-waiting .h-1.w-1:nth-child(2) {
+  animation-delay: -0.27s;
+}
+
+.sdv-solo.sdv-st-waiting .h-1.w-1:nth-child(3) {
+  animation-delay: -0.54s;
+}
+
+.dark .sdv-solo.sdv-st-waiting .h-1.w-1 {
+  background: #cbd5e1;
+}
+
+.sdv-solo.sdv-st-settled .h-1.w-1 {
+  animation: none;
+  opacity: 0.32;
+}
+
+/* Agent dots lean toward the state's hue family (subtle — the per-agent
+   identity hues are preserved, only nudged). Only on cards that are NOT in
+   mixed mode (mixed mode colors the agent dots by their own state below). */
+.sdv-solo:not(.sdv-mixed).sdv-st-thinking .t3team-aci-dot {
+  filter: hue-rotate(-20deg) saturate(1.15);
+}
+
+.sdv-solo:not(.sdv-mixed).sdv-st-writing .t3team-aci-dot {
+  filter: hue-rotate(-40deg) saturate(1.15);
+}
+
+.sdv-solo:not(.sdv-mixed).sdv-st-working .t3team-aci-dot {
+  filter: hue-rotate(190deg) saturate(1.25);
+}
+
+.sdv-solo:not(.sdv-mixed).sdv-st-waiting .t3team-aci-dot,
+.sdv-solo:not(.sdv-mixed).sdv-st-settled .t3team-aci-dot {
+  filter: saturate(0.35);
+  opacity: 0.45;
+}
+
+/* ===========================================================================
+ * Mixed-states card — each AGENT dot carries ITS OWN state, and they never
+ * all share one: a busy thread reads as "one is thinking, one is acting,
+ * one is waiting" at a glance. The story sets `data-sdv-state` + `--sdv-i`
+ * on the real .t3team-aci-cell; the states re-roll randomly over time.
+ * The color is the STATE's color (not the per-agent identity palette):
+ * cool thinking, warm working, muted waiting, dim settled.
+ *
+ * Color shifts:
+ * - dots rest at 1.5x the production size and the pulse/breath scales
+ *   AROUND that (growing, not just pulsing);
+ * - a state re-roll crossfades the color (0.7s spring) instead of snapping;
+ * - with .sdv-hue, every dot slowly wanders its own hue (per-dot phase),
+ *   so no two dots ever sit on the same color.
+ *
+ * The three upstream progress dots are GONE in this card: once every agent
+ * dot carries its own state, the thread-level state word alone is enough
+ * up front. The pinned baseline card above keeps them (unmodified).
+ * ========================================================================= */
+
+.sdv-mixed span[aria-hidden="true"].inline-flex.mr-1\.5 {
+  display: none;
+}
+
+.sdv-mixed .t3team-aci-cell {
+  filter: hue-rotate(calc(var(--sdv-i, 0) * -7deg));
+
+  /* eased growth when the snap capture fires */
+  transition: scale 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Split lead text: the production row renders "Working for 0:05" as ONE
+   text run, which can neither flip nor resize gracefully. The story portals
+   its OWN two pieces (state word + timer) into the same flex slot, so each
+   gets the production FLIP transition (t3team-aci-flip-in/out) on its own,
+   and the slot's width resizes with the shared spring when the word
+   changes — no layout jump for the dots. */
+/* Only the upstream progress-dots container (aria-hidden + mr-1.5) is
+   hidden — the agent dots' own inline-flex span lives in this slot too and
+   must stay. */
+.sdv-mixed .shrink-0 > .inline-flex.mr-1\.5[aria-hidden="true"],
+.sdv-mixed .shrink-0 > .t3team-label-shimmer:not(.sdv-lead) {
+  display: none;
+}
+
+/* Per-dot clicks: each dot is individually actionable (cursor pointer),
+   the group span is NOT — two adjacent pointer regions made the cursor
+   icon flicker as the mouse crossed between them. */
+.sdv-mixed .t3team-aci-cell {
+  cursor: pointer;
+}
+.sdv-mixed span[role="button"] {
+  cursor: default;
+}
+
+.sdv-lead {
+  /* inline-block (NOT flex): flex containers drop the whitespace between
+     the word / " for " / time pieces, which is what produced "WaitingFor". */
+  display: inline-block;
+  position: relative;
+  white-space: nowrap;
+  /* "resize width dynamically with motion": the story measures the incoming
+     text with an invisible sizer and transitions the EXPLICIT pixel width on
+     the shared spring — animatable in every browser, no layout jump. */
+  transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Invisible width probe for the incoming text (same font/inheritance). */
+.sdv-lead-sizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* The dots read as "slightly bigger" than the 4px production dots: they
+   rest at scale(1.5) and every state keyframe grows around that rest. */
+.sdv-mixed .t3team-aci-dot {
+  /* A status change crossfades the color (0.9s spring) instead of
+     snapping — the "shift on status change" half of the color language. */
+  transition:
+    background 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Slow per-dot hue wander — DELIBERATELY VERY SUBTLE at rest (±6° over a
+   15s sweep; each dot's phase is offset by its index). The bigger color
+   shift lives on the STATUS CHANGE itself: the .sdv-shift one-shot below. */
+.sdv-mixed.sdv-hue .t3team-aci-cell {
+  animation: t3team-sdv-hue-wander 15s ease-in-out infinite alternate;
+  animation-delay: calc(var(--sdv-i, 0) * -3.1s);
+}
+
+@keyframes t3team-sdv-hue-wander {
+  from {
+    filter: hue-rotate(calc(var(--sdv-i, 0) * -7deg - 6deg));
+  }
+  to {
+    filter: hue-rotate(calc(var(--sdv-i, 0) * -7deg + 6deg));
+  }
+}
+
+/* Status-change swing: when an agent's state re-rolls, the story adds
+   .sdv-shift to that cell for one cycle — a clearly visible hue swing
+   (±30° + brightness pop) that settles back into the subtle wander. */
+@keyframes t3team-sdv-shift {
+  0% {
+    filter: hue-rotate(calc(var(--sdv-i, 0) * -7deg - 30deg)) brightness(1.25);
+  }
+  55% {
+    filter: hue-rotate(calc(var(--sdv-i, 0) * -7deg + 10deg)) brightness(1.08);
+  }
+  100% {
+    filter: hue-rotate(calc(var(--sdv-i, 0) * -7deg)) brightness(1);
+  }
+}
+
+.sdv-mixed .t3team-aci-cell.sdv-shift {
+  animation: t3team-sdv-shift 1.1s ease-out;
+}
+
+.sdv-mixed .t3team-aci-cell[data-sdv-state="thinking"] .t3team-aci-dot {
+  background: #38bdf8;
+  animation: t3team-sdv-wave-big 1.6s ease-in-out infinite;
+  box-shadow: 0 0 5px 0 rgb(56 189 248 / 0.35);
+}
+
+.dark .sdv-mixed .t3team-aci-cell[data-sdv-state="thinking"] .t3team-aci-dot {
+  background: #7dd3fc;
+}
+
+.sdv-mixed .t3team-aci-cell[data-sdv-state="writing"] .t3team-aci-dot {
+  background: #818cf8;
+  animation: t3team-sdv-wave-big 1.75s ease-in-out infinite;
+  box-shadow: 0 0 5px 0 rgb(129 140 248 / 0.35);
+}
+
+.dark .sdv-mixed .t3team-aci-cell[data-sdv-state="writing"] .t3team-aci-dot {
+  background: #a5b4fc;
+}
+
+.sdv-mixed .t3team-aci-cell[data-sdv-state="working"] .t3team-aci-dot {
+  background: #f59e0b;
+  animation: t3team-sdv-snap-big 1.05s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  box-shadow: 0 0 6px 0 rgb(245 158 11 / 0.4);
+}
+
+.dark .sdv-mixed .t3team-aci-cell[data-sdv-state="working"] .t3team-aci-dot {
+  background: #fbbf24;
+}
+
+.sdv-mixed .t3team-aci-cell[data-sdv-state="waiting"] .t3team-aci-dot {
+  background: #94a3b8;
+  animation: t3team-sdv-breathe-big 3.2s ease-in-out infinite;
+}
+
+.dark .sdv-mixed .t3team-aci-cell[data-sdv-state="waiting"] .t3team-aci-dot {
+  background: #cbd5e1;
+}
+
+.sdv-mixed .t3team-aci-cell[data-sdv-state="settled"] .t3team-aci-dot {
+  background: #a3a3a3;
+  animation: none;
+  opacity: 0.4;
+  transform: scale(1.5);
+}
+
+.dark .sdv-mixed .t3team-aci-cell[data-sdv-state="settled"] .t3team-aci-dot {
+  background: #737373;
+}
+
+/* Growing variants: every keyframe grows around the 1.5x rest, so the dot
+   visibly swells and settles back instead of flickering at 4px. */
+/* Kept deliberately calm: real threads burst sporadically, they don't
+   blink steadily, so the idle pulse stays a gentle swell, not a bounce. */
+@keyframes t3team-sdv-wave-big {
+  0%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.82);
+    opacity: 0.95;
+  }
+}
+
+@keyframes t3team-sdv-snap-big {
+  0%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.85);
+    opacity: 1;
+  }
+}
+
+@keyframes t3team-sdv-breathe-big {
+  0%,
+  100% {
+    transform: scale(1.45);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.78);
+    opacity: 0.88;
+  }
+}
+
+/* Integration — "breathing ring" on a WAITING agent dot: one soft ring
+   swells around that single dot on the shared spring easing, synced to the
+   3.2s breath. The cell's first span is the (real) pulse wrapper. */
+.sdv-ring .sdv-mixed .t3team-aci-cell[data-sdv-state="waiting"] > span::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 9999px;
+  border: 1px solid #94a3b8;
+  box-shadow: 0 0 5px 1px rgb(148 163 184 / 0.3);
+  opacity: 0;
+  transform: scale(0.4);
+  animation: t3team-sdv-ring-breathe 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+
+.dark .sdv-ring .sdv-mixed .t3team-aci-cell[data-sdv-state="waiting"] > span::before {
+  border-color: #cbd5e1;
+  box-shadow: 0 0 5px 1px rgb(203 213 225 / 0.25);
+}
+
+@keyframes t3team-sdv-ring-breathe {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+/* ===========================================================================
+ * Integration — "proximity springs" (real mouse): the story's rAF loop
+ * writes translate() on the real agent cells (both axes). Only the
+ * will-change hint lives in CSS — there is deliberately NO visual cursor
+ * proxy, ghost or glow: just the dots moving.
+ * ========================================================================= */
+
+.sdv-springs .t3team-aci-cell,
+.sdv-springs .h-1.w-1 {
+  will-change: transform;
+}
+
+/* ===========================================================================
+ * Reduced motion — the state motion, the ring and the springs all fall back
+ * to a static dim state.
+ * (The baseline production row already honors its own motion-reduce
+ * utilities; this covers the variant overrides.)
+ * ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .sdv-solo .h-1.w-1,
+  .sdv-mixed .h-1.w-1,
+  .sdv-mixed .t3team-aci-dot,
+  .sdv-mixed .t3team-aci-cell,
+  .sdv-ring span[aria-hidden="true"].inline-flex::before,
+  .sdv-mixed .t3team-aci-cell > span::before {
+    animation: none !important;
+  }
+
+  .sdv-solo .h-1.w-1,
+  .sdv-mixed .h-1.w-1,
+  .sdv-mixed .t3team-aci-dot {
+    opacity: 0.4 !important;
+  }
+
+  .sdv-lead {
+    transition: none !important;
+  }
+}
+/* Debug alignment overlay */
+.sdv-debug {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+.sdv-debug-cross {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 1px solid #ef4444;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
+}
+.sdv-debug-cross::before,
+.sdv-debug-cross::after {
+  content: "";
+  position: absolute;
+  background: #ef4444;
+}
+.sdv-debug-cross::before {
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  margin-left: -0.5px;
+}
+.sdv-debug-cross::after {
+  top: 50%;
+  left: -3px;
+  right: -3px;
+  height: 1px;
+  margin-top: -0.5px;
+}
+.sdv-debug-home {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border: 1px dashed #f59e0b;
+  border-radius: 999px;
+}
+.sdv-debug-v {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  font:
+    10px/1.4 ui-monospace,
+    monospace;
+  color: #f59e0b;
+  background: rgb(0 0 0 / 0.35);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+/* Debug readout + capture chips — high contrast, big enough to read */
+/* Debug readout UI (rendered below the card, clear of the row AND the
+   card's own controls). Crosshair + home rings live on the row. */
+.sdv-live {
+  font:
+    600 13px/1.5 ui-monospace,
+    monospace;
+  color: #fbbf24;
+  background: rgb(15 15 15 / 0.92);
+  padding: 5px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.sdv-snap-chip {
+  font:
+    600 13px/1.5 ui-monospace,
+    monospace;
+  color: #f8fafc;
+  background: rgb(15 15 15 / 0.92);
+  padding: 5px 10px;
+  border-radius: 6px;
+  border-left: 3px solid #fbbf24;
+  white-space: nowrap;
+}
