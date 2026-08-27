@@ -162,19 +162,37 @@ Do not write brittle tests that only assert implementation details.
 
 ## Storybook And Screenshots
 
-Every reusable `t3team` component should have Storybook coverage before it is
-considered stable.
+Storybook is the basis for UI work, not documentation added afterward. Every
+reusable UI component MUST have Storybook stories before it ships, and a
+component without them is not done. New UI is designed and reviewed in
+Storybook before real-app integration; real-app click-through remains required
+for integrated behavior, and Storybook does not replace end-to-end acceptance.
 
-Required stories:
+Required stories, using realistic fixtures and exercised interactions (static
+decorative snapshots alone are insufficient):
 
-- default state
-- loading state
-- empty state where applicable
-- error state where applicable
-- dense/long-content state
-- narrow/mobile-ish state for layout-sensitive components
+- every supported, user-visible state and every meaningful combination of
+  state axes — default/initial/completed, loading/streaming, empty/partial/
+  populated, error/retry/recovered, disabled/read-only/submitted, stale/
+  conflicted/superseded, permission/role variants, artifact/workflow
+  lifecycle states, short/long/overflow content, narrow/tablet/desktop
+  layouts, supported themes, and keyboard/focus/expanded/selected states
+- a component is not done when only its default/happy state is represented
+- finite state machines and discriminated unions MUST have an explicit story
+  matrix that is exhaustive against the supported states, enforced at
+  compile/lint time — filename presence alone does not prove state
+  completeness
 
-Important screens should have snapshot coverage:
+CI MUST enforce the contract: every in-scope component maps to a story, the
+Storybook production build succeeds, every indexed story renders without
+runtime or console errors, play/interaction tests run for behavioral
+stories, and declared state matrices are exhaustive. Story debt is committed
+as a visible baseline and MUST NOT grow: every new or changed component and
+every changed public UI state adds or updates its stories in the same PR.
+Exceptions are explicit, narrow, owned, justified, and time-bounded — never
+a silently growing allowlist.
+
+Important screens MUST have snapshot coverage:
 
 - project browser
 - create project flow
@@ -307,7 +325,9 @@ A `t3team` feature is done when:
 - files are small or have justified exceptions
 - shared schemas/contracts are used
 - tests cover behavior and edge cases
-- reusable components have Storybook stories
+- every reusable component has Storybook stories covering all supported
+  user-visible states and meaningful state combinations (Definition of Done)
+- finite/discriminated component states have an exhaustive story matrix
 - important screens have snapshot coverage
 - the agent has opened the app in a browser and clicked through the changed flow
 - external mutations are reviewable
