@@ -416,7 +416,14 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
         });
       }),
     ).pipe(
-      Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+      // The prefix form of layerTest scopes baseDir to a temp directory, so
+      // the .bin fixture lands outside the repo (a plain cwd baseDir would
+      // write into apps/server/userdata/).
+      Layer.provideMerge(
+        ServerConfig.layerTest(process.cwd(), {
+          prefix: "t3code-codex-adapter-test-",
+        }),
+      ),
       Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(providerSessionDirectoryTestLayer),
       Layer.provideMerge(NodeServices.layer),
