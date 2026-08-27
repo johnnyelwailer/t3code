@@ -1552,6 +1552,7 @@ const make = Effect.gen(function* () {
           case "turn.started":
             return !conflictsWithActiveTurn || conflictingTurnStartIsPendingTurnStart;
           case "turn.completed":
+          case "turn.aborted":
             if (conflictsWithActiveTurn || missingTurnForActiveTurn) {
               return false;
             }
@@ -1565,7 +1566,8 @@ const make = Effect.gen(function* () {
             // thread ran — the known emitter was the Claude resume handshake
             // (system/init + result(num_turns: 0)), which is not a turn at
             // all — and applying it here stomps the "starting" lifecycle
-            // state while a turn start is pending.
+            // state while a turn start is pending. A late abort of a
+            // superseded turn is rejected by the conflict guard above.
             return eventTurnId !== undefined;
           default:
             return true;
@@ -1582,7 +1584,8 @@ const make = Effect.gen(function* () {
         event.type === "session.exited" ||
         event.type === "thread.started" ||
         event.type === "turn.started" ||
-        event.type === "turn.completed"
+        event.type === "turn.completed" ||
+        event.type === "turn.aborted"
       ) {
         const status = (() => {
           switch (event.type) {
@@ -1598,6 +1601,12 @@ const make = Effect.gen(function* () {
               return normalizeRuntimeTurnState(event.payload.state) === "failed"
                 ? "error"
                 : "ready";
+            case "turn.aborted":
+              // A user-interrupted turn leaves the session alive and idle —
+              // it can accept a new turn immediately. Providers that only
+              // emit turn.aborted on stop (without a follow-up session state
+              // change) must not leave the thread session stuck "running".
+              return "ready";
             case "session.started":
             case "thread.started":
               // Provider thread/session start notifications can arrive during an
@@ -1608,7 +1617,9 @@ const make = Effect.gen(function* () {
         const nextActiveTurnId =
           event.type === "turn.started"
             ? (eventTurnId ?? null)
-            : event.type === "turn.completed" || event.type === "session.exited"
+            : event.type === "turn.completed" ||
+                event.type === "turn.aborted" ||
+                event.type === "session.exited"
               ? null
               : event.type === "session.state.changed" &&
                   !sessionStatusAllowsActiveTurn(
