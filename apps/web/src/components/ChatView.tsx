@@ -507,6 +507,12 @@ const PreviewPanel = lazy(() =>
 );
 const DiffPanel = lazy(() => import("./DiffPanel"));
 const FilePreviewPanel = lazy(() => import("./files/FilePreviewPanel"));
+// A peer thread opened as a side chat: a nested ThreadChatView in a standard right-panel tab.
+const T3TeamThreadSurface = lazy(() =>
+  import("~/t3team/chat/t3team-ThreadRightPanelSurface").then((module) => ({
+    default: module.T3TeamThreadRightPanelSurface,
+  })),
+);
 const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
 const TYPE_TO_FOCUS_EDITABLE_SELECTOR = [
   "input",
@@ -7090,6 +7096,15 @@ function ChatViewContent(props: ChatViewProps) {
           ) : null
         }
       />
+    ) : activeRightPanelSurface?.kind === "thread" ? (
+      // A peer thread opened as a side chat: its full transcript in a standard right-panel tab.
+      <Suspense fallback={null}>
+        <T3TeamThreadSurface
+          key={activeRightPanelSurface.id}
+          environmentId={activeRightPanelSurface.environmentId}
+          threadId={activeRightPanelSurface.threadId}
+        />
+      </Suspense>
     ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
       activeProject &&
       activeWorkspaceRoot ? (

@@ -1,6 +1,11 @@
 import type { DesktopPreviewFavicon, PreviewSessionSnapshot } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+const threadShellState: { shells: Array<{ id: string; title: string }> } = { shells: [] };
+vi.mock("~/state/entities", () => ({
+  useThreadShells: () => threadShellState.shells,
+}));
 
 import {
   RightPanelTabs,
@@ -265,5 +270,79 @@ describe("tabMuteMenuItem", () => {
       label: "Unmute tab",
       disabled: false,
     });
+  });
+});
+
+describe("side chat (thread) tabs", () => {
+  const threadSurface = {
+    id: "thread:thread-C" as const,
+    kind: "thread" as const,
+    threadId: "thread-C",
+    environmentId: "env-1",
+  };
+
+  function renderThreadTab() {
+    return renderToStaticMarkup(
+      <RightPanelTabs
+        mode="inline"
+        surfaces={[previewSurface, threadSurface]}
+        activeSurfaceId={threadSurface.id}
+        pendingSurfaceIds={new Set()}
+        previewSessions={sessions}
+        desktopByTabId={{ "tab-1": overlay(null) }}
+        terminalLabelsById={new Map()}
+        onActivate={() => undefined}
+        onCloseSurface={() => undefined}
+        onCloseOtherSurfaces={() => undefined}
+        onCloseSurfacesToRight={() => undefined}
+        onCloseAllSurfaces={() => undefined}
+        onCopyFilePath={() => undefined}
+        onAddBrowser={() => undefined}
+        onAddTerminal={() => undefined}
+        onAddPullRequest={() => undefined}
+        onAddDiff={() => undefined}
+        onAddFiles={() => undefined}
+        onAddAgents={() => undefined}
+        liveAgentCount={0}
+        browserAvailable
+        terminalAvailable={false}
+        diffAvailable={false}
+        filesAvailable={false}
+        pullRequestAvailable={false}
+        agentsAvailable={false}
+      >
+        <div>content</div>
+      </RightPanelTabs>,
+    );
+  }
+
+  it("labels a thread tab from the thread shell's title", () => {
+    threadShellState.shells = [
+      { id: "thread-C", title: "Accessibility review" },
+      { id: "thread-A", title: "Unrelated thread" },
+    ];
+    const html = renderThreadTab();
+    threadShellState.shells = [];
+
+    expect(html).toContain('class="truncate">Accessibility review</span>');
+    // The peer thread's title must not leak into this tab.
+    expect(html).not.toContain("Unrelated thread");
+  });
+
+  it("falls back to 'Thread' while the shell is not projected yet", () => {
+    const html = renderThreadTab();
+
+    expect(html).toContain('class="truncate">Thread</span>');
+  });
+
+  it("renders a thread surface alongside browser tabs without clobbering them", () => {
+    threadShellState.shells = [{ id: "thread-C", title: "Accessibility review" }];
+    const html = renderThreadTab();
+    threadShellState.shells = [];
+
+    // The browser tab keeps its session title, the thread tab keeps its shell title,
+    // and both stay open as peer tabs.
+    expect(html).toContain('class="truncate">Local site</span>');
+    expect(html).toContain('class="truncate">Accessibility review</span>');
   });
 });
