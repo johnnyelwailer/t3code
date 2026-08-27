@@ -16,9 +16,9 @@ import * as NodeUrl from "node:url";
 import { isExternalCliDependency } from "../../../scripts/lib/cli-external-packages.ts";
 
 export const isBareSpecifier = (source: string): boolean =>
+  !NodePath.isAbsolute(source) &&
+  !NodePath.win32.isAbsolute(source) &&
   !source.startsWith(".") &&
-  !source.startsWith("/") &&
-  !source.startsWith("\\") &&
   !source.startsWith("node:") &&
   !source.includes("?");
 
