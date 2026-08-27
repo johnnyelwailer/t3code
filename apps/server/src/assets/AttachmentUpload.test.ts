@@ -125,7 +125,7 @@ describe("AttachmentUpload", () => {
       expect(yield* storeAttachmentUpload(claims, new Uint8Array(5))).toEqual({ ok: true });
       expect(
         NodeFS.readFileSync(NodePath.join(config.attachmentsDir, `${issued.attachmentId}.bin`)),
-      ).toEqual(new Uint8Array(5));
+      ).toEqual(Buffer.alloc(5));
       expect(
         NodeFS.readdirSync(config.attachmentsDir).filter((entry) => entry.endsWith(".txt")),
       ).toEqual([]);
