@@ -113,12 +113,12 @@ describe("T3TeamAgentsPanelForkSection", () => {
     expect(onOpenChildThread).toHaveBeenCalledWith({ projectId: "proj-9", threadId: "child-9" });
   });
 
-  it("orders sub-runs newest-to-oldest (most recently active first), status only breaking ties", () => {
+  it("orders sub-runs by lifecycle group (running, waiting, settled), never by lastMessageAt", () => {
     const now = Date.now();
     const at = (offsetMinutes: number) => new Date(now + offsetMinutes * 60_000).toISOString();
     // Deliberately reversed against status: the settled (completed) row is the MOST recent, the
-    // running row the least recent. Recency must win over status — the completed row comes first
-    // even though it's settled, so a status-priority sort would fail this test.
+    // running row the least recent. Recency must NOT win — the running row comes first even
+    // though it's the least recently active, so a lastMessageAt sort would fail this test.
     const completed = createThread({
       id: "c-1",
       title: "Settled work",
@@ -154,22 +154,24 @@ describe("T3TeamAgentsPanelForkSection", () => {
     const completedIndex = rows.findIndex((text) => text.includes("Settled work"));
     const errorIndex = rows.findIndex((text) => text.includes("Broken build"));
     const runningIndex = rows.findIndex((text) => text.includes("Active probe"));
-    expect(completedIndex).toBeGreaterThan(-1);
-    expect(errorIndex).toBeGreaterThan(completedIndex);
-    expect(runningIndex).toBeGreaterThan(errorIndex);
+    expect(runningIndex).toBeGreaterThan(-1);
+    expect(errorIndex).toBeGreaterThan(runningIndex);
+    expect(completedIndex).toBeGreaterThan(errorIndex);
   });
 
   it("caps the visible sub-runs at the limit and reveals the rest via a 'Show more' disclosure", () => {
     const now = Date.now();
     const at = (offsetMinutes: number) => new Date(now - offsetMinutes * 60_000).toISOString();
-    // 14 non-idle threads — more than the VISIBLE_SUB_RUN_LIMIT of 10. Sub-run 0 is the most
-    // recent (now), Sub-run 13 the oldest (13m ago), so recency order is 0,1,...,13.
+    // 14 non-idle threads — more than the VISIBLE_SUB_RUN_LIMIT of 10. Sub-run 0 was created
+    // most recently (now), Sub-run 13 the oldest (13m ago), so the stable createdAt order is
+    // 0,1,...,13.
     const threads = Array.from({ length: 14 }, (_, i) =>
       createThread({
         id: `s-${i}`,
         title: `Sub-run ${i}`,
         status: "completed",
         lastMessageAt: at(i),
+        createdAt: at(i),
       }),
     );
 
@@ -183,7 +185,7 @@ describe("T3TeamAgentsPanelForkSection", () => {
       />,
     );
 
-    // Only the 10 most recent are visible up front; the newest (Sub-run 0) is first, and the
+    // Only the 10 newest-created are visible up front; the newest (Sub-run 0) is first, and the
     // 11th (Sub-run 10) is hidden behind the disclosure.
     expect(container!.textContent).toContain("Sub-run 0");
     expect(container!.textContent).toContain("Sub-run 9");

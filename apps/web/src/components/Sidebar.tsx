@@ -1885,7 +1885,7 @@ export default function Sidebar() {
   const ensureSubRunExpanded = useExpandedSubRunsStore((store) => store.ensureExpanded);
   // t3team: which expanded parents are showing their FULL sub-run list (beyond the
   // SIDEBAR_SUB_RUN_LIMIT cap). Presentation-only, not persisted — a fresh expand
-  // always starts capped so the most recent active children lead.
+  // always starts capped so the active children lead.
   const [showAllSubRunParentIds, setShowAllSubRunParentIds] = useState<Set<string>>(new Set());
   // t3team: auto-expand a parent the moment one of its children starts
   // running, so active sub-run work is never invisible behind a collapsed
@@ -4100,7 +4100,8 @@ export default function Sidebar() {
                     if (!expandedSubRunParentIds.has(parentThread.id)) return [];
                     const allChildren = childThreadsByParentId.get(parentThread.id);
                     if (!allChildren || allChildren.length === 0) return [];
-                    // Newest-to-oldest (most recent active first), capped at SIDEBAR_SUB_RUN_LIMIT
+                    // Stable lifecycle + createdAt order (activity NEVER reorders the list — it
+                    // only moves at lifecycle transitions), capped at SIDEBAR_SUB_RUN_LIMIT
                     // with a "Show N more" disclosure so a parent with a large fleet (dozens of
                     // sub-runs) never floods the sidebar on expand. See pageSubRunThreads.
                     const { visible, hiddenCount } = pageSubRunThreads(
