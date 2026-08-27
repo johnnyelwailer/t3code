@@ -20,6 +20,12 @@ import {
   type SDKUserMessage,
   type ModelUsage,
 } from "@anthropic-ai/claude-agent-sdk";
+import {
+  MAX_TRANSIENT_GATEWAY_RETRIES,
+  gatewayRetrySteerMessage,
+  isTransientGatewayErrorText,
+  transientGatewayRetryDelayMs,
+} from "./claude-gateway-retry.ts";
 import { parseCliArgs } from "@t3tools/shared/cliArgs";
 import {
   ApprovalRequestId,
@@ -277,6 +283,11 @@ interface ClaudeSessionContext {
   readonly query: ClaudeQueryRuntime;
   streamFiber: Fiber.Fiber<void, Error> | undefined;
   readonly startedAt: string;
+  /**
+   * Transient-gateway retries already spent for the current host turn. Reset
+   * on every sendTurn: the budget belongs to the user's turn, not the session.
+   */
+  transientGatewayRetries: number;
   readonly basePermissionMode: PermissionMode | undefined;
   currentApiModelId: string | undefined;
   /** Effective effort for the session's turns; subagents without an explicit
@@ -389,11 +400,15 @@ function getEffectiveClaudeAgentEffort(
   return normalized ? (normalized as ClaudeSdkEffort) : null;
 }
 
-function isClaudeInterruptedMessage(message: string): boolean {
+export function isClaudeInterruptedMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
     normalized.includes("all fibers interrupted without error") ||
     normalized.includes("request was aborted") ||
+    // DOMException AbortError phrasing (undici/fetch layer): a mid-tool-call
+    // abort surfaces here and must read as an interruption, not a provider
+    // fault that fails the turn.
+    normalized.includes("this operation was aborted") ||
     normalized.includes("interrupted by user")
   );
 }
@@ -3026,6 +3041,68 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     const status = turnStatusFromResult(message);
     const errorMessage = resultUserFacingError(message);
 
+    // Re-drive only on failures classified as transient gateway errors:
+    // any other failure (401 auth, 400/413, max turns, CLI crash) fails the
+    // turn immediately — permanent errors are never retried here.
+    if (
+      status === "failed" &&
+      isTransientGatewayErrorText(resultErrorsText(message)) &&
+      context.transientGatewayRetries < MAX_TRANSIENT_GATEWAY_RETRIES
+    ) {
+      // Transient gateway error (423 capacity reservation, 429, 5xx): honor
+      // the gateway's retry directive, keep the turn visibly running, then
+      // re-drive the session with an automatic continue message. Only a
+      // terminal result — or exhausting the budget — fails the turn.
+      const attempt = context.transientGatewayRetries + 1;
+      const delayMs = transientGatewayRetryDelayMs(attempt, resultErrorsText(message));
+      const stamp = yield* makeEventStamp();
+      yield* offerRuntimeEvent({
+        type: "session.state.changed",
+        eventId: stamp.eventId,
+        provider: PROVIDER,
+        createdAt: stamp.createdAt,
+        threadId: context.session.threadId,
+        ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+        providerRefs: nativeProviderRefs(context),
+        payload: {
+          state: "running",
+          reason: `gateway_capacity_wait:${attempt}/${MAX_TRANSIENT_GATEWAY_RETRIES}`,
+        },
+        raw: {
+          source: "claude.sdk.message",
+          method: "claude/result",
+          messageType: `result:${message.subtype}`,
+          payload: message,
+        },
+      });
+      yield* emitRuntimeWarning(
+        context,
+        `Gateway capacity error; retrying in ${Math.round(delayMs / 1000)}s (attempt ${attempt} of ${MAX_TRANSIENT_GATEWAY_RETRIES}).`,
+        {
+          code: "provider.gateway_retry",
+          attempt,
+          maxAttempts: MAX_TRANSIENT_GATEWAY_RETRIES,
+          delayMs,
+        },
+      );
+      yield* Effect.sleep(delayMs);
+      if (context.stopped || context.turnState === undefined) {
+        return;
+      }
+      context.transientGatewayRetries = attempt;
+      yield* Queue.offer(context.promptQueue, {
+        type: "message",
+        message: buildUserMessage({
+          sdkContent: [{ type: "text", text: gatewayRetrySteerMessage(attempt) }],
+        }),
+      }).pipe(
+        Effect.mapError((cause) =>
+          toRequestError(context.session.threadId, "turn/gateway-retry", cause),
+        ),
+      );
+      return;
+    }
+
     if (status === "failed") {
       yield* emitRuntimeError(context, errorMessage ?? "Claude turn failed.");
     }
@@ -4424,6 +4501,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         pendingTaskModels,
         workflowMemberFingerprints,
         liveTaskIds,
+        transientGatewayRetries: 0,
         turnState: undefined,
         lastKnownContextWindow: initialContextWindow,
         lastKnownTokenUsage: undefined,
@@ -4511,6 +4589,8 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
   const sendTurn: ClaudeAdapterShape["sendTurn"] = Effect.fn("sendTurn")(function* (input) {
     const context = yield* requireSession(input.threadId);
+    // A new host turn gets a fresh transient-gateway retry budget.
+    context.transientGatewayRetries = 0;
     const modelSelection =
       input.modelSelection !== undefined && input.modelSelection.instanceId === boundInstanceId
         ? input.modelSelection

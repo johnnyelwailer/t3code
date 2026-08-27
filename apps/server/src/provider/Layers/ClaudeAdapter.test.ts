@@ -263,6 +263,24 @@ async function readFirstPromptMessage(
   return next.value;
 }
 
+function makePromptTextReader(input: {
+  readonly prompt: AsyncIterable<SDKUserMessage>;
+}): Effect.Effect<string | undefined> {
+  const iterator = input.prompt[Symbol.asyncIterator]();
+  return Effect.promise(async () => {
+    const next = await iterator.next();
+    if (next.done) {
+      return undefined;
+    }
+    const content = (next.value as SDKUserMessage).message.content;
+    if (typeof content === "string") {
+      return content;
+    }
+    const first = content[0];
+    return first?.type === "text" ? first.text : undefined;
+  });
+}
+
 const THREAD_ID = ThreadId.make("thread-claude-1");
 const RESUME_THREAD_ID = ThreadId.make("thread-claude-resume");
 
@@ -1619,6 +1637,187 @@ describe("ClaudeAdapterLive", () => {
         assert.equal(String(turnCompleted.turnId), String(turn.turnId));
         assert.equal(turnCompleted.payload.state, "interrupted");
         assert.equal(turnCompleted.payload.errorMessage, undefined);
+      }
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("fails permanent gateway errors (401, 413) without re-driving the turn", () => {
+    // Permanent failures must surface immediately: the retry gate is the
+    // transient-error classifier, not "any failed turn".
+    const cases = [
+      { label: "401", errors: ["API Error: 401 Unauthorized (invalid_api_key)"] },
+      { label: "413", errors: ["HTTP status 413: request too large"] },
+    ];
+    const runCase = (index: number, spec: (typeof cases)[number]) => {
+      const harness = makeHarness();
+      const threadId = ThreadId.make(`thread-claude-gateway-permanent-${index}`);
+      return Effect.gen(function* () {
+        const adapter = yield* ClaudeAdapter;
+
+        const session = yield* adapter.startSession({
+          threadId,
+          provider: ProviderDriverKind.make("claudeAgent"),
+          runtimeMode: "full-access",
+        });
+        const turn = yield* adapter.sendTurn({
+          threadId: session.threadId,
+          input: "hello",
+          attachments: [],
+        });
+
+        // One run of the prompt stream; a re-drive would offer a steer here.
+        const createInput = harness.getLastCreateQueryInput();
+        if (createInput === undefined) {
+          assert.fail("expected the harness to have captured the query input");
+        }
+        const nextPromptText = makePromptTextReader(createInput);
+
+        harness.query.emit({
+          type: "result",
+          subtype: "error_max_output_tokens",
+          is_error: true,
+          errors: spec.errors,
+          session_id: `sdk-session-gateway-permanent-${index}`,
+          uuid: `result-gateway-permanent-${index}`,
+        } as unknown as SDKMessage);
+
+        // The turn must complete as failed (a re-drive would keep it running).
+        const completion = Array.from(
+          yield* adapter.streamEvents.pipe(
+            Stream.filter((event) => event.type === "turn.completed"),
+            Stream.take(1),
+            Stream.runCollect,
+          ),
+        );
+        const turnCompleted = completion[0];
+        assert.equal(turnCompleted?.type, "turn.completed");
+        if (turnCompleted?.type === "turn.completed") {
+          assert.equal(String(turnCompleted.turnId), String(turn.turnId));
+          assert.equal(turnCompleted.payload.state, "failed");
+          assert.equal(turnCompleted.payload.errorMessage, spec.errors[0]);
+        }
+
+        // And no automatic continue message may be offered: under the test
+        // clock the 1-hour deadline always wins over a steer that never comes.
+        assert.equal(yield* nextPromptText, "hello");
+        const steerRead = Effect.timeout(nextPromptText, "1 hour").pipe(
+          Effect.orElseSucceed(() => "steer deadline"),
+        );
+        // Register the deadline timer first, then advance the test clock so
+        // it can fire.
+        const steerFiber = yield* steerRead.pipe(Effect.forkChild);
+        yield* TestClock.adjust("1 hour");
+        const steerOutcome = yield* Fiber.join(steerFiber);
+        assert.equal(steerOutcome, "steer deadline", `${spec.label}: re-drive must not happen`);
+      }).pipe(
+        Effect.provideService(Random.Random, makeDeterministicRandomService()),
+        Effect.provide(harness.layer),
+      );
+    };
+    return Effect.all(cases.map((spec, index) => runCase(index, spec)));
+  });
+
+  it.effect("re-drives transient gateway capacity failures with bounded retries", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      const turn = yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "hello",
+        attachments: [],
+      });
+
+      // One run of the prompt stream, read sequentially: user turn, then
+      // the re-drive steer messages.
+      const createInput = harness.getLastCreateQueryInput();
+      if (createInput === undefined) {
+        assert.fail("expected the harness to have captured the query input");
+      }
+      const nextPromptText = makePromptTextReader(createInput);
+      assert.equal(yield* nextPromptText, "hello");
+
+      const capacityResult = (uuid: string): void => {
+        harness.query.emit({
+          type: "result",
+          subtype: "error_during_execution",
+          is_error: true,
+          errors: [
+            'Request failed with status 423: {"type":"reservation_error","code":"gpu_reserved","retry_after_seconds":1}',
+          ],
+          session_id: "sdk-session-gateway-capacity",
+          uuid,
+        } as unknown as SDKMessage);
+      };
+
+      const waitReason = (reason: string) =>
+        Effect.gen(function* () {
+          const events = Array.from(
+            yield* adapter.streamEvents.pipe(
+              Stream.filter(
+                (event) =>
+                  event.type === "session.state.changed" &&
+                  String(event.payload.reason ?? "") === reason,
+              ),
+              Stream.take(1),
+              Stream.runCollect,
+            ),
+          );
+          assert.equal(events[0]?.type, "session.state.changed");
+          return events[0]?.type === "session.state.changed"
+            ? String(events[0].payload.reason)
+            : undefined;
+        });
+
+      // Attempt 1: honor the directive under the test clock, then re-drive.
+      capacityResult("result-gateway-capacity-1");
+      assert.equal(yield* waitReason("gateway_capacity_wait:1/5"), "gateway_capacity_wait:1/5");
+      yield* TestClock.adjust("1.5 seconds");
+      const steer1 = yield* nextPromptText;
+      assert.ok(
+        steer1?.startsWith("Automatic retry 1 of 5"),
+        `expected the retry 1 steer message, got: ${steer1}`,
+      );
+
+      // Attempt 2: the budget tracks attempts (bounded, per-host-turn).
+      capacityResult("result-gateway-capacity-2");
+      assert.equal(yield* waitReason("gateway_capacity_wait:2/5"), "gateway_capacity_wait:2/5");
+      yield* TestClock.adjust("1.5 seconds");
+      const steer2 = yield* nextPromptText;
+      assert.ok(
+        steer2?.startsWith("Automatic retry 2 of 5"),
+        `expected the retry 2 steer message, got: ${steer2}`,
+      );
+
+      // The re-driven turn succeeds: the turn completes, no third re-drive.
+      harness.query.emit({
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        errors: [],
+        session_id: "sdk-session-gateway-capacity",
+        uuid: "result-gateway-capacity-3",
+      } as unknown as SDKMessage);
+      const completion = Array.from(
+        yield* Stream.take(adapter.streamEvents, 1).pipe(
+          Stream.filter((event) => event.type === "turn.completed"),
+          Stream.take(1),
+          Stream.runCollect,
+        ),
+      );
+      const turnCompleted = completion[0];
+      assert.equal(turnCompleted?.type, "turn.completed");
+      if (turnCompleted?.type === "turn.completed") {
+        assert.equal(String(turnCompleted.turnId), String(turn.turnId));
+        assert.equal(turnCompleted.payload.state, "completed");
       }
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),

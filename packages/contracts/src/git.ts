@@ -343,12 +343,16 @@ export class GitCommandError extends Schema.TaggedErrorClass<GitCommandError>()(
   exitCode: Schema.optional(Schema.Number),
   stdoutLength: Schema.optional(Schema.Number),
   stderrLength: Schema.optional(Schema.Number),
+  /** Truncated (< 4KB) stderr — the diagnostics that make a non-zero exit actionable. */
+  stderr: Schema.optional(Schema.String),
   outputLength: Schema.optional(Schema.Number),
   detail: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {
   override get message(): string {
-    return `Git command failed in ${this.operation} (${this.cwd}): ${this.detail}`;
+    return `Git command failed in ${this.operation} (${this.cwd}): ${this.detail}${
+      this.stderr !== undefined ? `\nstderr: ${this.stderr}` : ""
+    }`;
   }
 }
 

@@ -15,6 +15,7 @@ import {
   VcsProcessStdinWriteError,
   VcsProcessTimeoutError,
 } from "@t3tools/contracts";
+import { redactCommandArgs } from "@t3tools/shared/git";
 import * as ProcessRunner from "../processRunner.ts";
 
 export interface VcsProcessInput {
@@ -159,11 +160,16 @@ export const make = Effect.gen(function* () {
     }
 
     if (!input.allowNonZeroExit && result.code !== 0) {
+      // Redact argument values before retaining stderr: any command can
+      // echo arguments (git echoes unknown options verbatim) and they may
+      // carry secrets.
+      const stderr = redactCommandArgs(result.stderr, input.args);
       return yield* VcsProcessExitError.fromProcessExit(
         baseError,
         {
           exitCode: result.code,
-          stderr: result.stderr,
+          stderr,
+          originalStderrLength: result.stderr.length,
           stderrTruncated: result.stderrTruncated,
         },
         classifyNonZeroExit(input.command, result.stderr),

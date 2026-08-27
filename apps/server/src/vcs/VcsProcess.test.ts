@@ -115,13 +115,17 @@ describe("VcsProcess.run", () => {
     }).pipe(provideLive),
   );
 
-  it.effect("classifies authentication failures without retaining stderr", () =>
+  it.effect("classifies authentication failures without retaining the credential value", () =>
     Effect.gen(function* () {
-      const secretStderr = "authentication failed for token super-secret-token";
       const error = yield* run({
         operation: "test.authentication",
         command: "node",
-        args: ["-e", "process.stderr.write(process.argv[1]); process.exit(1)", secretStderr],
+        args: [
+          "-e",
+          "process.stderr.write('authentication failed for ' + process.argv[1]); process.exit(1)",
+          "--",
+          "--token=super-secret-token",
+        ],
         cwd: process.cwd(),
       }).pipe(Effect.flip);
 
@@ -132,22 +136,25 @@ describe("VcsProcess.run", () => {
         exitCode: 1,
         detail: "Authentication failed.",
         failureKind: "authentication",
-        stderrLength: secretStderr.length,
+        stderrLength: "authentication failed for --token=super-secret-token".length,
         stderrTruncated: false,
       });
-      expect(error.message).not.toContain(secretStderr);
+      expect(error.message).toContain("authentication failed for [redacted]");
       expect(error.message).not.toContain("super-secret-token");
     }).pipe(provideLive),
   );
 
-  it.effect("classifies API rate limits without retaining provider stderr", () =>
+  it.effect("classifies API rate limits without retaining the credential value", () =>
     Effect.gen(function* () {
-      const providerStderr =
-        "GraphQL: API rate limit already exceeded for user ID 51714798 and token secret-value.";
       const error = yield* run({
         operation: "test.rate-limit",
         command: "node",
-        args: ["-e", "process.stderr.write(process.argv[1]); process.exit(1)", providerStderr],
+        args: [
+          "-e",
+          "process.stderr.write('GraphQL: API rate limit already exceeded for user ID 51714798 and ' + process.argv[1]); process.exit(1)",
+          "--",
+          "--api-token=secret-value",
+        ],
         cwd: process.cwd(),
       }).pipe(Effect.flip);
 
@@ -157,21 +164,27 @@ describe("VcsProcess.run", () => {
         exitCode: 1,
         detail: "API rate limit exceeded.",
         failureKind: "rate-limited",
-        stderrLength: providerStderr.length,
+        stderrLength:
+          "GraphQL: API rate limit already exceeded for user ID 51714798 and --api-token=secret-value"
+            .length,
         stderrTruncated: false,
       });
-      expect(error.message).not.toContain(providerStderr);
+      expect(error.message).toContain("and [redacted]");
       expect(error.message).not.toContain("secret-value");
     }).pipe(provideLive),
   );
 
   it.effect("classifies HTTP 429 responses as rate limits", () =>
     Effect.gen(function* () {
-      const providerStderr = "HTTP 429: Too Many Requests. request-id=secret-value";
       const error = yield* run({
         operation: "test.rate-limit",
         command: "node",
-        args: ["-e", "process.stderr.write(process.argv[1]); process.exit(1)", providerStderr],
+        args: [
+          "-e",
+          "process.stderr.write('HTTP 429: Too Many Requests. ' + process.argv[1]); process.exit(1)",
+          "--",
+          "--request-id=secret-value",
+        ],
         cwd: process.cwd(),
       }).pipe(Effect.flip);
 
@@ -179,7 +192,8 @@ describe("VcsProcess.run", () => {
         detail: "API rate limit exceeded.",
         failureKind: "rate-limited",
       });
-      expect(error.message).not.toContain(providerStderr);
+      expect(error.message).toContain("HTTP 429: Too Many Requests. [redacted]");
+      expect(error.message).not.toContain("secret-value");
     }).pipe(provideLive),
   );
 

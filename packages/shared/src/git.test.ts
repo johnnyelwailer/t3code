@@ -7,6 +7,7 @@ import {
   isTemporaryWorktreeBranch,
   normalizeGitRemoteUrl,
   parseGitHubRepositoryNameWithOwnerFromRemoteUrl,
+  redactCommandArgs,
   WORKTREE_BRANCH_PREFIX,
 } from "./git.ts";
 
@@ -169,6 +170,55 @@ describe("applyGitStatusStreamEvent", () => {
       aheadCount: 2,
       behindCount: 1,
       pr: null,
+    });
+  });
+
+  describe("redactCommandArgs", () => {
+    it("redacts option arguments with embedded values echoed in stderr", () => {
+      const stderr = "error: unknown option `--token=abc-secret'\nusage: git push\n";
+      expect(redactCommandArgs(stderr, ["push", "--token=abc-secret"])).toBe(
+        "error: unknown option `[redacted]'\nusage: git push\n",
+      );
+    });
+
+    it("leaves plain arguments (remotes, branch names, paths) readable", () => {
+      const stderr =
+        "error: upstream branch 'main' of 'origin' does not match\nfatal: push rejected\n";
+      expect(
+        redactCommandArgs(stderr, ["push", "-u", "origin", "main", "--", "src/feature.ts"]),
+      ).toBe(stderr);
+    });
+
+    it("redacts the bare value of an option argument when echoed alone", () => {
+      const stderr = "remote: rejected credential abc-secret\n";
+      expect(redactCommandArgs(stderr, ["push", "--token=abc-secret"])).toBe(
+        "remote: rejected credential [redacted]\n",
+      );
+    });
+
+    it("redacts the separate value of known secret flags", () => {
+      const stderr = "fatal: could not authenticate with hunter2\n";
+      expect(
+        redactCommandArgs(stderr, ["clone", "-pass", "hunter2", "https://example.com/r"]),
+      ).toBe("fatal: could not authenticate with [redacted]\n");
+    });
+
+    it("leaves short flags and absent tokens alone so diagnostics stay readable", () => {
+      const stderr = "fatal: short read while indexing nul\nfatal: unable to index 'nul'\n";
+      expect(redactCommandArgs(stderr, ["add", "-A", "--", "."])).toBe(stderr);
+    });
+
+    it("redacts the dash-less form git echoes in errors", () => {
+      const stderr = "error: unknown option `token=abc-secret'\n";
+      expect(redactCommandArgs(stderr, ["status", "--token=abc-secret"])).toBe(
+        "error: unknown option `[redacted]'\n",
+      );
+    });
+
+    it("redacts every occurrence of the option argument", () => {
+      expect(redactCommandArgs("--branch=x\n--branch=x", ["checkout", "--branch=x"])).toBe(
+        "[redacted]\n[redacted]",
+      );
     });
   });
 });
