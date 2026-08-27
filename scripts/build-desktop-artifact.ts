@@ -1642,6 +1642,17 @@ const runCommand = Effect.fn("runCommand")(function* (
   }
 });
 
+const resolveWorkspaceVpCommand = (
+  repoRoot: string,
+  args: ReadonlyArray<string>,
+  options: Parameters<typeof resolveSpawnCommand>[2] = {},
+) =>
+  resolveSpawnCommand(
+    NodePath.join(repoRoot, "node_modules", ".bin", process.platform === "win32" ? "vp.CMD" : "vp"),
+    args,
+    options,
+  );
+
 /**
  * Every `node_modules` directory that would be visible from `startDir`.
  *
@@ -2808,7 +2819,7 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
   }
 
   yield* Effect.log("[desktop-artifact] Installing server sidecar runtime externals...");
-  const installCommand = yield* resolveSpawnCommand("vp", [...STAGE_INSTALL_ARGS]);
+  const installCommand = yield* resolveWorkspaceVpCommand(input.repoRoot, [...STAGE_INSTALL_ARGS]);
   yield* runCommand(
     ChildProcess.make(installCommand.command, installCommand.args, {
       cwd: serverStageDir,
@@ -3203,7 +3214,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   if (!options.skipBuild) {
     yield* Effect.log("[desktop-artifact] Building desktop/server/web artifacts...");
-    const spawnCommand = yield* resolveSpawnCommand("vp", ["run", "build:desktop"]);
+    const spawnCommand = yield* resolveWorkspaceVpCommand(repoRoot, ["run", "build:desktop"]);
     yield* runCommand(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: repoRoot,
@@ -3568,7 +3579,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   }
 
   yield* Effect.log("[desktop-artifact] Installing staged production dependencies...");
-  const installCommand = yield* resolveSpawnCommand("vp", [...STAGE_INSTALL_ARGS]);
+  const installCommand = yield* resolveWorkspaceVpCommand(repoRoot, [...STAGE_INSTALL_ARGS]);
   yield* runCommand(
     ChildProcess.make(installCommand.command, installCommand.args, {
       cwd: stageAppDir,
@@ -3756,7 +3767,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     "--publish",
     "never",
   ];
-  const builderCommand = yield* resolveSpawnCommand("vp", builderArgs, { env: buildEnv });
+  const builderCommand = yield* resolveWorkspaceVpCommand(repoRoot, builderArgs, { env: buildEnv });
   yield* runCommand(
     ChildProcess.make(builderCommand.command, builderCommand.args, {
       cwd: repoRoot,
