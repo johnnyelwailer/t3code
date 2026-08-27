@@ -7,7 +7,7 @@ import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { create } from "zustand";
 
-import type { ComposerImageAttachment } from "../composerDraftStore";
+import type { ComposerAttachment } from "../composerDraftStore";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { attachmentEnvironment } from "../state/attachments";
 import { readPreparedConnection } from "../state/session";
@@ -25,7 +25,7 @@ export const useAttachmentUploadStore = create<AttachmentUploadStore>(() => ({
 }));
 
 interface UploadJob {
-  readonly image: ComposerImageAttachment;
+  readonly attachment: ComposerAttachment;
   readonly environmentId: EnvironmentId;
   readonly previous?: ReadyAttachmentUpload;
   readonly settled: Promise<void>;
@@ -101,17 +101,26 @@ function uploadBytes(input: {
 }
 
 async function runUpload(job: UploadJob): Promise<void> {
-  const mimeType = PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES.find(
-    (supportedMimeType) => supportedMimeType === job.image.mimeType.toLowerCase(),
-  );
-  if (!mimeType) {
-    setUploadState(job.image.id, {
-      status: "failed",
-      environmentId: job.environmentId,
-      reason: "Unsupported image type",
-      ...(job.previous ? { previous: job.previous } : {}),
-    });
-    return;
+  const attachment = job.attachment;
+  let mimeType: string;
+  if (attachment.type === "image") {
+    const supported = PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES.find(
+      (supportedMimeType) => supportedMimeType === attachment.mimeType.toLowerCase(),
+    );
+    if (!supported) {
+      setUploadState(attachment.id, {
+        status: "failed",
+        environmentId: job.environmentId,
+        reason: "Unsupported image type",
+        ...(job.previous ? { previous: job.previous } : {}),
+      });
+      return;
+    }
+    mimeType = supported;
+  } else {
+    // Arbitrary files: no server-side mime allow-list; the browser's
+    // application/octet-stream fallback already covers empty File.type.
+    mimeType = attachment.mimeType || "application/octet-stream";
   }
 
   const minted = await runAtomCommand(
@@ -120,9 +129,9 @@ async function runUpload(job: UploadJob): Promise<void> {
     {
       environmentId: job.environmentId,
       input: {
-        name: job.image.name,
+        name: attachment.name,
         mimeType,
-        sizeBytes: job.image.file.size,
+        sizeBytes: attachment.file.size,
       },
     },
     { reportFailure: false },
@@ -134,7 +143,7 @@ async function runUpload(job: UploadJob): Promise<void> {
     return;
   }
   if (minted._tag !== "Success") {
-    setUploadState(job.image.id, {
+    setUploadState(job.attachment.id, {
       status: "failed",
       environmentId: job.environmentId,
       reason: "Upload could not start",
@@ -147,7 +156,7 @@ async function runUpload(job: UploadJob): Promise<void> {
   const connection = readPreparedConnection(job.environmentId);
   const url = connection ? resolveAssetUrl(connection.httpBaseUrl, minted.value.relativeUrl) : null;
   if (!url) {
-    setUploadState(job.image.id, {
+    setUploadState(job.attachment.id, {
       status: "failed",
       environmentId: job.environmentId,
       reason: "Not connected",
@@ -160,14 +169,14 @@ async function runUpload(job: UploadJob): Promise<void> {
   let lastStep = -1;
   const upload = uploadBytes({
     url,
-    file: job.image.file,
+    file: job.attachment.file,
     onProgress: (progress) => {
       const step = Math.floor(progress * 20);
       if (step === lastStep || job.cancelled) {
         return;
       }
       lastStep = step;
-      setUploadState(job.image.id, {
+      setUploadState(job.attachment.id, {
         status: "uploading",
         environmentId: job.environmentId,
         progress,
@@ -182,7 +191,7 @@ async function runUpload(job: UploadJob): Promise<void> {
     if (job.cancelled) {
       return;
     }
-    setUploadState(job.image.id, {
+    setUploadState(job.attachment.id, {
       status: "ready",
       environmentId: job.environmentId,
       attachmentId: minted.value.attachmentId,
@@ -194,7 +203,7 @@ async function runUpload(job: UploadJob): Promise<void> {
     if (job.cancelled) {
       return;
     }
-    setUploadState(job.image.id, {
+    setUploadState(job.attachment.id, {
       status: "failed",
       environmentId: job.environmentId,
       reason: error instanceof Error ? error.message : "Upload failed",
@@ -223,7 +232,7 @@ function pumpUploads(): void {
     void runUpload(job)
       .catch(() => {
         if (!job.cancelled) {
-          setUploadState(job.image.id, {
+          setUploadState(job.attachment.id, {
             status: "failed",
             environmentId: job.environmentId,
             reason: "Upload failed",
@@ -232,8 +241,8 @@ function pumpUploads(): void {
         }
       })
       .finally(() => {
-        if (jobsByImageId.get(job.image.id) === job) {
-          jobsByImageId.delete(job.image.id);
+        if (jobsByImageId.get(job.attachment.id) === job) {
+          jobsByImageId.delete(job.attachment.id);
         }
         const remaining = (activeUploadsByEnvironment.get(job.environmentId) ?? 1) - 1;
         if (remaining > 0) {
@@ -249,14 +258,14 @@ function pumpUploads(): void {
 
 export function startAttachmentUpload(input: {
   readonly environmentId: EnvironmentId;
-  readonly image: ComposerImageAttachment;
+  readonly attachment: ComposerAttachment;
 }): void {
-  const existingJob = jobsByImageId.get(input.image.id);
+  const existingJob = jobsByImageId.get(input.attachment.id);
   if (existingJob?.environmentId === input.environmentId) {
     return;
   }
 
-  const existing = readAttachmentUpload(input.image.id);
+  const existing = readAttachmentUpload(input.attachment.id);
   if (existing?.status === "ready" && existing.environmentId === input.environmentId) {
     return;
   }
@@ -268,16 +277,16 @@ export function startAttachmentUpload(input: {
     "previous" in existing &&
     existing.previous?.environmentId === input.environmentId
   ) {
-    cancelAttachmentUpload(input.image.id);
+    cancelAttachmentUpload(input.attachment.id);
     if (existing.status === "failed" && existing.attachmentId) {
       deletePendingUpload(existing.environmentId, existing.attachmentId);
     }
-    setUploadState(input.image.id, existing.previous);
+    setUploadState(input.attachment.id, existing.previous);
     return;
   }
 
   if (existingJob) {
-    cancelAttachmentUpload(input.image.id);
+    cancelAttachmentUpload(input.attachment.id);
   }
   const previous = existing?.status === "ready" ? existing : existing?.previous;
   let resolveSettled: () => void = () => {};
@@ -285,7 +294,7 @@ export function startAttachmentUpload(input: {
     resolveSettled = resolve;
   });
   const job: UploadJob = {
-    image: input.image,
+    attachment: input.attachment,
     environmentId: input.environmentId,
     ...(previous ? { previous } : {}),
     settled,
@@ -295,9 +304,9 @@ export function startAttachmentUpload(input: {
     abort: null,
   };
 
-  jobsByImageId.set(input.image.id, job);
+  jobsByImageId.set(input.attachment.id, job);
   queue.push(job);
-  setUploadState(input.image.id, {
+  setUploadState(input.attachment.id, {
     status: "uploading",
     environmentId: input.environmentId,
     progress: 0,
@@ -342,17 +351,17 @@ export function releaseAttachmentUpload(imageId: string): void {
 
 export function retryAttachmentUpload(input: {
   readonly environmentId: EnvironmentId;
-  readonly image: ComposerImageAttachment;
+  readonly attachment: ComposerAttachment;
 }): void {
-  const previous = readAttachmentUpload(input.image.id);
-  cancelAttachmentUpload(input.image.id);
+  const previous = readAttachmentUpload(input.attachment.id);
+  cancelAttachmentUpload(input.attachment.id);
   if (previous?.status === "failed" && previous.attachmentId) {
     deletePendingUpload(previous.environmentId, previous.attachmentId);
   }
   if (previous && "previous" in previous && previous.previous) {
-    setUploadState(input.image.id, previous.previous);
+    setUploadState(input.attachment.id, previous.previous);
   } else {
-    clearUploadState(input.image.id);
+    clearUploadState(input.attachment.id);
   }
   startAttachmentUpload(input);
 }
@@ -363,7 +372,7 @@ export async function awaitAttachmentUploads(imageIds: ReadonlyArray<string>): P
 
 export function getUploadedAttachments(input: {
   readonly environmentId: EnvironmentId;
-  readonly images: ReadonlyArray<ComposerImageAttachment>;
+  readonly images: ReadonlyArray<ComposerAttachment>;
 }): ChatAttachment[] | null {
   const attachments: ChatAttachment[] = [];
   for (const image of input.images) {
@@ -372,7 +381,7 @@ export function getUploadedAttachments(input: {
       return null;
     }
     attachments.push({
-      type: "image",
+      type: image.type,
       id: upload.attachmentId,
       name: image.name,
       mimeType: image.mimeType,
@@ -382,7 +391,7 @@ export function getUploadedAttachments(input: {
   return attachments;
 }
 
-export function releaseAttachmentUploads(images: ReadonlyArray<ComposerImageAttachment>): void {
+export function releaseAttachmentUploads(images: ReadonlyArray<ComposerAttachment>): void {
   for (const image of images) {
     releaseAttachmentUpload(image.id);
   }

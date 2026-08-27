@@ -71,6 +71,7 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { buildExpandedImagePreview, ExpandedImagePreview } from "./ExpandedImagePreview";
+import { FileTagChipContent } from "./FileTagChip";
 import { ProposedPlanCard } from "./ProposedPlanCard";
 import { ChangedFilesCard } from "./ChangedFilesTree";
 import { shouldAutoExpandChangedFiles } from "./changedFilesPresentation";
@@ -1264,6 +1265,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     return null;
   }
   const userImages = row.message.attachments ?? [];
+  const userFiles = userImages.filter((attachment) => attachment.type === "file");
   const displayedUserMessage = deriveDisplayedUserMessageState(
     row.message.t3teamExt?.displayText ?? row.message.text,
   );
@@ -1282,7 +1284,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     ...elementContextState.contexts,
   ];
   const previewImages = userImages.filter((image) => image.name.startsWith("preview-annotation-"));
-  const regularImages = userImages.filter((image) => !image.name.startsWith("preview-annotation-"));
+  const regularImages = userImages.filter(
+    (image) => image.type !== "file" && !image.name.startsWith("preview-annotation-"),
+  );
   const canRevertAgentWork = typeof row.revertTurnCount === "number";
   const t3teamAttachments = getT3TeamRenderableAttachments(row.message);
 
@@ -1319,6 +1323,27 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                   </div>
                 )}
               </div>
+            ))}
+          </div>
+        )}
+        {userFiles.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {userFiles.map((file) => (
+              <Tooltip key={file.id}>
+                <TooltipTrigger
+                  render={
+                    <div className="inline-flex max-w-xs items-center gap-1.5 rounded-md border border-border/80 bg-background/70 px-2 py-1 text-xs" />
+                  }
+                >
+                  <FileTagChipContent
+                    path={file.name}
+                    label={file.name}
+                    theme={ctx.resolvedTheme}
+                    selectable
+                  />
+                </TooltipTrigger>
+                <TooltipPopup>{`${file.name} (${file.sizeBytes} bytes)`}</TooltipPopup>
+              </Tooltip>
             ))}
           </div>
         )}

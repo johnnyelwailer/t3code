@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import { NonNegativeInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
+  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
   ProjectFaviconPath,
@@ -44,10 +45,18 @@ export const ATTACHMENT_UPLOAD_URL_TTL_MS = 10 * 60_000;
 
 export const AttachmentCreateUploadUrlInput = Schema.Struct({
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
-  mimeType: Schema.Literals(PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES),
+  // Images use the supported-mime allow-list; arbitrary files carry any valid
+  // RFC 6838 mime (the server stores non-images with a fixed .bin extension).
+  mimeType: Schema.Union([
+    Schema.Literals(PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES),
+    TrimmedNonEmptyString.check(
+      Schema.isMaxLength(100),
+      Schema.isPattern(/^[a-z0-9][a-z0-9.+-]*\/[^\s/]+$/i),
+    ),
+  ]),
   sizeBytes: NonNegativeInt.check(
     Schema.isGreaterThanOrEqualTo(1),
-    Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES),
+    Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_FILE_BYTES),
   ),
 });
 export type AttachmentCreateUploadUrlInput = typeof AttachmentCreateUploadUrlInput.Type;

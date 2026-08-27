@@ -172,6 +172,17 @@ export function isProviderSendTurnSupportedImageMimeType(mimeType: string): bool
   return PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPE_SET.has(mimeType.toLowerCase());
 }
 const PROVIDER_SEND_TURN_MAX_IMAGE_DATA_URL_CHARS = 14_000_000;
+/**
+ * Arbitrary (non-image) files are never inlined into a model prompt: they are
+ * stored on disk and the agent reads them through its file tools, so the cap
+ * only needs to stay reasonable for the upload round-trip, not for base64
+ * payload encoding.
+ */
+export const PROVIDER_SEND_TURN_MAX_FILE_BYTES = 20 * 1024 * 1024;
+const PROVIDER_SEND_TURN_MAX_FILE_DATA_URL_CHARS = 27_300_000;
+// RFC 6838 type/subtype with the character sets in use; keeps the contract
+// generic (no per-vendor mime allow-list) while rejecting garbage.
+const CHAT_FILE_MIME_TYPE_PATTERN = /^[a-z0-9][a-z0-9.+-]*\/[^\s/]+$/i;
 const CHAT_ATTACHMENT_ID_MAX_CHARS = 128;
 // Correlation id is command id by design in this model.
 export const CorrelationId = CommandId;
@@ -192,6 +203,37 @@ export const ChatImageAttachment = Schema.Struct({
 });
 export type ChatImageAttachment = typeof ChatImageAttachment.Type;
 
+/**
+ * An arbitrary non-image file attached to a turn. The server stores it next
+ * to image attachments and hands the agent its on-disk path (the agent reads
+ * it with its file tools) — it is never base64-fed to the model itself.
+ */
+export const ChatFileAttachment = Schema.Struct({
+  type: Schema.Literal("file"),
+  id: ChatAttachmentId,
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
+  mimeType: TrimmedNonEmptyString.check(
+    Schema.isMaxLength(100),
+    Schema.isPattern(CHAT_FILE_MIME_TYPE_PATTERN),
+  ),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_FILE_BYTES)),
+});
+export type ChatFileAttachment = typeof ChatFileAttachment.Type;
+
+const UploadChatFileAttachment = Schema.Struct({
+  type: Schema.Literal("file"),
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
+  mimeType: TrimmedNonEmptyString.check(
+    Schema.isMaxLength(100),
+    Schema.isPattern(CHAT_FILE_MIME_TYPE_PATTERN),
+  ),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_FILE_BYTES)),
+  dataUrl: TrimmedNonEmptyString.check(
+    Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_FILE_DATA_URL_CHARS),
+  ),
+});
+export type UploadChatFileAttachment = typeof UploadChatFileAttachment.Type;
+
 const UploadChatImageAttachment = Schema.Struct({
   type: Schema.Literal("image"),
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
@@ -203,9 +245,9 @@ const UploadChatImageAttachment = Schema.Struct({
 });
 export type UploadChatImageAttachment = typeof UploadChatImageAttachment.Type;
 
-export const ChatAttachment = Schema.Union([ChatImageAttachment]);
+export const ChatAttachment = Schema.Union([ChatImageAttachment, ChatFileAttachment]);
 export type ChatAttachment = typeof ChatAttachment.Type;
-const UploadChatAttachment = Schema.Union([UploadChatImageAttachment]);
+const UploadChatAttachment = Schema.Union([UploadChatImageAttachment, UploadChatFileAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
 export const ProjectScriptIcon = Schema.Literals([

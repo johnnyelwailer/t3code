@@ -108,6 +108,30 @@ describe("AttachmentUpload", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("stores arbitrary files under a .bin extension", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const issued = yield* issueAttachmentUploadUrl({
+        name: "notes.txt",
+        mimeType: "text/plain",
+        sizeBytes: 5,
+      });
+      const token = issued.relativeUrl.slice(`${ATTACHMENT_UPLOAD_ROUTE_PREFIX}/`.length);
+      const claims = yield* validateAttachmentUploadToken(token);
+      if (!claims) {
+        throw new Error("Expected valid upload claims.");
+      }
+
+      expect(yield* storeAttachmentUpload(claims, new Uint8Array(5))).toEqual({ ok: true });
+      expect(
+        NodeFS.readFileSync(NodePath.join(config.attachmentsDir, `${issued.attachmentId}.bin`)),
+      ).toEqual(new Uint8Array(5));
+      expect(
+        NodeFS.readdirSync(config.attachmentsDir).filter((entry) => entry.endsWith(".txt")),
+      ).toEqual([]);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("deletes pending uploads without deleting thread-owned copies", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
