@@ -179,7 +179,6 @@ export function loadGitHubInboxResponse(vcs: VcsProcessShape, input: GitHubInbox
       ? { items: [] as ReadonlyArray<GitHubInboxDiscoverResponse["inboxItems"][number]> }
       : yield* loadLinkedPullRequestsAttempt({
           vcs,
-          host,
           account,
           ...(input.linkedRepositoryUrls
             ? { linkedRepositoryUrls: input.linkedRepositoryUrls }
