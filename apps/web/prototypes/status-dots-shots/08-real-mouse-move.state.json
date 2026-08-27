@@ -1,1 +1,6 @@
-"{\"dark\":false,\"agentStates\":[\"working\",\"thinking\",\"settled\",\"thinking\"],\"lead\":{\"text\":\"Working for 2s\",\"width\":94.515625,\"firstDotX\":320.515625},\"dots\":[{\"t\":\"translate(0px, 0px)\"},{\"t\":\"translate(0px, 0px)\"},{\"t\":\"translate(0px, 0px)\"},{\"t\":\"translate(0px, 0px)\"}]}"
+[
+  { "x": 114.6, "y": 9.4, "scale": "0.82" },
+  { "x": 130.6, "y": 12.4, "scale": "1.45" },
+  { "x": 146.6, "y": 15.4, "scale": "0.82" },
+  { "x": 162.6, "y": 14, "scale": "0.82" }
+]

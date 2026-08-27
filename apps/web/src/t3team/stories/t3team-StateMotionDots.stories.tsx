@@ -224,7 +224,10 @@ function AgentSidePanel({
   onClose: () => void;
 }) {
   return (
-    <div className="w-[300px] shrink-0 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+    <div
+      data-sdv-panel
+      className="w-[300px] shrink-0 rounded-xl border border-border/70 bg-card p-4 shadow-sm"
+    >
       <div className="mb-2 flex items-center justify-between">
         <span
           className={`rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${
@@ -612,7 +615,10 @@ function StateMotionDots({
   const selectedEntry = selectedAgent !== null ? entries[selectedAgent] : undefined;
 
   return (
-    <div className="flex w-full flex-col items-center gap-8 px-12 py-10 pb-16">
+    <div
+      data-sdv-selected={selectedAgent ?? -1}
+      className="flex w-full flex-col items-center gap-8 px-12 py-10 pb-16"
+    >
       {reducedMotion ? (
         <style>{`.sdv-solo .h-1.w-1, .sdv-mixed .h-1.w-1, .sdv-mixed .t3team-aci-dot, .sdv-mixed .t3team-aci-cell, .sdv-mixed .t3team-aci-cell > span::before, .sdv-mixed .t3team-aci-cell > span::after, .t3team-aci-pulse { animation: none !important; } .sdv-mixed .t3team-aci-dot, .sdv-solo .h-1.w-1 { opacity: 0.4 !important; box-shadow: none !important; } .sdv-lead { transition: none !important; } .sdv-lead .t3team-aci-flip-in, .sdv-lead .t3team-aci-flip-out { animation: none !important; }`}</style>
       ) : null}
