@@ -3376,12 +3376,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
   const stageProdResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
-  const packagedEnvSourceDir =
+  const packagedEnvSourceDirs =
     options.packsDir !== undefined
-      ? path.join(options.packsDir, "..", "vendor", "t3code")
+      ? [path.join(options.packsDir, "..", "vendor", "t3code"), repoRoot]
       : process.env.T3CODE_DISTRIBUTION?.trim()
-        ? repoRoot
-        : undefined;
+        ? [repoRoot]
+        : [];
   let includePackagedEnvFiles = false;
   if (options.packsDir !== undefined) {
     // Packs at Resources/packs (for backward compat and easy inspection)
@@ -3390,12 +3390,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     // node_modules tree. The server resolves these via ELECTRON_RUN_AS_NODE.
     yield* fs.copy(options.packsDir, path.join(stageAppDir, "apps", "desktop", "packs"));
   }
-  if (packagedEnvSourceDir !== undefined) {
+  if (packagedEnvSourceDirs.length > 0) {
     for (const envFile of [".env", ".env.local"]) {
-      const sourcePath = path.join(packagedEnvSourceDir, envFile);
-      if (yield* fs.exists(sourcePath).pipe(Effect.orElseSucceed(() => false))) {
-        yield* fs.copy(sourcePath, path.join(stageProdResourcesDir, envFile));
-        includePackagedEnvFiles = true;
+      for (const sourceDir of packagedEnvSourceDirs) {
+        const sourcePath = path.join(sourceDir, envFile);
+        if (yield* fs.exists(sourcePath).pipe(Effect.orElseSucceed(() => false))) {
+          yield* fs.copy(sourcePath, path.join(stageProdResourcesDir, envFile));
+          includePackagedEnvFiles = true;
+          break;
+        }
       }
     }
   }
