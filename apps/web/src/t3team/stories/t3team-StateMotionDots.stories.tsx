@@ -477,14 +477,14 @@ function StateMotionDots({
       // Perf: all reads first (batched layout), writes after — one reflow
       // per frame, not one per dot.
 
-      // Tooltip hygiene: the production cells AND their group span carry
-      // native `title`/`aria-label`; with moving dots the tooltip would
-      // linger over nothing, and the flicker between two pointer regions
-      // (group span vs cell) is what made the cursor icon twitch. The
-      // cells get `cursor: pointer` via CSS; the group span is plain.
+      // Tooltip hygiene: native `title` tooltips would linger over nothing
+      // once the dots move under a still cursor, and the flicker between
+      // two pointer regions (group span vs cell) is what made the cursor
+      // icon twitch. The cells get `cursor: pointer` via CSS; the group
+      // span is plain. `aria-label` is deliberately KEPT: production
+      // (87325f564) relies on it as the dots' accessible name.
       dots.forEach((d) => {
         if (d.hasAttribute("title")) d.removeAttribute("title");
-        if (d.hasAttribute("aria-label")) d.removeAttribute("aria-label");
       });
       const groupSpan = scope
         .querySelector<HTMLElement>(".t3team-aci-cell")
