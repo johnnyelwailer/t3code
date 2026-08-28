@@ -138,6 +138,32 @@ describe("@runbook/core lifecycle events", () => {
     expect(meta?.terminal).toBe("aborted");
   });
 
+  it("keeps the durable aborted marker when the run.aborted listener throws", async () => {
+    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-events-"));
+    roots.push(runsRoot);
+    // A throwing observer must not propagate into the settle funnel: without the guard the
+    // exception after writeTerminalMeta("aborted") would land in settleRunFailed and rewrite
+    // the terminal marker to "failed".
+    const engine = makeEngine(runsRoot, async () => {
+      throw new WorkflowAborted();
+    });
+    const result = await engine.startWorkflow(
+      { path: "w.ts" },
+      {},
+      {
+        runsRoot,
+        events: {
+          on: () => {
+            throw new Error("observer blew up");
+          },
+        },
+      },
+    );
+    expect(result).toEqual({ runId: "run-1", aborted: true });
+    const meta = await new FsJournalStore(runsRoot).readRunMeta("run-1");
+    expect(meta?.terminal).toBe("aborted");
+  });
+
   it("refuses a pre-aborted resume without clobbering the run's prior terminal state", async () => {
     const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-events-"));
     roots.push(runsRoot);

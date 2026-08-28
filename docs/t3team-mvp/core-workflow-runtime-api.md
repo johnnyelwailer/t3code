@@ -115,6 +115,19 @@ const result = await engine.startWorkflow(ref, args, { runsRoot, abortSignal: co
 - The run's metadata is marked `terminal: "aborted"`, `run.aborted` is emitted, and **resuming an
   aborted run is refused** — it has no pending work to drive.
 
+## Agent turns cross one seam (GHE #288 boundary)
+
+Agent execution is NOT a core primitive kind. The body's `agent()` / thread verbs journal their
+`sent`/`resolved` pair through the handle dispatch and fire the side effect through the broker
+(`fire` → `broker.send`) — that fire/broker seam is the single transport port. A host-owned
+`AgentStepBridge` (distro/host code, not `@runbook/core`) binds it: it owns exactly ONE agent
+turn (`start(step, {runId, scope, signal})`, `resume(handle, approval, …)`, `abort(handle)`) and
+carries the mandatory `RunScope` (tenantId/projectId/actorId). It owns no workflow journal,
+status, or recovery — core owns all of those. Consequence, covered by
+`packages/runbook-threads/src/agentTransport.test.ts`: an agent turn dispatches through the
+broker exactly once, and a replay over the journaled pair settles from the record with zero
+broker sends. Mastra/Temporal are private adapters of the bridge, never of core.
+
 ## Journal changes
 
 - `RunMeta` gains `terminal?: "completed" | "failed" | "aborted"` and `terminalAt?: string`.
