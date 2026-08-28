@@ -88,6 +88,7 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     writer: config.writer,
     setResolved: (entry) => resolved.set(entry.correlationId, entry),
     events: config.events,
+    abortSignal: config.abortSignal,
   });
 
   return {

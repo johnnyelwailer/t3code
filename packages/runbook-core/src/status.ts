@@ -34,8 +34,11 @@ export interface RunStatus {
 }
 
 /**
- * Read a run's durable status. A run whose journal file does not exist yet reports
- * `{ state: "empty" }` — the same shape a host uses for "not started".
+ * Read a run's durable status. A run id with NO run metadata at all reports
+ * `{ state: "empty" }` — the same shape a host uses for "not started". Once the engine has
+ * written the run's metadata the run is in-progress until a terminal marker lands, even with
+ * zero journal entries: a resumed re-drive clears the stale terminal before any new work is
+ * journaled, and that window must read as active, not "completed" or "empty".
  */
 export async function inspectRun(store: JournalStore, runId: string): Promise<RunStatus> {
   const [meta, entries] = await Promise.all([store.readRunMeta(runId), store.readEntries(runId)]);
@@ -60,7 +63,7 @@ export async function inspectRun(store: JournalStore, runId: string): Promise<Ru
       ? meta.terminal
       : pendingCorrelationIds.length > 0
         ? "suspended"
-        : entries.bySeq.size === 0
+        : meta === undefined
           ? "empty"
           : "in-progress";
   return {

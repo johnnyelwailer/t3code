@@ -82,6 +82,22 @@ describe("@runbook/core journal-derived run status", () => {
     expect(status.pendingCorrelationIds).toEqual(["corr-1"]);
   });
 
+  it("reports in-progress for a re-driven run whose terminal was cleared, even with zero entries", async () => {
+    // completed -> resume: the engine clears terminal/terminalAt before re-driving, so a run
+    // parked in that window (or before its first journaled work) must read as active, not the
+    // stale "completed" and not a bogus "empty".
+    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-status-"));
+    roots.push(runsRoot);
+    const store = new FsJournalStore(runsRoot);
+    await store.writeRunMeta("run-1", { ...META, terminal: "completed", terminalAt: NOW });
+    expect((await inspectRun(store, "run-1")).state).toBe("completed");
+    await store.writeRunMeta("run-1", META); // what resumeWorkflow writes when re-driving
+    const status = await inspectRun(store, "run-1");
+    expect(status.state).toBe("in-progress");
+    expect(status.entryCount).toBe(0);
+    expect(status.meta?.terminal).toBeUndefined();
+  });
+
   it("reports the terminal marker state over any journal content", async () => {
     const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-status-"));
     roots.push(runsRoot);

@@ -108,9 +108,11 @@ const result = await engine.startWorkflow(ref, args, { runsRoot, abortSignal: co
 
 - A pre-aborted signal settles the run before the body starts; a pre-aborted `resumeWorkflow`
   refuses up front without touching the run's prior terminal state.
-- The signal is also checked by the durable runtime before every LIVE primitive execution: once
-  it fires, the next live call throws `WorkflowAborted` (exported from `@runbook/core/errors`),
-  which the engine converts to the aborted outcome rather than a failure. Replay is unaffected —
+- The signal is also checked by the durable runtime before every LIVE primitive execution AND
+  before every live handle dispatch (the `thread.*` / `user.input` sends): once it fires, the
+  next live call throws `WorkflowAborted` (exported from `@runbook/core/errors`), which the
+  engine converts to the aborted outcome rather than a failure. A pre-aborted handle send leaves
+  `fire=0, seq=0` — no seq consumed, no journal entry, no broker fire. Replay is unaffected —
   recorded results are returned before the check.
 - The run's metadata is marked `terminal: "aborted"`, `run.aborted` is emitted, and **resuming an
   aborted run is refused** — it has no pending work to drive.
@@ -123,10 +125,20 @@ Agent execution is NOT a core primitive kind. The body's `agent()` / thread verb
 `AgentStepBridge` (distro/host code, not `@runbook/core`) binds it: it owns exactly ONE agent
 turn (`start(step, {runId, scope, signal})`, `resume(handle, approval, …)`, `abort(handle)`) and
 carries the mandatory `RunScope` (tenantId/projectId/actorId). It owns no workflow journal,
-status, or recovery — core owns all of those. Consequence, covered by
-`packages/runbook-threads/src/agentTransport.test.ts`: an agent turn dispatches through the
-broker exactly once, and a replay over the journaled pair settles from the record with zero
-broker sends. Mastra/Temporal are private adapters of the bridge, never of core.
+status, or recovery — core owns all of those.
+
+**Delivery is at-least-once, not exactly-once.** The dispatch intent is durable: the handle
+dispatch journals the `sent` entry (with its stable `correlationId`) BEFORE the broker fire, and
+a replay over a recorded `sent` entry never re-fires. But a crash can land between the journal
+write and the fire (the effect never happened) or between the fire and the out-of-band
+`resolved` write (the effect happened, the reply is missing). In both windows the host retries
+the dispatch with the SAME `correlationId`, so the host broker MUST be idempotent — dedupe by
+`correlationId` so one external effect lands per dispatch. The Nexi host provides that
+idempotency; a host that cannot must treat delivery as at-least-once and dedupe downstream.
+Covered by `packages/runbook-threads/src/agentTransport.test.ts`: a replay over the journaled
+pair settles from the record with zero broker sends, and both crash windows (after intent before
+fire; after fire before resolved) apply exactly one external effect through an idempotent fake.
+Mastra/Temporal are private adapters of the bridge, never of core.
 
 ## Journal changes
 
@@ -135,6 +147,10 @@ broker sends. Mastra/Temporal are private adapters of the bridge, never of core.
   completed resume re-checks version policy and re-drives the body — the host's established
   repair/re-run path).
 - `PRIMITIVE_KINDS` gains `"artifact"` and `"usage"`.
+- Handle dispatch journals the `sent` entry (the durable dispatch intent with its stable
+  `correlationId`) BEFORE the broker fire, on both the ask-shaped `send` and the one-way
+  `sendOneWay` paths — the crash-window ordering the at-least-once delivery contract above
+  relies on.
 
 ## Host wiring (T3Code)
 
