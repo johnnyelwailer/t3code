@@ -136,8 +136,9 @@ export interface ThreadStatusPill {
   /** GHE #40: live LLM-generated "working on" phrase. Rendered instead of `label`
    *  while the thread is active; `label` stays the stable status key. */
   activityLabel?: string;
-  /** GHE #208: deterministic 4-state base word; rendered as the label word, with
-   *  `activityLabel` (if any) appended as " · {detail}". */
+  /** GHE #208: deterministic 4-state base word. Rendered as the pill word when
+   *  there is no `activityLabel`; the `activityLabel` REPLACES it when present
+   *  (never both). */
   activityState?: import("~/t3team/t3team-activityStateDisplay").ActivityState;
   colorClass: string;
   dotClass: string;
