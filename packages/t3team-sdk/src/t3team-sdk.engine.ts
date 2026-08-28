@@ -11,13 +11,14 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 
-import {
-  createWorkflowEngine,
-  type StartWorkflowOptions as CoreStartWorkflowOptions,
-  type SuspendedResult,
-  type WorkflowVersionPolicy,
-  type WorkflowRunResult,
-} from "@runbook/core/engine";
+import { createWorkflowEngine } from "@runbook/core/engine";
+import type {
+  AbortedResult,
+  StartWorkflowOptions as CoreStartWorkflowOptions,
+  SuspendedResult,
+  WorkflowRunResult,
+  WorkflowVersionPolicy,
+} from "@runbook/core/engineTypes";
 
 import { defaultRunsRoot, FsJournalStore } from "./t3team-sdk.journalStore.ts";
 import type * as T from "./t3team-sdk.types.ts";
@@ -29,7 +30,7 @@ export type { WorkflowVersionPolicy };
 
 /** Options for {@link startWorkflow} — `runId` may be supplied for deterministic tests. */
 export type StartWorkflowOptions = CoreStartWorkflowOptions<T.WorkflowRunOptions>;
-export type { SuspendedResult, WorkflowRunResult };
+export type { AbortedResult, SuspendedResult, WorkflowRunResult };
 
 /** Hash the exact source artifact so a resumed run cannot silently use changed workflow code. */
 export function workflowSourceVersion(ref: T.WorkflowRef): string {
@@ -53,7 +54,7 @@ export async function startWorkflow<I, O>(
   ref: T.WorkflowRef<I, O>,
   args: I,
   options: StartWorkflowOptions = {},
-): Promise<WorkflowRunResult<O> | SuspendedResult> {
+): Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult> {
   return await engine.startWorkflow<I, O>(ref, args, options);
 }
 
@@ -62,7 +63,7 @@ export async function resumeWorkflow<I, O>(
   ref: T.WorkflowRef<I, O>,
   args: I,
   options: T.WorkflowRunOptions = {},
-): Promise<WorkflowRunResult<O> | SuspendedResult> {
+): Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult> {
   // T3Team's pre-extraction API resumed the current source at the workflow path. Keep that
   // adapter behavior by default; hosts that want content identity to be a hard gate can opt into
   // the reusable engine's strict policy explicitly.

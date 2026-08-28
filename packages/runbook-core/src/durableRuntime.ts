@@ -12,6 +12,7 @@ import type {
   DurablePrimitiveSeat,
   PrimitiveRuntime,
 } from "./runtimeTypes.ts";
+import type { WorkflowEventSink } from "./events.ts";
 
 export interface DurableRuntimeConfig {
   readonly journal: ReadonlyMap<number, JournalEntry>;
@@ -26,6 +27,10 @@ export interface DurableRuntimeConfig {
   readonly runId?: string | undefined;
   /** Resolved handle replies loaded from the durable store. */
   readonly resolved?: ReadonlyMap<string, ResolvedEntry> | undefined;
+  /** Live lifecycle observations; primitive started/completed events are emitted here. */
+  readonly events?: WorkflowEventSink | undefined;
+  /** First-class abort: checked before every live primitive execution (see the seat). */
+  readonly abortSignal?: AbortSignal | undefined;
 }
 
 export interface DurablePrimitiveRuntime extends PrimitiveRuntime {
@@ -61,6 +66,9 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     maxRecordedSeq,
     isBlackBoxed: () => blackBoxDepth > 0,
     takeSeq: () => (seq += 1),
+    runId: config.runId,
+    events: config.events,
+    abortSignal: config.abortSignal,
   };
   const callPrimitive = createDurableCallPrimitive(primitiveSeat);
   const callDeterministic = createDurableCallDeterministic(primitiveSeat);
@@ -79,6 +87,8 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     resolvedFor: (correlationId) => resolved.get(correlationId),
     writer: config.writer,
     setResolved: (entry) => resolved.set(entry.correlationId, entry),
+    events: config.events,
+    abortSignal: config.abortSignal,
   });
 
   return {

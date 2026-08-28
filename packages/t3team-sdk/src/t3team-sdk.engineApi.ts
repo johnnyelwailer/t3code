@@ -24,7 +24,7 @@ import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadType
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
 
 /** Reads one member of the active body surface, or explains precisely why it is unavailable. */
-function fromRun<T>(name: string): T {
+export function fromRun<T>(name: string): T {
   const surface = bodyApiStorage.getStore();
   if (surface === undefined) {
     throw new Error(

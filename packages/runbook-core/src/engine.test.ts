@@ -7,7 +7,7 @@ import * as NodePath from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createWorkflowEngine } from "./engine.ts";
-import type { WorkflowReference, WorkflowVersionPolicy } from "./engine.ts";
+import type { WorkflowReference, WorkflowVersionPolicy } from "./engineTypes.ts";
 import { ReplayDriftError } from "./errors.ts";
 import { FsJournalStore } from "./journalStore.ts";
 

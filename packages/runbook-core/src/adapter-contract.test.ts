@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { createDurableRuntime } from "./durableRuntime.ts";
-import { createWorkflowEngine, type WorkflowReference } from "./engine.ts";
+import { createWorkflowEngine } from "./engine.ts";
+import type { WorkflowReference } from "./engineTypes.ts";
 import { buildJournalMaps } from "./journalReader.ts";
 import type { JournalStore } from "./journalStore.ts";
 import { toResolvedWire, toWire, type ResolvedWireInput } from "./journalWriter.ts";

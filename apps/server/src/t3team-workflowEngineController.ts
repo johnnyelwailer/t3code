@@ -9,6 +9,7 @@
 // @effect-diagnostics globalConsole:off -- onComplete sink failure log in a plain Promise path, outside any Effect runtime.
 
 import {
+  type AbortedResult,
   type SuspendedResult,
   type WorkflowRef,
   type WorkflowRunOptions,
@@ -90,6 +91,7 @@ export function createWorkflowRunController(
         }),
     ...(input.store === undefined ? {} : { store: input.store }),
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
+    ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
     // Preserve T3Team's pre-extraction behavior for every controller-driven resume (pending
     // replies, timers, and boot rehydration): use the current source on disk unless a host caller
     // explicitly requests strict checking. The reusable core remains strict by default.
@@ -97,10 +99,21 @@ export function createWorkflowRunController(
   };
 
   const settle = async (
-    result: WorkflowRunResult<unknown> | SuspendedResult,
+    result: WorkflowRunResult<unknown> | SuspendedResult | AbortedResult,
   ): Promise<WorkflowLaunchStatus> => {
     if (cancelled) return "suspended";
     if ("suspended" in result) return "suspended"; // parked — the reactor resumes it later
+    if ("aborted" in result) {
+      // Aborted is a hard terminal distinct from completed: record it as failed so the
+      // durable row and the step activity never claim a completion that did not happen.
+      await input.lifecycle?.recordFailed({
+        reason: "Run aborted by host abort signal.",
+        step: "abort",
+      });
+      await stepActivities.emitRun("failed", "Run aborted.");
+      input.registry.deleteRun(input.runId);
+      return "failed";
+    }
     await input.lifecycle?.recordCompleted();
     if (cancelled) return "suspended";
     await stepActivities.emitRun("completed");

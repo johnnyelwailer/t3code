@@ -25,6 +25,8 @@ describe("@runbook/core composition primitives", () => {
       budgetTotal: 10,
       onPhase: (title) => phases.push(title),
       onLog: (message) => logs.push(message),
+      hostUuid: () => "uuid-1",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
       runSubWorkflow: async (ref, args) => ({ path: ref.path, args }),
     });
 
@@ -83,6 +85,8 @@ describe("@runbook/core composition primitives", () => {
       budgetTotal: 0,
       onPhase: () => {},
       onLog: () => {},
+      hostUuid: () => "uuid-2",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
       // Stands in for a real child body: it makes one primitive call of its own, exactly as a
       // sub-workflow's `agent`/`wait`/`askUser` would.
       runSubWorkflow: async () => {
@@ -110,6 +114,8 @@ describe("@runbook/core composition primitives", () => {
       budgetTotal: 0,
       onPhase: () => {},
       onLog: () => {},
+      hostUuid: () => "uuid-3",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
     });
 
     expect(() => primitives.workflow({ path: "./nested.ts" })).toThrow("no sub-workflow executor");

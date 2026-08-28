@@ -2,10 +2,9 @@
  * Sub-orchestration invocation policy: the cycle guard, the depth backstop, and the capability
  * chaining that lets `workflow()` nest to any depth.
  *
- * Separate from `t3team-sdk.bodyRunner.ts` on purpose. That module answers "load a body and run it
- * once"; this one answers "when a running body invokes ANOTHER body, what is allowed" — which is
- * policy, not loading, and is the part a reader looking for the nesting rules should find without
- * reading the loader. (The same reason bodyRunner was itself split out of `workflowRunner.ts`.)
+ * Separate from `t3team-sdk.bodyRunner.ts` on purpose: that module answers "load a body and run it
+ * once"; this one answers "when a running body invokes ANOTHER body, what is allowed" — policy,
+ * not loading, and the part a reader looking for the nesting rules should find without the loader.
  */
 
 import { createWorkflowPrimitives, type WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
@@ -43,10 +42,9 @@ const MAX_SUB_WORKFLOW_DEPTH = 16;
  * Identity is `absolutePath`, not `path`: two refs written differently (`./a.workflow.ts` from one
  * directory, `../x/a.workflow.ts` from another) are the same body and must be caught as one.
  *
- * Refusing recursion outright, rather than bounding it, is deliberate. A recursive body cannot
- * replay: every iteration writes journal entries at a `seq` that depends on how many iterations ran
- * before it, so a resume that re-enters the recursion with different data drifts. `wait`, `parallel`
- * and a loop in the parent body cover every case a recursive sub-workflow would have.
+ * Refusing recursion outright, rather than bounding it, is deliberate: a recursive body cannot
+ * replay — every iteration writes entries at a `seq` that depends on how many iterations ran
+ * before it, so a resume re-entering with different data drifts.
  */
 type SubWorkflowChain = ReadonlyArray<string>;
 
@@ -88,6 +86,8 @@ export function buildWorkflowPrimitives(opts: {
   readonly options: T.WorkflowRunOptions;
   readonly toolRefs: ReadonlyArray<T.AnyToolRef>;
   readonly scripts: Readonly<Record<string, T.AnyScriptRef>>;
+  /** Host timestamp formatter for artifact records (threaded to sub-workflow children too). */
+  readonly nowIso: () => string;
 }): {
   readonly primitives: WorkflowPrimitives;
   readonly captureCapabilities: (capabilities: ReadonlySet<string>) => void;
@@ -102,6 +102,8 @@ export function buildWorkflowPrimitives(opts: {
     budgetTotal: options.budget ?? 0,
     onPhase: options.onPhase ?? (() => {}),
     onLog: options.onLog ?? (() => {}),
+    hostUuid: runtime.hostUuid,
+    nowIso: opts.nowIso,
   };
 
   /**

@@ -1,5 +1,6 @@
 import { canonicalJsonError, hashArgs } from "./canonicalJson.ts";
-import { JournalSchemaError, JournalSerializeError } from "./errors.ts";
+import { JournalSchemaError, JournalSerializeError, WorkflowAborted } from "./errors.ts";
+import { emitSafe, type WorkflowEvent } from "./events.ts";
 import { assertJournalMatch, gapDrift } from "./replayDrift.ts";
 import type { DurablePrimitiveSeat, PrimitiveCall } from "./runtimeTypes.ts";
 
@@ -24,6 +25,27 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
     }
   };
 
+  // Live-path observations only: a replayed call returns the recorded result without emitting,
+  // so a subscriber sees each real transition exactly once per process lifetime. Emission is
+  // guarded: a throwing observer must not fail the primitive call itself.
+  const emit = (
+    type: "primitive.started" | "primitive.completed",
+    seq: number,
+    kind: string,
+    refId: string,
+  ): void => {
+    if (seat.runId === undefined) return;
+    const event: WorkflowEvent = {
+      type,
+      runId: seat.runId,
+      seq,
+      kind,
+      refId,
+      at: seat.nowIso(),
+    };
+    emitSafe(seat.events, event);
+  };
+
   return async <R>(call: PrimitiveCall<R>): Promise<R> => {
     if (seat.isBlackBoxed()) return await call.exec();
     const currentSeq = seat.takeSeq();
@@ -40,6 +62,10 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
     if (currentSeq <= seat.maxRecordedSeq)
       gapDrift(currentSeq, call.kind, call.refId, seat.filePath);
 
+    // First-class abort: live path only — a replayed call returns the recorded result above.
+    if (seat.abortSignal?.aborted === true) throw new WorkflowAborted();
+
+    emit("primitive.started", currentSeq, call.kind, call.refId);
     const result = await call.exec();
     const startedAt = seat.nowIso();
     const endedAt = seat.nowIso();
@@ -48,6 +74,8 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
 
     if (isNever) {
       seat.writer.append({ ...baseEntry, kind: "script-never", result: undefined });
+      // Correlate with primitive.started by the call's kind, not the journal kind.
+      emit("primitive.completed", currentSeq, call.kind, call.refId);
       return result;
     }
 
@@ -61,6 +89,7 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
       });
     }
     seat.writer.append({ ...baseEntry, kind: call.kind, result });
+    emit("primitive.completed", currentSeq, call.kind, call.refId);
     return result;
   };
 }

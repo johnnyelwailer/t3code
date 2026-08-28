@@ -1,7 +1,7 @@
 import { hashArgs, hashPrefix } from "./canonicalJson.ts";
 import { ReplayDriftError } from "./errors.ts";
 import type { RunMeta } from "./journal.ts";
-import type { WorkflowVersionPolicy } from "./engine.ts";
+import type { WorkflowVersionPolicy } from "./engineTypes.ts";
 
 /** Verify the input hash recorded at the start of a run. */
 export function assertInputArgsMatch(opts: {

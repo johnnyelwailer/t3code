@@ -1,5 +1,6 @@
 import { hashArgs } from "./canonicalJson.ts";
-import { CancelledError } from "./errors.ts";
+import { CancelledError, WorkflowAborted } from "./errors.ts";
+import { emitSafe } from "./events.ts";
 import type { PrimitiveKind } from "./runtimeTypes.ts";
 import {
   type HandleDispatch,
@@ -83,6 +84,9 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       await call.fire(id, inMemoryResolver(id, call.kind, call.refId));
       return id;
     }
+    // First-class abort: live path only, checked BEFORE takeSeq — a pre-aborted run must leave
+    // fire=0, seq=0: no seq consumed, no journal entry, no broker fire.
+    if (seat.abortSignal?.aborted === true) throw new WorkflowAborted();
     const currentSeq = seat.takeSeq();
     const correlationId = `${seat.runId}:${currentSeq}`;
     const argsHash = hashArgs(call.args);
@@ -94,7 +98,17 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     }
     if (currentSeq <= seat.maxRecordedSeq)
       gapDrift(currentSeq, call.kind, call.refId, seat.filePath);
-    await call.fire(correlationId, makeResolver(correlationId, call.kind, call.refId));
+    emitSafe(seat.events, {
+      type: "primitive.started",
+      runId: seat.runId,
+      seq: currentSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: seat.nowIso(),
+    });
+    // Journal the durable dispatch intent (stable correlationId) BEFORE firing: a crash between
+    // intent and fire leaves a pending correlation the host retries with the SAME id, and the
+    // idempotent broker dedupes. Core never re-fires a recorded sent entry on replay.
     const ts = seat.nowIso();
     seat.writer.append({
       seq: currentSeq,
@@ -108,6 +122,15 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       startedAt: ts,
       endedAt: ts,
     });
+    await call.fire(correlationId, makeResolver(correlationId, call.kind, call.refId));
+    emitSafe(seat.events, {
+      type: "primitive.completed",
+      runId: seat.runId,
+      seq: currentSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: seat.nowIso(),
+    });
     return correlationId;
   };
 
@@ -117,6 +140,8 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       void call.fire(id, noopResolver);
       return id;
     }
+    // First-class abort: live path only, checked BEFORE takeSeq — fire=0, seq=0 on abort.
+    if (seat.abortSignal?.aborted === true) throw new WorkflowAborted();
     const currentSeq = seat.takeSeq();
     const correlationId = `${seat.runId}:${currentSeq}`;
     const argsHash = hashArgs(call.args);
@@ -127,9 +152,19 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     }
     if (currentSeq <= seat.maxRecordedSeq)
       gapDrift(currentSeq, call.kind, call.refId, seat.filePath);
-    // Journal the sent entry SYNCHRONOUSLY (writeSync) before firing, so a suspend on a later
-    // await cannot dispose the writer mid-append. Delivery is best-effort, fired floating.
+    // Journal the durable dispatch intent (stable correlationId) SYNCHRONOUSLY before firing, so
+    // a suspend on a later await cannot dispose the writer mid-append and a crash between intent
+    // and fire leaves a pending correlation for the host to retry with the SAME id. Delivery is
+    // best-effort, fired floating.
     const ts = seat.nowIso();
+    emitSafe(seat.events, {
+      type: "primitive.started",
+      runId: seat.runId,
+      seq: currentSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: ts,
+    });
     seat.writer.append({
       seq: currentSeq,
       callId: `${currentSeq}:${call.kind}:${call.refId}`,
@@ -143,6 +178,14 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       endedAt: ts,
     });
     void call.fire(correlationId, noopResolver);
+    emitSafe(seat.events, {
+      type: "primitive.completed",
+      runId: seat.runId,
+      seq: currentSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: seat.nowIso(),
+    });
     return correlationId;
   };
 

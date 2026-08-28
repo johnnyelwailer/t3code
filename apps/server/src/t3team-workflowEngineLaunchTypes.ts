@@ -14,6 +14,7 @@ import type {
   RuntimeMode,
 } from "@t3tools/contracts";
 import type {
+  AbortedResult,
   AnyScriptRef,
   JournalStore,
   SuspendedResult,
@@ -64,6 +65,9 @@ export interface LaunchWorkflowRecipeInput {
   readonly onComplete?: (output: unknown) => Promise<void>;
   /** Optional sink for an uncaught run failure. */
   readonly onError?: (error: unknown) => Promise<void>;
+  /** Host-owned abort: a pre-aborted or mid-run signal settles the run as aborted (never
+   * completed). Distinct from the registry `cancel` (which parks the run for resume). */
+  readonly abortSignal?: AbortSignal | undefined;
   /** Present only for agent-authored ephemeral source runs. */
   readonly repairIntent?: WorkflowRepairIntent;
   /** Resolved distribution policy; clamped by the core repair funnel. */
@@ -102,7 +106,7 @@ export interface WorkflowRunController {
   readonly ref: WorkflowRef;
   readonly options: WorkflowRunOptions;
   readonly settle: (
-    result: WorkflowRunResult<unknown> | SuspendedResult,
+    result: WorkflowRunResult<unknown> | SuspendedResult | AbortedResult,
   ) => Promise<WorkflowLaunchStatus>;
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
   /** Live step-status sink shared by broker, settle, and resume (UX slice 1). */

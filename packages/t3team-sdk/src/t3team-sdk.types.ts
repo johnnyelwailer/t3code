@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 
-import type { WorkflowVersionPolicy } from "@runbook/core/engine";
+import type { WorkflowVersionPolicy } from "@runbook/core/engineTypes";
 
 import type { ToolRef as GenericToolRef } from "@runbook/tools";
 import type { ScriptRef as GenericScriptRef } from "@runbook/scripts";
@@ -184,4 +184,15 @@ export interface WorkflowRunOptions {
   /** Host fairness hooks around live tool/script primitives. Replayed entries do not call them. */
   readonly beforePrimitive?: () => Promise<boolean>;
   readonly afterPrimitive?: () => void;
+  /**
+   * Live lifecycle observations (see `@runbook/core/events`): the engine emits the run-level
+   * events and the durable runtime emits `primitive.started`/`primitive.completed` into this sink.
+   */
+  readonly events?: import("@runbook/core/events").WorkflowEventSink;
+  /**
+   * First-class abort: checked by the engine before the body starts and handed to the body
+   * executor; a host broker that observes it throws `WorkflowAborted` to settle the run as
+   * aborted rather than failed.
+   */
+  readonly abortSignal?: AbortSignal;
 }

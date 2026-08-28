@@ -37,4 +37,13 @@ export interface DurablePrimitiveSeat {
   readonly maxRecordedSeq: number;
   readonly isBlackBoxed: () => boolean;
   readonly takeSeq: () => number;
+  /** Host run id for live primitive events; absent = no primitive event emission. */
+  readonly runId?: string | undefined;
+  /** Live lifecycle observations; primitive started/completed events are emitted here. */
+  readonly events?: import("./events.ts").WorkflowEventSink | undefined;
+  /**
+   * First-class abort: checked before every LIVE primitive execution (never on the replay
+   * path); once aborted, the next live call throws WorkflowAborted.
+   */
+  readonly abortSignal?: AbortSignal | undefined;
 }
