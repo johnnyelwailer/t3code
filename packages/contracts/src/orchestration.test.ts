@@ -300,6 +300,54 @@ it.effect("accepts both inline and uploaded image attachments from clients", () 
   }),
 );
 
+it.effect("accepts file attachments alongside image attachments", () =>
+  Effect.gen(function* () {
+    const command = yield* decodeClientOrchestrationCommand({
+      type: "thread.turn.start",
+      commandId: "cmd-turn-file-attachments",
+      threadId: "thread-1",
+      message: {
+        messageId: "msg-file-attachments",
+        role: "user",
+        text: "read the spec",
+        attachments: [
+          {
+            type: "image",
+            id: "pending-00000000-0000-4000-8000-000000000001",
+            name: "screenshot.png",
+            mimeType: "image/png",
+            sizeBytes: 3,
+          },
+          {
+            type: "file",
+            id: "pending-00000000-0000-4000-8000-000000000002",
+            name: "spec.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 3,
+          },
+          {
+            type: "file",
+            name: "notes.txt",
+            mimeType: "text/plain",
+            sizeBytes: 3,
+            dataUrl: "data:text/plain;base64,YWJj",
+          },
+        ],
+      },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    if (command.type !== "thread.turn.start") {
+      assert.fail(`Expected thread.turn.start, received ${command.type}.`);
+    }
+    assert.strictEqual(command.message.attachments.length, 3);
+    assert.strictEqual(command.message.attachments[1]!.type, "file");
+    assert.strictEqual("dataUrl" in command.message.attachments[2]!, true);
+  }),
+);
+
 it.effect("preserves explicit provider and runtime mode in thread.turn.start", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeThreadTurnStartCommand({

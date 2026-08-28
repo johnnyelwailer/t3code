@@ -92,12 +92,14 @@ export interface SBendOut {
   /**
    * Per-dot pose. `x` is always 0 in this model (x-pitch is sacred);
    * `snapped`/`settling` are the state flags of the same dot.
+   * The caller passes the same object back each frame (zero-allocation
+   * hot path), so the fields are mutable.
    */
-  readonly poses: Array<{ x: number; y: number; snapped: boolean; settling: boolean }>;
+  poses: Array<{ x: number; y: number; snapped: boolean; settling: boolean }>;
   /** Per-dot value for the CSS `scale` property ("1" = normal). */
-  readonly scales: string[];
+  scales: string[];
   /** The single locked dot index, or -1. */
-  readonly snapIndex: number;
+  snapIndex: number;
 }
 
 interface InternalPose {
@@ -153,11 +155,12 @@ export function createSBendPhysics(config: SBendConfig = defaultSBendConfig): SB
     let snapIdx = -1;
     if (cursor.active) {
       for (let i = 0; i < homes.length; i++) {
-        const dist = Math.hypot(homes[i].x - cursor.x, homes[i].y - cursor.y);
+        const home = homes[i]!;
+        const dist = Math.hypot(home.x - cursor.x, home.y - cursor.y);
         if (
           dist < config.snap &&
           (snapIdx === -1 ||
-            dist < Math.hypot(homes[snapIdx].x - cursor.x, homes[snapIdx].y - cursor.y))
+            dist < Math.hypot(homes[snapIdx]!.x - cursor.x, homes[snapIdx]!.y - cursor.y))
         ) {
           snapIdx = i;
         }
@@ -168,11 +171,11 @@ export function createSBendPhysics(config: SBendConfig = defaultSBendConfig): SB
         // (the hand-off). The incumbent holds only while it is still the
         // closest home — otherwise a stale lock would sit on the wrong
         // dot while the cursor is on another home.
-        const prevDist = Math.hypot(homes[prev].x - cursor.x, homes[prev].y - cursor.y);
-        const candDist = Math.hypot(homes[snapIdx].x - cursor.x, homes[snapIdx].y - cursor.y);
+        const prevDist = Math.hypot(homes[prev]!.x - cursor.x, homes[prev]!.y - cursor.y);
+        const candDist = Math.hypot(homes[snapIdx]!.x - cursor.x, homes[snapIdx]!.y - cursor.y);
         if (prevDist <= candDist) snapIdx = prev;
       } else if (prev !== -1 && snapIdx === -1) {
-        const prevDist = Math.hypot(homes[prev].x - cursor.x, homes[prev].y - cursor.y);
+        const prevDist = Math.hypot(homes[prev]!.x - cursor.x, homes[prev]!.y - cursor.y);
         if (prevDist <= config.release) snapIdx = prev; // between dots: hold
       }
     }
@@ -187,6 +190,7 @@ export function createSBendPhysics(config: SBendConfig = defaultSBendConfig): SB
     for (let i = 0; i < homes.length; i++) {
       const pose = poses[i];
       const home = homes[i];
+      if (!pose || !home) continue;
       const cursorDist = Math.hypot(home.x - cursor.x, home.y - cursor.y);
 
       // Release: the dot belongs to its HOME until the cursor is far.

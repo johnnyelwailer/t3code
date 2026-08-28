@@ -1,13 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 import type { TurnId } from "@t3tools/contracts";
 import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
 import type { ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
-
-import { createSBendPhysics, defaultSBendConfig, type SBendOut } from "./t3team-stateMotionPhysics";
-import { SplitFlipText } from "./t3team-splitFlipText";
 import {
   buildEntries,
   rollDrift,
@@ -17,57 +13,38 @@ import {
 } from "./t3team-mockAgentSeeds";
 
 import "./t3team-StateMotionDots.css";
+// (createSBendPhysics / SplitFlipText now live in ~/t3team/chat/ — this
+// story imports nothing of the dot language directly anymore.)
 
 /**
- * GHE #201 follow-up — the chosen status-row dot direction, built on the
- * REAL conversation working row.
+ * GHE #201 follow-up — the state-textured status dots, on the REAL working row.
  *
- * WHAT THIS STORY IS
- * ------------------
- * Mounts the REAL `WorkingTimelineRow` (components/chat/MessagesTimeline)
- * fed with REAL-shaped data through the app's own seam
- * (`TimelineRowActivityCtx`): the active-agents indicator dots, the #208
- * state word, the flip step label and the production CSS
- * (`t3team-aci-*`, t3team-index.css) are untouched. Both REAL agent kinds
- * are present: child threads (`activeChildren`) and provider-native
- * subagents (`activeSubagents`) — the indicator shows both.
+ * THIS STORY IS THE VISUAL BASELINE FOR A SHIPPED FEATURE — the dot
+ * language lives in the APP, not here:
  *
- * THE DOT LANGUAGE (all restyle lives in the CSS file, keyed off the
- * `data-sdv-state` attribute this story stamps on the real cells):
- *   thinking → slow smooth wave, cool hue · writing → slower, cooler
- *   working  → snappy pulses, warm hue    · waiting → one soft breath + ring
- *   settled  → dim, still
- * Each AGENT dot carries ITS OWN state; the per-agent states re-roll
- * randomly every ~4.5s so a busy thread keeps moving.
+ *   state texture (per-agent thinking/writing/working/waiting/settled dots,
+ *   hue wander, status-change swing, waiting ring, 1.5x rest scale)
+ *     → t3team-index.css (keyed off data-t3team-state, stamped by the
+ *       real T3TeamActiveAgentsIndicator from ActiveAgentEntry.dotState)
+ *   S-bend + snap proximity (real mouse: the row bends away from the
+ *   cursor on the Y axis, single-grower lock on a dot's home)
+ *     → t3team-activeAgentsPhysics.ts, run by the indicator
+ *   split lead text ("state word for timer", each piece flips on its own,
+ *   width glides so the dots move WITH the text)
+ *     → t3team-workingLeadText.tsx + t3team-splitFlipText.tsx, rendered
+ *       inside the real WorkingTimelineRow
+ *   per-dot click opens that agent (child thread on the side / subagent →
+ *   Agents panel)
+ *     → onOpenAgent seam: T3TeamActiveAgentsIndicator →
+ *       TimelineRowActivityCtx → MessagesTimeline (default derivation
+ *       uses the host's onOpenThread)
  *
- * REUSABLE PARTS (extracted so they can be used outside this story):
- *   t3team-stateMotionPhysics.ts — the S-bend + snap pointer physics,
- *      pure and DOM-free (createSBendPhysics)
- *   t3team-splitFlipText.tsx     — the production 3D status roll as a
- *      component (SplitFlipText), with quiet-swap gating
- *   t3team-mockAgentSeeds.ts     — seeds, weighted state rolls, entries
- *
- * INTERACTION (the "proximity springs" control):
- *   S-BEND — the row avoids the cursor on the Y axis: it parts around the
- *      cursor's x, one side easing down, the other up (an S along the
- *      horizontal axis). Dots only ever move vertically, so their x-pitch
- *      is sacred and they never approach each other.
- *   SNAP   — the cursor on a dot's home locks THAT one dot exactly at its
- *      home and grows it; near-cursor dots shrink in anticipation. The
- *      hand-off between dots is immediate; between dots the incumbent
- *      holds (no chatter). Details: t3team-stateMotionPhysics.ts.
- *   CLICK  — each dot is individually clickable (cursor pointer) and opens
- *      that agent's thread card on the side (story-side stand-in for the
- *      app's child-thread/subagent pane).
- *
- * DEBUG: the "Debug alignment" control draws the raw pointer crosshair +
- * every true home, and every click captures the full coordinate snapshot
- * to the local server on :6011 (files: /tmp/sdv-snaps.jsonl).
+ * What this story adds on top: simulated per-agent states that re-roll
+ * every ~4.5s (production derives dotState from live labels), a side
+ * panel stand-in for "open that thread on the side", the click-to-capture
+ * debug rig, and opt-out toggles (no ring / no hue / no springs) for
+ * baseline comparison.
  */
-
-// ---------------------------------------------------------------------------
-// Row chrome
-// ---------------------------------------------------------------------------
 
 const WORKING_ROW = {
   kind: "working" as const,
@@ -80,11 +57,13 @@ function RealWorkingRow({
   activeAgents,
   workingStepLabel,
   onOpenAgents,
+  onOpenAgent,
   threadState,
 }: {
   activeAgents: readonly ActiveAgentEntry[];
   workingStepLabel: string | null;
   onOpenAgents: () => void;
+  onOpenAgent?: (entry: ActiveAgentEntry) => void;
   threadState: DotState | null;
 }) {
   return (
@@ -96,7 +75,8 @@ function RealWorkingRow({
         workingStepLabel,
         activeAgents,
         onOpenAgents,
-        threadActivityState: threadState,
+        onOpenAgent,
+        threadActivityState: threadState === "settled" ? null : threadState,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -104,15 +84,7 @@ function RealWorkingRow({
   );
 }
 
-function Card({
-  title,
-  children,
-  footnote,
-}: {
-  title: string;
-  children: React.ReactNode;
-  footnote?: string;
-}) {
+function Card({ title, children, footnote }: { title: string; children: React.ReactNode; footnote?: string }) {
   return (
     <div className="w-[560px] rounded-xl border border-border/70 bg-card p-4 shadow-sm">
       <div className="mb-3 text-xs font-medium text-muted-foreground">{title}</div>
@@ -123,95 +95,8 @@ function Card({
 }
 
 // ---------------------------------------------------------------------------
-// Split lead text ("<state word> for <timer>"), each piece on its OWN flip
-// ---------------------------------------------------------------------------
-
-/** Same format as the production row's WorkingTimer. */
-function formatElapsed(startIso: string, nowMs: number): string {
-  const elapsedSeconds = Math.max(0, Math.floor((nowMs - Date.parse(startIso)) / 1000));
-  if (elapsedSeconds < 60) return `${elapsedSeconds}s`;
-  const hours = Math.floor(elapsedSeconds / 3600);
-  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-  const seconds = elapsedSeconds % 60;
-  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-}
-
-/**
- * The story's split replacement for the production "Working for 0:05" run.
- * Portaled into the row's own first flex slot (the production single piece
- * is hidden by CSS).
- *
- * CHOREOGRAPHY — the slot width glides on the shared spring, but only
- * starting when the incoming text actually mounts (the "in" half of the
- * roll). Reserving space earlier made the dots move while the text was
- * still the old one — the "layout glides, text jumps" mismatch. Quiet
- * swaps (plain seconds ticks, no roll) glide immediately.
- *
- * inline-block on purpose: a flex container drops the whitespace between
- * the pieces ("WaitingFor").
- */
-function LeadText({ word, time }: { word: string; time: string }) {
-  const leadRef = useRef<HTMLSpanElement | null>(null);
-  const sizerRef = useRef<HTMLSpanElement | null>(null);
-  const rollingRef = useRef(false);
-
-  // The timer only rolls when the digits on screen actually change shape:
-  // the minute/hour part changes, or the digit count changes. A seconds
-  // tick inside the same format ("1m 5s" → "1m 6s") updates in place.
-  const timerShouldFlip = (prev: string, next: string) => {
-    const stripSeconds = (value: string) => value.replace(/\s?\d+s$/, "");
-    return stripSeconds(prev) !== stripSeconds(next) || prev.length !== next.length;
-  };
-
-  const applyWidth = () => {
-    const lead = leadRef.current;
-    const sizer = sizerRef.current;
-    if (!lead || !sizer) return;
-    sizer.textContent = `${word} for ${time}`;
-    const target = sizer.getBoundingClientRect().width;
-    if (target > 0) lead.style.width = `${target}px`;
-  };
-
-  const prevTextRef = useRef({ word, time });
-
-  // Apply the slot width toward the incoming text — but decide, BEFORE
-  // the roll starts, whether a piece is about to roll. Reserving space
-  // before the new text mounts made the dots move while the old text was
-  // still on screen ("layout glides, text jumps"). While a piece rolls
-  // we HOLD the width; the glide starts the moment the new text mounts
-  // (the "in" callback below). Quiet swaps (plain seconds ticks, no
-  // roll) apply immediately, as does the initial mount.
-  useEffect(() => {
-    const prev = prevTextRef.current;
-    prevTextRef.current = { word, time };
-    const wordRolls = word !== prev.word;
-    const timeRolls = time !== prev.time && timerShouldFlip(prev.time, time);
-    if (wordRolls || timeRolls) {
-      rollingRef.current = true; // hold; width applied on the "in" phase
-      return;
-    }
-    applyWidth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [word, time]);
-
-  const onPhase = (phase: "idle" | "out" | "in") => {
-    rollingRef.current = phase === "out";
-    if (phase === "in") applyWidth();
-  };
-
-  return (
-    <span ref={leadRef} className="sdv-lead">
-      <SplitFlipText text={word} onPhaseChange={onPhase} />
-      <span> for </span>
-      <SplitFlipText text={time} shouldFlip={timerShouldFlip} onPhaseChange={onPhase} />
-      <span ref={sizerRef} className="sdv-lead-sizer" aria-hidden />
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Side panel — the clicked agent's thread card
+// Side panel — the clicked agent's thread card (the app opens the real
+// thread / Agents panel; this stand-in keeps the exploration self-contained)
 // ---------------------------------------------------------------------------
 
 function AgentSidePanel({
@@ -224,16 +109,11 @@ function AgentSidePanel({
   onClose: () => void;
 }) {
   return (
-    <div
-      data-sdv-panel
-      className="w-[300px] shrink-0 rounded-xl border border-border/70 bg-card p-4 shadow-sm"
-    >
+    <div data-sdv-panel className="w-[300px] shrink-0 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
       <div className="mb-2 flex items-center justify-between">
         <span
           className={`rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${
-            entry.source === "subagent"
-              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-              : "bg-sky-500/15 text-sky-600 dark:text-sky-400"
+            entry.source === "subagent" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-sky-500/15 text-sky-600 dark:text-sky-400"
           }`}
         >
           {entry.source === "subagent" ? "provider subagent" : "child thread"}
@@ -271,11 +151,11 @@ type StateMotionDotsProps = {
   activeSubagents: number;
   /** Auto-simulate live-output events (real one-shot dot pulse) + label cycling. */
   liveStream: boolean;
-  /** A waiting agent dot gets one soft breathing ring (shared spring easing). */
+  /** Opt out of the waiting-agent breathing ring. */
   ring: boolean;
-  /** S-bend + snap pointer physics (real mouse). */
+  /** Opt out of the S-bend + snap pointer physics (real mouse). */
   springs: boolean;
-  /** Subtle per-dot hue wander; a bigger one-shot swing on status change. */
+  /** Opt out of the subtle per-dot hue wander. */
   colorShifts: boolean;
   /** Force the reduced-motion fallback (static dim dots). */
   reducedMotion: boolean;
@@ -299,66 +179,42 @@ function StateMotionDots({
   frozenClock,
 }: StateMotionDotsProps) {
   const [ticks, setTicks] = useState<ReadonlyMap<string, number>>(() => new Map());
-  const [driftState, setDriftState] = useState<Drift>(() =>
-    rollDrift(activeChildren + activeSubagents),
-  );
+  const [driftState, setDriftState] = useState<Drift>(() => rollDrift(activeChildren + activeSubagents));
   const entries = buildEntries(activeChildren, activeSubagents, ticks);
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
 
   const mixedScopeRef = useRef<HTMLDivElement | null>(null);
-  // The pointer in VIEWPORT space (raw clientX/clientY). Converted to row
-  // space EVERY FRAME against a fresh scope rect — the layout moves under
-  // a still mouse (width transitions, re-rolls), and event-time
-  // conversion desyncs the trigger from the actual pointer.
+  // Viewport-space pointer for the debug overlay (the production physics in
+  // the indicator tracks its own pointer).
   const pointerRef = useRef({ x: 0, y: 0, active: false });
 
   const [liveReadout, setLiveReadout] = useState("");
   const [snaps, setSnaps] = useState<readonly string[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
 
-  // The split lead text is portaled into the row's own first flex slot
-  // (the production single-piece "Working for 0:05" is hidden by CSS).
-  const [leadAnchor, setLeadAnchor] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    setLeadAnchor(mixedScopeRef.current?.querySelector<HTMLElement>(".shrink-0") ?? null);
-  }, []);
-
-  // 1s clock for the lead timer; frozenClock pins it for static testing.
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    if (frozenClock) return;
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [frozenClock]);
 
   const fire = (id: string) =>
     setTicks((current) => new Map(current).set(id, (current.get(id) ?? 0) + 1));
 
-  // The per-agent states re-roll randomly every ~4.5s.
-  useEffect(() => {
-    if (!drift || reducedMotion) return;
-    const timer = window.setInterval(() => {
-      setDriftState((current) => rollDrift(entriesRef.current.length, current));
-    }, 4500);
-    return () => window.clearInterval(timer);
-  }, [drift, reducedMotion]);
-
-  // Stamp the REAL agent cells with their own state + index so the CSS can
-  // texture each dot (motion + color + ring) per state. A state re-roll
-  // gives that cell one .sdv-shift cycle (visible hue swing + pop).
+  // The per-agent states re-roll randomly every ~4.5s. The story stamps
+  // them directly onto the REAL cells (data-t3team-state — the same
+  // attribute the production indicator stamps from entry.dotState), so
+  // the production CSS textures each dot.
   useEffect(() => {
     const scope = mixedScopeRef.current;
     if (!scope) return;
-    const cells = scope.querySelectorAll(".t3team-aci-cell");
+    const cells = scope.querySelectorAll<HTMLElement>(".t3team-aci-cell");
     entries.slice(0, 5).forEach((entry, i) => {
       const cell = cells[i];
       if (!cell) return;
       const state = driftState.agents[i] ?? "working";
-      const prev = cell.getAttribute("data-sdv-state");
-      cell.setAttribute("data-sdv-state", state);
-      cell.style.setProperty("--sdv-i", String(i));
+      const prev = cell.getAttribute("data-t3team-state");
+      cell.setAttribute("data-t3team-state", state);
+      cell.style.setProperty("--t3team-aci-i", String(i));
       if (prev && prev !== state) {
+        // one-shot re-roll swing (story-only flourish; production fires
+        // the same keyframe when entry.dotState changes)
         cell.classList.add("sdv-shift");
         const clear = (event: AnimationEvent) => {
           if (event.animationName === "t3team-sdv-shift") cell.classList.remove("sdv-shift");
@@ -381,8 +237,7 @@ function StateMotionDots({
       timer = window.setTimeout(
         () => {
           const current = entriesRef.current;
-          const entry =
-            current.length > 0 ? current[Math.floor(Math.random() * current.length)] : undefined;
+          const entry = current.length > 0 ? current[Math.floor(Math.random() * current.length)] : undefined;
           if (entry) fire(entry.id);
           tick();
         },
@@ -405,160 +260,73 @@ function StateMotionDots({
   useEffect(() => {
     if (!liveStream) return;
     const timer = window.setInterval(
-      () =>
-        setLabel((current) => LABELS[(LABELS.indexOf(current) + 1) % LABELS.length] ?? "Working"),
+      () => setLabel((current) => LABELS[(LABELS.indexOf(current) + 1) % LABELS.length] ?? "Working"),
       3200,
     );
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveStream]);
 
-  // Per-dot clicks: the real cells all call the group's onOpenAgents, so
-  // the story intercepts at scope level — the cell under the pointer
-  // selects that agent for the side panel.
-  useEffect(() => {
-    const scope = mixedScopeRef.current;
-    if (!scope) return;
-    const onDown = (event: MouseEvent) => {
-      const cell = (event.target as HTMLElement).closest<HTMLElement>(".t3team-aci-cell");
-      if (!cell || !scope.contains(cell)) return;
-      const cells = Array.from(scope.querySelectorAll(".t3team-aci-cell")).filter(
-        (d) => d.offsetWidth > 0,
-      );
-      const index = cells.indexOf(cell);
-      setSelectedAgent(index >= 0 ? index : null);
-    };
-    scope.addEventListener("pointerdown", onDown);
-    return () => scope.removeEventListener("pointerdown", onDown);
-  }, []);
+  // Per-dot clicks now go through the PRODUCTION onOpenAgent seam (the
+  // real indicator calls it for the clicked entry).
+  const onOpenAgent = (entry: ActiveAgentEntry) => {
+    const index = entries.findIndex((current) => current.id === entry.id);
+    setSelectedAgent(index >= 0 ? index : null);
+  };
 
   // -------------------------------------------------------------------------
-  // S-BEND + SNAP pointer physics — real mouse, written on the real cells.
-  // The math lives in t3team-stateMotionPhysics.ts (pure, reusable); this
-  // effect only bridges it to the DOM: read homes → step → write poses.
+  // Debug overlay: crosshair on the raw pointer + one dashed ring per dot's
+  // live home, so trigger vs pointer vs home can be compared pixel-by-pixel.
   // -------------------------------------------------------------------------
   useEffect(() => {
     const scope = mixedScopeRef.current;
-    if (!scope) return;
-
-    const physics = createSBendPhysics(defaultSBendConfig);
-    const out: SBendOut = { poses: [], scales: [], snapIndex: -1 };
-
+    if (!scope || !debug) return;
     let raf = 0;
-    let dots: HTMLElement[] = [];
     let dbg: HTMLDivElement | null = null;
     let lastReadout = 0;
-    let last = 0;
-
-    const ensureDebug = (count: number) => {
-      if (dbg) return;
-      dbg = document.createElement("div");
-      dbg.className = "sdv-debug";
-      dbg.innerHTML =
-        Array.from({ length: count }, () => `<span class="sdv-debug-home"></span>`).join("") +
-        `<div class="sdv-debug-cross"></div>`;
-      scope.appendChild(dbg);
-    };
-
+    let dots: HTMLElement[] = [];
     const tick = (now: number) => {
-      // Perf: reuse the cached dot list; only re-query when the first node
-      // left the tree (drift re-roll / count change). One contains() check
-      // per frame beats a per-frame querySelectorAll + allocation.
-      if (dots.length === 0 || !scope.contains(dots[0])) {
-        dots = Array.from(scope.querySelectorAll<HTMLElement>(".h-1.w-1, .t3team-aci-cell")).filter(
-          (d) => d.offsetWidth > 0,
-        );
-      }
       if (dots.length === 0) {
-        raf = requestAnimationFrame(tick);
-        return;
+        dots = Array.from(scope.querySelectorAll<HTMLElement>(".t3team-aci-cell")).filter((d) => d.offsetWidth > 0);
       }
-
-      // Perf: all reads first (batched layout), writes after — one reflow
-      // per frame, not one per dot.
-
-      // Tooltip hygiene: native `title` tooltips would linger over nothing
-      // once the dots move under a still cursor, and the flicker between
-      // two pointer regions (group span vs cell) is what made the cursor
-      // icon twitch. The cells get `cursor: pointer` via CSS; the group
-      // span is plain. `aria-label` is deliberately KEPT: production
-      // (87325f564) relies on it as the dots' accessible name.
-      dots.forEach((d) => {
-        if (d.hasAttribute("title")) d.removeAttribute("title");
-      });
-      const groupSpan = scope
-        .querySelector<HTMLElement>(".t3team-aci-cell")
-        ?.closest("span[title]");
-      if (groupSpan?.hasAttribute("title")) groupSpan.removeAttribute("title");
-
-      // Reads (batched): scope rect + each home. Homes are NOT cached —
-      // layout shifts (lead-text width transition, re-rolls) would poison
-      // a first-sight capture; each frame re-derives the untransformed
-      // center by subtracting our own displacement from the live rect.
       const srect = scope.getBoundingClientRect();
       const p = pointerRef.current;
-      const cursor = { x: p.x - srect.left, y: p.y - srect.top, active: p.active };
-      const homes = dots.map((dot, i) => {
-        const dr = dot.getBoundingClientRect();
-        const prevX = out.poses[i]?.x ?? 0;
-        const prevY = out.poses[i]?.y ?? 0;
-        return {
-          x: dr.left + dr.width / 2 - srect.left - prevX,
-          y: dr.top + dr.height / 2 - srect.top - prevY,
-        };
-      });
-
-      const frame = physics.stepFrame(now, { cursor, homes }, out);
-
-      // Writes.
-      dots.forEach((dot, i) => {
-        const pose = frame.poses[i];
-        dot.style.transform = `translate(${pose.x.toFixed(2)}px, ${pose.y.toFixed(2)}px)`;
-        dot.style.scale = frame.scales[i] === "1" ? "" : frame.scales[i];
-      });
-
-      if (debug) {
-        ensureDebug(dots.length);
-        const cross = dbg!.querySelector<HTMLElement>(".sdv-debug-cross");
-        cross.style.left = `${cursor.x}px`;
-        cross.style.top = `${cursor.y}px`;
-        dbg!.querySelectorAll<HTMLElement>(".sdv-debug-home").forEach((h, k) => {
-          h.style.left = `${homes[k].x}px`;
-          h.style.top = `${homes[k].y}px`;
-        });
-        const nowMs_ = performance.now();
-        if (nowMs_ - lastReadout > 150) {
-          lastReadout = nowMs_;
-          setLiveReadout(
-            `click row = capture · cursor(${cursor.x.toFixed(1)}, ${cursor.y.toFixed(1)}) · ` +
-              `home0(${homes[0].x.toFixed(1)}, ${homes[0].y.toFixed(1)}) · ` +
-              `locked ${frame.snapIndex === -1 ? "none" : "dot" + frame.snapIndex}`,
-          );
-        }
+      const cursor = { x: p.x - srect.left, y: p.y - srect.top };
+      if (!dbg) {
+        dbg = document.createElement("div");
+        dbg.className = "sdv-debug";
+        dbg.innerHTML =
+          Array.from({ length: dots.length }, () => `<span class="sdv-debug-home"></span>`).join("") +
+          `<div class="sdv-debug-cross"></div>`;
+        scope.appendChild(dbg);
       }
-
+      dbg.querySelector<HTMLElement>(".sdv-debug-cross")!.style.left = `${cursor.x}px`;
+      dbg.querySelector<HTMLElement>(".sdv-debug-cross")!.style.top = `${cursor.y}px`;
+      dots.forEach((dot, k) => {
+        const dr = dot.getBoundingClientRect();
+        // subtract the displacement the physics loop applies, to read the home
+        const t = dot.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+        const hx = dr.left + dr.width / 2 - srect.left - (t ? parseFloat(t[1] ?? "0") : 0);
+        const hy = dr.top + dr.height / 2 - srect.top - (t ? parseFloat(t[2] ?? "0") : 0);
+        const ring = dbg!.querySelectorAll<HTMLElement>(".sdv-debug-home")[k];
+        if (ring) {
+          ring.style.left = `${hx}px`;
+          ring.style.top = `${hy}px`;
+        }
+      });
+      if (now - lastReadout > 150) {
+        lastReadout = now;
+        setLiveReadout(`click row = capture · cursor(${cursor.x.toFixed(1)}, ${cursor.y.toFixed(1)})`);
+      }
       raf = requestAnimationFrame(tick);
     };
-
-    if (springs && !reducedMotion) {
-      raf = requestAnimationFrame(tick);
-    } else {
-      // Static: clear any residual pose.
-      dots = Array.from(scope.querySelectorAll<HTMLElement>(".h-1.w-1, .t3team-aci-cell"));
-      dots.forEach((dot) => {
-        dot.style.transform = "";
-        dot.style.scale = "";
-      });
-    }
+    raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
-      dots.forEach((dot) => {
-        dot.style.transform = "";
-        dot.style.scale = "";
-      });
       dbg?.remove();
+      dots = [];
     };
-  }, [springs, reducedMotion, debug]);
+  }, [debug]);
 
   // Click-to-capture: every pointerdown freezes the full coordinate
   // snapshot — as chips below the card AND to the local capture server
@@ -596,9 +364,7 @@ function StateMotionDots({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(snap),
       }).catch(() => undefined);
-      const cursorText = cursor
-        ? `cursor(${cursor.x.toFixed(1)}, ${cursor.y.toFixed(1)})`
-        : "cursor(n/a)";
+      const cursorText = cursor ? `cursor(${cursor.x.toFixed(1)}, ${cursor.y.toFixed(1)})` : "cursor(n/a)";
       const dotsText = dots.map((d, i) => `d${i}@(${d.cx},${d.cy})\u00d7${d.scale}`).join("  ");
       setSnaps((prev) => [`SNAP ${snapCount}  ${cursorText}  ${dotsText}`, ...prev].slice(0, 6));
     };
@@ -615,19 +381,16 @@ function StateMotionDots({
   const selectedEntry = selectedAgent !== null ? entries[selectedAgent] : undefined;
 
   return (
-    <div
-      data-sdv-selected={selectedAgent ?? -1}
-      className="flex w-full flex-col items-center gap-8 px-12 py-10 pb-16"
-    >
+    <div data-sdv-selected={selectedAgent ?? -1} className="flex w-full flex-col items-center gap-8 px-12 py-10 pb-16">
       {reducedMotion ? (
-        <style>{`.sdv-solo .h-1.w-1, .sdv-mixed .h-1.w-1, .sdv-mixed .t3team-aci-dot, .sdv-mixed .t3team-aci-cell, .sdv-mixed .t3team-aci-cell > span::before, .sdv-mixed .t3team-aci-cell > span::after, .t3team-aci-pulse { animation: none !important; } .sdv-mixed .t3team-aci-dot, .sdv-solo .h-1.w-1 { opacity: 0.4 !important; box-shadow: none !important; } .sdv-lead { transition: none !important; } .sdv-lead .t3team-aci-flip-in, .sdv-lead .t3team-aci-flip-out { animation: none !important; }`}</style>
+        <style>{`.sdv-mixed .h-1.w-1, .sdv-mixed .t3team-aci-dot, .sdv-mixed .t3team-aci-cell, .sdv-mixed .t3team-aci-cell > span, .sdv-mixed .t3team-aci-cell > span::before, .t3team-aci-pulse, .t3team-aci-flip-in, .t3team-aci-flip-out { animation: none !important; } .sdv-mixed .t3team-aci-dot { opacity: 0.4 !important; box-shadow: none !important; } .t3team-aci-lead { transition: none !important; }`}</style>
       ) : null}
 
       <div className="flex w-full items-start justify-center gap-6">
         <div className="flex flex-col gap-8">
           <Card
-            title="Baseline — current production working row (unmodified)"
-            footnote="The real WorkingTimelineRow: three staggered pulses + #208 state word + GHE #201 agent dots + flip label. No scope classes — nothing here is overridden."
+            title="The production working row (this is what ships)"
+            footnote="Real WorkingTimelineRow + real indicator: state-textured dots, split lead text, S-bend + snap proximity, per-dot thread opening. No scope overrides — nothing here is mocked."
           >
             <div className="rounded-lg border border-border/50 bg-card p-4">
               <div className="mb-3 rounded-md bg-accent/60 px-3 py-2 text-sm">
@@ -644,7 +407,7 @@ function StateMotionDots({
 
           <Card
             title="State-motion dots — every dot carries ITS OWN state, re-rolling randomly every ~4.5s"
-            footnote="Per-agent: thinking = cool wave · working = warm snappy pulses · waiting = muted breath (+ ring) · settled = dim still. Click a dot to open its thread on the side. Hover: S-bend avoidance + grow-on-lock."
+            footnote="Production CSS textures each dot (thinking = cool wave · working = warm snappy pulses · waiting = breath + ring · settled = dim). Click a dot: its thread opens on the side. Hover: S-bend avoidance + grow-on-lock."
           >
             <div className="rounded-lg border border-border/50 bg-card p-4">
               <div className="mb-3 rounded-md bg-accent/60 px-3 py-2 text-sm">
@@ -652,42 +415,24 @@ function StateMotionDots({
               </div>
               <div
                 ref={mixedScopeRef}
-                className={`relative ${ring ? "sdv-ring" : ""} ${springs && !reducedMotion ? "sdv-springs" : ""} ${colorShifts && !reducedMotion ? "sdv-hue" : ""} sdv-solo sdv-mixed sdv-st-${threadForMixed ?? "settled"}`}
+                data-sdv-no-springs={springs && !reducedMotion ? undefined : ""}
+                className={`relative ${ring ? "" : "sdv-no-ring"} ${colorShifts ? "" : "sdv-no-hue"} ${frozenClock ? "sdv-frozen" : ""} sdv-mixed sdv-st-${threadForMixed ?? "settled"}`}
                 onPointerMove={
-                  springs && !reducedMotion
+                  debug
                     ? (event) => {
-                        pointerRef.current = {
-                          ...pointerRef.current,
-                          x: event.clientX,
-                          y: event.clientY,
-                          active: true,
-                        };
+                        pointerRef.current = { ...pointerRef.current, x: event.clientX, y: event.clientY, active: true };
                       }
                     : undefined
                 }
-                onPointerLeave={
-                  springs && !reducedMotion
-                    ? () => {
-                        pointerRef.current.active = false;
-                      }
-                    : undefined
-                }
+                onPointerLeave={debug ? () => (pointerRef.current.active = false) : undefined}
               >
                 <RealWorkingRow
                   activeAgents={entries}
                   workingStepLabel={label}
                   onOpenAgents={() => {}}
+                  onOpenAgent={onOpenAgent}
                   threadState={threadForMixed}
                 />
-                {leadAnchor
-                  ? createPortal(
-                      <LeadText
-                        word={threadForMixed === null ? "Working" : stateWordOf(threadForMixed)}
-                        time={formatElapsed(WORKING_ROW.createdAt, nowMs)}
-                      />,
-                      leadAnchor,
-                    )
-                  : null}
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <button
@@ -698,12 +443,8 @@ function StateMotionDots({
                   re-roll agent states
                 </button>
                 <span className="text-[10px] text-muted-foreground/70">
-                  thread: {threadForMixed === null ? "Working" : stateWordOf(threadForMixed)} ·
-                  agents:{" "}
-                  {entries
-                    .slice(0, 5)
-                    .map((_, i) => driftState.agents[i] ?? "working")
-                    .join(" · ")}
+                  thread: {threadForMixed === null ? "Working" : stateWordOf(threadForMixed)} · agents:{" "}
+                  {entries.slice(0, 5).map((_, i) => driftState.agents[i] ?? "working").join(" · ")}
                 </span>
               </div>
             </div>
@@ -751,14 +492,12 @@ const meta = {
     springs: true,
     colorShifts: true,
     reducedMotion: false,
-    frozenClock: false,
   },
   argTypes: {
     threadState: {
       control: "select",
       options: ["auto", "thinking", "writing", "working", "waiting", "settled"],
-      description:
-        "Pins the THREAD-level state (progress dots + state word). 'auto' lets it drift with the agents.",
+      description: "Pins the THREAD-level state (state word). 'auto' lets it drift with the agents.",
     },
     drift: {
       control: "boolean",
@@ -778,10 +517,10 @@ const meta = {
     },
     ring: {
       control: "boolean",
-      description: "Integration: a waiting agent dot gets one soft breathing ring (spring easing).",
+      description: "Opt out of the waiting-agent breathing ring.",
     },
     debug: {
-      control: "checkbox",
+      control: "boolean",
       name: "Debug alignment",
       description:
         "Draws the raw pointer crosshair and a dashed ring at every dot's true home, so you can verify trigger vs pointer vs home pixel-by-pixel. Clicks also capture snapshots.",
@@ -789,12 +528,11 @@ const meta = {
     springs: {
       control: "boolean",
       description:
-        "S-bend + snap (real mouse): the row avoids the cursor on the vertical axis — one side eases up, the other down (an S along the horizontal axis); dots keep their x-pitch so they never approach each other, near-cursor dots shrink in anticipation. When the cursor sits on a dot's home, that one dot alone locks back to its original spot and grows until the cursor leaves.",
+        "S-bend + snap (real mouse, production physics): the row avoids the cursor on the vertical axis; dots keep their x-pitch, near-cursor dots shrink, the dot under the cursor locks at home and grows.",
     },
     colorShifts: {
       control: "boolean",
-      description:
-        "Subtle per-dot hue wander at rest; a bigger one-shot hue swing when an agent's status changes.",
+      description: "Opt out of the subtle per-dot hue wander.",
     },
     reducedMotion: {
       control: "boolean",
@@ -804,18 +542,11 @@ const meta = {
 } satisfies Meta<typeof StateMotionDots>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof StateMotionDots>;
 
 export const StateMotion: Story = {
   name: "State-motion dots (mixed, drifting)",
-  args: {
-    threadState: "auto",
-    drift: true,
-    ring: true,
-    springs: true,
-    colorShifts: true,
-    debug: false,
-  },
+  args: { threadState: "auto", drift: true, ring: true, springs: true, colorShifts: true, debug: false },
 };
 
 export const ThreadWaiting: Story = {

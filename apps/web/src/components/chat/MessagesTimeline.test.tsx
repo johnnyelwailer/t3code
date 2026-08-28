@@ -1133,7 +1133,10 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("Working for");
+    // The lead is split (state word / " for " / timer as separate pieces,
+    // GHE #201 follow-up) — check the split state word, not the joined string.
+    expect(markup).toContain(">Working</span>");
+    expect(markup).toContain(" for ");
     expect(markup).toContain("Running pnpm");
     expect(markup).toContain("live-activity-focus");
   });
@@ -1244,8 +1247,9 @@ describe("MessagesTimeline", () => {
     );
 
     // One live status element per turn: the state word (GHE #208) is the base
-    // of the working row itself — not a second row beneath it.
-    expect(markup.split("Thinking for").length - 1).toBe(1);
+    // of the working row itself — not a second row beneath it. The lead is
+    // split into pieces (GHE #201 follow-up), so count the state-word piece.
+    expect(markup.split(">Thinking</span>").length - 1).toBe(1);
     // The pre-#236 duplicate: an iconless "Thinking" LiveActivityRow rendered
     // under the "Working" line. It no longer exists.
     expect(markup).not.toContain("live-activity-focus");
@@ -1262,7 +1266,7 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("Working for");
+    expect(markup).toContain(">Working</span>");
     // No second live row of any kind.
     expect(markup).not.toContain("live-activity-focus");
   });
@@ -1292,10 +1296,10 @@ describe("MessagesTimeline", () => {
     );
 
     const messageIndex = markup.indexOf("Part of the answer.");
-    const workingIndex = markup.indexOf("Working for");
+    const workingIndex = markup.indexOf(">Working</span>");
     expect(workingIndex).toBeGreaterThan(messageIndex);
     // Still exactly one live status element.
-    expect(markup.split("Working for").length - 1).toBe(1);
+    expect(markup.split(">Working</span>").length - 1).toBe(1);
   });
 
   it("renders review comment contexts as structured cards instead of raw tags", () => {

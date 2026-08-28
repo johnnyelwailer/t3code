@@ -972,6 +972,12 @@ export function makeCursorAdapter(
           }
           if (input.attachments && input.attachments.length > 0) {
             for (const attachment of input.attachments) {
+              // Only images are inlined; non-image attachments reach the agent
+              // through the '[Attached file "name" is saved at: path]' line
+              // ProviderService injects into the turn text.
+              if (attachment.type !== "image") {
+                continue;
+              }
               const attachmentPath = resolveAttachmentPath({
                 attachmentsDir: serverConfig.attachmentsDir,
                 attachment,

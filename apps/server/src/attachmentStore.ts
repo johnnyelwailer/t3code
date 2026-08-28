@@ -80,6 +80,10 @@ export function attachmentRelativePath(attachment: ChatAttachment): string {
       });
       return `${attachment.id}${extension}`;
     }
+    case "file":
+      // Arbitrary files keep a fixed extension so the id-only lookup paths
+      // (claim sweep, delete) can resolve them without trusting the name.
+      return `${attachment.id}.bin`;
   }
 }
 

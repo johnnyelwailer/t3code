@@ -278,6 +278,67 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
     }),
   );
 
+  it.effect("does not inline file attachments into the ACP prompt", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("grok-file-attachment-probe");
+      const serverConfig = yield* ServerConfig;
+
+      const tempDir = yield* Effect.promise(() =>
+        NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "grok-acp-file-")),
+      );
+      const requestLogPath = NodePath.join(tempDir, "requests.ndjson");
+      yield* Effect.promise(() => NodeFSP.writeFile(requestLogPath, "", "utf8"));
+      const wrapperPath = yield* Effect.promise(() =>
+        makeMockGrokWrapper({ T3_ACP_REQUEST_LOG_PATH: requestLogPath }),
+      );
+      const adapter = yield* makeTestAdapter(wrapperPath);
+
+      // The file must exist where the adapter resolves it; its bytes must not
+      // reach the wire — the agent reads it through the path line instead.
+      const attachmentId = "grok-file-attachment-12345678-1234-4234-8234-123456789abc";
+      yield* Effect.promise(() =>
+        NodeFSP.writeFile(
+          NodePath.join(serverConfig.attachmentsDir, `${attachmentId}.bin`),
+          "attachment-secret-bytes",
+          "utf8",
+        ),
+      );
+
+      yield* adapter.startSession({
+        threadId,
+        provider: ProviderDriverKind.make("grok"),
+        cwd: process.cwd(),
+        runtimeMode: "full-access",
+        modelSelection: { instanceId: ProviderInstanceId.make("grok"), model: "grok-mock-alt" },
+      });
+
+      yield* adapter.sendTurn({
+        threadId,
+        input: "read the notes",
+        attachments: [
+          {
+            type: "file",
+            id: attachmentId,
+            name: "notes.txt",
+            mimeType: "text/plain",
+            sizeBytes: 23,
+          },
+        ],
+      });
+      yield* adapter.stopSession(threadId);
+
+      const requests = yield* Effect.promise(() => readJsonLines(requestLogPath));
+      const promptRequest = requests.find((entry) => entry.method === "session/prompt");
+      assert.isDefined(promptRequest);
+      // The prompt must carry exactly the user text: the file bytes never
+      // reach the wire, the agent reads it through the shared path line.
+      assert.deepEqual(
+        (promptRequest.params as { prompt?: Array<Record<string, unknown>> }).prompt,
+        [{ type: "text", text: "read the notes" }],
+      );
+    }),
+  );
+
   it.effect("closes the ACP child process when a session stops", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("grok-stop-session-close");

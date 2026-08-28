@@ -60,19 +60,20 @@ export type SeedAgent = {
   readonly title: string;
   readonly statusLabel: string;
   readonly source: "child" | "subagent";
+  readonly dotState: DotState;
 };
 
 export const CHILD_SEEDS: readonly SeedAgent[] = [
-  { title: "Fix the flaky retry test", statusLabel: "Editing tests", source: "child" },
-  { title: "Draft the release notes", statusLabel: "Reading contracts", source: "child" },
-  { title: "Review the provider registry diff", statusLabel: "Working", source: "child" },
-  { title: "Scrape the docs site", statusLabel: "Running build", source: "child" },
-  { title: "Split the billing service", statusLabel: "Planning steps", source: "child" },
+  { title: "Fix the flaky retry test", statusLabel: "Editing tests", source: "child", dotState: "writing" },
+  { title: "Draft the release notes", statusLabel: "Reading contracts", source: "child", dotState: "thinking" },
+  { title: "Review the provider registry diff", statusLabel: "Working", source: "child", dotState: "working" },
+  { title: "Scrape the docs site", statusLabel: "Running build", source: "child", dotState: "working" },
+  { title: "Split the billing service", statusLabel: "Planning steps", source: "child", dotState: "thinking" },
 ];
 
 export const SUBAGENT_SEEDS: readonly SeedAgent[] = [
-  { title: "Review release risks", statusLabel: "Checking API compatibility", source: "subagent" },
-  { title: "Assess rollout risk", statusLabel: "Reading migration plan", source: "subagent" },
+  { title: "Review release risks", statusLabel: "Checking API compatibility", source: "subagent", dotState: "thinking" },
+  { title: "Assess rollout risk", statusLabel: "Reading migration plan", source: "subagent", dotState: "thinking" },
 ];
 
 /** One entry per active agent; `activityKey` mutates on every simulated event. */
@@ -87,6 +88,7 @@ export function buildEntries(
     title: seed.title,
     statusLabel: seed.statusLabel,
     activityKey: `c${i}|${eventTicks.get(`child-${i}`) ?? 0}`,
+    dotState: seed.dotState,
   }));
   const subagents = SUBAGENT_SEEDS.slice(0, subagentCount).map((seed, i) => ({
     id: `agent-${i}`,
@@ -94,6 +96,7 @@ export function buildEntries(
     title: seed.title,
     statusLabel: seed.statusLabel,
     activityKey: `a${i}|${eventTicks.get(`agent-${i}`) ?? 0}`,
+    dotState: seed.dotState,
   }));
   return [...children, ...subagents];
 }

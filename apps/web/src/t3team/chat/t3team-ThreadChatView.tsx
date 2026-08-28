@@ -157,6 +157,7 @@ export function ThreadChatView({
     kickoffPending,
     kickoffWorkflow,
     hasServerLaunchActivity,
+    embeddedMode,
   });
 
   // A thread mirrored from an external Codex/Claude session is read-only while that tool still

@@ -325,10 +325,238 @@ label:has(> select#reasoning-effort) select {
   white-space: nowrap;
 }
 
+/* ===========================================================================
+ * GHE #201 follow-up — state-textured agent dots.
+ *
+ * Each indicator dot carries its own state (data-t3team-state, derived in
+ * t3team-activeAgentsCore): thinking = cool wave, writing = cooler slower
+ * wave, working = warm snappy pulse, waiting = muted breath + ring,
+ * settled = dim still. Dots rest at scale(1.5); each state keyframe grows
+ * around that rest so the dot swells instead of flickering at 4px.
+ *
+ * Color: a very subtle per-dot hue wander at rest (±6° over 15s, phase
+ * offset by the dot index); the bigger one-shot swing (±30° + brightness
+ * pop) fires on STATE CHANGE via the .t3team-aci-shift keyed remount in
+ * the indicator.
+ *
+ * Proximity: the S-bend + snap transforms are written on .t3team-aci-cell
+ * by the indicator's rAF loop (createSBendPhysics) — only the will-change
+ * hint and the eased scale transition live in CSS.
+ * ========================================================================= */
+
+.t3team-aci-cell {
+  cursor: pointer;
+  will-change: transform;
+  /* eased growth when the snap capture fires / anticipation shrink */
+  transition: scale 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* subtle per-dot hue wander (phase offset by --t3team-aci-i) */
+  animation: t3team-aci-hue-wander 15s ease-in-out infinite alternate;
+  animation-delay: calc(var(--t3team-aci-i, 0) * -3.1s);
+}
+
+@keyframes t3team-aci-hue-wander {
+  from {
+    filter: hue-rotate(calc(var(--t3team-aci-i, 0) * -7deg - 6deg));
+  }
+  to {
+    filter: hue-rotate(calc(var(--t3team-aci-i, 0) * -7deg + 6deg));
+  }
+}
+
+/* Status-change swing: one-shot hue swing + brightness pop that settles
+   back into the subtle wander (replays on the keyed remount). */
+.t3team-aci-shift {
+  animation: t3team-aci-state-shift 1.1s ease-out;
+}
+
+@keyframes t3team-aci-state-shift {
+  0% {
+    filter: hue-rotate(-30deg) brightness(1.25);
+  }
+  55% {
+    filter: hue-rotate(10deg) brightness(1.08);
+  }
+  100% {
+    filter: none;
+  }
+}
+
+.t3team-aci-cell[data-t3team-state] .t3team-aci-dot {
+  /* a status change crossfades the color (0.9s spring) instead of
+     snapping; keep the base opacity/transform transitions */
+  transition:
+    background 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 6s linear,
+    transform 140ms ease;
+}
+
+.t3team-aci-cell[data-t3team-state="thinking"] .t3team-aci-dot {
+  background: #38bdf8;
+  animation: t3team-aci-wave 1.6s ease-in-out infinite;
+  box-shadow: 0 0 5px 0 rgb(56 189 248 / 0.35);
+}
+
+.dark .t3team-aci-cell[data-t3team-state="thinking"] .t3team-aci-dot {
+  background: #7dd3fc;
+}
+
+.t3team-aci-cell[data-t3team-state="writing"] .t3team-aci-dot {
+  background: #818cf8;
+  animation: t3team-aci-wave 1.75s ease-in-out infinite;
+  box-shadow: 0 0 5px 0 rgb(129 140 248 / 0.35);
+}
+
+.dark .t3team-aci-cell[data-t3team-state="writing"] .t3team-aci-dot {
+  background: #a5b4fc;
+}
+
+.t3team-aci-cell[data-t3team-state="working"] .t3team-aci-dot {
+  background: #f59e0b;
+  animation: t3team-aci-snap 1.05s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  box-shadow: 0 0 6px 0 rgb(245 158 11 / 0.4);
+}
+
+.dark .t3team-aci-cell[data-t3team-state="working"] .t3team-aci-dot {
+  background: #fbbf24;
+}
+
+.t3team-aci-cell[data-t3team-state="waiting"] .t3team-aci-dot {
+  background: #94a3b8;
+  animation: t3team-aci-breathe 3.2s ease-in-out infinite;
+}
+
+.dark .t3team-aci-cell[data-t3team-state="waiting"] .t3team-aci-dot {
+  background: #cbd5e1;
+}
+
+.t3team-aci-cell[data-t3team-state="settled"] .t3team-aci-dot {
+  background: #a3a3a3;
+  animation: none;
+  opacity: 0.4;
+  transform: scale(1.5);
+}
+
+.dark .t3team-aci-cell[data-t3team-state="settled"] .t3team-aci-dot {
+  background: #737373;
+}
+
+/* Every keyframe grows around the 1.5x rest — a gentle swell, not a
+   bounce (real threads burst sporadically). */
+@keyframes t3team-aci-wave {
+  0%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.82);
+    opacity: 0.95;
+  }
+}
+
+@keyframes t3team-aci-snap {
+  0%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.85);
+    opacity: 1;
+  }
+}
+
+@keyframes t3team-aci-breathe {
+  0%,
+  100% {
+    transform: scale(1.45);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.78);
+    opacity: 0.88;
+  }
+}
+
+/* Waiting dots get one soft breathing ring, synced to the 3.2s breath.
+   The cell's first span is the pulse wrapper (relative-anchored). */
+.t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 9999px;
+  border: 1px solid #94a3b8;
+  box-shadow: 0 0 5px 1px rgb(148 163 184 / 0.3);
+  opacity: 0;
+  transform: scale(0.4);
+  animation: t3team-aci-ring-breathe 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+
+.dark .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+  border-color: #cbd5e1;
+  box-shadow: 0 0 5px 1px rgb(203 213 225 / 0.25);
+}
+
+@keyframes t3team-aci-ring-breathe {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Split lead text ("<state word> for <timer>") — see
+   t3team-workingLeadText.tsx: each piece flips on its own and the slot
+   width glides on the shared spring, so the dots beside it move WITH the
+   text instead of jumping. */
+.t3team-aci-lead {
+  display: inline-block;
+  position: relative;
+  white-space: nowrap;
+  transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t3team-aci-lead-sizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .t3team-aci-pulse,
   .t3team-aci-flip-out,
-  .t3team-aci-flip-in {
+  .t3team-aci-flip-in,
+  .t3team-aci-cell,
+  .t3team-aci-shift,
+  .t3team-aci-dot,
+  .t3team-aci-cell > span::before {
     animation: none !important;
+  }
+
+  .t3team-aci-dot {
+    opacity: 0.5 !important;
+  }
+
+  .t3team-aci-lead {
+    transition: none !important;
   }
 }
