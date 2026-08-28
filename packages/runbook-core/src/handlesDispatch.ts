@@ -1,5 +1,6 @@
 import { hashArgs } from "./canonicalJson.ts";
 import { CancelledError } from "./errors.ts";
+import { emitSafe } from "./events.ts";
 import type { PrimitiveKind } from "./runtimeTypes.ts";
 import {
   type HandleDispatch,
@@ -94,6 +95,14 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     }
     if (currentSeq <= seat.maxRecordedSeq)
       gapDrift(currentSeq, call.kind, call.refId, seat.filePath);
+    emitSafe(seat.events, {
+      type: "primitive.started",
+      runId: seat.runId,
+      seq: currentSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: seat.nowIso(),
+    });
     await call.fire(correlationId, makeResolver(correlationId, call.kind, call.refId));
     const ts = seat.nowIso();
     seat.writer.append({
@@ -107,6 +116,14 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       correlationId,
       startedAt: ts,
       endedAt: ts,
+    });
+    emitSafe(seat.events, {
+      type: "primitive.completed",
+      runId: seat.runId,
+      seq: currentSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: seat.nowIso(),
     });
     return correlationId;
   };
@@ -130,6 +147,14 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     // Journal the sent entry SYNCHRONOUSLY (writeSync) before firing, so a suspend on a later
     // await cannot dispose the writer mid-append. Delivery is best-effort, fired floating.
     const ts = seat.nowIso();
+    emitSafe(seat.events, {
+      type: "primitive.started",
+      runId: seat.runId,
+      seq: currentSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: ts,
+    });
     seat.writer.append({
       seq: currentSeq,
       callId: `${currentSeq}:${call.kind}:${call.refId}`,
@@ -143,6 +168,14 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       endedAt: ts,
     });
     void call.fire(correlationId, noopResolver);
+    emitSafe(seat.events, {
+      type: "primitive.completed",
+      runId: seat.runId,
+      seq: currentSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: seat.nowIso(),
+    });
     return correlationId;
   };
 

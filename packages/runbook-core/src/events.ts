@@ -46,6 +46,21 @@ export interface WorkflowEventSink {
   readonly on: (event: WorkflowEvent) => void;
 }
 
+/**
+ * Emit into a sink, swallowing observer exceptions. The durable write has already happened (or
+ * is about to) — a throwing observer must not turn a completed run into a failed one by
+ * propagating into the settle funnel or the primitive seat. The journal and terminal marker
+ * are the truth; observation is best-effort.
+ */
+export function emitSafe(events: WorkflowEventSink | undefined, event: WorkflowEvent): void {
+  if (events === undefined) return;
+  try {
+    events.on(event);
+  } catch {
+    // Observer failures are non-durable by design.
+  }
+}
+
 /** Per-type handlers; each is narrowed to its own event variant. */
 export type WorkflowEventHandlers = {
   readonly [K in WorkflowEvent["type"]]?: (
@@ -55,8 +70,8 @@ export type WorkflowEventHandlers = {
 
 /**
  * Build a sink from per-type handlers. Missing handlers are no-ops, so a host can subscribe
- * to only the transitions it cares about. Handler exceptions propagate to the emitter — a
- * host that must never fail a run over a status hiccup wraps its handler.
+ * to only the transitions it cares about. Handler exceptions are swallowed at the emit site
+ * ({@link emitSafe}) — a status hiccup in an observer can never fail or rewrite a run.
  */
 export function createWorkflowEventSink(handlers: WorkflowEventHandlers): WorkflowEventSink {
   return {

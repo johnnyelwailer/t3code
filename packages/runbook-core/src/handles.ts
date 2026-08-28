@@ -57,6 +57,8 @@ export interface HandleSeat {
   readonly writer: JournalSink;
   /** Update the in-memory resolved map so the same run sees a synchronous resolution. */
   readonly setResolved: (entry: ResolvedEntry) => void;
+  /** Live lifecycle observations; handle sends emit primitive started/completed like other calls. */
+  readonly events?: import("./events.ts").WorkflowEventSink | undefined;
 }
 
 export interface HandleDispatch {

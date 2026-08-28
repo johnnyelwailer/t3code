@@ -1,5 +1,6 @@
 import { canonicalJsonError, hashArgs } from "./canonicalJson.ts";
 import { JournalSchemaError, JournalSerializeError, WorkflowAborted } from "./errors.ts";
+import { emitSafe, type WorkflowEvent } from "./events.ts";
 import { assertJournalMatch, gapDrift } from "./replayDrift.ts";
 import type { DurablePrimitiveSeat, PrimitiveCall } from "./runtimeTypes.ts";
 
@@ -25,15 +26,24 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
   };
 
   // Live-path observations only: a replayed call returns the recorded result without emitting,
-  // so a subscriber sees each real transition exactly once per process lifetime.
+  // so a subscriber sees each real transition exactly once per process lifetime. Emission is
+  // guarded: a throwing observer must not fail the primitive call itself.
   const emit = (
     type: "primitive.started" | "primitive.completed",
     seq: number,
     kind: string,
     refId: string,
   ): void => {
-    if (seat.events === undefined || seat.runId === undefined) return;
-    seat.events.on({ type, runId: seat.runId, seq, kind, refId, at: seat.nowIso() });
+    if (seat.runId === undefined) return;
+    const event: WorkflowEvent = {
+      type,
+      runId: seat.runId,
+      seq,
+      kind,
+      refId,
+      at: seat.nowIso(),
+    };
+    emitSafe(seat.events, event);
   };
 
   return async <R>(call: PrimitiveCall<R>): Promise<R> => {

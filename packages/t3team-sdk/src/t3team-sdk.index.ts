@@ -109,6 +109,7 @@ export type {
 } from "./t3team-sdk.broker.ts";
 export type { BuiltinToolsTree } from "./t3team-sdk.builtins.ts";
 export type {
+  AbortedResult,
   DurableWorkflowRuntime,
   StartWorkflowOptions,
   SuspendedResult,

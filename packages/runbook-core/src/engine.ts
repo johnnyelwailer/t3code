@@ -1,5 +1,6 @@
 import { hashArgs } from "./canonicalJson.ts";
 import { WorkflowError, WorkflowRunNotFoundError } from "./errors.ts";
+import { emitSafe } from "./events.ts";
 import {
   settleRun,
   settleRunFailed,
@@ -95,13 +96,24 @@ export function createWorkflowEngine<
       ...(options.events === undefined ? {} : { events: options.events }),
     };
     if (options.abortSignal?.aborted === true) {
-      // Pre-aborted start: the body never ran; mark the fresh run aborted and stop.
+      // Pre-aborted start: the body never ran; mark the fresh run aborted and stop. Emission is
+      // guarded: a throwing observer must not turn the settled marker into a failed run.
       await writeTerminalMeta(settle, "aborted");
-      options.events?.on({ type: "run.started", runId, startKind: "start", at: adapter.nowIso() });
-      options.events?.on({ type: "run.aborted", runId, at: adapter.nowIso() });
+      emitSafe(options.events, {
+        type: "run.started",
+        runId,
+        startKind: "start",
+        at: adapter.nowIso(),
+      });
+      emitSafe(options.events, { type: "run.aborted", runId, at: adapter.nowIso() });
       return { runId, aborted: true };
     }
-    options.events?.on({ type: "run.started", runId, startKind: "start", at: adapter.nowIso() });
+    emitSafe(options.events, {
+      type: "run.started",
+      runId,
+      startKind: "start",
+      at: adapter.nowIso(),
+    });
     return await drive(runId, ref, args, runsRoot, store, options, settle);
   };
 
@@ -136,13 +148,25 @@ export function createWorkflowEngine<
       workflowPath,
       policy: options.workflowVersionPolicy,
     });
-    if (
+    const reDriving = meta?.terminal === "completed" || meta?.terminal === "failed";
+    const versionChanged =
       options.workflowVersionPolicy === "allow-change" &&
       meta !== undefined &&
       workflowVersion !== undefined &&
-      meta.workflowVersion !== workflowVersion
-    ) {
-      await store.writeRunMeta(runId, { ...meta, workflowVersion });
+      meta.workflowVersion !== workflowVersion;
+    if (meta !== undefined && (reDriving || versionChanged)) {
+      // Re-driving a terminal (completed/failed) run: drop the stale terminal marker so
+      // inspectRun shows the run in-progress again; refresh the version stamp when it moved.
+      await store.writeRunMeta(runId, {
+        workflowPath: meta.workflowPath,
+        argsHash: meta.argsHash,
+        createdAt: meta.createdAt,
+        ...(versionChanged && workflowVersion !== undefined
+          ? { workflowVersion }
+          : meta.workflowVersion === undefined
+            ? {}
+            : { workflowVersion: meta.workflowVersion }),
+      });
     }
     const settle: SettleContext = {
       store,
@@ -150,7 +174,12 @@ export function createWorkflowEngine<
       nowIso: adapter.nowIso,
       ...(options.events === undefined ? {} : { events: options.events }),
     };
-    options.events?.on({ type: "run.started", runId, startKind: "resume", at: adapter.nowIso() });
+    emitSafe(options.events, {
+      type: "run.started",
+      runId,
+      startKind: "resume",
+      at: adapter.nowIso(),
+    });
     return await drive(runId, ref, args, runsRoot, store, options, settle);
   };
 

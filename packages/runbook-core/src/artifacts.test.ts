@@ -28,14 +28,22 @@ const makeRuntime = (
     flush(): Promise<void>;
     dispose(): void;
   },
+  src: typeof source = source,
 ) =>
   createDurableRuntime({
     journal,
     writer: sink,
-    source,
+    source: src,
     runId: "run-1",
     nowIso: () => NOW,
   });
+
+const makeSink = (live: JournalEntry[]) => ({
+  append: (entry: JournalEntry) => live.push(entry),
+  appendResolved: () => {},
+  flush: async () => {},
+  dispose: () => {},
+});
 
 describe("@runbook/core artifact emission", () => {
   it("mints a deterministic artifact record through the journal and replays it verbatim", async () => {
@@ -83,6 +91,60 @@ describe("@runbook/core artifact emission", () => {
     const second = await emitAgain({ type: "report", title: "Q3", data: { rows: 3 } });
     expect(second).toEqual(record);
     expect(replay).toEqual([]); // nothing re-journaled on replay
+  });
+
+  it("keeps artifact ids stable across a suspend/resume where the host uuid source changed", async () => {
+    // Live segment: emit -> tool primitive -> park. The journal holds [artifact, tool-sent].
+    const live: JournalEntry[] = [];
+    let toolExecs = 0;
+    const runtime = makeRuntime(new Map(), makeSink(live));
+    const emit = createArtifactEmitter({
+      callPrimitive: runtime.callPrimitive,
+      hostUuid: source.uuid,
+      nowIso: () => NOW,
+    }).emit;
+    const record = await emit({ type: "report", data: { rows: 3 } });
+    await runtime.callPrimitive({
+      kind: "tool",
+      refId: "t1",
+      args: {},
+      exec: async () => {
+        toolExecs += 1;
+        return "ok";
+      },
+    });
+
+    // Resume with a DIFFERENT host uuid source: the replayed artifact must keep its recorded
+    // id (not the new host's entropy), the tool must not re-execute, and a fresh live emit
+    // after the park takes the new host's id at the next seq.
+    const resumedSource = { now: source.now, random: source.random, uuid: () => "host-uuid-2" };
+    const resumed: JournalEntry[] = [];
+    const resumedRuntime = makeRuntime(
+      new Map(live.map((entry) => [entry.seq, entry])),
+      makeSink(resumed),
+      resumedSource,
+    );
+    const emitAgain = createArtifactEmitter({
+      callPrimitive: resumedRuntime.callPrimitive,
+      hostUuid: resumedSource.uuid,
+      nowIso: () => NOW,
+    }).emit;
+    const replayed = await emitAgain({ type: "report", data: { rows: 3 } });
+    expect(replayed).toEqual(record); // id "artifact-uuid-1", NOT "host-uuid-2"
+    const toolAgain = await resumedRuntime.callPrimitive({
+      kind: "tool",
+      refId: "t1",
+      args: {},
+      exec: async () => {
+        toolExecs += 1;
+        return "ok";
+      },
+    });
+    expect(toolAgain).toBe("ok");
+    expect(toolExecs).toBe(1); // replay did not re-execute the side effect
+    const fresh = await emitAgain({ type: "report", data: { rows: 4 } });
+    expect(fresh.id).toBe("host-uuid-2");
+    expect(resumed.map((entry) => entry.kind)).toEqual(["artifact"]); // only the new emit
   });
 
   it("omits the title key when absent so the journaled record stays canonical", async () => {

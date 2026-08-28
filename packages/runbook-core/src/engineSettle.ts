@@ -8,9 +8,9 @@
  */
 
 import { WorkflowAborted, WorkflowError } from "./errors.ts";
+import { emitSafe, type WorkflowEventSink } from "./events.ts";
 import type { JournalStore } from "./journalStore.ts";
 import type { RunOutcome } from "./runEngine.ts";
-import type { WorkflowEventSink } from "./events.ts";
 import type { WorkflowResult } from "./engineTypes.ts";
 
 /** Map a settled outcome to the public result shape (suspended / aborted / completed). */
@@ -51,7 +51,7 @@ export async function writeTerminalMeta(ctx: SettleContext, terminal: TerminalKi
 /** Settle a returned outcome: terminal outcomes get a marker; suspension only emits. */
 export async function settleRun(ctx: SettleContext, outcome: RunOutcome): Promise<void> {
   if (outcome.kind === "suspended") {
-    ctx.events?.on({
+    emitSafe(ctx.events, {
       type: "run.suspended",
       runId: ctx.runId,
       correlationId: outcome.correlationId,
@@ -61,7 +61,7 @@ export async function settleRun(ctx: SettleContext, outcome: RunOutcome): Promis
   }
   const terminal: TerminalKind = outcome.kind === "completed" ? "completed" : "aborted";
   await writeTerminalMeta(ctx, terminal);
-  ctx.events?.on({
+  emitSafe(ctx.events, {
     type: outcome.kind === "completed" ? "run.completed" : "run.aborted",
     runId: ctx.runId,
     at: ctx.nowIso(),
@@ -75,7 +75,7 @@ export async function settleRunFailed(ctx: SettleContext, error: unknown): Promi
     throw error;
   }
   await writeTerminalMeta(ctx, "failed");
-  ctx.events?.on({
+  emitSafe(ctx.events, {
     type: "run.failed",
     runId: ctx.runId,
     error: error instanceof Error ? error.message : String(error),
