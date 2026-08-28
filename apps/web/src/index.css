@@ -2610,6 +2610,16 @@ code {
  * glyphs once every cycle, then rests (background-clip: text). The
  * element's own color is replaced by the gradient, so set the surrounding
  * text color where needed.
+ *
+ * LEAF-ONLY: put this class on the element that DIRECTLY holds the text.
+ * Never on a wrapper around animated descendants (flip/roll spans) — those
+ * children get their own compositing layer in Chromium, a wrapper's
+ * clipped background cannot reach into it, and the inherited transparent
+ * fill then renders the glyphs invisible (P0 "white on white" report).
+ *
+ * SAFETY NET: where the browser cannot clip a background to text, the
+ * label falls back to the solid base tone instead of vanishing — the
+ * transparent fill is only applied inside the @supports block.
  */
 @keyframes t3team-label-shimmer {
   0%,
@@ -2625,19 +2635,26 @@ code {
 .t3team-label-shimmer {
   --shimmer-base: #0369a1; /* sky-700 */
   --shimmer-glow: #7dd3fc; /* sky-300 */
-  background-image: linear-gradient(
-    100deg,
-    var(--shimmer-base) 42%,
-    var(--shimmer-glow) 50%,
-    var(--shimmer-base) 58%
-  );
-  background-size: 250% 100%;
-  background-repeat: no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  animation: t3team-label-shimmer 5.5s ease-in-out infinite;
+  /* solid fallback — visible even when background-clip:text is absent */
+  color: var(--shimmer-base);
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .t3team-label-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      var(--shimmer-base) 42%,
+      var(--shimmer-glow) 50%,
+      var(--shimmer-base) 58%
+    );
+    background-size: 250% 100%;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: t3team-label-shimmer 5.5s ease-in-out infinite;
+  }
 }
 
 .dark .t3team-label-shimmer {

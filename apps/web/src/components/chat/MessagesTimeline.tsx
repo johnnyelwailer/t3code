@@ -11,7 +11,11 @@ import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team
 import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
 import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
 import { T3TeamActiveAgentsStepLabel } from "~/t3team/chat/t3team-activeAgentsStepLabel";
-import { ACTIVITY_STATE_WORDS, type ActivityState } from "~/t3team/t3team-activityStateDisplay";
+import {
+  ACTIVITY_STATE_WORDS,
+  resolveActivityPillDisplay,
+  type ActivityState,
+} from "~/t3team/t3team-activityStateDisplay";
 import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   emptyAgentPanelModel,
@@ -235,6 +239,12 @@ interface TimelineRowActivityState {
    * pre-#208 "Working" base word.
    */
   threadActivityState?: ActivityState | null;
+  /**
+   * GHE #40: the thread's live LLM activity label, already gated on the
+   * `t3teamActivityLabelsEnabled` flag by the caller. Replaces the state
+   * word in the working row through the shared resolver (never appended).
+   */
+  threadActivityLabel?: string | null;
 }
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
@@ -297,6 +307,8 @@ interface MessagesTimelineProps {
   activeTurnStartedAt: string | null;
   /** GHE #236/#208: thread activity state — bases the working row's status word. */
   threadActivityState?: ActivityState | null;
+  /** GHE #40: thread LLM activity label — replaces the state word (flag-gated by the caller). */
+  threadActivityLabel?: string | null;
   listRef: React.RefObject<LegendListRef | null>;
   timelineEntries: ReturnType<typeof deriveTimelineEntries>;
   latestTurn: TimelineLatestTurn | null;
@@ -358,6 +370,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   workingStepLabel = null,
   activeTurnStartedAt,
   threadActivityState = null,
+  threadActivityLabel = null,
   agentPanelModel = EMPTY_AGENT_PANEL_MODEL,
   /** GHE #201: active agents for the working row (running child threads + live subagents). */
   activeAgents = EMPTY_ACTIVE_AGENTS,
@@ -797,6 +810,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenAgents,
       onOpenAgent: onOpenAgent ?? onOpenAgentDefault,
       threadActivityState,
+      threadActivityLabel,
     }),
     [
       activeAgents,
@@ -807,6 +821,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenAgent,
       onOpenAgentDefault,
       threadActivityState,
+      threadActivityLabel,
       workingStepLabel,
     ],
   );
@@ -1683,6 +1698,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     onOpenAgents,
     onOpenAgent,
     threadActivityState,
+    threadActivityLabel,
   } = use(TimelineRowActivityCtx);
   const hasActiveAgents = activeAgents.length > 0;
   // GHE #201: main turn idle but agents active — the row leads with the
@@ -1693,12 +1709,23 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     const last = activeAgents[activeAgents.length - 1];
     return last ? `${last.title} — ${last.statusLabel}` : null;
   })();
-  // GHE #236: one live status element per turn. The deterministic state word
-  // (GHE #208) is the base; "Working" stands in only when no state word is
-  // available (old servers / stale idle state). The second "Thinking" row
-  // that #7152 rendered beneath this line is gone — it was a duplicate.
+  // GHE #236/#208/#40: the shared resolver (same seam as the sidebar) picks
+  // the lead word: the LLM activity label REPLACES the deterministic state
+  // word, which replaces the base word. The base word: a turn STARTS
+  // thinking (the server persists `thinking` on turn-started), so an
+  // ACTIVE turn with no live state yet reads "Thinking" — "Working"
+  // remains only when no active-turn info exists at all (old servers).
   const liveState = threadActivityState !== null && threadActivityState !== undefined;
-  const stateWord = liveState ? ACTIVITY_STATE_WORDS[threadActivityState] : "Working";
+  const baseWord = liveState
+    ? ACTIVITY_STATE_WORDS[threadActivityState]
+    : isWorking
+      ? "Thinking"
+      : "Working";
+  const leadWord = resolveActivityPillDisplay({
+    label: baseWord,
+    activityLabel: threadActivityLabel ?? null,
+    activityState: threadActivityState ?? null,
+  });
   return (
     <div data-t3team-working-row>
       <div className="border-b border-border/60 pb-2 pt-1">
@@ -1734,17 +1761,22 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
                     <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse [animation-delay:400ms] motion-reduce:animate-none" />
                   </span>
                 ) : null}
-                <span className="t3team-label-shimmer min-w-0 overflow-hidden text-ellipsis">
+                {/* The shimmer paint lives on the LEAF text spans inside
+                    WorkingLeadText (background-clip: text cannot reach text
+                    in nested animated spans through this wrapper — P0).
+                    This span is pure layout: the last-resort clamp. */}
+                <span className="min-w-0 overflow-hidden text-ellipsis">
                   {row.createdAt ? (
                     <>
                       <WorkingLeadText
-                        stateWord={stateWord}
+                        stateWord={leadWord}
                         createdAt={row.createdAt}
                         liveState={liveState}
+                        shimmer
                       />
                     </>
                   ) : (
-                    `${stateWord}...`
+                    <span className="t3team-label-shimmer">{`${leadWord}...`}</span>
                   )}
                 </span>
               </>

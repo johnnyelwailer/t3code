@@ -1145,7 +1145,8 @@ describe("MessagesTimeline", () => {
 
     // The lead is split (state word / " for " / timer as separate pieces,
     // GHE #201 follow-up) — check the split state word, not the joined string.
-    expect(markup).toContain(">Working</span>");
+    // Active turn with no live state yet → the spec's pre-activity word.
+    expect(markup).toContain(">Thinking</span>");
     expect(markup).toContain(" for ");
     expect(markup).toContain("Running pnpm");
     expect(markup).toContain("live-activity-focus");
@@ -1266,7 +1267,7 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("gap-1.5 py-0.5 px-1");
   });
 
-  it("falls back to the 'Working' base word when no activity state is available", () => {
+  it("falls back to 'Thinking' for an ACTIVE turn with no activity state yet (a turn starts thinking)", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
@@ -1276,7 +1277,7 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain(">Working</span>");
+    expect(markup).toContain(">Thinking</span>");
     // No second live row of any kind.
     expect(markup).not.toContain("live-activity-focus");
   });
@@ -1294,9 +1295,10 @@ describe("MessagesTimeline", () => {
     // The lead text rides the .t3team-label-shimmer defaults (the bluish sky
     // gradient). The muted-foreground override made the word read as
     // "grey on grey" in light and "dark grey on dark grey" in dark.
-    // (The span also carries the narrow-panel shrink handling from the
-    // GHE #208 follow-up — the shimmer class is what this test guards.)
-    expect(markup).toContain("t3team-label-shimmer min-w-0 overflow-hidden text-ellipsis");
+    // P0: the class must sit on the LEAF text spans, not on a wrapper around
+    // the animated flip spans (background-clip: text cannot reach into their
+    // compositing layers — that is what left the glyphs transparent).
+    expect(markup).toContain('<span class="t3team-label-shimmer">Thinking</span>');
     expect(markup).not.toContain("shimmer-base:var(--muted-foreground)");
   });
 
@@ -1358,8 +1360,89 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain('class="flex min-w-0 items-baseline"');
     // The "..." dots keep their priority: still unsqueezable —
     expect(markup).toContain("inline-flex shrink-0 items-center");
-    // …and the shimmer span truncates the no-createdAt fallback run.
-    expect(markup).toContain("t3team-label-shimmer min-w-0 overflow-hidden text-ellipsis");
+    // …and the clamp wrapper truncates the lead without carrying the shimmer
+    // paint itself (the paint lives on the leaf spans — P0).
+    expect(markup).toContain('class="min-w-0 overflow-hidden text-ellipsis"');
+    expect(markup).toContain("t3team-label-shimmer");
+  });
+
+  it("paints the working-row shimmer on LEAF text spans, never on a wrapper around the flip spans (P0: invisible text)", () => {
+    // background-clip: text only reaches the glyphs of the element that
+    // directly holds them. The flip spans animate (transform) and get their
+    // own compositing layers in Chromium, so a wrapper's clipped background
+    // never reaches them — the inherited transparent fill leaves the glyphs
+    // invisible (white on white / black on black). The paint must sit on
+    // the leaf.
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="thinking"
+        timelineEntries={[]}
+      />,
+    );
+    const LEAF_RE = /<span[^>]*class="[^"]*t3team-label-shimmer[^"]*"[^>]*>([^<]*)<\/span>/g;
+    const leaves = [...markup.matchAll(LEAF_RE)].map((m) => m[1]);
+    expect(leaves).toContain("Thinking");
+    expect(leaves).toContain(" for ");
+    const wrapper =
+      /class="[^"]*t3team-label-shimmer[^"]*"[^>]*>\s*<span[^>]*t3team-aci-flip/.exec(markup) ??
+      null;
+    expect(wrapper).toBeNull();
+
+    // Fallback path (no start time): the bare "..." string is its own leaf.
+    const fallback = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        threadActivityState="thinking"
+        timelineEntries={[]}
+      />,
+    );
+    expect(fallback).toContain('class="t3team-label-shimmer">Thinking...');
+  });
+
+  it("resolves the working-row lead word through the shared resolver: LLM label replaces the state word; active turn reads Thinking", () => {
+    // GHE #40 seam: the conversation row must agree with the sidebar — the
+    // LLM activity label REPLACES the state word (never appended), the state
+    // word replaces the base word, and an active turn with no live state yet
+    // reads "Thinking", not "Working".
+    const withLabel = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="working"
+        threadActivityLabel="Editing the retry test"
+        timelineEntries={[]}
+      />,
+    );
+    const LEAF_RE = /<span[^>]*class="[^"]*t3team-label-shimmer[^"]*"[^>]*>([^<]*)<\/span>/g;
+    const leaves = [...withLabel.matchAll(LEAF_RE)].map((m) => m[1]);
+    expect(leaves).toContain("Editing the retry test");
+    expect(withLabel).not.toContain(">Working</span>");
+
+    const bare = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    expect(bare).toContain(">Thinking</span>");
+
+    const stateOnly = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="writing"
+        timelineEntries={[]}
+      />,
+    );
+    expect(stateOnly).toContain(">Writing</span>");
   });
 
   it("keeps the lead slot's clamp + ellipsis in .t3team-aci-lead (GHE #208 follow-up)", () => {
@@ -1396,7 +1479,9 @@ describe("MessagesTimeline", () => {
     );
     // Same letters as the fallback, one cue apart: the deterministic state
     // word carries the live emphasis (font-medium), the fallback does not.
-    expect(live).toContain('<span class="font-medium">Working</span>');
+    // (The state-word leaf also carries the shimmer paint — P0 leaf-only.
+    //)
+    expect(live).toContain('<span class="t3team-label-shimmer font-medium">Working</span>');
 
     const fallback = renderToStaticMarkup(
       <MessagesTimeline
@@ -1406,8 +1491,10 @@ describe("MessagesTimeline", () => {
         timelineEntries={[]}
       />,
     );
-    expect(fallback).toContain(">Working</span>");
-    expect(fallback).not.toContain('<span class="font-medium">Working</span>');
+    // Active turn + no live state → "Thinking" (a turn starts thinking),
+    // at the regular weight.
+    expect(fallback).toContain('<span class="t3team-label-shimmer">Thinking</span>');
+    expect(fallback).not.toContain("font-medium");
 
     // Every live state word is emphasized, not just "working".
     const thinking = renderToStaticMarkup(
@@ -1419,7 +1506,7 @@ describe("MessagesTimeline", () => {
         timelineEntries={[]}
       />,
     );
-    expect(thinking).toContain('<span class="font-medium">Thinking</span>');
+    expect(thinking).toContain('<span class="t3team-label-shimmer font-medium">Thinking</span>');
   });
 
   it("pins the live working row to the bottom, after content the turn already streamed (GHE #236)", () => {
@@ -1447,10 +1534,10 @@ describe("MessagesTimeline", () => {
     );
 
     const messageIndex = markup.indexOf("Part of the answer.");
-    const workingIndex = markup.indexOf(">Working</span>");
+    const workingIndex = markup.indexOf(">Thinking</span>");
     expect(workingIndex).toBeGreaterThan(messageIndex);
     // Still exactly one live status element.
-    expect(markup.split(">Working</span>").length - 1).toBe(1);
+    expect(markup.split(">Thinking</span>").length - 1).toBe(1);
   });
 
   it("renders review comment contexts as structured cards instead of raw tags", () => {

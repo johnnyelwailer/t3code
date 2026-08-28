@@ -59,6 +59,7 @@ export const WorkingLeadText = ({
   stateWord,
   createdAt,
   liveState = false,
+  shimmer = false,
 }: {
   readonly stateWord: string;
   readonly createdAt: string;
@@ -72,6 +73,14 @@ export const WorkingLeadText = ({
    * purpose: one unified activity row, no new pills.
    */
   readonly liveState?: boolean;
+  /**
+   * Paint the shimmer on each LEAF piece (state word, " for " joiner,
+   * timer). background-clip: text cannot reach text inside nested
+   * animated spans through a wrapper — the clip must sit on the element
+   * that directly holds the glyphs, or the flip layers paint nothing
+   * (P0 white-on-white working-row label).
+   */
+  readonly shimmer?: boolean;
 }) => {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -162,15 +171,22 @@ export const WorkingLeadText = ({
     if (phase === "in") applyWidth();
   };
 
+  const shimmerClass = shimmer ? "t3team-label-shimmer" : undefined;
+  // The state word may carry BOTH the live emphasis (font-medium) and the
+  // shimmer paint; SplitFlipText takes one className, so join.
+  const wordClass =
+    [shimmerClass, liveState ? "font-medium" : undefined].filter(Boolean).join(" ") || undefined;
+
   return (
     <span ref={slotRef} className="t3team-aci-lead">
+      <SplitFlipText text={stateWord} onPhaseChange={onPhase} className={wordClass} />
+      <span className={shimmerClass}> for </span>
       <SplitFlipText
-        text={stateWord}
+        text={time}
+        shouldFlip={timerShouldRoll}
         onPhaseChange={onPhase}
-        {...(liveState ? { className: "font-medium" } : {})}
+        className={shimmerClass}
       />
-      <span> for </span>
-      <SplitFlipText text={time} shouldFlip={timerShouldRoll} onPhaseChange={onPhase} />
       <span ref={sizerRef} className="t3team-aci-lead-sizer" aria-hidden />
     </span>
   );
