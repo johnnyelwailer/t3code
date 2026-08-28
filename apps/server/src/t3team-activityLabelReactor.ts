@@ -88,11 +88,19 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
     // enrichment" — the deterministic state word keeps flowing.
     let activityLabelsEnabled = (yield* serverSettingsService.getSettings)
       .t3teamActivityLabelsEnabled;
-    yield* serverSettingsService.streamChanges.pipe(
-      Stream.runForEach((settings) => {
-        activityLabelsEnabled = settings.t3teamActivityLabelsEnabled;
-        return Effect.void;
-      }),
+    // The settings stream is a live, never-ending PubSub stream. It MUST be
+    // forked into the layer scope, not `yield*`ed inline: `yield*` on a stream
+    // that never completes would block this reactor effect forever, so the two
+    // stream subscriptions below (the deterministic state word + the domain
+    // event handlers) would never start and the working row would be stuck on
+    // its "Working" fallback. (GHE #208 regression.)
+    yield* Effect.forkScoped(
+      serverSettingsService.streamChanges.pipe(
+        Stream.runForEach((settings) => {
+          activityLabelsEnabled = settings.t3teamActivityLabelsEnabled;
+          return Effect.void;
+        }),
+      ),
     );
 
     // 2. LLM enrichment (GHE #40): throttled, gated, fail-open.
