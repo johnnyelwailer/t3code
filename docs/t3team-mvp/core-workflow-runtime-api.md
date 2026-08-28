@@ -44,8 +44,8 @@ handlers to it. Event types:
 
 **Replay emits nothing.** `primitive.*` fire only on the live path — when `exec()` actually runs.
 A resumed run replays recorded entries silently; the journal is the source of truth, events are
-the real-time view of it. Deterministic primitives (`now`, `random`, `uuid`) take no seat and emit
-no events.
+the real-time view of it. Deterministic primitives (`now`, `random`, `uuid`) are journaled but
+emit no events.
 
 The same sink is passed to the SDK's `createDurableWorkflowRuntime` (via `WorkflowRunOptions.events`)
 so primitive events and run events land in one ordered stream.
@@ -60,8 +60,9 @@ const record = await emit({ type: "report", title: "Q3", data: { rows: 3 } });
 // record: { id, type, title?, data, at }
 ```
 
-`emit` is the `artifact` primitive: the id is minted through the journaled `uuid` primitive and the
-whole record is journaled, so a resumed run reports the **same** artifact ids it reported before.
+`emit` is the `artifact` primitive: the whole record is journaled (the id is minted from host
+entropy, not the journaled `uuid` — a nested uuid entry would break the journal's crash-recovery
+prefix invariant), so a resumed run reports the **same** artifact ids it reported before.
 `title` is omitted from the journaled record when absent (canonical JSON, no `undefined` keys).
 Hosts list a run's artifacts with `inspectRun(store, runId).artifacts`.
 
@@ -105,10 +106,12 @@ const result = await engine.startWorkflow(ref, args, { runsRoot, abortSignal: co
 // result: { runId, aborted: true } — a distinct AbortedResult, not a failure
 ```
 
-- A pre-aborted signal settles the run before the body starts.
-- The signal is handed to the body executor; a host broker that observes it mid-run throws
-  `WorkflowAborted` (exported from `@runbook/core/errors`), which the engine converts to the
-  aborted outcome rather than a failure.
+- A pre-aborted signal settles the run before the body starts; a pre-aborted `resumeWorkflow`
+  refuses up front without touching the run's prior terminal state.
+- The signal is also checked by the durable runtime before every LIVE primitive execution: once
+  it fires, the next live call throws `WorkflowAborted` (exported from `@runbook/core/errors`),
+  which the engine converts to the aborted outcome rather than a failure. Replay is unaffected —
+  recorded results are returned before the check.
 - The run's metadata is marked `terminal: "aborted"`, `run.aborted` is emitted, and **resuming an
   aborted run is refused** — it has no pending work to drive.
 

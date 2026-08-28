@@ -7,7 +7,7 @@ import * as NodePath from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createWorkflowEngine } from "./engine.ts";
-import type { WorkflowReference } from "./engine.ts";
+import type { WorkflowReference } from "./engineTypes.ts";
 import { WorkflowAborted } from "./errors.ts";
 import { WorkflowSuspended } from "./handles.ts";
 import type { WorkflowEvent, WorkflowEventSink } from "./events.ts";
@@ -136,5 +136,30 @@ describe("@runbook/core lifecycle events", () => {
     expect(events.map((event) => event.type)).toEqual(["run.started", "run.aborted"]);
     const meta = await new FsJournalStore(runsRoot).readRunMeta("run-1");
     expect(meta?.terminal).toBe("aborted");
+  });
+
+  it("refuses a pre-aborted resume without clobbering the run's prior terminal state", async () => {
+    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-events-"));
+    roots.push(runsRoot);
+    const { events, sink } = collect();
+    const engine = makeEngine(runsRoot, async () => "done");
+    await engine.startWorkflow({ path: "w.ts" }, {}, { runsRoot, events: sink });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      engine.resumeWorkflow(
+        "run-1",
+        { path: "w.ts" },
+        {},
+        {
+          runsRoot,
+          abortSignal: controller.signal,
+        },
+      ),
+    ).rejects.toThrow("already aborted");
+    // The completed marker survives: the refused resume wrote nothing and emitted nothing.
+    const meta = await new FsJournalStore(runsRoot).readRunMeta("run-1");
+    expect(meta?.terminal).toBe("completed");
+    expect(events.map((event) => event.type)).toEqual(["run.started", "run.completed"]);
   });
 });

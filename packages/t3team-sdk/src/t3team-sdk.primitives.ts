@@ -22,8 +22,8 @@ export interface WorkflowPrimitivesDeps {
   readonly budgetTotal: number;
   readonly onPhase: (title: string) => void;
   readonly onLog: (message: string) => void;
-  /** Journaled uuid — artifact ids mint through this so replay is deterministic. */
-  readonly uuid: () => string;
+  /** Host entropy for artifact ids — must NOT be the journaled uuid primitive. */
+  readonly hostUuid: () => string;
   /** Host timestamp formatter for artifact records. */
   readonly nowIso: () => string;
   readonly runSubWorkflow?: (
@@ -46,7 +46,7 @@ export function createWorkflowPrimitives(deps: WorkflowPrimitivesDeps): Workflow
     budgetTotal: deps.budgetTotal,
     onPhase: deps.onPhase,
     onLog: deps.onLog,
-    uuid: deps.uuid,
+    hostUuid: deps.hostUuid,
     nowIso: deps.nowIso,
     ...(deps.runSubWorkflow === undefined ? {} : { runSubWorkflow: deps.runSubWorkflow }),
   });

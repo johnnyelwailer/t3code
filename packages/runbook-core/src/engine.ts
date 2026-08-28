@@ -1,134 +1,72 @@
 import { hashArgs } from "./canonicalJson.ts";
-import { WorkflowAborted, WorkflowError, WorkflowRunNotFoundError } from "./errors.ts";
-import type { WorkflowEventSink } from "./events.ts";
+import { WorkflowError, WorkflowRunNotFoundError } from "./errors.ts";
 import {
   settleRun,
   settleRunFailed,
+  toRunResult,
   writeTerminalMeta,
   type SettleContext,
 } from "./engineSettle.ts";
-import { executeWorkflowRun, type RunOutcome, type WorkflowBodyExecutor } from "./runEngine.ts";
+import { executeWorkflowRun } from "./runEngine.ts";
 import type { JournalStore } from "./journalStore.ts";
+import type {
+  StartWorkflowOptions,
+  WorkflowEngine,
+  WorkflowEngineAdapter,
+  WorkflowReference,
+  WorkflowResult,
+  WorkflowRunOptionsBase,
+} from "./engineTypes.ts";
 import { assertInputArgsMatch, assertWorkflowVersionMatch } from "./engineValidation.ts";
 
 export { assertInputArgsMatch, assertWorkflowVersionMatch } from "./engineValidation.ts";
 
-/** The minimum workflow-reference shape required by the lifecycle engine. */
-export interface WorkflowReference {
-  /** Stable author-facing workflow identity used in inline workflow primitive arguments. */
-  readonly path: string;
-}
-
-/** Host-independent options required by the lifecycle engine. */
-export interface WorkflowRunOptionsBase {
-  readonly runsRoot?: string;
-  readonly store?: JournalStore;
-  /** Explicitly accept a changed executable, then record it as the new replay baseline. */
-  readonly workflowVersionPolicy?: WorkflowVersionPolicy;
-  /** Live lifecycle observations (see {@link WorkflowEventSink}); absent = no emission. */
-  readonly events?: WorkflowEventSink;
-  /**
-   * First-class abort: the engine checks it before the body starts and hands it to the body
-   * executor, which (or its broker) throws {@link WorkflowAborted} to settle the run as aborted.
-   */
-  readonly abortSignal?: AbortSignal;
-}
-
-export type WorkflowVersionPolicy = "strict" | "allow-change";
-
-export type { RunOutcome } from "./runEngine.ts";
-
-export interface WorkflowRunResult<O> {
-  readonly runId: string;
-  readonly result: O;
-}
-
-export interface SuspendedResult {
-  readonly runId: string;
-  readonly suspended: true;
-  readonly correlationId: string;
-}
-
-/** The run settled as aborted (its {@link AbortSignal} fired). */
-export interface AbortedResult {
-  readonly runId: string;
-  readonly aborted: true;
-}
-
-export type StartWorkflowOptions<Options extends WorkflowRunOptionsBase> = Options & {
-  readonly runId?: string;
-  readonly overwrite?: boolean;
-};
-
-export interface WorkflowEngineAdapter<Ref extends WorkflowReference, Options> {
-  /** Stable host identity persisted in run metadata; it may be a file path, URI, or database key. */
-  readonly workflowPath: (ref: Ref) => string;
-  /** Host policy for the default filesystem root; custom stores may ignore it. */
-  readonly defaultRunsRoot: () => string;
-  /** Construct the host's default journal store when callers did not inject one. */
-  readonly createStore: (runsRoot: string) => JournalStore;
-  /** Generate a top-level run id using host policy. */
-  readonly newRunId: () => string;
-  /** Timestamp used for run metadata; body-visible time remains runtime-journaled. */
-  readonly nowIso: () => string;
-  /**
-   * Optional identity for the exact executable workflow artifact. Hosts that can resolve a
-   * stable content/version hash should provide it; old metadata without one remains resumable.
-   */
-  readonly workflowVersion?: (ref: Ref) => string | Promise<string>;
-  /** Bind the generic lifecycle to a host-specific body loader/executor. */
-  readonly executeBody: WorkflowBodyExecutor<Ref, Options>;
-}
-
-export interface WorkflowEngine<
-  Ref extends WorkflowReference,
-  Options extends WorkflowRunOptionsBase,
-> {
-  readonly startWorkflow: <I, O>(
-    ref: Ref,
-    args: I,
-    options?: StartWorkflowOptions<Options>,
-  ) => Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult>;
-  readonly resumeWorkflow: <I, O>(
-    runId: string,
-    ref: Ref,
-    args: I,
-    options?: Options,
-  ) => Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult>;
-}
-
-function toRunResult<O>(
-  runId: string,
-  outcome: RunOutcome,
-): WorkflowRunResult<O> | SuspendedResult | AbortedResult {
-  if (outcome.kind === "suspended") {
-    return { runId, suspended: true, correlationId: outcome.correlationId };
-  }
-  if (outcome.kind === "aborted") return { runId, aborted: true };
-  return { runId, result: outcome.output as O };
-}
-
 /**
- * Create the reusable start/resume lifecycle around a host-specific body executor.
- *
- * The engine owns run identity, metadata, overwrite/resume guards, input drift, and the
- * journal-store boundary. It deliberately does not know how workflows are loaded, which
- * tools exist, or how a host records live run status; those concerns stay in the adapter.
+ * Create the reusable start/resume lifecycle around a host-specific body executor. The engine
+ * owns run identity, metadata, overwrite/resume guards, input drift, and the journal-store
+ * boundary; it deliberately does not know how workflows are loaded, which tools exist, or how
+ * a host records live run status — those concerns stay in the adapter.
  */
 export function createWorkflowEngine<
   Ref extends WorkflowReference,
   Options extends WorkflowRunOptionsBase,
 >(adapter: WorkflowEngineAdapter<Ref, Options>): WorkflowEngine<Ref, Options> {
-  const resolveStore = (options: WorkflowRunOptionsBase, runsRoot: string): JournalStore =>
-    options.store ?? adapter.createStore(runsRoot);
+  /** Drive the body and settle the run; settleRunFailed rethrows, so this never swallows. */
+  const drive = async <I, O>(
+    runId: string,
+    ref: Ref,
+    args: I,
+    runsRoot: string,
+    store: JournalStore,
+    options: Options,
+    settle: SettleContext,
+  ): Promise<WorkflowResult<O>> => {
+    try {
+      const outcome = await executeWorkflowRun({
+        runId,
+        ref,
+        args,
+        runsRoot,
+        store,
+        options,
+        body: adapter.executeBody,
+        events: options.events,
+        abortSignal: options.abortSignal,
+      });
+      await settleRun(settle, outcome);
+      return toRunResult(runId, outcome);
+    } catch (error) {
+      return await settleRunFailed(settle, error);
+    }
+  };
 
   const startWorkflow = async <I, O>(
     ref: Ref,
     args: I,
     options: StartWorkflowOptions<Options> = {} as StartWorkflowOptions<Options>,
-  ): Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult> => {
+  ): Promise<WorkflowResult<O>> => {
     const runsRoot = options.runsRoot ?? adapter.defaultRunsRoot();
-    const store = resolveStore(options, runsRoot);
+    const store = options.store ?? adapter.createStore(runsRoot);
     const runId = options.runId ?? adapter.newRunId();
     const workflowPath = adapter.workflowPath(ref);
     const existing = await store.readEntries(runId);
@@ -156,30 +94,15 @@ export function createWorkflowEngine<
       nowIso: adapter.nowIso,
       ...(options.events === undefined ? {} : { events: options.events }),
     };
-    options.events?.on({ type: "run.started", runId, startKind: "start", at: adapter.nowIso() });
     if (options.abortSignal?.aborted === true) {
+      // Pre-aborted start: the body never ran; mark the fresh run aborted and stop.
       await writeTerminalMeta(settle, "aborted");
+      options.events?.on({ type: "run.started", runId, startKind: "start", at: adapter.nowIso() });
       options.events?.on({ type: "run.aborted", runId, at: adapter.nowIso() });
       return { runId, aborted: true };
     }
-    try {
-      const outcome = await executeWorkflowRun({
-        runId,
-        ref,
-        args,
-        runsRoot,
-        store,
-        options,
-        body: adapter.executeBody,
-        events: options.events,
-        abortSignal: options.abortSignal,
-      });
-      await settleRun(settle, outcome);
-      return toRunResult(runId, outcome);
-    } catch (error) {
-      // settleRunFailed rethrows the original error, so this return never completes.
-      return await settleRunFailed(settle, error);
-    }
+    options.events?.on({ type: "run.started", runId, startKind: "start", at: adapter.nowIso() });
+    return await drive(runId, ref, args, runsRoot, store, options, settle);
   };
 
   const resumeWorkflow = async <I, O>(
@@ -187,14 +110,21 @@ export function createWorkflowEngine<
     ref: Ref,
     args: I,
     options: Options = {} as Options,
-  ): Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult> => {
+  ): Promise<WorkflowResult<O>> => {
     const runsRoot = options.runsRoot ?? adapter.defaultRunsRoot();
-    const store = resolveStore(options, runsRoot);
+    const store = options.store ?? adapter.createStore(runsRoot);
     if (!(await store.hasRun(runId))) throw new WorkflowRunNotFoundError(store.locator(runId));
     const meta = await store.readRunMeta(runId);
     if (meta?.terminal === "aborted") {
       throw new WorkflowError(
         `Cannot resume run '${runId}': it was aborted. An aborted run has no pending work to drive; start a new run instead.`,
+      );
+    }
+    if (options.abortSignal?.aborted === true) {
+      // Refuse up front WITHOUT writing: the body never ran, so the run's prior terminal
+      // state (completed/failed are resumable) must not be clobbered to "aborted".
+      throw new WorkflowError(
+        `Cannot resume run '${runId}': the abort signal is already aborted. Pass a live signal or omit it.`,
       );
     }
     const workflowPath = adapter.workflowPath(ref);
@@ -221,29 +151,7 @@ export function createWorkflowEngine<
       ...(options.events === undefined ? {} : { events: options.events }),
     };
     options.events?.on({ type: "run.started", runId, startKind: "resume", at: adapter.nowIso() });
-    if (options.abortSignal?.aborted === true) {
-      await writeTerminalMeta(settle, "aborted");
-      options.events?.on({ type: "run.aborted", runId, at: adapter.nowIso() });
-      return { runId, aborted: true };
-    }
-    try {
-      const outcome = await executeWorkflowRun({
-        runId,
-        ref,
-        args,
-        runsRoot,
-        store,
-        options,
-        body: adapter.executeBody,
-        events: options.events,
-        abortSignal: options.abortSignal,
-      });
-      await settleRun(settle, outcome);
-      return toRunResult(runId, outcome);
-    } catch (error) {
-      // settleRunFailed rethrows the original error, so this return never completes.
-      return await settleRunFailed(settle, error);
-    }
+    return await drive(runId, ref, args, runsRoot, store, options, settle);
   };
 
   return { startWorkflow, resumeWorkflow };

@@ -6,6 +6,7 @@ import { createDurableRuntime } from "./durableRuntime.ts";
 import type { JournalEntry } from "./journalReader.ts";
 import type { JournalSink } from "./journalStore.ts";
 import { type ReplyResolver, WorkflowSuspended } from "./handles.ts";
+import { WorkflowAborted } from "./errors.ts";
 
 interface MemoryJournal {
   readonly entries: JournalEntry[];
@@ -144,5 +145,38 @@ describe("@runbook/core durable runtime", () => {
     });
     expect(replay.currentSeq()).toBe(5);
     expect(replayJournal.entries).toEqual([]);
+  });
+
+  it("throws WorkflowAborted on the next live primitive call once the abort signal fires", async () => {
+    const journal = makeMemoryJournal();
+    const source = {
+      now: () => 1_700_000_000_000,
+      random: () => 0.25,
+      uuid: () => "uuid-1",
+    };
+    const controller = new AbortController();
+    const runtime = createDurableRuntime({
+      journal: new Map(),
+      writer: journal.sink,
+      source,
+      abortSignal: controller.signal,
+    });
+    await runtime.callPrimitive({
+      kind: "tool",
+      refId: "t",
+      args: null,
+      exec: async () => "one",
+    });
+    controller.abort();
+    await expect(
+      runtime.callPrimitive({
+        kind: "tool",
+        refId: "t",
+        args: null,
+        exec: async () => "two",
+      }),
+    ).rejects.toThrow(WorkflowAborted);
+    // The aborted call journaled nothing — the journal stays a clean prefix.
+    expect(journal.entries.map((entry) => entry.seq)).toEqual([1]);
   });
 });

@@ -2,6 +2,7 @@ export * from "./canonicalJson.ts";
 export * from "./durableRuntime.ts";
 export * from "./durableRuntimePrimitive.ts";
 export * from "./engine.ts";
+export * from "./engineTypes.ts";
 export * from "./runEngine.ts";
 export * from "./composition.ts";
 export * from "./scheduling.ts";

@@ -29,6 +29,8 @@ export interface DurableRuntimeConfig {
   readonly resolved?: ReadonlyMap<string, ResolvedEntry> | undefined;
   /** Live lifecycle observations; primitive started/completed events are emitted here. */
   readonly events?: WorkflowEventSink | undefined;
+  /** First-class abort: checked before every live primitive execution (see the seat). */
+  readonly abortSignal?: AbortSignal | undefined;
 }
 
 export interface DurablePrimitiveRuntime extends PrimitiveRuntime {
@@ -66,6 +68,7 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     takeSeq: () => (seq += 1),
     runId: config.runId,
     events: config.events,
+    abortSignal: config.abortSignal,
   };
   const callPrimitive = createDurableCallPrimitive(primitiveSeat);
   const callDeterministic = createDurableCallDeterministic(primitiveSeat);

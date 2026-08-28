@@ -11,14 +11,14 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 
-import {
-  createWorkflowEngine,
-  type AbortedResult,
-  type StartWorkflowOptions as CoreStartWorkflowOptions,
-  type SuspendedResult,
-  type WorkflowVersionPolicy,
-  type WorkflowRunResult,
-} from "@runbook/core/engine";
+import { createWorkflowEngine } from "@runbook/core/engine";
+import type {
+  AbortedResult,
+  StartWorkflowOptions as CoreStartWorkflowOptions,
+  SuspendedResult,
+  WorkflowRunResult,
+  WorkflowVersionPolicy,
+} from "@runbook/core/engineTypes";
 
 import { defaultRunsRoot, FsJournalStore } from "./t3team-sdk.journalStore.ts";
 import type * as T from "./t3team-sdk.types.ts";

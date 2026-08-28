@@ -1,19 +1,11 @@
 /**
- * Workflow-engine error taxonomy (Epic 25 §Error classes).
- *
- * Every primitive failure the engine raises is classified into exactly one of these
- * classes so workflow authors can branch with `instanceof`. The base {@link WorkflowError}
- * is injected into the workflow body as a global (see workflowGlobals.ts); the
- * subclasses are injected alongside it so author code that references e.g.
- * `PermissionDeniedError` resolves the identifier.
- *
- * Phase 25.2 only *throws* a subset of these (replay divergence, load-time refusal,
- * journal corruption). The remaining subclasses are declared here so the taxonomy is
- * complete and stable; the primitives that raise them land in 25.3–25.5.
- *
- * The taxonomy is `class` declarations (not a generic factory) so that `instanceof
- * <ErrorSubclass>` works inside workflow bodies — the spec's catchable-error contract
- * depends on the class identity being a real, named class.
+ * Workflow-engine error taxonomy (Epic 25 §Error classes). Every primitive failure the engine
+ * raises is classified into exactly one of these classes so workflow authors can branch with
+ * `instanceof`. The base {@link WorkflowError} and the subclasses are injected into the
+ * workflow body as globals (see workflowGlobals.ts), so author code that references e.g.
+ * `PermissionDeniedError` resolves the identifier. Phase 25.2 only *throws* a subset (replay
+ * divergence, load-time refusal, journal corruption); the rest are declared so the taxonomy is
+ * complete and stable. Real named classes (not a factory) so `instanceof` works in bodies.
  */
 export class WorkflowError extends Error {
   constructor(message: string) {
@@ -59,11 +51,10 @@ export class CancelledError extends WorkflowError {
   }
 }
 /**
- * First-class abort (Epic 25 §Error classes). Thrown by a host executor/broker when the run's
- * {@link AbortSignal} fires; the engine converts it into the `aborted` run outcome, stamps the
- * terminal marker, and re-throws it so the caller can tell "aborted" apart from "failed".
- * Distinct from {@link CancelledError} (a primitive-level cancellation) — this one settles the
- * whole run.
+ * First-class abort (Epic 25 §Error classes). Thrown when the run's {@link AbortSignal} fires
+ * (engine pre-check or the durable runtime's live-call check); the engine converts it into the
+ * `aborted` outcome and re-throws so the caller can tell "aborted" apart from "failed".
+ * Distinct from {@link CancelledError} (a primitive-level cancellation) — this settles the run.
  */
 export class WorkflowAborted extends WorkflowError {
   constructor(message = "Workflow run was aborted.") {
@@ -80,10 +71,8 @@ export class WorkflowLoadError extends WorkflowError {
 }
 
 /**
- * Raised when {@link resumeWorkflow} is asked to continue a run whose journal does not
- * exist on disk. Resuming a non-existent run is almost always a typo'd `runId`, a wiped
- * runs root, or a wrong `runsRoot` option — surfacing it loudly prevents the engine from
- * silently degrading a resume into a fresh start.
+ * Raised when {@link resumeWorkflow} is asked to continue a run whose journal does not exist
+ * on disk — almost always a typo'd `runId`, a wiped runs root, or a wrong `runsRoot`.
  */
 export class WorkflowRunNotFoundError extends WorkflowError {
   readonly journalPath: string;
@@ -97,11 +86,9 @@ export class WorkflowRunNotFoundError extends WorkflowError {
 }
 
 /**
- * Raised when a primitive's recorded result cannot be re-encoded to the journal before
- * the line is written — the handler returned a value that is not canonical-JSON
- * (bigint/function/symbol/non-finite). The side effect has *already* happened, so this
- * error makes the hazard visible at the call site instead of silently corrupting the
- * journal.
+ * Raised when a primitive's recorded result cannot be re-encoded to the journal before the line
+ * is written — the handler returned a value that is not canonical-JSON (bigint/function/symbol).
+ * The side effect has *already* happened, so this makes the hazard visible at the call site.
  */
 export class JournalSerializeError extends WorkflowError {
   readonly seq: number;
@@ -127,8 +114,8 @@ export class JournalSerializeError extends WorkflowError {
 
 /**
  * Raised on resume when a *recorded* journal result fails to decode against the current
- * tool/script result schema. Distinct from {@link ReplayDriftError} (body diverged) — this
- * means the on-disk journal is corrupt or schema-incompatible with the current code.
+ * result schema — the on-disk journal is corrupt or schema-incompatible (distinct from
+ * {@link ReplayDriftError}, which means the body diverged).
  */
 export class JournalSchemaError extends WorkflowError {
   readonly seq: number;

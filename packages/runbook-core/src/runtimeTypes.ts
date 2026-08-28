@@ -41,4 +41,9 @@ export interface DurablePrimitiveSeat {
   readonly runId?: string | undefined;
   /** Live lifecycle observations; primitive started/completed events are emitted here. */
   readonly events?: import("./events.ts").WorkflowEventSink | undefined;
+  /**
+   * First-class abort: checked before every LIVE primitive execution (never on the replay
+   * path); once aborted, the next live call throws WorkflowAborted.
+   */
+  readonly abortSignal?: AbortSignal | undefined;
 }

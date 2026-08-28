@@ -7,11 +7,20 @@
  * identically, and the engine file stays focused on start/resume guards.
  */
 
-import { WorkflowAborted } from "./errors.ts";
-import type { RunMeta } from "./journal.ts";
+import { WorkflowAborted, WorkflowError } from "./errors.ts";
 import type { JournalStore } from "./journalStore.ts";
 import type { RunOutcome } from "./runEngine.ts";
 import type { WorkflowEventSink } from "./events.ts";
+import type { WorkflowResult } from "./engineTypes.ts";
+
+/** Map a settled outcome to the public result shape (suspended / aborted / completed). */
+export function toRunResult<O>(runId: string, outcome: RunOutcome): WorkflowResult<O> {
+  if (outcome.kind === "suspended") {
+    return { runId, suspended: true, correlationId: outcome.correlationId };
+  }
+  if (outcome.kind === "aborted") return { runId, aborted: true };
+  return { runId, result: outcome.output as O };
+}
 
 export interface SettleContext {
   readonly store: JournalStore;
@@ -22,13 +31,16 @@ export interface SettleContext {
 
 export type TerminalKind = "completed" | "failed" | "aborted";
 
-/** Stamp the terminal marker onto the run metadata (read-modify-write; absent meta is created). */
+/**
+ * Stamp the terminal marker onto the run metadata (read-modify-write). Both engine paths write
+ * the run metadata before settling, so a missing record means the store was bypassed or
+ * corrupted — refuse to fabricate one.
+ */
 export async function writeTerminalMeta(ctx: SettleContext, terminal: TerminalKind): Promise<void> {
-  const meta: RunMeta = (await ctx.store.readRunMeta(ctx.runId)) ?? {
-    workflowPath: "",
-    argsHash: "",
-    createdAt: ctx.nowIso(),
-  };
+  const meta = await ctx.store.readRunMeta(ctx.runId);
+  if (meta === undefined) {
+    throw new WorkflowError(`Cannot settle run '${ctx.runId}': no run metadata found.`);
+  }
   await ctx.store.writeRunMeta(ctx.runId, {
     ...meta,
     terminal,

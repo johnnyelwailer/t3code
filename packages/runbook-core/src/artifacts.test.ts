@@ -49,7 +49,7 @@ describe("@runbook/core artifact emission", () => {
     const runtime = makeRuntime(new Map(), liveSink);
     const emit = createArtifactEmitter({
       callPrimitive: runtime.callPrimitive,
-      uuid: runtime.uuid,
+      hostUuid: source.uuid,
       nowIso: () => NOW,
     }).emit;
 
@@ -61,9 +61,10 @@ describe("@runbook/core artifact emission", () => {
       data: { rows: 3 },
       at: NOW,
     });
-    // The uuid primitive (seq 1) and the artifact call (seq 2) are both journaled.
-    expect(live.map((entry) => entry.kind)).toEqual(["uuid", "artifact"]);
-    expect(live[1]?.result).toEqual(record);
+    // Exactly ONE journal entry: the artifact record itself. No nested uuid entry — the id is
+    // host entropy, and a nested entry would break the journal's crash-recovery prefix invariant.
+    expect(live.map((entry) => entry.kind)).toEqual(["artifact"]);
+    expect(live[0]?.result).toEqual(record);
 
     // Replay: a fresh runtime over the recorded journal returns the SAME record without exec.
     const replay: JournalEntry[] = [];
@@ -76,7 +77,7 @@ describe("@runbook/core artifact emission", () => {
     const replayed = makeRuntime(new Map(live.map((entry) => [entry.seq, entry])), replaySink);
     const emitAgain = createArtifactEmitter({
       callPrimitive: replayed.callPrimitive,
-      uuid: replayed.uuid,
+      hostUuid: source.uuid,
       nowIso: () => NOW,
     }).emit;
     const second = await emitAgain({ type: "report", title: "Q3", data: { rows: 3 } });
@@ -95,11 +96,11 @@ describe("@runbook/core artifact emission", () => {
     const runtime = makeRuntime(new Map(), sink);
     const record: ArtifactRecord = await createArtifactEmitter({
       callPrimitive: runtime.callPrimitive,
-      uuid: runtime.uuid,
+      hostUuid: source.uuid,
       nowIso: () => NOW,
     }).emit({ type: "diff", data: "a" });
     expect("title" in record).toBe(false);
-    expect(live[1]?.result).toEqual({ id: "artifact-uuid-1", type: "diff", data: "a", at: NOW });
+    expect(live[0]?.result).toEqual({ id: "artifact-uuid-1", type: "diff", data: "a", at: NOW });
   });
 
   it("surfaces journaled artifacts through inspectRun", async () => {
@@ -109,17 +110,7 @@ describe("@runbook/core artifact emission", () => {
     await store.writeRunMeta("run-1", { workflowPath: "w.ts", argsHash: "h", createdAt: NOW });
     await store.appendEntry("run-1", {
       seq: 1,
-      callId: "1:uuid:uuid",
-      kind: "uuid",
-      refId: "uuid",
-      argsHash: "h",
-      result: "artifact-uuid-1",
-      startedAt: NOW,
-      endedAt: NOW,
-    });
-    await store.appendEntry("run-1", {
-      seq: 2,
-      callId: "2:artifact:report",
+      callId: "1:artifact:report",
       kind: "artifact",
       refId: "report",
       argsHash: "h",

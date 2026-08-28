@@ -1,4 +1,4 @@
-import type { WorkflowReference } from "./engine.ts";
+import type { WorkflowReference } from "./engineTypes.ts";
 import type { WorkflowEventSink } from "./events.ts";
 import { WorkflowAborted } from "./errors.ts";
 import { WorkflowSuspended } from "./handles.ts";

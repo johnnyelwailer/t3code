@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 
-import type { WorkflowVersionPolicy } from "@runbook/core/engine";
+import type { WorkflowVersionPolicy } from "@runbook/core/engineTypes";
 
 import type { ToolRef as GenericToolRef } from "@runbook/tools";
 import type { ScriptRef as GenericScriptRef } from "@runbook/scripts";

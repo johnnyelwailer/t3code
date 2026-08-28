@@ -26,6 +26,8 @@ export interface DurableRuntimeConfig {
   readonly afterPrimitive?: () => void;
   /** Live lifecycle observations; primitive started/completed events are emitted here. */
   readonly events?: WorkflowEventSink;
+  /** First-class abort: the next live primitive call after it fires throws WorkflowAborted. */
+  readonly abortSignal?: AbortSignal;
 }
 
 export type DurableWorkflowRuntime = Omit<DurablePrimitiveRuntime, "callPrimitive"> &
@@ -44,6 +46,7 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
     ...(config.runId === undefined ? {} : { runId: config.runId }),
     ...(config.resolved === undefined ? {} : { resolved: config.resolved }),
     ...(config.events === undefined ? {} : { events: config.events }),
+    ...(config.abortSignal === undefined ? {} : { abortSignal: config.abortSignal }),
   });
 
   let toolScript!: ReturnType<typeof createToolScriptCalls>;

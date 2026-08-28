@@ -96,6 +96,7 @@ export async function executeWorkflowBody(
       ? {}
       : { afterPrimitive: opts.options.afterPrimitive }),
     ...(opts.events === undefined ? {} : { events: opts.events }),
+    ...(opts.abortSignal === undefined ? {} : { abortSignal: opts.abortSignal }),
   });
   const { primitives, captureCapabilities } = buildWorkflowPrimitives({
     runtime,

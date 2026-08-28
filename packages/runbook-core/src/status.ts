@@ -49,6 +49,7 @@ export async function inspectRun(store: JournalStore, runId: string): Promise<Ru
       if (!entries.byCorrelation.has(entry.correlationId))
         pendingCorrelationIds.push(entry.correlationId);
     }
+    // Safe casts: only createArtifactEmitter / createUsageRecorder journal those kinds.
     if (entry.kind === "artifact" && entry.result !== undefined)
       artifacts.push(entry.result as ArtifactRecord);
     if (entry.kind === "usage" && entry.result !== undefined)

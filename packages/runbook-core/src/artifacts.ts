@@ -3,11 +3,16 @@
  *
  * An artifact is a durable, typed output of a run (a report, a diff, a generated file record,
  * …). Emission goes through the run's journal like every other effectful call: the LIVE path
- * mints the record (id from the journaled `uuid`, timestamp from the host clock) and journals
- * it as the call's result; a REPLAY returns the recorded record verbatim, so a resumed run
- * reports the same artifact ids it reported before. The journal is the artifact store at the
- * core level — hosts that want richer storage mirror the records out (they see them as
- * `kind: "artifact"` journal entries and via {@link import("./status.ts").inspectRun}).
+ * mints the record and journals it as the call's result; a REPLAY returns the recorded record
+ * verbatim, so a resumed run reports the same artifact ids it reported before. The journal is
+ * the artifact store at the core level — hosts that want richer storage mirror the records out
+ * (they see them as `kind: "artifact"` journal entries and via
+ * {@link import("./status.ts").inspectRun}).
+ *
+ * The id is minted from HOST entropy, not the journaled `uuid` primitive: the whole record is
+ * already journaled as the call's result, so replay stability comes from the journal, and a
+ * nested uuid entry would break the journal's crash-recovery prefix invariant (the inner entry
+ * would land at seq n+1 before the outer artifact entry at seq n).
  */
 
 import type { PrimitiveCall } from "./runtimeTypes.ts";
@@ -24,7 +29,7 @@ export interface ArtifactInput {
 
 /** The durable artifact record; stable across replay. */
 export interface ArtifactRecord {
-  /** Deterministic per-run id (journaled `uuid`). */
+  /** Host-entropy id (NOT journaled — replay stability comes from the journaled record). */
   readonly id: string;
   readonly type: string;
   readonly title?: string;
@@ -35,7 +40,8 @@ export interface ArtifactRecord {
 
 export interface ArtifactEmitterDeps {
   readonly callPrimitive: <R>(call: PrimitiveCall<R>) => Promise<R>;
-  readonly uuid: () => string;
+  /** Host entropy — must NOT be the journaled uuid primitive (see module header). */
+  readonly hostUuid: () => string;
   readonly nowIso: () => string;
 }
 
@@ -54,7 +60,7 @@ export function createArtifactEmitter(deps: ArtifactEmitterDeps): ArtifactEmitte
       refId: input.type,
       args: input,
       exec: async () => ({
-        id: deps.uuid(),
+        id: deps.hostUuid(),
         type: input.type,
         ...(input.title === undefined ? {} : { title: input.title }),
         data: input.data,

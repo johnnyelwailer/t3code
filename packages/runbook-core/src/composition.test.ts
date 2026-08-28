@@ -25,7 +25,7 @@ describe("@runbook/core composition primitives", () => {
       budgetTotal: 10,
       onPhase: (title) => phases.push(title),
       onLog: (message) => logs.push(message),
-      uuid: () => "uuid-1",
+      hostUuid: () => "uuid-1",
       nowIso: () => "2026-01-01T00:00:00.000Z",
       runSubWorkflow: async (ref, args) => ({ path: ref.path, args }),
     });
@@ -85,7 +85,7 @@ describe("@runbook/core composition primitives", () => {
       budgetTotal: 0,
       onPhase: () => {},
       onLog: () => {},
-      uuid: () => "uuid-2",
+      hostUuid: () => "uuid-2",
       nowIso: () => "2026-01-01T00:00:00.000Z",
       // Stands in for a real child body: it makes one primitive call of its own, exactly as a
       // sub-workflow's `agent`/`wait`/`askUser` would.
@@ -114,7 +114,7 @@ describe("@runbook/core composition primitives", () => {
       budgetTotal: 0,
       onPhase: () => {},
       onLog: () => {},
-      uuid: () => "uuid-3",
+      hostUuid: () => "uuid-3",
       nowIso: () => "2026-01-01T00:00:00.000Z",
     });
 
