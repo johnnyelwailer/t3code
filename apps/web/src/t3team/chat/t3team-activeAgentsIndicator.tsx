@@ -196,26 +196,16 @@ export function T3TeamActiveAgentsIndicator({
 
   const visible = entries.slice(0, MAX_VISIBLE_DOTS);
   const overflow = entries.length - visible.length;
-  const groupLabel = `${entries.length} active agent${entries.length === 1 ? "" : "s"} — open agents`;
-
   // No title attribute on the group: the native hover tooltip was redundant —
   // the working row already renders the status word + step label right next to
   // the dots, and hovering a dot flips that label to the agent's live status.
-  // aria-label keeps the info for screen readers.
+  // The individual dots are the accessible controls. The wrapper stays
+  // non-interactive because nesting a role="button" around these buttons would
+  // create invalid nested interactive semantics and a duplicate focus target.
   return (
     <span
       ref={groupRef}
-      role="button"
-      tabIndex={0}
-      aria-label={groupLabel}
-      onClick={onOpenAgents}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpenAgents();
-        }
-      }}
-      className="ml-2 inline-flex h-[1em] shrink-0 -translate-y-[3px] items-center rounded-sm align-middle outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="ml-2 inline-flex h-[1em] shrink-0 items-center rounded-sm align-middle"
     >
       <span className="inline-flex h-full items-center gap-1">
         {visible.map((entry, i) => {
@@ -257,12 +247,14 @@ export function T3TeamActiveAgentsIndicator({
           );
         })}
         {overflow > 0 ? (
-          <span
-            aria-hidden
+          <button
+            type="button"
+            aria-label={`Open all ${entries.length} active agents`}
+            onClick={onOpenAgents}
             className="pl-0.5 text-[10px] font-medium leading-none tabular-nums text-sky-600 dark:text-sky-300/80"
           >
             +{overflow}
-          </span>
+          </button>
         ) : null}
       </span>
     </span>
