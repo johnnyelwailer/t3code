@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
+import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { toAtlassianError } from "./t3team-atlassian-http.ts";
 import {
   deriveReferenceDirectoryName,
@@ -11,6 +12,7 @@ import {
 } from "./t3team-project-repository-utils.ts";
 import type {
   LinkedRepositoryBootstrapResult,
+  MetaRepositoryBootstrapResult,
   ReferenceManifestFile,
 } from "./t3team-project-repository-utils.ts";
 import { VcsProvisioningService } from "./vcs/VcsProvisioningService.ts";
@@ -35,6 +37,7 @@ export const ensureWorkspaceGitRepository = Effect.fn("ensureWorkspaceGitReposit
 
 export const ensureWorkspaceGitignore = Effect.fn("ensureWorkspaceGitignore")(function* (
   workspaceRoot: string,
+  entries: ReadonlyArray<string> = [GITIGNORE_ENTRY],
 ) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -43,11 +46,45 @@ export const ensureWorkspaceGitignore = Effect.fn("ensureWorkspaceGitignore")(fu
   const current = exists
     ? yield* fileSystem.readFileString(gitignorePath).pipe(Effect.orElseSucceed(() => ""))
     : "";
-  if (current.split(/\r?\n/).some((line) => line.trim() === GITIGNORE_ENTRY)) return;
-  const next = `${current}${current.length > 0 && !current.endsWith("\n") ? "\n" : ""}${GITIGNORE_ENTRY}\n`;
+  const lines = current.split(/\r?\n/);
+  if (entries.every((entry) => lines.some((line) => line.trim() === entry))) return;
+  const missing = entries
+    .filter((entry) => !lines.some((line) => line.trim() === entry))
+    .join("\n");
+  const next = `${current}${current.length > 0 && !current.endsWith("\n") ? "\n" : ""}${missing}\n`;
   yield* fileSystem
     .writeFileString(gitignorePath, next)
     .pipe(Effect.mapError(toAtlassianError("Failed to update workspace .gitignore.")));
+});
+
+/** Detects whether the workspace root is itself a git repository (a monorepo or wrapper repo)
+ * and adopts it as the project meta-repo instead of wrapping it with reference clones
+ * (GHE #42). `url` is the detected origin remote when the source-control registry can resolve
+ * one; absent remotes or detection failures still adopt the repository without a url. */
+export const detectMetaRepository = Effect.fn("detectMetaRepository")(function* (input: {
+  readonly workspaceRoot: string;
+  readonly sourceControlProviders?: SourceControlProviderRegistry["Service"];
+}) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const gitDirectory = path.join(input.workspaceRoot, ".git");
+  const isGitRepository = yield* fileSystem
+    .exists(gitDirectory)
+    .pipe(Effect.orElseSucceed(() => false));
+  if (!isGitRepository) return undefined;
+  let url: string | undefined;
+  if (input.sourceControlProviders) {
+    const handle = yield* input.sourceControlProviders
+      .resolveHandle({ cwd: input.workspaceRoot })
+      .pipe(Effect.orElseSucceed(() => undefined));
+    url = handle?.context?.remoteUrl;
+  }
+  const metaRepository: MetaRepositoryBootstrapResult = {
+    ...(url ? { url } : {}),
+    localPath: input.workspaceRoot,
+    status: "adopted",
+  };
+  return metaRepository;
 });
 
 export const syncLinkedRepository = Effect.fn("syncLinkedRepository")(function* (input: {

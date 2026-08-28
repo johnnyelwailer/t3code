@@ -86,7 +86,7 @@ export const T3TeamRenameThreadTool = Tool.make("t3team_rename_thread", {
 
 export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
   description:
-    "Create a child t3team session from the current thread. `isolation` is required and decides where the child works: 'shared' runs it in the project's shared checkout (no new branch), 'own-worktree' gives it a dedicated branch + worktree — of the linked repo named by `repo_full_name` when the project has linked repos, or of the local repository when it does not. Use `effort` " +
+    "Create a child t3team session from the current thread. `isolation` is required and decides where the child works: 'shared' runs it in the project's shared checkout (no new branch), 'own-worktree' gives it a dedicated branch + worktree — of the linked repo named by `repo_full_name`, or of the project's own repository when the project workspace IS a git repository (monorepo-as-metarepo) or a plain local workspace. Use `effort` " +
     "('light' | 'standard' | 'high') to ask for a thinking tier WITHOUT naming a provider or " +
     "model — it is mapped onto whatever reasoning control the resolved provider exposes, and " +
     "on providers that expose none it falls back to the model tier when the model slugs form " +
@@ -100,7 +100,7 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     }),
     isolation: Schema.Literals(["shared", "own-worktree"]).annotate({
       description:
-        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' when the project has linked repos; in a local workspace omit it to isolate in the local repository.",
+        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' to pick a linked repo; omit it to isolate in the project's own repository (a monorepo used as the meta-repo, or a local workspace without linked repos).",
     }),
     ticket_id: Schema.optional(Schema.String).annotate({
       description:
@@ -138,7 +138,7 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     }),
     repo_full_name: Schema.optional(Schema.String).annotate({
       description:
-        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in projects that have linked repos; omit it in a local workspace (no linked repos) to isolate the child in a worktree of the local repository instead.",
+        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in legacy projects that wrap linked repos. In a monorepo project (workspace is itself a git repository used as the meta-repo) you may pass the meta-repo's own URL to isolate there explicitly, or omit it; in a local workspace (no linked repos) omit it to isolate in the local repository.",
     }),
     repo_ref: Schema.optional(Schema.String).annotate({
       description:

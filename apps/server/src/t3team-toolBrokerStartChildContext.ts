@@ -11,6 +11,7 @@ import { ensureWorkspaceGitignore } from "./t3team-project-repository-services.t
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
+  META_REPOSITORY_GITIGNORE_ENTRIES,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
 import {
@@ -26,6 +27,53 @@ const LinkedRepositoryManifestJson = Schema.Struct({
 const decodeLinkedRepositoryManifest = Schema.decodeEffect(
   Schema.fromJsonString(LinkedRepositoryManifestJson),
 );
+
+/** The optional `metaRepository` entry of a reference manifest: present when the workspace
+ * root is itself an adopted git repository (monorepo / meta-repo, GHE #42) instead of a
+ * synthetic container wrapping reference clones. */
+export const metaRepositoryFromManifestJson = (manifestJson: string) => {
+  try {
+    const parsed = globalThis.JSON.parse(manifestJson) as { metaRepository?: unknown };
+    const candidate = parsed.metaRepository;
+    if (typeof candidate !== "object" || candidate === null) return undefined;
+    const entry = candidate as { localPath?: unknown; url?: unknown; status?: unknown };
+    if (typeof entry.localPath !== "string" || entry.localPath.trim().length === 0) {
+      return undefined;
+    }
+    return {
+      ...(typeof entry.url === "string" && entry.url.trim().length > 0
+        ? { url: entry.url.trim() }
+        : {}),
+      localPath: entry.localPath,
+    };
+  } catch {
+    return undefined;
+  }
+};
+
+/** Reads the adopted meta-repo entry from the project workspace's reference manifest, when
+ * one exists. Returns undefined for legacy wrapped projects (no entry) or workspaces without
+ * a manifest. */
+export const readMetaRepositoryFromWorkspace = (input: {
+  readonly services: T3TeamStartChildLinkedRepositoryServices;
+  readonly projectWorkspaceRoot: string;
+}) =>
+  Effect.gen(function* () {
+    const manifestPath = input.services.path.join(
+      input.projectWorkspaceRoot,
+      HIDDEN_T3TEAM_DIR,
+      REFERENCES_DIR_NAME,
+      MANIFEST_FILE_NAME,
+    );
+    const exists = yield* input.services.fileSystem
+      .exists(manifestPath)
+      .pipe(Effect.orElseSucceed(() => false));
+    if (!exists) return undefined;
+    const manifestText = yield* input.services.fileSystem
+      .readFileString(manifestPath)
+      .pipe(Effect.orElseSucceed(() => ""));
+    return metaRepositoryFromManifestJson(manifestText);
+  });
 
 export type T3TeamStartChildServices = {
   readonly fileSystem: FileSystem.FileSystem;
@@ -76,16 +124,19 @@ export const linkedRepositoryManifestExists = (input: {
     .pipe(Effect.orElseSucceed(() => false));
 
 /** Creates a dedicated worktree of the LOCAL repository (or submodule) at the project
- * workspace root — the isolation path for workspaces without a linked-repository manifest.
- * Mirrors `resolveLinkedRepositoryWorktree`: same branch naming, same scoped path layout under
- * `.t3team/child-session-worktrees/`, same base-ref resolution. Ensures `.t3team/` is
- * gitignored so the worktree stays invisible to the shared checkout. */
+ * workspace root — the isolation path for workspaces without a linked-repository manifest, and
+ * for adopted meta-repos (monorepo projects, GHE #42) whose sub-work happens in worktrees of
+ * the meta-repo itself. Mirrors `resolveLinkedRepositoryWorktree`: same branch naming, same
+ * scoped path layout under `.t3team/child-session-worktrees/`, same base-ref resolution.
+ * Ensures `.t3team/` is gitignored so the worktree stays invisible to the shared checkout. */
 export const resolveLocalRepositoryWorktree = (input: {
   readonly services: T3TeamStartChildLinkedRepositoryServices;
   readonly projectWorkspaceRoot: string;
   readonly repoRef?: string;
   readonly sessionName: string;
   readonly childThreadId: string;
+  /** Display name for the scoped worktree directory; defaults to the workspace directory name. */
+  readonly repositoryName?: string;
 }) =>
   Effect.gen(function* () {
     const { fileSystem, path, gitWorkflow, sourceControlProviders } = input.services;
@@ -109,18 +160,42 @@ export const resolveLocalRepositoryWorktree = (input: {
         .pipe(Effect.orElseSucceed(() => "main"))) ||
         "main");
 
-    const scopedWorktreePath = buildScopedChildWorktreePath({
-      path,
-      projectWorkspaceRoot: workspaceRoot,
-      repoFullName: path.basename(workspaceRoot),
-      repoRef: baseRef,
-      childThreadId: input.childThreadId,
-    });
+    // An adopted meta-repo keeps only its machine-local subpaths ignored so committed team
+    // state under `.t3team/` survives (GHE #42); legacy workspaces keep the full entry.
+    const metaRepositoryManifestPath = path.join(
+      workspaceRoot,
+      HIDDEN_T3TEAM_DIR,
+      REFERENCES_DIR_NAME,
+      MANIFEST_FILE_NAME,
+    );
+    const metaRepositoryManifestExists = yield* fileSystem
+      .exists(metaRepositoryManifestPath)
+      .pipe(Effect.orElseSucceed(() => false));
+    let gitignoreEntries: ReadonlyArray<string> | undefined;
+    if (metaRepositoryManifestExists) {
+      const manifestText = yield* fileSystem
+        .readFileString(metaRepositoryManifestPath)
+        .pipe(Effect.orElseSucceed(() => ""));
+      if (metaRepositoryFromManifestJson(manifestText)) {
+        gitignoreEntries = META_REPOSITORY_GITIGNORE_ENTRIES;
+      }
+    }
 
-    yield* ensureWorkspaceGitignore(workspaceRoot).pipe(
+    yield* ensureWorkspaceGitignore(workspaceRoot, gitignoreEntries).pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
     );
+
+    const scopedWorktreePath = buildScopedChildWorktreePath({
+      path,
+      projectWorkspaceRoot: workspaceRoot,
+      repoFullName:
+        input.repositoryName && input.repositoryName.trim().length > 0
+          ? input.repositoryName
+          : path.basename(workspaceRoot),
+      repoRef: baseRef,
+      childThreadId: input.childThreadId,
+    });
 
     yield* fileSystem.makeDirectory(path.dirname(scopedWorktreePath), { recursive: true });
 

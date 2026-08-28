@@ -7,11 +7,20 @@
  */
 import type { LinkedRepositorySyncResult } from "~/t3team/backend/t3team-types";
 
+export type ProjectWorkspaceBootstrapMetaRepository = {
+  readonly url?: string;
+  readonly localPath: string;
+  readonly status: "adopted";
+};
+
 export type ProjectWorkspaceBootstrapResult = {
   readonly workspaceRoot: string;
   readonly workspaceRepositoryInitialized: boolean;
   readonly referencesRoot: string;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositorySyncResult>;
+  /** Present when the workspace root is itself a git repository adopted as the meta-repo
+   * (monorepo-as-metarepo, GHE #42): sub-work happens in worktrees of this repository. */
+  readonly metaRepository?: ProjectWorkspaceBootstrapMetaRepository;
 };
 
 export type ProjectWorkspaceContextFile = {

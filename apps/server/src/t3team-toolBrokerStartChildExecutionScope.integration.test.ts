@@ -43,6 +43,7 @@ import {
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 
 const EVAL_REPO_FULL_NAME = "eval-owner/eval-repo";
+const META_REPO_FULL_NAME = "eval-owner/eval-monorepo";
 
 type StoredThread = {
   readonly id: ThreadId;
@@ -56,6 +57,7 @@ const evalRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-start-chi
 const projectWorkspaceRoot = NodePath.join(evalRoot, "project-workspace");
 const linkedRepoPath = NodePath.join(evalRoot, "linked-repo");
 const localWorkspaceRoot = NodePath.join(evalRoot, "local-workspace");
+const metaWorkspaceRoot = NodePath.join(evalRoot, "monorepo-workspace");
 let evalHarnessReady = false;
 
 function runGit(cwd: string, args: ReadonlyArray<string>) {
@@ -104,12 +106,43 @@ function initLocalWorkspace() {
   initGitRepo(localWorkspaceRoot);
 }
 
+/** An adopted monorepo-as-meta-repo: the workspace root is a real git repository whose
+ * reference manifest carries a `metaRepository` entry alongside linked repositories. */
+function initMetaWorkspace() {
+  initGitRepo(metaWorkspaceRoot);
+
+  const manifestDir = NodePath.join(metaWorkspaceRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME);
+  NodeFS.mkdirSync(manifestDir, { recursive: true });
+  NodeFS.writeFileSync(
+    NodePath.join(manifestDir, MANIFEST_FILE_NAME),
+    JSON.stringify({
+      workspaceRoot: metaWorkspaceRoot,
+      referencesRoot: manifestDir,
+      workspaceRepositoryInitialized: false,
+      metaRepository: {
+        url: `https://github.com/${META_REPO_FULL_NAME}`,
+        localPath: metaWorkspaceRoot,
+        status: "adopted",
+      },
+      linkedRepositories: [
+        {
+          url: `https://github.com/${EVAL_REPO_FULL_NAME}`,
+          localPath: linkedRepoPath,
+          status: "cloned",
+        },
+      ],
+    }),
+    "utf8",
+  );
+}
+
 function ensureEvalHarnessReady() {
   if (evalHarnessReady) {
     return;
   }
   initLinkedRepo();
   initLocalWorkspace();
+  initMetaWorkspace();
   evalHarnessReady = true;
 }
 
@@ -136,6 +169,13 @@ const localVariant: EvalVariant = {
   parentThreadId: ThreadId.make("parent-thread-local-eval"),
   workspaceRoot: localWorkspaceRoot,
   projectTitle: "Eval Local Project",
+};
+
+const metaVariant: EvalVariant = {
+  projectId: ProjectId.make("project-meta-eval"),
+  parentThreadId: ThreadId.make("parent-thread-meta-eval"),
+  workspaceRoot: metaWorkspaceRoot,
+  projectTitle: "Eval Monorepo Project",
 };
 
 function createEvalHarness(variant: EvalVariant = linkedVariant) {
@@ -276,6 +316,13 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
           resolve: () =>
             Effect.succeed({
               getDefaultBranch: () => Effect.succeed("main"),
+            }),
+          resolveHandle: () =>
+            Effect.succeed({
+              provider: {
+                getDefaultBranch: () => Effect.succeed("main"),
+              },
+              context: null,
             }),
         } as unknown as SourceControlProviderRegistry["Service"]),
         Layer.succeed(ProjectSetupScriptRunner, {
@@ -636,5 +683,124 @@ describe("t3team.thread.start_child isolation integration eval", () => {
         deprecation_note: expect.stringContaining("'isolation'"),
       }),
     );
+  });
+
+  it("scenario G: monorepo-as-metarepo project isolates without repo_full_name in a meta-repo worktree", async () => {
+    const harness = createEvalHarness(metaVariant);
+    const startResult = await harness.runBroker(
+      Effect.gen(function* () {
+        const broker = yield* T3TeamToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId: metaVariant.parentThreadId,
+          toolContext: harness.toolContext,
+        });
+        return yield* binding!.callTool({
+          server: "t3team",
+          tool: "t3team.thread.start_child",
+          arguments: {
+            name: "Monorepo implementation",
+            isolation: "own-worktree",
+          },
+        });
+      }),
+    );
+    expect(startResult.isError).toBeUndefined();
+    const structured = startResult.structuredContent as {
+      isolation: string;
+      worktree_path: string;
+      branch: string;
+      repo_full_name?: string;
+    };
+    expect(structured.isolation).toBe("own-worktree");
+    expect(NodeFS.existsSync(structured.worktree_path)).toBe(true);
+    expect(structured.worktree_path.startsWith(metaWorkspaceRoot)).toBe(true);
+    expect(structured.worktree_path).toContain("child-session-worktrees");
+    // The worktree's main worktree is the meta-repo itself (monorepo work, GHE #42).
+    const worktreeCommonDir = NodeChildProcess.spawnSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: structured.worktree_path,
+      encoding: "utf8",
+    }).stdout.trim();
+    expect(worktreeCommonDir).toBe(NodePath.join(NodeFS.realpathSync(metaWorkspaceRoot), ".git"));
+    // The meta-repo keeps only machine-local subpaths ignored, so committed team state under
+    // .t3team/ survives the worktree.
+    const gitignore = NodeFS.readFileSync(NodePath.join(metaWorkspaceRoot, ".gitignore"), "utf8");
+    expect(gitignore).toContain(".t3team/references/");
+    expect(gitignore).toContain(".t3team/child-session-worktrees/");
+    expect(
+      gitignore
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .includes(".t3team/"),
+    ).toBe(false);
+  });
+
+  it("scenario H: repo_full_name matching the meta-repo URL isolates in the meta-repo", async () => {
+    const harness = createEvalHarness(metaVariant);
+    const startResult = await harness.runBroker(
+      Effect.gen(function* () {
+        const broker = yield* T3TeamToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId: metaVariant.parentThreadId,
+          toolContext: harness.toolContext,
+        });
+        return yield* binding!.callTool({
+          server: "t3team",
+          tool: "t3team.thread.start_child",
+          arguments: {
+            name: "Monorepo explicit repo",
+            isolation: "own-worktree",
+            repo_full_name: META_REPO_FULL_NAME,
+          },
+        });
+      }),
+    );
+    expect(startResult.isError).toBeUndefined();
+    const structured = startResult.structuredContent as {
+      isolation: string;
+      worktree_path: string;
+      repo_full_name?: string;
+    };
+    expect(structured.isolation).toBe("own-worktree");
+    expect(structured.repo_full_name).toBe(`https://github.com/${META_REPO_FULL_NAME}`);
+    expect(NodeFS.existsSync(structured.worktree_path)).toBe(true);
+    expect(structured.worktree_path.startsWith(metaWorkspaceRoot)).toBe(true);
+  });
+
+  it("scenario I: a linked repo in a monorepo project still isolates in that linked repo", async () => {
+    const harness = createEvalHarness(metaVariant);
+    const startResult = await harness.runBroker(
+      Effect.gen(function* () {
+        const broker = yield* T3TeamToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId: metaVariant.parentThreadId,
+          toolContext: harness.toolContext,
+        });
+        return yield* binding!.callTool({
+          server: "t3team",
+          tool: "t3team.thread.start_child",
+          arguments: {
+            name: "Linked repo implementation",
+            isolation: "own-worktree",
+            repo_full_name: EVAL_REPO_FULL_NAME,
+          },
+        });
+      }),
+    );
+    expect(startResult.isError).toBeUndefined();
+    const structured = startResult.structuredContent as {
+      isolation: string;
+      worktree_path: string;
+      repo_full_name?: string;
+    };
+    expect(structured.isolation).toBe("own-worktree");
+    expect(structured.repo_full_name).toBe(EVAL_REPO_FULL_NAME);
+    expect(NodeFS.existsSync(structured.worktree_path)).toBe(true);
+    expect(structured.worktree_path.startsWith(metaWorkspaceRoot)).toBe(true);
+    // The worktree's main worktree is the LINKED repository, not the meta-repo.
+    const worktreeCommonDir = NodeChildProcess.spawnSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: structured.worktree_path,
+      encoding: "utf8",
+    }).stdout.trim();
+    expect(worktreeCommonDir).toBe(NodePath.join(NodeFS.realpathSync(linkedRepoPath), ".git"));
   });
 });

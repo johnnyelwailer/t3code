@@ -12,10 +12,18 @@ export type LinkedRepositoryReference = {
   readonly error?: string;
 };
 
+export type MetaRepositoryReference = {
+  readonly url?: string;
+  readonly localPath: string;
+  readonly status: "adopted";
+};
+
 export type ProjectAgentReferences = {
   readonly referencesRoot?: string;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryReference>;
   readonly workspaceRepositoryInitialized?: boolean;
+  /** Set when the workspace root is itself a git repository adopted as the meta-repo. */
+  readonly metaRepository?: MetaRepositoryReference;
 };
 
 export type ProjectAgentSetup = {
@@ -82,6 +90,7 @@ export function applyWorkspaceBootstrapToProject(
       bootstrap.linkedRepositories.length > 0
         ? mapLinkedRepositories(bootstrap.linkedRepositories)
         : existingLinked,
+    ...(bootstrap.metaRepository ? { metaRepository: bootstrap.metaRepository } : {}),
   };
 
   return {

@@ -19,11 +19,21 @@ export type LinkedRepositoryBootstrapResult = {
   readonly error?: string;
 };
 
+/** The workspace root is itself a git repository (monorepo / wrapper repo) adopted as the
+ * project meta-repo: sub-work happens in worktrees of this repository, not in reference
+ * clones. `url` is the detected origin remote when one is configured. */
+export type MetaRepositoryBootstrapResult = {
+  readonly url?: string;
+  readonly localPath: string;
+  readonly status: "adopted";
+};
+
 export type BootstrapWorkspaceResponse = {
   readonly workspaceRoot: string;
   readonly workspaceRepositoryInitialized: boolean;
   readonly referencesRoot: string;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>;
+  readonly metaRepository?: MetaRepositoryBootstrapResult;
 };
 
 export type ContextWorkspaceFile = {
@@ -46,12 +56,20 @@ export const HIDDEN_T3TEAM_DIR = ".t3team";
 export const REFERENCES_DIR_NAME = "references";
 export const MANIFEST_FILE_NAME = "reference-repositories.json";
 export const GITIGNORE_ENTRY = ".t3team/";
+/** Gitignore entries for an ADOPTED meta-repo (workspace root is a real git repository):
+ * only the machine-local subpaths stay ignored so committed team state (skills, recipes,
+ * conventions) can live under `.t3team/` and be shared through the repository (GHE #42). */
+export const META_REPOSITORY_GITIGNORE_ENTRIES = [
+  ".t3team/references/",
+  ".t3team/child-session-worktrees/",
+] as const;
 
 export type ReferenceManifestFile = {
   readonly workspaceRoot: string;
   readonly referencesRoot: string;
   readonly workspaceRepositoryInitialized: boolean;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryBootstrapResult>;
+  readonly metaRepository?: MetaRepositoryBootstrapResult;
   readonly updatedAt: string;
 };
 
