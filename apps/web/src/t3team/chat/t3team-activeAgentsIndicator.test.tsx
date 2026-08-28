@@ -40,14 +40,12 @@ describe("T3TeamActiveAgentsIndicator", () => {
       <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={() => {}} />,
     );
     expect(markup).not.toContain('title="');
-    // The accessible name still carries the same info for screen readers.
-    expect(markup).toContain('aria-label="2 active agents — open agents"');
     // One dot per entry, each with its own accessible name.
     expect(markup).toContain('aria-label="Child A — Editing code"');
     expect(markup).toContain('aria-label="Sub B — Running tests"');
   });
 
-  it("still opens the agents panel on click of the dot group", () => {
+  it("still opens the agents panel on click of a dot without a per-agent handler", () => {
     const onOpenAgents = vi.fn();
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -56,11 +54,12 @@ describe("T3TeamActiveAgentsIndicator", () => {
       root = createRoot(container);
       root.render(<T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={onOpenAgents} />);
     });
-    const group = container.querySelector<HTMLElement>('[role="button"]');
-    expect(group).not.toBeNull();
-    expect(group!.getAttribute("title")).toBeNull();
+    const dot = container.querySelector<HTMLElement>('.t3team-aci-cell');
+    expect(dot).not.toBeNull();
+    expect(dot!.parentElement?.parentElement?.getAttribute("role")).toBeNull();
+    expect(dot!.parentElement?.parentElement?.getAttribute("title")).toBeNull();
     act(() => {
-      group!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      dot!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onOpenAgents).toHaveBeenCalledTimes(1);
     act(() => root.unmount());
