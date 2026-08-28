@@ -24,6 +24,8 @@ import {
   getStartedThreadModelChangeBlockReason,
   hasEnvironmentReconnectWarningGraceElapsed,
   hasServerAcknowledgedLocalDispatch,
+  hasLocalDispatchGoneStuck,
+  LOCAL_DISPATCH_STUCK_BACKSTOP_MS,
   isBranchMismatchDismissedForSession,
   reconcileMountedTerminalThreadIds,
   reconcileRetainedMountedThreadIds,
@@ -945,5 +947,160 @@ describe("hasServerAcknowledgedLocalDispatch", () => {
     expect(hasServerAcknowledgedLocalDispatch({ ...common, hasPendingApproval: true })).toBe(true);
     expect(hasServerAcknowledgedLocalDispatch({ ...common, hasPendingUserInput: true })).toBe(true);
     expect(hasServerAcknowledgedLocalDispatch({ ...common, threadError: "failed" })).toBe(true);
+  });
+});
+
+describe("hasLocalDispatchGoneStuck", () => {
+  // The snapshot stamps startedAt with the real clock at creation; pin it so
+  // every case is deterministic.
+  const dispatchAt = "2026-03-29T01:00:00.000Z";
+  const stuckDispatch = () => ({
+    ...createLocalDispatchSnapshot(makeThread()),
+    startedAt: dispatchAt,
+  });
+  const at = (minutes: number, seconds = 0) =>
+    new Date(Date.parse(dispatchAt) + minutes * 60_000 + seconds * 1_000).toISOString();
+  const backstopMs = LOCAL_DISPATCH_STUCK_BACKSTOP_MS;
+
+  it("abandons an unacknowledged dispatch only after the idle window", () => {
+    const localDispatch = stuckDispatch();
+    const input = {
+      localDispatch,
+      latestTurn: null,
+      latestUserMessageCreatedAt: null,
+      session: null,
+      hasPendingApproval: false,
+      hasPendingUserInput: false,
+      threadError: null,
+      preparingWorktree: false,
+    };
+
+    expect(hasLocalDispatchGoneStuck({ ...input, now: at(4, 59) })).toBe(false);
+    // Exactly the backstop elapses: recovered.
+    expect(hasLocalDispatchGoneStuck({ ...input, now: at(backstopMs / 60_000, 0) })).toBe(true);
+  });
+
+  it("slides the window with recent server-visible activity", () => {
+    const localDispatch = stuckDispatch();
+    const activity = "2026-03-29T01:04:00.000Z"; // 4 minutes after the send
+    const session = { ...readySession, status: "running" as const, updatedAt: activity };
+    const turn = { ...completedTurn, startedAt: activity, completedAt: null };
+
+    // 6 minutes elapsed, but the last activity is 4 minutes old: still inside
+    // the window.
+    expect(
+      hasLocalDispatchGoneStuck({
+        localDispatch,
+        latestTurn: turn,
+        latestUserMessageCreatedAt: null,
+        session,
+        hasPendingApproval: false,
+        hasPendingUserInput: false,
+        threadError: null,
+        preparingWorktree: false,
+        now: "2026-03-29T01:06:00.000Z",
+      }),
+    ).toBe(false);
+    // The same activity now 5 minutes old: the window closed.
+    expect(
+      hasLocalDispatchGoneStuck({
+        localDispatch,
+        latestTurn: turn,
+        latestUserMessageCreatedAt: null,
+        session,
+        hasPendingApproval: false,
+        hasPendingUserInput: false,
+        threadError: null,
+        preparingWorktree: false,
+        now: "2026-03-29T01:09:00.000Z",
+      }),
+    ).toBe(true);
+  });
+
+  it("never abandons a dispatch that is still preparing the worktree", () => {
+    const localDispatch = { ...stuckDispatch(), preparingWorktree: true };
+    expect(
+      hasLocalDispatchGoneStuck({
+        localDispatch,
+        latestTurn: null,
+        latestUserMessageCreatedAt: null,
+        session: null,
+        hasPendingApproval: false,
+        hasPendingUserInput: false,
+        threadError: null,
+        preparingWorktree: true,
+        now: at(30),
+      }),
+    ).toBe(false);
+  });
+
+  it("leaves already-resolved dispatch states to their own paths", () => {
+    const localDispatch = stuckDispatch();
+    const base = {
+      latestTurn: null,
+      latestUserMessageCreatedAt: null,
+      session: null,
+      threadError: null,
+      preparingWorktree: false,
+      hasPendingApproval: false,
+      hasPendingUserInput: false,
+      now: at(30),
+    };
+
+    expect(
+      hasLocalDispatchGoneStuck({
+        ...base,
+        localDispatch,
+        hasPendingApproval: true,
+        hasPendingUserInput: false,
+      }),
+    ).toBe(false);
+    expect(
+      hasLocalDispatchGoneStuck({
+        ...base,
+        localDispatch,
+        hasPendingApproval: false,
+        hasPendingUserInput: true,
+      }),
+    ).toBe(false);
+    expect(hasLocalDispatchGoneStuck({ ...base, localDispatch, threadError: "failed" })).toBe(
+      false,
+    );
+  });
+
+  it("floors the window at the send itself when the server emits nothing", () => {
+    const localDispatch = stuckDispatch();
+    // A clock that runs behind: server timestamps predate the client's send.
+    const oldSession = { ...readySession, updatedAt: "2026-03-28T23:59:00.000Z" };
+    expect(
+      hasLocalDispatchGoneStuck({
+        localDispatch,
+        latestTurn: null,
+        latestUserMessageCreatedAt: null,
+        session: oldSession,
+        hasPendingApproval: false,
+        hasPendingUserInput: false,
+        threadError: null,
+        preparingWorktree: false,
+        now: at(5, 1),
+      }),
+    ).toBe(true);
+  });
+
+  it("never abandons on an unparseable clock", () => {
+    const localDispatch = stuckDispatch();
+    expect(
+      hasLocalDispatchGoneStuck({
+        localDispatch,
+        latestTurn: null,
+        latestUserMessageCreatedAt: null,
+        session: null,
+        hasPendingApproval: false,
+        hasPendingUserInput: false,
+        threadError: null,
+        preparingWorktree: false,
+        now: "not-a-date",
+      }),
+    ).toBe(false);
   });
 });

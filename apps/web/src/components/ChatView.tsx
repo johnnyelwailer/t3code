@@ -351,6 +351,7 @@ import {
   hasEnvironmentReconnectWarningGraceElapsed,
   scheduleEnvironmentReconnectWarning,
   hasServerAcknowledgedLocalDispatch,
+  hasLocalDispatchGoneStuck,
   isBranchMismatchDismissedForSession,
   shouldDockDraftHeroForSubmission,
   shouldReleaseTimelineAnchorForToolActivity,
@@ -664,6 +665,47 @@ function useLocalDispatchState(input: {
     ],
   );
   const activeLocalDispatch = serverAcknowledgedLocalDispatch ? null : localDispatch;
+  // GHE #301 stuck-busy backstop: if a dispatch is still unacknowledged and
+  // no server-visible field it watches (turn timestamps, session
+  // status/updatedAt, the user message echo) has changed for the idle window,
+  // the turn died on the provider side without a terminal event — abandon
+  // the dispatch and recover the composer without a manual thread switch
+  // (re-mounts re-derive busy exactly this way via resetLocalDispatch).
+  useEffect(() => {
+    if (localDispatch === null || serverAcknowledgedLocalDispatch) {
+      return;
+    }
+    const evaluate = () => {
+      const dispatch = localDispatch;
+      if (
+        hasLocalDispatchGoneStuck({
+          localDispatch: dispatch,
+          latestTurn: input.activeLatestTurn,
+          latestUserMessageCreatedAt: latestUserMessage?.createdAt ?? null,
+          session: input.activeThread?.session ?? null,
+          hasPendingApproval: input.activePendingApproval !== null,
+          hasPendingUserInput: input.activePendingUserInput !== null,
+          threadError: input.threadError,
+          preparingWorktree: dispatch.preparingWorktree,
+          now: new Date().toISOString(),
+        })
+      ) {
+        setLocalDispatch(null);
+      }
+    };
+    evaluate();
+    const timer = window.setInterval(evaluate, 15_000);
+    return () => window.clearInterval(timer);
+  }, [
+    localDispatch,
+    serverAcknowledgedLocalDispatch,
+    input.activeLatestTurn,
+    input.activePendingApproval,
+    input.activePendingUserInput,
+    input.activeThread?.session,
+    input.threadError,
+    latestUserMessage?.createdAt,
+  ]);
   const beginLocalDispatch = useCallback(
     (options?: { preparingWorktree?: boolean; submissionIntent?: ComposerSubmissionIntent }) => {
       const preparingWorktree = Boolean(options?.preparingWorktree);
