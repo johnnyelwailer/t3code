@@ -529,6 +529,18 @@ label:has(> select#reasoning-effort) select {
   display: inline-block;
   position: relative;
   white-space: nowrap;
+  /* GHE #208 follow-up — narrow-panel clamp: when the working row's panel
+     is narrower than the lead, the slot's JS-set width is clamped to the
+     available space (t3team-workingLeadText.tsx) and the timer text gets
+     an ellipsis here instead of hard-clipping at the row wrapper's
+     overflow-x-clip. No CSS percentage max-width: the lead sits inside an
+     auto-basis flex item, so a percentage max-width would resolve circular
+     and corrupt the content sizing even at wide widths. The rotateX flips
+     never widen the box, so the clipping is a no-op for the roll. The
+     sizer is measured, not clipped (visibility: hidden still lays out at
+     full width). */
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -538,6 +550,10 @@ label:has(> select#reasoning-effort) select {
   top: 0;
   visibility: hidden;
   white-space: nowrap;
+  /* Always lay out at full text width: an absolute box shrink-to-fits its
+     containing block, so without this the sizer would measure the CLAMPED
+     width on narrow panels and the natural-width detection would lie. */
+  width: max-content;
   pointer-events: none;
 }
 

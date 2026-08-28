@@ -1697,19 +1697,27 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   // (GHE #208) is the base; "Working" stands in only when no state word is
   // available (old servers / stale idle state). The second "Thinking" row
   // that #7152 rendered beneath this line is gone — it was a duplicate.
-  const stateWord = threadActivityState ? ACTIVITY_STATE_WORDS[threadActivityState] : "Working";
+  const liveState = threadActivityState !== null && threadActivityState !== undefined;
+  const stateWord = liveState ? ACTIVITY_STATE_WORDS[threadActivityState] : "Working";
   return (
     <div data-t3team-working-row>
       <div className="border-b border-border/60 pb-2 pt-1">
-        {/* GHE #238: single-line, no wrap. The row is a flex line; the timer
-            text and the dots never shrink, and the step label is the sole
-            shrink/truncate point (it clips internally via .t3team-aci-step). */}
+        {/* GHE #238: single-line, no wrap. The row is a flex line; the step
+            label is the primary shrink/truncate point (it clips internally
+            via .t3team-aci-step). The dots never shrink; the lead span is
+            the last-resort shrink point (narrow panels — see below). */}
         <div className="flex items-baseline px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
-          <span className="shrink-0">
+          {/* GHE #208 follow-up: the step label stays the PRIMARY shrink
+              point; the lead span is the LAST-RESORT one — only when the
+              panel is narrower than the lead itself does the timer text
+              ellipsize (the .t3team-aci-lead clamp) instead of hard-clipping
+              at the row wrapper's overflow-x-clip. The row stays one line,
+              no wrap, no second line. */}
+          <span className="flex min-w-0 items-baseline">
             {!isWorking && hasActiveAgents ? (
-              <>
+              <span className="min-w-0 truncate">
                 {activeAgents.length} active agent{activeAgents.length === 1 ? "" : "s"}
-              </>
+              </span>
             ) : (
               <>
                 {/* GHE #201 follow-up: the "..." pulses only stand in when NO
@@ -1720,16 +1728,20 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
                     .t3team-label-shimmer defaults) so the "..." stays visible
                     in both themes; muted-grey dots read as "gone" on dark. */}
                 {!hasActiveAgents ? (
-                  <span className="mr-1.5 inline-flex items-center gap-[3px]" aria-hidden>
+                  <span className="mr-1.5 inline-flex shrink-0 items-center gap-[3px]" aria-hidden>
                     <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse motion-reduce:animate-none" />
                     <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse [animation-delay:200ms] motion-reduce:animate-none" />
                     <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse [animation-delay:400ms] motion-reduce:animate-none" />
                   </span>
                 ) : null}
-                <span className="t3team-label-shimmer">
+                <span className="t3team-label-shimmer min-w-0 overflow-hidden text-ellipsis">
                   {row.createdAt ? (
                     <>
-                      <WorkingLeadText stateWord={stateWord} createdAt={row.createdAt} />
+                      <WorkingLeadText
+                        stateWord={stateWord}
+                        createdAt={row.createdAt}
+                        liveState={liveState}
+                      />
                     </>
                   ) : (
                     `${stateWord}...`
@@ -1748,7 +1760,11 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
           {hasActiveAgents ? (
             <T3TeamActiveAgentsStepLabel label={workingStepLabel ?? idleAgentSummary} />
           ) : workingStepLabel ? (
-            <span className="ml-2 min-w-0 truncate text-muted-foreground/55">
+            // GHE #208 follow-up: the step label is the PRIMARY shrink
+            // point — with shrink-100 it surrenders nearly all the row's
+            // overflow, so a narrow panel truncates (then vanishes) the
+            // step before the timer text ever ellipsizes.
+            <span className="ml-2 min-w-0 shrink-100 truncate text-muted-foreground/55">
               {workingStepLabel}
             </span>
           ) : null}

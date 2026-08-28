@@ -58,9 +58,20 @@ function timerShouldRoll(prev: string, next: string): boolean {
 export const WorkingLeadText = ({
   stateWord,
   createdAt,
+  liveState = false,
 }: {
   readonly stateWord: string;
   readonly createdAt: string;
+  /**
+   * GHE #208 follow-up — the "working" state word is spelled exactly like
+   * the no-state fallback ("Working"), so a live working state used to be
+   * visually indistinguishable from missing data (the timer was the only
+   * cue). When the word comes from the server's deterministic
+   * activityState it gets the subtle live emphasis (font-medium); the
+   * static fallback word stays at the regular weight. Restrained on
+   * purpose: one unified activity row, no new pills.
+   */
+  readonly liveState?: boolean;
 }) => {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -78,9 +89,43 @@ export const WorkingLeadText = ({
     const slot = slotRef.current;
     const sizer = sizerRef.current;
     if (!slot || !sizer) return;
-    sizer.textContent = `${stateWord} for ${time}`;
-    const target = sizer.getBoundingClientRect().width;
-    if (target > 0) slot.style.width = `${target}px`;
+    // The sizer mirrors the rendered pieces EXACTLY (word at the live
+    // weight, the rest regular) so the measured full width matches the
+    // layout — a single all-medium measurement would overestimate by a
+    // couple of px and the allocation check below would misfire.
+    let wordSpan = sizer.children.item(0) as HTMLElement | null;
+    let restSpan = sizer.children.item(1) as HTMLElement | null;
+    if (!wordSpan || !restSpan) {
+      sizer.textContent = "";
+      wordSpan = document.createElement("span");
+      restSpan = document.createElement("span");
+      sizer.append(wordSpan, restSpan);
+    }
+    wordSpan.textContent = stateWord;
+    wordSpan.style.fontWeight = liveState ? "500" : "";
+    restSpan.textContent = ` for ${time}`;
+    const full = sizer.getBoundingClientRect().width;
+    if (full <= 0) return;
+    // Narrow-panel last resort (GHE #208 follow-up): the lead is the
+    // last-resort flex shrink point, and its final width can only be known
+    // from the flex layout itself — an inline-block auto width does NOT
+    // clamp inside this auto-basis flex item (measured in Blink). So:
+    // hand the lead its FULL px width, let the row reflow (the clientWidth
+    // read below forces the layout), then read how much space the flex row
+    // actually allocated to the lead (the lead's flex item minus the dots,
+    // which never shrink). Wide panels: the allocation equals the full
+    // text, the slot keeps its px width — which the 480ms width glide
+    // needs. Narrow panels: the allocation is smaller, the slot takes it,
+    // and the timer ellipsizes (the .t3team-aci-lead overflow handling)
+    // instead of hard-clipping at the row wrapper's overflow-x-clip.
+    // No percentage max-width in the CSS: it resolves circular against the
+    // auto-basis flex item that contains the lead and corrupts the sizing
+    // even when wide.
+    slot.style.width = `${full}px`;
+    const leadItem = slot.parentElement?.parentElement;
+    const dots = slot.parentElement?.previousElementSibling;
+    const allocated = leadItem ? leadItem.clientWidth - (dots ? dots.clientWidth : 0) : full;
+    slot.style.width = `${Math.max(0, Math.min(full, allocated))}px`;
   };
 
   useEffect(() => {
@@ -94,7 +139,23 @@ export const WorkingLeadText = ({
     }
     applyWidth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateWord, time]);
+  }, [stateWord, time, liveState]);
+
+  // A panel resize never changes the text, so the effect above does not run
+  // for it: wide → narrow must move the lead onto the CSS ellipsis, and
+  // narrow → wide must hand the px width (and the glide) back.
+  const applyWidthRef = useRef(applyWidth);
+  useEffect(() => {
+    applyWidthRef.current = applyWidth;
+  });
+  useEffect(() => {
+    const slot = slotRef.current;
+    const row = slot?.closest<HTMLElement>("[data-t3team-working-row]");
+    if (!row || typeof ResizeObserver !== "function") return;
+    const observer = new ResizeObserver(() => applyWidthRef.current());
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, []);
 
   const onPhase = (phase: "idle" | "out" | "in") => {
     rollingRef.current = phase === "out";
@@ -103,7 +164,11 @@ export const WorkingLeadText = ({
 
   return (
     <span ref={slotRef} className="t3team-aci-lead">
-      <SplitFlipText text={stateWord} onPhaseChange={onPhase} />
+      <SplitFlipText
+        text={stateWord}
+        onPhaseChange={onPhase}
+        {...(liveState ? { className: "font-medium" } : {})}
+      />
       <span> for </span>
       <SplitFlipText text={time} shouldFlip={timerShouldRoll} onPhaseChange={onPhase} />
       <span ref={sizerRef} className="t3team-aci-lead-sizer" aria-hidden />

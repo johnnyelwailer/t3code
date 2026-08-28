@@ -5,7 +5,9 @@ import {
   TurnId,
   type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
+// @effect-diagnostics nodeBuiltinImport:off - Regression coverage asserts the narrow-panel clamp rules in t3team-index.css.
 import { codexFeedbackMessage } from "@t3tools/client-runtime/state/threads";
+import * as NodeFS from "node:fs";
 import { createRef, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
@@ -1292,7 +1294,9 @@ describe("MessagesTimeline", () => {
     // The lead text rides the .t3team-label-shimmer defaults (the bluish sky
     // gradient). The muted-foreground override made the word read as
     // "grey on grey" in light and "dark grey on dark grey" in dark.
-    expect(markup).toContain('class="t3team-label-shimmer"');
+    // (The span also carries the narrow-panel shrink handling from the
+    // GHE #208 follow-up — the shimmer class is what this test guards.)
+    expect(markup).toContain("t3team-label-shimmer min-w-0 overflow-hidden text-ellipsis");
     expect(markup).not.toContain("shimmer-base:var(--muted-foreground)");
   });
 
@@ -1333,6 +1337,89 @@ describe("MessagesTimeline", () => {
     // …and the left "..." pulses are gone — the state word alone is enough.
     expect(withAgents).not.toContain("dark:bg-[#38bdf8]/60");
     expect(withAgents).not.toContain("animate-pulse");
+  });
+
+  it("gives the state timer a last-resort ellipsis on narrow panels instead of a hard clip (GHE #208 follow-up)", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="thinking"
+        timelineEntries={[]}
+      />,
+    );
+
+    // The lead span is the LAST-RESORT shrink point: it must be shrinkable
+    // (min-w-0), not shrink-0 — that was the hard clip at the row
+    // wrapper's overflow-x-clip when the panel went narrower than the
+    // timer. The row stays one line: the timer ellipsizes instead of
+    // wrapping to a second line.
+    expect(markup).toContain('class="flex min-w-0 items-baseline"');
+    // The "..." dots keep their priority: still unsqueezable —
+    expect(markup).toContain("inline-flex shrink-0 items-center");
+    // …and the shimmer span truncates the no-createdAt fallback run.
+    expect(markup).toContain("t3team-label-shimmer min-w-0 overflow-hidden text-ellipsis");
+  });
+
+  it("keeps the lead slot's clamp + ellipsis in .t3team-aci-lead (GHE #208 follow-up)", () => {
+    const css = NodeFS.readFileSync(
+      new URL("../../t3team/t3team-index.css", import.meta.url),
+      "utf8",
+    );
+    const rule = css.match(/\.t3team-aci-lead\s*\{[^}]*\}/)?.[0] ?? "";
+    // The slot ellipsizes when the flex row clamps it (width auto +
+    // shrink-to-fit + overflow hidden); nowrap keeps the single-line
+    // constraint (no 2nd-line wrap regression).
+    expect(rule).toContain("text-overflow: ellipsis");
+    expect(rule).toContain("overflow: hidden");
+    expect(rule).toContain("white-space: nowrap");
+    // No percentage max-width declaration: the lead sits inside an
+    // auto-basis flex item, so one resolves circular and corrupts the
+    // sizing even at wide widths (regression guard). Comments stripped so
+    // the prose above can't trip the check.
+    expect(rule.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain("max-width:");
+    const sizerRule = css.match(/\.t3team-aci-lead-sizer\s*\{[^}]*\}/)?.[0] ?? "";
+    // The sizer must measure at FULL text width, clamps included.
+    expect(sizerRule).toContain("width: max-content");
+  });
+
+  it("emphasizes the live 'working' state word so it doesn't read like the no-state fallback (GHE #208 follow-up)", () => {
+    const live = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="working"
+        timelineEntries={[]}
+      />,
+    );
+    // Same letters as the fallback, one cue apart: the deterministic state
+    // word carries the live emphasis (font-medium), the fallback does not.
+    expect(live).toContain('<span class="font-medium">Working</span>');
+
+    const fallback = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    expect(fallback).toContain(">Working</span>");
+    expect(fallback).not.toContain('<span class="font-medium">Working</span>');
+
+    // Every live state word is emphasized, not just "working".
+    const thinking = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="thinking"
+        timelineEntries={[]}
+      />,
+    );
+    expect(thinking).toContain('<span class="font-medium">Thinking</span>');
   });
 
   it("pins the live working row to the bottom, after content the turn already streamed (GHE #236)", () => {

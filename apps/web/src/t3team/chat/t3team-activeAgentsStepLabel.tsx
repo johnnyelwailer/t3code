@@ -59,7 +59,11 @@ export function T3TeamActiveAgentsStepLabel({ label }: { label: string | null })
 
   if (target === "") return null;
   return (
-    <span className="t3team-aci-step ml-2 min-w-0 text-muted-foreground/55">
+    // GHE #208 follow-up: shrink-100 makes the step label the primary
+    // shrink point — it surrenders nearly all the row's overflow, so a
+    // narrow panel truncates (then vanishes) the label before the timer
+    // text ellipsizes. Same rule as the solo working row's step label.
+    <span className="t3team-aci-step ml-2 min-w-0 shrink-100 text-muted-foreground/55">
       <span
         key={shown}
         className={
