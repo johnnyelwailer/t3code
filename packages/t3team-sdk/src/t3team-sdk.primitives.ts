@@ -22,6 +22,10 @@ export interface WorkflowPrimitivesDeps {
   readonly budgetTotal: number;
   readonly onPhase: (title: string) => void;
   readonly onLog: (message: string) => void;
+  /** Journaled uuid — artifact ids mint through this so replay is deterministic. */
+  readonly uuid: () => string;
+  /** Host timestamp formatter for artifact records. */
+  readonly nowIso: () => string;
   readonly runSubWorkflow?: (
     ref: T.WorkflowRef,
     args: unknown,
@@ -42,6 +46,8 @@ export function createWorkflowPrimitives(deps: WorkflowPrimitivesDeps): Workflow
     budgetTotal: deps.budgetTotal,
     onPhase: deps.onPhase,
     onLog: deps.onLog,
+    uuid: deps.uuid,
+    nowIso: deps.nowIso,
     ...(deps.runSubWorkflow === undefined ? {} : { runSubWorkflow: deps.runSubWorkflow }),
   });
 }

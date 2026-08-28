@@ -54,6 +54,22 @@
       "types": "./src/engine.ts",
       "import": "./src/engine.ts"
     },
+    "./events": {
+      "types": "./src/events.ts",
+      "import": "./src/events.ts"
+    },
+    "./artifacts": {
+      "types": "./src/artifacts.ts",
+      "import": "./src/artifacts.ts"
+    },
+    "./usage": {
+      "types": "./src/usage.ts",
+      "import": "./src/usage.ts"
+    },
+    "./status": {
+      "types": "./src/status.ts",
+      "import": "./src/status.ts"
+    },
     "./engineValidation": {
       "types": "./src/engineValidation.ts",
       "import": "./src/engineValidation.ts"

@@ -24,6 +24,18 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
     }
   };
 
+  // Live-path observations only: a replayed call returns the recorded result without emitting,
+  // so a subscriber sees each real transition exactly once per process lifetime.
+  const emit = (
+    type: "primitive.started" | "primitive.completed",
+    seq: number,
+    kind: string,
+    refId: string,
+  ): void => {
+    if (seat.events === undefined || seat.runId === undefined) return;
+    seat.events.on({ type, runId: seat.runId, seq, kind, refId, at: seat.nowIso() });
+  };
+
   return async <R>(call: PrimitiveCall<R>): Promise<R> => {
     if (seat.isBlackBoxed()) return await call.exec();
     const currentSeq = seat.takeSeq();
@@ -40,6 +52,7 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
     if (currentSeq <= seat.maxRecordedSeq)
       gapDrift(currentSeq, call.kind, call.refId, seat.filePath);
 
+    emit("primitive.started", currentSeq, call.kind, call.refId);
     const result = await call.exec();
     const startedAt = seat.nowIso();
     const endedAt = seat.nowIso();
@@ -48,6 +61,7 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
 
     if (isNever) {
       seat.writer.append({ ...baseEntry, kind: "script-never", result: undefined });
+      emit("primitive.completed", currentSeq, "script-never", call.refId);
       return result;
     }
 
@@ -61,6 +75,7 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
       });
     }
     seat.writer.append({ ...baseEntry, kind: call.kind, result });
+    emit("primitive.completed", currentSeq, call.kind, call.refId);
     return result;
   };
 }

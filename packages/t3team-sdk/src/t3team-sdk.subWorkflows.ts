@@ -88,6 +88,8 @@ export function buildWorkflowPrimitives(opts: {
   readonly options: T.WorkflowRunOptions;
   readonly toolRefs: ReadonlyArray<T.AnyToolRef>;
   readonly scripts: Readonly<Record<string, T.AnyScriptRef>>;
+  /** Host timestamp formatter for artifact records (threaded to sub-workflow children too). */
+  readonly nowIso: () => string;
 }): {
   readonly primitives: WorkflowPrimitives;
   readonly captureCapabilities: (capabilities: ReadonlySet<string>) => void;
@@ -102,6 +104,8 @@ export function buildWorkflowPrimitives(opts: {
     budgetTotal: options.budget ?? 0,
     onPhase: options.onPhase ?? (() => {}),
     onLog: options.onLog ?? (() => {}),
+    uuid: runtime.uuid,
+    nowIso: opts.nowIso,
   };
 
   /**

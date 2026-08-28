@@ -95,12 +95,14 @@ export async function executeWorkflowBody(
     ...(opts.options.afterPrimitive === undefined
       ? {}
       : { afterPrimitive: opts.options.afterPrimitive }),
+    ...(opts.events === undefined ? {} : { events: opts.events }),
   });
   const { primitives, captureCapabilities } = buildWorkflowPrimitives({
     runtime,
     options: opts.options,
     toolRefs,
     scripts,
+    nowIso,
   });
   return await runPreparedBody({
     runtime,

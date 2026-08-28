@@ -1,7 +1,13 @@
 import { hashArgs } from "./canonicalJson.ts";
-import { WorkflowError, WorkflowRunNotFoundError } from "./errors.ts";
-import { executeWorkflowRun, type WorkflowBodyExecutor } from "./runEngine.ts";
-import type { RunOutcome } from "./runEngine.ts";
+import { WorkflowAborted, WorkflowError, WorkflowRunNotFoundError } from "./errors.ts";
+import type { WorkflowEventSink } from "./events.ts";
+import {
+  settleRun,
+  settleRunFailed,
+  writeTerminalMeta,
+  type SettleContext,
+} from "./engineSettle.ts";
+import { executeWorkflowRun, type RunOutcome, type WorkflowBodyExecutor } from "./runEngine.ts";
 import type { JournalStore } from "./journalStore.ts";
 import { assertInputArgsMatch, assertWorkflowVersionMatch } from "./engineValidation.ts";
 
@@ -19,6 +25,13 @@ export interface WorkflowRunOptionsBase {
   readonly store?: JournalStore;
   /** Explicitly accept a changed executable, then record it as the new replay baseline. */
   readonly workflowVersionPolicy?: WorkflowVersionPolicy;
+  /** Live lifecycle observations (see {@link WorkflowEventSink}); absent = no emission. */
+  readonly events?: WorkflowEventSink;
+  /**
+   * First-class abort: the engine checks it before the body starts and hands it to the body
+   * executor, which (or its broker) throws {@link WorkflowAborted} to settle the run as aborted.
+   */
+  readonly abortSignal?: AbortSignal;
 }
 
 export type WorkflowVersionPolicy = "strict" | "allow-change";
@@ -34,6 +47,12 @@ export interface SuspendedResult {
   readonly runId: string;
   readonly suspended: true;
   readonly correlationId: string;
+}
+
+/** The run settled as aborted (its {@link AbortSignal} fired). */
+export interface AbortedResult {
+  readonly runId: string;
+  readonly aborted: true;
 }
 
 export type StartWorkflowOptions<Options extends WorkflowRunOptionsBase> = Options & {
@@ -69,22 +88,24 @@ export interface WorkflowEngine<
     ref: Ref,
     args: I,
     options?: StartWorkflowOptions<Options>,
-  ) => Promise<WorkflowRunResult<O> | SuspendedResult>;
+  ) => Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult>;
   readonly resumeWorkflow: <I, O>(
     runId: string,
     ref: Ref,
     args: I,
     options?: Options,
-  ) => Promise<WorkflowRunResult<O> | SuspendedResult>;
+  ) => Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult>;
 }
 
 function toRunResult<O>(
   runId: string,
   outcome: RunOutcome,
-): WorkflowRunResult<O> | SuspendedResult {
-  return outcome.kind === "suspended"
-    ? { runId, suspended: true, correlationId: outcome.correlationId }
-    : { runId, result: outcome.output as O };
+): WorkflowRunResult<O> | SuspendedResult | AbortedResult {
+  if (outcome.kind === "suspended") {
+    return { runId, suspended: true, correlationId: outcome.correlationId };
+  }
+  if (outcome.kind === "aborted") return { runId, aborted: true };
+  return { runId, result: outcome.output as O };
 }
 
 /**
@@ -105,7 +126,7 @@ export function createWorkflowEngine<
     ref: Ref,
     args: I,
     options: StartWorkflowOptions<Options> = {} as StartWorkflowOptions<Options>,
-  ): Promise<WorkflowRunResult<O> | SuspendedResult> => {
+  ): Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult> => {
     const runsRoot = options.runsRoot ?? adapter.defaultRunsRoot();
     const store = resolveStore(options, runsRoot);
     const runId = options.runId ?? adapter.newRunId();
@@ -129,16 +150,36 @@ export function createWorkflowEngine<
       ...(workflowVersion === undefined ? {} : { workflowVersion }),
     });
 
-    const outcome = await executeWorkflowRun({
-      runId,
-      ref,
-      args,
-      runsRoot,
+    const settle: SettleContext = {
       store,
-      options,
-      body: adapter.executeBody,
-    });
-    return toRunResult(runId, outcome);
+      runId,
+      nowIso: adapter.nowIso,
+      ...(options.events === undefined ? {} : { events: options.events }),
+    };
+    options.events?.on({ type: "run.started", runId, startKind: "start", at: adapter.nowIso() });
+    if (options.abortSignal?.aborted === true) {
+      await writeTerminalMeta(settle, "aborted");
+      options.events?.on({ type: "run.aborted", runId, at: adapter.nowIso() });
+      return { runId, aborted: true };
+    }
+    try {
+      const outcome = await executeWorkflowRun({
+        runId,
+        ref,
+        args,
+        runsRoot,
+        store,
+        options,
+        body: adapter.executeBody,
+        events: options.events,
+        abortSignal: options.abortSignal,
+      });
+      await settleRun(settle, outcome);
+      return toRunResult(runId, outcome);
+    } catch (error) {
+      // settleRunFailed rethrows the original error, so this return never completes.
+      return await settleRunFailed(settle, error);
+    }
   };
 
   const resumeWorkflow = async <I, O>(
@@ -146,11 +187,16 @@ export function createWorkflowEngine<
     ref: Ref,
     args: I,
     options: Options = {} as Options,
-  ): Promise<WorkflowRunResult<O> | SuspendedResult> => {
+  ): Promise<WorkflowRunResult<O> | SuspendedResult | AbortedResult> => {
     const runsRoot = options.runsRoot ?? adapter.defaultRunsRoot();
     const store = resolveStore(options, runsRoot);
     if (!(await store.hasRun(runId))) throw new WorkflowRunNotFoundError(store.locator(runId));
     const meta = await store.readRunMeta(runId);
+    if (meta?.terminal === "aborted") {
+      throw new WorkflowError(
+        `Cannot resume run '${runId}': it was aborted. An aborted run has no pending work to drive; start a new run instead.`,
+      );
+    }
     const workflowPath = adapter.workflowPath(ref);
     assertInputArgsMatch({ meta, args, workflowPath });
     const workflowVersion = await adapter.workflowVersion?.(ref);
@@ -168,16 +214,36 @@ export function createWorkflowEngine<
     ) {
       await store.writeRunMeta(runId, { ...meta, workflowVersion });
     }
-    const outcome = await executeWorkflowRun({
-      runId,
-      ref,
-      args,
-      runsRoot,
+    const settle: SettleContext = {
       store,
-      options,
-      body: adapter.executeBody,
-    });
-    return toRunResult(runId, outcome);
+      runId,
+      nowIso: adapter.nowIso,
+      ...(options.events === undefined ? {} : { events: options.events }),
+    };
+    options.events?.on({ type: "run.started", runId, startKind: "resume", at: adapter.nowIso() });
+    if (options.abortSignal?.aborted === true) {
+      await writeTerminalMeta(settle, "aborted");
+      options.events?.on({ type: "run.aborted", runId, at: adapter.nowIso() });
+      return { runId, aborted: true };
+    }
+    try {
+      const outcome = await executeWorkflowRun({
+        runId,
+        ref,
+        args,
+        runsRoot,
+        store,
+        options,
+        body: adapter.executeBody,
+        events: options.events,
+        abortSignal: options.abortSignal,
+      });
+      await settleRun(settle, outcome);
+      return toRunResult(runId, outcome);
+    } catch (error) {
+      // settleRunFailed rethrows the original error, so this return never completes.
+      return await settleRunFailed(settle, error);
+    }
   };
 
   return { startWorkflow, resumeWorkflow };

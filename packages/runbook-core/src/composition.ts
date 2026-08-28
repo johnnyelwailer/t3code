@@ -6,6 +6,7 @@
  * executor; no provider, catalog, loader, or product policy belongs here.
  */
 
+import { createArtifactEmitter, type ArtifactInput, type ArtifactRecord } from "./artifacts.ts";
 import { WorkflowError } from "./errors.ts";
 import type { WorkflowReference } from "./engine.ts";
 import type { PrimitiveCall } from "./runtimeTypes.ts";
@@ -39,6 +40,11 @@ export interface WorkflowPrimitives<
   readonly budget: WorkflowBudget;
   readonly phase: (title: string) => void;
   readonly log: (message: string) => void;
+  /**
+   * Emit a typed, durable artifact into the run journal (the `artifact` primitive). The
+   * returned record is stable across replay — a resumed run sees the same artifact ids.
+   */
+  readonly emit: (input: ArtifactInput) => Promise<ArtifactRecord>;
 }
 
 export interface WorkflowPrimitivesDeps<
@@ -53,6 +59,10 @@ export interface WorkflowPrimitivesDeps<
   readonly budgetTotal: number;
   readonly onPhase: (title: string) => void;
   readonly onLog: (message: string) => void;
+  /** Journaled uuid — artifact ids mint through this so replay is deterministic. */
+  readonly uuid: () => string;
+  /** Host timestamp formatter for artifact records. */
+  readonly nowIso: () => string;
   /**
    * Runs `ref` inline, in THIS run's journal sequence. Absent only for a host that does not
    * support sub-workflows at all; a nested child now receives one too, because nesting is no
@@ -178,5 +188,6 @@ export function createWorkflowPrimitives<
     budget,
     phase: deps.onPhase,
     log: deps.onLog,
+    emit: createArtifactEmitter(deps).emit,
   };
 }

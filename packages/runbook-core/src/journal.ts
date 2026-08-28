@@ -40,6 +40,15 @@ export const RunMetaSchema = Schema.Struct({
   workflowVersion: Schema.optional(Schema.String),
   argsHash: Schema.String,
   createdAt: Schema.String,
+  /**
+   * Terminal outcome marker, written by the engine when a run settles. Only `"aborted"` is a
+   * HARD terminal (the engine refuses to resume it); `"completed"` and `"failed"` runs can
+   * still be resumed — a completed resume re-checks version policy and re-drives the body,
+   * which is the host's established repair/re-run path.
+   */
+  terminal: Schema.optional(Schema.Literals(["completed", "failed", "aborted"])),
+  /** Host-formatted timestamp of the terminal settlement. */
+  terminalAt: Schema.optional(Schema.String),
 });
 export type RunMeta = typeof RunMetaSchema.Type;
 const decodeRunMeta = Schema.decodeUnknownSync(RunMetaSchema);

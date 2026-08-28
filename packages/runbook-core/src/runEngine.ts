@@ -1,4 +1,6 @@
 import type { WorkflowReference } from "./engine.ts";
+import type { WorkflowEventSink } from "./events.ts";
+import { WorkflowAborted } from "./errors.ts";
 import { WorkflowSuspended } from "./handles.ts";
 import type { JournalMaps } from "./journalReader.ts";
 import type { JournalStore, JournalSink } from "./journalStore.ts";
@@ -6,7 +8,8 @@ import { createStoreSink } from "./journalStore.ts";
 
 export type RunOutcome<O = unknown> =
   | { readonly kind: "completed"; readonly output: O }
-  | { readonly kind: "suspended"; readonly correlationId: string };
+  | { readonly kind: "suspended"; readonly correlationId: string }
+  | { readonly kind: "aborted" };
 
 export interface ExecuteBodyRequest<Ref extends WorkflowReference, Options> {
   readonly runId: string;
@@ -17,6 +20,10 @@ export interface ExecuteBodyRequest<Ref extends WorkflowReference, Options> {
   readonly journal: JournalMaps;
   readonly sink: JournalSink;
   readonly options: Options;
+  /** Live lifecycle observations; forward to the durable runtime so it emits primitive events. */
+  readonly events?: WorkflowEventSink;
+  /** Host abort signal; the executor/broker checks it and throws {@link WorkflowAborted}. */
+  readonly abortSignal?: AbortSignal;
 }
 
 /** Host-specific body loading, capability binding, and execution behind the core run loop. */
@@ -28,8 +35,9 @@ export type WorkflowBodyExecutor<Ref extends WorkflowReference, Options> = (
  * Execute one body inside the generic durability barrier.
  *
  * The body may use any host-specific loader, tool catalog, or broker, but it receives the
- * already-loaded replay maps and one ordered sink. Core catches only the identity-based durable
- * suspension signal and always flushes/disposes the sink before returning an outcome.
+ * already-loaded replay maps and one ordered sink. Core catches the identity-based durable
+ * suspension signal and the first-class abort signal, and always flushes/disposes the sink
+ * before returning an outcome.
  */
 export async function executeWorkflowRun<Ref extends WorkflowReference, Options>(opts: {
   readonly runId: string;
@@ -39,6 +47,8 @@ export async function executeWorkflowRun<Ref extends WorkflowReference, Options>
   readonly store: JournalStore;
   readonly options: Options;
   readonly body: WorkflowBodyExecutor<Ref, Options>;
+  readonly events?: WorkflowEventSink | undefined;
+  readonly abortSignal?: AbortSignal | undefined;
 }): Promise<RunOutcome> {
   const journal = await opts.store.readEntries(opts.runId);
   const sink = createStoreSink(opts.store, opts.runId);
@@ -52,11 +62,16 @@ export async function executeWorkflowRun<Ref extends WorkflowReference, Options>
       journal,
       sink,
       options: opts.options,
+      ...(opts.events === undefined ? {} : { events: opts.events }),
+      ...(opts.abortSignal === undefined ? {} : { abortSignal: opts.abortSignal }),
     });
     return { kind: "completed", output };
   } catch (error) {
     if (error instanceof WorkflowSuspended) {
       return { kind: "suspended", correlationId: error.correlationId };
+    }
+    if (error instanceof WorkflowAborted) {
+      return { kind: "aborted" };
     }
     throw error;
   } finally {

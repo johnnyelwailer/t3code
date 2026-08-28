@@ -58,6 +58,19 @@ export class CancelledError extends WorkflowError {
     this.name = "CancelledError";
   }
 }
+/**
+ * First-class abort (Epic 25 §Error classes). Thrown by a host executor/broker when the run's
+ * {@link AbortSignal} fires; the engine converts it into the `aborted` run outcome, stamps the
+ * terminal marker, and re-throws it so the caller can tell "aborted" apart from "failed".
+ * Distinct from {@link CancelledError} (a primitive-level cancellation) — this one settles the
+ * whole run.
+ */
+export class WorkflowAborted extends WorkflowError {
+  constructor(message = "Workflow run was aborted.") {
+    super(message);
+    this.name = "WorkflowAborted";
+  }
+}
 /** Refuses to load a workflow that violates a determinism contract at load time. */
 export class WorkflowLoadError extends WorkflowError {
   constructor(message: string) {
