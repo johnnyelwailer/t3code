@@ -13,6 +13,8 @@ export type {
   WorkflowRunIntent,
 } from "./tools/t3team-sdk.workflow.ts";
 export { runWorkflowTool } from "./tools/t3team-sdk.workflow.ts";
+export type { RunSandboxToolArgs, RunSandboxToolResult } from "./tools/t3team-sdk.sandbox.ts";
+export { runSandboxTool } from "./tools/t3team-sdk.sandbox.ts";
 export type { RenameThreadToolArgs, RenameThreadToolResult } from "./tools/t3team-sdk.t3team.ts";
 export type {
   ListRecipesToolResult,

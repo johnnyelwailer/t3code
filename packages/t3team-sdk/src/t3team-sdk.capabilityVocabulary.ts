@@ -35,6 +35,7 @@ export const TOOL_GROUP_IDS = [
   "mutation.draft",
   "thread.handoff",
   "ui.render",
+  "sandbox.execute",
 ] as const;
 
 /**
