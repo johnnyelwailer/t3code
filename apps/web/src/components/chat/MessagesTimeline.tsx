@@ -9,6 +9,7 @@ import {
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
+import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
 import { T3TeamActiveAgentsStepLabel } from "~/t3team/chat/t3team-activeAgentsStepLabel";
 import { ACTIVITY_STATE_WORDS, type ActivityState } from "~/t3team/t3team-activityStateDisplay";
 import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
@@ -160,7 +161,7 @@ import { useThreadShell } from "~/state/entities";
 // Context — shared state consumed by every row component via Context.
 // Propagates through LegendList's memo boundaries for shared callbacks and
 // non-row-scoped state. `nowIso` is intentionally excluded — self-ticking
-// components (WorkingTimer, LiveElapsed) handle it.
+// components (WorkingLeadText) handle it.
 // ---------------------------------------------------------------------------
 
 interface TimelineRowSharedState {
@@ -219,6 +220,12 @@ interface TimelineRowActivityState {
   activeAgents: readonly ActiveAgentEntry[];
   /** GHE #201: opens the Agents panel from the working-row indicator. */
   onOpenAgents: () => void;
+  /**
+   * GHE #201 follow-up: opens ONE agent (per-dot click). When provided, each
+   * indicator dot opens its own thread/agent; when omitted, every dot falls
+   * back to the group `onOpenAgents`.
+   */
+  onOpenAgent?: ((entry: ActiveAgentEntry) => void) | undefined;
   /**
    * GHE #236/#208: the thread's deterministic activity state. Bases the
    * working row's status word so the conversation renders ONE state-driven
@@ -282,6 +289,8 @@ interface MessagesTimelineProps {
   /** GHE #201: active agents for the working row (running child threads + live subagents). */
   activeAgents?: readonly ActiveAgentEntry[];
   onOpenAgents?: () => void;
+  /** GHE #201 follow-up: per-dot open (child thread / agent view on the side). */
+  onOpenAgent?: (entry: ActiveAgentEntry) => void;
   isWorking: boolean;
   workingStepLabel?: string | null;
   activeTurnStartedAt: string | null;
@@ -352,6 +361,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   /** GHE #201: active agents for the working row (running child threads + live subagents). */
   activeAgents = EMPTY_ACTIVE_AGENTS,
   onOpenAgents = NOOP_OPEN_AGENTS,
+  onOpenAgent,
   listRef,
   timelineEntries,
   latestTurn,
@@ -755,6 +765,27 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       actorOutboundRelations,
     ],
   );
+  // GHE #201 follow-up: per-dot open default. A child dot opens its own
+  // thread via the host's onOpenThread (the same seam the work-log child
+  // links use; the project id comes from the current thread's shell); a
+  // subagent dot — or any entry we can't resolve — opens the Agents panel.
+  const routeThreadRef = parseScopedThreadKey(routeThreadKey);
+  const routeThreadShell = useThreadShell(routeThreadRef);
+  const onOpenAgentDefault = useMemo(() => {
+    if (!onOpenThread || !routeThreadShell) return undefined;
+    const projectId = routeThreadShell.projectId;
+    return (entry: ActiveAgentEntry) => {
+      if (entry.source === "child") {
+        const PREFIX = "child:";
+        if (entry.id.startsWith(PREFIX)) {
+          onOpenThread({ projectId, threadId: entry.id.slice(PREFIX.length) });
+          return;
+        }
+      }
+      onOpenAgents();
+    };
+  }, [onOpenThread, routeThreadShell, onOpenAgents]);
+
   const activityState = useMemo<TimelineRowActivityState>(
     () => ({
       isWorking,
@@ -763,6 +794,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workingStepLabel,
       activeAgents,
       onOpenAgents,
+      onOpenAgent: onOpenAgent ?? onOpenAgentDefault,
       threadActivityState,
     }),
     [
@@ -771,6 +803,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isWorking,
       latestTurn?.turnId,
       onOpenAgents,
+      onOpenAgent,
+      onOpenAgentDefault,
       threadActivityState,
       workingStepLabel,
     ],
@@ -1617,7 +1651,7 @@ const TurnPlanTimelineRow = memo(function TurnPlanTimelineRow({
 });
 
 export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { isWorking, workingStepLabel, activeAgents, onOpenAgents, threadActivityState } =
+  const { isWorking, workingStepLabel, activeAgents, onOpenAgents, onOpenAgent, threadActivityState } =
     use(TimelineRowActivityCtx);
   const hasActiveAgents = activeAgents.length > 0;
   // GHE #201: main turn idle but agents active — the row leads with the
@@ -1634,7 +1668,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   // that #7152 rendered beneath this line is gone — it was a duplicate.
   const stateWord = threadActivityState ? ACTIVITY_STATE_WORDS[threadActivityState] : "Working";
   return (
-    <div>
+    <div data-t3team-working-row>
       <div className="border-b border-border/60 pb-2 pt-1">
         {/* GHE #238: single-line, no wrap. The row is a flex line; the timer
             text and the dots never shrink, and the step label is the sole
@@ -1656,7 +1690,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
                 <span className="t3team-label-shimmer [--shimmer-base:var(--muted-foreground)] [--shimmer-glow:var(--foreground)]">
                   {row.createdAt ? (
                     <>
-                      {stateWord} for <WorkingTimer createdAt={row.createdAt} />
+                      <WorkingLeadText stateWord={stateWord} createdAt={row.createdAt} />
                     </>
                   ) : (
                     `${stateWord}...`
@@ -1666,7 +1700,11 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
             )}
           </span>
           {hasActiveAgents ? (
-            <T3TeamActiveAgentsIndicator entries={activeAgents} onOpenAgents={onOpenAgents} />
+            <T3TeamActiveAgentsIndicator
+              entries={activeAgents}
+              onOpenAgents={onOpenAgents}
+              onOpenAgent={onOpenAgent}
+            />
           ) : null}
           {hasActiveAgents ? (
             <T3TeamActiveAgentsStepLabel label={workingStepLabel ?? idleAgentSummary} />
@@ -1734,28 +1772,6 @@ function ThreadErrorTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "th
 // does not create a React commit every second while a response is streaming.
 // ---------------------------------------------------------------------------
 
-/** Live "Working for Xs" label. */
-function WorkingTimer({ createdAt }: { createdAt: string }) {
-  const textRef = useRef<HTMLSpanElement>(null);
-  const initialText = formatWorkingTimerNow(createdAt);
-
-  useEffect(() => {
-    const updateText = () => {
-      if (textRef.current) {
-        textRef.current.textContent = formatWorkingTimerNow(createdAt);
-      }
-    };
-    updateText();
-    const id = setInterval(updateText, 1000);
-    return () => clearInterval(id);
-  }, [createdAt]);
-
-  return (
-    <span ref={textRef} className="tabular-nums">
-      {initialText}
-    </span>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Extracted row sections — own their state / store subscriptions so changes
@@ -2501,32 +2517,6 @@ function useStableRows(rows: MessagesTimelineRow[]): MessagesTimelineRow[] {
 // Pure helpers
 // ---------------------------------------------------------------------------
 
-function formatWorkingTimer(startIso: string, endIso: string): string | null {
-  const startedAtMs = Date.parse(startIso);
-  const endedAtMs = Date.parse(endIso);
-  if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs)) {
-    return null;
-  }
-
-  const elapsedSeconds = Math.max(0, Math.floor((endedAtMs - startedAtMs) / 1000));
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`;
-  }
-
-  const hours = Math.floor(elapsedSeconds / 3600);
-  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-  const seconds = elapsedSeconds % 60;
-
-  if (hours > 0) {
-    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-  }
-
-  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-}
-
-function formatWorkingTimerNow(startIso: string): string {
-  return formatWorkingTimer(startIso, new Date().toISOString()) ?? "0s";
-}
 
 type WorkEntryIconName =
   | "bot"

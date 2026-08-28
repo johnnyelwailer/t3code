@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { TurnId } from "@t3tools/contracts";
 import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
-import type { ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
+import { deriveDotState, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 
 /**
  * DESIGN → INTEGRATION (GHE #201): the active-agents indicator in the
@@ -76,6 +76,7 @@ function buildEntries(
     title: seed.title,
     statusLabel: seed.statusLabel,
     activityKey: `c${i}|${eventTicks.get(`child-${i}`) ?? 0}`,
+    dotState: deriveDotState({ label: seed.statusLabel }),
   }));
   const subagents = SUBAGENT_SEEDS.slice(0, subagentCount).map((seed, i) => ({
     id: `agent-${i}`,
@@ -83,6 +84,7 @@ function buildEntries(
     title: seed.title,
     statusLabel: seed.statusLabel,
     activityKey: `a${i}|${eventTicks.get(`agent-${i}`) ?? 0}`,
+    dotState: deriveDotState({ label: seed.statusLabel }),
   }));
   return [...children, ...subagents];
 }

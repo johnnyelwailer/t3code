@@ -27,6 +27,33 @@ export interface ActiveAgentEntry {
   readonly statusLabel: string;
   /** Changes on every live-output event; drives the one-shot dot pulse. */
   readonly activityKey: string;
+  /** GHE #201 follow-up: this agent's dot state (textures the indicator dot). */
+  readonly dotState: DotState;
+}
+
+/**
+ * GHE #201 follow-up — the per-agent dot states for the state-textured
+ * indicator dots. Production has no per-agent state enum, so the dot state
+ * is classified from the live label the app already tracks:
+ * read-ish → thinking, write-ish → writing, waiting → waiting,
+ * everything else → working. `settled` is reserved (the story exploration's
+ * fourth-and-fifth state); active agents are never settled in production.
+ */
+export type DotState = "thinking" | "writing" | "working" | "waiting" | "settled";
+
+export function deriveDotState({
+  label,
+  status,
+}: {
+  readonly label?: string | null | undefined;
+  readonly status?: string | null | undefined;
+}): DotState {
+  if (status === "waiting") return "waiting";
+  const text = (label ?? "").toLowerCase();
+  if (!text) return "working";
+  if (/read|search|browse|analyz|investigat|examin/.test(text)) return "thinking";
+  if (/edit|writ|patch|creat|draft|implement|author/.test(text)) return "writing";
+  return "working";
 }
 
 export const EMPTY_ACTIVE_AGENTS: readonly ActiveAgentEntry[] = [];
@@ -52,6 +79,7 @@ export function mergeActiveAgentsAndChildren({
       title: thread.title,
       statusLabel: thread.activityLabel ?? "Working",
       activityKey: `${thread.childStatusUpdatedAt ?? ""}|${thread.lastMessageAt}|${thread.activityLabel ?? ""}`,
+      dotState: deriveDotState({ label: thread.activityLabel }),
     });
   }
   const pushSubagent = (agent: RuntimeSubagent) => {
@@ -62,6 +90,7 @@ export function mergeActiveAgentsAndChildren({
       title: agent.title,
       statusLabel: subagentStatusLabel(agent),
       activityKey: `${agent.updatedAt}|${agent.progress ?? ""}|${agent.lastToolName ?? ""}|${agent.status}`,
+      dotState: deriveDotState({ label: subagentStatusLabel(agent), status: agent.status }),
     });
   };
   for (const agent of agentPanelModel.directAgents) pushSubagent(agent);

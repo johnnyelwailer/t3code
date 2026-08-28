@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { ActiveAgentEntry } from "./t3team-activeAgentsCore";
+import { deriveDotState, type ActiveAgentEntry } from "./t3team-activeAgentsCore";
 import { T3TeamActiveAgentsIndicator } from "./t3team-activeAgentsIndicator";
 
 const ENTRIES: readonly ActiveAgentEntry[] = [
@@ -14,6 +14,7 @@ const ENTRIES: readonly ActiveAgentEntry[] = [
     title: "Child A",
     statusLabel: "Editing code",
     activityKey: "k1",
+    dotState: "writing",
   },
   {
     id: "agent:sub-1",
@@ -21,6 +22,7 @@ const ENTRIES: readonly ActiveAgentEntry[] = [
     title: "Sub B",
     statusLabel: "Running tests",
     activityKey: "k2",
+    dotState: "working",
   },
 ];
 
@@ -63,5 +65,49 @@ describe("T3TeamActiveAgentsIndicator", () => {
     expect(onOpenAgents).toHaveBeenCalledTimes(1);
     act(() => root.unmount());
     container.remove();
+  });
+
+  it("stamps each dot with its entry's dotState (state-texture hook)", () => {
+    const markup = renderToStaticMarkup(
+      <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={() => {}} />,
+    );
+    expect(markup).toContain('data-t3team-state="writing"');
+    expect(markup).toContain('data-t3team-state="working"');
+  });
+
+  it("opens the clicked agent when onOpenAgent is provided (per-dot open)", () => {
+    const onOpenAgents = vi.fn();
+    const onOpenAgent = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    let root: Root;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={onOpenAgents} onOpenAgent={onOpenAgent} />,
+      );
+    });
+    const dots = container.querySelectorAll<HTMLElement>(".t3team-aci-cell");
+    expect(dots.length).toBe(2);
+    act(() => {
+      dots[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onOpenAgent).toHaveBeenCalledTimes(1);
+    expect(onOpenAgent).toHaveBeenCalledWith(ENTRIES[1]);
+    expect(onOpenAgents).toHaveBeenCalledTimes(0);
+    act(() => root.unmount());
+    container.remove();
+  });
+});
+
+describe("deriveDotState", () => {
+  it("classifies read-ish labels as thinking, write-ish as writing, rest as working", () => {
+    expect(deriveDotState({ label: "Reading contracts" })).toBe("thinking");
+    expect(deriveDotState({ label: "Searching the repo" })).toBe("thinking");
+    expect(deriveDotState({ label: "Editing code" })).toBe("writing");
+    expect(deriveDotState({ label: "Drafting notes" })).toBe("writing");
+    expect(deriveDotState({ label: "Running tests" })).toBe("working");
+    expect(deriveDotState({ label: null })).toBe("working");
+    expect(deriveDotState({ label: "anything", status: "waiting" })).toBe("waiting");
   });
 });
