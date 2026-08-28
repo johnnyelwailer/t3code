@@ -18,6 +18,7 @@ import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shar
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
@@ -1433,9 +1434,67 @@ const make = Effect.gen(function* () {
     // session, settles it with the failure detail, and records a failure
     // activity — covering the "adapter session gone after restart" case the
     // fork fix targeted, without clobbering lastError on the success path.
+    // Pass the turn id through so a pack whose in-memory session is gone
+    // (restart, reaped instance) can still emit a turn.aborted targeted at
+    // the host's active turn — without it the pack's fallback branch is
+    // dead code and the interrupt is a silent no-op that leaves the thread
+    // session "running" forever (residual stuck-stop, GHE #256 family).
     yield* providerService
-      .interruptTurn({ threadId: event.payload.threadId })
+      .interruptTurn({
+        threadId: event.payload.threadId,
+        ...(event.payload.turnId !== undefined ? { turnId: event.payload.turnId } : {}),
+      })
       .pipe(Effect.catchCause(recoverInterruptFailure));
+
+    // Residual stuck-stop backstop: the interrupt above asks the provider to
+    // abort the turn and the provider is expected to settle it with a
+    // terminal event (turn.aborted / turn.completed) that
+    // ProviderRuntimeIngestion applies. If that event never arrives — the
+    // provider lost its in-memory session, a run that ignored the abort
+    // signal, a broken event stream — the thread must not sit "running"
+    // with a Stop button that does nothing: force-settle the session once
+    // the exact turn we asked to stop is still active after the grace
+    // window. (The provider emits turn.aborted synchronously during the
+    // interrupt, so this only fires when the terminal event was lost.)
+    yield* Effect.sleep(Duration.seconds(30)).pipe(
+      Effect.andThen(
+        Effect.gen(function* () {
+          const latest = yield* resolveThread(event.payload.threadId);
+          const session = latest?.session;
+          if (
+            session?.status !== "running" ||
+            session.activeTurnId === null ||
+            (event.payload.turnId !== undefined && session.activeTurnId !== event.payload.turnId)
+          ) {
+            return; // settled by the provider, or a different turn is now active
+          }
+          yield* Effect.logWarning("provider.turn.interrupt-no-terminal-event", {
+            threadId: event.payload.threadId,
+            turnId: event.payload.turnId ?? null,
+            graceSeconds: 30,
+          });
+          const nowIso = DateTime.formatIso(yield* DateTime.now);
+          yield* setThreadSession({
+            threadId: event.payload.threadId,
+            session: {
+              ...session,
+              status: "ready",
+              activeTurnId: null,
+              updatedAt: nowIso,
+            },
+            createdAt: nowIso,
+          });
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("provider.turn.interrupt-backstop-failed", {
+              threadId: event.payload.threadId,
+              cause: Cause.pretty(cause),
+            }),
+          ),
+        ),
+      ),
+      Effect.forkScoped,
+    );
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (

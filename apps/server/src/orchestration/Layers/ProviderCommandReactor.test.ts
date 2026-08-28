@@ -2878,6 +2878,9 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.interruptTurn.mock.calls.length === 1);
     expect(harness.interruptTurn.mock.calls[0]?.[0]).toEqual({
       threadId: "thread-1",
+      // The turn id must reach the provider: a pack whose in-memory session
+      // is gone (restart/reap) can only emit a targeted turn.aborted with it.
+      turnId: asTurnId("turn-1"),
     });
   });
 
