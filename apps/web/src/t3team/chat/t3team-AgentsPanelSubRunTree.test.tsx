@@ -10,7 +10,16 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+
+const settingsState = vi.hoisted(() => ({
+  activityLabelsEnabled: true,
+}));
+
+vi.mock("~/hooks/useSettings", () => ({
+  usePrimarySettings: (selector?: (settings: Record<string, unknown>) => unknown) =>
+    selector ? selector({ t3teamActivityLabelsEnabled: settingsState.activityLabelsEnabled }) : {},
+}));
 
 import type { ProjectThread } from "~/t3team/t3team-types";
 import type { SubRunNode } from "./t3team-AgentsPanelForkSection.logic";
@@ -115,5 +124,44 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     expect(alert!.className.baseVal).toContain("size-3");
     expect(alert!.className.baseVal).toContain("text-destructive");
     expect(container!.querySelector(".size-1\\.5")).toBeNull();
+  });
+});
+
+describe("T3TeamAgentsPanelSubRunTree live status text (GHE #208 seam)", () => {
+  const statusText = () => container!.querySelector("button .font-mono")?.textContent ?? "";
+
+  it("a running sub-run with an LLM label shows the label (shared resolution, flag on)", () => {
+    render([
+      node(
+        createThread({
+          status: "running",
+          activityState: "writing",
+          activityLabel: "Editing the router",
+        }),
+      ),
+    ]);
+    expect(statusText()).toBe("Editing the router");
+  });
+
+  it("a running sub-run with only a state word shows the word (flag off drops the label)", () => {
+    settingsState.activityLabelsEnabled = false;
+    render([
+      node(
+        createThread({
+          status: "running",
+          activityState: "writing",
+          activityLabel: "Editing the router",
+        }),
+      ),
+    ]);
+    expect(statusText()).toBe("Writing");
+    settingsState.activityLabelsEnabled = true;
+  });
+
+  it("a running sub-run with neither falls back to the stable label; dots are untouched", () => {
+    render([node(createThread({ status: "running" }))]);
+    expect(statusText()).toBe("Running");
+    // the running dot/icon language from GHE #254 is unchanged
+    expect(ringSvg(), "running sub-run still carries the pulsing ring").toBeTruthy();
   });
 });

@@ -4,6 +4,7 @@ import type { ProjectThread } from "~/t3team/t3team-types";
 import { SUB_RUN_LIFECYCLE_RANK } from "~/t3team/components/t3team-projectSidebarThreadTree";
 import {
   buildSubRunTree,
+  resolveSubRunStatusLabel,
   sortSubRunNodes,
 } from "./t3team-AgentsPanelForkSection.logic";
 
@@ -133,11 +134,7 @@ describe("sortSubRunNodes", () => {
       thread: createThread({ id, status: "running", createdAt: at(createdOffsetMinutes) }),
       children: [],
     });
-    const nodes = [
-      make("b", -2),
-      make("c", -3),
-      make("a", -1),
-    ];
+    const nodes = [make("b", -2), make("c", -3), make("a", -1)];
     const order = sortSubRunNodes(nodes).map((node) => node.thread.id);
     // Every tick a different child gets the freshest lastMessageAt — the pattern that
     // reshuffled the list under the old recency sort. Order must not change.
@@ -152,8 +149,14 @@ describe("sortSubRunNodes", () => {
   it("breaks ties on equal createdAt by id", () => {
     const at = new Date().toISOString();
     const nodes = [
-      { thread: createThread({ id: "completed-b", status: "completed", createdAt: at }), children: [] },
-      { thread: createThread({ id: "completed-a", status: "completed", createdAt: at }), children: [] },
+      {
+        thread: createThread({ id: "completed-b", status: "completed", createdAt: at }),
+        children: [],
+      },
+      {
+        thread: createThread({ id: "completed-a", status: "completed", createdAt: at }),
+        children: [],
+      },
     ];
     expect(sortSubRunNodes(nodes).map((node) => node.thread.id)).toEqual([
       "completed-a",
@@ -175,5 +178,49 @@ describe("SUB_RUN_LIFECYCLE_RANK", () => {
     expect(SUB_RUN_LIFECYCLE_RANK.running).toBeLessThan(SUB_RUN_LIFECYCLE_RANK.error);
     expect(SUB_RUN_LIFECYCLE_RANK.error).toBeLessThan(SUB_RUN_LIFECYCLE_RANK.idle);
     expect(SUB_RUN_LIFECYCLE_RANK.idle).toBeLessThan(SUB_RUN_LIFECYCLE_RANK.completed);
+  });
+});
+
+describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
+  it("shows the LLM activity label when it flows and the flag is on", () => {
+    const thread = createThread({
+      status: "running",
+      activityState: "writing",
+      activityLabel: "Editing the router",
+    });
+    expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(
+      "Editing the router",
+    );
+  });
+
+  it("falls back to the deterministic state word when no label flows (flag off or absent)", () => {
+    const thread = createThread({ status: "running", activityState: "writing" });
+    expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe("Writing");
+    const labeled = createThread({
+      status: "running",
+      activityState: "writing",
+      activityLabel: "Editing the router",
+    });
+    expect(resolveSubRunStatusLabel(labeled, { activityLabelsEnabled: false })).toBe("Writing");
+  });
+
+  it("keeps the stable status label when neither label nor state is available", () => {
+    const thread = createThread({ status: "running" });
+    expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe("Running");
+  });
+
+  it("never shows a live word for settled states — the stable label stands", () => {
+    for (const [status, label] of [
+      ["idle", "Idle"],
+      ["completed", "Completed"],
+      ["error", "Error"],
+    ] as const) {
+      const thread = createThread({
+        status,
+        activityState: "working",
+        activityLabel: "Editing the router",
+      });
+      expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(label);
+    }
   });
 });

@@ -8,21 +8,16 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "~/lib/utils";
+import { usePrimarySettings } from "~/hooks/useSettings";
 import { formatRelativeTime } from "~/t3team/components/t3team-projectSidebarTimeLabels";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import {
+  resolveSubRunStatusLabel,
   sortSubRunNodes,
   type SubRunNode,
   type SubRunOpenCallback,
 } from "./t3team-AgentsPanelForkSection.logic";
 import { SubRunStatusIcon } from "./t3team-AgentsPanelSubRunStatusIcon";
-
-const CHILD_STATUS: Record<ProjectThread["status"], { label: string }> = {
-  idle: { label: "Idle" },
-  running: { label: "Running" },
-  completed: { label: "Completed" },
-  error: { label: "Error" },
-};
 
 const INDENT_CLASS = "ml-3 border-l border-border/40 pl-2";
 
@@ -56,6 +51,12 @@ function SubRunRow({
   onToggle?: (() => void) | undefined;
   onOpen: SubRunOpenCallback;
 }) {
+  // GHE #208 seam: the row's status TEXT goes through the SAME shared resolution as the
+  // sidebar sub-run rows (LLM label → state word → stable label); the dot/icon keep
+  // their own 4-state + settled visuals untouched.
+  const activityLabelsEnabled = usePrimarySettings(
+    (settings) => settings.t3teamActivityLabelsEnabled,
+  );
   return (
     <div className="flex w-full items-center gap-1 rounded-md px-1.5 py-1 hover:bg-accent/40">
       {hasChildren ? (
@@ -79,7 +80,7 @@ function SubRunRow({
         <SubRunStatusIcon status={thread.status} />
         <span className="min-w-0 flex-1 truncate text-sm">{thread.title}</span>
         <span className="shrink-0 font-mono text-[.7rem] text-muted-foreground/80">
-          {CHILD_STATUS[thread.status].label}
+          {resolveSubRunStatusLabel(thread, { activityLabelsEnabled })}
         </span>
         <span className="shrink-0 font-mono text-[.7rem] tabular-nums text-muted-foreground/60">
           {formatRelativeTime(thread.lastMessageAt)}
