@@ -1676,8 +1676,14 @@ const TurnPlanTimelineRow = memo(function TurnPlanTimelineRow({
 });
 
 export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { isWorking, workingStepLabel, activeAgents, onOpenAgents, onOpenAgent, threadActivityState } =
-    use(TimelineRowActivityCtx);
+  const {
+    isWorking,
+    workingStepLabel,
+    activeAgents,
+    onOpenAgents,
+    onOpenAgent,
+    threadActivityState,
+  } = use(TimelineRowActivityCtx);
   const hasActiveAgents = activeAgents.length > 0;
   // GHE #201: main turn idle but agents active — the row leads with the
   // count instead of a (nonexistent) timer, and the label defaults to the
@@ -1706,13 +1712,21 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
               </>
             ) : (
               <>
-                {/* upstream progress dots: three staggered pulses, restored */}
-                <span className="mr-1.5 inline-flex items-center gap-[3px]" aria-hidden>
-                  <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse motion-reduce:animate-none" />
-                  <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:200ms] motion-reduce:animate-none" />
-                  <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:400ms] motion-reduce:animate-none" />
-                </span>
-                <span className="t3team-label-shimmer [--shimmer-base:var(--muted-foreground)] [--shimmer-glow:var(--foreground)]">
+                {/* GHE #201 follow-up: the "..." pulses only stand in when NO
+                    agent dots are on the row — once the subagent dots carry
+                    each agent's state, the thread-level state word alone is
+                    enough up front. When shown, they ride the shimmer's own
+                    blue (light sky-700 / dark sky-400, matching the
+                    .t3team-label-shimmer defaults) so the "..." stays visible
+                    in both themes; muted-grey dots read as "gone" on dark. */}
+                {!hasActiveAgents ? (
+                  <span className="mr-1.5 inline-flex items-center gap-[3px]" aria-hidden>
+                    <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse motion-reduce:animate-none" />
+                    <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse [animation-delay:200ms] motion-reduce:animate-none" />
+                    <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse [animation-delay:400ms] motion-reduce:animate-none" />
+                  </span>
+                ) : null}
+                <span className="t3team-label-shimmer">
                   {row.createdAt ? (
                     <>
                       <WorkingLeadText stateWord={stateWord} createdAt={row.createdAt} />
@@ -1796,7 +1810,6 @@ function ThreadErrorTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "th
 // Self-ticking labels — update their own text nodes so elapsed-time display
 // does not create a React commit every second while a response is streaming.
 // ---------------------------------------------------------------------------
-
 
 // ---------------------------------------------------------------------------
 // Extracted row sections — own their state / store subscriptions so changes
@@ -2541,7 +2554,6 @@ function useStableRows(rows: MessagesTimelineRow[]): MessagesTimelineRow[] {
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
-
 
 type WorkEntryIconName =
   | "bot"

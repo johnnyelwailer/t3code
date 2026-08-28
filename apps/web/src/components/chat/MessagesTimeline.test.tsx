@@ -132,6 +132,14 @@ vi.mock("@pierre/diffs/react", () => {
   return { FileDiff: MockFileDiff };
 });
 
+// The real step label runs a hover useSyncExternalStore, which SSR
+// (renderToStaticMarkup) cannot run; the working-row tests only need its
+// slot to exist, not its debounce/FLIP behavior.
+vi.mock("~/t3team/chat/t3team-activeAgentsStepLabel", () => ({
+  T3TeamActiveAgentsStepLabel: ({ label }: { label: string | null }) =>
+    label ? <span data-testid="active-agents-step-label">{label}</span> : null,
+}));
+
 function matchMedia() {
   return {
     matches: false,
@@ -1269,6 +1277,62 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain(">Working</span>");
     // No second live row of any kind.
     expect(markup).not.toContain("live-activity-focus");
+  });
+
+  it("keeps the live working row's lead text in the blue shimmer, not muted grey (regression)", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+
+    // The lead text rides the .t3team-label-shimmer defaults (the bluish sky
+    // gradient). The muted-foreground override made the word read as
+    // "grey on grey" in light and "dark grey on dark grey" in dark.
+    expect(markup).toContain('class="t3team-label-shimmer"');
+    expect(markup).not.toContain("shimmer-base:var(--muted-foreground)");
+  });
+
+  it('hides the left "..." pulses when agent dots are on the row; keeps them solo, in blue (regression)', () => {
+    const solo = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    // Solo working row: the three "..." pulses stand in, in the shimmer's
+    // blue so they stay visible on dark instead of fading into the background.
+    expect(solo.split("dark:bg-[#38bdf8]/60").length - 1).toBe(3);
+    expect(solo).not.toContain("bg-muted-foreground/30 animate-pulse");
+
+    const withAgents = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        activeAgents={[
+          {
+            id: "agent-dot-qa",
+            source: "child",
+            title: "Dot QA",
+            statusLabel: "Working",
+            activityKey: "k1",
+            dotState: "working",
+          },
+        ]}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    // The subagent dots on the right stay…
+    expect(withAgents).toContain('data-t3team-state="working"');
+    // …and the left "..." pulses are gone — the state word alone is enough.
+    expect(withAgents).not.toContain("dark:bg-[#38bdf8]/60");
+    expect(withAgents).not.toContain("animate-pulse");
   });
 
   it("pins the live working row to the bottom, after content the turn already streamed (GHE #236)", () => {
