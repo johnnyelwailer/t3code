@@ -49,6 +49,14 @@ Prefix policy:
   - Parse and render context attachment chips from user message text, then strip the inline attachment block from message body rendering so timeline displays clean content.
 - `apps/web/src/composerDraftStore.ts`
   - Add optional `contextAttachments?: ComposerContextAttachment[]` field + 3 CRUD methods (`addContextAttachment`, `removeContextAttachment`, `clearContextAttachments`) to per-thread draft state. Generic, upstreamable extension point for ephemeral context attachments.
+- `apps/web/src/rightPanelStore.ts`
+  - Add the `thread` (side-chat) surface kind: `thread:<threadId>` reference surfaces plus the `openThreadSurface` action (no-op for the thread's own id), and v12 persistence migration that validates thread-surface references.
+- `apps/web/src/rightPanelStore.test.ts`
+  - Unit tests for the side-chat surface: open/activate, no-self, peer-tab coexistence, per-thread scoping, close fallback, and migration validation.
+- `apps/web/src/components/RightPanelTabs.tsx`
+  - Tab title (thread-shell registry, "Thread" fallback) and `MessagesSquare` icon for `thread` surfaces so side chats render as standard tabs alongside Files/Agents/Preview.
+- `apps/web/src/components/RightPanelTabs.test.tsx`
+  - Tests for side-chat tab labeling: shell-title labels, fallback, and coexistence with browser tabs.
 - `apps/server/src/provider/Layers/CodexSessionRuntime.ts`
   - Bind the in-process t3team tool broker into Codex session startup so dynamic tool registration and MCP-backed view/thread actions work per thread without introducing a second provider stack.
 - `apps/server/src/provider/Layers/CodexSessionRuntime.test.ts`

@@ -405,6 +405,73 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
     }),
   );
 
+  it.effect("skips file attachments when building the turn payload", () => {
+    const runtimeFactory = makeRuntimeFactory();
+    const layer = Layer.effect(
+      CodexAdapter,
+      Effect.gen(function* () {
+        const codexConfig = decodeCodexSettings({});
+        return yield* makeCodexAdapter(codexConfig, {
+          makeRuntime: runtimeFactory.factory,
+        });
+      }),
+    ).pipe(
+      // The prefix form of layerTest scopes baseDir to a temp directory, so
+      // the .bin fixture lands outside the repo (a plain cwd baseDir would
+      // write into apps/server/userdata/).
+      Layer.provideMerge(
+        ServerConfig.layerTest(process.cwd(), {
+          prefix: "t3code-codex-adapter-test-",
+        }),
+      ),
+      Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provideMerge(providerSessionDirectoryTestLayer),
+      Layer.provideMerge(NodeServices.layer),
+    );
+
+    return Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      const serverConfig = yield* ServerConfig;
+      const attachmentId = "codex-file-skip-12345678-1234-4234-8234-123456789abc";
+      NodeFS.writeFileSync(
+        NodePath.join(serverConfig.attachmentsDir, `${attachmentId}.bin`),
+        "hello",
+        "utf8",
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("sess-file-skip"),
+        runtimeMode: "full-access",
+      });
+      const runtime = runtimeFactory.lastRuntime;
+      NodeAssert.ok(runtime);
+
+      yield* Effect.ignore(
+        adapter.sendTurn({
+          threadId: asThreadId("sess-file-skip"),
+          input: "read the notes",
+          attachments: [
+            {
+              type: "file",
+              id: attachmentId,
+              name: "notes.txt",
+              mimeType: "text/plain",
+              sizeBytes: 5,
+            },
+          ],
+        }),
+      );
+
+      // The file reaches the model only through the shared
+      // '[Attached file … is saved at: path]' line — never as an inlined
+      // image payload, so the turn payload carries no attachments at all.
+      NodeAssert.deepStrictEqual(runtime.sendTurnImpl.mock.calls[0]?.[0], {
+        input: "read the notes",
+      });
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("passes configured launch args into the session runtime", () => {
     const runtimeFactory = makeRuntimeFactory();
     const layer = Layer.effect(

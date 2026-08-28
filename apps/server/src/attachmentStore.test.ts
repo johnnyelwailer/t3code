@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  attachmentRelativePath,
   createAttachmentId,
   createPendingAttachmentId,
   parseAttachmentUuid,
@@ -16,6 +17,37 @@ import {
 } from "./attachmentStore.ts";
 
 describe("attachmentStore", () => {
+  it("stores arbitrary files under a fixed .bin extension while images keep theirs", () => {
+    const attachmentId = "thread-abc-00000000-0000-4000-8000-000000000001";
+    expect(
+      attachmentRelativePath({
+        type: "file",
+        id: attachmentId,
+        name: "notes.txt",
+        mimeType: "text/plain",
+        sizeBytes: 6,
+      }),
+    ).toBe(`${attachmentId}.bin`);
+    expect(
+      attachmentRelativePath({
+        type: "file",
+        id: attachmentId,
+        name: "spec.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 6,
+      }),
+    ).toBe(`${attachmentId}.bin`);
+    expect(
+      attachmentRelativePath({
+        type: "image",
+        id: attachmentId,
+        name: "shot.png",
+        mimeType: "image/png",
+        sizeBytes: 6,
+      }),
+    ).toBe(`${attachmentId}.png`);
+  });
+
   it("sanitizes thread ids when creating attachment ids", () => {
     const attachmentId = createAttachmentId("thread.folder/unsafe space");
     expect(attachmentId).toBeTruthy();

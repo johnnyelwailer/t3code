@@ -27,10 +27,11 @@ const CHILD_STATUS: Record<ProjectThread["status"], { label: string }> = {
 const INDENT_CLASS = "ml-3 border-l border-border/40 pl-2";
 
 /**
- * How many non-idle sub-runs render at once before a "Show more" disclosure. A coordinator with
- * many children (dozens of sub-runs) would otherwise render every row on expand; the user only
- * wants the most recent active ones up front. Idle threads are unaffected — they collapse into
- * their own disclosure regardless of this limit.
+ * How many non-idle sub-runs render at once before a "Show more" disclosure (the same cap as
+ * the sidebar's SIDEBAR_SUB_RUN_LIMIT). A coordinator with many children (dozens of
+ * sub-runs) would otherwise render every row on expand; the user only wants the active ones
+ * up front. Idle threads are unaffected — they collapse into their own disclosure regardless
+ * of this limit.
  */
 const VISIBLE_SUB_RUN_LIMIT = 10;
 
@@ -126,8 +127,9 @@ function SubRunChildrenGroup({
   const sorted = sortSubRunNodes(nodes);
   const idleNodes = sorted.filter((node) => node.thread.status === "idle");
   const activeNodes = sorted.filter((node) => node.thread.status !== "idle");
-  // Newest-to-oldest (see sortSubRunNodes); render only the most recent VISIBLE_SUB_RUN_LIMIT
-  // up front, with a "Show more" disclosure for the rest so a large fleet never floods the panel.
+  // Stable lifecycle + createdAt order (see sortSubRunNodes); render only the first
+  // VISIBLE_SUB_RUN_LIMIT up front, with a "Show more" disclosure for the rest so a large
+  // fleet never floods the panel.
   const visibleActive = showAll ? activeNodes : activeNodes.slice(0, VISIBLE_SUB_RUN_LIMIT);
   const hiddenCount = activeNodes.length - visibleActive.length;
   return (

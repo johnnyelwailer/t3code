@@ -105,15 +105,14 @@ export function AppMainContent({
     />
   );
 
-  const { threadProject, resolvedThread, embeddedThread, viewProject } =
-    useAppMainContentThreadResolution({
-      view,
-      allProjects,
-      homeProject,
-      homeChatProject,
-      homeChatThreadId,
-      getThreadsForProject,
-    });
+  const { threadProject, resolvedThread, viewProject } = useAppMainContentThreadResolution({
+    view,
+    allProjects,
+    homeProject,
+    homeChatProject,
+    homeChatThreadId,
+    getThreadsForProject,
+  });
 
   if (!view) {
     if (homeProject) {
@@ -157,7 +156,6 @@ export function AppMainContent({
         view={view}
         threadProject={threadProject}
         resolvedThread={resolvedThread}
-        embeddedThread={embeddedThread}
         onOpenTicket={onOpenTicket}
         onOpenEmbeddedThread={onOpenEmbeddedThread}
         onCloseEmbeddedThread={() =>

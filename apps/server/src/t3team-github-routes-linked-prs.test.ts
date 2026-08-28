@@ -56,7 +56,6 @@ describe("loadLinkedPullRequestsAttempt", () => {
 
         const result = yield* loadLinkedPullRequestsAttempt({
           vcs: { run } as unknown as VcsProcessShape,
-          host: "github.com",
           account: "alex-dev",
           linkedRepositoryUrls: ["https://github.com/acme/project"],
         });
@@ -117,7 +116,6 @@ describe("loadLinkedPullRequestsAttempt", () => {
 
         const result = yield* loadLinkedPullRequestsAttempt({
           vcs: { run } as unknown as VcsProcessShape,
-          host: "github.com",
           account: "alex-dev",
           linkedRepositoryUrls: [
             "https://github.com/acme/project",
@@ -128,6 +126,77 @@ describe("loadLinkedPullRequestsAttempt", () => {
         expect(result.items).toHaveLength(1);
         expect(result.items[0]?.id).toBe("pr:acme/project:1");
         expect(result.warning).toContain("acme/broken");
+      }),
+  );
+
+  /**
+   * A reader signed into github.com and a GitHub Enterprise install links a repository on each.
+   * The linked repository's URL names the host it lives on, and the read must go to that host
+   * with that host's `gh` credentials — the Enterprise repository must not be dropped because a
+   * request names a single (active-preferred) host, and its pull requests must still surface.
+   */
+  it.effect(
+    "reads each linked repository on the host its URL names and returns items from both",
+    () =>
+      Effect.gen(function* () {
+        const hostsSeen: string[] = [];
+        const run = vi.fn<VcsProcessShape["run"]>((request) => {
+          const args = request.args ?? [];
+          const hostnameIndex = args.indexOf("--hostname");
+          const hostname =
+            hostnameIndex >= 0 && typeof args[hostnameIndex + 1] === "string"
+              ? (args[hostnameIndex + 1] as string)
+              : null;
+          hostsSeen.push(hostname ?? "none");
+          if (hostname === "nexpore.ghe.com") {
+            return Effect.succeed(
+              processOutput(
+                JSON.stringify([
+                  {
+                    number: 7,
+                    title: "NEX-42 land the gateway",
+                    state: "open",
+                    html_url: "https://nexpore.ghe.com/acme/ghe-app/pull/7",
+                    head: { ref: "feat/gateway" },
+                    user: { login: "alex-dev" },
+                  },
+                ]),
+              ),
+            );
+          }
+          return Effect.succeed(
+            processOutput(
+              JSON.stringify([
+                {
+                  number: 3,
+                  title: "Commodity fix",
+                  state: "open",
+                  html_url: "https://github.com/acme/project/pull/3",
+                  head: { ref: "fix/commodity" },
+                  user: { login: "alex-dev" },
+                },
+              ]),
+            ),
+          );
+        });
+
+        const result = yield* loadLinkedPullRequestsAttempt({
+          vcs: { run } as unknown as VcsProcessShape,
+          account: "alex-dev",
+          linkedRepositoryUrls: [
+            "https://github.com/acme/project",
+            "https://nexpore.ghe.com/acme/ghe-app",
+          ],
+        });
+
+        expect(hostsSeen.toSorted()).toEqual(["github.com", "nexpore.ghe.com"]);
+        expect(result.items).toHaveLength(2);
+        const enterprise = result.items.find((item) => item.id === "pr:acme/ghe-app:7");
+        expect(enterprise?.repositoryUrl).toBe("https://nexpore.ghe.com/acme/ghe-app");
+        expect(result.items.find((item) => item.id === "pr:acme/project:3")?.repositoryUrl).toBe(
+          "https://github.com/acme/project",
+        );
+        expect(result.warning).toBeUndefined();
       }),
   );
 });

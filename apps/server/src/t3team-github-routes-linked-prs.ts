@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import { resolveGitHubWorkItemKey } from "@t3tools/shared/t3team-githubActivity";
 import type { VcsProcessShape } from "./t3team-vcsProcessShape.ts";
-import { parseLinkedRepositoryName } from "./t3team-github-routes-suggestions.ts";
+import { parseLinkedRepositoryTarget } from "./t3team-github-routes-suggestions.ts";
 import type {
   GitHubInboxAttempt,
   GitHubInboxItem,
@@ -12,25 +12,35 @@ import { normalizeRepositoryUrls } from "./t3team-project-repository-utils.ts";
 
 export function loadLinkedPullRequestsAttempt(input: {
   readonly vcs: VcsProcessShape;
-  readonly host: string;
   readonly account?: string;
   readonly linkedRepositoryUrls?: ReadonlyArray<string>;
 }): Effect.Effect<GitHubInboxAttempt, never, never> {
-  const repositoryNames = normalizeRepositoryUrls(input.linkedRepositoryUrls)
-    .map((url) => parseLinkedRepositoryName(input.host, url))
-    .filter((value): value is string => typeof value === "string");
+  // Each linked URL names the host its repository lives on. A reader signed in to more than one
+  // GitHub-kind host names one of them in the request; the other host's repositories still have
+  // to be read on their own host rather than dropped for not matching the named one.
+  const seen = new Set<string>();
+  const repositories: Array<{ readonly host: string; readonly repository: string }> = [];
+  for (const url of normalizeRepositoryUrls(input.linkedRepositoryUrls)) {
+    const target = parseLinkedRepositoryTarget(url);
+    if (target === undefined) continue;
+    const key = `${target.host} ${target.repository.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    repositories.push(target);
+  }
 
-  if (repositoryNames.length === 0) return Effect.succeed({ items: [] });
+  if (repositories.length === 0) return Effect.succeed({ items: [] });
 
   type RepositoryResult = {
+    readonly host: string;
     readonly repository: string;
     readonly items: ReadonlyArray<GitHubInboxItem>;
     readonly failed: boolean;
   };
 
   return Effect.forEach(
-    repositoryNames,
-    (repository): Effect.Effect<RepositoryResult, never, never> =>
+    repositories,
+    ({ host, repository }): Effect.Effect<RepositoryResult, never, never> =>
       input.vcs
         .run({
           operation: "t3team.github.repo-prs",
@@ -38,7 +48,7 @@ export function loadLinkedPullRequestsAttempt(input: {
           args: [
             "api",
             "--hostname",
-            input.host,
+            host,
             `/repos/${repository}/pulls?state=all&per_page=30&sort=updated&direction=desc`,
           ],
           cwd: process.cwd(),
@@ -85,7 +95,7 @@ export function loadLinkedPullRequestsAttempt(input: {
                   ? `pr:${repository}:${number}`
                   : `pr:${repository}:${subjectTitle ?? "unknown"}`,
                 repository,
-                repositoryUrl: `https://${input.host}/${repository}`,
+                repositoryUrl: `https://${host}/${repository}`,
                 reason: "pull request",
                 ...(authorLogin ? { authorLogin } : {}),
                 ...(authorAvatarUrl ? { authorAvatarUrl } : {}),
@@ -117,8 +127,10 @@ export function loadLinkedPullRequestsAttempt(input: {
             }),
           ),
           Effect.match({
-            onFailure: () => ({ repository, items: [], failed: true }) satisfies RepositoryResult,
-            onSuccess: (items) => ({ repository, items, failed: false }) satisfies RepositoryResult,
+            onFailure: () =>
+              ({ host, repository, items: [], failed: true }) satisfies RepositoryResult,
+            onSuccess: (items) =>
+              ({ host, repository, items, failed: false }) satisfies RepositoryResult,
           }),
         ),
     { concurrency: 3 },

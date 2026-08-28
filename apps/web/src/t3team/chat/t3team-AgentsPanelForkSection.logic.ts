@@ -6,19 +6,12 @@
  * nested indentation live in `t3team-AgentsPanelSubRunTree.tsx`.
  */
 import type { ProjectThread } from "~/t3team/t3team-types";
+import { compareSubRunThreads } from "~/t3team/components/t3team-projectSidebarThreadTree";
 
 export type SubRunOpenCallback = (input: {
   readonly projectId: string;
   readonly threadId: string;
 }) => void;
-
-/** Working first, then errors, then recent (settled); idle last (collapsed by the panel). */
-export const STATUS_PRIORITY: Record<ProjectThread["status"], number> = {
-  running: 0,
-  error: 1,
-  completed: 2,
-  idle: 3,
-};
 
 export interface SubRunNode {
   readonly thread: ProjectThread;
@@ -46,15 +39,14 @@ export function buildSubRunTree(
 }
 
 /**
- * Most recently active first (newest-to-oldest by lastMessageAt); status-priority only breaks
- * ties between threads that share a last-activity timestamp. The panel caps how many of these
- * are rendered at once (see `t3team-AgentsPanelSubRunTree.tsx`), so the top of this order is the
- * "most recent active" set the user actually wants to see.
+ * Stable sub-run ordering, identical to the sidebar's sub-run list
+ * (`compareSubRunThreads` in `t3team-projectSidebarThreadTree.ts`): lifecycle groups first
+ * (running, waiting/error, idle, settled), then createdAt newest-first with an id tiebreak.
+ * Activity NEVER reorders the list — a row holds its position from open until settled, so the
+ * panel only reorders at lifecycle transitions, never on a message. The panel caps how many
+ * rows render at once (see `t3team-AgentsPanelSubRunTree.tsx`), so the top of this order is
+ * the active set the user wants to see.
  */
 export function sortSubRunNodes(nodes: ReadonlyArray<SubRunNode>): SubRunNode[] {
-  return [...nodes].sort(
-    (a, b) =>
-      Date.parse(b.thread.lastMessageAt) - Date.parse(a.thread.lastMessageAt) ||
-      STATUS_PRIORITY[a.thread.status] - STATUS_PRIORITY[b.thread.status],
-  );
+  return nodes.toSorted((a, b) => compareSubRunThreads(a.thread, b.thread));
 }

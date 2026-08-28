@@ -250,6 +250,69 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     }),
   );
 
+  it.effect("does not inline file attachments into the ACP prompt", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CursorAdapter;
+      const serverConfig = yield* ServerConfig;
+      const settings = yield* ServerSettingsService;
+      const threadId = ThreadId.make("cursor-file-attachment-probe");
+
+      const tempDir = yield* Effect.promise(() =>
+        NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "cursor-acp-file-")),
+      );
+      const requestLogPath = NodePath.join(tempDir, "requests.ndjson");
+      yield* Effect.promise(() => NodeFSP.writeFile(requestLogPath, "", "utf8"));
+      const wrapperPath = yield* Effect.promise(() =>
+        makeProbeWrapper(requestLogPath, NodePath.join(tempDir, "argv.txt")),
+      );
+      yield* settings.updateSettings({ providers: { cursor: { binaryPath: wrapperPath } } });
+
+      // The file must exist where the adapter resolves it; its bytes must not
+      // reach the wire — the agent reads it through the path line instead.
+      const attachmentId = "cursor-file-attachment-12345678-1234-4234-8234-123456789abc";
+      yield* Effect.promise(() =>
+        NodeFSP.writeFile(
+          NodePath.join(serverConfig.attachmentsDir, `${attachmentId}.bin`),
+          "attachment-secret-bytes",
+          "utf8",
+        ),
+      );
+
+      yield* adapter.startSession({
+        threadId,
+        provider: ProviderDriverKind.make("cursor"),
+        cwd: process.cwd(),
+        runtimeMode: "full-access",
+        modelSelection: { instanceId: ProviderInstanceId.make("cursor"), model: "default" },
+      });
+
+      yield* adapter.sendTurn({
+        threadId,
+        input: "read the notes",
+        attachments: [
+          {
+            type: "file",
+            id: attachmentId,
+            name: "notes.txt",
+            mimeType: "text/plain",
+            sizeBytes: 23,
+          },
+        ],
+      });
+      yield* adapter.stopSession(threadId);
+
+      const requests = yield* Effect.promise(() => readJsonLines(requestLogPath));
+      const promptRequest = requests.find((entry) => entry.method === "session/prompt");
+      assert.isDefined(promptRequest);
+      // The prompt must carry exactly the user text: the file bytes never
+      // reach the wire, the agent reads it through the shared path line.
+      assert.deepEqual(
+        (promptRequest.params as { prompt?: Array<Record<string, unknown>> }).prompt,
+        [{ type: "text", text: "read the notes" }],
+      );
+    }),
+  );
+
   it.effect("steers a running turn instead of opening a new one on mid-turn sendTurn", () =>
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;

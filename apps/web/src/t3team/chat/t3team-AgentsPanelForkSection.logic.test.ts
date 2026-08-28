@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ProjectThread } from "~/t3team/t3team-types";
+import { SUB_RUN_LIFECYCLE_RANK } from "~/t3team/components/t3team-projectSidebarThreadTree";
 import {
   buildSubRunTree,
   sortSubRunNodes,
-  STATUS_PRIORITY,
 } from "./t3team-AgentsPanelForkSection.logic";
 
 function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
@@ -75,54 +75,89 @@ describe("buildSubRunTree", () => {
 });
 
 describe("sortSubRunNodes", () => {
-  it("orders most recently active first (newest-to-oldest), status only breaking ties", () => {
+  it("orders by lifecycle group first, createdAt newest-first within — never by lastMessageAt", () => {
     const now = Date.now();
     const at = (offsetMinutes: number) => new Date(now + offsetMinutes * 60_000).toISOString();
     const nodes = [
       {
-        thread: createThread({ id: "old-settled", status: "completed", lastMessageAt: at(0) }),
+        // Most recently active, but settled: recency must NOT pull it to the top.
+        thread: createThread({
+          id: "settled-recent",
+          status: "completed",
+          lastMessageAt: at(0),
+          createdAt: at(-10),
+        }),
         children: [],
       },
       {
-        thread: createThread({ id: "error", status: "error", lastMessageAt: at(20) }),
+        thread: createThread({
+          id: "error-older",
+          status: "error",
+          lastMessageAt: at(-50),
+          createdAt: at(-40),
+        }),
         children: [],
       },
       {
-        thread: createThread({ id: "running", status: "running", lastMessageAt: at(10) }),
+        thread: createThread({
+          id: "running-newer",
+          status: "running",
+          lastMessageAt: at(-30),
+          createdAt: at(-20),
+        }),
         children: [],
       },
       {
-        thread: createThread({ id: "settled", status: "completed", lastMessageAt: at(40) }),
+        thread: createThread({
+          id: "running-older",
+          status: "running",
+          lastMessageAt: at(-1),
+          createdAt: at(-60),
+        }),
         children: [],
       },
     ];
-    // Recency wins over status: the settled (completed) thread is the most recent and comes first,
-    // even though a running thread would have won under the old status-priority order.
+    // Lifecycle group: running (createdAt newest-first), then error, then settled.
     expect(sortSubRunNodes(nodes).map((node) => node.thread.id)).toEqual([
-      "settled",
-      "error",
-      "running",
-      "old-settled",
+      "running-newer",
+      "running-older",
+      "error-older",
+      "settled-recent",
     ]);
   });
 
-  it("breaks ties on equal last-activity by status priority", () => {
+  it("keeps the order stable while threads keep messaging (no reshuffle)", () => {
+    const at = (offsetMinutes: number) =>
+      new Date(Date.now() + offsetMinutes * 60_000).toISOString();
+    const make = (id: string, createdOffsetMinutes: number) => ({
+      thread: createThread({ id, status: "running", createdAt: at(createdOffsetMinutes) }),
+      children: [],
+    });
+    const nodes = [
+      make("b", -2),
+      make("c", -3),
+      make("a", -1),
+    ];
+    const order = sortSubRunNodes(nodes).map((node) => node.thread.id);
+    // Every tick a different child gets the freshest lastMessageAt — the pattern that
+    // reshuffled the list under the old recency sort. Order must not change.
+    for (const leader of ["c", "a", "b"]) {
+      for (const node of nodes) {
+        node.thread.lastMessageAt = node.thread.id === leader ? at(0) : at(-60);
+      }
+      expect(sortSubRunNodes(nodes).map((node) => node.thread.id)).toEqual(order);
+    }
+  });
+
+  it("breaks ties on equal createdAt by id", () => {
     const at = new Date().toISOString();
     const nodes = [
-      {
-        thread: createThread({ id: "completed", status: "completed", lastMessageAt: at }),
-        children: [],
-      },
-      {
-        thread: createThread({ id: "running", status: "running", lastMessageAt: at }),
-        children: [],
-      },
-      { thread: createThread({ id: "error", status: "error", lastMessageAt: at }), children: [] },
+      { thread: createThread({ id: "completed-b", status: "completed", createdAt: at }), children: [] },
+      { thread: createThread({ id: "completed-a", status: "completed", createdAt: at }), children: [] },
     ];
     expect(sortSubRunNodes(nodes).map((node) => node.thread.id)).toEqual([
-      "running",
-      "error",
-      "completed",
+      "completed-a",
+      "completed-b",
     ]);
   });
 
@@ -135,10 +170,10 @@ describe("sortSubRunNodes", () => {
   });
 });
 
-describe("STATUS_PRIORITY", () => {
-  it("ranks working above errors above settled above idle", () => {
-    expect(STATUS_PRIORITY.running).toBeLessThan(STATUS_PRIORITY.error);
-    expect(STATUS_PRIORITY.error).toBeLessThan(STATUS_PRIORITY.completed);
-    expect(STATUS_PRIORITY.completed).toBeLessThan(STATUS_PRIORITY.idle);
+describe("SUB_RUN_LIFECYCLE_RANK", () => {
+  it("ranks working above waiting above idle above settled (shared with the sidebar)", () => {
+    expect(SUB_RUN_LIFECYCLE_RANK.running).toBeLessThan(SUB_RUN_LIFECYCLE_RANK.error);
+    expect(SUB_RUN_LIFECYCLE_RANK.error).toBeLessThan(SUB_RUN_LIFECYCLE_RANK.idle);
+    expect(SUB_RUN_LIFECYCLE_RANK.idle).toBeLessThan(SUB_RUN_LIFECYCLE_RANK.completed);
   });
 });

@@ -85,12 +85,42 @@ export const PersistedComposerImageAttachment = Schema.Struct({
   mimeType: Schema.String,
   sizeBytes: Schema.Number,
   dataUrl: Schema.String,
+  /**
+   * Absent on entries persisted before arbitrary-file attachments existed;
+   * those were images, so hydration defaults to the image variant.
+   */
+  type: Schema.optional(Schema.Literals(["image", "file"])),
 });
 export type PersistedComposerImageAttachment = typeof PersistedComposerImageAttachment.Type;
 
 export interface ComposerImageAttachment extends Omit<ChatImageAttachment, "previewUrl"> {
   previewUrl: string;
   file: File;
+}
+
+/**
+ * An arbitrary non-image file staged in the composer. It shares the image
+ * pipeline (upload queue, persisted-attachment slot, send flow) but carries
+ * no pixel preview: `previewUrl` is always `""` and the chip renders the
+ * file name and extension instead.
+ */
+export interface ComposerFileAttachment {
+  type: "file";
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** Always `""`: arbitrary files have no pixel preview; the chip shows name + icon. */
+  previewUrl: string;
+  file: File;
+}
+
+export type ComposerAttachment = ComposerImageAttachment | ComposerFileAttachment;
+
+export function isComposerImageAttachment(
+  attachment: ComposerAttachment,
+): attachment is ComposerImageAttachment {
+  return attachment.type === "image";
 }
 
 const PersistedTerminalContextDraft = Schema.Struct({
@@ -250,7 +280,8 @@ const PersistedComposerDraftStoreStorage = Schema.Struct({
  */
 export interface ComposerThreadDraftState {
   prompt: string;
-  images: ComposerImageAttachment[];
+  /** Composer attachment slots: images and arbitrary files share one array. */
+  images: ComposerAttachment[];
   nonPersistedImageIds: string[];
   persistedAttachments: PersistedComposerImageAttachment[];
   terminalContexts: TerminalContextDraft[];
@@ -470,8 +501,8 @@ interface ComposerDraftStoreState {
     threadRef: ComposerThreadTarget,
     interactionMode: ProviderInteractionMode | null | undefined,
   ) => void;
-  addImage: (threadRef: ComposerThreadTarget, image: ComposerImageAttachment) => void;
-  addImages: (threadRef: ComposerThreadTarget, images: ComposerImageAttachment[]) => void;
+  addImage: (threadRef: ComposerThreadTarget, image: ComposerAttachment) => void;
+  addImages: (threadRef: ComposerThreadTarget, images: ComposerAttachment[]) => void;
   removeImage: (threadRef: ComposerThreadTarget, imageId: string) => void;
   insertTerminalContext: (
     threadRef: ComposerThreadTarget,
@@ -661,10 +692,10 @@ export function createEmptyThreadDraft(): ComposerThreadDraftState {
   };
 }
 
-function composerImageDedupKey(image: ComposerImageAttachment): string {
+function composerImageDedupKey(attachment: ComposerAttachment): string {
   // Keep this independent from File.lastModified so dedupe is stable for hydrated
   // images reconstructed from localStorage (which get a fresh lastModified value).
-  return `${image.mimeType}\u0000${image.sizeBytes}\u0000${image.name}`;
+  return `${attachment.mimeType}\u0000${attachment.sizeBytes}\u0000${attachment.name}`;
 }
 
 function terminalContextDedupKey(context: TerminalContextDraft): string {
@@ -1099,6 +1130,7 @@ function normalizePersistedAttachment(value: unknown): PersistedComposerImageAtt
   const mimeType = candidate.mimeType;
   const sizeBytes = candidate.sizeBytes;
   const dataUrl = candidate.dataUrl;
+  const type = candidate.type;
   if (
     typeof id !== "string" ||
     typeof name !== "string" ||
@@ -1106,6 +1138,7 @@ function normalizePersistedAttachment(value: unknown): PersistedComposerImageAtt
     typeof sizeBytes !== "number" ||
     !Number.isFinite(sizeBytes) ||
     typeof dataUrl !== "string" ||
+    (type !== undefined && type !== "image" && type !== "file") ||
     id.length === 0 ||
     dataUrl.length === 0
   ) {
@@ -1117,6 +1150,7 @@ function normalizePersistedAttachment(value: unknown): PersistedComposerImageAtt
     mimeType,
     sizeBytes,
     dataUrl,
+    ...(type === "file" ? { type: "file" as const } : {}),
   };
 }
 
@@ -2165,10 +2199,26 @@ function hydratePersistedComposerImageAttachment(
 
 export function hydrateImagesFromPersisted(
   attachments: ReadonlyArray<PersistedComposerImageAttachment>,
-): ComposerImageAttachment[] {
-  return attachments.flatMap((attachment) => {
+): ComposerAttachment[] {
+  return attachments.flatMap((attachment): ComposerAttachment[] => {
     const file = hydratePersistedComposerImageAttachment(attachment);
     if (!file) return [];
+
+    if (attachment.type === "file") {
+      // Files never render a pixel preview; keep the string contract with
+      // the empty value so blob-URL bookkeeping stays a no-op for them.
+      return [
+        {
+          type: "file" as const,
+          id: attachment.id,
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+          previewUrl: "",
+          file,
+        } satisfies ComposerFileAttachment,
+      ];
+    }
 
     return [
       {
@@ -2977,7 +3027,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               existing.images.map((image) => composerImageDedupKey(image)),
             );
             const acceptedPreviewUrls = new Set(existing.images.map((image) => image.previewUrl));
-            const dedupedIncoming: ComposerImageAttachment[] = [];
+            const dedupedIncoming: ComposerAttachment[] = [];
             for (const image of images) {
               const dedupKey = composerImageDedupKey(image);
               if (existingIds.has(image.id) || existingDedupKeys.has(dedupKey)) {

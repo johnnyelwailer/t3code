@@ -957,10 +957,16 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
               });
 
               const text = input.input?.trim();
-              const imagePromptParts = yield* Effect.forEach(
+              // Only images are inlined; non-image attachments reach the
+              // agent through the '[Attached file "name" is saved at: path]'
+              // line ProviderService injects into the turn text.
+              const resolvedImageParts = yield* Effect.forEach(
                 input.attachments ?? [],
                 (attachment) =>
                   Effect.gen(function* () {
+                    if (attachment.type !== "image") {
+                      return undefined;
+                    }
                     const attachmentPath = resolveAttachmentPath({
                       attachmentsDir: serverConfig.attachmentsDir,
                       attachment,
@@ -984,12 +990,13 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
                       ),
                     );
                     return {
-                      type: "image",
+                      type: "image" as const,
                       data: Buffer.from(bytes).toString("base64"),
                       mimeType: attachment.mimeType,
-                    } satisfies EffectAcpSchema.ContentBlock;
+                    };
                   }),
               );
+              const imagePromptParts = resolvedImageParts.filter((part) => part !== undefined);
               const promptParts: Array<EffectAcpSchema.ContentBlock> = [
                 ...(text ? [{ type: "text" as const, text }] : []),
                 ...imagePromptParts,

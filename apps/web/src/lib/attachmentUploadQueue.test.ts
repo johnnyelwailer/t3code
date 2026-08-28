@@ -1,7 +1,7 @@
 import { EnvironmentId } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ComposerImageAttachment } from "../composerDraftStore";
+import type { ComposerFileAttachment, ComposerImageAttachment } from "../composerDraftStore";
 
 const mocks = vi.hoisted(() => ({
   createUploadUrl: Symbol("create-upload-url"),
@@ -110,6 +110,19 @@ function makeImage(id: string): ComposerImageAttachment {
   };
 }
 
+function makeFile(id: string): ComposerFileAttachment {
+  const file = new File([new Uint8Array([1, 2, 3])], `${id}.txt`, { type: "text/plain" });
+  return {
+    type: "file",
+    id,
+    name: file.name,
+    mimeType: file.type,
+    sizeBytes: file.size,
+    previewUrl: "",
+    file,
+  };
+}
+
 describe("attachmentUploadQueue", () => {
   beforeEach(() => {
     TestXmlHttpRequest.requests = [];
@@ -151,7 +164,7 @@ describe("attachmentUploadQueue", () => {
 
   it("uploads images immediately and sends attachment references", async () => {
     const image = makeImage("image-1");
-    startAttachmentUpload({ environmentId: firstEnvironment, image });
+    startAttachmentUpload({ environmentId: firstEnvironment, attachment: image });
     await Promise.resolve();
 
     const request = TestXmlHttpRequest.requests[0]!;
@@ -189,9 +202,55 @@ describe("attachmentUploadQueue", () => {
     );
   });
 
+  it("uploads arbitrary files and sends file attachment references", async () => {
+    const file = makeFile("notes");
+    startAttachmentUpload({ environmentId: firstEnvironment, attachment: file });
+    await Promise.resolve();
+
+    const request = TestXmlHttpRequest.requests[0]!;
+    expect(request.method).toBe("POST");
+    const settled = awaitAttachmentUploads([file.id]);
+    request.complete();
+    await settled;
+
+    expect(getUploadedAttachments({ environmentId: firstEnvironment, images: [file] })).toEqual([
+      {
+        type: "file",
+        id: "pending-environment-1-notes.txt",
+        name: "notes.txt",
+        mimeType: "text/plain",
+        sizeBytes: 3,
+      },
+    ]);
+
+    releaseAttachmentUploads([file]);
+    expect(readAttachmentUpload(file.id)).toBeUndefined();
+  });
+
+  it("refuses images whose mime type providers cannot inline", async () => {
+    const unsupportedImage: ComposerImageAttachment = {
+      type: "image",
+      id: "image-bmp",
+      name: "scan.bmp",
+      mimeType: "image/bmp",
+      sizeBytes: 3,
+      previewUrl: "blob:image-bmp",
+      file: new File([new Uint8Array([1, 2, 3])], "scan.bmp", { type: "image/bmp" }),
+    };
+    startAttachmentUpload({ environmentId: firstEnvironment, attachment: unsupportedImage });
+    await Promise.resolve();
+
+    expect(readAttachmentUpload(unsupportedImage.id)).toMatchObject({
+      status: "failed",
+      reason: "Unsupported image type",
+    });
+    expect(TestXmlHttpRequest.requests).toEqual([]);
+    releaseAttachmentUploads([unsupportedImage]);
+  });
+
   it("retries rejected uploads", async () => {
     const image = makeImage("image-retry");
-    startAttachmentUpload({ environmentId: firstEnvironment, image });
+    startAttachmentUpload({ environmentId: firstEnvironment, attachment: image });
     await Promise.resolve();
 
     let settled = awaitAttachmentUploads([image.id]);
@@ -202,7 +261,7 @@ describe("attachmentUploadQueue", () => {
       reason: "Upload rejected (500)",
     });
 
-    retryAttachmentUpload({ environmentId: firstEnvironment, image });
+    retryAttachmentUpload({ environmentId: firstEnvironment, attachment: image });
     await Promise.resolve();
     settled = awaitAttachmentUploads([image.id]);
     TestXmlHttpRequest.requests[1]!.complete();
@@ -237,7 +296,7 @@ describe("attachmentUploadQueue", () => {
       return Promise.resolve({ _tag: "Success", value: undefined });
     });
 
-    startAttachmentUpload({ environmentId: firstEnvironment, image });
+    startAttachmentUpload({ environmentId: firstEnvironment, attachment: image });
     releaseAttachmentUpload(image.id);
     resolveMint(minted);
     await deleted;
@@ -257,19 +316,19 @@ describe("attachmentUploadQueue", () => {
 
   it("restores the previous environment after a replacement upload fails", async () => {
     const image = makeImage("image-move");
-    startAttachmentUpload({ environmentId: firstEnvironment, image });
+    startAttachmentUpload({ environmentId: firstEnvironment, attachment: image });
     await Promise.resolve();
     let settled = awaitAttachmentUploads([image.id]);
     TestXmlHttpRequest.requests[0]!.complete();
     await settled;
 
-    startAttachmentUpload({ environmentId: secondEnvironment, image });
+    startAttachmentUpload({ environmentId: secondEnvironment, attachment: image });
     await Promise.resolve();
     settled = awaitAttachmentUploads([image.id]);
     TestXmlHttpRequest.requests[1]!.complete(500);
     await settled;
 
-    startAttachmentUpload({ environmentId: firstEnvironment, image });
+    startAttachmentUpload({ environmentId: firstEnvironment, attachment: image });
     expect(readAttachmentUpload(image.id)).toMatchObject({
       status: "ready",
       environmentId: firstEnvironment,
@@ -280,10 +339,13 @@ describe("attachmentUploadQueue", () => {
   it("does not let stalled uploads block another environment", async () => {
     const images = ["image-a", "image-b", "image-c", "image-d"].map(makeImage);
     for (const image of images) {
-      startAttachmentUpload({ environmentId: firstEnvironment, image });
+      startAttachmentUpload({ environmentId: firstEnvironment, attachment: image });
     }
     const otherEnvironmentImage = makeImage("image-other");
-    startAttachmentUpload({ environmentId: secondEnvironment, image: otherEnvironmentImage });
+    startAttachmentUpload({
+      environmentId: secondEnvironment,
+      attachment: otherEnvironmentImage,
+    });
     await Promise.resolve();
 
     expect(TestXmlHttpRequest.requests).toHaveLength(4);
