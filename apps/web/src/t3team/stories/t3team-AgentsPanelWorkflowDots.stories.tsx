@@ -32,7 +32,7 @@ import type {
 
 import { AgentsPanel } from "~/components/AgentsPanel";
 
-const NOW = new Date("2026-01-01T10:00:00.000Z").getTime();
+const NOW = Date.now();
 const ISO = (offsetSec: number) => new Date(NOW + offsetSec * 1000).toISOString();
 
 function sub(
