@@ -104,6 +104,9 @@ export function buildWorkflowPrimitives(opts: {
     onLog: options.onLog ?? (() => {}),
     hostUuid: runtime.hostUuid,
     nowIso: opts.nowIso,
+    ...(options.onCompositionBranchFailed === undefined
+      ? {}
+      : { onCompositionBranchFailed: options.onCompositionBranchFailed }),
   };
 
   /**

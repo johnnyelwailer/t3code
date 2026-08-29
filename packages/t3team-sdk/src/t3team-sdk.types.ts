@@ -172,6 +172,15 @@ export interface WorkflowRunOptions {
   readonly budget?: number;
   readonly onPhase?: (title: string) => void;
   readonly onLog?: (message: string) => void;
+  /**
+   * Live observation of a `parallel()`/`pipeline()` branch that rejected — see
+   * `@runbook/core/composition`'s `CompositionBranchFailure`. The branch itself still resolves
+   * to `null` for the body regardless of whether this is wired; it exists purely so a host can
+   * make an otherwise-silent swallowed rejection visible (e.g. as a failed step activity).
+   */
+  readonly onCompositionBranchFailed?: (
+    failure: import("@runbook/core/composition").CompositionBranchFailure,
+  ) => void | Promise<void>;
   // Thread-model wiring: thread verbs fire through `broker` into the host. `launchThreadId` is
   // the chat the user launched from (the `thread` global binds to it; absent → headless).
   // `defaultModel` backs agent/askAgent calls that omit a per-call model.
