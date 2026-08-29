@@ -166,59 +166,86 @@ type DotColorVariantsProps = {
   autoCycle: boolean;
   /** Force the reduced-motion look on a normal machine. */
   reducedMotion: boolean;
+  /** Render just one variant's card ("all" = the full comparison). */
+  focus: "all" | "A" | "B" | "C" | "D";
+  /** Uniform zoom on the visible card(s) — the dots are 4px; 2–3x reads best. */
+  zoom: number;
 };
 
-function DotColorVariants({ autoCycle, reducedMotion }: DotColorVariantsProps) {
+type VariantConfig = {
+  id: "A" | "B" | "C" | "D";
+  scope: string;
+  alsoInherits?: string;
+  letter: string;
+  name: string;
+  technique: string;
+  paletteNote: string;
+};
+
+const VARIANTS: readonly VariantConfig[] = [
+  {
+    id: "A",
+    scope: "sdv2-vA",
+    letter: "A",
+    name: "Smooth crossfade",
+    technique: "persistent cells · 380ms ease-in-out on background-color / box-shadow / opacity",
+    paletteNote:
+      "Theme-token palette (color-mix in oklch): working = --primary (theme accent) · thinking = --warning tinted into --muted-foreground · writing = softened --primary · waiting/settled = muted neutral · done = --success · error = --destructive. Dark set lifts each toward white ~15%.",
+  },
+  {
+    id: "B",
+    scope: "sdv2-vB",
+    alsoInherits: "sdv2-vA",
+    letter: "B",
+    name: "Soft-glow blend",
+    technique: "A's palette + two-layer halo (tight 6px + wide 16px) blending on the same 380ms ease-in-out; ring border crossfades too",
+    paletteNote:
+      "Same tokens as A — the difference is the light: two stacked glows whose COLOR transitions with the core, so a state change reads as the halo breathing into the new hue. No geometry change.",
+  },
+  {
+    id: "C",
+    scope: "sdv2-vC",
+    letter: "C",
+    name: "Hue-drift subtle",
+    technique: "one quiet oklch family (hue 235–290°, chroma ≤ 0.11) · 500ms ease-in-out · no halo",
+    paletteNote:
+      "Live states live within ~55° of each other at low chroma, so working→thinking reads as a gentle drift, not a flip — the existing motion + hue wander carries the state. done/error stay color-coded but desaturated. Lightness tuned per theme.",
+  },
+  {
+    id: "D",
+    scope: "sdv2-vD",
+    letter: "D",
+    name: "Porcelain orb (recommended)",
+    technique:
+      "420ms soft-out color morph on everything · drifting orb sheen (position + opacity + color) · very subtle 4px halo · waiting = soft breathing halo (no hard ring)",
+    paletteNote:
+      "Accent-anchored tokens, chroma nudged up slightly. The sheen is a blurred color-mix(state, white) highlight that slowly drifts position and opacity while its color follows the state transition - the dot behaves like a lit orb. The waiting state's old hard ring is gone (soft halo instead, no layout impact) and the flip-demo labels reserve width so state changes never reflow the row.",
+  },
+];
+
+function DotColorVariants({ autoCycle, reducedMotion, focus, zoom }: DotColorVariantsProps) {
   return (
     <div className="flex w-full flex-col items-center gap-6 px-10 py-10 pb-16">
       {reducedMotion ? (
         <style>{`[class*="sdv2-v"] .t3team-aci-cell, [class*="sdv2-v"] .t3team-aci-cell > span::before, [class*="sdv2-v"] .t3team-aci-dot { animation: none !important; transition: none !important; box-shadow: none !important; opacity: 0.55 !important; }`}</style>
       ) : null}
 
-      <VariantCard
-        scope="sdv2-vA"
-        letter="A"
-        name="Smooth crossfade"
-        technique="persistent cells · 380ms ease-in-out on background-color / box-shadow / opacity"
-        paletteNote="Theme-token palette (color-mix in oklch): working = --primary (theme accent) · thinking = --warning tinted into --muted-foreground · writing = softened --primary · waiting/settled = muted neutral · done = --success · error = --destructive. Dark set lifts each toward white ~15%."
-      >
-        <StateRow scope="sdv2-vA" />
-        <FlipDemo scope="sdv2-vA" autoCycle={autoCycle} />
-      </VariantCard>
-
-      <VariantCard
-        scope="sdv2-vB"
-        alsoInherits="sdv2-vA"
-        letter="B"
-        name="Soft-glow blend"
-        technique="A's palette + two-layer halo (tight 6px + wide 16px) blending on the same 380ms ease-in-out; ring border crossfades too"
-        paletteNote="Same tokens as A — the difference is the light: two stacked glows whose COLOR transitions with the core, so a state change reads as the halo breathing into the new hue. No geometry change."
-      >
-        <StateRow scope="sdv2-vB" />
-        <FlipDemo scope="sdv2-vB" autoCycle={autoCycle} />
-      </VariantCard>
-
-      <VariantCard
-        scope="sdv2-vC"
-        letter="C"
-        name="Hue-drift subtle"
-        technique="one quiet oklch family (hue 235–290°, chroma ≤ 0.11) · 500ms ease-in-out · no halo"
-        paletteNote="Live states live within ~55° of each other at low chroma, so working→thinking reads as a gentle drift, not a flip — the existing motion + hue wander carries the state. done/error stay color-coded but desaturated. Lightness tuned per theme."
-      >
-        <StateRow scope="sdv2-vC" />
-        <FlipDemo scope="sdv2-vC" autoCycle={autoCycle} />
-      </VariantCard>
-
-      <VariantCard
-        scope="sdv2-vD"
-        letter="D"
-        name="Porcelain orb (recommended)"
-        technique="420ms soft-out color morph on everything · drifting orb sheen (position + opacity + color) · very subtle 4px halo · waiting = soft breathing halo (no hard ring)"
-        paletteNote="Accent-anchored tokens, chroma nudged up slightly. The sheen is a blurred color-mix(state, white) highlight that slowly drifts position and opacity while its color follows the state transition - the dot behaves like a lit orb. The waiting state's old hard ring is gone (soft halo instead, no layout impact) and the flip-demo labels reserve width so state changes never reflow the row."
-      >
-        <StateRow scope="sdv2-vD" />
-        <FlipDemo scope="sdv2-vD" autoCycle={autoCycle} />
-      </VariantCard>
+      <div style={{ zoom }}>
+        {VARIANTS.filter((variant) => focus === "all" || variant.id === focus).map((variant) => (
+          <VariantCard
+            key={variant.id}
+            scope={variant.scope}
+            alsoInherits={variant.alsoInherits}
+            letter={variant.letter}
+            name={variant.name}
+            technique={variant.technique}
+            paletteNote={variant.paletteNote}
+          >
+            <StateRow scope={variant.scope} />
+            <FlipDemo scope={variant.scope} autoCycle={autoCycle} />
+          </VariantCard>
+        ))}
+      </div>
 
       <div className="text-[10px] text-muted-foreground/70">
         All four variants paint the production dot DOM — shared keyframes, the waiting ring, and the
@@ -236,8 +263,19 @@ const meta = {
   args: {
     autoCycle: true,
     reducedMotion: false,
+    focus: "all" as "all" | "A" | "B" | "C" | "D",
+    zoom: 1,
   },
   argTypes: {
+    focus: {
+      control: "select",
+      options: ["all", "A", "B", "C", "D"],
+      description: "Render a single variant's card so it can be studied up close (D = the porcelain orb).",
+    },
+    zoom: {
+      control: { type: "number", min: 0.5, max: 3, step: 0.25 },
+      description: "Uniform zoom on the visible card(s). The dots are 4px — 2–3x reads best.",
+    },
     autoCycle: {
       control: "boolean",
       description:
@@ -255,7 +293,12 @@ type Story = StoryObj<typeof DotColorVariants>;
 
 export const Directions: Story = {
   name: "Four directions (A crossfade · B soft-glow · C hue-drift · D porcelain)",
-  args: { autoCycle: true, reducedMotion: false },
+  args: { autoCycle: true, reducedMotion: false, focus: "all", zoom: 1 },
+};
+
+export const PorcelainOrbFocus: Story = {
+  name: "D only — porcelain orb (focus, zoomed)",
+  args: { autoCycle: true, reducedMotion: false, focus: "D", zoom: 2.5 },
 };
 
 export const StaticForCapture: Story = {
