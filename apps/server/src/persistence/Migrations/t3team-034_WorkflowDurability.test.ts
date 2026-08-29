@@ -54,6 +54,7 @@ layer("t3team-034_WorkflowDurability", (it) => {
         "failure_reason", // added by t3team-046 (failure diagnostics)
         "failure_step", // added by t3team-046 (failure diagnostics)
         "host_tool_grant", // added by t3team-047 (host tool grant)
+        "intent_json", // added by t3team-051 (launch intent — the auto-report prerequisite)
         "interaction_mode",
         "launch_thread_id",
         "model_json",
