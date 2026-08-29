@@ -172,6 +172,8 @@ import { T3TeamThreadStopCascadeReactorLive } from "./t3team-threadStopCascadeRe
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts";
 import { T3TeamChildWaitReactorLive } from "./t3team-childWait.ts";
+import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
+import { T3TeamChildCleanupNudgeReactorLive } from "./t3team-childCleanupNudgeReactor.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
 import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactor.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
@@ -845,6 +847,8 @@ export const makeServerLayer = Layer.unwrap(
       T3TeamChildStatusReactorLive,
       T3TeamActivityLabelReactorLive,
       T3TeamChildWaitReactorLive,
+      T3TeamChildSettleSweeperLive,
+      T3TeamChildCleanupNudgeReactorLive,
       T3TeamThreadSilenceWatchReactorLive,
       T3TeamThreadTransientTurnRetryLive,
       T3TeamWorkflowEngineRehydrateLive,

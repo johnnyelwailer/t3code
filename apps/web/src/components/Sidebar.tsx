@@ -37,6 +37,7 @@ import {
   AlarmClockOffIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   CircleAlertIcon,
   ClockIcon,
   FolderIcon,
@@ -197,9 +198,10 @@ import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThread
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
 import {
-  pageSubRunThreads,
-  SIDEBAR_SUB_RUN_LIMIT,
+  partitionSubRunThreads,
+  sortFoldedSubRunThreads,
 } from "~/t3team/components/t3team-projectSidebarThreadTree";
+import type { ProjectThread } from "~/t3team/t3team-types";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
@@ -1889,7 +1891,8 @@ export default function Sidebar() {
   // t3team: which expanded parents are showing their FULL sub-run list (beyond the
   // SIDEBAR_SUB_RUN_LIMIT cap). Presentation-only, not persisted — a fresh expand
   // always starts capped so the active children lead.
-  const [showAllSubRunParentIds, setShowAllSubRunParentIds] = useState<Set<string>>(new Set());
+  // GHE #304: which parents' sub-run "Settled (N)" fold row is expanded.
+  const [foldedSubRunParentIds, setFoldedSubRunParentIds] = useState<Set<string>>(new Set());
   // t3team: auto-expand a parent the moment one of its children starts
   // running, so active sub-run work is never invisible behind a collapsed
   // chip — additive only (ensureExpanded never removes), and only fired on
@@ -4103,19 +4106,22 @@ export default function Sidebar() {
                     if (!expandedSubRunParentIds.has(parentThread.id)) return [];
                     const allChildren = childThreadsByParentId.get(parentThread.id);
                     if (!allChildren || allChildren.length === 0) return [];
-                    // Stable lifecycle + createdAt order (activity NEVER reorders the list — it
-                    // only moves at lifecycle transitions), capped at SIDEBAR_SUB_RUN_LIMIT
-                    // with a "Show N more" disclosure so a parent with a large fleet (dozens of
-                    // sub-runs) never floods the sidebar on expand. See pageSubRunThreads.
-                    const { visible, hiddenCount } = pageSubRunThreads(
-                      allChildren,
-                      showAllSubRunParentIds.has(parentThread.id),
-                    );
-                    const rows: ReactNode[] = visible.map((child) => {
-                      const childEnvironmentId =
+                    // GHE #304: the visible list shows ONLY running sub-runs — a
+                    // terminal thread is roster noise, not "active". Every
+                    // non-running sub-run collapses into ONE dim "Settled (N)"
+                    // fold row (replacing the old "Show N more" disclosure),
+                    // expandable into the same compact rows, oldest first.
+                    const { running, folded } = partitionSubRunThreads(allChildren);
+                    const foldOpen = foldedSubRunParentIds.has(parentThread.id);
+                    const foldedThreads = foldOpen ? sortFoldedSubRunThreads(folded) : [];
+                    const childRefFor = (child: ProjectThread) =>
+                      scopeThreadRef(
                         threadShellById.get(child.id as ThreadId)?.environmentId ??
-                        parentThread.environmentId;
-                      const childRef = scopeThreadRef(childEnvironmentId, child.id as ThreadId);
+                          parentThread.environmentId,
+                        child.id as ThreadId,
+                      );
+                    const rows: ReactNode[] = running.map((child) => {
+                      const childRef = childRefFor(child);
                       return (
                         <SidebarSubRunRow
                           key={`sub-run:${child.id}`}
@@ -4127,26 +4133,50 @@ export default function Sidebar() {
                         />
                       );
                     });
-                    if (hiddenCount > 0) {
+                    if (folded.length > 0) {
                       rows.push(
                         <li
-                          key={`sub-run-more:${parentThread.id}`}
+                          key={`sub-run-settled:${parentThread.id}`}
                           role="presentation"
                           className="list-none"
                         >
                           <button
                             type="button"
+                            aria-expanded={foldOpen}
                             onClick={() =>
-                              setShowAllSubRunParentIds((prev) =>
-                                new Set(prev).add(parentThread.id),
-                              )
+                              setFoldedSubRunParentIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(parentThread.id)) next.delete(parentThread.id);
+                                else next.add(parentThread.id);
+                                return next;
+                              })
                             }
-                            className="flex h-7 w-full items-center rounded-md ps-[calc(var(--sidebar-content-inset)+1.5rem)] text-left text-xs text-muted-foreground/70 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                            className="flex h-7 w-full items-center gap-1 rounded-md ps-[calc(var(--sidebar-content-inset)+1.5rem)] text-left text-xs text-muted-foreground/60 hover:bg-sidebar-row-hover hover:text-muted-foreground/90"
                           >
-                            Show {hiddenCount} more
+                            <ChevronRightIcon
+                              aria-hidden
+                              className={cn(
+                                "size-3 shrink-0 transition-transform motion-reduce:transition-none",
+                                foldOpen && "rotate-90",
+                              )}
+                            />
+                            <span>Settled ({folded.length})</span>
                           </button>
                         </li>,
                       );
+                      for (const child of foldedThreads) {
+                        const childRef = childRefFor(child);
+                        rows.push(
+                          <SidebarSubRunRow
+                            key={`sub-run-folded:${child.id}`}
+                            child={child}
+                            childRef={childRef}
+                            isActive={routeThreadKey === scopedThreadKey(childRef)}
+                            onNavigate={() => navigateToThread(childRef)}
+                            onContextMenu={handleThreadContextMenu}
+                          />,
+                        );
+                      }
                     }
                     return rows;
                   };

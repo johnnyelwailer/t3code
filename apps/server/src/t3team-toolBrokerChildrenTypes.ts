@@ -21,6 +21,7 @@ export const T3TEAM_CHILD_OPS = [
   "unwatch",
   "stop",
   "close",
+  "sweep",
   "help",
 ] as const;
 export type T3TeamChildOp = (typeof T3TEAM_CHILD_OPS)[number];
@@ -81,6 +82,12 @@ export interface T3TeamChildrenToolDeps {
   ) => Effect.Effect<void, string>;
   /** Interrupt a thread's active turn (the stop op). */
   readonly interruptTurn: (threadId: ThreadIdType) => Effect.Effect<void, string>;
+  /**
+   * Settle a thread (the sweep op): dispatches the durable `thread.settle`
+   * command. The decider's invariants still apply — running sessions and
+   * blocked-on-user work refuse the settle and surface as sweep errors.
+   */
+  readonly settleThread: (threadId: ThreadIdType) => Effect.Effect<void, string>;
   readonly nowIso: () => string;
   readonly newId: () => string;
 }
@@ -91,6 +98,9 @@ export type ChildrenArgs = {
   readonly on?: unknown;
   readonly timeout?: unknown;
   readonly all?: unknown;
+  readonly all_older_than_hours?: unknown;
+  readonly thread_ids?: unknown;
+  readonly include_settled?: unknown;
   readonly reason?: unknown;
   readonly op_name?: unknown;
 };

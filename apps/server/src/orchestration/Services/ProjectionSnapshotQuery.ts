@@ -155,6 +155,19 @@ export interface ProjectionSnapshotQueryShape {
   ) => Effect.Effect<ReadonlyArray<ThreadId>, ProjectionRepositoryError>;
 
   /**
+   * Every durable parent/child relation in the store: a child's own
+   * t3team.handoff.created parentThreadId, or the parent's t3team.handoff.started
+   * childThreadId. Deduped per child with the newest handoff winning. Workflow-
+   * owned children never appear (their handoff payload carries workflowRunId
+   * instead of a parent). Global (all projects) — used by the server-side
+   * child-settle sweep, which must see every project in one scan.
+   */
+  readonly listParentChildRelations: () => Effect.Effect<
+    ReadonlyArray<{ readonly childThreadId: ThreadId; readonly parentThreadId: ThreadId }>,
+    ProjectionRepositoryError
+  >;
+
+  /**
    * Read the checkpoint context needed to resolve a single thread diff.
    */
   readonly getThreadCheckpointContext: (

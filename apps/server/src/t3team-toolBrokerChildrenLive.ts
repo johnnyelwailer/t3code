@@ -73,6 +73,14 @@ export function makeManageChildrenHandler(input: {
         createdAt: nowIso(),
       })
       .pipe(Effect.asVoid, Effect.mapError(normalizeError));
+  const settleThread: T3TeamChildrenToolDeps["settleThread"] = (threadId) =>
+    orchestration
+      .dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make(`server:t3team:children:sweep:${t3teamRandomUUID()}`),
+        threadId,
+      })
+      .pipe(Effect.asVoid, Effect.mapError(normalizeError));
 
   return (toolArgs, callerThreadId) =>
     loadDetail(callerThreadId).pipe(
@@ -89,6 +97,7 @@ export function makeManageChildrenHandler(input: {
           listChildThreadIds,
           appendActivity,
           interruptTurn,
+          settleThread,
           nowIso,
           newId: () => t3teamRandomUUID(),
         };

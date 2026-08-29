@@ -41,6 +41,8 @@ export type ThreadRunStatusInput = Pick<
   | "planProgress"
   | "childStatus"
   | "activityState"
+  | "settledOverride"
+  | "settledAt"
 >;
 
 export interface ThreadRunStatus {
@@ -63,6 +65,10 @@ export interface ThreadRunStatus {
   readonly childStatus: string | null;
   /** Deterministic 4-state activity state while a turn runs (GHE #208); null when idle. */
   readonly activityState: string | null;
+  /** The thread's settle marker: 'settled' threads keep transcripts but drop
+   *   out of the active rosters (GHE #304); 'active' is the explicit keep-active pin. */
+  readonly settledOverride: string | null;
+  readonly settledAt: string | null;
 }
 
 /**
@@ -132,5 +138,7 @@ export function deriveThreadRunStatus(shell: ThreadRunStatusInput): ThreadRunSta
     inProgressToolCall: shell.planProgress?.step ?? null,
     childStatus: shell.childStatus ?? null,
     activityState: shell.activityState ?? null,
+    settledOverride: shell.settledOverride,
+    settledAt: shell.settledAt,
   };
 }

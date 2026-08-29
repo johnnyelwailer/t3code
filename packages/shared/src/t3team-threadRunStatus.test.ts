@@ -11,6 +11,8 @@ const shellBase = {
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T01:00:00.000Z",
   childStatus: null,
+  settledOverride: null,
+  settledAt: null,
 };
 
 it("maps a running session to running", () => {
@@ -111,7 +113,24 @@ it("derives the full status record from a shell", () => {
   expect(status.worktreePath).toBe("/wt/feat-x");
   expect(status.inProgressToolCall).toBe("Running tests");
   expect(status.childStatus).toBe("child is writing tests");
+  expect(status.settledOverride).toBeNull();
+  expect(status.settledAt).toBeNull();
   expect(status.lastActivityAt).toBe("2026-01-01T01:00:00.000Z");
+});
+
+it("surfaces the settle marker on the status record (GHE #304)", () => {
+  const status = deriveThreadRunStatus({
+    ...shellBase,
+    modelSelection: { instanceId: ProviderInstanceId.make("claude"), model: "claude-opus" },
+    branch: "feat/x",
+    worktreePath: "/wt/feat-x",
+    latestTurn: null,
+    session: null,
+    settledOverride: "settled",
+    settledAt: "2026-01-05T00:00:00.000Z",
+  });
+  expect(status.settledOverride).toBe("settled");
+  expect(status.settledAt).toBe("2026-01-05T00:00:00.000Z");
 });
 
 it("tolerates a missing model selection", () => {

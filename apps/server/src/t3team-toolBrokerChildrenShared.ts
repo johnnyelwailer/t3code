@@ -27,13 +27,14 @@ const LAST_MESSAGE_SUMMARY_CHARS = 240;
 // ── Per-op usage (the self-healing discovery surface) ──────────────────────
 
 const OP_USAGE: Record<T3TeamChildOp, string> = {
-  list: `children({ op: "list", all?: boolean }) — this thread's child sessions with live state (name, state, provider+model, created/last-activity, worktree+branch when isolated, last-message summary). all:true lists the whole project instead.`,
+  list: `children({ op: "list", all?: boolean, include_settled?: boolean }) — this thread's child sessions with live state (name, state, provider+model, created/last-activity, worktree+branch when isolated, last-message summary). all:true lists the whole project instead. Settled children are EXCLUDED by default; include_settled:true lists them with a settled:true marker.`,
   status: `children({ op: "status", thread_id }) — one thread's current turn state, in-progress work, elapsed time, and a recent activity tail.`,
   wait: `children({ op: "wait", thread_id, on?: "terminal"|"completed"|"failed", timeout?: number }) — durably resume this turn when the target thread reaches a terminal state (default on:"terminal"); a dead child resolves as failed. timeout is milliseconds.`,
   watch: `children({ op: "watch", thread_id, timeout?: number }) — watch a thread for silence (GHE #63): this thread is notified when the target has had no activity for timeout ms (default 900000 = 15m; per-subscription), re-notified at each multiple of the timeout while it stays silent. The notification flags whether a tool call was still in progress (legitimate long operation vs. the real stuck signal). If the target stops (terminal state) the watch closes with a stopped note.`,
   unwatch: `children({ op: "unwatch", thread_id }) — cancel all silence watches this thread has on the target thread.`,
   stop: `children({ op: "stop", thread_id, reason?: string }) — halt the target thread's running turn.`,
   close: `children({ op: "close", thread_id }) — mark the target child done from this side (bookkeeping once its final report has arrived).`,
+  sweep: `children({ op: "sweep", thread_ids?: string[], all_older_than_hours?: number }) — settle terminal (completed/failed/aborted) threads in bulk: given thread ids and/or all of this thread's terminal children older than N hours. Non-terminal threads are skipped, never force-settled. Cleanup protocol: verify each state first (final result / discarded work / unpushed work in worktrees) — e.g. in a dedicated cleanup child — then sweep; settled threads keep their transcripts and drop out of the active rosters.`,
   help: `children({ op: "help", op_name?: string }) — the exact schema/usage for one op; omit op_name for all ops.`,
 };
 
@@ -94,6 +95,9 @@ export function childStatusFromDetail(detail: ChildThreadDetail): Record<string,
     model: status.model,
     createdAt: status.createdAt,
     lastActivityAt: status.lastActivityAt,
+    ...(detail.settledOverride === "settled"
+      ? { settled: true as const, settledAt: detail.settledAt ?? undefined }
+      : {}),
     ...(status.branch ? { branch: status.branch } : {}),
     ...(status.worktreePath ? { worktreePath: status.worktreePath } : {}),
     ...(status.childStatus ? { childStatus: status.childStatus } : {}),
@@ -111,6 +115,9 @@ export function childStatusFromShell(shell: ChildThreadShell): Record<string, un
     model: status.model,
     createdAt: status.createdAt,
     lastActivityAt: status.lastActivityAt,
+    ...(shell.settledOverride === "settled"
+      ? { settled: true as const, settledAt: shell.settledAt ?? undefined }
+      : {}),
     ...(status.branch ? { branch: status.branch } : {}),
     ...(status.worktreePath ? { worktreePath: status.worktreePath } : {}),
     ...(status.childStatus ? { childStatus: status.childStatus } : {}),

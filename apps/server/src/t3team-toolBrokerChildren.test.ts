@@ -28,6 +28,8 @@ const childShell: ChildThreadShell = {
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:10:00.000Z",
   childStatus: null,
+  settledOverride: null,
+  settledAt: null,
 };
 
 const callerDetail: ChildThreadDetail = {
@@ -58,6 +60,7 @@ const childDetail: ChildThreadDetail = {
 function makeDeps(overrides: Partial<T3TeamChildrenToolDeps> = {}): TestDeps {
   const appended: Array<{ threadId: string; kind: string; payload: unknown }> = [];
   const interrupted: string[] = [];
+  const settled: string[] = [];
   const base: T3TeamChildrenToolDeps = {
     callerThreadId: CALLER,
     callerProjectId: PROJECT,
@@ -72,16 +75,18 @@ function makeDeps(overrides: Partial<T3TeamChildrenToolDeps> = {}): TestDeps {
         appended.push({ threadId, kind: input.kind, payload: input.payload });
       }),
     interruptTurn: (threadId) => Effect.sync(() => interrupted.push(threadId)),
+    settleThread: (threadId) => Effect.sync(() => settled.push(threadId)),
     nowIso: () => "2026-01-01T00:20:00.000Z",
     newId: () => "wait-1",
     ...overrides,
   };
-  return { ...base, __appended: appended, __interrupted: interrupted };
+  return { ...base, __appended: appended, __interrupted: interrupted, __settled: settled };
 }
 
 interface TestDeps extends T3TeamChildrenToolDeps {
   __appended: Array<{ threadId: string; kind: string; payload: unknown }>;
   __interrupted: string[];
+  __settled: string[];
 }
 
 const run = (deps: TestDeps, args: unknown) =>
@@ -340,5 +345,156 @@ describe("children tool — close", () => {
     const closed = deps.__appended.find((a) => a.kind === "t3team.child.closed");
     expect(closed).toBeDefined();
     expect(closed?.threadId).toBe(CALLER);
+  });
+});
+
+const settledChildShell: ChildThreadShell = {
+  ...childShell,
+  settledOverride: "settled",
+  settledAt: "2026-01-02T00:00:00.000Z",
+};
+
+describe("children tool — list: settled exclusion (GHE #304)", () => {
+  it("excludes settled children by default and reports settledExcluded with a hint", async () => {
+    const deps = makeDeps({
+      loadThreadShell: (id) => Effect.succeed(id === CHILD ? settledChildShell : undefined),
+    });
+    const out = await run(deps, { op: "list" });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.count).toBe(0);
+    expect(out.structured.settledExcluded).toBe(1);
+    expect(out.structured.hint).toContain("include_settled:true");
+  });
+
+  it("include_settled:true lists settled children with a settled marker", async () => {
+    const deps = makeDeps({
+      loadThreadShell: (id) => Effect.succeed(id === CHILD ? settledChildShell : undefined),
+    });
+    const out = await run(deps, { op: "list", include_settled: true });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.count).toBe(1);
+    expect(out.structured.settledExcluded).toBeUndefined();
+    const row = (out.structured.threads as Array<Record<string, unknown>>)[0]!;
+    expect(row.threadId).toBe(CHILD);
+    expect(row.settled).toBe(true);
+    expect(row.settledAt).toBe("2026-01-02T00:00:00.000Z");
+    expect(row.state).toBe("completed");
+  });
+
+  it("all:true excludes settled project threads too, counted separately from truncation", async () => {
+    const deps = makeDeps({
+      listProjectThreadShells: () => Effect.succeed([childShell, settledChildShell]),
+    });
+    const out = await run(deps, { op: "list", all: true });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.count).toBe(1);
+    expect(out.structured.settledExcluded).toBe(1);
+    expect(out.structured.truncated).toBeUndefined();
+  });
+
+  it("settled exclusion keeps the visible rows aligned to their thread ids", async () => {
+    // Two children: the FIRST is settled. A filter that drops it must not
+    // shift the second row's threadId.
+    const other = ThreadId.make("other-thread");
+    const otherShell: ChildThreadShell = {
+      ...childShell,
+      id: other,
+      title: "Other child",
+      latestTurn: { state: "running" } as never,
+    };
+    const deps = makeDeps({
+      listChildThreadIds: () => Effect.succeed([CHILD, other]),
+      loadThreadShell: (id) =>
+        Effect.succeed(id === CHILD ? settledChildShell : id === other ? otherShell : undefined),
+    });
+    const out = await run(deps, { op: "list" });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.count).toBe(1);
+    const row = (out.structured.threads as Array<Record<string, unknown>>)[0]!;
+    expect(row.threadId).toBe(other);
+    expect(row.state).toBe("running");
+  });
+});
+
+describe("children tool — sweep (GHE #304)", () => {
+  it("requires a target form", async () => {
+    const out = await run(makeDeps(), { op: "sweep" });
+    expect(out.isError).toBe(true);
+    expect(out.text).toContain("thread_ids");
+    expect(out.text).toContain("all_older_than_hours");
+  });
+
+  it("settles explicit terminal ids and skips others with per-thread reasons", async () => {
+    const foreign = ThreadId.make("foreign-thread");
+    const running = ThreadId.make("running-thread");
+    const deps = makeDeps({
+      loadThreadDetail: (id) =>
+        Effect.succeed(
+          id === CHILD
+            ? childDetail
+            : id === foreign
+              ? { ...childDetail, id: foreign, projectId: ProjectId.make("other-project") }
+              : id === running
+                ? {
+                    ...childDetail,
+                    id: running,
+                    session: { status: "running" } as never,
+                    latestTurn: { state: "running" } as never,
+                  }
+                : undefined,
+        ),
+    });
+    const out = await run(deps, {
+      op: "sweep",
+      thread_ids: [CHILD, foreign, running, "missing-thread"],
+    });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.settled).toEqual([CHILD]);
+    expect(out.structured.settledCount).toBe(1);
+    expect(deps.__settled).toEqual([CHILD]);
+    const skipped = out.structured.skipped as Array<Record<string, unknown>>;
+    expect(skipped.map((s) => s.reason).sort()).toEqual(
+      [
+        "in a different project",
+        "state is 'running', not terminal — only completed/failed/aborted threads can be swept",
+        "thread not found",
+      ].sort(),
+    );
+  });
+
+  it("all_older_than_hours settles this thread's old terminal children only", async () => {
+    // Base fixtures: CHILD's last activity is 10m before nowIso (00:20 − 00:10).
+    const deps = makeDeps();
+    const settledAll = await run(deps, { op: "sweep", all_older_than_hours: 0.1 }); // 6m
+    expect(settledAll.isError).toBeFalsy();
+    expect(settledAll.structured.settled).toEqual([CHILD]);
+
+    const deps2 = makeDeps();
+    const tooYoung = await run(deps2, { op: "sweep", all_older_than_hours: 1 }); // 60m
+    expect(tooYoung.isError).toBeFalsy();
+    expect(tooYoung.structured.settledCount).toBe(0);
+    expect(tooYoung.structured.hint).toContain("Verify each child's state");
+    expect(deps2.__settled).toEqual([]);
+  });
+
+  it("never force-settles a running child via all_older_than_hours", async () => {
+    const deps = makeDeps({
+      loadThreadShell: (id) =>
+        Effect.succeed(
+          id === CHILD
+            ? {
+                ...childShell,
+                session: { status: "running" } as never,
+                latestTurn: { state: "running" } as never,
+              }
+            : undefined,
+        ),
+    });
+    const out = await run(deps, { op: "sweep", all_older_than_hours: 0.1 });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.settledCount).toBe(0);
+    const skipped = out.structured.skipped as Array<Record<string, unknown>>;
+    expect(skipped[0]!.threadId).toBe(CHILD);
+    expect(skipped[0]!.reason).toContain("state is 'running'");
   });
 });

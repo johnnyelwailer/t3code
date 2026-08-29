@@ -12,6 +12,10 @@ import { usePrimarySettings } from "~/hooks/useSettings";
 import { formatRelativeTime } from "~/t3team/components/t3team-projectSidebarTimeLabels";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import {
+  partitionSubRunThreads,
+  sortFoldedSubRunThreads,
+} from "~/t3team/components/t3team-projectSidebarThreadTree";
+import {
   resolveSubRunStatusLabel,
   sortSubRunNodes,
   type SubRunNode,
@@ -20,15 +24,6 @@ import {
 import { SubRunStatusIcon } from "./t3team-AgentsPanelSubRunStatusIcon";
 
 const INDENT_CLASS = "ml-3 border-l border-border/40 pl-2";
-
-/**
- * How many non-idle sub-runs render at once before a "Show more" disclosure (the same cap as
- * the sidebar's SIDEBAR_SUB_RUN_LIMIT). A coordinator with many children (dozens of
- * sub-runs) would otherwise render every row on expand; the user only wants the active ones
- * up front. Idle threads are unaffected — they collapse into their own disclosure regardless
- * of this limit.
- */
-const VISIBLE_SUB_RUN_LIMIT = 10;
 
 function Chevron({ open, className }: { open: boolean; className?: string }) {
   return open ? (
@@ -113,9 +108,13 @@ function SubRunNodeView({ node, onOpen }: { node: SubRunNode; onOpen: SubRunOpen
 }
 
 /**
- * Status-priority grouping for one level: working -> errors -> recent (settled), with every
- * idle thread at this level collapsed into a single disclosure row instead of cluttering the
- * list.
+ * GHE #304 — one level of the sub-run roster: the visible list shows ONLY
+ * running sub-runs (the "Active" area — a terminal thread from hours or days
+ * ago is roster noise, and the settled override settles it out of rosters
+ * for good); every non-running sub-run collapses into ONE dim fold row,
+ * replacing the old "N idle · expand" disclosure. Expanding lists the
+ * folded sub-runs with their terminal-state glyph + age — no per-thread
+ * chrome — in oldest-first order (the server cleanup-nudge digest order).
  */
 function SubRunChildrenGroup({
   nodes,
@@ -124,38 +123,23 @@ function SubRunChildrenGroup({
   nodes: ReadonlyArray<SubRunNode>;
   onOpen: SubRunOpenCallback;
 }) {
-  const [showAll, setShowAll] = useState(false);
   const sorted = sortSubRunNodes(nodes);
-  const idleNodes = sorted.filter((node) => node.thread.status === "idle");
-  const activeNodes = sorted.filter((node) => node.thread.status !== "idle");
-  // Stable lifecycle + createdAt order (see sortSubRunNodes); render only the first
-  // VISIBLE_SUB_RUN_LIMIT up front, with a "Show more" disclosure for the rest so a large
-  // fleet never floods the panel.
-  const visibleActive = showAll ? activeNodes : activeNodes.slice(0, VISIBLE_SUB_RUN_LIMIT);
-  const hiddenCount = activeNodes.length - visibleActive.length;
+  const runningNodes = sorted.filter((node) => node.thread.status === "running");
+  const foldedNodes = sorted.filter((node) => node.thread.status !== "running");
   return (
     <div className="flex flex-col">
-      {visibleActive.map((node) => (
+      {runningNodes.map((node) => (
         <SubRunNodeView key={node.thread.id} node={node} onOpen={onOpen} />
       ))}
-      {hiddenCount > 0 ? (
-        <button
-          type="button"
-          onClick={() => setShowAll(true)}
-          aria-expanded={false}
-          className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground hover:bg-accent/40"
-        >
-          <ChevronRight aria-hidden className="size-3 shrink-0" />
-          <span>Show {hiddenCount} more</span>
-        </button>
+      {foldedNodes.length > 0 ? (
+        <SettledSubRunDisclosure nodes={foldedNodes} onOpen={onOpen} />
       ) : null}
-      {idleNodes.length > 0 ? <IdleSubRunDisclosure nodes={idleNodes} onOpen={onOpen} /> : null}
     </div>
   );
 }
 
-/** "N idle · expand" disclosure row for the stale threads of one level. */
-function IdleSubRunDisclosure({
+/** The dim fold row for one level's non-running sub-runs. */
+function SettledSubRunDisclosure({
   nodes,
   onOpen,
 }: {
@@ -163,24 +147,39 @@ function IdleSubRunDisclosure({
   onOpen: SubRunOpenCallback;
 }) {
   const [open, setOpen] = useState(false);
+  // Oldest first (last activity), matching the cleanup-nudge digest order.
+  const ordered = sortFoldedSubRunThreads(nodes.map((node) => node.thread));
+  const oldestAge = ordered.length > 0 ? formatRelativeTime(ordered[0]!.lastMessageAt) : "";
   return (
-    <div>
+    <div data-t3team-settled-fold="true">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground hover:bg-accent/40"
+        className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground/70 hover:bg-accent/40 hover:text-muted-foreground"
       >
         <Chevron open={open} className="shrink-0" />
         <span>
-          {nodes.length} idle · {open ? "collapse" : "expand"}
+          Settled ({nodes.length}){oldestAge !== "" ? ` · oldest ${oldestAge}` : ""}
+          {open ? " · collapse" : " · expand"}
         </span>
       </button>
       {open ? (
         <div className={INDENT_CLASS}>
           <div className="flex flex-col">
-            {nodes.map((node) => (
-              <SubRunNodeView key={node.thread.id} node={node} onOpen={onOpen} />
+            {ordered.map((thread) => (
+              <button
+                key={thread.id}
+                type="button"
+                onClick={() => onOpen({ projectId: thread.projectId, threadId: thread.id })}
+                className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/80 hover:bg-accent/40"
+              >
+                <SubRunStatusIcon status={thread.status} className="size-2.5" />
+                <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+                <span className="shrink-0 font-mono text-[.65rem] tabular-nums text-muted-foreground/60">
+                  {formatRelativeTime(thread.lastMessageAt)}
+                </span>
+              </button>
             ))}
           </div>
         </div>

@@ -79,6 +79,40 @@ export const SUB_RUN_LIFECYCLE_RANK: Record<ProjectThread["status"], number> = {
   completed: 3,
 };
 
+/**
+ * GHE #304 — the split the sub-run rosters render from: the visible list shows
+ * ONLY running sub-runs (a terminal thread — even a fresh failed one — is
+ * roster noise, not "active"); every non-running sub-run (settled, terminal,
+ * or idle) collapses into ONE dim fold row ("Settled (N)") instead of
+ * per-thread chrome. Shared by the Agents panel sub-run tree and the sidebar
+ * sub-run list so the two rosters can never disagree about what is active.
+ */
+export type SubRunPartition = {
+  readonly running: readonly ProjectThread[];
+  readonly folded: readonly ProjectThread[];
+};
+
+export function partitionSubRunThreads(threads: ReadonlyArray<ProjectThread>): SubRunPartition {
+  const running: ProjectThread[] = [];
+  const folded: ProjectThread[] = [];
+  for (const thread of threads) {
+    (thread.status === "running" ? running : folded).push(thread);
+  }
+  return { running, folded };
+}
+
+/**
+ * Fold order: oldest last-activity first — the same "top by age" order the
+ * server's cleanup nudge digest uses, so the expand reads like the digest.
+ */
+export function sortFoldedSubRunThreads<T extends Pick<ProjectThread, "id" | "lastMessageAt">>(
+  threads: readonly T[],
+): T[] {
+  return threads.toSorted(
+    (a, b) => Date.parse(a.lastMessageAt) - Date.parse(b.lastMessageAt) || a.id.localeCompare(b.id),
+  );
+}
+
 export function compareSubRunThreads(
   a: Pick<ProjectThread, "id" | "createdAt" | "status">,
   b: Pick<ProjectThread, "id" | "createdAt" | "status">,
@@ -90,9 +124,9 @@ export function compareSubRunThreads(
   );
 }
 
-export function sortSubRunThreads<
-  T extends Pick<ProjectThread, "id" | "createdAt" | "status">,
->(threads: readonly T[]): T[] {
+export function sortSubRunThreads<T extends Pick<ProjectThread, "id" | "createdAt" | "status">>(
+  threads: readonly T[],
+): T[] {
   return threads.toSorted(compareSubRunThreads);
 }
 
