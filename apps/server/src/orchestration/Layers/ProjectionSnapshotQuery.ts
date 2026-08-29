@@ -2893,40 +2893,53 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 
   const getThreadShellById: ProjectionSnapshotQueryShape["getThreadShellById"] = (threadId) =>
     Effect.gen(function* () {
-      const [threadRow, latestTurnRow, sessionRow, sleepingRow] = yield* Effect.all([
-        getActiveThreadRowById({ threadId }).pipe(
-          Effect.mapError(
-            toPersistenceSqlOrDecodeError(
-              "ProjectionSnapshotQuery.getThreadShellById:getThread:query",
-              "ProjectionSnapshotQuery.getThreadShellById:getThread:decodeRow",
+      const [threadRow, latestTurnRow, sessionRow, sleepingRow, workflowRunStatusRow] =
+        yield* Effect.all([
+          getActiveThreadRowById({ threadId }).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getThreadShellById:getThread:query",
+                "ProjectionSnapshotQuery.getThreadShellById:getThread:decodeRow",
+              ),
             ),
           ),
-        ),
-        getLatestTurnRowByThread({ threadId }).pipe(
-          Effect.mapError(
-            toPersistenceSqlOrDecodeError(
-              "ProjectionSnapshotQuery.getThreadShellById:getLatestTurn:query",
-              "ProjectionSnapshotQuery.getThreadShellById:getLatestTurn:decodeRow",
+          getLatestTurnRowByThread({ threadId }).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getThreadShellById:getLatestTurn:query",
+                "ProjectionSnapshotQuery.getThreadShellById:getLatestTurn:decodeRow",
+              ),
             ),
           ),
-        ),
-        getThreadSessionRowByThread({ threadId }).pipe(
-          Effect.mapError(
-            toPersistenceSqlOrDecodeError(
-              "ProjectionSnapshotQuery.getThreadShellById:getSession:query",
-              "ProjectionSnapshotQuery.getThreadShellById:getSession:decodeRow",
+          getThreadSessionRowByThread({ threadId }).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getThreadShellById:getSession:query",
+                "ProjectionSnapshotQuery.getThreadShellById:getSession:decodeRow",
+              ),
             ),
           ),
-        ),
-        getSleepingWakeAtByThread({ threadId }).pipe(
-          Effect.mapError(
-            toPersistenceSqlOrDecodeError(
-              "ProjectionSnapshotQuery.getThreadShellById:getSleepingWakeAt:query",
-              "ProjectionSnapshotQuery.getThreadShellById:getSleepingWakeAt:decodeRow",
+          getSleepingWakeAtByThread({ threadId }).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getThreadShellById:getSleepingWakeAt:query",
+                "ProjectionSnapshotQuery.getThreadShellById:getSleepingWakeAt:decodeRow",
+              ),
             ),
           ),
-        ),
-      ]);
+          // Durable workflow-run status join (mirrors getShellSnapshot's listWorkflowRunStatusRows):
+          // without this, a live single-thread shell refetch (the push path every workflow-run
+          // lifecycle transition drives through) silently omits `workflowRunStatus`, so the
+          // sidebar's status pill only ever appears after a full snapshot reload.
+          getWorkflowRunStatusByThread({ threadId }).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getThreadShellById:getWorkflowRunStatus:query",
+                "ProjectionSnapshotQuery.getThreadShellById:getWorkflowRunStatus:decodeRow",
+              ),
+            ),
+          ),
+        ]);
 
       if (Option.isNone(threadRow)) {
         return Option.none<OrchestrationThreadShell>();
@@ -2983,6 +2996,17 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           ? { activityStateUpdatedAt: threadRow.value.activityStateUpdatedAt }
           : {}),
         ...(Option.isSome(sleepingRow) ? { sleepingUntil: sleepingRow.value.wakeAt } : {}),
+        ...(Option.isSome(workflowRunStatusRow)
+          ? {
+              workflowRunStatus: {
+                runId: workflowRunStatusRow.value.runId,
+                status: workflowRunStatusRow.value.status,
+                pendingKind: workflowRunStatusRow.value.pendingKind,
+                wakeAt: workflowRunStatusRow.value.wakeAt,
+                updatedAt: workflowRunStatusRow.value.updatedAt,
+              },
+            }
+          : {}),
       } satisfies OrchestrationThreadShell);
     });
 
