@@ -151,20 +151,32 @@ describe("T3TeamAgentsPanelForkSection", () => {
     const rows = Array.from(container!.querySelectorAll("button")).map(
       (button) => button.textContent ?? "",
     );
-    const completedIndex = rows.findIndex((text) => text.includes("Settled work"));
-    const errorIndex = rows.findIndex((text) => text.includes("Broken build"));
+    // GHE #304 fold: only the running row is visible up front; the terminal rows
+    // collapse into one dim fold row.
     const runningIndex = rows.findIndex((text) => text.includes("Active probe"));
+    const foldIndex = rows.findIndex((text) => text.includes("Settled (2)"));
     expect(runningIndex).toBeGreaterThan(-1);
-    expect(errorIndex).toBeGreaterThan(runningIndex);
+    expect(foldIndex).toBeGreaterThan(runningIndex);
+    expect(rows.find((text) => text.includes("Broken build"))).toBeUndefined();
+    expect(rows.find((text) => text.includes("Settled work"))).toBeUndefined();
+    // Expanding the fold lists the terminal rows oldest-first: 'Broken build'
+    // (20m) precedes 'Settled work' (30m) — recency never promotes a terminal row
+    // above the fold, but inside the fold the oldest leads.
+    click(findButtonByText("Settled (2)"));
+    const foldRows = Array.from(container!.querySelectorAll("button")).map(
+      (button) => button.textContent ?? "",
+    );
+    const completedIndex = foldRows.findIndex((text) => text.includes("Settled work"));
+    const errorIndex = foldRows.findIndex((text) => text.includes("Broken build"));
+    expect(errorIndex).toBeGreaterThan(-1);
     expect(completedIndex).toBeGreaterThan(errorIndex);
   });
 
-  it("caps the visible sub-runs at the limit and reveals the rest via a 'Show more' disclosure", () => {
+  it("folds every non-running sub-run into one 'Settled (N)' row, expandable to the full roster", () => {
     const now = Date.now();
     const at = (offsetMinutes: number) => new Date(now - offsetMinutes * 60_000).toISOString();
-    // 14 non-idle threads — more than the VISIBLE_SUB_RUN_LIMIT of 10. Sub-run 0 was created
-    // most recently (now), Sub-run 13 the oldest (13m ago), so the stable createdAt order is
-    // 0,1,...,13.
+    // 14 terminal threads — far beyond the old 10-row cap. Sub-run 13 is the oldest
+    // (13m ago) so it leads the fold's oldest-first order.
     const threads = Array.from({ length: 14 }, (_, i) =>
       createThread({
         id: `s-${i}`,
@@ -185,23 +197,30 @@ describe("T3TeamAgentsPanelForkSection", () => {
       />,
     );
 
-    // Only the 10 newest-created are visible up front; the newest (Sub-run 0) is first, and the
-    // 11th (Sub-run 10) is hidden behind the disclosure.
+    // Nothing renders up front — the whole roster sits behind ONE dim fold row.
+    expect(container!.textContent).toContain("Settled (14)");
+    expect(container!.textContent).not.toContain("Sub-run 0");
+    expect(container!.textContent).not.toContain("Sub-run 10");
+
+    click(findButtonByText("Settled (14)"));
+
+    // After expanding, all 14 are visible — the fold replaced the "Show N more" cap.
     expect(container!.textContent).toContain("Sub-run 0");
     expect(container!.textContent).toContain("Sub-run 9");
-    expect(container!.textContent).not.toContain("Sub-run 10");
-    const showMore = findButtonByText("Show 4 more");
-    expect(showMore).toBeTruthy();
-
-    click(showMore);
-
-    // After expanding, all 14 are visible and the disclosure is gone.
+    expect(container!.textContent).toContain("Sub-run 10");
     expect(container!.textContent).toContain("Sub-run 13");
     expect(
       Array.from(container!.querySelectorAll("button")).some((b) =>
-        b.textContent?.includes("Show 4 more"),
+        b.textContent?.includes("Show more"),
       ),
     ).toBe(false);
+    // Oldest-first: the oldest row (Sub-run 13) renders before the newest (Sub-run 0).
+    const foldRows = Array.from(container!.querySelectorAll("button")).map(
+      (button) => button.textContent ?? "",
+    );
+    expect(foldRows.findIndex((t) => t.includes("Sub-run 13"))).toBeLessThan(
+      foldRows.findIndex((t) => t.includes("Sub-run 0")),
+    );
   });
 
   it("collapses idle sub-runs into a single disclosure row and expands on click", () => {
@@ -231,17 +250,26 @@ describe("T3TeamAgentsPanelForkSection", () => {
       />,
     );
 
-    // The running row is visible; the idle rows are hidden behind one disclosure.
+    // The running row is visible; the terminal rows are hidden behind one fold row.
     expect(container!.textContent).toContain("Active probe");
     expect(container!.textContent).not.toContain("Old triage run");
     expect(container!.textContent).not.toContain("Older probe");
-    expect(container!.textContent).toContain("2 idle · expand");
+    expect(container!.textContent).toContain("Settled (2)");
+    // Oldest (72h) leads the fold label.
+    expect(container!.textContent).toContain("oldest 3d ago");
 
-    click(findButtonByText("2 idle · expand"));
+    click(findButtonByText("Settled (2)"));
 
-    expect(container!.textContent).toContain("Old triage run");
     expect(container!.textContent).toContain("Older probe");
-    expect(container!.textContent).toContain("2 idle · collapse");
+    expect(container!.textContent).toContain("Old triage run");
+    expect(container!.textContent).toContain("collapse");
+    // Oldest-first inside the fold: the 72h row precedes the 48h row.
+    const foldRows = Array.from(container!.querySelectorAll("button")).map(
+      (button) => button.textContent ?? "",
+    );
+    expect(foldRows.findIndex((t) => t.includes("Older probe"))).toBeLessThan(
+      foldRows.findIndex((t) => t.includes("Old triage run")),
+    );
   });
 
   it("renders nested sub-runs indented under their parent, open by default while the parent runs", () => {
@@ -276,7 +304,7 @@ describe("T3TeamAgentsPanelForkSection", () => {
     ).toBe("true");
   });
 
-  it("keeps a settled parent's subtree collapsed by default and expands it on toggle", () => {
+  it("keeps a settled parent in the fold, and its nested subtree out of the fold's chrome", () => {
     const parent = createThread({ id: "parent-1", title: "Settled parent", status: "completed" });
     const child = createThread({ id: "child-1", title: "Nested probe", status: "completed" });
 
@@ -295,13 +323,15 @@ describe("T3TeamAgentsPanelForkSection", () => {
       />,
     );
 
+    // GHE #304: a terminal parent is roster noise — it folds instead of rendering its own
+    // expanded row, and its nested subtree does not expand out of the fold's compact rows.
+    expect(container!.textContent).not.toContain("Settled parent");
+    expect(container!.textContent).toContain("Settled (1)");
+
+    click(findButtonByText("Settled (1)"));
+
     expect(container!.textContent).toContain("Settled parent");
     expect(container!.textContent).not.toContain("Nested probe");
-
-    const toggle = findButtonByText("Settled parent").previousElementSibling as HTMLButtonElement;
-    expect(toggle.getAttribute("aria-label")).toBe("Expand sub-runs");
-    click(toggle);
-    expect(container!.textContent).toContain("Nested probe");
   });
 
   it("survives a cyclic parent relation without hanging", () => {
@@ -323,6 +353,9 @@ describe("T3TeamAgentsPanelForkSection", () => {
       />,
     );
     expect(container!.textContent).toContain("Thread A");
+    // Thread B is terminal, so it sits in the fold (no hang, no render crash).
+    expect(container!.textContent).toContain("Settled (1)");
+    click(findButtonByText("Settled (1)"));
     expect(container!.textContent).toContain("Thread B");
   });
 
