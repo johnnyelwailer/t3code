@@ -3,6 +3,7 @@ import { ListTreeIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
+import { resolveActivityStatePill } from "~/t3team/t3team-activityStateDisplay";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import {
   useT3TeamInboxPinnedGitHubActivity,
@@ -83,14 +84,19 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
   );
   const expanded = useExpandedSubRunsStore((state) => state.expandedParentIds.has(threadId));
   const toggle = useExpandedSubRunsStore((state) => state.toggle);
-  if (!counts || counts.total === 0) {
+  // Counts ACTIVE sub-runs only — settled/terminal children collapse into the
+  // #304 "Settled (N)" fold, not the chip (same running-vs-folded split the
+  // sub-run rosters use). A parent with zero active children is idle: it gets
+  // no chip at all — no stale total, no empty ring, no "0".
+  if (!counts || counts.running === 0) {
     return null;
   }
-  const noun = counts.total === 1 ? "sub-run" : "sub-runs";
+  const noun = counts.running === 1 ? "sub-run" : "sub-runs";
+  const settledCount = counts.total - counts.running;
   const description =
-    counts.running > 0
-      ? `${counts.total} ${noun} · ${counts.running} active`
-      : `${counts.total} ${noun}`;
+    settledCount === 0
+      ? `${counts.running} active ${noun}`
+      : `${counts.running} active ${noun} · ${settledCount} settled`;
   return (
     <button
       type="button"
@@ -111,10 +117,15 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
       className="flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
     >
       <ListTreeIcon aria-hidden className="size-3 shrink-0" />
-      {counts.total}
-      {counts.running > 0 ? (
-        <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-primary" />
-      ) : null}
+      {counts.running}
+      {/* The "active children" mark speaks the working row's 4-state color
+          language (sky = in motion), not the theme's primary accent: on the
+          Nexplore theme primary is a red-orange that read as an error dot on
+          an otherwise idle row. */}
+      <span
+        aria-hidden
+        className={`size-1.5 shrink-0 rounded-full ${resolveActivityStatePill("working").dotClass}`}
+      />
     </button>
   );
 }

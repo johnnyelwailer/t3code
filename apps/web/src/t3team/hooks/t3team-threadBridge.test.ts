@@ -316,6 +316,50 @@ describe("remapProjectThreadToStoredProject", () => {
     expect(mapped.activityStateUpdatedAt).toBe("2026-05-22T10:00:01.000Z");
   });
 
+  describe("thread status: error is current state, not history", () => {
+    const baseThread = (session: unknown) =>
+      ({
+        id: "thread-status",
+        projectId: ProjectId.make("live-saved"),
+        title: "Child that hit a transient gateway error",
+        messages: [],
+        latestTurn: null,
+        archivedAt: null,
+        error: null,
+        session,
+        createdAt: "2026-05-22T09:00:00.000Z",
+        updatedAt: "2026-05-22T10:00:00.000Z",
+        environmentId: "env-local" as EnvironmentId,
+        defaultModelSelection: null,
+      }) as never;
+
+    it("keeps red only while the session is CURRENTLY in error state", () => {
+      expect(
+        mapLiveThreadToProjectThread(baseThread({ status: "error", lastError: "gateway 413" }))
+          .status,
+      ).toBe("error");
+      // lastError without an error session state is banner text, not a state.
+      expect(
+        mapLiveThreadToProjectThread(baseThread({ status: "error", lastError: null })).status,
+      ).toBe("error");
+    });
+
+    it("a lingering lastError no longer paints an idle/ready thread red forever", () => {
+      expect(
+        mapLiveThreadToProjectThread(baseThread({ status: "ready", lastError: "gateway 413" }))
+          .status,
+      ).toBe("idle");
+      expect(
+        mapLiveThreadToProjectThread(baseThread({ status: "stopped", lastError: "gateway 413" }))
+          .status,
+      ).toBe("completed");
+      expect(
+        mapLiveThreadToProjectThread(baseThread({ status: "running", lastError: "gateway 413" }))
+          .status,
+      ).toBe("running");
+    });
+  });
+
   it("maps durable parent and ticket metadata from live threads", () => {
     expect(
       mapLiveThreadToProjectThread({

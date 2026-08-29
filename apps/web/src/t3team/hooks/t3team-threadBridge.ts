@@ -51,11 +51,17 @@ export function mapLiveThreadToProjectThread(
     // registers, and native background work (subagents/workflow children) that
     // stays alive after the turn settles. Without them those children read
     // "idle" and the active-children indicator never lights for them. The
-    // lastError/stopped/archived branches above keep the t3team sidebar's
+    // error/stopped/archived branches below keep the t3team sidebar's
     // historical vocabulary (error/completed) intact.
-    status: thread.session?.lastError
-      ? "error"
-      : thread.session?.status === "stopped" || thread.archivedAt
+    //
+    // "error" is CURRENT state, not history: it follows the session's own
+    // status, which a failed turn sets to "error" and the next activity moves
+    // on (starting → running → ready). `session.lastError` is the error BANNER
+    // text and survives session-state transitions (the provider-sync path
+    // carries it forward verbatim), so stamping status from it made one
+    // transient error read as red forever — including on settled, idle rows.
+    status:
+      thread.session?.status === "stopped" || thread.archivedAt
         ? "completed"
         : thread.session?.status === "error"
           ? "error"
