@@ -1302,7 +1302,7 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("shimmer-base:var(--muted-foreground)");
   });
 
-  it('hides the left "..." pulses when agent dots are on the row; keeps them solo, in blue (regression)', () => {
+  it("renders NO leading dot pulses on the working row — the status text alone leads (regression)", () => {
     const solo = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
@@ -1311,10 +1311,15 @@ describe("MessagesTimeline", () => {
         timelineEntries={[]}
       />,
     );
-    // Solo working row: the three "..." pulses stand in, in the shimmer's
-    // blue so they stay visible on dark instead of fading into the background.
-    expect(solo.split("dark:bg-[#38bdf8]/60").length - 1).toBe(3);
-    expect(solo).not.toContain("bg-muted-foreground/30 animate-pulse");
+    // GHE #236 follow-up: the three "..." pulses are gone entirely — the
+    // status text (state word + timer) leads the row on its own, in both
+    // the solo case and with agent dots on the row.
+    expect(solo).not.toContain("dark:bg-[#38bdf8]/60");
+    expect(solo).not.toContain("bg-[#0369a1]/60");
+    expect(solo).not.toContain("animate-pulse");
+    expect(solo).not.toContain("gap-[3px]");
+    // The status text still leads: the state word renders.
+    expect(solo).toContain("Thinking");
 
     const withAgents = renderToStaticMarkup(
       <MessagesTimeline
@@ -1334,9 +1339,9 @@ describe("MessagesTimeline", () => {
         timelineEntries={[]}
       />,
     );
-    // The subagent dots on the right stay…
+    // The child-agent living dots on the right stay…
     expect(withAgents).toContain('data-t3team-state="working"');
-    // …and the left "..." pulses are gone — the state word alone is enough.
+    // …and no leading pulse dots either.
     expect(withAgents).not.toContain("dark:bg-[#38bdf8]/60");
     expect(withAgents).not.toContain("animate-pulse");
   });
@@ -1358,8 +1363,10 @@ describe("MessagesTimeline", () => {
     // timer. The row stays one line: the timer ellipsizes instead of
     // wrapping to a second line.
     expect(markup).toContain('class="flex min-w-0 items-baseline"');
-    // The "..." dots keep their priority: still unsqueezable —
-    expect(markup).toContain("inline-flex shrink-0 items-center");
+    // GHE #236 follow-up: the "..." pulses are gone — nothing sits before
+    // the clamp wrapper anymore, so the lead takes the full row width.
+    expect(markup).not.toContain("bg-[#0369a1]/60");
+    expect(markup).not.toContain("animate-pulse");
     // …and the clamp wrapper truncates the lead without carrying the shimmer
     // paint itself (the paint lives on the leaf spans — P0).
     expect(markup).toContain('class="min-w-0 overflow-hidden text-ellipsis"');

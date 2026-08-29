@@ -1747,20 +1747,10 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
               </span>
             ) : (
               <>
-                {/* GHE #201 follow-up: the "..." pulses only stand in when NO
-                    agent dots are on the row — once the subagent dots carry
-                    each agent's state, the thread-level state word alone is
-                    enough up front. When shown, they ride the shimmer's own
-                    blue (light sky-700 / dark sky-400, matching the
-                    .t3team-label-shimmer defaults) so the "..." stays visible
-                    in both themes; muted-grey dots read as "gone" on dark. */}
-                {!hasActiveAgents ? (
-                  <span className="mr-1.5 inline-flex shrink-0 items-center gap-[3px]" aria-hidden>
-                    <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse motion-reduce:animate-none" />
-                    <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse [animation-delay:200ms] motion-reduce:animate-none" />
-                    <span className="h-1 w-1 rounded-full bg-[#0369a1]/60 dark:bg-[#38bdf8]/60 animate-pulse [animation-delay:400ms] motion-reduce:animate-none" />
-                  </span>
-                ) : null}
+                {/* GHE #236 follow-up: no leading dot pulses — the status
+                    text alone leads the row; the child-agent living dots on
+                    the right (T3TeamActiveAgentsIndicator) carry the live
+                    texture. */}
                 {/* The shimmer paint lives on the LEAF text spans inside
                     WorkingLeadText (background-clip: text cannot reach text
                     in nested animated spans through this wrapper — P0).
