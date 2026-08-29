@@ -237,6 +237,34 @@ export function mergePathEntries(
   return merged.length > 0 ? merged.join(delimiter) : undefined;
 }
 
+/** Common per-user CLI locations that GUI and service launches often omit. */
+export function resolveKnownPosixCliDirs(env: NodeJS.ProcessEnv): ReadonlyArray<string> {
+  const absolute = (value: string | undefined): string | undefined => {
+    const trimmed = value?.trim();
+    return trimmed && NodePath.posix.isAbsolute(trimmed) ? trimmed : undefined;
+  };
+  const home = absolute(env.HOME);
+  const configuredBin = (value: string | undefined, suffix = "/bin") => {
+    const root = absolute(value);
+    return root ? NodePath.posix.join(root, suffix.slice(1)) : undefined;
+  };
+  const homePath = (suffix: string) => (home ? NodePath.posix.join(home, suffix) : undefined);
+
+  return [
+    ...[homePath(".local/bin"), homePath("bin")].filter(
+      (path): path is string => path !== undefined,
+    ),
+    configuredBin(env.BUN_INSTALL) ?? homePath(".bun/bin"),
+    configuredBin(env.NPM_CONFIG_PREFIX) ?? homePath(".npm-global/bin"),
+    configuredBin(env.CARGO_HOME) ?? homePath(".cargo/bin"),
+    absolute(env.PNPM_HOME),
+    configuredBin(env.VOLTA_HOME),
+    configuredBin(env.ASDF_DATA_DIR, "/shims") ?? homePath(".asdf/shims"),
+    configuredBin(env.DENO_INSTALL) ?? homePath(".deno/bin"),
+    homePath(".dotnet/tools"),
+  ].filter((path): path is string => path !== undefined);
+}
+
 function envCaptureStart(name: string): string {
   return `__T3CODE_ENV_${name}_START__`;
 }

@@ -4,11 +4,13 @@ import {
   mergePathEntries,
   readPathFromLoginShell,
   readPathFromLaunchctl,
+  resolveKnownPosixCliDirs,
   resolveWindowsEnvironment,
 } from "@t3tools/shared/shell";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 
 function logPathHydrationWarning(message: string, error?: unknown): void {
@@ -17,11 +19,30 @@ function logPathHydrationWarning(message: string, error?: unknown): void {
   );
 }
 
-function hydratePosixPath(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): void {
+export function hydratePosixPath(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+  options: {
+    readonly readLoginShellPath?: typeof readPathFromLoginShell;
+    readonly readLaunchctlPath?: typeof readPathFromLaunchctl;
+    readonly isDirectory?: (path: string) => boolean;
+  } = {},
+): void {
+  const readLoginShellPath = options.readLoginShellPath ?? readPathFromLoginShell;
+  const readLaunchctlPath = options.readLaunchctlPath ?? readPathFromLaunchctl;
+  const isDirectory =
+    options.isDirectory ??
+    ((path: string) => {
+      try {
+        return NodeFS.statSync(path).isDirectory();
+      } catch {
+        return false;
+      }
+    });
   let shellPath: string | undefined;
   for (const shell of listLoginShellCandidates(platform, env.SHELL)) {
     try {
-      shellPath = readPathFromLoginShell(shell);
+      shellPath = readLoginShellPath(shell);
     } catch (error) {
       logPathHydrationWarning(`Failed to read PATH from login shell ${shell}.`, error);
     }
@@ -29,8 +50,13 @@ function hydratePosixPath(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): vo
     if (shellPath) break;
   }
 
-  const launchctlPath = platform === "darwin" && !shellPath ? readPathFromLaunchctl() : undefined;
-  const mergedPath = mergePathEntries(shellPath ?? launchctlPath, env.PATH, platform);
+  const launchctlPath = platform === "darwin" && !shellPath ? readLaunchctlPath() : undefined;
+  const knownCliPath = resolveKnownPosixCliDirs(env).filter(isDirectory).join(":");
+  const mergedPath = mergePathEntries(
+    shellPath ?? launchctlPath,
+    [env.PATH, knownCliPath].filter(Boolean).join(":"),
+    platform,
+  );
   if (mergedPath) {
     env.PATH = mergedPath;
   }

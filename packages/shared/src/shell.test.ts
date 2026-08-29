@@ -16,6 +16,7 @@ import {
   readEnvironmentFromWindowsShell,
   readPathFromLaunchctl,
   readPathFromLoginShell,
+  resolveKnownPosixCliDirs,
   resolveCommandPath,
   resolveKnownWindowsCliDirs,
   resolveSpawnCommand,
@@ -379,6 +380,53 @@ describe("resolveKnownWindowsCliDirs", () => {
       "C:\\Users\\testuser\\.bun\\bin",
       "C:\\Users\\testuser\\scoop\\shims",
     ]);
+  });
+});
+
+describe("resolveKnownPosixCliDirs", () => {
+  it("returns standard per-user CLI install directories", () => {
+    expect(resolveKnownPosixCliDirs({ HOME: "/Users/test" })).toEqual([
+      "/Users/test/.local/bin",
+      "/Users/test/bin",
+      "/Users/test/.bun/bin",
+      "/Users/test/.npm-global/bin",
+      "/Users/test/.cargo/bin",
+      "/Users/test/.asdf/shims",
+      "/Users/test/.deno/bin",
+      "/Users/test/.dotnet/tools",
+    ]);
+  });
+
+  it("uses configured tool homes", () => {
+    expect(
+      resolveKnownPosixCliDirs({
+        HOME: "/Users/test",
+        BUN_INSTALL: "/opt/bun",
+        NPM_CONFIG_PREFIX: "/opt/npm",
+        CARGO_HOME: "/opt/cargo",
+        PNPM_HOME: "/opt/pnpm",
+        VOLTA_HOME: "/opt/volta",
+        ASDF_DATA_DIR: "/opt/asdf",
+        DENO_INSTALL: "/opt/deno",
+      }),
+    ).toContain("/opt/bun/bin");
+    expect(resolveKnownPosixCliDirs({ HOME: "/Users/test", CARGO_HOME: "/opt/cargo" })).toContain(
+      "/opt/cargo/bin",
+    );
+  });
+
+  it("rejects relative homes and keeps absolute homes without HOME", () => {
+    expect(resolveKnownPosixCliDirs({ HOME: ".", BUN_INSTALL: "tools" })).toEqual([]);
+    expect(resolveKnownPosixCliDirs({ BUN_INSTALL: "/opt/bun" })).toContain("/opt/bun/bin");
+  });
+
+  it("normalizes root directory homes", () => {
+    expect(resolveKnownPosixCliDirs({ HOME: "/" })[0]).toBe("/.local/bin");
+    expect(resolveKnownPosixCliDirs({ BUN_INSTALL: "/" })).toContain("/bin");
+  });
+
+  it("returns no directories when HOME is unavailable", () => {
+    expect(resolveKnownPosixCliDirs({})).toEqual([]);
   });
 });
 
