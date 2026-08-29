@@ -176,6 +176,8 @@ type ThreadStatusInput = Pick<
   | "backgroundLiveness"
   | "activityLabel"
   | "activityState"
+  | "workflowRunStatus"
+  | "sleepingUntil"
 > & {
   lastVisitedAt?: string | undefined;
 };
@@ -490,16 +492,93 @@ export type SidebarThreadStatus =
   | "failed"
   | "ready";
 
+type WorkflowRunLivenessInput = Pick<SidebarThreadSummary, "workflowRunStatus" | "sleepingUntil">;
+
+// A durable orchestration run (`t3team.orchestration.run` / a recipe launch) executes on an
+// EPHEMERAL CHILD thread, never on the launch thread's own provider session — so a launch thread
+// that only ever sees its own session status has no idea the run is alive. `workflowRunStatus` is
+// already computed server-side (ProjectionSnapshotQuery.ts joins `workflow_runs` by
+// `launch_thread_id`) and already shipped to the client on every thread shell; it was simply never
+// read here. Folding it into the SAME "working"/"monitoring"/"input" vocabulary this file already
+// has — rather than inventing a new visual state — is the reuse the codebase asks for.
+//
+// `workflowRunStatus` keeps reporting the run's LAST status forever (the query picks the
+// most-recently-updated run for the thread, regardless of status) — there is no separate "run
+// ended" event to clear it. Every other consumer of this field already treats terminal statuses
+// as inert for this reason (see TERMINAL_WORKFLOW_STATUSES in t3team-workflowDecisionAvailability.ts),
+// so this resolver does the same rather than adding a clearing mechanism of its own.
+const WORKFLOW_RUN_INERT_STATUSES: ReadonlySet<string> = new Set([
+  // Deliberately halted (the workflow-control route's Pause button, or restart bookkeeping the
+  // engine resolves on its own): the user asked for this, or will get no new information from it.
+  // Like a terminal run, it must not read as live work.
+  "paused",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+/** True while a workflow run launched from this thread is parked on an `askUser` reply — the one
+ *  case where the user, not the engine, must act next. */
+export function hasWorkflowRunPendingUserInput(thread: WorkflowRunLivenessInput): boolean {
+  const run = thread.workflowRunStatus;
+  return run !== undefined && run.status === "suspended" && run.pendingKind === "user.input";
+}
+
+/**
+ * Background liveness contributed by a durable workflow run, in the same two-state vocabulary as
+ * `backgroundLiveness` ("working" | "monitoring" | null).
+ *
+ * `queued` and `running` are the engine actively moving the run forward with no user action
+ * needed — same shape as a session's own "starting"/"running" status, so both read as "working".
+ * `suspended` with `pendingKind: "thread.turn"` is a child thread's turn in flight — also
+ * "working". `suspended` with `pendingKind: "user.input"` is surfaced as `input`, not liveness
+ * (see `hasWorkflowRunPendingUserInput`), so it contributes nothing here.
+ *
+ * `sleeping` (parked on a durable `waitUntil` timer) maps to "monitoring", not "working": nothing
+ * is actively executing and only the scheduler is watching the clock until `wakeAt` — the same
+ * shape as a watch-loop task, which is exactly what "monitoring" is reserved for. Reading it as
+ * "ready" instead would recreate the bug this fix is for: a thread that looks idle while it still
+ * has a scheduled continuation, inviting a "continue" message into a run that will resume on its
+ * own (the originating incident, nexi-distribution#317).
+ */
+export function resolveWorkflowRunBackgroundLiveness(
+  thread: WorkflowRunLivenessInput,
+): "working" | "monitoring" | null {
+  const run = thread.workflowRunStatus;
+  if (run !== undefined && !WORKFLOW_RUN_INERT_STATUSES.has(run.status)) {
+    if (run.status === "sleeping") {
+      return "monitoring";
+    }
+    if (run.status === "suspended" && run.pendingKind === "user.input") {
+      return null;
+    }
+    return "working";
+  }
+  // A thread can launch several runs; the most-recently-updated one (workflowRunStatus above) may
+  // already be terminal while a DIFFERENT run on the same thread is still sleeping. `sleepingUntil`
+  // (the soonest `wake_at` across every sleeping run for this thread) is the same fallback the
+  // richer project-sidebar pill already uses for this gap (t3team-projectSidebarStatusPills.ts).
+  if (thread.sleepingUntil !== undefined) {
+    return "monitoring";
+  }
+  return null;
+}
+
 type SidebarThreadStatusInput = Pick<
   SidebarThreadSummary,
-  "hasPendingApprovals" | "hasPendingUserInput" | "session" | "backgroundLiveness"
+  | "hasPendingApprovals"
+  | "hasPendingUserInput"
+  | "session"
+  | "backgroundLiveness"
+  | "workflowRunStatus"
+  | "sleepingUntil"
 >;
 
 export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): SidebarThreadStatus {
   if (thread.hasPendingApprovals) {
     return "approval";
   }
-  if (thread.hasPendingUserInput) {
+  if (thread.hasPendingUserInput || hasWorkflowRunPendingUserInput(thread)) {
     return "input";
   }
   if (thread.session?.status === "running" || thread.session?.status === "starting") {
@@ -512,10 +591,11 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   }
   // Background work outlives the turn: fleets read as working; monitoring
   // only when watch loops are the sole live work.
-  if (thread.backgroundLiveness === "working") {
+  const workflowRunLiveness = resolveWorkflowRunBackgroundLiveness(thread);
+  if (thread.backgroundLiveness === "working" || workflowRunLiveness === "working") {
     return "working";
   }
-  if (thread.backgroundLiveness === "monitoring") {
+  if (thread.backgroundLiveness === "monitoring" || workflowRunLiveness === "monitoring") {
     return "monitoring";
   }
   return "ready";
@@ -698,7 +778,7 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.hasPendingUserInput) {
+  if (thread.hasPendingUserInput || hasWorkflowRunPendingUserInput(thread)) {
     return {
       label: "Awaiting Input",
       colorClass: "text-indigo-600 dark:text-indigo-300/90",
@@ -745,7 +825,13 @@ export function resolveThreadStatusPill(input: {
   // workflow fleets read as plain Working; Monitoring is reserved for watch
   // loops (a parent agent babysitting a PR, tailing checks) with no other
   // live work. Same recede treatment as Working per inbox-zero.
-  if (thread.backgroundLiveness === "working") {
+  //
+  // A durable orchestration run (launched on an ephemeral child thread, never this thread's own
+  // session) folds into the same working/monitoring signal `backgroundLiveness` already reports —
+  // see `resolveWorkflowRunBackgroundLiveness` for the run-status mapping and why `sleeping` reads
+  // as Monitoring rather than nothing.
+  const workflowRunLiveness = resolveWorkflowRunBackgroundLiveness(thread);
+  if (thread.backgroundLiveness === "working" || workflowRunLiveness === "working") {
     return {
       label: "Working",
       ...(activityLabel ? { activityLabel } : {}),
@@ -754,7 +840,7 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.backgroundLiveness === "monitoring") {
+  if (thread.backgroundLiveness === "monitoring" || workflowRunLiveness === "monitoring") {
     return {
       label: "Monitoring",
       colorClass: "text-sky-600 dark:text-sky-300/80",

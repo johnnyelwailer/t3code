@@ -1,6 +1,5 @@
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
-import ChatMarkdown from "~/components/ChatMarkdown";
 import type { ChatMessage } from "~/types";
 import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
 import {
@@ -19,6 +18,7 @@ import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkf
 import { T3TeamSystemTimelineShapeRow } from "~/t3team/chat/t3team-SystemTimelineShapeRow";
 import { T3TeamSystemTimelineDecisionRow } from "~/t3team/chat/t3team-SystemTimelineDecisionRow";
 import { T3TeamSystemTimelineGenericRow } from "~/t3team/chat/t3team-SystemTimelineGenericRow";
+import { T3TeamSystemTimelineNotificationBody } from "~/t3team/chat/t3team-SystemTimelineNotificationBody";
 import { workflowDecisionUnavailableMessage } from "~/t3team/chat/t3team-workflowDecisionAvailability";
 
 export function T3TeamSystemTimelineRow(props: {
@@ -163,9 +163,11 @@ export function T3TeamSystemTimelineRow(props: {
     widgetAttachments.length === 0;
   if (workflowNotification) {
     return showMessageText ? (
-      <div className="max-w-[92%] text-sm leading-6 text-foreground/90">
-        <ChatMarkdown text={message.text} cwd={markdownCwd} threadRef={threadRef ?? undefined} />
-      </div>
+      <T3TeamSystemTimelineNotificationBody
+        text={message.text}
+        threadRef={threadRef}
+        {...(markdownCwd ? { markdownCwd } : {})}
+      />
     ) : null;
   }
 

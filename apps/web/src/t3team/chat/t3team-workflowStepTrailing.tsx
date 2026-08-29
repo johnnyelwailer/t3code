@@ -28,6 +28,22 @@ export function StepDuration({ step }: { step: T3TeamWorkflowStepEntry | undefin
   );
 }
 
+/** The badge for a step row folded from more than one `thread.turn` on the same child thread —
+ * see `t3team-workflowShapeThreadTurnFold.ts`. Makes the repeat VISIBLE rather than silently
+ * collapsing it into something indistinguishable from a single turn. Renders nothing when the
+ * step was not folded (including a genuinely single-turn step). */
+export function TurnCountBadge({ step }: { step: T3TeamWorkflowStepEntry | undefined }) {
+  if (step?.turnCount === undefined) return null;
+  return (
+    <span
+      data-step-turn-count={step.turnCount}
+      className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/80"
+    >
+      {step.turnCount} turns
+    </span>
+  );
+}
+
 export function StepDue({
   step,
   wakeAt,

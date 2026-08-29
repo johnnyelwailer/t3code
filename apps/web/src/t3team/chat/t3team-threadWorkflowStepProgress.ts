@@ -39,6 +39,11 @@ export interface T3TeamWorkflowStepEntry {
    * (the server has no remembered start time), and for older activities — see
    * `ProjectRecipeWorkflowStepActivityPayload.durationMs`. */
   readonly durationMs?: number;
+  /** Client-side aggregate, never stamped by the server: how many `thread.turn` activities were
+   * folded into this row because they ran on the SAME child thread, adjacent, with the same
+   * displayed label — see `t3team-workflowShapeThreadTurnFold.ts`. Absent for a step that was not
+   * folded, including a genuinely single-turn step. */
+  readonly turnCount?: number;
 }
 
 export interface T3TeamWorkflowRunProgress {

@@ -1238,6 +1238,65 @@ contents under review, and in another run the literal sentinel string the user h
 (`TIMER-FIRED-OK`). Both would plausibly be lost through a summarising prompt lens — which is the
 concrete form the drift risk takes.
 
+## Auto-report on completion (design intent — PJ, 2026-08-29, not built)
+
+Every run ends with a report, whether or not its author wrote one, and the report decides who has
+to resolve what it found.
+
+**Why.** A delivery run failed its QA gate, posted a 4460-character wall of prose through
+`notifyUser`, and ended. Two blockers, both real, both already root-caused, both small — and the run
+handed the whole routing decision back to the user. PJ, on reading it: *"a super verbose ugly
+formatted report that i honestly dont want to read"*. Separately he asked the launching agent to
+summarise it and was told the pipeline was still running, because `notifyUser` messages were
+`visibleToAgent: false` (fixed since). Three failures, one shape: the run produced knowledge and had
+no reliable way to deliver it to whoever needed it.
+
+**Not a new mechanism.** The reporter is Epic 24's T2b composer subagent (see
+[24-tiered-message-composition.md](24-tiered-message-composition.md)) with `purpose: "report"`. Do
+not build a report-specific composer; a report is the second caller of the one already designed.
+
+**Decisions (PJ, 2026-08-29):**
+
+- **It is an `agent()` call.** *"the report is just like a specialized form of an agent() call. it's
+  also replayed"* — so it needs no new determinism machinery: journaled and replayed like any other
+  agent step, and a replayed run re-renders rather than re-composes.
+- **The reporter chooses the length.** *"reporter decides how long it must be.. as long as
+  necessary"* — no `expectedLength` parameter and no cap. Brevity is the composer's editorial
+  judgement, supervised by its own iteration loop, not a number imposed by the caller. That is the
+  point of moving composition off the orchestration author: a specialised, supervised writer does
+  not need to be told to be short.
+- **The fallback is structured.** If the composer errors, times out, or returns junk, the run's
+  facts are still delivered — rendered structurally (a returned object already becomes clean
+  labelled lines) rather than dumped raw. A prettifier that can lose the payload is worse than no
+  prettifier.
+- **Trigger is completion-without-a-report, not failure.** The motivating run did not crash; it
+  completed with a failing verdict. A silent success needs a report just as much.
+- **The author's own `notifyUser` is an override**, not the only path.
+
+**Routing.** "Who resolves this" is already a choice of recipient in
+`t3team-workflowEngineBrokerNotify.ts`, so no new transport is needed:
+
+| recipient | message role | effect |
+| --------- | ------------ | ------ |
+| `agent`   | `user`       | turn input — the agent wakes and acts |
+| `user`    | `system`     | note — no turn, a human resolves |
+
+In the motivating run the correct route was arguably `agent`: two small fixes, both diagnosed, in a
+worktree the agent still had.
+
+**Prerequisite — persist `intent`.** A run's `intent` (`goal`, `expectedOutcome`, `guardrails`) is
+REQUIRED at launch and then discarded: `workflow_runs` has no column for it, and its only consumer
+is `repairIntent` on the self-heal path. Without a stored `expectedOutcome` the reporter can say
+what happened but never whether the run achieved what it set out to — exactly the judgement that
+decides whether a human is needed. Small migration, large payoff.
+
+**Hazards.**
+
+- Routing to `agent` starts a turn, so it needs a loop bound (report → agent → repair → report …).
+- It must never land on a thread with an in-flight turn. That is the same failure as
+  `nexi-distribution#317`, where a message sent into a busy child stranded the server's
+  turn-tracking. Building this promotes #317 from "file for later" to a blocker.
+
 ## Open questions
 
 1. **VM isolation strategy.** Stage 1 trusts project code (current). Stage 2 needs real

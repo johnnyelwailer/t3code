@@ -10,7 +10,7 @@ import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { formatWorkflowStepDue } from "~/t3team/chat/t3team-workflowRunLabels";
-import { StepTrailing } from "~/t3team/chat/t3team-workflowStepTrailing";
+import { StepTrailing, TurnCountBadge } from "~/t3team/chat/t3team-workflowStepTrailing";
 import {
   displayedStepStatus,
   StepStatusIcon,
@@ -110,6 +110,7 @@ export function RuntimeStepRow({
       <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">
         {fallbackRuntimeLabel(step)}
       </span>
+      <TurnCountBadge step={step} />
       <StepTrailing step={step} wakeAt={wakeAt} childStatuses={childStatuses} />
     </div>
   );

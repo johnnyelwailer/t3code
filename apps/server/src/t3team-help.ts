@@ -10,6 +10,7 @@
  */
 import { T3TEAM_WIDGET_AUTHORING_GUIDANCE } from "@t3tools/project-context/t3teamWidgetGuidance";
 
+import { T3TEAM_REPORTING_MANUAL } from "./t3team-workflowManualReporting.ts";
 import { T3TEAM_TIMERS_MANUAL, T3TEAM_WORKFLOW_MANUAL } from "./t3team-workflowManual.ts";
 
 export interface T3TeamHelpTopic {
@@ -34,6 +35,13 @@ const TOPICS: ReadonlyArray<T3TeamHelpTopic> = [
     title: "Durable orchestration timers and routines",
     summary: "Exact waitUntil/now syntax for one-shot waits and recurring durable routines.",
     body: T3TEAM_TIMERS_MANUAL,
+  },
+  {
+    slug: "reporting",
+    title: "Reporting an orchestration's outcome to the human",
+    summary:
+      "Return structured results instead of prose, lead with the verdict, put numbers in a table, and never forward a sub-agent's raw output.",
+    body: T3TEAM_REPORTING_MANUAL,
   },
   {
     slug: "widget-guidance",
