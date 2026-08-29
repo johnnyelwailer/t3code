@@ -4,6 +4,7 @@ import * as NodeTimersPromises from "node:timers/promises";
 
 import {
   createWorkflowPrimitives as createGenericWorkflowPrimitives,
+  type CompositionBranchFailure,
   type PipelineStage,
   type WorkflowPrimitives as GenericWorkflowPrimitives,
   type WorkflowPrimitivesDeps as GenericWorkflowPrimitivesDeps,
@@ -11,7 +12,7 @@ import {
 
 import type * as T from "./t3team-sdk.types.ts";
 
-export type { PipelineStage };
+export type { PipelineStage, CompositionBranchFailure };
 export type WorkflowPrimitives = GenericWorkflowPrimitives<T.WorkflowRef, T.WorkflowInvokeOpts>;
 
 export interface WorkflowPrimitivesDeps {
@@ -31,6 +32,9 @@ export interface WorkflowPrimitivesDeps {
     args: unknown,
     opts?: T.WorkflowInvokeOpts,
   ) => Promise<unknown>;
+  /** Live observation of a `parallel()`/`pipeline()` branch that rejected — see the generic
+   * `WorkflowPrimitivesDeps.onCompositionBranchFailed` this forwards to. */
+  readonly onCompositionBranchFailed?: (failure: CompositionBranchFailure) => void | Promise<void>;
 }
 
 export function createWorkflowPrimitives(deps: WorkflowPrimitivesDeps): WorkflowPrimitives {
@@ -49,5 +53,8 @@ export function createWorkflowPrimitives(deps: WorkflowPrimitivesDeps): Workflow
     hostUuid: deps.hostUuid,
     nowIso: deps.nowIso,
     ...(deps.runSubWorkflow === undefined ? {} : { runSubWorkflow: deps.runSubWorkflow }),
+    ...(deps.onCompositionBranchFailed === undefined
+      ? {}
+      : { onCompositionBranchFailed: deps.onCompositionBranchFailed }),
   });
 }

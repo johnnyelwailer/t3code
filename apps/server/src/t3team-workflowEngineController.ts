@@ -17,6 +17,11 @@ import {
 } from "@t3team/sdk";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
+import {
+  createCompositionBranchFailureHandler,
+  summarizeCompositionBranchFailures,
+  type WorkflowCompositionBranchFailure,
+} from "./t3team-workflowEngineCompositionFailure.ts";
 import { makeControllerFail, makeControllerResume } from "./t3team-workflowEngineResume.ts";
 import { createWorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import { deliverWorkflowCompletion } from "./t3team-workflowCompletionMessage.ts";
@@ -47,6 +52,10 @@ export function createWorkflowRunController(
   // primitives), so every `phase()` call before the live continuation point re-fires in the same
   // order before any NEW step activity can be emitted — see `WorkflowEngineBrokerDeps.currentPhase`.
   let currentWorkflowPhase: string | undefined;
+  // Parallel/pipeline branches that rejected during this run (UX slice: a swallowed rejection
+  // must never look like an unqualified success) — see `options.onCompositionBranchFailed` below
+  // and `settle`'s use of this count to annotate the run's own terminal activity.
+  const compositionBranchFailures: WorkflowCompositionBranchFailure[] = [];
   // The live step-status emitter (UX slice 1). Terminal run activities are emitted HERE — in
   // settle (completed) and the launch/resume catch (failed) — not in the durability lifecycle:
   // this controller is the single funnel BOTH the live launch and boot rehydration drive
@@ -90,6 +99,16 @@ export function createWorkflowRunController(
     onPhase: (title) => {
       currentWorkflowPhase = title;
     },
+    // Live step-status pip for a swallowed `parallel()`/`pipeline()` rejection (see the
+    // defect this closes: a failed branch previously left NO activity anywhere) — see
+    // `t3team-workflowEngineCompositionFailure.ts`.
+    onCompositionBranchFailed: createCompositionBranchFailureHandler({
+      stepActivities,
+      runId: input.runId,
+      newId: input.newId,
+      getWorkflowPhase: () => currentWorkflowPhase,
+      onFailure: (failure) => compositionBranchFailures.push(failure),
+    }),
     ...t3teamWorkflowHostToolRunOptions(input.hostToolClient),
     scripts: input.scripts ?? {},
     defaultModel: toWorkflowModelSelection(
@@ -128,7 +147,15 @@ export function createWorkflowRunController(
     }
     await input.lifecycle?.recordCompleted();
     if (cancelled) return "suspended";
-    await stepActivities.emitRun("completed");
+    // The run genuinely completed — `parallel`/`pipeline` never rethrow a branch's rejection —
+    // but a failed branch must keep this from reading as unqualifiedly green. `phase` stays
+    // "completed" (that is the truth); `error` carries a summary a viewer will see the same way
+    // they see any other run-level note, alongside the branch's own "failed" step row (the
+    // primary signal — see `onCompositionBranchFailed` above).
+    await stepActivities.emitRun(
+      "completed",
+      summarizeCompositionBranchFailures(compositionBranchFailures),
+    );
     await deliverWorkflowCompletion({
       launchThreadId: input.launchThreadId,
       workflowRunId: input.runId,
