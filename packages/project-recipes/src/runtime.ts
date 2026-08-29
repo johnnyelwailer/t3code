@@ -163,6 +163,16 @@ export const ProjectRecipeWorkflowStepActivityPayload = Schema.Struct({
    * before this field existed; a consumer falls back to its own heuristic in that case.
    */
   workflowPhase: Schema.optional(Schema.String),
+  /**
+   * Milliseconds between the step's start (`createdAt` on the initial `emitSent` activity) and
+   * its terminal resolution, stamped on the resolved (`completed`/`failed`) activity only.
+   * Absent on the initial (non-terminal) emission — no duration exists yet — and absent on a
+   * post-restart resolve, since the process-local record of the step's start time (`sentByCorrelation`
+   * in `t3team-workflowEngineStepActivities.ts`) does not survive a server restart. Also absent for
+   * an activity emitted before this field existed. Never a guessed or zero value: a consumer must
+   * treat "no field" as "unknown", not "instant".
+   */
+  durationMs: Schema.optional(Schema.Number),
 });
 export type ProjectRecipeWorkflowStepActivityPayload =
   typeof ProjectRecipeWorkflowStepActivityPayload.Type;
