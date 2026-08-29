@@ -99,14 +99,17 @@ export function reconcileT3TeamWorkflowShapeProgress(
   const insertedByAnchor = new Map<number, number>();
   for (const [runtimeIndex, runtimeStep] of visibleRuntime.entries()) {
     if (planIndexByRuntimeIndex.has(runtimeIndex)) continue;
-    // The phase an unmatched (dynamic) runtime step is bucketed under is the AUTHORED phase of
-    // the nearest prior matched plan step, not the workflow's actual current phase at the time
-    // this step ran — `T3TeamWorkflowStepEntry.phase` is a lifecycle phase (started/completed/…),
-    // there is no "current workflow phase" field on the runtime activity to bucket by instead.
-    // A long dynamic run (many agent calls with no per-call plan row) can therefore anchor to
-    // whichever plan step matched last, even if the run has since moved through later phases.
-    // Left as-is per the no-invented-data rule; fixing this needs the server to stamp the
-    // workflow's phase onto each step activity.
+    // Where an unmatched (dynamic) runtime step is INSERTED (relative to plan rows) still comes
+    // from the nearest prior matched plan step — that is purely about display order and stays a
+    // reasonable anchor. What phase HEADER it renders under is a separate question, and the
+    // server now answers it directly: `workflowPhase` is stamped onto the activity at the moment
+    // it was sent (the AUTHORED phase the body was actually inside then — see
+    // `t3team-workflowEngineController.ts` / `t3team-workflowEngineBroker.ts`), so prefer it.
+    // Fall back to the nearest-prior-match heuristic only for activities emitted before that
+    // stamp existed (older runs): `T3TeamWorkflowStepEntry.phase` is a lifecycle phase
+    // (started/completed/…), so without the stamp there is nothing else to bucket by, and a long
+    // dynamic run (many agent calls with no per-call plan row) can then anchor to whichever plan
+    // step matched last, even after the run has since moved through later phases.
     const priorMatches = [...planIndexByRuntimeIndex.entries()].filter(
       ([matchedRuntimeIndex]) => matchedRuntimeIndex < runtimeIndex,
     );
@@ -116,7 +119,8 @@ export function reconcileT3TeamWorkflowShapeProgress(
     rows.splice(insertionIndex, 0, {
       runtimeStep,
       phase:
-        anchorPlanIndex >= 0 ? (plan[anchorPlanIndex]?.phase ?? null) : (plan[0]?.phase ?? null),
+        runtimeStep.workflowPhase ??
+        (anchorPlanIndex >= 0 ? (plan[anchorPlanIndex]?.phase ?? null) : (plan[0]?.phase ?? null)),
     });
     insertedByAnchor.set(anchorPlanIndex, priorInsertions + 1);
   }

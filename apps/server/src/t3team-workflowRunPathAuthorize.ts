@@ -10,10 +10,11 @@
  *     ({@link ./t3team-workflowRunPackAuthorize.ts}).
  */
 import * as Effect from "effect/Effect";
-import type * as FileSystem from "effect/FileSystem";
-import type * as Path from "effect/Path";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 
 import { resolveWithinRoot } from "./t3team-projectRecipeDiscoveryShared.ts";
+import { ensureEphemeralRunsGitignore } from "./t3team-workflowEphemeralSource.ts";
 import {
   authorizePackWorkflow,
   confirmRunnable,
@@ -48,11 +49,20 @@ export function resolveRunWorkflowPath(input: {
     if (precheckError !== null) {
       return Effect.fail(precheckError);
     }
-    const runDirectory = path.join(workspaceRoot, ".t3team-runs", runId);
+    const runsRoot = path.join(workspaceRoot, ".t3team-runs");
+    const runDirectory = path.join(runsRoot, runId);
     const workflowPath = path.join(runDirectory, "workflow.ts");
     return fileSystem
       .makeDirectory(runDirectory, { recursive: true })
       .pipe(
+        // Self-ignoring `.t3team-runs/`: never fails the launch (`ensureEphemeralRunsGitignore`
+        // swallows its own errors), never touches the user's own root `.gitignore`.
+        Effect.andThen(
+          ensureEphemeralRunsGitignore({ runsRoot }).pipe(
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+          ),
+        ),
         Effect.andThen(fileSystem.writeFileString(workflowPath, args.source ?? "")),
         Effect.mapError(errorMessage),
         Effect.as(workflowPath),

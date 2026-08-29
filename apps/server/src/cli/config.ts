@@ -213,7 +213,6 @@ export const resolveServerConfig = (
   cliLogLevel: Option.Option<LogLevel.LogLevel>,
   options?: {
     readonly startupPresentation?: ServerConfig.StartupPresentation;
-    readonly forceAutoBootstrapProjectFromCwd?: boolean;
   },
 ) =>
   Effect.gen(function* () {
@@ -314,12 +313,17 @@ export const resolveServerConfig = (
     const desktopTelemetryFd = bootstrap?.desktopTelemetryFd;
     const desktopTelemetryControlFd = bootstrap?.desktopTelemetryControlFd;
     const resourceMonitorPath = bootstrap?.resourceMonitorPath;
+    // An explicit request (CLI flag or env var) must win over the headless
+    // startup's implicit "don't auto-bootstrap" default — otherwise
+    // `serve --auto-bootstrap-project-from-cwd` (and its env-var form) is a
+    // silent no-op, since `serve` always resolves a headless
+    // `startupPresentation`. The headless default only applies when neither
+    // source expressed an explicit preference.
     const autoBootstrapProjectFromCwd = Option.getOrElse(
       resolveOptionPrecedence(
-        Option.fromUndefinedOr(options?.forceAutoBootstrapProjectFromCwd),
-        isHeadlessStartup ? Option.some(false) : Option.none(),
         normalizedFlags.autoBootstrapProjectFromCwd,
         Option.fromUndefinedOr(env.autoBootstrapProjectFromCwd),
+        isHeadlessStartup ? Option.some(false) : Option.none(),
       ),
       () => mode === "web",
     );

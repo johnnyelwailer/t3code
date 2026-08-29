@@ -557,7 +557,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     }),
   );
 
-  it.effect("forces noBrowser and disables auto-bootstrap for headless startup presentation", () =>
+  it.effect("forces noBrowser and disables auto-bootstrap by default for headless startup presentation", () =>
     Effect.gen(function* () {
       const { join } = yield* Path.Path;
       const baseDir = join(NodeOS.tmpdir(), "t3-cli-config-headless-base");
@@ -589,7 +589,6 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
               ConfigProvider.fromEnv({
                 env: {
                   T3CODE_NO_BROWSER: "false",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
                 },
               }),
             ),
@@ -618,5 +617,129 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
         tailscaleServePort: 443,
       });
     }),
+  );
+
+  // Regression test: `serve` (and any other headless startup) resolves
+  // `startupPresentation: "headless"` here, and its handler used to pass a
+  // `forceAutoBootstrapProjectFromCwd: false` override that always won,
+  // regardless of what the CLI flag or env var said. That made
+  // `serve --auto-bootstrap-project-from-cwd` (and the env-var form) a
+  // silent no-op: no project or thread was ever created for the cwd, and
+  // nothing was logged about it. The two tests below pin the fix: an
+  // explicit request — flag or env var — must still win over the headless
+  // default.
+  it.effect(
+    "honors an explicit --auto-bootstrap-project-from-cwd flag for headless startup presentation",
+    () =>
+      Effect.gen(function* () {
+        const { join } = yield* Path.Path;
+        const baseDir = join(NodeOS.tmpdir(), "t3-cli-config-headless-flag-base");
+        const derivedPaths = yield* deriveExplicitServerPaths(baseDir, undefined);
+
+        const resolved = yield* resolveServerConfig(
+          {
+            mode: Option.some("web"),
+            port: Option.some(3773),
+            host: Option.none(),
+            baseDir: Option.some(baseDir),
+            cwd: Option.none(),
+            devUrl: Option.none(),
+            noBrowser: Option.none(),
+            bootstrapFd: Option.none(),
+            autoBootstrapProjectFromCwd: Option.some(true),
+            logWebSocketEvents: Option.none(),
+            tailscaleServeEnabled: Option.none(),
+            tailscaleServePort: Option.none(),
+          },
+          Option.none(),
+          {
+            startupPresentation: "headless",
+          },
+        ).pipe(Effect.provide(Layer.mergeAll(ConfigProvider.layer(ConfigProvider.fromEnv({})), NetService.layer)));
+
+        expect(resolved).toEqual({
+          logLevel: "Info",
+          ...defaultObservabilityConfig,
+          mode: "web",
+          port: 3773,
+          cwd: process.cwd(),
+          baseDir,
+          ...derivedPaths,
+          host: undefined,
+          staticDir: resolved.staticDir,
+          devUrl: undefined,
+          noBrowser: true,
+          startupPresentation: "headless",
+          desktopBootstrapToken: undefined,
+          autoBootstrapProjectFromCwd: true,
+          logWebSocketEvents: false,
+          tailscaleServeEnabled: false,
+          tailscaleServePort: 443,
+        });
+      }),
+  );
+
+  it.effect(
+    "honors the T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD env var for headless startup presentation",
+    () =>
+      Effect.gen(function* () {
+        const { join } = yield* Path.Path;
+        const baseDir = join(NodeOS.tmpdir(), "t3-cli-config-headless-env-base");
+        const derivedPaths = yield* deriveExplicitServerPaths(baseDir, undefined);
+
+        const resolved = yield* resolveServerConfig(
+          {
+            mode: Option.some("web"),
+            port: Option.some(3773),
+            host: Option.none(),
+            baseDir: Option.some(baseDir),
+            cwd: Option.none(),
+            devUrl: Option.none(),
+            noBrowser: Option.none(),
+            bootstrapFd: Option.none(),
+            autoBootstrapProjectFromCwd: Option.none(),
+            logWebSocketEvents: Option.none(),
+            tailscaleServeEnabled: Option.none(),
+            tailscaleServePort: Option.none(),
+          },
+          Option.none(),
+          {
+            startupPresentation: "headless",
+          },
+        ).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              ConfigProvider.layer(
+                ConfigProvider.fromEnv({
+                  env: {
+                    T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  },
+                }),
+              ),
+              NetService.layer,
+            ),
+          ),
+        );
+
+        expect(resolved).toEqual({
+          logLevel: "Info",
+          ...defaultObservabilityConfig,
+          mode: "web",
+          port: 3773,
+          cwd: process.cwd(),
+          baseDir,
+          ...derivedPaths,
+          host: undefined,
+          staticDir: resolved.staticDir,
+          devUrl: undefined,
+          noBrowser: true,
+          startupPresentation: "headless",
+          desktopBootstrapToken: undefined,
+          autoBootstrapProjectFromCwd: true,
+          logWebSocketEvents: false,
+          tailscaleServeEnabled: false,
+          tailscaleServePort: 443,
+        });
+      }),
   );
 });

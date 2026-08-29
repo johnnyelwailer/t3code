@@ -9,6 +9,7 @@
 import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import { formatWorkflowStepDue } from "~/t3team/chat/t3team-workflowRunLabels";
 import { StepTrailing } from "~/t3team/chat/t3team-workflowStepTrailing";
 import {
   displayedStepStatus,
@@ -72,8 +73,21 @@ export function fallbackRuntimeLabel(step: T3TeamWorkflowStepEntry): string {
       return "Review information";
     case "act":
       return "Apply changes";
-    case "wait.until":
-      return "Scheduled work";
+    case "wait.until": {
+      // The server already knows the real wake time (`Sleep until <ISO>` — see
+      // `t3team-workflowEngineBrokerNotify.ts`); showing it beats a content-free "Scheduled
+      // work" label for a run whose whole body is a durable timer.
+      const isoDeadline = step.detail?.match(
+        /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b/,
+      )?.[0];
+      const due = isoDeadline ? formatWorkflowStepDue(isoDeadline) : null;
+      return due ? `Waiting ${due}` : "Scheduled work";
+    }
+    case "thread.message":
+      // Covers both `thread.showWidget()` (detail = the widget's own title) and a plain
+      // `notifyUser`/`notifyAgent` one-way message (detail = the message text) — either beats
+      // the meaningless implementation-detail fallback below.
+      return runtimeDetailLabel(step.detail) ?? "Notification sent";
     default:
       return "Additional orchestration work";
   }

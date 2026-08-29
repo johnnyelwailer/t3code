@@ -971,6 +971,39 @@ Phases A–B sit alongside the existing 6-phase plan (per the recipes architectu
 memory). Phase C folds into Epic 19 Phase 5. Phase D blocks on recipes Phase 4
 (`agent.task`). Phase E folds into the parallel stage-2 sandbox track.
 
+## Widget composition default (design intent — PJ, 2026-08-29, not built)
+
+Sharpens T2b above, and applies it to `t3team.widget.show` / `thread.showWidget` rather than only
+to registered views.
+
+**The default should be a prompt, not code.** The calling agent describes *what it wants to see*;
+`widget.show` spawns a builder subagent that authors it. The builder has its own isolated context
+and system prompt, exact knowledge of the theme-token and icon contracts, and iterates until the
+widget runs without errors and is visually verified — only then is it shown to the user. That is
+the `reuse-check → draft → typecheck → preview → fix → repeat` loop already specified in T2b, whose
+`preview()` step captures both errors and screenshots.
+
+**Model choice is free, same as `agent()` in an orchestration.** Defaults to Nexplore AI; any model
+or harness may be selected per call.
+
+**Raw code stays a first-class input — it is not a legacy path.** `widgetCode` (HTML, SVG, React,
+whatever) must remain accepted, *especially inside orchestrations*: a workflow body replays from
+line 1 on every resume, so a builder that regenerated the widget on each replay would be
+nondeterministic. Passing authored code keeps the run deterministic.
+
+**Consequence for orchestrations.** If a prompt-built widget is used inside a workflow body, the
+built artifact has to be journaled the way an `agent()` result already is, so replay returns the
+recorded widget instead of rebuilding it. The raw-code path is the escape hatch when that is not
+wanted.
+
+**Related gap found in live QA (2026-08-29).** The widget authoring guidance — theme tokens, the
+`t3w-icon` sprite, no-emoji, `width:100%` — currently lives only on the `t3team.widget.show` entry
+of `IMPLEMENTED_T3TEAM_TOOL_CATALOG`. A workflow body calling `thread.showWidget()` goes through the
+SDK path and never sees it, so an agent authored a widget with hardcoded `#fff` / `#1f2328`, which
+renders as a light slab for anyone on the dark theme. A builder subagent that owns the contract
+removes this class of failure entirely; until it exists, the guidance needs plumbing to both
+surfaces from one source.
+
 ## Working decisions
 
 1. T1 widgets are display/link primitives. They may navigate to an existing route, but they

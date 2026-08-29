@@ -110,6 +110,15 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.github.issue_comment.draft_create": PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,
   "t3team.recipe.list": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.orchestration.run": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
+  // Same group as `run`: a recipe that declares `thread.handoff` to launch an ephemeral
+  // orchestration must be able to observe and recover it too, or the agent is blind the moment
+  // a run goes async. `resume` carries the same risk as `run` itself (it can execute further
+  // arbitrary orchestration code, optionally with a corrected `source`) — a caller that already
+  // holds `thread.handoff` could reach the same effect via `run` again, so a narrower group for
+  // `resume` alone would not reduce the actual blast radius, only add friction to the intended
+  // run -> observe -> fix -> resume recovery loop (see t3team-workflowManual.ts).
+  "t3team.orchestration.status": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
+  "t3team.orchestration.resume": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.recipe.validate": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.read_current": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.rename": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,

@@ -126,6 +126,67 @@ describe("reconcileT3TeamWorkflowShapeProgress", () => {
     ]);
   });
 
+  it("buckets a parallel() fan-out of dynamic agent calls under its OWN authored phase, not the next matched plan step's", () => {
+    // The exact reported scenario: one `parallel()` of three dynamic `agent()` calls runs
+    // entirely under the first authored phase, and `phase('Synthesize')` only fires after that
+    // `parallel()` resolves. Before the server stamped `workflowPhase`, two of the three dynamic
+    // rows anchored to whichever plan step matched next and rendered under "Synthesize" instead.
+    const result = reconcileT3TeamWorkflowShapeProgress(
+      [
+        { phase: "Review", kind: "agent", label: "Agent turn" },
+        { phase: "Synthesize", kind: "agent", label: "Merge into ranked report" },
+      ],
+      [
+        {
+          ...runtimeStep("thread.turn", "completed", 1),
+          detail: "Review correctness",
+          workflowPhase: "Review",
+        },
+        {
+          ...runtimeStep("thread.turn", "completed", 2),
+          detail: "Review edge cases",
+          workflowPhase: "Review",
+        },
+        {
+          ...runtimeStep("thread.turn", "completed", 3),
+          detail: "Review API design",
+          workflowPhase: "Review",
+        },
+        {
+          ...runtimeStep("thread.turn", "completed", 4),
+          detail: "Merge into ranked report",
+          workflowPhase: "Synthesize",
+        },
+      ],
+    );
+
+    const reviewDetails = ["Review correctness", "Review edge cases", "Review API design"];
+    const dynamicRows = result.rows.filter((row) =>
+      reviewDetails.includes(row.runtimeStep?.detail ?? ""),
+    );
+    expect(dynamicRows).toHaveLength(3);
+    expect(dynamicRows.map((row) => row.phase)).toEqual(["Review", "Review", "Review"]);
+
+    const mergeRow = result.rows.find((row) => row.runtimeStep?.detail === "Merge into ranked report");
+    expect(mergeRow?.planStep?.label).toBe("Merge into ranked report");
+  });
+
+  it("falls back to the nearest-prior-match heuristic when a runtime step carries no workflowPhase stamp (older runs)", () => {
+    const result = reconcileT3TeamWorkflowShapeProgress(
+      [
+        { phase: "Review", kind: "agent", label: "Agent turn" },
+        { phase: "Synthesize", kind: "agent", label: "Merge into ranked report" },
+      ],
+      [
+        { ...runtimeStep("thread.turn", "completed", 1), detail: "Review correctness" },
+        { ...runtimeStep("thread.turn", "completed", 4), detail: "Merge into ranked report" },
+      ],
+    );
+
+    const dynamicRow = result.rows.find((row) => row.runtimeStep?.detail === "Review correctness");
+    expect(dynamicRow?.phase).toBe("Review");
+  });
+
   it("matches scheduled runtime work to an authored wait row", () => {
     const result = reconcileT3TeamWorkflowShapeProgress(
       [{ phase: "Review", kind: "agent", label: "Wait for review window" }],

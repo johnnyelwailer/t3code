@@ -877,3 +877,162 @@ describe("nested agents vs subagent shells", () => {
     expect(agents.map((agent) => agent.id)).toEqual(["nested-1"]);
   });
 });
+
+// Real-shaped payloads below were read verbatim (field names/values, minus
+// ids) from a live workflow-orchestration thread's projection_thread_activities
+// rows — see apps/server/src/t3team-workflowEngineStepActivities.ts (the
+// emitter) and packages/project-recipes/src/runtime.ts
+// (ProjectRecipeWorkflowStepActivityPayload).
+describe("recipe-workflow-step fold (t3team.recipe.workflow.step)", () => {
+  const workflowRunId = "74710a7f-9da8-4207-bd80-da0b1fa302ce";
+  const launchThreadId = "3e97be2d-83a7-48af-924d-e925d8b22eb8";
+
+  it("thread.create + thread.turn pairs build a workflow group with member agents", () => {
+    const model = deriveAgentPanelModel({
+      agents: fold([
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:blackbox:1`,
+          stepKind: "thread.create",
+          phase: "completed",
+          detail: "Review correctness",
+          projectId: "proj-1",
+          threadId: `${workflowRunId}:blackbox:1`,
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:blackbox:2`,
+          stepKind: "thread.turn",
+          phase: "completed",
+          detail: "Review correctness",
+          projectId: "proj-1",
+          threadId: `${workflowRunId}:blackbox:1`,
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:blackbox:3`,
+          stepKind: "thread.create",
+          phase: "completed",
+          detail: "Review edge cases",
+          projectId: "proj-1",
+          threadId: `${workflowRunId}:blackbox:3`,
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:blackbox:4`,
+          stepKind: "thread.turn",
+          phase: "completed",
+          detail: "Review edge cases",
+          projectId: "proj-1",
+          threadId: `${workflowRunId}:blackbox:3`,
+        }),
+        // Reports the LAUNCH thread's own id (asking the user a question) —
+        // must never become a roster member.
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:5`,
+          stepKind: "user.input",
+          phase: "completed",
+          detail: "Pick a winner",
+          projectId: "proj-1",
+          threadId: launchThreadId,
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `run:${workflowRunId}`,
+          stepKind: "run",
+          phase: "completed",
+          projectId: "proj-1",
+        }),
+      ]),
+    });
+
+    expect(model.workflows).toHaveLength(1);
+    const group = model.workflows[0]!;
+    expect(group.workflow.id).toBe(workflowRunId);
+    expect(group.workflow.kind).toBe("workflow");
+    expect(group.workflow.status).toBe("completed");
+
+    const members = [...group.phases.flatMap((phase) => phase.members), ...group.unphasedMembers];
+    expect(members.map((member) => member.id).toSorted()).toEqual(
+      [`${workflowRunId}:blackbox:1`, `${workflowRunId}:blackbox:3`].toSorted(),
+    );
+    expect(members.map((member) => member.id)).not.toContain(launchThreadId);
+
+    const first = members.find((member) => member.id === `${workflowRunId}:blackbox:1`);
+    expect(first?.title).toBe("Review correctness");
+    expect(first?.status).toBe("completed");
+    expect(first?.kind).toBe("workflow_agent");
+    expect(first?.parentAgentId).toBe(workflowRunId);
+    // Neither the payload nor the fold invents model/usage data for a
+    // recipe-workflow child thread.
+    expect(first?.model).toBeNull();
+    expect(first?.usage).toBeNull();
+  });
+
+  it("a thread.create with no thread.turn yet reads as running, not completed", () => {
+    const agents = fold([
+      activity("t3team.recipe.workflow.step", {
+        workflowRunId,
+        stepId: `${workflowRunId}:blackbox:1`,
+        stepKind: "thread.create",
+        phase: "completed",
+        detail: "Still working",
+        threadId: `${workflowRunId}:blackbox:1`,
+      }),
+    ]);
+    const member = agents.find((agent) => agent.id === `${workflowRunId}:blackbox:1`);
+    expect(member?.status).toBe("running");
+    const workflow = agents.find((agent) => agent.id === workflowRunId);
+    expect(workflow?.status).toBe("running");
+  });
+
+  it("an immediate run failure with no preceding steps still marks the workflow failed", () => {
+    // Observed live: a run can fail before any step activity lands
+    // (e.g. a synchronous script error), so the coordinator must be
+    // creatable from the terminal row alone.
+    const agents = fold([
+      activity("t3team.recipe.workflow.step", {
+        workflowRunId: "wf-fail",
+        stepId: "run:wf-fail",
+        stepKind: "run",
+        phase: "failed",
+        projectId: "proj-1",
+        error: "ReferenceError: readFileSync is not defined",
+      }),
+    ]);
+    expect(agents).toHaveLength(1);
+    expect(agents[0]!.kind).toBe("workflow");
+    expect(agents[0]!.status).toBe("failed");
+    expect(agents[0]!.error).toBe("ReferenceError: readFileSync is not defined");
+  });
+
+  it("groups members by their authored workflowPhase name", () => {
+    const model = deriveAgentPanelModel({
+      agents: fold([
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId: "wf-phases",
+          stepId: "wf-phases:1",
+          stepKind: "thread.create",
+          phase: "completed",
+          detail: "Draft A",
+          threadId: "wf-phases:1",
+          workflowPhase: "Draft",
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId: "wf-phases",
+          stepId: "wf-phases:2",
+          stepKind: "thread.create",
+          phase: "started",
+          detail: "Review A",
+          threadId: "wf-phases:2",
+          workflowPhase: "Review",
+        }),
+      ]),
+    });
+    const group = model.workflows[0]!;
+    expect(group.phases.map((phase) => phase.title)).toEqual(["Draft", "Review"]);
+    expect(group.phases[0]!.members.map((member) => member.id)).toEqual(["wf-phases:1"]);
+    expect(group.phases[1]!.members.map((member) => member.id)).toEqual(["wf-phases:2"]);
+  });
+});

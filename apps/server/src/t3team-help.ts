@@ -8,6 +8,8 @@
  *
  * @module t3team-help
  */
+import { T3TEAM_WIDGET_AUTHORING_GUIDANCE } from "@t3tools/project-context/t3teamWidgetGuidance";
+
 import { T3TEAM_TIMERS_MANUAL, T3TEAM_WORKFLOW_MANUAL } from "./t3team-workflowManual.ts";
 
 export interface T3TeamHelpTopic {
@@ -33,6 +35,13 @@ const TOPICS: ReadonlyArray<T3TeamHelpTopic> = [
     summary: "Exact waitUntil/now syntax for one-shot waits and recurring durable routines.",
     body: T3TEAM_TIMERS_MANUAL,
   },
+  {
+    slug: "widget-guidance",
+    title: "Widget authoring guidance (thread.showWidget / t3team.widget.show)",
+    summary:
+      "Theme CSS variables, the icon sprite, layout/CSP rules for any widget body — same contract thread.showWidget and the t3team.widget.show tool both use.",
+    body: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  },
 ];
 
 /** Aliases → canonical slug, so common phrasings resolve to the right topic. */
@@ -47,6 +56,9 @@ const ALIASES: Readonly<Record<string, string>> = {
   timer: "timers",
   schedule: "timers",
   scheduling: "timers",
+  widget: "widget-guidance",
+  widgets: "widget-guidance",
+  showwidget: "widget-guidance",
 };
 
 const indexText = (): string =>

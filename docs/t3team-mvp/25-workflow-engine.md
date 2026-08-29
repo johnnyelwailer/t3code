@@ -1177,6 +1177,67 @@ The step-union runtime has been **deleted** — the durable engine is the only o
 Every recipe is authored against the engine (`recipe.ts` + `*.workflow.ts`); there is no
 longer a `recipe.json` / step-union path.
 
+## Pre-run review phase (design intent — PJ, 2026-08-29, not built)
+
+The engine already has a **reactive** repair path: `t3team-workflowSelfHeal.ts`,
+`t3team-workflowEngineRepair.ts`, and `t3team-workflowRepair{Generate,Guardrails,Policy,Prompt}.ts`,
+with a distribution-tunable `t3team-pack-workflowRepairPolicy.ts`. It fires *after* a run fails,
+hands a no-tools structured repair model the failure plus `T3TEAM_WORKFLOW_MANUAL`, and retries.
+
+The intent is a **proactive** counterpart that reuses the same machinery:
+
+- The workflow builder should itself be a subagent, at least in part.
+- Before a workflow is accepted for its first execution, a **review phase** checks the authored
+  source against a ruleset.
+- That review runs on a **cheap tier** (`Instant` or `Fast`) — it is a fast conformance check, not
+  a reasoning task.
+- On rejection it feeds the existing repair loop rather than failing the run.
+
+Why this is worth having, from live QA on 2026-08-29: `precheckWorkflowSource`
+(`t3team-workflowSourcePrecheck.ts`) is the only gate today, it runs **only** for inline `source`
+(never for `workflowPath`), and it checks exactly two things — that `export const meta` is present
+and that the TypeScript parses. A file carrying `import { readFileSync } from "node:fs"`, a `meta`
+declared *after* the default export, and an `agent()` call with no `capabilities` passed both
+checks and died at runtime with a bare `ReferenceError: readFileSync is not defined`. Each of those
+violates a rule the manual states explicitly, and none is cheaply expressible as a static check —
+which is exactly the shape a cheap-model conformance pass handles well.
+
+## Self-build from prompt, not only self-repair (design intent — PJ, 2026-08-29, not built)
+
+Extends the pre-run review phase above. Today an orchestration is authored *inline* by the calling
+agent and the engine only ever repairs it reactively. The intent is that the builder can also
+**self-build from a prompt**, the same way `widget.show` should (Epic 24 § Widget composition
+default).
+
+**Advantage** — less context rot in the orchestrator thread: the calling agent describes the
+structure it wants instead of emitting 60–110 lines of TypeScript into its own context.
+
+**Risk, stated by PJ** — vision drift: the full idea may not survive the prompt lens.
+
+**Mitigation that already exists.** `t3team.orchestration.run` already *requires*
+`intent: { goal, expectedOutcome, guardrails }` — non-blank goal and expectedOutcome, at least one
+non-blank guardrail (`packages/t3team-sdk/src/tools/t3team-sdk.workflow.ts`). That is already a
+structured contract for carrying intent through a lens, rather than free prose, and a prompt-built
+workflow would inherit it unchanged.
+
+**Refinement must not be a rebuild — and the seam is already there.** Two existing mechanisms:
+
+- `t3team.orchestration.resume` accepts a corrected `source` and performs same-prefix journal
+  replay: journaled steps return their recorded results verbatim, execution continues live past the
+  recorded frontier (`t3team-toolBrokerWorkflowResumeTool.ts`, `t3team-workflowResumeFailed.ts`).
+- The authored source persists at `.t3team-runs/<runId>/workflow.ts` and the engine re-reads it on
+  every resume/rehydrate, so a builder can read the current source and amend it rather than
+  regenerate from scratch.
+
+So the target shape is tri-modal, mirroring `showWidget`: `prompt` (default, builder subagent),
+`source` (raw, deterministic — required inside orchestration bodies), `workflowPath` (existing file).
+
+**Evidence for keeping the raw path (live QA, 2026-08-29).** Authoring with full conversation
+context produced materially better sources than a summary could: the agent embedded the exact file
+contents under review, and in another run the literal sentinel string the user had asked for
+(`TIMER-FIRED-OK`). Both would plausibly be lost through a summarising prompt lens — which is the
+concrete form the drift risk takes.
+
 ## Open questions
 
 1. **VM isolation strategy.** Stage 1 trusts project code (current). Stage 2 needs real
