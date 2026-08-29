@@ -46,6 +46,16 @@ import { ServerSettingsService } from "./serverSettings.ts";
  *      The deterministic word updates instantly; the detail catches up lazily.
  *    - SKIPPED when the recent-activity window is unchanged since the last
  *      generation; CLEARED on idle/terminal.
+ *    - TIME-BOXED (GHE #208 follow-up): a persisted label gets a minimum
+ *      life of `ACTIVITY_LABEL_TTL_MS` (5s — PJ's decision: give an LLM
+ *      status text a minimum time to live, then let either new LLM text or
+ *      the live deterministic state word override it). The clear is
+ *      scheduled inside `createActivityLabelSummarizer` after each persist;
+ *      a newer label reschedules it, the turn-end clear cancels it, and a
+ *      late fire is no-oped by the timer-handle guard. After expiry the
+ *      display falls back to the live `activityState` word automatically via
+ *      the existing pill precedence. The throttle above (light inference,
+ *      slow generation) is untouched.
  *    - Gated by the `t3teamActivityLabelsEnabled` settings flag: off = no LLM
  *      calls, the UI shows just the state word.
  *
@@ -88,6 +98,12 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
     // enrichment" — the deterministic state word keeps flowing.
     let activityLabelsEnabled = (yield* serverSettingsService.getSettings)
       .t3teamActivityLabelsEnabled;
+    // GHE #208 follow-up: optional env override for the LLM label TTL (the
+    // 5s minimum life). Only positive finite ints are honored; anything else
+    // falls back to the ACTIVITY_LABEL_TTL_MS default.
+    const rawTtl = process.env.T3TEAM_ACTIVITY_LABEL_TTL_MS;
+    const parsedTtl = rawTtl === undefined ? NaN : Number.parseInt(rawTtl, 10);
+    const activityLabelTtlMs = Number.isFinite(parsedTtl) && parsedTtl >= 0 ? parsedTtl : undefined;
     // The settings stream is a live, never-ending PubSub stream. It MUST be
     // forked into the layer scope, not `yield*`ed inline: `yield*` on a stream
     // that never completes would block this reactor effect forever, so the two
@@ -143,6 +159,11 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
       onError: (cause) => {
         Effect.runFork(Effect.logWarning("activity label summarizer timer failed", { cause }));
       },
+      // GHE #208 follow-up: the label TTL defaults to ACTIVITY_LABEL_TTL_MS
+      // (5s); a numeric env override exists to shorten it for e2e tests
+      // (0 disables the timer — the label then lives until the next
+      // generation or the turn-end clear).
+      ...(activityLabelTtlMs !== undefined ? { activityLabelTtlMs } : {}),
     });
 
     const onActivity = (event: OrchestrationEvent) =>
