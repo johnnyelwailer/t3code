@@ -2,7 +2,12 @@ import * as DateTime from "effect/DateTime";
 
 import type { JournalEntry, ResolvedEntry } from "./journalReader.ts";
 import type { JournalSink } from "./journalStore.ts";
-import { createHandleDispatch, type HandleDispatch } from "./handles.ts";
+import {
+  createHandleDispatch,
+  createSuspensionLatch,
+  type HandleDispatch,
+  type SuspensionLatch,
+} from "./handles.ts";
 import {
   createDurableCallDeterministic,
   createDurableCallPrimitive,
@@ -31,6 +36,13 @@ export interface DurableRuntimeConfig {
   readonly events?: WorkflowEventSink | undefined;
   /** First-class abort: checked before every live primitive execution (see the seat). */
   readonly abortSignal?: AbortSignal | undefined;
+  /**
+   * The RUN's suspension latch, so the run boundary (`executeWorkflowRun`) and this runtime share
+   * one record. Absent for a standalone runtime (tests, an embedder driving primitives directly),
+   * which then owns a private latch: the re-throw behaviour still holds, only the boundary's
+   * "body returned normally while suspended" check has nothing to read.
+   */
+  readonly suspension?: SuspensionLatch | undefined;
 }
 
 export interface DurablePrimitiveRuntime extends PrimitiveRuntime {
@@ -40,6 +52,7 @@ export interface DurablePrimitiveRuntime extends PrimitiveRuntime {
   readonly hostRandom: () => number;
   readonly hostUuid: () => string;
   readonly handles: HandleDispatch;
+  readonly suspension: SuspensionLatch;
 }
 
 export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimitiveRuntime {
@@ -48,6 +61,7 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
   const maxRecordedSeq =
     config.journal.size === 0 ? 0 : Math.max(...Array.from(config.journal.keys()));
   const resolved = new Map<string, ResolvedEntry>(config.resolved ?? []);
+  const suspension = config.suspension ?? createSuspensionLatch();
 
   const runBlackBoxed = async <R>(fn: () => Promise<R>): Promise<R> => {
     blackBoxDepth += 1;
@@ -69,6 +83,7 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     runId: config.runId,
     events: config.events,
     abortSignal: config.abortSignal,
+    suspension,
   };
   const callPrimitive = createDurableCallPrimitive(primitiveSeat);
   const callDeterministic = createDurableCallDeterministic(primitiveSeat);
@@ -89,6 +104,7 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     setResolved: (entry) => resolved.set(entry.correlationId, entry),
     events: config.events,
     abortSignal: config.abortSignal,
+    suspension,
   });
 
   return {
@@ -102,5 +118,6 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     hostRandom: config.source.random,
     hostUuid: config.source.uuid,
     handles,
+    suspension,
   };
 }

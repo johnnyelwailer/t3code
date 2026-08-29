@@ -8,6 +8,7 @@
 
 import { createArtifactEmitter, type ArtifactInput, type ArtifactRecord } from "./artifacts.ts";
 import { WorkflowError } from "./errors.ts";
+import { WorkflowSuspended } from "./handles.ts";
 import type { WorkflowReference } from "./engineTypes.ts";
 import type { PrimitiveCall } from "./runtimeTypes.ts";
 
@@ -49,9 +50,7 @@ export interface CompositionBranchFailure {
  */
 function describeRejectionReason(reason: unknown): string {
   if (reason instanceof Error) {
-    return reason.message.length > 0
-      ? reason.message
-      : `${reason.name} was thrown with no message`;
+    return reason.message.length > 0 ? reason.message : `${reason.name} was thrown with no message`;
   }
   if (typeof reason === "string") {
     return reason.length > 0 ? reason : "an empty string was thrown";
@@ -126,9 +125,20 @@ export interface WorkflowPrimitivesDeps<
    * terminal activity) but swallow whatever it throws, exactly like every other live status pip
    * in this codebase — a lost report must never turn a swallowed rejection into a hard failure.
    */
-  readonly onCompositionBranchFailed?: (
-    failure: CompositionBranchFailure,
-  ) => void | Promise<void>;
+  readonly onCompositionBranchFailed?: (failure: CompositionBranchFailure) => void | Promise<void>;
+}
+
+/**
+ * A durable suspension is a CONTROL SIGNAL, not a branch rejection: it means the ask has not been
+ * answered yet, so turning it into `null` would hand the body a fabricated result for a step that
+ * never ran — the same silent-wrong-answer shape a body's own `catch (e)` used to produce. Both
+ * compositions therefore re-raise it instead of reporting-and-nulling.
+ *
+ * This does NOT change the documented contract that a REJECTED thunk resolves to `null`: a
+ * suspension is not a rejection, and every real error still takes the reporting path below.
+ */
+function rethrowIfSuspension(reason: unknown): void {
+  if (reason instanceof WorkflowSuspended) throw reason;
 }
 
 /** Await the optional branch-failure hook, swallowing whatever IT throws — see the field's doc. */
@@ -161,6 +171,7 @@ export function createWorkflowPrimitives<
                 .then(
                   (value) => value,
                   async (reason) => {
+                    rethrowIfSuspension(reason);
                     await reportCompositionBranchFailure(deps, {
                       compositionKind: "parallel",
                       index,
@@ -197,6 +208,7 @@ export function createWorkflowPrimitives<
                 }
                 return prev;
               } catch (reason) {
+                rethrowIfSuspension(reason);
                 await reportCompositionBranchFailure(deps, {
                   compositionKind: "pipeline",
                   index,

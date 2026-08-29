@@ -2,13 +2,7 @@ import { hashArgs } from "./canonicalJson.ts";
 import { CancelledError, WorkflowAborted } from "./errors.ts";
 import { emitSafe } from "./events.ts";
 import type { PrimitiveKind } from "./runtimeTypes.ts";
-import {
-  type HandleDispatch,
-  type HandleSeat,
-  type HandleSendCall,
-  type ReplyResolver,
-  WorkflowSuspended,
-} from "./handles.ts";
+import type { HandleDispatch, HandleSeat, HandleSendCall, ReplyResolver } from "./handles.ts";
 import { assertJournalMatch, gapDrift } from "./replayDrift.ts";
 
 const noopResolver: ReplyResolver = { resolve: () => {}, reject: () => {} };
@@ -79,6 +73,10 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
   });
 
   const send = async (call: HandleSendCall): Promise<string> => {
+    // Sticky suspension, checked FIRST — before the black-box branch, before the abort check, and
+    // above all before takeSeq: a body that caught the signal and looped must not consume another
+    // seq or fire another side effect. See SuspensionLatch in handles.ts.
+    seat.suspension.assertNotSuspended();
     if (seat.isBlackBoxed()) {
       const id = `${seat.runId}:blackbox:${(blackboxSeq += 1)}`;
       await call.fire(id, inMemoryResolver(id, call.kind, call.refId));
@@ -123,6 +121,9 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       endedAt: ts,
     });
     await call.fire(correlationId, makeResolver(correlationId, call.kind, call.refId));
+    // A broker may itself have driven a nested body that suspended (an intercepting broker does);
+    // refuse to hand this correlationId back once the run is parked.
+    seat.suspension.assertNotSuspended();
     emitSafe(seat.events, {
       type: "primitive.completed",
       runId: seat.runId,
@@ -135,6 +136,7 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
   };
 
   const sendOneWay = (call: HandleSendCall): string => {
+    seat.suspension.assertNotSuspended(); // see `send` — no seq, no fire, once the run is parked
     if (seat.isBlackBoxed()) {
       const id = `${seat.runId}:blackbox:${(blackboxSeq += 1)}`;
       void call.fire(id, noopResolver);
@@ -193,8 +195,16 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     correlationId: string,
     decodeReply: ((reply: unknown) => Promise<R>) | undefined,
   ): Promise<R> => {
+    // Deliberately NOT gated on `assertNotSuspended`: reading an ALREADY-journaled reply is a pure
+    // read that fires nothing and writes nothing, so re-throwing here would buy no safety while
+    // breaking a host that settles a resolver out of band and reads it back on the same runtime.
+    // Every touchpoint that could actually do damage — send, sendOneWay, callPrimitive, the
+    // deterministic globals, and the run boundary — is gated.
     const resolved = seat.resolvedFor(correlationId);
-    if (resolved === undefined) throw new WorkflowSuspended(correlationId);
+    // Arm the latch instead of throwing a fresh signal: user code may catch this, and the latch is
+    // what makes catching it worthless. `isBlackBoxed` rides along because a suspension inside
+    // parallel()/pipeline() has no journaled `sent` entry and can never be resumed.
+    if (resolved === undefined) throw seat.suspension.arm(correlationId, seat.isBlackBoxed());
     if (resolved.dismissed) {
       throw new CancelledError(
         `Handle '${correlationId}' was dismissed; its response will never settle.`,
@@ -203,5 +213,10 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     return (decodeReply === undefined ? resolved.reply : await decodeReply(resolved.reply)) as R;
   };
 
-  return { send, sendOneWay, awaitResolution };
+  return {
+    assertNotSuspended: seat.suspension.assertNotSuspended,
+    send,
+    sendOneWay,
+    awaitResolution,
+  };
 }
