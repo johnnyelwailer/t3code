@@ -206,11 +206,19 @@ RULES
       return await getThread().askUser('Choose:', { schema: Choice, label: 'Choose action' })
     }
   An arbitrary options array is not supported; use a Schema so the UI can render controls.
-- Return the final result at the end.
+- Return the final result at the end, and prefer RETURNING a structured object over narrating one:
+  the host renders it as clean labelled lines, while prose renders as typed. t3team_help("reporting").
 
 RESULT
 Returns { runId, status: 'accepted'|'completed'|'suspended'|'failed', handoff: 'workflow-ui', output?, error? }.
 accepted means the durable host owns the run. A successful workflow-ui handoff means end the
 current host turn immediately with no follow-up assistant prose. Do not launch it again or poll
 it; sleeping, user decisions, and other progress arrive through the existing orchestration UI.
-On 'failed', read 'error', fix the source per this manual, and run it again.`;
+
+On 'failed', read 'error' first:
+- "Invalid inputs for workflow '<name>': ..." means the WORKFLOW is correct and YOUR launch
+  arguments were wrong. Call t3team_orchestration_resume with the same runId and corrected
+  'args' — never 'source', never t3team_orchestration_run again (that makes a duplicate card).
+- Any other failure is a genuine source defect: fix the source, then call
+  t3team_orchestration_resume with corrected 'source' (same-prefix replay). Only run again if no
+  runId is available to resume.`;

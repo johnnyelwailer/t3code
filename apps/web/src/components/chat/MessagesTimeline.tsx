@@ -162,6 +162,10 @@ import {
   describeActorOutboundSend,
   type ActorOutboundRelations,
 } from "~/t3team/chat/t3team-actorOutbound";
+import {
+  COLLAPSED_MESSAGE_FADE_MASK,
+  shouldCollapseMessageText,
+} from "~/t3team/chat/t3team-collapsibleMessage";
 import { useThreadShell } from "~/state/entities";
 
 // ---------------------------------------------------------------------------
@@ -2300,22 +2304,6 @@ function UserMessagePreviewAnnotationCard(props: {
   );
 }
 
-const MAX_COLLAPSED_USER_MESSAGE_LINES = 8;
-const MAX_COLLAPSED_USER_MESSAGE_LENGTH = 600;
-const COLLAPSED_USER_MESSAGE_FADE_HEIGHT_REM = 1.75;
-const COLLAPSED_USER_MESSAGE_FADE_MASK = `linear-gradient(to bottom, black calc(100% - ${COLLAPSED_USER_MESSAGE_FADE_HEIGHT_REM}rem), transparent)`;
-
-function shouldCollapseUserMessage(text: string): boolean {
-  if (text.trim().length === 0) {
-    return false;
-  }
-
-  return (
-    text.length > MAX_COLLAPSED_USER_MESSAGE_LENGTH ||
-    text.split("\n").length > MAX_COLLAPSED_USER_MESSAGE_LINES
-  );
-}
-
 const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(props: {
   text: string;
   terminalContexts: ParsedTerminalContextEntry[];
@@ -2325,7 +2313,7 @@ const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(prop
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasVisibleBody = props.text.trim().length > 0 || props.terminalContexts.length > 0;
-  const canCollapse = hasVisibleBody && shouldCollapseUserMessage(props.text);
+  const canCollapse = hasVisibleBody && shouldCollapseMessageText(props.text);
   const isCollapsed = canCollapse && !expanded;
 
   return (
@@ -2340,8 +2328,8 @@ const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(prop
           style={
             isCollapsed
               ? {
-                  WebkitMaskImage: COLLAPSED_USER_MESSAGE_FADE_MASK,
-                  maskImage: COLLAPSED_USER_MESSAGE_FADE_MASK,
+                  WebkitMaskImage: COLLAPSED_MESSAGE_FADE_MASK,
+                  maskImage: COLLAPSED_MESSAGE_FADE_MASK,
                 }
               : undefined
           }

@@ -23,6 +23,7 @@ import {
   StepStatusIcon,
   StepTrailing,
 } from "~/t3team/chat/t3team-workflowRunStepRow";
+import { TurnCountBadge } from "~/t3team/chat/t3team-workflowStepTrailing";
 import type { useT3TeamWorkflowShapeLiveState } from "~/t3team/chat/t3team-workflowShapeLiveState";
 
 type LiveState = ReturnType<typeof useT3TeamWorkflowShapeLiveState>;
@@ -153,11 +154,14 @@ export function T3TeamWorkflowShapeStepRows({
                       />
                     }
                     trailing={
-                      <StepTrailing
-                        step={step}
-                        wakeAt={index === scheduledPlanRow ? activeWaitAt : undefined}
-                        childStatuses={childStatuses}
-                      />
+                      <>
+                        <TurnCountBadge step={step} />
+                        <StepTrailing
+                          step={step}
+                          wakeAt={index === scheduledPlanRow ? activeWaitAt : undefined}
+                          childStatuses={childStatuses}
+                        />
+                      </>
                     }
                     hideKindLabel={step?.stepKind === "wait.until"}
                   />

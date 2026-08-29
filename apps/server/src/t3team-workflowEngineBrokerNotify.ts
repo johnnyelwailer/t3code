@@ -103,7 +103,23 @@ export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): P
             ? {
                 author: { kind: "system", workflowRunId: deps.runId },
                 visibleToUser: true,
-                visibleToAgent: false,
+                // Visible to the AGENT too, deliberately. `visibleToUser: true` with
+                // `visibleToAgent: false` puts the user and the agent in two different
+                // conversations, and this is the one message where that diverges hardest: it is
+                // the run's report. Observed 2026-08-29 — a delivery run posted its QA verdict
+                // here, the user then asked "can u summarize and tell me next step", and the
+                // agent answered that the pipeline was still running. The report was on screen
+                // and filtered out of its prompt (`describeAgentVisibleSystemMessage` drops
+                // system messages flagged false), so it had the completion line's verdict with
+                // none of the substance behind it and fell back to restating the launch plan.
+                //
+                // The cost is prompt weight when a workflow notifies often. That is the right
+                // trade: a chatty run makes the context longer, a hidden report makes the agent
+                // wrong. Brevity belongs to the author — see t3team_help("reporting").
+                //
+                // The WIDGET branches above stay false on purpose: their payload is HTML the
+                // agent itself authored, so re-injecting it is cost without information.
+                visibleToAgent: true,
               }
             : undefined,
         ),
