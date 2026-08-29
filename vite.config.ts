@@ -16,6 +16,15 @@ export default defineConfig({
       "**/dist/**",
       "**/dist-electron/**",
       "**/.{idea,git,cache,output,temp}/**",
+      // Agent worktrees are checkouts of THIS repo nested inside it, so every test file appears
+      // once per worktree. The copies fail at import (`Cannot find package '@t3tools/contracts'`)
+      // because they have no node_modules of their own, and the run then reports hundreds of
+      // failed FILES beside a fully green test count — e.g. "579 failed | 289 passed (868)" for a
+      // run whose 272 tests all passed. That is worse than noise: it trains everyone reading the
+      // output to wave failures away, which is exactly how a real one gets missed. Same reason
+      // `.repos/**` is excluded above.
+      "**/worktrees/**",
+      "**/.worktrees/**",
     ],
     hookTimeout: 60_000,
     testTimeout: 60_000,
