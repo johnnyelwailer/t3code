@@ -32,6 +32,7 @@ import type {
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineLaunch.ts";
 import { makeOrphanIfSleeping } from "./t3team-workflowEngineDurabilityOrphan.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
+import { createWorkflowRunShellPusher } from "./t3team-workflowRunShellPush.ts";
 
 export interface BuildRunningRowInput {
   readonly runId: string;
@@ -102,8 +103,17 @@ export function makeWorkflowRunLifecycle(opts: {
   const releaseAdmission = (): void => {
     if (admissionManaged) workflowAdmissionQueue.release(row.runId);
   };
+  // Pushes the launch thread's shell to the sidebar on a real status transition only — see
+  // t3team-workflowRunShellPush.ts for why `recordActive`'s per-primitive re-affirmation needs
+  // this dedup.
+  const pushIfTransitioned = createWorkflowRunShellPusher({
+    launchThreadId: row.launchThreadId,
+    dispatch: opts.dispatch,
+    newId: opts.newId,
+  });
   return {
-    recordRunning: () => Effect.runPromise(repo.upsert(row)),
+    recordRunning: () =>
+      Effect.runPromise(repo.upsert(row)).then(() => pushIfTransitioned(row.status)),
     recordActive: async () => {
       if (
         workflowAdmissionQueue.isCancelled(row.runId) ||
@@ -132,7 +142,9 @@ export function makeWorkflowRunLifecycle(opts: {
         repo.setStatus({ runId: row.runId, status: "running", updatedAt: opts.nowIso() }),
       );
       const activeRow = await Effect.runPromise(repo.getById({ runId: row.runId }));
-      return Option.isSome(activeRow) && activeRow.value.status === "running";
+      const isActive = Option.isSome(activeRow) && activeRow.value.status === "running";
+      if (isActive) pushIfTransitioned("running"); // interim "queued" write above is gate churn
+      return isActive;
     },
     releaseActive: releaseAdmission,
     recordSuspended: (pending) =>
@@ -144,7 +156,7 @@ export function makeWorkflowRunLifecycle(opts: {
           pendingKind: pending.kind,
           updatedAt: opts.nowIso(),
         }),
-      ),
+      ).then(() => pushIfTransitioned("suspended")),
     recordSleeping: (sleep) =>
       Effect.runPromise(
         repo.setSleeping({
@@ -156,11 +168,15 @@ export function makeWorkflowRunLifecycle(opts: {
       ).then(() => {
         releaseAdmission();
         opts.onSleep?.();
+        pushIfTransitioned("sleeping");
       }),
     recordCompleted: () =>
       Effect.runPromise(
         repo.clearPending({ runId: row.runId, status: "completed", updatedAt: opts.nowIso() }),
-      ).then(releaseAdmission),
+      ).then(() => {
+        releaseAdmission();
+        pushIfTransitioned("completed");
+      }),
     recordFailed: (detail) =>
       Effect.runPromise(
         repo.clearPending({
@@ -171,7 +187,10 @@ export function makeWorkflowRunLifecycle(opts: {
             ? {}
             : { failureReason: detail.reason, failureStep: detail.step }),
         }),
-      ).then(releaseAdmission),
+      ).then(() => {
+        releaseAdmission();
+        pushIfTransitioned("failed");
+      }),
     // Crash-recovery guard (see ./t3team-workflowEngineDurabilityOrphan.ts).
     orphanIfSleeping: makeOrphanIfSleeping({
       repo,

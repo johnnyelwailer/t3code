@@ -292,6 +292,109 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
       assert.isFalse(NodeFS.existsSync(NodePath.join(runsRoot, runId)));
     }),
   );
+
+  // GHE (sidebar status pill only updates on reload): the lifecycle's suspend/resume/complete
+  // transitions must each push the launch thread's shell through the live subscribeShell stream
+  // (see t3team-workflowRunShellPush.ts) — proven here against the REAL launch/resume path, not
+  // a mock. The dedup guarantee itself (repeated `recordActive` re-affirmation of an unchanged
+  // status must NOT push again) is proven in isolation, precisely, in
+  // t3team-workflowRunShellPush.test.ts; this test proves the WIRING: that the lifecycle a real
+  // run drives through actually calls it, tagged with the right transitions.
+  it.effect("pushes the launch thread's shell on suspend, resume, and completion", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkflowRunRepository;
+      const store = yield* WorkflowJournalStore;
+
+      const runId = "durable-shell-push";
+      const launchThreadId = "launch-shell-push";
+      const args = { prTitle: "Push the shell on every real transition" };
+      const dispatched: OrchestrationCommand[] = [];
+      const dispatch = (command: OrchestrationCommand): Promise<void> => {
+        dispatched.push(command);
+        return Promise.resolve();
+      };
+      let seq = 0;
+      const newId = (): string => `id-${(seq += 1)}`;
+      const shellPushes = () =>
+        dispatched.filter(
+          (command) =>
+            command.type === "thread.meta.update" &&
+            command.threadId === launchThreadId &&
+            command.commandId.startsWith("t3team-wf-shell-push:"),
+        );
+
+      const registry = makeWorkflowEngineRegistry();
+      const launchLifecycle = makeWorkflowRunLifecycle({
+        repo,
+        row: buildRunningWorkflowRunRow({
+          runId,
+          workflowPath,
+          args,
+          launchThreadId,
+          projectId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          nowIso: nowIso(),
+        }),
+        nowIso,
+        dispatch,
+        newId,
+      });
+      const launched = yield* Effect.promise(() =>
+        launchWorkflowRecipe({
+          runId,
+          workflowPath,
+          args,
+          runsRoot,
+          launchThreadId,
+          projectId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          registry,
+          dispatch,
+          newId,
+          nowIso,
+          store,
+          lifecycle: launchLifecycle,
+        }),
+      );
+      assert.strictEqual(launched.status, "suspended");
+      // recordRunning's own push already covers "the run is running"; recordActive's immediate
+      // re-affirmation before the first primitive must not double it.
+      const afterFirstSuspend = shellPushes().length;
+      assert.isAtLeast(afterFirstSuspend, 1);
+
+      const agentAsk = registry.takePending(`${runId}:1`);
+      assert.strictEqual(agentAsk?.kind, "thread.turn");
+      yield* Effect.promise(() =>
+        registry
+          .getRun(runId)!
+          .resume(agentAsk!.correlationId, { summary: "Low risk; well tested." }),
+      );
+
+      const suspendedRow = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.strictEqual(suspendedRow.status, "suspended");
+      assert.strictEqual(suspendedRow.pendingKind, "user.input");
+      // Resuming into the agent's turn, then suspending again on askUser, are two more real
+      // transitions — each must push.
+      const afterSecondSuspend = shellPushes().length;
+      assert.isAbove(afterSecondSuspend, afterFirstSuspend);
+
+      const userAsk = registry.takePending(launchThreadId);
+      assert.strictEqual(userAsk?.kind, "user.input");
+      yield* Effect.promise(() =>
+        registry.getRun(runId)!.resume(userAsk!.correlationId, { merge: true }),
+      );
+
+      const finalRow = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.strictEqual(finalRow.status, "completed");
+      // The terminal transition pushes too, so a stale "Input" pill clears without a reload.
+      const afterCompletion = shellPushes().length;
+      assert.isAbove(afterCompletion, afterSecondSuspend);
+    }),
+  );
 });
 
 /**
