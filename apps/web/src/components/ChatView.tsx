@@ -7410,7 +7410,7 @@ function ChatViewContent(props: ChatViewProps) {
                     <>
                       <T3TeamActiveWorkflowDock
                         items={activeWorkflowDockItems}
-                        className="mx-auto max-w-3xl rounded-t-xl"
+                        className="mx-auto max-w-3xl rounded-t-[22px]"
                         onOpen={openWorkflowCard}
                       />
                       <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
@@ -7422,6 +7422,13 @@ function ChatViewContent(props: ChatViewProps) {
                   ) : null}
                   <div
                     className="relative"
+                    // Marked so CSS can fuse the composer to whatever sits DIRECTLY above it (the
+                    // active-orchestration dock). Adjacency is expressed in CSS rather than a React
+                    // flag on purpose: `ComposerBannerStack` returns null when empty and the context
+                    // slot / sync pill are conditional, so `+` matches exactly when nothing
+                    // intervenes — no flag can track that without restating every one of those
+                    // conditions and drifting from them.
+                    data-chat-composer-shell-wrapper="true"
                     style={
                       forceExpandedMobileComposer
                         ? { viewTransitionName: MOBILE_COMPOSER_VIEW_TRANSITION_NAME }
