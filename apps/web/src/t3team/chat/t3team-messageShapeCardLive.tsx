@@ -21,6 +21,10 @@ import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 import type { ProjectRecipeWorkflowShapePayload } from "@t3tools/project-recipes";
 
 import {
+  T3TeamWorkflowCardHeadline,
+  T3TeamWorkflowNameChip,
+} from "~/t3team/chat/t3team-workflowCardHeadline";
+import {
   T3TeamWorkflowRunControls,
   T3TeamWorkflowRunControlStatus,
   type WorkflowRunControlAction,
@@ -44,6 +48,7 @@ export function T3TeamWorkflowShapeLiveCard({
   onOpenThread,
   currentThreadId,
   childStatuses,
+  outcomeSummary,
 }: {
   shape: ProjectRecipeWorkflowShapePayload;
   progress: T3TeamWorkflowRunProgress;
@@ -56,6 +61,10 @@ export function T3TeamWorkflowShapeLiveCard({
   /** The thread this card is rendered in — a step that ran here is not a navigable child. */
   currentThreadId?: string | undefined;
   childStatuses?: Readonly<Record<string, string>>;
+  /** A short, honest outcome line for the terminal banner (see
+   * `findT3TeamWorkflowRunOutcomeSummaries`) — never the full result, which renders in its own
+   * message body instead. */
+  outcomeSummary?: string | undefined;
 }) {
   const {
     rows,
@@ -88,30 +97,41 @@ export function T3TeamWorkflowShapeLiveCard({
         </div>
       ) : null}
       <T3TeamWorkflowRunControlStatus pending={controlPending} error={controlError} />
-      <div className="mb-2 flex items-start justify-between gap-1.5">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 @sm/workflow-live-card:flex-row @sm/workflow-live-card:items-center @sm/workflow-live-card:gap-1.5">
-          <div className="flex min-w-0 items-center gap-1.5 text-primary">
-            <RouteIcon className="size-3.5 shrink-0" />
-            {shape.name ? (
-              <span
-                className="min-w-0 truncate text-sm font-semibold text-foreground"
-                title={shape.name}
-              >
-                {shape.name}
-              </span>
-            ) : null}
-          </div>
+      {/*
+        Two rows, not one: the title, the slug, and the live status were all fighting for the
+        same line — the title clamped to two lines and still truncated, the slug interrupted it,
+        and the status wrapped to three lines of its own. Giving the title the full first row
+        means its two-line clamp is a genuine fallback for a long description, not something that
+        triggers on every card; the slug and status share a second, muted, single-line row with
+        the controls — small, subordinate, and never wrapping.
+      */}
+      <div className="mb-2 flex min-w-0 items-start gap-1.5 text-primary">
+        <RouteIcon className="mt-0.5 size-3.5 shrink-0" />
+        <T3TeamWorkflowCardHeadline shape={shape} className="min-w-0" showNameChip={false} />
+      </div>
+      {/*
+        At a narrow container width even this muted second row stacks rather than squeezing the
+        meta text against the controls — full width for each instead of both truncating at once.
+      */}
+      <div className="mb-2 flex min-w-0 flex-col items-start gap-1 @sm/workflow-live-card:flex-row @sm/workflow-live-card:items-center @sm/workflow-live-card:justify-between">
+        <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          {shape.description && shape.name ? <T3TeamWorkflowNameChip name={shape.name} /> : null}
+          {shape.description && shape.name && showLiveStatus ? (
+            <span aria-hidden className="shrink-0 text-muted-foreground/50">
+              ·
+            </span>
+          ) : null}
           {showLiveStatus ? (
             <span
               data-run-live-status={liveLabel}
-              className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground @sm/workflow-live-card:ml-auto"
+              className="flex min-w-0 items-center gap-1 truncate"
             >
               {liveLabel === "Scheduled" ? (
-                <ClockIcon className="size-3" />
+                <ClockIcon className="size-3 shrink-0" />
               ) : (
-                <CircleDashedIcon className="size-3" />
+                <CircleDashedIcon className="size-3 shrink-0" />
               )}
-              {liveLabel}
+              <span className="truncate">{liveLabel}</span>
             </span>
           ) : null}
         </div>
@@ -129,9 +149,6 @@ export function T3TeamWorkflowShapeLiveCard({
           />
         </div>
       </div>
-      {shape.description ? (
-        <p className="text-sm leading-6 text-muted-foreground">{shape.description}</p>
-      ) : null}
       {repair ? (
         <RepairStatusStrip
           repair={repair}
@@ -154,7 +171,9 @@ export function T3TeamWorkflowShapeLiveCard({
         <p className="mt-3 text-xs text-muted-foreground/70">No steps to preview.</p>
       )}
 
-      {progress.run ? <RunStatusBanner run={progress.run} /> : null}
+      {progress.run ? (
+        <RunStatusBanner run={progress.run} {...(outcomeSummary ? { outcomeSummary } : {})} />
+      ) : null}
     </div>
   );
 }

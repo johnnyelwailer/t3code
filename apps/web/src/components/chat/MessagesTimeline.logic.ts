@@ -1109,6 +1109,40 @@ export function deriveMessagesTimelineRows(input: {
   return nextRows;
 }
 
+/**
+ * Row-level visibility filter applied to `deriveMessagesTimelineRows` output before rows reach the
+ * timeline or its minimap. Two independent suppressions, both message-only:
+ *
+ *  - `t3teamExt.visibleToUser === false` — the framed sender-attribution input the actor-message
+ *    reactor stores as a hidden `role:"user"` turn prompt (the agent's reaction and the actor card
+ *    still render).
+ *  - a decision card's own correlated reply, so it doesn't ALSO render as a bare row duplicating
+ *    the now-answered card. `cardAnsweredWorkflowReplyMessageIds` is every `answerMessageId` from
+ *    `findT3TeamWorkflowDecisionAnswers` (`t3team-workflowDecisionAnswers.ts`); suppression fires
+ *    ONLY when the message also carries `t3teamExt.workflowReply.correlationId`. That module's
+ *    legacy fallback also correlates a FREEFORM reply typed in the composer (no `workflowReply`
+ *    ext) when nothing names the ask by correlationId — such a reply is real conversation and must
+ *    keep rendering, which the `correlationId !== undefined` check preserves.
+ */
+export function isVisibleMessagesTimelineRow(
+  row: MessagesTimelineRow,
+  cardAnsweredWorkflowReplyMessageIds: ReadonlySet<string>,
+): boolean {
+  if (row.kind !== "message") {
+    return true;
+  }
+  if (row.message.t3teamExt?.visibleToUser === false) {
+    return false;
+  }
+  if (
+    cardAnsweredWorkflowReplyMessageIds.has(row.message.id) &&
+    row.message.t3teamExt?.workflowReply?.correlationId !== undefined
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function computeStableMessagesTimelineRows(
   rows: MessagesTimelineRow[],
   previous: StableMessagesTimelineRowsState,

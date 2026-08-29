@@ -87,6 +87,7 @@ import {
   computeStableMessagesTimelineRows,
   deriveInterAgentReactionTurnIds,
   deriveMessagesTimelineRows,
+  isVisibleMessagesTimelineRow,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
   resolveTimelineIsAtEnd,
@@ -146,6 +147,7 @@ import {
   findT3TeamWorkflowDecisionAnswers,
   type T3TeamWorkflowDecisionAnswer,
 } from "~/t3team/chat/t3team-workflowDecisionAnswers";
+import { findT3TeamWorkflowRunOutcomeSummaries } from "~/t3team/chat/t3team-workflowRunOutcome";
 import { T3TeamActorTimelineRow } from "~/t3team/chat/t3team-ActorTimelineRow";
 import {
   getT3TeamRenderableAttachments,
@@ -189,7 +191,9 @@ interface TimelineRowSharedState {
   onDismissThreadError: (() => void) | undefined;
   activeWorkflowInputMessageId: string | null;
   workflowDecisionAnswers: ReadonlyMap<string, T3TeamWorkflowDecisionAnswer>;
-  answeredDecisionReplyMessageIds: ReadonlySet<string>;
+  /** A run's short, honest banner outcome line (status-line addition only — never the full
+   * result), keyed by workflowRunId. See `t3team-workflowRunOutcome.ts`. */
+  workflowRunOutcomeSummaries: ReadonlyMap<string, string>;
   workflowStepRuns: ReadonlyMap<string, T3TeamWorkflowRunProgress>;
   workflowRunStatus?: import("@t3tools/contracts").OrchestrationWorkflowRunStatus;
   onSubmitRecipeCardAction?: ChatViewT3TeamExtensionProps["onSubmitRecipeCardAction"];
@@ -539,6 +543,26 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     });
   }, [latestTurn]);
 
+  const workflowDecisionAnswers = useMemo(
+    () => findT3TeamWorkflowDecisionAnswers(timelineEntries),
+    [timelineEntries],
+  );
+
+  // A decision card renders its own answered state (chosen chip); the
+  // reply message that produced it — one the server stamped with
+  // `t3teamExt.workflowReply.correlationId` — would otherwise ALSO render as a
+  // bare row, duplicating it. A freeform reply typed in the composer carries
+  // no `workflowReply` ext even when it happens to be picked up by the
+  // legacy-fallback correlation in `findT3TeamWorkflowDecisionAnswers`, so it
+  // is deliberately excluded here and keeps rendering as normal conversation.
+  const cardAnsweredWorkflowReplyMessageIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const answer of workflowDecisionAnswers.values()) {
+      ids.add(answer.answerMessageId);
+    }
+    return ids;
+  }, [workflowDecisionAnswers]);
+
   const rawRows = useMemo(
     () =>
       // Suppress messages flagged `t3teamExt.visibleToUser === false` — e.g. the
@@ -546,6 +570,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       // hidden `role:"user"` turn prompt. Filtering here (before the minimap and
       // list derivation) keeps the raw framing out of both the timeline and the
       // minimap; the agent's reaction and the actor card still render.
+      // Also suppress a decision card's own correlated reply (see
+      // `cardAnsweredWorkflowReplyMessageIds` above) so it doesn't duplicate
+      // the answered card as a second, bare row.
       deriveMessagesTimelineRows({
         timelineEntries,
         latestTurn,
@@ -559,9 +586,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         revertTurnCountByUserMessageId,
         resumeOffer: resumeMessageId !== null,
         threadError,
-      }).filter(
-        (row) => !(row.kind === "message" && row.message.t3teamExt?.visibleToUser === false),
-      ),
+      }).filter((row) => isVisibleMessagesTimelineRow(row, cardAnsweredWorkflowReplyMessageIds)),
     [
       timelineEntries,
       latestTurn,
@@ -575,6 +600,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       revertTurnCountByUserMessageId,
       resumeMessageId,
       threadError,
+      cardAnsweredWorkflowReplyMessageIds,
     ],
   );
   const rows = useStableRows(rawRows);
@@ -678,18 +704,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [timelineEntries],
   );
 
-  const workflowDecisionAnswers = useMemo(
-    () => findT3TeamWorkflowDecisionAnswers(timelineEntries),
+  const workflowRunOutcomeSummaries = useMemo(
+    () => findT3TeamWorkflowRunOutcomeSummaries(timelineEntries),
     [timelineEntries],
-  );
-
-  // A decision reply renders its chosen chip inline on the ask card (see
-  // `T3TeamWorkflowDecisionCard`) — its own bare user-bubble row would just repeat it. Suppress
-  // by identity of the answer message `findT3TeamWorkflowDecisionAnswers` already resolved
-  // (correlationId-matched, with a legacy adjacency fallback), not by re-deriving adjacency here.
-  const answeredDecisionReplyMessageIds = useMemo(
-    () => new Set([...workflowDecisionAnswers.values()].map((answer) => answer.answerMessageId)),
-    [workflowDecisionAnswers],
   );
 
   const workflowStepRuns = useMemo(
@@ -732,7 +749,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleTurnFold,
       activeWorkflowInputMessageId,
       workflowDecisionAnswers,
-      answeredDecisionReplyMessageIds,
+      workflowRunOutcomeSummaries,
       workflowStepRuns,
       ...(workflowRunStatus ? { workflowRunStatus } : {}),
       onSubmitRecipeCardAction,
@@ -764,7 +781,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleTurnFold,
       activeWorkflowInputMessageId,
       workflowDecisionAnswers,
-      answeredDecisionReplyMessageIds,
+      workflowRunOutcomeSummaries,
       workflowStepRuns,
       workflowRunStatus,
       onSubmitRecipeCardAction,
@@ -1228,6 +1245,7 @@ function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message
       {...(ctx.markdownCwd ? { markdownCwd: ctx.markdownCwd } : {})}
       activeWorkflowInputMessageId={ctx.activeWorkflowInputMessageId}
       workflowDecisionAnswers={ctx.workflowDecisionAnswers}
+      workflowRunOutcomeSummaries={ctx.workflowRunOutcomeSummaries}
       workflowStepRuns={ctx.workflowStepRuns}
       {...(ctx.workflowRunStatus ? { workflowRunStatus: ctx.workflowRunStatus } : {})}
       {...(ctx.onSubmitRecipeCardAction
@@ -1308,11 +1326,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
 
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
-  // This message answered a still-visible ask card, which now renders the chosen chip inline
-  // (see `T3TeamWorkflowDecisionCard`) — a second, bare bubble here would just repeat it.
-  if (ctx.answeredDecisionReplyMessageIds.has(row.message.id)) {
-    return null;
-  }
+  // A decision-card reply renders here like any other user message — no suppression. The ask
+  // card (`T3TeamWorkflowDecisionCard`) settles instead of restating the value: see its own
+  // comment for why the two must not both hold the answer.
   const userImages = row.message.attachments ?? [];
   const userFiles = userImages.filter((attachment) => attachment.type === "file");
   const displayedUserMessage = deriveDisplayedUserMessageState(
@@ -1497,6 +1513,10 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
 
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  // A workflow's terminal result (`t3team-wf-result:<runId>`) renders here, in full, as normal
+  // markdown — this IS the Defect 1 fix. Its run's shape card banner may add a short derived
+  // outcome line alongside the status (see `t3team-workflowRunOutcome.ts`), but never the full
+  // result, so this message is never suppressed.
   const messageText = row.message.text
     ? workflowCompletionDisplayText(row.message.id, row.message.text)
     : row.message.streaming

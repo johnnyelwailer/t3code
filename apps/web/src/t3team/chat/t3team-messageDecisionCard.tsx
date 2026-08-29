@@ -12,7 +12,7 @@
  * `isThreadWaitingForRecipeInput`); older cards in the history render disabled.
  */
 import { useState } from "react";
-import { CircleHelpIcon, CornerDownRightIcon } from "lucide-react";
+import { CheckIcon, CircleHelpIcon, CornerDownRightIcon } from "lucide-react";
 
 import type { ProjectRecipeWorkflowDecisionPayload } from "@t3tools/project-recipes";
 
@@ -25,15 +25,6 @@ import type { T3TeamWorkflowDecisionAnswer } from "./t3team-workflowDecisionAnsw
 // `t3team-workflowDecisionAnswers.ts` so that module doesn't need to import back from here (that
 // was the other half of a type/value import cycle between the two files).
 export { getT3TeamWorkflowDecisionAttachment } from "./t3team-workflowDecisionAnswers";
-
-const ANSWER_CHIP_MAX_CHARS = 120;
-
-/** A freeform text answer can be arbitrarily long; the chip is a summary, not the transcript. */
-function truncateAnswerChipText(text: string): string {
-  return text.length <= ANSWER_CHIP_MAX_CHARS
-    ? text
-    : `${text.slice(0, ANSWER_CHIP_MAX_CHARS - 1)}…`;
-}
 
 export type WorkflowDecisionChooseHandler = (input: {
   /** The chosen option label — the reply message's display text. */
@@ -76,8 +67,11 @@ export function T3TeamWorkflowDecisionCard(props: {
   active: boolean;
   /** Terminal runs withdraw their pending ask; do not leave dead reply controls in the timeline. */
   unavailableMessage?: string | undefined;
-  /** The reply that answered this ask, when one exists — keeps the card in an answered state
-   * (question + chosen chip) instead of vanishing once a user has replied. */
+  /** The reply that answered this ask, when one exists — keeps the card in a settled state
+   * (question + highlighted choice, header switched to "Answered") instead of either vanishing
+   * or looking eternally pending. The VALUE itself is not restated here — it lives in the
+   * reply's own message, exactly as it would for a typed answer; `UserTimelineRow`
+   * (`MessagesTimeline.tsx`) never suppresses a decision reply's bubble. */
   answer?: T3TeamWorkflowDecisionAnswer | undefined;
   onChoose?: WorkflowDecisionChooseHandler | undefined;
 }) {
@@ -101,10 +95,22 @@ export function T3TeamWorkflowDecisionCard(props: {
 
   return (
     <div className="rounded-lg border border-primary/35 bg-background/65 px-4 py-3">
-      <div className="mb-2 flex items-center gap-1.5 text-primary">
-        <CircleHelpIcon className="size-3.5" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide">Needs your input</span>
-      </div>
+      {answer ? (
+        <div
+          className="mb-2 flex items-center gap-1.5 text-muted-foreground"
+          data-workflow-decision-status="answered"
+        >
+          <CheckIcon className="size-3.5" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide">Answered</span>
+        </div>
+      ) : (
+        <div className="mb-2 flex items-center gap-1.5 text-primary">
+          <CircleHelpIcon className="size-3.5" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide">
+            Needs your input
+          </span>
+        </div>
+      )}
       <T3TeamWorkflowQuestionProse question={decision.question} />
 
       {unavailable ? (
@@ -127,22 +133,6 @@ export function T3TeamWorkflowDecisionCard(props: {
           onChoose={runChoose}
         />
       )}
-
-      {/*
-        The answer is USER input, not a system notice — even though the underlying reply message
-        may itself be attributed to the workflow, the card renders it as the user's own bubble so
-        the reader never mistakes their own choice for something the system said.
-      */}
-      {answer ? (
-        <div className="mt-3 flex justify-end" data-workflow-decision-status="answered">
-          <span
-            className="max-w-[85%] rounded-2xl bg-primary px-3 py-1.5 text-sm text-primary-foreground"
-            title={answer.text}
-          >
-            {truncateAnswerChipText(answer.text)}
-          </span>
-        </div>
-      ) : null}
 
       {/*
         The run is BLOCKED here. A muted one-liner read as a status note, so the card looked like a

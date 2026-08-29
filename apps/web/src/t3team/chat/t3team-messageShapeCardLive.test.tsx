@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { EventId } from "@t3tools/contracts";
+import { EventId, type OrchestrationThreadActivity } from "@t3tools/contracts";
 import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
+import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
 import { deriveT3TeamWorkflowStepRuns } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import type { ChatMessage } from "~/types";
 import {
   formatWorkflowStepDue,
   T3TeamWorkflowShapeLiveCard,
@@ -421,3 +423,7 @@ describe("live workflow step overlay on the plan card", () => {
     expect(markup).not.toContain("nexplore/coding should never be a row title");
   }, 30000);
 });
+
+// The header/outcome presentation tests (Defect 3 headline + outcome fold-in, and the
+// two-row header layout fix) live in `t3team-messageShapeCardLiveHeader.test.tsx`, split out
+// once this file outgrew the test-file LOC ceiling.
