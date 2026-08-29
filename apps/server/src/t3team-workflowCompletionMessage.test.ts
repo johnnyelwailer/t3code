@@ -24,6 +24,39 @@ describe("formatWorkflowOutput", () => {
     expect(output).toContain("**Count:** 3");
     expect(output).not.toContain("{");
   });
+
+  // GHE (Defect 1, live repro): a workflow returning `{ findings: [...], summaryStats: {...} }`
+  // rendered to the user as exactly "Workflow completed." — nested objects and arrays-of-objects
+  // were filtered out before this text was ever stored, so no client-side fix could recover the
+  // lost data. The rich rendering lives in the shared `renderWorkflowRecordAsDisplayText`; these
+  // prove this, the pre-storage formatter, is wired to it.
+  it("renders an array-of-objects field instead of collapsing to the generic fallback", () => {
+    const output = formatWorkflowOutput({
+      findings: [
+        { title: "Rounding drift in total()", severity: "high", file: "src/cart.ts:4" },
+        { title: "checkToken accepts whitespace", severity: "medium", file: "src/auth.ts:3" },
+      ],
+      summaryStats: { high: 1, medium: 1, low: 0 },
+    });
+    expect(output).toContain("Rounding drift in total()");
+    expect(output).toContain("checkToken accepts whitespace");
+    expect(output).toContain("High: 1, Medium: 1, Low: 0");
+    expect(output).not.toBe("Workflow completed.");
+  });
+
+  it("renders a nested object field instead of collapsing to the generic fallback", () => {
+    const output = formatWorkflowOutput({
+      before: { status: "draft" },
+      after: { status: "published" },
+      artifactId: "art-1",
+      artifactType: "document",
+    });
+    expect(output).toContain("**Artifact Id:** art-1");
+    expect(output).toContain("**Artifact Type:** document");
+    expect(output).toContain("Status: draft");
+    expect(output).toContain("Status: published");
+    expect(output).not.toBe("Workflow completed.");
+  });
 });
 
 describe("buildWorkflowFailureText", () => {

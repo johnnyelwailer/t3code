@@ -11,6 +11,10 @@
       "types": "./src/t3team-threadRunStatus.ts",
       "import": "./src/t3team-threadRunStatus.ts"
     },
+    "./t3team-workflowOutputText": {
+      "types": "./src/t3team-workflowOutputText.ts",
+      "import": "./src/t3team-workflowOutputText.ts"
+    },
     "./themePalettes": {
       "types": "./src/themePalettes.ts",
       "import": "./src/themePalettes.ts"

@@ -7,6 +7,7 @@
  */
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
+import { randomUUID } from "~/lib/utils";
 import type { ChatMessage } from "~/types";
 import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
 import {
@@ -75,7 +76,14 @@ export function T3TeamSystemTimelineDecisionRow({
             ? async ({ choice, value, correlationId }) => {
                 await dispatchWorkflowDecision({
                   threadId: threadRef.threadId,
-                  messageId: message.id,
+                  // A fresh id, NOT `message.id` (the ask's own id): there is no optimistic reply
+                  // bubble to reconcile with here (unlike the composer path), and reusing the
+                  // ask's id makes the server upsert IN PLACE — the projector then keeps the ask's
+                  // original `role: "system"` (upsert never changes an existing message's role,
+                  // see `orchestration/projector.ts`) while overwriting its text and wiping its
+                  // `t3teamExt.attachments`, so the reply rendered as the ask itself, under System
+                  // chrome, instead of creating a genuine new user-authored message.
+                  messageId: randomUUID(),
                   text: choice,
                   value,
                   correlationId,

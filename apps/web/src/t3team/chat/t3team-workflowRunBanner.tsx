@@ -21,7 +21,16 @@ import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkf
 import { repairStatus } from "~/t3team/chat/t3team-workflowRunLabels";
 import { canOpenStepThread } from "~/t3team/chat/t3team-workflowRunStepRow";
 
-export function RunStatusBanner({ run }: { run: NonNullable<T3TeamWorkflowRunProgress["run"]> }) {
+export function RunStatusBanner({
+  run,
+  outcomeSummary,
+}: {
+  run: NonNullable<T3TeamWorkflowRunProgress["run"]>;
+  /** A short, honest outcome line for this run (see `findT3TeamWorkflowRunOutcomeSummaries`) —
+   * NEVER the full result. The full result renders in its own message body as markdown; this
+   * banner stays a status line, at most a few plain words longer. */
+  outcomeSummary?: string | undefined;
+}) {
   if (run.phase === "started") return null;
   const failed = run.phase === "failed";
   const paused = run.phase === "paused";
@@ -47,7 +56,7 @@ export function RunStatusBanner({ run }: { run: NonNullable<T3TeamWorkflowRunPro
       ) : (
         <CheckCircle2Icon className="size-4 shrink-0" />
       )}
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 flex-1 truncate">
         {failed
           ? "Run failed"
           : paused
@@ -56,6 +65,11 @@ export function RunStatusBanner({ run }: { run: NonNullable<T3TeamWorkflowRunPro
               ? "Run stopped"
               : "Run completed"}
         {run.error ? <span className="ml-1 opacity-80">— {run.error}</span> : null}
+        {outcomeSummary ? (
+          <span data-run-outcome-summary="" className="ml-1 opacity-80">
+            · {outcomeSummary}
+          </span>
+        ) : null}
       </span>
     </div>
   );
