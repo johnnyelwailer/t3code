@@ -1,8 +1,7 @@
 // @effect-diagnostics globalTimers:off -- the retry backoff timer is owned
 // by this reactor fiber (same host-timer pattern as t3team-childWaitScheduler).
 /**
- * Session-level auto-retry for transient provider failures (GHE stop-reason
- * + retry work).
+ * Session-level auto-retry for transient provider failures (GHE #306).
  *
  * Two failure shapes dead-end a thread today with no visible stop reason and
  * no recovery: the host-level turn-inactivity watchdog (the "600s no provider
@@ -61,9 +60,12 @@ import { t3teamRandomUUID } from "./t3team-random.ts";
 
 /**
  * Session-level automatic retry budget for transient provider failures.
- * The provider's OWN in-turn retry budget (transport retries, the Claude
- * gateway 423/429/5xx re-drive) runs first; this is the host's second layer,
- * bounded so a permanently-dead provider cannot loop the turn forever.
+ * The driver's OWN in-turn retry budget (transport retries, the gateway
+ * 423/429/5xx re-drive — the Nexplore Pi driver's ~9h 14-attempt
+ * exponential episode, for instance) runs first; this is the host's second
+ * layer, bounded so a permanently-dead provider cannot loop the turn
+ * forever. Re-issuing the turn hands the episode back to the driver's own
+ * policy, which re-sends the context and retries from the top.
  */
 export const MAX_SESSION_TRANSIENT_RETRIES = 3;
 
@@ -236,9 +238,10 @@ export interface TransientTurnRetryState {
   userStopped: boolean;
   /**
    * The class of the most recent terminal turn. A `session.exited` right
-   * after a TRANSIENT death is part of the same death (Claude ends its
-   * session when the interrupted turn ends) and must not erase the
-   * scheduled-retry bookkeeping; every other outcome ends the episode.
+   * after a TRANSIENT death is part of the same death (several drivers —
+   * observed on the claudeAgent driver — end the session when the
+   * interrupted turn ends) and must not erase the scheduled-retry
+   * bookkeeping; every other outcome ends the episode.
    */
   lastTerminal: "transient" | "success" | "other" | null;
 }
@@ -405,9 +408,10 @@ export function createTransientTurnRetryTracker(
         return decisionForTransient(entry, failure.reason, resolveDelay, failure.directiveSeconds);
       }
       if (payload.state === "interrupted" || payload.state === "cancelled") {
-        // NOTE: some providers (Claude) end a WATCHDOG-stalled turn with a
-        // `turn.completed` state "interrupted" rather than `turn.aborted` —
-        // the stall marker check therefore applies here too.
+        // NOTE: some drivers (observed on claudeAgent) end a
+        // WATCHDOG-stalled turn with a `turn.completed` state "interrupted"
+        // rather than `turn.aborted` (the Pi driver emits `turn.aborted`);
+        // the stall marker check therefore applies to both shapes.
         const stalled = stallDecisionFor(entry, turnId, resolveDelay);
         if (stalled !== null && !entry.userStopped) {
           entry.lastTerminal = "transient";

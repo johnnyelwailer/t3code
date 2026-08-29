@@ -473,6 +473,145 @@ activeHarness.layer("turn inactivity watchdog: active stream", (it) => {
 
 const codexFast = makeFakeAdapter(CODEX_DRIVER);
 const claudeSlow = makeFakeAdapter(CLAUDE_AGENT_DRIVER);
+
+const retryAnnouncementWarning = (
+  threadId: ThreadId,
+  turnId: TurnId,
+  delayMs: number,
+  eventId: string,
+): LegacyProviderRuntimeEvent => ({
+  type: "runtime.warning",
+  eventId: asEventId(eventId),
+  provider: CODEX_DRIVER,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  threadId,
+  turnId,
+  payload: {
+    message: `Retrying (attempt 11 of 14, waiting 17m): 423 gpu_reserved`,
+    detail: { code: "provider.retry", attempt: 11, maxAttempts: 14, delayMs },
+  },
+});
+
+const codexAnnounced = makeFakeAdapter(CODEX_DRIVER);
+const announcedHarness = makeWatchdogHarness({ [CODEX_DRIVER]: codexAnnounced.adapter });
+
+announcedHarness.layer("turn inactivity watchdog: announced retry backoff (GHE #306)", (it) => {
+  it.effect(
+    "does not fire mid-sleep when the driver announces a backoff longer than the budget",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        codexAnnounced.interruptTurnCalls.length = 0;
+
+        yield* startCodexSession(provider, asThreadId("thread-announced"));
+        const turn = yield* provider.sendTurn({
+          threadId: asThreadId("thread-announced"),
+          input: "hello",
+          attachments: [],
+        });
+        yield* drainFibers;
+
+        // The driver announces it will sleep 1024s (Pi's attempt-11 wait,
+        // longer than the 600s default budget) before its next attempt.
+        codexAnnounced.emit(
+          retryAnnouncementWarning(
+            asThreadId("thread-announced"),
+            turn.turnId,
+            1_024_000,
+            "retry-1",
+          ),
+        );
+        yield* drainFibers;
+
+        // 600s plain budget would have fired long ago; the effective budget
+        // is now 1024s + 120s slack = 1144s.
+        yield* advanceTestClock(1_143_000);
+        yield* drainFibers;
+        assert.equal(
+          codexAnnounced.interruptTurnCalls.length,
+          0,
+          "no interrupt inside the announced window",
+        );
+
+        // Crossing the extended budget still fires the backstop.
+        yield* advanceTestClock(5_000);
+        yield* drainFibers;
+        assert.equal(codexAnnounced.interruptTurnCalls.length, 1);
+        assert.deepEqual(codexAnnounced.interruptTurnCalls[0], [
+          asThreadId("thread-announced"),
+          turn.turnId,
+        ]);
+      }),
+  );
+
+  it.effect("a warning without the provider.retry detail re-arms the plain budget", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      codexAnnounced.interruptTurnCalls.length = 0;
+
+      yield* startCodexSession(provider, asThreadId("thread-other-warning"));
+      yield* provider.sendTurn({
+        threadId: asThreadId("thread-other-warning"),
+        input: "hello",
+        attachments: [],
+      });
+      yield* drainFibers;
+
+      // A large delayMs under a DIFFERENT detail code must not extend the
+      // budget — only the provider.retry announcement does.
+      codexAnnounced.emit({
+        type: "runtime.warning",
+        eventId: asEventId("other-warning"),
+        provider: CODEX_DRIVER,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        threadId: asThreadId("thread-other-warning"),
+        payload: {
+          message: "something else",
+          detail: { code: "something.else", delayMs: 10_000_000 },
+        },
+      });
+      yield* drainFibers;
+
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+      assert.equal(codexAnnounced.interruptTurnCalls.length, 1);
+    }),
+  );
+
+  it.effect("a buggy huge announcement cannot disable the backstop (24h cap)", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      codexAnnounced.interruptTurnCalls.length = 0;
+
+      yield* startCodexSession(provider, asThreadId("thread-huge"));
+      const turn = yield* provider.sendTurn({
+        threadId: asThreadId("thread-huge"),
+        input: "hello",
+        attachments: [],
+      });
+      yield* drainFibers;
+
+      // 100 days announced: the budget caps at 24h, it does not vanish.
+      codexAnnounced.emit(
+        retryAnnouncementWarning(
+          asThreadId("thread-huge"),
+          turn.turnId,
+          100 * 24 * 60 * 60 * 1000,
+          "retry-huge",
+        ),
+      );
+      yield* drainFibers;
+
+      yield* advanceTestClock(24 * 60 * 60 * 1000 - 1_000);
+      yield* drainFibers;
+      assert.equal(codexAnnounced.interruptTurnCalls.length, 0);
+      yield* advanceTestClock(2_000);
+      yield* drainFibers;
+      assert.equal(codexAnnounced.interruptTurnCalls.length, 1);
+    }),
+  );
+});
+
 const perProviderHarness = makeWatchdogHarness(
   {
     [CODEX_DRIVER]: codexFast.adapter,

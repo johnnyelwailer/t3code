@@ -327,10 +327,11 @@ describe("createTransientTurnRetryTracker — retry policy", () => {
     expect(tracker.state.get(threadId)).toBeUndefined();
   });
 
-  it("retries a Claude-style watchdog stall: turn.completed state 'interrupted'", () => {
-    // The Claude adapter ends a watchdog-interrupted turn with a turn.completed
-    // (state "interrupted"), not a turn.aborted — the stall marker must apply
-    // to both terminal shapes.
+  it("retries a watchdog stall that settles as turn.completed state 'interrupted'", () => {
+    // Some drivers (observed on claudeAgent) end a watchdog-interrupted turn
+    // with a turn.completed (state "interrupted"), not a turn.aborted (the
+    // Pi driver emits turn.aborted) — the stall marker must apply to both
+    // terminal shapes.
     const tracker = createTransientTurnRetryTracker();
     const threadId = "thread-1";
     tracker.onStallWarning(threadId, "turn-1", stallWarning.payload);

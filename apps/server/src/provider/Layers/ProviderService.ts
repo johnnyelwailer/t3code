@@ -84,6 +84,39 @@ const isModelSelection = Schema.is(ModelSelection);
  */
 const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
 
+/**
+ * Announced-retry backoff budgeting (GHE #306 addendum).
+ *
+ * Drivers that retry transient gateway errors announce each backoff sleep
+ * as a `runtime.warning` with `detail { code: "provider.retry", delayMs }`
+ * (the Nexplore Pi driver does this for its ~9h 14-attempt exponential
+ * episode). The host re-arms the PLAIN budget from that announcement today,
+ * which fires mid-sleep once a backoff wait outgrows the budget (Pi's
+ * attempt 11 waits 1024s > the 600s default) and kills a legitimately
+ * running retry episode — the GHE #306 incident. Arm
+ * `max(normal budget, announced delay + slack)` instead: the sleep plus the
+ * next request's own runtime. Capped, so a buggy announcement cannot
+ * disable the backstop indefinitely.
+ */
+const RETRY_ANNOUNCE_SLACK_MS = 120_000;
+const MAX_RETRY_ANNOUNCE_BUDGET_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The effective watchdog budget when the event is an announced retry
+ * backoff; undefined for every other event (plain re-arm).
+ */
+const announcedRetryBudgetMs = (event: ProviderRuntimeEvent): number | undefined => {
+  if (event.type !== "runtime.warning") return undefined;
+  const detail = (event.payload as { detail?: unknown } | null | undefined)?.detail;
+  const announced = detail as { code?: unknown; delayMs?: unknown } | null | undefined;
+  if (announced?.code !== "provider.retry") return undefined;
+  const delayMs = announced.delayMs;
+  if (typeof delayMs === "number" && Number.isFinite(delayMs) && delayMs > 0) {
+    return Math.min(delayMs + RETRY_ANNOUNCE_SLACK_MS, MAX_RETRY_ANNOUNCE_BUDGET_MS);
+  }
+  return undefined;
+};
+
 interface TurnWatchdogEntry {
   readonly turnId: TurnId;
   readonly instanceId: ProviderInstanceId;
@@ -418,8 +451,11 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     turnId: TurnId,
     instanceId: ProviderInstanceId,
     provider: ProviderDriverKind,
+    announcedBudgetMs?: number,
   ) {
-    const timeoutMs = yield* resolveTurnInactivityTimeoutMs(instanceId);
+    const baseMs = yield* resolveTurnInactivityTimeoutMs(instanceId);
+    const timeoutMs =
+      announcedBudgetMs !== undefined ? Math.max(baseMs, announcedBudgetMs) : baseMs;
     const previousEntry = yield* Ref.get(turnWatchdogs).pipe(
       Effect.map((map) => map.get(threadId)),
     );
@@ -477,7 +513,16 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           }
           return clearTurnWatchdog(event.threadId);
         }
-        return armTurnWatchdog(event.threadId, entry.turnId, entry.instanceId, entry.provider);
+        // An announced retry backoff (driver detail "provider.retry")
+        // extends the budget to cover the sleep; every other event
+        // re-arms the plain budget.
+        return armTurnWatchdog(
+          event.threadId,
+          entry.turnId,
+          entry.instanceId,
+          entry.provider,
+          announcedRetryBudgetMs(event),
+        );
       }),
     );
 
