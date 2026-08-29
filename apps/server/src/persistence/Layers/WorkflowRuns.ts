@@ -19,7 +19,9 @@ import {
   SetWorkflowRunPendingInput,
   SetWorkflowRunSleepingInput,
   SetWorkflowRunStatusInput,
+  UpdateWorkflowRunArgsInput,
   WorkflowRun,
+  WorkflowRunIntent,
   WorkflowRunRepository,
   type WorkflowRunRepositoryShape,
 } from "../Services/WorkflowRuns.ts";
@@ -39,6 +41,15 @@ const WorkflowRunDbRow = WorkflowRun.mapFields(
     // domain type is unchanged, so callers see the same `WorkflowRunHostToolGrant | null`.
     hostToolGrant: Schema.optional(
       Schema.NullOr(Schema.fromJsonString(WorkflowRunHostToolGrant)).pipe(
+        Schema.catchDecoding(() => Effect.succeed(Option.some(null))),
+      ),
+    ),
+    // `intent_json` decodes LENIENTLY to `null` for the same reason as `host_tool_grant` above:
+    // the boot scan reads every row, so one unreadable intent must degrade that ONE run's report
+    // to "outcome unknown" rather than abort rehydration for all of them. The denying direction
+    // here is "no recorded intent", which is exactly what a pre-051 row looks like.
+    intent: Schema.optional(
+      Schema.NullOr(Schema.fromJsonString(WorkflowRunIntent)).pipe(
         Schema.catchDecoding(() => Effect.succeed(Option.some(null))),
       ),
     ),
@@ -71,6 +82,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason,
           failure_step,
           host_tool_grant,
+          intent_json,
           wake_at,
           created_at,
           updated_at
@@ -94,6 +106,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           ${row.failureReason ?? null},
           ${row.failureStep ?? null},
           ${row.hostToolGrant ? JSON.stringify(row.hostToolGrant) : null},
+          ${row.intent ? JSON.stringify(row.intent) : null},
           ${row.wakeAt},
           ${row.createdAt},
           ${row.updatedAt}
@@ -117,6 +130,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason = excluded.failure_reason,
           failure_step = excluded.failure_step,
           host_tool_grant = excluded.host_tool_grant,
+          intent_json = excluded.intent_json,
           wake_at = excluded.wake_at,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
@@ -147,6 +161,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason AS "failureReason",
           failure_step AS "failureStep",
           host_tool_grant AS "hostToolGrant",
+          intent_json AS "intent",
           wake_at AS "wakeAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -179,6 +194,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason AS "failureReason",
           failure_step AS "failureStep",
           host_tool_grant AS "hostToolGrant",
+          intent_json AS "intent",
           wake_at AS "wakeAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -214,6 +230,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason AS "failureReason",
           failure_step AS "failureStep",
           host_tool_grant AS "hostToolGrant",
+          intent_json AS "intent",
           wake_at AS "wakeAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -223,16 +240,19 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
-  // The ephemeral concurrency cap's index: how many runs of one origin still hold engine
-  // resources (running now, or parked and resumable).
+  // The ephemeral run-count cap's index: how many runs of one origin, launched from one thread,
+  // still hold engine resources (running now, or parked and resumable). Scoped to
+  // `launch_thread_id` so the cap is per-caller, not one budget shared by every thread on the
+  // server.
   const countLiveWorkflowRunRowsByOrigin = SqlSchema.findAll({
     Request: CountLiveWorkflowRunsByOriginInput,
     Result: Schema.Struct({ count: Schema.Number }),
-    execute: ({ origin }) =>
+    execute: ({ origin, launchThreadId }) =>
       sql`
         SELECT COUNT(*) AS "count"
         FROM workflow_runs
         WHERE origin = ${origin}
+          AND launch_thread_id = ${launchThreadId}
           AND status IN ('running', 'suspended', 'sleeping', 'paused')
       `,
   });
@@ -315,6 +335,21 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
+  // Input-contract repair (a same-run correction, never the launch path): rewrites args/hash
+  // only, leaving status/pending/every other column untouched. Mirrors the shape of
+  // `setWorkflowRunStatusRow` above — a narrow, single-purpose UPDATE rather than a full upsert.
+  const updateWorkflowRunArgsRow = SqlSchema.void({
+    Request: UpdateWorkflowRunArgsInput,
+    execute: ({ runId, args, argsHash, updatedAt }) =>
+      sql`
+        UPDATE workflow_runs
+        SET args_json = ${JSON.stringify(args)},
+            args_hash = ${argsHash},
+            updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND status != 'cancelled'
+      `,
+  });
+
   const upsert: WorkflowRunRepositoryShape["upsert"] = (row) =>
     upsertWorkflowRunRow(row).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.upsert:query")),
@@ -366,6 +401,11 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setSleeping:query")),
     );
 
+  const updateArgs: WorkflowRunRepositoryShape["updateArgs"] = (input) =>
+    updateWorkflowRunArgsRow(input).pipe(
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.updateArgs:query")),
+    );
+
   return {
     upsert,
     getById,
@@ -377,6 +417,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     setPending,
     clearPending,
     setSleeping,
+    updateArgs,
   } satisfies WorkflowRunRepositoryShape;
 });
 

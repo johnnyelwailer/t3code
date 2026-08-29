@@ -86,6 +86,7 @@ import Migration0055 from "./Migrations/041_AuthSessionClientConnection.ts";
 import Migration0056 from "./Migrations/042_ProjectionThreadLinkedPullRequest.ts";
 import Migration0057 from "./Migrations/t3team-049_ProjectionThreadActivityLabel.ts";
 import Migration0058 from "./Migrations/t3team-050_ProjectionThreadActivityState.ts";
+import Migration0059 from "./Migrations/t3team-051_WorkflowRunIntent.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -156,6 +157,7 @@ export const migrationEntries = [
   [56, "ProjectionThreadLinkedPullRequest", Migration0056],
   [57, "ProjectionThreadActivityLabel", Migration0057],
   [58, "ProjectionThreadActivityState", Migration0058],
+  [59, "WorkflowRunIntent", Migration0059],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

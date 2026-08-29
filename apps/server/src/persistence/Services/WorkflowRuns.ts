@@ -16,12 +16,17 @@ import {
   ProviderInteractionMode,
   RuntimeMode,
 } from "@t3tools/contracts";
+// The launch contract's OWN schema, not a persistence copy of it: `intent` is stored exactly as
+// `t3team.orchestration.run` accepted it, so the column and the tool argument can never drift.
+import { WorkflowRunIntent } from "@t3team/sdk/tools/t3teamWorkflow";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
+
+export { WorkflowRunIntent };
 
 /** Run lifecycle, mirrored from the SDK's start/suspend/complete path. `sleeping` is the
  * clock-parked sibling of `suspended` (Epic 27): a run parked on `waitUntil`, woken by the
@@ -92,6 +97,12 @@ export const WorkflowRun = Schema.Struct({
   /** The host-tool bridge this run was launched with (migration 047), replayed verbatim by boot
    * rehydration. NULL for a run launched without one, and for every pre-047 row. */
   hostToolGrant: Schema.optional(Schema.NullOr(WorkflowRunHostToolGrant)),
+  /** The launch contract this run was given (migration 051): `goal` / `expectedOutcome` /
+   * `guardrails`, required by `t3team.orchestration.run` and previously discarded after the
+   * self-heal path read it. Kept because judging a run's OUTCOME (not just its status) needs
+   * what it set out to do — see Epic 25 §Auto-report on completion. NULL for a launch that
+   * carried no intent, and for every pre-051 row. */
+  intent: Schema.optional(Schema.NullOr(WorkflowRunIntent)),
   /** The wall-clock instant a `sleeping` run is due (Epic 27) — the scheduler's index. Null
    * for a run not parked on a timer. */
   wakeAt: Schema.NullOr(IsoDateTime),
@@ -123,6 +134,18 @@ export const ResumePausedWorkflowRunInput = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 export type ResumePausedWorkflowRunInput = typeof ResumePausedWorkflowRunInput.Type;
+
+/** Correct a run's launch args after a same-run repair (input-contract fault): rewrites
+ * `args`/`argsHash` only — status, pending, and every other column are untouched. `argsHash`
+ * mirrors the hash computed at launch (see `buildRunningWorkflowRunRow`), so a later boot
+ * rehydration or status read sees a row that looks exactly like it was launched this way. */
+export const UpdateWorkflowRunArgsInput = Schema.Struct({
+  runId: Schema.String,
+  args: Schema.Unknown,
+  argsHash: Schema.String,
+  updatedAt: IsoDateTime,
+});
+export type UpdateWorkflowRunArgsInput = typeof UpdateWorkflowRunArgsInput.Type;
 
 /** Flip a run to `suspended` and record the ask it is parked on, in one update. */
 export const SetWorkflowRunPendingInput = Schema.Struct({
@@ -157,8 +180,13 @@ export const SetWorkflowRunSleepingInput = Schema.Struct({
 });
 export type SetWorkflowRunSleepingInput = typeof SetWorkflowRunSleepingInput.Type;
 
-/** Count runs of one origin still holding engine resources (running/suspended/sleeping). */
-export const CountLiveWorkflowRunsByOriginInput = Schema.Struct({ origin: WorkflowRunOrigin });
+/** Count runs of one origin still holding engine resources (running/suspended/sleeping/paused),
+ * scoped to one launching thread — the ephemeral run-count cap is per-caller (one agent thread
+ * looping launch→suspend/sleep→pause), not a single server-wide budget shared by every thread. */
+export const CountLiveWorkflowRunsByOriginInput = Schema.Struct({
+  origin: WorkflowRunOrigin,
+  launchThreadId: Schema.String,
+});
 export type CountLiveWorkflowRunsByOriginInput = typeof CountLiveWorkflowRunsByOriginInput.Type;
 
 /** WorkflowRunRepositoryShape - service API for durable run records. */
@@ -193,13 +221,18 @@ export interface WorkflowRunRepositoryShape {
   readonly clearPending: (
     input: ClearWorkflowRunPendingInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
-  /** Count live (running/suspended/sleeping) runs of one origin — the ephemeral concurrency cap. */
+  /** Count live (running/suspended/sleeping/paused) runs of one origin for one launching thread
+   * — the per-thread ephemeral run-count cap. */
   readonly countLiveByOrigin: (
     input: CountLiveWorkflowRunsByOriginInput,
   ) => Effect.Effect<number, ProjectionRepositoryError>;
   /** Flip to `sleeping` and record the wake deadline + `waitUntil` correlation (Epic 27). */
   readonly setSleeping: (
     input: SetWorkflowRunSleepingInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Correct a run's persisted launch args after a same-run repair (input-contract fault). */
+  readonly updateArgs: (
+    input: UpdateWorkflowRunArgsInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
 }
 
