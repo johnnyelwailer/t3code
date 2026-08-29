@@ -1298,7 +1298,7 @@ describe("MessagesTimeline", () => {
     // P0: the class must sit on the LEAF text spans, not on a wrapper around
     // the animated flip spans (background-clip: text cannot reach into their
     // compositing layers — that is what left the glyphs transparent).
-    expect(markup).toContain('<span class="t3team-label-shimmer">Thinking</span>');
+    expect(markup).toContain('<span class="t3team-label-shimmer t3team-aci-lead-word">Thinking</span>');
     expect(markup).not.toContain("shimmer-base:var(--muted-foreground)");
   });
 
@@ -1484,26 +1484,40 @@ describe("MessagesTimeline", () => {
     expect(stateOnly).toContain(">Writing</span>");
   });
 
-  it("keeps the lead slot's clamp + ellipsis in .t3team-aci-lead (GHE #208 follow-up)", () => {
+  it("keeps the lead slot's clamp + per-piece ellipsis in .t3team-aci-lead (GHE #208 follow-up)", () => {
     const css = NodeFS.readFileSync(
       new URL("../../t3team/t3team-index.css", import.meta.url),
       "utf8",
     );
     const rule = css.match(/\.t3team-aci-lead\s*\{[^}]*\}/)?.[0] ?? "";
-    // The slot ellipsizes when the flex row clamps it (width auto +
-    // shrink-to-fit + overflow hidden); nowrap keeps the single-line
-    // constraint (no 2nd-line wrap regression).
-    expect(rule).toContain("text-overflow: ellipsis");
+    // The slot is the clamp: the flex row shrinks it (min-width comes from
+    // the parent's min-w-0), it clips, and stays one line (no 2nd-line wrap
+    // regression). text-overflow is dead CSS on a flex container — the
+    // PIECES carry the ellipsis (below).
+    expect(rule).toContain("display: inline-flex");
     expect(rule).toContain("overflow: hidden");
     expect(rule).toContain("white-space: nowrap");
+    expect(rule).toContain("transition: width 480ms");
     // No percentage max-width declaration: the lead sits inside an
     // auto-basis flex item, so one resolves circular and corrupts the
     // sizing even at wide widths (regression guard). Comments stripped so
     // the prose above can't trip the check.
     expect(rule.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain("max-width:");
-    const sizerRule = css.match(/\.t3team-aci-lead-sizer\s*\{[^}]*\}/)?.[0] ?? "";
-    // The sizer must measure at FULL text width, clamps included.
-    expect(sizerRule).toContain("width: max-content");
+    // No JS-measured px width either: the sizer/pin that read the flex
+    // allocation back into slot.style.width trapped the slot at the
+    // clamped value when the panel grew (0.0.39 "Writing for …"). The
+    // clamp must stay owned by the CSS rules below.
+    expect(css).not.toContain("t3team-aci-lead-sizer");
+    const wordRule = css.match(/\.t3team-aci-lead-word\s*\{[^}]*\}/)?.[0] ?? "";
+    const timerRule = css.match(/\.t3team-aci-lead-timer\s*\{[^}]*\}/)?.[0] ?? "";
+    const joinRule = css.match(/\.t3team-aci-lead-join\s*\{[^}]*\}/)?.[0] ?? "";
+    // The duration must survive truncation: the word is the ONLY shrink
+    // point and carries the ellipsis; the joiner and the timer never
+    // shrink.
+    expect(wordRule).toContain("min-width: 0");
+    expect(wordRule).toContain("text-overflow: ellipsis");
+    expect(timerRule).toContain("flex-shrink: 0");
+    expect(joinRule).toContain("flex-shrink: 0");
   });
 
   it("emphasizes the live 'working' state word so it doesn't read like the no-state fallback (GHE #208 follow-up)", () => {
@@ -1520,7 +1534,7 @@ describe("MessagesTimeline", () => {
     // word carries the live emphasis (font-medium), the fallback does not.
     // (The state-word leaf also carries the shimmer paint — P0 leaf-only.
     //)
-    expect(live).toContain('<span class="t3team-label-shimmer font-medium">Working</span>');
+    expect(live).toContain('<span class="t3team-label-shimmer font-medium t3team-aci-lead-word">Working</span>');
 
     const fallback = renderToStaticMarkup(
       <MessagesTimeline
@@ -1532,7 +1546,7 @@ describe("MessagesTimeline", () => {
     );
     // Active turn + no live state → "Thinking" (a turn starts thinking),
     // at the regular weight.
-    expect(fallback).toContain('<span class="t3team-label-shimmer">Thinking</span>');
+    expect(fallback).toContain('<span class="t3team-label-shimmer t3team-aci-lead-word">Thinking</span>');
     expect(fallback).not.toContain("font-medium");
 
     // Every live state word is emphasized, not just "working".
@@ -1545,7 +1559,7 @@ describe("MessagesTimeline", () => {
         timelineEntries={[]}
       />,
     );
-    expect(thinking).toContain('<span class="t3team-label-shimmer font-medium">Thinking</span>');
+    expect(thinking).toContain('<span class="t3team-label-shimmer font-medium t3team-aci-lead-word">Thinking</span>');
   });
 
   it("pins the live working row to the bottom, after content the turn already streamed (GHE #236)", () => {

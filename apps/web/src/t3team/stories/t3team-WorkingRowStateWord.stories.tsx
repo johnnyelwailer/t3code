@@ -17,13 +17,12 @@ import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
  *    the live emphasis (font-medium); the fallback stays regular weight.
  *    One unified activity row, no new pills.
  *
- * 2. Timer clipping — in a narrow panel the lead span was `shrink-0`, so
- *    "thinking for 12s" hard-clipped at the row wrapper's overflow-x-clip.
- *    The step label (shrink-100) stays the primary shrink point; the lead
- *    is the last-resort one and its timer text ellipsizes (the
- *    .t3team-aci-lead clamp in t3team-index.css + the width probe in
- *    t3team-workingLeadText.tsx) instead of clipping. The row stays ONE
- *    line — no wrap, no second line.
+ * 2. Timer clipping — in a narrow panel the lead was hard-clipping at the
+ *    row wrapper's overflow-x-clip. The step label (shrink-100) stays the
+ *    primary shrink point; the lead is the last-resort one and its timer
+ *    text ellipsizes (the .t3team-aci-lead clamp in t3team-index.css —
+ *    pure CSS, no JS width pinning) instead of clipping. The row stays
+ *    ONE line — no wrap, no second line.
  */
 
 const WORKING_ROW = {

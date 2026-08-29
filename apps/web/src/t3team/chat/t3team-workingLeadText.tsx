@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { SplitFlipText } from "./t3team-splitFlipText";
 
@@ -12,9 +12,31 @@ import { SplitFlipText } from "./t3team-splitFlipText";
  * (SplitFlipText) on its own, and the slot's width glides on the shared
  * spring — the dots move WITH the text instead of jumping.
  *
- * CHOREOGRAPHY — the slot width holds while a piece rolls out and starts
- * gliding exactly when the incoming text mounts; quiet swaps (plain
- * seconds ticks, no roll) apply the width immediately.
+ * SIZING — the slot (`.t3team-aci-lead`) is an inline-flex row that sizes
+ * to its text and the outer flex row clamps it. The pieces carry the
+ * ellipsis policy (t3team-index.css): the state word — which can be an
+ * arbitrary-length LLM label — surrenders ALL the overflow first and
+ * ellipsizes ("drop the middle"); the " for " joiner and the timer never
+ * shrink, so the duration always survives truncation, down to the point
+ * where even the joiner + timer no longer fit. The 480ms
+ * `transition: width` glides the slot on content changes (a roll) and on
+ * panel resizes (GHE #208 follow-up).
+ *
+ * No JS width measurement: an earlier version pinned the slot to a px
+ * width it read back from the flex layout. Two defects made that a trap —
+ * a forced reflow reads the TRANSITION-interpolated width (Blink), so the
+ * "full width, then clamp to allocation" dance always read the pre-change
+ * width and re-pinned the old value; and once pinned, the slot's own px
+ * width was the only thing its parent's width tracked, so a ResizeObserver
+ * on the parent never fired when the panel grew and the pin locked the
+ * text clipped ("Writing for …" at wide panel widths, 0.0.39 report).
+ * Letting the flex layout own the width makes the clamp correct in both
+ * directions with no feedback loop.
+ *
+ * CHOREOGRAPHY — the slot width holds while a piece rolls out (the old
+ * text stays mounted) and starts gliding exactly when the incoming text
+ * mounts; quiet swaps (plain seconds ticks, no roll) keep the same width
+ * (tabular-nums, same digit count) so nothing moves.
  *
  * PERFORMANCE — the 1s tick re-renders only this small component (memo),
  * never the whole row.
@@ -33,7 +55,7 @@ export function formatWorkingTimer(startIso: string, endIso: string): string | n
   }
 
   const hours = Math.floor(elapsedSeconds / 3600);
-  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+  const minutes = Math.floor(elapsedSeconds % 3600 / 60);
   const seconds = elapsedSeconds % 60;
 
   if (hours > 0) {
@@ -89,97 +111,6 @@ export const WorkingLeadText = ({
   }, []);
   const time = formatWorkingTimer(createdAt, new Date(nowMs).toISOString()) ?? "0s";
 
-  const slotRef = useRef<HTMLSpanElement | null>(null);
-  const sizerRef = useRef<HTMLSpanElement | null>(null);
-  const rollingRef = useRef(false);
-  const prevTextRef = useRef({ stateWord, time });
-
-  const applyWidth = () => {
-    const slot = slotRef.current;
-    const sizer = sizerRef.current;
-    if (!slot || !sizer) return;
-    // The sizer mirrors the rendered pieces EXACTLY (word at the live
-    // weight, the rest regular) so the measured full width matches the
-    // layout — a single all-medium measurement would overestimate by a
-    // couple of px and the allocation check below would misfire.
-    let wordSpan = sizer.children.item(0) as HTMLElement | null;
-    let restSpan = sizer.children.item(1) as HTMLElement | null;
-    if (!wordSpan || !restSpan) {
-      sizer.textContent = "";
-      wordSpan = document.createElement("span");
-      restSpan = document.createElement("span");
-      sizer.append(wordSpan, restSpan);
-    }
-    wordSpan.textContent = stateWord;
-    wordSpan.style.fontWeight = liveState ? "500" : "";
-    restSpan.textContent = ` for ${time}`;
-    const full = sizer.getBoundingClientRect().width;
-    if (full <= 0) return;
-    // Narrow-panel last resort (GHE #208 follow-up): the lead is the
-    // last-resort flex shrink point, and its final width can only be known
-    // from the flex layout itself — an inline-block auto width does NOT
-    // clamp inside this auto-basis flex item (measured in Blink). So:
-    // hand the lead its FULL px width, let the row reflow (the clientWidth
-    // read below forces the layout), then read how much space the flex row
-    // actually allocated to the lead. Wide panels: the allocation equals
-    // the full text, the slot keeps its px width — which the 480ms width
-    // glide needs. Narrow panels: the allocation is smaller, the slot takes
-    // it, and the timer ellipsizes (the .t3team-aci-lead overflow handling)
-    // instead of hard-clipping at the row wrapper's overflow-x-clip.
-    // No percentage max-width in the CSS: it resolves circular against the
-    // auto-basis flex item that contains the lead and corrupts the sizing
-    // even when wide.
-    // GHE #236 follow-up: leadItem.clientWidth is the slot's entire share —
-    // the pre-#236 leading "..." pulses no longer sit beside the clamp,
-    // so nothing is subtracted from the allocation.
-    slot.style.width = `${full}px`;
-    const leadItem = slot.parentElement?.parentElement;
-    const allocated = leadItem ? leadItem.clientWidth : full;
-    slot.style.width = `${Math.max(0, Math.min(full, allocated))}px`;
-  };
-
-  useEffect(() => {
-    const prev = prevTextRef.current;
-    prevTextRef.current = { stateWord, time };
-    const wordRolls = stateWord !== prev.stateWord;
-    const timeRolls = time !== prev.time && timerShouldRoll(prev.time, time);
-    if (wordRolls || timeRolls) {
-      rollingRef.current = true; // hold; the width glides when the text mounts
-      return;
-    }
-    applyWidth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateWord, time, liveState]);
-
-  // A panel resize never changes the text, so the effect above does not run
-  // for it: wide → narrow must move the lead onto the CSS ellipsis, and
-  // narrow → wide must hand the px width (and the glide) back.
-  // GHE #236 follow-up: observe the LEAD ITEM's allocation, not the row box
-  // — when the siblings (agent dots, the step label) take or give space,
-  // the lead item's width changes even though the row box does not, and a
-  // px width clamped during that transient must re-measure and re-expand
-  // (the "Fixing stale status for 2m 4..." ellipsis that stayed clipped
-  // with agent dots on the row). Convergent: applyWidth's own width write
-  // changes the lead item once more, the observer re-fires, and the second
-  // pass is a no-op (slot already at min(full, allocated)).
-  const applyWidthRef = useRef(applyWidth);
-  useEffect(() => {
-    applyWidthRef.current = applyWidth;
-  });
-  useEffect(() => {
-    const slot = slotRef.current;
-    const leadItem = slot?.parentElement?.parentElement;
-    if (!leadItem || typeof ResizeObserver !== "function") return;
-    const observer = new ResizeObserver(() => applyWidthRef.current());
-    observer.observe(leadItem);
-    return () => observer.disconnect();
-  }, []);
-
-  const onPhase = (phase: "idle" | "out" | "in") => {
-    rollingRef.current = phase === "out";
-    if (phase === "in") applyWidth();
-  };
-
   const shimmerClass = shimmer ? "t3team-label-shimmer" : undefined;
   // The state word may carry BOTH the live emphasis (font-medium) and the
   // shimmer paint; SplitFlipText takes one className, so join.
@@ -187,16 +118,14 @@ export const WorkingLeadText = ({
     [shimmerClass, liveState ? "font-medium" : undefined].filter(Boolean).join(" ") || undefined;
 
   return (
-    <span ref={slotRef} className="t3team-aci-lead">
-      <SplitFlipText text={stateWord} onPhaseChange={onPhase} className={wordClass} />
-      <span className={shimmerClass}> for </span>
+    <span className="t3team-aci-lead">
+      <SplitFlipText text={stateWord} className={`${wordClass ?? ""} t3team-aci-lead-word`.trim()} />
+      <span className={`t3team-aci-lead-join ${shimmerClass ?? ""}`.trim()}> for </span>
       <SplitFlipText
         text={time}
         shouldFlip={timerShouldRoll}
-        onPhaseChange={onPhase}
-        className={shimmerClass}
+        className={`${shimmerClass ?? ""} t3team-aci-lead-timer`.trim()}
       />
-      <span ref={sizerRef} className="t3team-aci-lead-sizer" aria-hidden />
     </span>
   );
 };

@@ -537,37 +537,52 @@ label:has(> select#reasoning-effort) select {
 /* Split lead text ("<state word> for <timer>") — see
    t3team-workingLeadText.tsx: each piece flips on its own and the slot
    width glides on the shared spring, so the dots beside it move WITH the
-   text instead of jumping. */
+   text instead of jumping.
+   Clamping is pure CSS: the slot is an inline-flex row that sizes to its
+   text and the outer flex row shrinks it when the panel is narrow.
+   Ellipsis policy per piece — the state word (which can be an
+   arbitrary-length LLM label) surrenders ALL the overflow first and
+   carries the ellipsis; the joiner and the timer never shrink, so the
+   duration always survives truncation ("drop the middle", not the end).
+   Only when the joiner + timer themselves no longer fit does the slot's
+   overflow hard-clip (a last resort below ~70px).
+   No percentage max-width: the lead sits inside an auto-basis flex item,
+   so one resolves circular and corrupts the content sizing even at wide
+   widths. The rotateX flips never widen the box, so the clipping is a
+   no-op for the roll. No JS width pinning: reading the flex allocation
+   back into a px width trapped the slot at the clamped value when the
+   panel grew again (forced reflows read the transition-interpolated
+   width, and the pinned px width is all the parent's width tracks — the
+   0.0.39 "Writing for …" at wide panels). */
 .t3team-aci-lead {
-  display: inline-block;
+  display: inline-flex;
   position: relative;
   white-space: nowrap;
-  /* GHE #208 follow-up — narrow-panel clamp: when the working row's panel
-     is narrower than the lead, the slot's JS-set width is clamped to the
-     available space (t3team-workingLeadText.tsx) and the timer text gets
-     an ellipsis here instead of hard-clipping at the row wrapper's
-     overflow-x-clip. No CSS percentage max-width: the lead sits inside an
-     auto-basis flex item, so a percentage max-width would resolve circular
-     and corrupt the content sizing even at wide widths. The rotateX flips
-     never widen the box, so the clipping is a no-op for the roll. The
-     sizer is measured, not clipped (visibility: hidden still lays out at
-     full width). */
   overflow: hidden;
-  text-overflow: ellipsis;
   transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.t3team-aci-lead-sizer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  visibility: hidden;
-  white-space: nowrap;
-  /* Always lay out at full text width: an absolute box shrink-to-fits its
-     containing block, so without this the sizer would measure the CLAMPED
-     width on narrow panels and the natural-width detection would lie. */
-  width: max-content;
-  pointer-events: none;
+.t3team-aci-lead-word {
+  /* Primary (only) shrink point: the arbitrary-length state/label word
+     gives up all the overflow and carries the ellipsis. */
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.t3team-aci-lead-join {
+  flex-shrink: 0;
+  /* Flex formatting strips leading/trailing whitespace at item boundaries —
+     without pre, " for " would render as "for" glued to both neighbours. */
+  white-space: pre;
+}
+
+.t3team-aci-lead-timer {
+  /* The duration must survive truncation: never a flex shrink point.
+     When even the joiner + timer no longer fit (below ~70px), the
+     slot's overflow clips them — the last resort. */
+  flex-shrink: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
