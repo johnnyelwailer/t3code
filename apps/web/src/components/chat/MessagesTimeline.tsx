@@ -87,6 +87,7 @@ import {
   computeStableMessagesTimelineRows,
   deriveInterAgentReactionTurnIds,
   deriveMessagesTimelineRows,
+  isVisibleMessagesTimelineRow,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
   resolveTimelineIsAtEnd,
@@ -542,6 +543,26 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     });
   }, [latestTurn]);
 
+  const workflowDecisionAnswers = useMemo(
+    () => findT3TeamWorkflowDecisionAnswers(timelineEntries),
+    [timelineEntries],
+  );
+
+  // A decision card renders its own answered state (chosen chip); the
+  // reply message that produced it — one the server stamped with
+  // `t3teamExt.workflowReply.correlationId` — would otherwise ALSO render as a
+  // bare row, duplicating it. A freeform reply typed in the composer carries
+  // no `workflowReply` ext even when it happens to be picked up by the
+  // legacy-fallback correlation in `findT3TeamWorkflowDecisionAnswers`, so it
+  // is deliberately excluded here and keeps rendering as normal conversation.
+  const cardAnsweredWorkflowReplyMessageIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const answer of workflowDecisionAnswers.values()) {
+      ids.add(answer.answerMessageId);
+    }
+    return ids;
+  }, [workflowDecisionAnswers]);
+
   const rawRows = useMemo(
     () =>
       // Suppress messages flagged `t3teamExt.visibleToUser === false` — e.g. the
@@ -549,6 +570,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       // hidden `role:"user"` turn prompt. Filtering here (before the minimap and
       // list derivation) keeps the raw framing out of both the timeline and the
       // minimap; the agent's reaction and the actor card still render.
+      // Also suppress a decision card's own correlated reply (see
+      // `cardAnsweredWorkflowReplyMessageIds` above) so it doesn't duplicate
+      // the answered card as a second, bare row.
       deriveMessagesTimelineRows({
         timelineEntries,
         latestTurn,
@@ -562,9 +586,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         revertTurnCountByUserMessageId,
         resumeOffer: resumeMessageId !== null,
         threadError,
-      }).filter(
-        (row) => !(row.kind === "message" && row.message.t3teamExt?.visibleToUser === false),
-      ),
+      }).filter((row) => isVisibleMessagesTimelineRow(row, cardAnsweredWorkflowReplyMessageIds)),
     [
       timelineEntries,
       latestTurn,
@@ -578,6 +600,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       revertTurnCountByUserMessageId,
       resumeMessageId,
       threadError,
+      cardAnsweredWorkflowReplyMessageIds,
     ],
   );
   const rows = useStableRows(rawRows);
@@ -678,11 +701,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   const activeWorkflowInputMessageId = useMemo(
     () => findActiveWorkflowInputMessageId(timelineEntries),
-    [timelineEntries],
-  );
-
-  const workflowDecisionAnswers = useMemo(
-    () => findT3TeamWorkflowDecisionAnswers(timelineEntries),
     [timelineEntries],
   );
 

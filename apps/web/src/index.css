@@ -1151,27 +1151,6 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     box-shadow: none;
   }
 
-  /* Fuse the active-orchestration dock to the composer into one continuous surface.
-     The dock paints `border-x border-t` with a square bottom and deliberately no bottom
-     border, so it only reads as attached if the composer stops rounding the edge it lands
-     on — otherwise the composer's 22px top corners cut back under the dock's square ones
-     and both ends of the seam show a notch (reported twice).
-     `+` rather than a React flag: the banner stack renders null when empty and the context
-     slot / sync pill are conditional, so adjacency in CSS is true exactly when the dock is
-     really touching the composer, and stays true as those conditions change. All three
-     layers must square together — host (22px), the p-px outline surface (22px), and the
-     inner fill (20px) — or the leftover radius shows through as a lighter corner. */
-  [data-t3team-active-workflow-dock="true"]
-    + [data-chat-composer-shell-wrapper="true"]
-    :is(
-      .chat-composer-glass-host,
-      [data-chat-composer-main-surface="true"],
-      [data-chat-composer-surface="true"]
-    ) {
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-  }
-
   .chat-composer-glass-shell:is(
       .chat-composer-glass-shell-attached,
       :has(:is(.chat-composer-top-drawer, .chat-composer-shoulder-tab))
@@ -2825,4 +2804,36 @@ code {
   .animate-pulse {
     animation: none;
   }
+}
+
+/* Fuse the active-orchestration dock to the composer into one continuous surface.
+   The dock paints `border-x border-t` with a square bottom and deliberately no bottom border,
+   so it only reads as attached if the composer stops rounding the edge it lands on — otherwise
+   the composer's 22px top corners cut back under the dock's square ones and both ends of the
+   seam show a notch.
+
+   `+` rather than a React flag: `ComposerBannerStack` returns null when empty and the context
+   slot / sync pill are conditional, so adjacency in CSS is true exactly when the dock is really
+   touching the composer, and stays true as those conditions change without restating any of
+   those conditions.
+
+   DELIBERATELY UNLAYERED, and it must stay that way. The obvious home is beside the other
+   `.chat-composer-glass-*` rules in `@layer components`, and there it silently loses: the radius
+   it fights is Tailwind's `rounded-[22px]` utility in `@layer utilities`, and a later layer beats
+   an earlier one no matter how specific the earlier selector is. Unlayered declarations outrank
+   every layer, so this wins where the same rule one layer up did nothing. Its neighbours in
+   `components` only ever set `display`/`box-shadow`/`background` — properties no utility touches
+   on these elements — which is why the trap had never shown up there before.
+
+   All three layers square together — host (22px), the `p-px` outline surface (22px), and the
+   inner fill (20px) — or the leftover radius shows through as a lighter corner. */
+[data-t3team-active-workflow-dock="true"]
+  + [data-chat-composer-shell-wrapper="true"]
+  :is(
+    .chat-composer-glass-host,
+    [data-chat-composer-main-surface="true"],
+    [data-chat-composer-surface="true"]
+  ) {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }

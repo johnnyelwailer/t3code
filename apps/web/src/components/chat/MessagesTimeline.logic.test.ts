@@ -6,9 +6,11 @@ import {
   computeMessageDurationStart,
   deriveInterAgentReactionTurnIds,
   deriveMessagesTimelineRows,
+  isVisibleMessagesTimelineRow,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
   shouldPreserveAssistantLineBreaks,
+  type MessagesTimelineRow,
 } from "./MessagesTimeline.logic";
 import {
   EMPTY_ACTIVE_AGENTS,
@@ -1784,6 +1786,85 @@ describe("computeStableMessagesTimelineRows", () => {
 
     expect(reordered).not.toBe(initial);
     expect(reordered.result).toEqual([initial.result[1], initial.result[0]]);
+  });
+});
+
+describe("isVisibleMessagesTimelineRow", () => {
+  function messageRow(message: ChatMessage): MessagesTimelineRow {
+    return {
+      kind: "message",
+      id: message.id,
+      createdAt: message.createdAt,
+      message,
+      durationStart: message.createdAt,
+      showAssistantMeta: false,
+      showAssistantCopyButton: false,
+      assistantCopyStreaming: false,
+    };
+  }
+
+  it("suppresses a decision card's own correlated reply (card-click answer)", () => {
+    const reply = msg({
+      id: "reply-1",
+      role: "user",
+      text: "Yes",
+      t3teamExt: { workflowReply: { value: "yes", correlationId: "corr-1" } },
+    });
+    const cardAnsweredWorkflowReplyMessageIds = new Set([reply.id]);
+
+    expect(
+      isVisibleMessagesTimelineRow(messageRow(reply), cardAnsweredWorkflowReplyMessageIds),
+    ).toBe(false);
+  });
+
+  it("keeps a freeform composer reply visible even when the legacy fallback names it as an answer", () => {
+    // No `t3teamExt.workflowReply` at all — this is what a message typed directly in the
+    // composer looks like, including when `findT3TeamWorkflowDecisionAnswers`'s legacy
+    // fallback picks it as the answer (no reply anywhere named the ask by correlationId).
+    const freeformReply = msg({ id: "reply-2", role: "user", text: "Yes" });
+    const cardAnsweredWorkflowReplyMessageIds = new Set([freeformReply.id]);
+
+    expect(
+      isVisibleMessagesTimelineRow(messageRow(freeformReply), cardAnsweredWorkflowReplyMessageIds),
+    ).toBe(true);
+  });
+
+  it("keeps an unrelated user message visible when it is not any ask's answer", () => {
+    const unrelated = msg({
+      id: "unrelated-1",
+      role: "user",
+      text: "unrelated aside",
+      t3teamExt: { workflowReply: { value: "yes", correlationId: "corr-1" } },
+    });
+    // This message's id is deliberately absent from the answered-ids set — it landed between
+    // an ask and its real answer (e.g. an interleaved system notification's neighbor) and must
+    // never be suppressed by adjacency alone.
+    const cardAnsweredWorkflowReplyMessageIds = new Set<string>();
+
+    expect(
+      isVisibleMessagesTimelineRow(messageRow(unrelated), cardAnsweredWorkflowReplyMessageIds),
+    ).toBe(true);
+  });
+
+  it("keeps suppressing legacy visibleToUser === false rows unrelated to workflow replies", () => {
+    const hidden = msg({
+      id: "hidden-1",
+      role: "user",
+      text: "framing",
+      t3teamExt: { visibleToUser: false },
+    });
+
+    expect(isVisibleMessagesTimelineRow(messageRow(hidden), new Set())).toBe(false);
+  });
+
+  it("does not affect non-message rows", () => {
+    const workingRow: MessagesTimelineRow = {
+      kind: "working",
+      id: "working-indicator-row",
+      createdAt: null,
+    };
+
+    expect(isVisibleMessagesTimelineRow(workingRow, new Set())).toBe(true);
   });
 });
 
