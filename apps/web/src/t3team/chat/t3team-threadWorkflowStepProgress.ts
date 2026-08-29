@@ -34,6 +34,11 @@ export interface T3TeamWorkflowStepEntry {
   /** The authored `phase()` group active when this step was sent, stamped by the server — see
    * `reconcileT3TeamWorkflowShapeProgress`. Absent for older runs / activities. */
   readonly workflowPhase?: string;
+  /** Milliseconds the step took to resolve, stamped by the server only on its terminal
+   * (completed/failed) activity. Absent for a still-running step, for a post-restart resolve
+   * (the server has no remembered start time), and for older activities — see
+   * `ProjectRecipeWorkflowStepActivityPayload.durationMs`. */
+  readonly durationMs?: number;
 }
 
 export interface T3TeamWorkflowRunProgress {
@@ -100,6 +105,7 @@ export function deriveT3TeamWorkflowStepRuns(
       ...(payload.projectId === undefined ? {} : { projectId: payload.projectId }),
       ...(payload.threadId === undefined ? {} : { threadId: payload.threadId }),
       ...(payload.workflowPhase === undefined ? {} : { workflowPhase: payload.workflowPhase }),
+      ...(payload.durationMs === undefined ? {} : { durationMs: payload.durationMs }),
     });
   }
 

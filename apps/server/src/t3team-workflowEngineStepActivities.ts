@@ -148,6 +148,12 @@ export function createWorkflowStepActivityEmitter(opts: {
     emitResolved: (correlationId, phase, error) => {
       const sent = sentByCorrelation.get(correlationId);
       sentByCorrelation.delete(correlationId);
+      // Only computable when the step's start survived in-process (`sentByCorrelation` is empty
+      // after a restart — see the field's doc on `SentStepRecord` above and on
+      // `ProjectRecipeWorkflowStepActivityPayload.durationMs`). A guessed or zero duration is
+      // worse than none, so omit rather than fabricate.
+      const durationMs =
+        sent === undefined ? undefined : Date.parse(opts.nowIso()) - Date.parse(sent.createdAt);
       return append(
         correlationId,
         {
@@ -165,6 +171,7 @@ export function createWorkflowStepActivityEmitter(opts: {
           // `t3team-workflowEngineResume.ts`'s `makeControllerResume`. Absent after a process
           // restart (the in-memory map is empty), same as `detail`/`stepKind` above.
           ...(sent?.workflowPhase === undefined ? {} : { workflowPhase: sent.workflowPhase }),
+          ...(durationMs === undefined ? {} : { durationMs }),
         },
         `Workflow step ${phase}: ${sent?.detail ?? sent?.stepKind ?? correlationId}`,
         sent?.createdAt ?? opts.nowIso(),

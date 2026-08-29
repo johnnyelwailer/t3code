@@ -6,8 +6,27 @@
  * broken up.
  */
 
+import { formatDuration } from "~/session-logic";
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { formatWorkflowStepDue } from "~/t3team/chat/t3team-workflowRunLabels";
+
+/** Below this, a step's duration is noise — a "3ms" tag on every trivial step would bury the
+ * slow step this feature exists to surface. */
+const STEP_DURATION_DISPLAY_THRESHOLD_MS = 1_000;
+
+/** The step's resolved duration, formatted the same way as a turn's "Worked for …" trailing
+ * label (`formatDuration` in `~/session-logic`) — omitted below the noise threshold and when the
+ * server never captured one (see `T3TeamWorkflowStepEntry.durationMs`). */
+export function StepDuration({ step }: { step: T3TeamWorkflowStepEntry | undefined }) {
+  if (step?.durationMs === undefined || step.durationMs < STEP_DURATION_DISPLAY_THRESHOLD_MS) {
+    return null;
+  }
+  return (
+    <span data-step-duration className="shrink-0 text-[11px] text-muted-foreground/70">
+      {formatDuration(step.durationMs)}
+    </span>
+  );
+}
 
 export function StepDue({
   step,
@@ -49,7 +68,12 @@ export function StepTrailing({
       </span>
     );
   }
-  return <StepDue step={step} wakeAt={wakeAt} />;
+  return (
+    <>
+      <StepDuration step={step} />
+      <StepDue step={step} wakeAt={wakeAt} />
+    </>
+  );
 }
 
 /** An executed step the authored plan has no row for (loop iteration, parallel branch, ...). */

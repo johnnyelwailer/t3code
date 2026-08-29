@@ -19,6 +19,7 @@ import {
   StepStatusIcon,
 } from "~/t3team/chat/t3team-workflowRunStepRow";
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import { StepDuration } from "~/t3team/chat/t3team-workflowStepTrailing";
 
 const LAUNCH_THREAD = "thread-launch";
 const CHILD_THREAD = "thread-child";
@@ -205,5 +206,42 @@ describe("fallbackRuntimeLabel", () => {
     });
 
     expect(label).toBe("Notification sent");
+  });
+});
+
+/**
+ * "any step that took time to complete" — but a "3ms" tag on every trivial step would bury the
+ * slow step the feature exists to surface, so a sub-1s step renders nothing.
+ */
+describe("StepDuration", () => {
+  function resolvedStep(durationMs: number | undefined): T3TeamWorkflowStepEntry {
+    return {
+      stepId: "run-1:4",
+      seq: 4,
+      stepKind: "thread.turn",
+      phase: "completed",
+      ...(durationMs === undefined ? {} : { durationMs }),
+    };
+  }
+
+  it("renders nothing for a step that took under a second", () => {
+    const markup = renderToStaticMarkup(<StepDuration step={resolvedStep(730)} />);
+    expect(markup).toBe("");
+  });
+
+  it("renders nothing when the step never recorded a duration (e.g. a post-restart resolve)", () => {
+    const markup = renderToStaticMarkup(<StepDuration step={resolvedStep(undefined)} />);
+    expect(markup).toBe("");
+  });
+
+  it("renders the formatted duration for a multi-second step", () => {
+    const markup = renderToStaticMarkup(<StepDuration step={resolvedStep(93_000)} />);
+    expect(markup).toContain("data-step-duration");
+    expect(markup).toContain("1m 33s");
+  });
+
+  it("renders the formatted duration for a step right at the 1s threshold", () => {
+    const markup = renderToStaticMarkup(<StepDuration step={resolvedStep(1_000)} />);
+    expect(markup).toContain("1.0s");
   });
 });
