@@ -41,6 +41,12 @@ export function createWorkflowRunController(
     path: input.workflowPath,
     absolutePath: input.workflowPath,
   };
+  // The authored `phase()` group the body is currently inside — updated live by `onPhase` below,
+  // read live by the broker's `step()`. Reconstructed correctly on every resume because the SDK
+  // replays the WHOLE body from the top each time (fast-forwarding through already-recorded
+  // primitives), so every `phase()` call before the live continuation point re-fires in the same
+  // order before any NEW step activity can be emitted — see `WorkflowEngineBrokerDeps.currentPhase`.
+  let currentWorkflowPhase: string | undefined;
   // The live step-status emitter (UX slice 1). Terminal run activities are emitted HERE — in
   // settle (completed) and the launch/resume catch (failed) — not in the durability lifecycle:
   // this controller is the single funnel BOTH the live launch and boot rehydration drive
@@ -56,6 +62,7 @@ export function createWorkflowRunController(
   });
   const broker = createWorkflowEngineBroker({
     stepActivities,
+    currentPhase: () => currentWorkflowPhase,
     runId: input.runId,
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
     projectId: input.projectId,
@@ -78,6 +85,11 @@ export function createWorkflowRunController(
   const options: WorkflowRunOptions = {
     runsRoot: input.runsRoot,
     broker,
+    // Feeds the SAME cell `currentPhase` (above) reads — see its comment for why a plain
+    // in-memory cell is replay-safe here despite the SDK re-running the whole body on resume.
+    onPhase: (title) => {
+      currentWorkflowPhase = title;
+    },
     ...t3teamWorkflowHostToolRunOptions(input.hostToolClient),
     scripts: input.scripts ?? {},
     defaultModel: toWorkflowModelSelection(

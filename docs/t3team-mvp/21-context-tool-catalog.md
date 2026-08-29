@@ -583,6 +583,8 @@ t3team.view.read
 t3team.recipe.list
 t3team.recipe.validate
 t3team.orchestration.run
+t3team.orchestration.status
+t3team.orchestration.resume
 t3team.widget.show
 t3team.thread.rename
 t3team.thread.search
@@ -599,8 +601,9 @@ t3team.thread.open_full_page
 ```
 
 `t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search`,
-`t3team.thread.search_source`, `t3team.thread.read_message`, `t3team.thread.start_child`, and
-`t3team.thread.children` are the
+`t3team.thread.search_source`, `t3team.thread.read_message`, `t3team.thread.start_child`,
+`t3team.thread.children`, `t3team.orchestration.run`, `t3team.orchestration.status`, and
+`t3team.orchestration.resume` are the
 current live runtime slice used by the broker implementation. The rest of this section
 remains planned catalog scope.
 

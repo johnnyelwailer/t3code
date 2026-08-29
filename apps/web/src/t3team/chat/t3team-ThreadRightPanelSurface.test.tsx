@@ -3,12 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const entityState: {
-  shell: { id: string; projectId: string; title: string } | null;
+  thread: { id: string; projectId: string; title: string } | null;
   project: { title: string; source?: { provider?: string }; workspaceRoot?: string } | null;
-} = { shell: null, project: null };
+} = { thread: null, project: null };
 
 vi.mock("~/state/entities", () => ({
-  useThreadShell: () => entityState.shell,
+  useThread: () => entityState.thread,
   useProject: () => entityState.project,
 }));
 
@@ -47,7 +47,7 @@ function readStubProps(markup: string): Record<string, unknown> {
 }
 
 describe("T3TeamThreadRightPanelSurface", () => {
-  it("shows a loading state until the peer thread's shell is projected", () => {
+  it("shows a loading state until the peer thread's detail is fetched", () => {
     const html = renderSurface();
 
     expect(html).toContain("Loading thread…");
@@ -55,9 +55,9 @@ describe("T3TeamThreadRightPanelSurface", () => {
   });
 
   it("renders the peer thread embedded: header hidden, embedded mode on", () => {
-    entityState.shell = { id: "thread-C", projectId: "project-1", title: "Accessibility review" };
+    entityState.thread = { id: "thread-C", projectId: "project-1", title: "Accessibility review" };
     const html = renderSurface();
-    entityState.shell = null;
+    entityState.thread = null;
 
     expect(html).toContain('data-testid="thread-chat-view"');
     expect(readStubProps(html)).toEqual({
@@ -72,15 +72,28 @@ describe("T3TeamThreadRightPanelSurface", () => {
     });
   });
 
+  it("renders an ephemeral thread that never gets a shell projection (workflow child threads)", () => {
+    // Workflow child threads created by the orchestration engine's agent(...) primitive are
+    // `retention: "ephemeral"` on purpose so they stay out of the sidebar, which means the
+    // shell snapshot never carries them — only the independent detail fetch resolves. This is
+    // the regression case: the surface must render from detail alone, with no shell at all.
+    entityState.thread = { id: "thread-C", projectId: "project-1", title: "Review correctness" };
+    const html = renderSurface();
+    entityState.thread = null;
+
+    expect(html).toContain('data-testid="thread-chat-view"');
+    expect(html).not.toContain("Loading thread…");
+  });
+
   it("passes the project title, source and workspace root through when the project is projected", () => {
-    entityState.shell = { id: "thread-C", projectId: "project-1", title: "Accessibility review" };
+    entityState.thread = { id: "thread-C", projectId: "project-1", title: "Accessibility review" };
     entityState.project = {
       title: "Nexplore AI",
       source: { provider: "local" },
       workspaceRoot: "/tmp/wt",
     };
     const html = renderSurface();
-    entityState.shell = null;
+    entityState.thread = null;
     entityState.project = null;
 
     expect(readStubProps(html)).toEqual({

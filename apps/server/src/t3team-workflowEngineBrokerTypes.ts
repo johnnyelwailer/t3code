@@ -100,6 +100,16 @@ export interface WorkflowEngineBrokerDeps {
   readonly stepActivities?: WorkflowStepActivityEmitter;
   readonly beforePrimitive?: () => Promise<boolean>;
   readonly afterPrimitive?: () => void;
+  /**
+   * The authored `phase()` group the workflow body is currently inside, read live at the moment
+   * a primitive is SENT. Backed by a cell the controller updates from `WorkflowRunOptions.onPhase`
+   * (see `t3team-workflowEngineController.ts`); replay-safe because the SDK re-executes the whole
+   * body from the top on every resume, so this cell is reconstructed identically every time —
+   * `phase()` needs no journaling of its own (unlike `now()`, it reads no host entropy/clock; its
+   * value is fully determined by already-deterministic source, so replaying the same statements
+   * in the same order reproduces it). Absent in tests/older wiring — `step()` then stamps nothing.
+   */
+  readonly currentPhase?: () => string | undefined;
 }
 
 export interface ThreadCreatePayload {

@@ -45,7 +45,6 @@ export const runT3TeamServerCommand = (
   flags: CliServerFlags,
   options?: {
     readonly startupPresentation?: StartupPresentation;
-    readonly forceAutoBootstrapProjectFromCwd?: boolean;
   },
 ) =>
   Effect.gen(function* () {
@@ -203,7 +202,6 @@ export const t3teamServeCommand = Command.make("serve", { ...sharedServerCommand
   Command.withHandler((flags) =>
     runT3TeamServerCommand(flags, {
       startupPresentation: "headless",
-      forceAutoBootstrapProjectFromCwd: false,
     }),
   ),
 );

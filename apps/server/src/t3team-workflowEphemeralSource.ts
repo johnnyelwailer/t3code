@@ -76,6 +76,23 @@ export const replaceEphemeralWorkflowSourceAtomically = (input: {
     return { target, auditPath };
   });
 
+/**
+ * Makes `.t3team-runs/` self-ignoring: idempotently writes a `.gitignore` containing `*` so every
+ * run directory the engine persists under it (including this file itself) stays invisible to the
+ * user's own `git status`. Never touches the user's own root `.gitignore` — the engine only owns
+ * `.t3team-runs/`. Leaves an existing `.gitignore` untouched (the user may have customized it),
+ * and never fails: a write failure here must not stop orchestration from launching.
+ */
+export const ensureEphemeralRunsGitignore = (input: { readonly runsRoot: string }) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const gitignorePath = path.join(input.runsRoot, ".gitignore");
+    const exists = yield* fs.exists(gitignorePath);
+    if (exists) return;
+    yield* fs.writeFileString(gitignorePath, "*\n");
+  }).pipe(Effect.ignore);
+
 /** Write one host-owned repair record. Sources stay in workflow.ts.original, not this log. */
 export const writeEphemeralWorkflowRepairAudit = (input: {
   readonly runsRoot: string;

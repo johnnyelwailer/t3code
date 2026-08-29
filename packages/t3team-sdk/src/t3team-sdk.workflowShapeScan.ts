@@ -10,6 +10,7 @@
 import type * as TsApi from "typescript";
 
 import { findMetaStatement } from "./t3team-sdk.transpile.ts";
+import { classifyCompositionVerb } from "./t3team-sdk.workflowShapeScanComposition.ts";
 import {
   collectWorkflowBodyBindings,
   resolveVerb,
@@ -137,6 +138,10 @@ function classifyCall(
     );
     return;
   }
+  // `workflow()` / `wait()` / `waitUntil()` — composition/scheduling primitives with no dedicated
+  // kind of their own; see t3team-sdk.workflowShapeScanComposition.ts for why each falls to `act`
+  // and why a real call site must not silently vanish here the way it used to.
+  if (verb !== null && classifyCompositionVerb(ts, verb, arg0, sf, sink.onStep)) return;
   if (verb !== null) return;
 
   if (!ts.isPropertyAccessExpression(callee)) return;

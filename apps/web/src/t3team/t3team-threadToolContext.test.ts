@@ -136,6 +136,16 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["write"],
         },
         {
+          id: "t3team.orchestration.status",
+          label: "Observe orchestration run",
+          capabilities: ["read"],
+        },
+        {
+          id: "t3team.orchestration.resume",
+          label: "Resume orchestration run",
+          capabilities: ["write"],
+        },
+        {
           id: "t3team.thread.rename",
           label: "Rename thread",
           capabilities: ["write"],

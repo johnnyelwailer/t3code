@@ -209,6 +209,11 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
         nextProjectId = ProjectId.make(yield* randomUUID);
         const bootstrapProjectTitle = path.basename(serverConfig.cwd) || "project";
         nextProjectDefaultModelSelection = getAutoBootstrapDefaultModelSelection();
+        yield* Effect.logInfo("auto-bootstrap: creating project for cwd", {
+          cwd: serverConfig.cwd,
+          projectId: nextProjectId,
+          title: bootstrapProjectTitle,
+        });
         yield* orchestrationEngine.dispatch({
           type: "project.create",
           commandId: CommandId.make(yield* randomUUID),
@@ -222,6 +227,10 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
         nextProjectId = existingProject.value.id;
         nextProjectDefaultModelSelection =
           existingProject.value.defaultModelSelection ?? getAutoBootstrapDefaultModelSelection();
+        yield* Effect.logInfo("auto-bootstrap: reusing existing project for cwd", {
+          cwd: serverConfig.cwd,
+          projectId: nextProjectId,
+        });
       }
 
       const existingThreadId =

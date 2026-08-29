@@ -156,6 +156,13 @@ export const ProjectRecipeWorkflowStepActivityPayload = Schema.Struct({
   error: Schema.optional(Schema.String),
   projectId: Schema.optional(Schema.String),
   threadId: Schema.optional(Schema.String),
+  /**
+   * The AUTHORED `phase()` group active in the workflow body when this step was sent — distinct
+   * from `phase` above, which is this step's own lifecycle state (started/completed/…). Absent
+   * for a run whose host has not wired the engine's phase tracker, or for an activity emitted
+   * before this field existed; a consumer falls back to its own heuristic in that case.
+   */
+  workflowPhase: Schema.optional(Schema.String),
 });
 export type ProjectRecipeWorkflowStepActivityPayload =
   typeof ProjectRecipeWorkflowStepActivityPayload.Type;

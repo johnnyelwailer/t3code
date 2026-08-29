@@ -31,6 +31,9 @@ export interface T3TeamWorkflowStepEntry {
   readonly error?: string;
   readonly projectId?: string;
   readonly threadId?: string;
+  /** The authored `phase()` group active when this step was sent, stamped by the server — see
+   * `reconcileT3TeamWorkflowShapeProgress`. Absent for older runs / activities. */
+  readonly workflowPhase?: string;
 }
 
 export interface T3TeamWorkflowRunProgress {
@@ -96,6 +99,7 @@ export function deriveT3TeamWorkflowStepRuns(
       ...(payload.error === undefined ? {} : { error: payload.error }),
       ...(payload.projectId === undefined ? {} : { projectId: payload.projectId }),
       ...(payload.threadId === undefined ? {} : { threadId: payload.threadId }),
+      ...(payload.workflowPhase === undefined ? {} : { workflowPhase: payload.workflowPhase }),
     });
   }
 

@@ -122,7 +122,12 @@ THE ENGINE API (import the ones you use from "@t3team/sdk")
 - thread.showWidget({ title, widgetCode, format? }) renders sandboxed inline HTML/SVG through
                               the typed widget attachment pipeline. Requires 'user'. Use this
                               for interactive/rich UI. Trusted notifyUser HTML is automatically
-                              promoted to this sandboxed widget path for compatibility.
+                              promoted to this sandboxed widget path for compatibility. Color
+                              EVERYTHING with the host theme variables (var(--background),
+                              var(--success), var(--warning), var(--info), ...), never hard-code
+                              hex colors, and render icons from the host sprite (t3w-icon)
+                              instead of emoji — the same markup must work in light and dark.
+                              Full authoring contract: t3team_help("widget-guidance").
 - parallel(thunks)            run () => ...  thunks concurrently (barrier). A failed thunk -> null.
 - pipeline(items, ...stages)  per-item fan-out through stages, no barrier between them.
 - phase(title)                start a progress group (title should match a meta.phases title).
