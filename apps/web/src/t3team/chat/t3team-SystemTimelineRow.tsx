@@ -57,12 +57,14 @@ export function T3TeamSystemTimelineRow(props: {
 
   const workflowCard = getT3TeamWorkflowCardAttachment(message);
   const workflowDecision = getT3TeamWorkflowDecisionAttachment(message);
+  const decisionAnswer = workflowDecisionAnswers?.get(message.id);
   const decisionUnavailableMessage = workflowDecisionUnavailableMessage(
     workflowDecision,
     workflowRunStatus,
     workflowDecision?.workflowRunId
       ? workflowStepRuns?.get(workflowDecision.workflowRunId)
       : undefined,
+    decisionAnswer !== undefined,
   );
   const workflowShape = getT3TeamWorkflowShapeAttachment(message);
   const genericAttachments = getT3TeamRenderableAttachments(message);
@@ -74,10 +76,12 @@ export function T3TeamSystemTimelineRow(props: {
 
   // A decision reply is always posted as a `role: "user"` message (see
   // `t3team-thread-recipe-workflow-routes-resolve.ts`), so it renders through `UserTimelineRow`,
-  // never through this system row — and it is never suppressed there either. The ask card
-  // (`T3TeamWorkflowDecisionCard`) settles instead of restating the value, so the reply's own
-  // bubble is the one place the answer lives (matched to its ask by
-  // `t3teamExt.workflowReply.correlationId`, see `t3team-workflowDecisionAnswers.ts`).
+  // never through this system row. The ask card (`T3TeamWorkflowDecisionCard`) settles to show the
+  // chosen value, so a card-sourced reply would say it twice — the timeline drops that row
+  // (`isVisibleMessagesTimelineRow`) and the card is the one place the answer lives. A reply the
+  // user TYPED in the composer instead still renders as its own bubble: it is ordinary prose, not
+  // an echo of a chip. Both are matched to their ask by `t3teamExt.workflowReply.correlationId`
+  // (see `t3team-workflowDecisionAnswers.ts`), which is also what tells the two cases apart.
 
   if (workflowShape) {
     const outcomeSummary =
@@ -98,7 +102,6 @@ export function T3TeamSystemTimelineRow(props: {
   }
 
   if (workflowDecision) {
-    const answer = workflowDecisionAnswers?.get(message.id);
     return (
       <T3TeamSystemTimelineDecisionRow
         message={message}
@@ -106,7 +109,7 @@ export function T3TeamSystemTimelineRow(props: {
         workflowDecision={workflowDecision}
         activeWorkflowInputMessageId={activeWorkflowInputMessageId}
         decisionUnavailableMessage={decisionUnavailableMessage}
-        {...(answer ? { answer } : {})}
+        {...(decisionAnswer ? { answer: decisionAnswer } : {})}
         {...(onSubmitRecipeCardAction ? { onSubmitRecipeCardAction } : {})}
         {...(dispatchWorkflowDecision ? { dispatchWorkflowDecision } : {})}
       />
