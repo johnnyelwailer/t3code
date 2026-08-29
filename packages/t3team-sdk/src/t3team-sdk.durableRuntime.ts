@@ -6,6 +6,7 @@
 
 import { createDurableRuntime, type DurablePrimitiveRuntime } from "@runbook/core/durableRuntime";
 import type { WorkflowEventSink } from "@runbook/core/events";
+import type { SuspensionLatch } from "@runbook/core/handles";
 import type { JournalEntry, ResolvedEntry } from "./t3team-sdk.journalReader.ts";
 import type { JournalSink } from "./t3team-sdk.journalStore.ts";
 import { createToolScriptCalls } from "./t3team-sdk.toolScriptCalls.ts";
@@ -28,6 +29,9 @@ export interface DurableRuntimeConfig {
   readonly events?: WorkflowEventSink;
   /** First-class abort: the next live primitive call after it fires throws WorkflowAborted. */
   readonly abortSignal?: AbortSignal;
+  /** The run's suspension latch, shared with the run boundary so a body that CATCHES the
+   * suspension signal still cannot complete the run. Absent = this runtime owns a private one. */
+  readonly suspension?: SuspensionLatch;
 }
 
 export type DurableWorkflowRuntime = Omit<DurablePrimitiveRuntime, "callPrimitive"> &
@@ -47,6 +51,7 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
     ...(config.resolved === undefined ? {} : { resolved: config.resolved }),
     ...(config.events === undefined ? {} : { events: config.events }),
     ...(config.abortSignal === undefined ? {} : { abortSignal: config.abortSignal }),
+    ...(config.suspension === undefined ? {} : { suspension: config.suspension }),
   });
 
   let toolScript!: ReturnType<typeof createToolScriptCalls>;

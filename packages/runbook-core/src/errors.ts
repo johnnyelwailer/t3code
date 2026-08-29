@@ -71,6 +71,23 @@ export class WorkflowLoadError extends WorkflowError {
 }
 
 /**
+ * Raised when the launch/resume args fail to decode against a workflow's declared
+ * `meta.inputs`. Distinct from every other decode/runtime failure the taxonomy above
+ * classifies: the workflow SOURCE is not at fault here — the CALLER passed wrong or
+ * missing arguments. A host-side repair funnel must route this to an ARGS correction,
+ * never a source rewrite (see `workflowRepairTargetFor` in the t3code distribution's
+ * `t3team-workflowRepairGuardrails.ts`, which uses `instanceof` on this class rather
+ * than matching the message text).
+ */
+export class WorkflowInputDecodeError extends WorkflowError {
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = "WorkflowInputDecodeError";
+    if (cause !== undefined) (this as { cause?: unknown }).cause = cause;
+  }
+}
+
+/**
  * Raised when {@link resumeWorkflow} is asked to continue a run whose journal does not exist
  * on disk — almost always a typo'd `runId`, a wiped runs root, or a wrong `runsRoot`.
  */

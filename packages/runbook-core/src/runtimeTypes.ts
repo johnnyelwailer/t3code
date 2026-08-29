@@ -46,4 +46,10 @@ export interface DurablePrimitiveSeat {
    * path); once aborted, the next live call throws WorkflowAborted.
    */
   readonly abortSignal?: AbortSignal | undefined;
+  /**
+   * The run's sticky suspension record (see `SuspensionLatch` in `handles.ts`). Checked before
+   * every primitive call AND again after `exec` resolves, so a body — or a composition thunk —
+   * that swallowed the suspension signal cannot journal a result on top of it.
+   */
+  readonly suspension: import("./handles.ts").SuspensionLatch;
 }

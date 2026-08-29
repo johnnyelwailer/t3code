@@ -22,6 +22,7 @@ export {
   TargetMissingError,
   TimeoutError,
   WorkflowError,
+  WorkflowInputDecodeError,
   WorkflowLoadError,
   WorkflowRunNotFoundError,
 } from "./t3team-sdk.errors.ts";

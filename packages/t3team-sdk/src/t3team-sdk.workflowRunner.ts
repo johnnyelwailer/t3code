@@ -89,6 +89,9 @@ export async function executeWorkflowBody(
     nowIso,
     runId: opts.runId,
     resolved: opts.journal.byCorrelation,
+    // Share the run boundary's suspension latch: the runtime arms it, the boundary refuses to
+    // report `completed` while it is armed (a body that caught the signal cannot fake a result).
+    suspension: opts.suspension,
     ...(opts.options.beforePrimitive === undefined
       ? {}
       : { beforePrimitive: opts.options.beforePrimitive }),
