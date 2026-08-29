@@ -1346,6 +1346,36 @@ describe("MessagesTimeline", () => {
     expect(withAgents).not.toContain("animate-pulse");
   });
 
+  it("centers the status text and the agent dots on one line — no baseline-era nudge (regression)", () => {
+    const withAgents = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        activeAgents={[
+          {
+            id: "agent-dot-align",
+            source: "child",
+            title: "Align QA",
+            statusLabel: "Working",
+            activityKey: "k1",
+            dotState: "working",
+          },
+        ]}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    // GHE #236 follow-up: the row centers its children. The lead's clamp is
+    // overflow-hidden (no text baseline by spec), so items-baseline left the
+    // status text riding above the dots with dead space below. items-center
+    // puts glyph centers and dot centers on the same line — and the old
+    // -translate-y-[3px] nudge on the dot group (tuned to the baseline row)
+    // is gone.
+    expect(withAgents).toContain("flex items-center px-1");
+    expect(withAgents).not.toContain("items-baseline");
+    expect(withAgents).not.toContain("-translate-y-[3px]");
+  });
+
   it("gives the state timer a last-resort ellipsis on narrow panels instead of a hard clip (GHE #208 follow-up)", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
@@ -1362,14 +1392,16 @@ describe("MessagesTimeline", () => {
     // wrapper's overflow-x-clip when the panel went narrower than the
     // timer. The row stays one line: the timer ellipsizes instead of
     // wrapping to a second line.
-    expect(markup).toContain('class="flex min-w-0 items-baseline"');
+    expect(markup).toContain('class="flex min-w-0 items-center"');
     // GHE #236 follow-up: the "..." pulses are gone — nothing sits before
     // the clamp wrapper anymore, so the lead takes the full row width.
     expect(markup).not.toContain("bg-[#0369a1]/60");
     expect(markup).not.toContain("animate-pulse");
-    // …and the clamp wrapper truncates the lead without carrying the shimmer
-    // paint itself (the paint lives on the leaf spans — P0).
-    expect(markup).toContain('class="min-w-0 overflow-hidden text-ellipsis"');
+    // …and the clamp wrapper is a FLEX row: as a block it would lay the
+    // inline-block slot out in a line box whose strut overhangs the slot
+    // baseline, inflating the row and riding the text ~3px above the dots.
+    // The SLOT (.t3team-aci-lead) owns overflow + ellipsis itself.
+    expect(markup).toContain('class="flex min-w-0 items-center overflow-hidden"');
     expect(markup).toContain("t3team-label-shimmer");
   });
 

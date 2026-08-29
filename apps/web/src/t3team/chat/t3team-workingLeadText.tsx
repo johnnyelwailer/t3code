@@ -121,19 +121,20 @@ export const WorkingLeadText = ({
     // clamp inside this auto-basis flex item (measured in Blink). So:
     // hand the lead its FULL px width, let the row reflow (the clientWidth
     // read below forces the layout), then read how much space the flex row
-    // actually allocated to the lead (the lead's flex item minus the dots,
-    // which never shrink). Wide panels: the allocation equals the full
-    // text, the slot keeps its px width — which the 480ms width glide
-    // needs. Narrow panels: the allocation is smaller, the slot takes it,
-    // and the timer ellipsizes (the .t3team-aci-lead overflow handling)
+    // actually allocated to the lead. Wide panels: the allocation equals
+    // the full text, the slot keeps its px width — which the 480ms width
+    // glide needs. Narrow panels: the allocation is smaller, the slot takes
+    // it, and the timer ellipsizes (the .t3team-aci-lead overflow handling)
     // instead of hard-clipping at the row wrapper's overflow-x-clip.
     // No percentage max-width in the CSS: it resolves circular against the
     // auto-basis flex item that contains the lead and corrupts the sizing
     // even when wide.
+    // GHE #236 follow-up: leadItem.clientWidth is the slot's entire share —
+    // the pre-#236 leading "..." pulses no longer sit beside the clamp,
+    // so nothing is subtracted from the allocation.
     slot.style.width = `${full}px`;
     const leadItem = slot.parentElement?.parentElement;
-    const dots = slot.parentElement?.previousElementSibling;
-    const allocated = leadItem ? leadItem.clientWidth - (dots ? dots.clientWidth : 0) : full;
+    const allocated = leadItem ? leadItem.clientWidth : full;
     slot.style.width = `${Math.max(0, Math.min(full, allocated))}px`;
   };
 
@@ -153,16 +154,24 @@ export const WorkingLeadText = ({
   // A panel resize never changes the text, so the effect above does not run
   // for it: wide → narrow must move the lead onto the CSS ellipsis, and
   // narrow → wide must hand the px width (and the glide) back.
+  // GHE #236 follow-up: observe the LEAD ITEM's allocation, not the row box
+  // — when the siblings (agent dots, the step label) take or give space,
+  // the lead item's width changes even though the row box does not, and a
+  // px width clamped during that transient must re-measure and re-expand
+  // (the "Fixing stale status for 2m 4..." ellipsis that stayed clipped
+  // with agent dots on the row). Convergent: applyWidth's own width write
+  // changes the lead item once more, the observer re-fires, and the second
+  // pass is a no-op (slot already at min(full, allocated)).
   const applyWidthRef = useRef(applyWidth);
   useEffect(() => {
     applyWidthRef.current = applyWidth;
   });
   useEffect(() => {
     const slot = slotRef.current;
-    const row = slot?.closest<HTMLElement>("[data-t3team-working-row]");
-    if (!row || typeof ResizeObserver !== "function") return;
+    const leadItem = slot?.parentElement?.parentElement;
+    if (!leadItem || typeof ResizeObserver !== "function") return;
     const observer = new ResizeObserver(() => applyWidthRef.current());
-    observer.observe(row);
+    observer.observe(leadItem);
     return () => observer.disconnect();
   }, []);
 

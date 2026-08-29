@@ -1732,15 +1732,27 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
         {/* GHE #238: single-line, no wrap. The row is a flex line; the step
             label is the primary shrink/truncate point (it clips internally
             via .t3team-aci-step). The dots never shrink; the lead span is
-            the last-resort shrink point (narrow panels — see below). */}
-        <div className="flex items-baseline px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
+            the last-resort shrink point (narrow panels — see below).
+            GHE #236 follow-up: items-CENTER, not baseline — the lead's
+            clamp span is overflow-hidden, which by spec has NO text
+            baseline, so baseline alignment pinned the lead's line-box
+            BOTTOM to the row baseline and left the status text riding ~3px
+            above the agent dots (with dead space below it). Centering puts
+            the glyph centers and the dot centers on the same line.
+            The clamp itself must be a flex row (below): as a block it lays
+            out the inline-block slot in a LINE BOX whose strut overhangs
+            the slot's baseline by ~6px, inflating the row to 29px and
+            pinning the status text ~3px above the centered dots. As a
+            flex row the slot is a flex item (no line box), the row stays
+            22.75px tall, and everything centers on one line. */}
+        <div className="flex items-center px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
           {/* GHE #208 follow-up: the step label stays the PRIMARY shrink
               point; the lead span is the LAST-RESORT one — only when the
               panel is narrower than the lead itself does the timer text
               ellipsize (the .t3team-aci-lead clamp) instead of hard-clipping
               at the row wrapper's overflow-x-clip. The row stays one line,
               no wrap, no second line. */}
-          <span className="flex min-w-0 items-baseline">
+          <span className="flex min-w-0 items-center">
             {!isWorking && hasActiveAgents ? (
               <span className="min-w-0 truncate">
                 {activeAgents.length} active agent{activeAgents.length === 1 ? "" : "s"}
@@ -1754,8 +1766,14 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
                 {/* The shimmer paint lives on the LEAF text spans inside
                     WorkingLeadText (background-clip: text cannot reach text
                     in nested animated spans through this wrapper — P0).
-                    This span is pure layout: the last-resort clamp. */}
-                <span className="min-w-0 overflow-hidden text-ellipsis">
+                    This span is pure layout: the last-resort clamp. FLEX, not
+                    block — a block here lays the inline-block slot out in a
+                    line box whose strut overhangs the slot baseline, and the
+                    inflated 29px box makes the status text ride ~3px above
+                    the dots (measured on the GHE #201 alignment story).
+                    text-overflow is dead CSS on a flex container; the SLOT
+                    (.t3team-aci-lead) owns overflow + ellipsis. */}
+                <span className="flex min-w-0 items-center overflow-hidden">
                   {row.createdAt ? (
                     <>
                       <WorkingLeadText
