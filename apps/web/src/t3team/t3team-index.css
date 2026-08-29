@@ -364,8 +364,21 @@ label:has(> select#reasoning-effort) select {
 }
 
 /* Status-change swing: one-shot hue swing + brightness pop that settles
-   back into the subtle wander (replays on the keyed remount). */
+   back into the subtle wander (replays on the keyed remount).
+
+   display:inline-flex is load-bearing: this span is a flex item of the
+   cell, so it is blockified, and its natural height would be a FULL text
+   line box (inherited line-height, ~22.75px at 14px). The inline-block
+   dot inside then sits on that line's baseline — measured 3.125px off the
+   cell's optical center in the GHE #201 alignment-test story. Making the
+   wrapper a flex container sized to the dot (and centering the dot in it)
+   removes the baseline from the equation; the cell's items-center then
+   centers the dot exactly. The waiting ring's ::before (anchored to this
+   span's 50%/50%) is aligned as a consequence. */
 .t3team-aci-shift {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   animation: t3team-aci-state-shift 1.1s ease-out;
 }
 
