@@ -14,11 +14,18 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3
  * muted monospace text, not a bordered/filled chip: it should recede rather than read as a
  * control with visual weight comparable to a button. Still visible, copyable, and truncation-
  * guarded (via `title`) so a long slug cannot push the headline around.
+ *
+ * Bounded in CHARACTERS, not as a percentage of its parent. `max-w-[45%]` measured 41px live,
+ * because the percentage resolves against the slug's own narrow flex row (90px when the run has no
+ * status text beside it) rather than the card — so `qa-report-shape` rendered as `qa-re…` with half
+ * the row left empty. A ch bound tracks the thing actually being clamped: this is monospace, so
+ * ~24ch is a readable slug, and anything longer still truncates with its `title` intact. The
+ * headline sits on its own row above and cannot be pushed around by this either way.
  */
 export function T3TeamWorkflowNameChip({ name }: { name: string }) {
   return (
     <span
-      className="max-w-[45%] shrink-0 truncate font-mono text-[10px] text-muted-foreground/70"
+      className="min-w-0 max-w-[24ch] truncate font-mono text-[10px] text-muted-foreground/70"
       title={name}
     >
       {name}
