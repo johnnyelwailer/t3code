@@ -18,7 +18,7 @@ export const MAX_TRANSIENT_GATEWAY_RETRIES = 5;
 const MAX_RETRY_DELAY_SECONDS = 60;
 
 const TRANSIENT_GATEWAY_ERROR =
-  /\b(retry_after_seconds|retry-after|gpu_reserved|reservation_error|rate.?limit(?:ed)?|capacity\s+(?:is\s+)?reserved|server (?:overloaded|error)|internal server error|bad gateway|service unavailable|gateway time[d]? ?out|request was throttled)\b|http(?:\s+status)?[^0-9\n]{0,12}\b(423|429|502|503|504)\b/i;
+  /\b(retry_after_seconds|retry-after|gpu_reserved|reservation_error|reservation owner is|rate.?limit(?:ed)?|capacity\s+(?:is\s+)?reserved|server (?:overloaded|error)|internal server error|bad gateway|service unavailable|gateway time[d]? ?out|request was throttled)\b|(?<!\S)423(?=[:\s]|$)|\b(status|code)\s*[:=\s]*(423|429|502|503|504)\b|http(?:\s+status)?[^0-9\n]{0,12}\b(423|429|502|503|504)\b/i;
 
 export function isTransientGatewayErrorText(text: string): boolean {
   if (text.length === 0) return false;
@@ -29,6 +29,23 @@ const RETRY_DIRECTIVES = [
   /retry_after_seconds["']?\s*[:=]\s*["']?(\d+(?:\.\d+)?)/i,
   /retry-?after["']?\s*[:=]\s*["']?(\d+(?:\.\d+)?)/i,
 ];
+
+/**
+ * The gateway's explicit retry directive, in seconds, when the error text
+ * carries one (`retry_after_seconds` / `Retry-After`); null otherwise.
+ * Session-level retry policy reuses this so a reservation window is honored
+ * at the expiry instead of a blind backoff.
+ */
+export function retryDirectiveSeconds(text: string): number | null {
+  for (const directive of RETRY_DIRECTIVES) {
+    const match = directive.exec(text);
+    if (match !== null) {
+      const seconds = Number(match[1]);
+      if (Number.isFinite(seconds) && seconds > 0) return seconds;
+    }
+  }
+  return null;
+}
 
 /**
  * Delay before the next attempt, in milliseconds.
@@ -42,14 +59,9 @@ export function transientGatewayRetryDelayMs(
   text: string,
   random: () => number = Math.random,
 ): number {
-  for (const directive of RETRY_DIRECTIVES) {
-    const match = directive.exec(text);
-    if (match !== null) {
-      const seconds = Number(match[1]);
-      if (Number.isFinite(seconds) && seconds > 0) {
-        return Math.min(seconds, MAX_RETRY_DELAY_SECONDS) * 1000;
-      }
-    }
+  const directiveSeconds = retryDirectiveSeconds(text);
+  if (directiveSeconds !== null) {
+    return Math.min(directiveSeconds, MAX_RETRY_DELAY_SECONDS) * 1000;
   }
   const baseMs = 2_000 * 2 ** Math.max(0, attempt - 1);
   const capped = Math.min(baseMs, MAX_RETRY_DELAY_SECONDS * 1000);
