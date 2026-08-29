@@ -6,11 +6,18 @@
  *
  * GHE (regression on the Defect 2 id-reuse fix, spotted live by PJ): once a decision is
  * answered, the card must SETTLE (header stops saying "Needs your input", controls stop being
- * interactive) and the value must be stated exactly once. Design (A): the card settles and stops
- * restating the value; the reply's own message carries it, exactly as it would for a typed
- * answer — no suppression. (Design (B) — the card keeps the value and the reply is suppressed —
- * was rejected: it makes the click path and the typed path render differently, and re-hides the
- * human attribution Defect 2 exists to fix.)
+ * interactive) and the value must be stated exactly once.
+ *
+ * Design UPDATED 2026-08-29: the original design here (the card settles and stops restating the
+ * value; the reply's own message carries it, exactly as it would for a typed answer — no
+ * suppression) shipped, then PJ hit it live and complained about a duplicate ("why is there a
+ * duplicated Yes message below it?") — the settled card already shows the chosen value via its
+ * own affordance, so also rendering the reply bubble said it twice. The fix flips to the design
+ * this file used to reject: the card keeps the value, and a reply that came FROM THE CARD (its
+ * message carries `t3teamExt.workflowReply.correlationId`) is now suppressed from rendering as
+ * its own bubble — see `isVisibleMessagesTimelineRow` in `MessagesTimeline.logic.ts`. A reply the
+ * user TYPED in the composer (no `workflowReply` ext) is ordinary conversation, not an echo of a
+ * chip, and still renders — that distinction is what the coverage below has to preserve.
  */
 
 import {
@@ -138,15 +145,49 @@ describe("answered decision reply — the card settles, the value is stated once
     expect(markup).toContain('data-workflow-decision-status="answered"');
     expect(markup).not.toContain("Needs your input");
     expect(markup).toContain("Answered");
-    // the reply renders as an ordinary user bubble — the same element a typed answer would use —
-    // never suppressed.
-    expect(markup).toContain("bg-message");
+    // the reply came FROM THE CARD (`workflowReply.correlationId`), so it must NOT ALSO render
+    // as its own bubble — the settled card above already states the chosen value ("hold"'s
+    // button stays highlighted, unmuted). Rendering both said it twice; PJ hit that live.
+    expect(markup).not.toContain('data-message-id="message-reply-hold"');
+    expect(markup).not.toContain('data-message-role="user"');
     // the value is not ALSO restated inside the card as a second, separate element (the old
     // "chosen chip" used a native `title` matching the answer text; that element is gone).
     expect(markup).not.toContain('title="hold"');
     // the controls are non-interactive once settled.
     expect(markup).toContain('disabled=""');
     expect(markup).not.toContain("…or reply in the composer below.");
+  }, 10000);
+
+  it("still renders a TYPED composer reply as its own bubble — no suppression", async () => {
+    // No `t3teamExt.workflowReply` at all: this is what a message typed directly into the
+    // composer looks like, even once `findT3TeamWorkflowDecisionAnswers`'s legacy fallback names
+    // it as the ask's answer (nothing else correlates by correlationId). Unlike a card-sourced
+    // reply, this is real conversation the user wrote themselves — it must keep rendering. This
+    // is the case most at risk of a future regression: it is easy to widen the suppression to
+    // "any message that settled some card" instead of "only a message stamped
+    // `workflowReply.correlationId`".
+    const ask = decisionMessage("message-decision-1");
+    const typedReply: ChatMessage = {
+      id: MessageId.make("message-typed-reply-1"),
+      role: "user",
+      text: "Hold it for now, thanks",
+      streaming: false,
+      createdAt: "2026-06-09T00:00:01.000Z",
+      updatedAt: "2026-06-09T00:00:01.000Z",
+      turnId: null,
+    };
+
+    const markup = await renderTimeline([ask, typedReply]);
+
+    // the legacy fallback still settles the card (the next user message answers it)…
+    expect(markup).toContain('data-workflow-decision-status="answered"');
+    expect(markup).not.toContain("Needs your input");
+    // …but the typed reply is NOT a card-sourced answer, so it renders as an ordinary user
+    // bubble, same as it would if this ask didn't exist at all.
+    expect(markup).toContain('data-message-id="message-typed-reply-1"');
+    expect(markup).toContain('data-message-role="user"');
+    expect(markup).toContain("Hold it for now, thanks");
+    expect(markup).toContain("bg-message");
   }, 10000);
 
   it("does not swallow an interleaved system notification as the answer", async () => {
@@ -164,12 +205,20 @@ describe("answered decision reply — the card settles, the value is stated once
 
     const markup = await renderTimeline([ask, notification, reply]);
 
+    // the interleaved system notification is unrelated to the ask/reply pair — it must keep
+    // rendering normally, and correlation must not confuse it with the answer.
     expect(markup).toContain("Preparing release notes");
+    expect(markup).toContain('data-message-id="message-notify-1"');
+    // the ask still resolves its answer correctly by `correlationId` — the notification sitting
+    // between the ask and its real reply must not break that match.
     expect(markup).toContain('data-workflow-decision-status="answered"');
-    expect(markup).toContain("bg-message");
+    expect(markup).not.toContain("Needs your input");
+    // the real reply is the one suppressed (card-sourced, same as the button case above) —
+    // never the notification, and never left dangling as an unmatched extra bubble.
+    expect(markup).not.toContain('data-message-id="message-reply-hold"');
   }, 10000);
 
-  it("settles the struct-form variant the same way: header switches, fields disable, no restated value", async () => {
+  it("settles the struct-form variant: header switches, the raw reply renders as a summary line since it isn't JSON", async () => {
     const ask: ChatMessage = {
       id: MessageId.make("message-decision-form-1"),
       role: "system",
@@ -221,10 +270,17 @@ describe("answered decision reply — the card settles, the value is stated once
 
     expect(markup).toContain('data-workflow-decision-status="answered"');
     expect(markup).not.toContain("Needs your input");
-    expect(markup).toContain("bg-message");
+    // the reply is card-sourced (`workflowReply.correlationId`), so it must NOT ALSO render as
+    // its own bubble — the value below comes from the settled card's own summary line, not from
+    // a duplicated reply message.
+    expect(markup).not.toContain('data-message-id="message-reply-form-1"');
     expect(markup).toContain("severity: high, note: rounding bug");
-    // the form's own controls (select + text input + submit) are disabled, not just hidden.
-    expect(markup).toContain('disabled=""');
+    // This is the human-readable "key: value" summary a card's own form-submit produces (see
+    // `summarizeT3TeamDecisionFormValue`), not JSON — there's no struct to repopulate the fields
+    // from, so the affordance falls back to a single read-only summary line rather than a
+    // disabled-but-silently-empty form (see `t3team-messageDecisionAffordance.tsx`'s
+    // `parseT3TeamDecisionFormAnswer` guard).
+    expect(markup).toContain('data-workflow-decision-status="answered-form-summary"');
     expect(markup).not.toContain("Type your answer in the composer");
   }, 10000);
 
@@ -307,7 +363,9 @@ describe("answered decision reply — the card settles, the value is stated once
     expect(countOccurrences(markup, "Needs your input")).toBe(1);
     expect(markup).toContain("Continue?");
     expect(markup).toContain("Assign to whom?");
-    expect(markup).toContain("bg-message");
+    // the settled card's own correlated reply does not bleed into a bubble — settled and
+    // pending cards coexist without a stray extra row for the answered one.
+    expect(markup).not.toContain('data-message-id="message-reply-multi-1"');
     expect(markup).toContain("…or reply in the composer below.");
   }, 10000);
 });

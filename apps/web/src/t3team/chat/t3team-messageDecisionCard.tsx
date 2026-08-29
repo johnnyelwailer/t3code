@@ -69,9 +69,11 @@ export function T3TeamWorkflowDecisionCard(props: {
   unavailableMessage?: string | undefined;
   /** The reply that answered this ask, when one exists — keeps the card in a settled state
    * (question + highlighted choice, header switched to "Answered") instead of either vanishing
-   * or looking eternally pending. The VALUE itself is not restated here — it lives in the
-   * reply's own message, exactly as it would for a typed answer; `UserTimelineRow`
-   * (`MessagesTimeline.tsx`) never suppresses a decision reply's bubble. */
+   * or looking eternally pending. This card IS where the value is shown for a card-sourced reply:
+   * the timeline drops that reply's own bubble (`isVisibleMessagesTimelineRow`) because the
+   * highlighted choice above already states it, and rendering both said it twice. A reply the user
+   * TYPED in the composer is not suppressed — it is ordinary prose rather than an echo of a chip,
+   * and `t3teamExt.workflowReply.correlationId` is what distinguishes the two. */
   answer?: T3TeamWorkflowDecisionAnswer | undefined;
   onChoose?: WorkflowDecisionChooseHandler | undefined;
 }) {
