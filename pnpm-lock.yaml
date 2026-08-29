@@ -490,6 +490,9 @@ importers:
       '@pierre/diffs':
         specifier: 'catalog:'
         version: 1.3.0-beta.10(patch_hash=7ef7cb0cbabb17c15cdb137554068b36f15f6f5265e73fb51452aa3380db91aa)(@shikijs/themes@4.3.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@silvia-odwyer/photon-node':
+        specifier: ^0.3.4
+        version: 0.3.4
       '@t3team/pack-api':
         specifier: workspace:*
         version: link:../../packages/t3team-pack-api
