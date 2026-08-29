@@ -915,13 +915,9 @@ describe("ProviderCommandReactor", () => {
     expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
       cwd: "/tmp/provider-project",
       previousTitle: "Investigate reconnect regressions",
-      message: [
-        "USER:",
-        "Please investigate reconnect regressions after restarting the session.",
-        "",
-        "ASSISTANT:",
-        "The remaining issue is stale reconnect state.",
-      ].join("\n"),
+      // GHE #308: the regeneration context is agent-side content only — the user's
+      // request must not appear in the title-generation context.
+      message: ["ASSISTANT:", "The remaining issue is stale reconnect state."].join("\n"),
     });
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
@@ -929,11 +925,13 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.titleRegeneration).toBeNull();
   });
 
-  it("pins the first user message when regeneration context is truncated", async () => {
+  it("truncates regeneration context without pinning user messages", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
-    const firstUserMessage = `Review subagent monitoring risks. ${"Opening context. ".repeat(200)}`;
-    const recentUserMessage = `LATEST FINDING: ${"implementation detail ".repeat(320)}`;
+    // Agent-side sections sum past the 8000-char budget: the recent section fits
+    // whole, the older section is sliced, and no user section may survive.
+    const earlyWorkText = `EARLY CONTEXT: ${"baseline finding ".repeat(300)}`;
+    const recentWorkText = `LATEST FINDING: ${"implementation detail ".repeat(320)}`;
     harness.generateThreadTitle.mockReturnValue(
       Effect.succeed({ title: "Review subagent monitoring risks" }),
     );
@@ -954,7 +952,7 @@ describe("ProviderCommandReactor", () => {
         message: {
           messageId: asMessageId("user-message-before-long-title-regeneration"),
           role: "user",
-          text: firstUserMessage,
+          text: "Review subagent monitoring risks.",
           attachments: [
             {
               type: "image",
@@ -972,26 +970,40 @@ describe("ProviderCommandReactor", () => {
     );
     await harness.runEffect(
       harness.engine.dispatch({
-        type: "thread.turn.start",
-        commandId: CommandId.make("cmd-middle-turn-before-long-title-regeneration"),
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-early-before-long-title-regeneration"),
         threadId: ThreadId.make("thread-1"),
-        message: {
-          messageId: asMessageId("middle-message-before-long-title-regeneration"),
-          role: "user",
-          text: "Temporary handoff details.",
-          attachments: [
-            {
-              type: "image",
-              id: "middle-context-image",
-              name: "image.png",
-              mimeType: "image/png",
-              sizeBytes: 5,
-            },
-          ],
-        },
-        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-        runtimeMode: "approval-required",
+        messageId: asMessageId("assistant-early-before-long-title-regeneration"),
+        delta: earlyWorkText,
         createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-assistant-early-complete-before-long-title-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-early-before-long-title-regeneration"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-recent-before-long-title-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-recent-before-long-title-regeneration"),
+        delta: recentWorkText,
+        createdAt: "2026-01-01T00:00:03.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-assistant-recent-complete-before-long-title-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-recent-before-long-title-regeneration"),
+        createdAt: "2026-01-01T00:00:04.000Z",
       }),
     );
     await harness.runEffect(
@@ -1002,20 +1014,12 @@ describe("ProviderCommandReactor", () => {
         message: {
           messageId: asMessageId("recent-message-before-long-title-regeneration"),
           role: "user",
-          text: recentUserMessage,
-          attachments: [
-            {
-              type: "image",
-              id: "recent-context-image",
-              name: "image.png",
-              mimeType: "image/png",
-              sizeBytes: 5,
-            },
-          ],
+          text: "STOP THE WORK NOW",
+          attachments: [],
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
-        createdAt: "2026-01-01T00:00:02.000Z",
+        createdAt: "2026-01-01T00:00:05.000Z",
       }),
     );
     await harness.runEffect(
@@ -1035,15 +1039,69 @@ describe("ProviderCommandReactor", () => {
       throw new Error("Expected a title generation input");
     }
     const message = input.message;
-    expect(message.startsWith("USER:\nReview subagent monitoring risks.")).toBe(true);
-    expect(message).toContain("[First user message truncated]");
-    expect(message).toContain("[Earlier content truncated]");
-    expect(message).toContain("image.png");
-    expect(message).toHaveLength(8_000);
-    expect(input.attachments?.map((attachment) => attachment.id)).toEqual([
-      "opening-context-image",
-      "recent-context-image",
-    ]);
+    expect(message.startsWith("[Earlier content truncated]\n\n")).toBe(true);
+    expect(message).toContain("ASSISTANT:");
+    expect(message).not.toContain("USER:");
+    expect(message).not.toContain("STOP THE WORK NOW");
+    expect(message).not.toContain("Review subagent monitoring risks.");
+    expect(message).not.toContain("[First user message truncated]");
+    expect(message).toContain("LATEST FINDING");
+    // Marker (29 chars) + a full 8000-char context.
+    expect(message).toHaveLength(8_029);
+    // User-message attachments stay out of the agent-side context.
+    expect(input.attachments).toBeUndefined();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.title).toBe("Review subagent monitoring risks");
+  });
+
+  it("keeps the current title when a user-only conversation has no agent content", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "Stopping work" }));
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-thread-title-user-only"),
+        threadId: ThreadId.make("thread-1"),
+        title: "Fix reconnect regressions",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-user-only-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-user-only-regeneration"),
+          role: "user",
+          text: "you stopped mid work",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-thread-title-regenerate-user-only"),
+        threadId: ThreadId.make("thread-1"),
+        regenerateTitle: true,
+      }),
+    );
+
+    await harness.drain();
+
+    // Agent-side context is empty, so generation is skipped and the title is kept.
+    expect(harness.generateThreadTitle).not.toHaveBeenCalled();
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.title).toBe("Fix reconnect regressions");
+    expect(thread?.titleRegeneration).toBeNull();
   });
 
   it("clears title regeneration state left pending across reactor startup", async () => {
@@ -1105,6 +1163,27 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
       }),
     );
+    // Regeneration context is agent-side content only (GHE #308): add an
+    // assistant message so the fallback path is actually exercised.
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-before-fallback-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-fallback-regeneration"),
+        delta: "The reconnect state is stale after session restore.",
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-assistant-complete-before-fallback-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-fallback-regeneration"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+      }),
+    );
     await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.meta.update",
@@ -1116,6 +1195,7 @@ describe("ProviderCommandReactor", () => {
 
     await harness.drain();
 
+    expect(harness.generateThreadTitle).toHaveBeenCalledTimes(1);
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.title).toBe("Keep meaningful title");
@@ -1152,6 +1232,25 @@ describe("ProviderCommandReactor", () => {
     );
     await harness.runEffect(
       harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-before-failed-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-failed-regeneration"),
+        delta: "The reconnect state is stale after session restore.",
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-assistant-complete-before-failed-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-failed-regeneration"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
         type: "thread.meta.update",
         commandId: CommandId.make("cmd-thread-title-failed-regeneration"),
         threadId: ThreadId.make("thread-1"),
@@ -1161,6 +1260,7 @@ describe("ProviderCommandReactor", () => {
 
     await harness.drain();
 
+    expect(harness.generateThreadTitle).toHaveBeenCalledTimes(1);
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.title).toBe("Keep title after failure");
@@ -1202,6 +1302,25 @@ describe("ProviderCommandReactor", () => {
     );
     await harness.runEffect(
       harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-before-completion-failure"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-completion-failure"),
+        delta: "The reconnect state is stale after session restore.",
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-assistant-complete-before-completion-failure"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-completion-failure"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
         type: "thread.meta.update",
         commandId: CommandId.make("cmd-thread-title-regeneration-completion-failure"),
         threadId: ThreadId.make("thread-1"),
@@ -1233,14 +1352,11 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.titleRegeneration).toBeNull();
   });
 
-  it("pins the first user context and attachment before the retained tail", async () => {
+  it("truncates the regeneration context down to the retained agent-side tail", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
-    const firstUserContext = "USER:\nOld visual issue\n[Attachments: old-issue.png]";
     const truncationMarker = "[Earlier content truncated]\n\n";
-    const retainedContext = "x".repeat(
-      8_000 - firstUserContext.length - "\n\n".length - truncationMarker.length,
-    );
+    const retainedContext = "x".repeat(8_000);
 
     await harness.runEffect(
       harness.engine.dispatch({
@@ -1304,15 +1420,12 @@ describe("ProviderCommandReactor", () => {
 
     await harness.drain();
 
-    expect(harness.generateThreadTitle.mock.calls[0]?.[0].message).toBe(
-      `${firstUserContext}\n\n${truncationMarker}${retainedContext}`,
-    );
-    expect(harness.generateThreadTitle.mock.calls[0]?.[0].attachments).toEqual([
-      expect.objectContaining({
-        id: "old-title-context-image",
-        name: "old-issue.png",
-      }),
-    ]);
+    // GHE #308: no first-user pinning — the user's "Old visual issue" message and
+    // its attachment stay out of the title context; only the agent-side tail is
+    // retained behind the truncation marker.
+    const input = harness.generateThreadTitle.mock.calls[0]?.[0];
+    expect(input?.message).toBe(`${truncationMarker}${retainedContext}`);
+    expect(input?.attachments).toBeUndefined();
   });
 
   it("does not overwrite a manual rename while title regeneration is running", async () => {
@@ -1345,6 +1458,25 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-before-regeneration-race"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-regeneration-race"),
+        delta: "The reconnect state is stale after session restore.",
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-assistant-complete-before-regeneration-race"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-regeneration-race"),
+        createdAt: "2026-01-01T00:00:02.000Z",
       }),
     );
     await harness.runEffect(
@@ -1475,6 +1607,26 @@ describe("ProviderCommandReactor", () => {
       }),
     );
     await waitFor(() => harness.startSession.mock.calls.length === 1);
+    // Regeneration context is agent-side content only (GHE #308).
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-before-superseded-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-superseded-regeneration"),
+        delta: "The reconnect state is stale after session restore.",
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-assistant-complete-before-superseded-regeneration"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("assistant-message-before-superseded-regeneration"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+      }),
+    );
 
     await harness.runEffect(
       harness.engine.dispatch({

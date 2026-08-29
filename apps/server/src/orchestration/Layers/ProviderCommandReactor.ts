@@ -138,10 +138,23 @@ type ThreadTitleMessage = {
   readonly attachments?: ReadonlyArray<ChatAttachment> | undefined;
 };
 
-function formatThreadTitleSection(message: ThreadTitleMessage): string | undefined {
-  // Neither system prompts nor actor-to-actor coordination messages are user-facing prose,
-  // so neither should steer a generated thread title.
+/**
+ * Section formatting for a title-generation context. GHE #308: thread titles
+ * are generated from the agent's own work only, so the thread-title path passes
+ * `includeUser: false` and user prose can never steer a title. The fork
+ * transcript bootstrap keeps the full conversation (`includeUser: true`) because
+ * a child agent needs the user's original instructions.
+ */
+function formatThreadMessageSection(
+  message: ThreadTitleMessage,
+  includeUser: boolean,
+): string | undefined {
+  // Neither system prompts nor actor-to-actor coordination messages are user-facing
+  // prose, so neither should steer a generated title or a fork transcript.
   if (message.role === "system" || message.role === "actor") {
+    return undefined;
+  }
+  if (!includeUser && message.role === "user") {
     return undefined;
   }
   const text = message.text.trim();
@@ -168,6 +181,7 @@ function limitFirstUserSection(section: string): string {
 function collectRecentThreadTitleContext(
   messages: ReadonlyArray<ThreadTitleMessage>,
   maxChars: number,
+  includeUser: boolean,
 ): {
   readonly context: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
@@ -178,7 +192,7 @@ function collectRecentThreadTitleContext(
   const retainedAttachments: Array<ChatAttachment> = [];
 
   for (const message of messages.toReversed()) {
-    const section = formatThreadTitleSection(message);
+    const section = formatThreadMessageSection(message, includeUser);
     if (section === undefined) {
       continue;
     }
@@ -204,7 +218,30 @@ function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMessage>): 
   readonly message: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
 } {
-  const recent = collectRecentThreadTitleContext(messages, MAX_THREAD_TITLE_CONTEXT_CHARS);
+  // Agent-side content only: when the context does not fit the budget, the
+  // oldest sections are simply dropped behind the truncation marker — user
+  // messages are never pinned, because user prose must not steer a title.
+  const recent = collectRecentThreadTitleContext(messages, MAX_THREAD_TITLE_CONTEXT_CHARS, false);
+  return {
+    message: recent.truncated
+      ? `${THREAD_TITLE_CONTEXT_TRUNCATION_MARKER}${recent.context}`
+      : recent.context,
+    attachments: recent.attachments.slice(-MAX_REGENERATION_ATTACHMENTS),
+  };
+}
+
+/**
+ * Fork-transcript context: the full conversation (user + assistant), with the
+ * first user message pinned when the budget truncates — a child agent needs
+ * the original instructions even when only recent turns fit. This is the only
+ * remaining caller of the first-user pinning budget; thread titles use
+ * `formatThreadTitleContext` instead (agent-side content only, GHE #308).
+ */
+function formatForkTranscriptContext(messages: ReadonlyArray<ThreadTitleMessage>): {
+  readonly message: string;
+  readonly attachments: ReadonlyArray<ChatAttachment>;
+} {
+  const recent = collectRecentThreadTitleContext(messages, MAX_THREAD_TITLE_CONTEXT_CHARS, true);
   if (!recent.truncated) {
     return {
       message: recent.context,
@@ -213,10 +250,10 @@ function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMessage>): 
   }
 
   const firstUserMessage = messages.find(
-    (message) => message.role === "user" && formatThreadTitleSection(message),
+    (message) => message.role === "user" && formatThreadMessageSection(message, true),
   );
   const firstUserSection = firstUserMessage
-    ? formatThreadTitleSection(firstUserMessage)
+    ? formatThreadMessageSection(firstUserMessage, true)
     : undefined;
   if (!firstUserMessage || !firstUserSection) {
     return {
@@ -231,7 +268,7 @@ function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMessage>): 
     pinnedSection.length -
     "\n\n".length -
     THREAD_TITLE_CONTEXT_TRUNCATION_MARKER.length;
-  const retainedRecent = collectRecentThreadTitleContext(messages, recentContextBudget);
+  const retainedRecent = collectRecentThreadTitleContext(messages, recentContextBudget, true);
   const pinnedAttachment = firstUserMessage.attachments?.[0];
   const recentAttachments = retainedRecent.attachments.filter(
     (attachment) => attachment.id !== pinnedAttachment?.id,
@@ -260,7 +297,7 @@ function buildForkTranscriptBootstrapInput(input: {
     historyCandidates.splice(index, 1);
     break;
   }
-  const history = formatThreadTitleContext(historyCandidates).message.trim();
+  const history = formatForkTranscriptContext(historyCandidates).message.trim();
   if (history.length === 0) {
     return input.latestUserInput;
   }

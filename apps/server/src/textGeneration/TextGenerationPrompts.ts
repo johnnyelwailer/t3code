@@ -215,7 +215,9 @@ export interface ThreadTitlePromptInput {
 }
 
 // Keep shared editorial rules in these two prompts in sync. Regeneration
-// intentionally adds guidance for thread history and the previous title.
+// intentionally adds guidance for agent-side thread history and the previous
+// title: user prose is deliberately absent from the regeneration context
+// (GHE #308), so the title must be driven by the agent's own work.
 const INITIAL_THREAD_TITLE_PROMPT = `Generate a title that will help the user recognize this T3 Code thread weeks later.
 Return JSON with exactly one key: title.
 
@@ -245,20 +247,24 @@ function regenerateThreadTitlePrompt(previousTitle: string): string {
 The previous title was ${JSON.stringify(previousTitle)}.
 Return JSON with exactly one key: title.
 
+The thread contents below are the agent's own messages: what the agent has been working on.
+User messages are intentionally omitted — the title must name the work the agent is doing,
+not restate what the user said.
+
 Determine the title in this order:
-1. Read the USER messages first. Identify the latest explicit durable goal. The original subject remains the subject until the user clearly changes what the thread is about.
-2. Use ASSISTANT messages to resolve vague links, unnamed code, and discovered product nouns. Do not promote one assistant finding into the thread subject unless the user adopts it as a new goal.
-3. Compare that subject with the previous title. Preserve accurate scope words, especially when earlier content is truncated. Replace the previous title when it is generic, artifact-based, a completion update, or contradicted by the thread.
-4. Title the durable subject and desired outcome, not the current workflow state.
+1. Read the ASSISTANT messages and name the work the thread is doing: which feature, bug, or task the agent is investigating, fixing, or building.
+2. Compare that work with the previous title. A short or recent agent turn does not change the thread subject on its own: when the agent's activity is a follow-up, status update, or a slice of a larger effort, keep the subject the previous title already named.
+3. Replace the previous title only when the agent's work clearly shows a different subject, or when the previous title is generic, artifact-based, or a completion update. Preserve accurate scope words, especially when earlier content is truncated.
+4. Title the work the agent is doing, not the current workflow state.
 
 Editorial rules:
 - 3-8 words, fewer than 40 characters.
 - Use a compact noun phrase or clear action phrase.
-- Preserve the umbrella subject when later messages focus on one finding, provider, platform, or implementation detail.
+- Preserve the umbrella subject when recent agent messages focus on one finding, provider, platform, or implementation detail.
 - A thread progressing through research, planning, implementation, review, CI, merge, and monitoring has usually not changed subjects.
 - Ignore deliverables and operations such as mocks, plans, HTML, branches, PRs, tests, CI, commits, merging, and monitoring unless they are the actual topic.
 - Models, subagents, tools, output formats, and monitoring instructions do not belong in the title unless they are themselves the topic.
-- Treat final operational follow-ups and assistant completion summaries as weak evidence of subject.
+- Treat status updates ("stopped", "waiting", "done") as weak evidence of subject.
 - For reviews, name the reviewed feature or system and its durable concern, not one finding from the review.
 - For research, name the question domain rather than the research process.
 - Do not claim the work is complete.
@@ -308,7 +314,7 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
     prompt = `${INITIAL_THREAD_TITLE_PROMPT}\n\nUser message:\n${message}${threadTitlePromptSuffix(input)}`;
   } else {
     const message = preserveMessageEnd(input.message);
-    prompt = `${regenerateThreadTitlePrompt(input.previousTitle)}\n\nThread contents:\n${message}${threadTitlePromptSuffix(input)}`;
+    prompt = `${regenerateThreadTitlePrompt(input.previousTitle)}\n\nAgent messages:\n${message}${threadTitlePromptSuffix(input)}`;
   }
   const outputSchema = Schema.Struct({
     title: Schema.String,

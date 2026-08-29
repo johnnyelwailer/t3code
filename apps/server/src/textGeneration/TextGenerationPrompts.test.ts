@@ -193,9 +193,9 @@ describe("buildThreadTitlePrompt", () => {
     expect(result.prompt).toContain("67890 bytes");
   });
 
-  it("regenerates from recent thread contents and identifies the previous title", () => {
+  it("regenerates from recent agent-side contents and identifies the previous title", () => {
     const result = buildThreadTitlePrompt({
-      message: `USER:\nInvestigate reconnect regressions\n\nASSISTANT:\nThe remaining issue is stale session state`,
+      message: `ASSISTANT:\nThe remaining issue is stale session state`,
       previousTitle: "Investigate reconnect regressions",
     });
 
@@ -203,16 +203,18 @@ describe("buildThreadTitlePrompt", () => {
       "Regenerate the title for an existing T3 Code thread so the user can recognize it weeks later.",
     );
     expect(result.prompt).toContain('The previous title was "Investigate reconnect regressions".');
+    // GHE #308: the regeneration prompt is driven by agent activity, never user prose.
     expect(result.prompt).toContain(
-      "Read the USER messages first. Identify the latest explicit durable goal.",
+      "User messages are intentionally omitted — the title must name the work the agent is doing,",
     );
     expect(result.prompt).toContain(
-      "Do not promote one assistant finding into the thread subject unless the user adopts it as a new goal.",
+      "Read the ASSISTANT messages and name the work the thread is doing:",
     );
+    expect(result.prompt).not.toContain("Read the USER messages first");
     expect(result.prompt).toContain(
       'A subagent-monitoring review that finds a Codex roster bug remains "Review Subagent Monitoring Risks,"',
     );
-    expect(result.prompt).toContain("Thread contents:");
+    expect(result.prompt).toContain("Agent messages:");
     expect(result.prompt).toContain("The remaining issue is stale session state");
   });
 
@@ -235,7 +237,7 @@ describe("buildThreadTitlePrompt", () => {
     });
 
     expect(result.prompt).toContain(
-      `Thread contents:\n[Earlier content truncated]\n\n${retainedContext}`,
+      `Agent messages:\n[Earlier content truncated]\n\n${retainedContext}`,
     );
     expect(result.prompt.match(/\[Earlier content truncated\]/g)).toHaveLength(1);
   });
