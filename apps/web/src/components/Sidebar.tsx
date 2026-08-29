@@ -4149,7 +4149,7 @@ export default function Sidebar() {
                                 return next;
                               })
                             }
-                            className="flex h-7 w-full items-center gap-1 rounded-md ps-[calc(var(--sidebar-content-inset)+1.5rem)] text-left text-xs text-muted-foreground/60 hover:bg-sidebar-row-hover hover:text-muted-foreground/90"
+                            className="flex h-7 w-full items-center gap-1 rounded-md ps-[calc(var(--sidebar-content-inset)+0.5rem)] text-left text-xs text-muted-foreground/60 hover:bg-sidebar-row-hover hover:text-muted-foreground/90"
                           >
                             <ChevronRightIcon
                               aria-hidden
