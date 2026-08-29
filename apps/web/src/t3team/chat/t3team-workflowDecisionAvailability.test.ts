@@ -7,7 +7,7 @@
  * That is every card in every run that finishes normally, so the settled-card state was effectively
  * unreachable in the end state a user actually scrolls back to.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { workflowDecisionUnavailableMessage } from "~/t3team/chat/t3team-workflowDecisionAvailability";
 
