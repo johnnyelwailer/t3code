@@ -1888,10 +1888,8 @@ export default function Sidebar() {
   // the user opened stays open across reload (see t3team-useExpandedSubRuns.ts).
   const expandedSubRunParentIds = useExpandedSubRunsStore((store) => store.expandedParentIds);
   const ensureSubRunExpanded = useExpandedSubRunsStore((store) => store.ensureExpanded);
-  // t3team: which expanded parents are showing their FULL sub-run list (beyond the
-  // SIDEBAR_SUB_RUN_LIMIT cap). Presentation-only, not persisted — a fresh expand
-  // always starts capped so the active children lead.
   // GHE #304: which parents' sub-run "Settled (N)" fold row is expanded.
+  // Presentation-only, not persisted — a fresh expand starts folded.
   const [foldedSubRunParentIds, setFoldedSubRunParentIds] = useState<Set<string>>(new Set());
   // t3team: auto-expand a parent the moment one of its children starts
   // running, so active sub-run work is never invisible behind a collapsed
