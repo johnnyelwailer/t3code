@@ -1,4 +1,5 @@
 import { SidebarInset, useSidebar } from "~/t3team/components/ui/t3team-sidebar";
+import { useLocalProviderSessionThreadFilter } from "~/t3team/hooks/t3team-useLocalProviderSessionThreadFilter";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { AppMainContent } from "~/t3team/t3team-AppMainContent";
 import { T3TeamInlineRecipeLaunchProvider } from "~/t3team/t3team-inlineRecipeLaunch";
@@ -44,6 +45,11 @@ export function AppContentPane({
 }) {
   const { isMobile, open } = useSidebar();
   const shouldInsetDesktopHeader = !isMobile && !open;
+  // "Local provider sessions" display filter for the ticket-detail thread lists
+  // (the main content above already filters inside AppMainContent).
+  const { filterForProject: visibleThreadsForProject } = useLocalProviderSessionThreadFilter(
+    store.getThreadsForProject,
+  );
 
   return (
     <T3TeamInlineRecipeLaunchProvider>
@@ -89,7 +95,7 @@ export function AppContentPane({
                 ticketId={ticketId}
                 shouldInsetDesktopHeader={shouldInsetDesktopHeader}
                 {...(activeThreadId ? { activeThreadId } : {})}
-                projectThreads={store.getThreadsForProject(project.id)}
+                projectThreads={visibleThreadsForProject(project.id)}
                 onOpenTicket={onOpenTicket}
                 onOpenThread={onOpenThread}
                 onOpenFullThread={onOpenFullThread}

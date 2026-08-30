@@ -47,3 +47,30 @@ export function isExternalSessionActive(session: ExternalSession, now = Date.now
 export function externalProviderName(provider: ExternalSession["provider"]): string {
   return localProviderDisplayName(provider);
 }
+
+/**
+ * A sidebar thread adopted from a local provider session (official Codex or Claude app).
+ * `providerKind` is only ever derived by t3team-threadBridge from the `local:` message ids
+ * that the local-provider sync writes, so its presence is the display-side equivalent of
+ * `readExternalSession` for the lightweight ProjectThread rows the sidebar lists.
+ * The `| undefined` is load-bearing under exactOptionalPropertyTypes: TS normalizes arrays
+ * of heterogeneous rows into unions where some members carry a required `providerKind: undefined`.
+ */
+export function isLocalProviderSessionThread(
+  thread: { readonly providerKind?: string | undefined } | null | undefined,
+): boolean {
+  return Boolean(thread?.providerKind);
+}
+
+/**
+ * Hide already-adopted local provider sessions from a thread list when the
+ * "Local provider sessions" setting is off. This is HIDE, not delete: the
+ * store keeps every row, and the filter re-applies on each toggle transition
+ * (either direction), so turning the setting back on restores the rows without
+ * re-syncing.
+ */
+export function filterLocalProviderSessionThreads<
+  T extends { readonly providerKind?: string | undefined },
+>(threads: ReadonlyArray<T>, show: boolean): T[] {
+  return show ? [...threads] : threads.filter((thread) => !isLocalProviderSessionThread(thread));
+}

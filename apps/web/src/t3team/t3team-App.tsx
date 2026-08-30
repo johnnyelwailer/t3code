@@ -9,6 +9,7 @@ import { readProjectIdFromView } from "~/t3team/t3team-types";
 import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
+import { useLocalProviderSessionThreadFilter } from "~/t3team/hooks/t3team-useLocalProviderSessionThreadFilter";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
 import { useResolvedViewSync } from "~/t3team/t3team-useResolvedViewSync";
 import { useHydratePinnedSidebarItems } from "~/t3team/hooks/t3team-useHydratePinnedSidebarItems";
@@ -55,6 +56,15 @@ export function App({
   const manageRepositoriesProject = manageRepositoriesProjectId
     ? (store.projects.find((candidate) => candidate.id === manageRepositoriesProjectId) ?? null)
     : null;
+  // "Local provider sessions" display filter: OFF hides already-adopted sessions from the
+  // shell's thread lists; ON brings them back (see the hook docs). Selection/resolution
+  // keep the full store.
+  const { filter: filterVisibleThreads, filterForProject: getVisibleThreadsForProject } =
+    useLocalProviderSessionThreadFilter(store.getThreadsForProject);
+  const visibleThreads = useMemo(
+    () => filterVisibleThreads(store.threads),
+    [filterVisibleThreads, store.threads],
+  );
   const {
     handleSelectProject,
     handleSelectProjectDashboardMode,
@@ -111,8 +121,8 @@ export function App({
             looseWorkspaceProjects={store.looseWorkspaceProjects}
             selectedId={selectedProjectId}
             expandedIds={store.expandedProjectIds}
-            threads={store.threads}
-            getThreadsForProject={store.getThreadsForProject}
+            threads={visibleThreads}
+            getThreadsForProject={getVisibleThreadsForProject}
             view={resolvedView}
             projectSortOrder={sidebarState.projectSortOrder}
             threadSortOrder={sidebarState.threadSortOrder}
@@ -174,7 +184,7 @@ export function App({
         setShowCreate={setShowCreate}
         addProject={store.addProject}
         projects={store.projects}
-        threads={store.threads}
+        threads={visibleThreads}
         threadSortOrder={sidebarState.threadSortOrder}
         getTicketsForProject={store.getTicketsForProject}
         onSelectProject={handleSelectProject}
