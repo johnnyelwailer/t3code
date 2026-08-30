@@ -141,6 +141,8 @@ THE ENGINE API (import the ones you use from "@t3team/sdk")
 - getArgs()                   the orchestration input (validated against meta.inputs if
                               declared).
 
+For exact provider/model selection, call t3team_help("model-selection").
+
 DURABLE TIMERS AND ROUTINES
 For the focused timer reference and copyable examples, call t3team_help("timers").
 Use waitUntil(now() + durationMs) for seconds, minutes, hours, or days. Do not poll, call a

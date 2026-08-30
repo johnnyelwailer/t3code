@@ -31,6 +31,7 @@ function readDocumentedToolIds(): ReadonlyArray<string> {
 describe("t3teamToolCatalog", () => {
   it("lists the implemented tools in catalog order", () => {
     expect(listImplementedT3TeamToolCatalogEntries().map((tool) => tool.id)).toEqual([
+      "t3team.runtime.models",
       "t3team.widget.show",
       "t3team.backlog.set_assignee_filter",
       "t3team.view.read",
@@ -63,6 +64,7 @@ describe("t3teamToolCatalog", () => {
 
   it("defaults thread tool selection from the catalog", () => {
     expect(DEFAULT_T3TEAM_THREAD_TOOL_IDS).toEqual([
+      "t3team.runtime.models",
       "t3team.widget.show",
       "t3team.view.read",
       "t3team.recipe.list",

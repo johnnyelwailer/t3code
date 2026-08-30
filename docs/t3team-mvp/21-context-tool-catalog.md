@@ -579,6 +579,7 @@ Context-bound chat and standalone chat share thread tools.
 Useful tools:
 
 ```text
+t3team.runtime.models
 t3team.view.read
 t3team.recipe.list
 t3team.recipe.validate
@@ -600,12 +601,17 @@ t3team.thread.attach_context
 t3team.thread.open_full_page
 ```
 
-`t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search`,
+`t3team.runtime.models`, `t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search`,
 `t3team.thread.search_source`, `t3team.thread.read_message`, `t3team.thread.start_child`,
 `t3team.thread.children`, `t3team.orchestration.run`, `t3team.orchestration.status`, and
 `t3team.orchestration.resume` are the
 current live runtime slice used by the broker implementation. The rest of this section
 remains planned catalog scope.
+
+`t3team.runtime.models` reads the current thread's true `ModelSelection` plus every configured
+provider instance and model from the live `ProviderRegistry` snapshots. Agent authors call it
+before naming an exact provider/model in `start_child` or an orchestration; the SDK deliberately
+ships no curated model tree.
 
 `t3team.thread.search` searches the transcript of the CURRENT thread (case-insensitive
 substring, optional `limit` and `role` filter), returning each match with its 1-based

@@ -65,6 +65,8 @@ type CreateBindingInput<
     toolArgs: unknown,
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
+  /** Current selection plus provider/model choices from the live ProviderRegistry. */
+  readonly readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
   /** Delivers a produced draft to the review surface; only thread-bound bindings have one. */
   readonly publishDraft?: T3TeamDraftMutationPublisher;
 };
@@ -138,6 +140,7 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
               input.manageChildren!(toolArgs, callerThreadId),
           }
         : {}),
+      ...(input.readRuntimeModels ? { readRuntimeModels: input.readRuntimeModels } : {}),
       ...(input.publishDraft ? { publishDraft: input.publishDraft } : {}),
     });
 

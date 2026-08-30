@@ -16,6 +16,7 @@ const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroke
  * the toolkit; the parity test requires every implemented catalog tool to be mapped or named
  * in the explicit policy-exclusion set. */
 export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
+  t3team_models: "t3team.runtime.models",
   t3team_rename_thread: "t3team.thread.rename",
   t3team_search_thread: "t3team.thread.search",
   t3team_search_source: "t3team.thread.search_source",
@@ -84,6 +85,16 @@ export const T3TeamRenameThreadTool = Tool.make("t3team_rename_thread", {
   dependencies,
 });
 
+export const T3TeamModelsTool = Tool.make("t3team_models", {
+  description:
+    "Read the current thread's true model selection and the live provider instances/models " +
+    "available to this runtime. Call before setting an exact provider or model; never guess " +
+    "from examples or static SDK constants.",
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
 export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
   description:
     "Create a child t3team session from the current thread. `isolation` is required and decides where the child works: 'shared' runs it in the project's shared checkout (no new branch), 'own-worktree' gives it a dedicated branch + worktree — of the linked repo named by `repo_full_name`, or of the project's own repository when the project workspace IS a git repository (monorepo-as-metarepo) or a plain local workspace. Use `effort` " +
@@ -119,11 +130,11 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     // provider's models.
     provider: Schema.optional(Schema.String).annotate({
       description:
-        "Optional provider instance id to run the child on a DIFFERENT provider than the parent (e.g. spawn a Codex child from a Claude parent for cross-provider review). Omit to inherit the parent's provider; `model` must be one of that provider's models.",
+        "Optional provider INSTANCE id to run the child on a different provider. Read it from t3team_models immediately before the call; omit it to inherit the parent provider.",
     }),
     model: Schema.optional(Schema.String).annotate({
       description:
-        "Optional canonical model slug override for the child session. Prefer omitting this to inherit the current thread model; if you set it, use a provider-specific canonical slug such as 'gpt-5.4' or 'gpt-5.3-codex', not a generic alias like 'gpt-5'.",
+        "Optional exact model slug override for the child session. Prefer inheriting; otherwise read the slug from t3team_models for the selected provider instance.",
     }),
     reasoning_effort: Schema.optional(Schema.Literals(["low", "medium", "high"])).annotate({
       description:
@@ -476,6 +487,7 @@ export const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
 });
 
 export const T3TeamToolkit = Toolkit.make(
+  T3TeamModelsTool,
   T3TeamRenameThreadTool,
   T3TeamSearchThreadTool,
   T3TeamSearchSourceTool,

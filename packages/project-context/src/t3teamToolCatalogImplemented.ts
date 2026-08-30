@@ -39,10 +39,16 @@ const START_CHILD_INPUT_SCHEMA = {
         "Optional kickoff style. 'plan' maps to plan mode; 'interactive' and 'autopilot' currently map to the default interaction mode.",
       enum: ["plan", "interactive", "autopilot"],
     },
+    provider: {
+      type: "string",
+      description:
+        "Optional provider INSTANCE id for cross-provider routing. Read it from t3team.runtime.models immediately before the call; never use a driver family or guessed id.",
+      minLength: 1,
+    },
     model: {
       type: "string",
       description:
-        "Optional canonical model slug override for the child session. Prefer omitting this to inherit the current thread model; if you set it, use a provider-specific canonical slug such as 'gpt-5.4' or 'gpt-5.3-codex', not a generic alias like 'gpt-5'.",
+        "Optional exact model slug override for the child session. Prefer omitting this to inherit; otherwise read the slug from t3team.runtime.models for the selected provider instance.",
       minLength: 1,
     },
     reasoning_effort: {
@@ -126,6 +132,21 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
 } as const;
 
 export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
+  "t3team.runtime.models": {
+    id: "t3team.runtime.models",
+    label: "List runtime models",
+    title: "List live provider instances and models",
+    description:
+      "Read the current thread's true model selection and every provider instance/model from " +
+      "the live ProviderRegistry snapshots. Call this before naming an exact provider or model " +
+      "in start_child or an orchestration; never guess ids from examples or a static list.",
+    capabilities: ["read"],
+    kind: "read",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
+  },
   "t3team.widget.show": {
     id: "t3team.widget.show",
     label: "Show widget",

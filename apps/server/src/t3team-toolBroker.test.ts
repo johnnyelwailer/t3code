@@ -173,6 +173,7 @@ describe("T3TeamToolBrokerLive", () => {
     );
 
     expect(binding?.listServers()[0]?.tools).toEqual({
+      "t3team.runtime.models": expect.objectContaining({ name: "t3team.runtime.models" }),
       "t3team.thread.rename": expect.objectContaining({ name: "t3team.thread.rename" }),
       "t3team.thread.start_child": expect.objectContaining({
         name: "t3team.thread.start_child",
