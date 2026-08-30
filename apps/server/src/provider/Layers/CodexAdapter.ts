@@ -1968,11 +1968,32 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     if (session.stopped) {
       return;
     }
-    session.stopped = true;
-    sessions.delete(session.threadId);
+    // Tear down first and only record the session as stopped if the process
+    // actually stopped. `close` runs the graceful close plus the
+    // `forceKillAfter` SIGKILL escalation; a child that survives both must
+    // surface as a failure instead of being silently recorded as stopped —
+    // otherwise no host-level mechanism can ever observe the leaked process
+    // (GHE #326).
     yield* session.runtime.close.pipe(Effect.ignore);
+    const processAlive = yield* session.runtime.isProcessAlive;
+    if (processAlive) {
+      // Keep the session (scope, event pump, map entry) intact: the process
+      // is still alive, so the session is NOT stopped — the failure is what
+      // makes the leak observable.
+      yield* Effect.logError("provider.codex.stop-process-survived", {
+        threadId: String(session.threadId),
+      });
+      return yield* new ProviderAdapterProcessError({
+        provider: PROVIDER,
+        threadId: session.threadId,
+        detail:
+          "Codex app-server process still alive after graceful stop and SIGKILL escalation; session not recorded as stopped.",
+      });
+    }
     yield* Effect.ignore(Scope.close(session.scope, Exit.void));
     yield* Fiber.interrupt(session.eventFiber).pipe(Effect.ignore);
+    session.stopped = true;
+    sessions.delete(session.threadId);
   });
 
   const stopSession: CodexAdapterShape["stopSession"] = (threadId) =>
@@ -1995,10 +2016,21 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     Effect.succeed(Boolean(sessions.get(threadId) && !sessions.get(threadId)?.stopped));
 
   const stopAll: CodexAdapterShape["stopAll"] = () =>
-    Effect.forEach(Array.from(sessions.values()), stopSessionInternal, {
-      concurrency: 1,
-      discard: true,
-    }).pipe(Effect.asVoid);
+    Effect.forEach(
+      Array.from(sessions.values()),
+      (session) =>
+        stopSessionInternal(session).pipe(
+          // One process that refuses to die must not prevent the remaining
+          // sessions from being stopped.
+          Effect.catchCause((cause) =>
+            Effect.logWarning("provider.codex.stop-all-failed", {
+              threadId: String(session.threadId),
+              cause,
+            }),
+          ),
+        ),
+      { concurrency: 1, discard: true },
+    ).pipe(Effect.asVoid);
 
   yield* Effect.acquireRelease(Effect.void, () =>
     stopAll().pipe(

@@ -208,6 +208,13 @@ export interface CodexSessionRuntimeShape {
   ) => Effect.Effect<void, CodexSessionRuntimeError>;
   readonly events: Stream.Stream<ProviderEvent, never>;
   readonly close: Effect.Effect<void>;
+  /**
+   * True when the app-server child process is still alive — i.e. it survived
+   * both the graceful close and the `forceKillAfter` SIGKILL escalation.
+   * Callers check this after `close` so a stop that did not actually stop
+   * the process can be reported instead of recorded as stopped (GHE #326).
+   */
+  readonly isProcessAlive: Effect.Effect<boolean>;
 }
 
 export type CodexSessionRuntimeError =
@@ -2087,6 +2094,22 @@ export const makeCodexSessionRuntime = (
       yield* Queue.shutdown(events);
     });
 
+    // Liveness probe for the app-server child: callers check this AFTER
+    // `close` (graceful close + the `forceKillAfter` SIGKILL escalation
+    // have already run inside `Scope.close(runtimeScope)`) so a stop that
+    // did not actually stop the process can be reported instead of
+    // recorded as stopped (GHE #326). `process.kill(pid, 0)` never signals:
+    // it succeeds when the process exists (ESRCH means it is gone).
+    const isProcessAlive = Effect.sync(() => {
+      const pid = Number(child.pid);
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch (cause) {
+        return (cause as NodeJS.ErrnoException).code !== "ESRCH";
+      }
+    });
+
     return {
       start,
       getSession: Ref.get(sessionRef),
@@ -2269,5 +2292,6 @@ export const makeCodexSessionRuntime = (
         }),
       events: Stream.fromQueue(events),
       close,
+      isProcessAlive,
     } satisfies CodexSessionRuntimeShape;
   });

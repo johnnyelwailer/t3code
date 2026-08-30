@@ -62,6 +62,8 @@ const asItemId = (value: string): ProviderItemId => ProviderItemId.make(value);
 class FakeCodexRuntime implements CodexSessionRuntimeShape {
   private readonly eventQueue = Effect.runSync(Queue.unbounded<ProviderEvent>());
   private readonly now = "2026-01-01T00:00:00.000Z";
+  /** Set by the factory for stop-survival scenarios (GHE #326). */
+  public survivesStop = false;
 
   public readonly startImpl = vi.fn(() =>
     Promise.resolve({
@@ -164,6 +166,10 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
 
   close = Effect.promise(() => this.closeImpl());
 
+  get isProcessAlive() {
+    return Effect.succeed(this.survivesStop);
+  }
+
   emit(event: ProviderEvent) {
     return Queue.offer(this.eventQueue, event).pipe(Effect.asVoid);
   }
@@ -185,7 +191,10 @@ function makeRuntimeFactory() {
   };
 }
 
-function makeScopedRuntimeFactory(options?: { readonly failConstruction?: boolean }) {
+function makeScopedRuntimeFactory(options?: {
+  readonly failConstruction?: boolean;
+  readonly surviveStop?: boolean;
+}) {
   const runtimes: Array<FakeCodexRuntime> = [];
   const releasedThreadIds: Array<ThreadId> = [];
 
@@ -206,6 +215,7 @@ function makeScopedRuntimeFactory(options?: { readonly failConstruction?: boolea
       }
 
       const runtime = new FakeCodexRuntime(runtimeOptions);
+      runtime.survivesStop = options?.surviveStop === true;
       runtimes.push(runtime);
       return runtime;
     }),
@@ -1597,6 +1607,56 @@ scopedFailureLayer("CodexAdapterLive scoped startup failure", (it) => {
         asThreadId("thread-fail"),
       ]);
       NodeAssert.equal(yield* adapter.hasSession(asThreadId("thread-fail")), false);
+    }),
+  );
+});
+
+const scopedSurvivorRuntimeFactory = makeScopedRuntimeFactory({ surviveStop: true });
+const scopedSurvivorLayer = it.layer(
+  Layer.effect(
+    CodexAdapter,
+    Effect.gen(function* () {
+      const codexConfig = decodeCodexSettings({});
+      return yield* makeCodexAdapter(codexConfig, {
+        makeRuntime: scopedSurvivorRuntimeFactory.factory,
+      });
+    }),
+  ).pipe(
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+    Layer.provideMerge(ServerSettingsService.layerTest()),
+    Layer.provideMerge(providerSessionDirectoryTestLayer),
+    Layer.provideMerge(NodeServices.layer),
+  ),
+);
+
+scopedSurvivorLayer("CodexAdapterLive stop failure propagation", (it) => {
+  it.effect("stopSession fails when the child process survives the SIGKILL grace period", () =>
+    Effect.gen(function* () {
+      scopedSurvivorRuntimeFactory.releasedThreadIds.length = 0;
+      const adapter = yield* CodexAdapter;
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-survivor"),
+        runtimeMode: "full-access",
+      });
+
+      const runtime = scopedSurvivorRuntimeFactory.lastRuntime;
+      NodeAssert.ok(runtime);
+
+      const result = yield* adapter.stopSession(asThreadId("thread-survivor")).pipe(Effect.result);
+
+      // The teardown ran, but the surviving child must surface as a failure
+      // instead of being silently recorded as stopped (GHE #326).
+      NodeAssert.equal(runtime.closeImpl.mock.calls.length, 1);
+      NodeAssert.equal(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        NodeAssert.equal(result.failure._tag, "ProviderAdapterProcessError");
+      }
+      // The session is recorded as NOT stopped: still present and its scope
+      // has not been released.
+      NodeAssert.equal(yield* adapter.hasSession(asThreadId("thread-survivor")), true);
+      NodeAssert.deepStrictEqual(scopedSurvivorRuntimeFactory.releasedThreadIds, []);
     }),
   );
 });
