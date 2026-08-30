@@ -1145,6 +1145,29 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  // GHE #343: pending turn-start marker — a turn was requested (user message
+  // posted) but the provider has not started it yet. Mirrors the repository
+  // reader's pending-row filter (turn_id IS NULL, state 'pending', a pending
+  // message, no checkpoint).
+  const getActiveThreadPendingTurnStartRow = SqlSchema.findOneOption({
+    Request: ThreadIdLookupInput,
+    Result: ProjectionThreadIdLookupRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT threads.thread_id AS "threadId"
+        FROM projection_threads threads
+        INNER JOIN projection_turns turns
+          ON turns.thread_id = threads.thread_id
+        WHERE threads.thread_id = ${threadId}
+          AND threads.deleted_at IS NULL
+          AND turns.turn_id IS NULL
+          AND turns.state = 'pending'
+          AND turns.pending_message_id IS NOT NULL
+          AND turns.checkpoint_turn_count IS NULL
+        LIMIT 1
+      `,
+  });
+
   const listThreadMessageRowsByThread = SqlSchema.findAll({
     Request: ThreadIdLookupInput,
     Result: ProjectionThreadMessageDbRowSchema,
@@ -3363,6 +3386,17 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       Effect.map(Option.isSome),
     );
 
+  const hasPendingTurnStart: ProjectionSnapshotQueryShape["hasPendingTurnStart"] = (threadId) =>
+    getActiveThreadPendingTurnStartRow({ threadId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.hasPendingTurnStart:query",
+          "ProjectionSnapshotQuery.hasPendingTurnStart:decodeRow",
+        ),
+      ),
+      Effect.map(Option.isSome),
+    );
+
   return {
     getCommandReadModel,
     getSnapshot,
@@ -3382,6 +3416,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getThreadDetailById,
     getThreadDetailSnapshot,
     threadExists,
+    hasPendingTurnStart,
   } satisfies ProjectionSnapshotQueryShape;
 });
 

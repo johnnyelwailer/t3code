@@ -224,6 +224,23 @@ export interface ProjectionSnapshotQueryShape {
    * reads.
    */
   readonly threadExists: (threadId: ThreadId) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
+   * Cheaply check whether a turn has been requested on an active
+   * (non-deleted) thread but has not yet started in the provider.
+   *
+   * The pending turn-start marker (a `projection_turns` row with
+   * `turn_id IS NULL`) is written when a user message is posted
+   * (`thread.turn-start-requested`) and removed once the provider starts
+   * the turn — or the session settles error/stopped/interrupted. In that
+   * requested-but-unstarted window `activeTurnId` is still null, so callers
+   * that may stop the thread's provider session must consult this probe
+   * first (GHE #343: the reaper disposed a session while a workflow retry
+   * turn was queued, and the run failed with "no reply text").
+   */
+  readonly hasPendingTurnStart: (
+    threadId: ThreadId,
+  ) => Effect.Effect<boolean, ProjectionRepositoryError>;
 }
 
 /**

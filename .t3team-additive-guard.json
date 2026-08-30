@@ -73,6 +73,7 @@
     "apps/server/src/provider/Layers/ProviderInstanceRegistryLive.ts",
     "apps/server/src/provider/Layers/ProviderService.ts",
     "apps/server/src/provider/Layers/ProviderSessionReaper.test.ts",
+    "apps/server/src/provider/Layers/ProviderSessionReaper.ts",
     "apps/server/src/provider/ProviderDriver.ts",
     "apps/server/src/provider/Services/ProviderAdapterRegistry.ts",
     "apps/server/src/provider/opencodeRuntime.environment.test.ts",

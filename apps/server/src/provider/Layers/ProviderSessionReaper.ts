@@ -84,6 +84,24 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
           continue;
         }
 
+        // A turn can be requested (user message posted — including a
+        // workflow engine's queued or corrective-retry turn) but not yet
+        // started in the provider: activeTurnId only appears once the
+        // provider starts it, and nothing bumps lastSeenAt in between.
+        // The pending turn-start marker bridges that window; disposing the
+        // session now would kill the queued turn, which then settles with no
+        // reply text (GHE #343).
+        const pendingTurnStart = yield* projectionSnapshotQuery.hasPendingTurnStart(
+          binding.threadId,
+        );
+        if (pendingTurnStart) {
+          yield* Effect.logDebug("provider.session.reaper.skipped-pending-turn-start", {
+            threadId: binding.threadId,
+            idleDurationMs,
+          });
+          continue;
+        }
+
         const reaped = yield* providerService.stopSession({ threadId: binding.threadId }).pipe(
           Effect.tap(() =>
             Effect.logInfo("provider.session.reaped", {

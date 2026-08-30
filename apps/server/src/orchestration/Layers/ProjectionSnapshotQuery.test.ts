@@ -1711,6 +1711,91 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       }),
   );
 
+  it.effect(
+    "hasPendingTurnStart reports true only for active threads with a requested-but-unstarted turn",
+    () =>
+      Effect.gen(function* () {
+        const snapshotQuery = yield* ProjectionSnapshotQuery;
+        const sql = yield* SqlClient.SqlClient;
+
+        yield* sql`DELETE FROM projection_projects`;
+        yield* sql`DELETE FROM projection_threads`;
+        yield* sql`DELETE FROM projection_turns`;
+
+        yield* sql`
+        INSERT INTO projection_projects (
+          project_id, title, workspace_root, default_model_selection_json,
+          scripts_json, created_at, updated_at, deleted_at
+        )
+        VALUES (
+          'project-1', 'Project 1', '/tmp/project-1',
+          '{"provider":"codex","model":"gpt-5-codex"}', '[]',
+          '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:01.000Z', NULL
+        )
+      `;
+
+        yield* sql`
+        INSERT INTO projection_threads (
+          thread_id, project_id, title, model_selection_json, runtime_mode,
+          interaction_mode, branch, worktree_path, latest_turn_id,
+          latest_user_message_at, pending_approval_count, pending_user_input_count,
+          has_actionable_proposed_plan, created_at, updated_at, deleted_at
+        )
+        VALUES
+          (
+            'thread-pending', 'project-1', 'Pending Thread',
+            '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default',
+            NULL, NULL, NULL, NULL, 0, 0, 0,
+            '2026-06-01T00:00:02.000Z', '2026-06-01T00:00:03.000Z', NULL
+          ),
+          (
+            'thread-deleted', 'project-1', 'Deleted Thread',
+            '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default',
+            NULL, NULL, NULL, NULL, 0, 0, 0,
+            '2026-06-01T00:00:04.000Z', '2026-06-01T00:00:05.000Z', '2026-06-01T00:00:06.000Z'
+          )
+      `;
+
+        // GHE #343 shape: user message posted (pending start), provider has
+        // not started the turn yet; a settled turn may already exist.
+        yield* sql`
+        INSERT INTO projection_turns (
+          thread_id, turn_id, pending_message_id, source_proposed_plan_thread_id,
+          source_proposed_plan_id, assistant_message_id, state, requested_at,
+          started_at, completed_at, checkpoint_turn_count, checkpoint_ref,
+          checkpoint_status, checkpoint_files_json
+        )
+        VALUES
+          (
+            'thread-pending', 'turn-settled', NULL, NULL, NULL, NULL,
+            'completed', '2026-06-01T00:01:00.000Z', '2026-06-01T00:01:00.000Z',
+            '2026-06-01T00:02:00.000Z', NULL, NULL, NULL, '[]'
+          ),
+          (
+            'thread-pending', NULL, 'msg-corrective', NULL, NULL, NULL,
+            'pending', '2026-06-01T00:02:00.100Z', NULL, NULL, NULL, NULL, NULL, '[]'
+          ),
+          (
+            'thread-deleted', NULL, 'msg-deleted', NULL, NULL, NULL,
+            'pending', '2026-06-01T00:02:00.200Z', NULL, NULL, NULL, NULL, NULL, '[]'
+          )
+      `;
+
+        assert.equal(
+          yield* snapshotQuery.hasPendingTurnStart(ThreadId.make("thread-pending")),
+          true,
+        );
+        assert.equal(
+          yield* snapshotQuery.hasPendingTurnStart(ThreadId.make("thread-deleted")),
+          false,
+        );
+        assert.equal(
+          yield* snapshotQuery.hasPendingTurnStart(ThreadId.make("thread-unknown")),
+          false,
+        );
+      }),
+  );
+
   it.effect("searches active user messages and canonical assistant outputs", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;

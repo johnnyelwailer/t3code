@@ -693,6 +693,7 @@ const buildAppUnderTest = (options?: {
       // the members they care about (e.g. the subscribeThread resume-gap cases) don't hit
       // `Unimplemented method "threadExists"` when ws.ts checks liveness.
       threadExists: () => Effect.succeed(true),
+      hasPendingTurnStart: () => Effect.succeed(true),
       getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
       getProjectShellById: () => Effect.succeed(Option.none()),
       getThreadShellById: () => Effect.succeed(Option.none()),
@@ -6513,6 +6514,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         layers: {
           projectionSnapshotQuery: {
             threadExists: () => Effect.succeed(false),
+            hasPendingTurnStart: () => Effect.succeed(false),
           },
         },
       });
@@ -6539,6 +6541,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         layers: {
           projectionSnapshotQuery: {
             threadExists: () => Effect.succeed(true),
+            hasPendingTurnStart: () => Effect.succeed(true),
           },
         },
       });

@@ -286,6 +286,7 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
       );
     },
     threadExists: () => Effect.die("unused"),
+    hasPendingTurnStart: () => Effect.die("unused"),
     searchThreads: () => Effect.succeed({ matches: [] }),
   };
 

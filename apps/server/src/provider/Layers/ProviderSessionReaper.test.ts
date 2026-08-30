@@ -69,6 +69,7 @@ function makeReadModel(
       readonly updatedAt: string;
     } | null;
     readonly backgroundLiveness?: "working" | "monitoring" | null;
+    readonly pendingTurnStart?: boolean;
   }>,
 ) {
   const now = "2026-01-01T00:00:00.000Z";
@@ -111,6 +112,7 @@ function makeReadModel(
       messages: [],
       session: thread.session,
       backgroundLiveness: thread.backgroundLiveness ?? null,
+      pendingTurnStart: thread.pendingTurnStart ?? false,
       activities: [],
       proposedPlans: [],
       checkpoints: [],
@@ -226,6 +228,11 @@ describe("ProviderSessionReaper", () => {
           getThreadDetailById: () => Effect.die("unused"),
           getThreadDetailSnapshot: () => Effect.die("unused"),
           threadExists: () => Effect.die("unused"),
+          hasPendingTurnStart: (threadId) =>
+            Effect.succeed(
+              input.readModel.threads.find((thread) => thread.id === threadId)?.pendingTurnStart ===
+                true,
+            ),
           searchThreads: () => Effect.succeed({ matches: [] }),
         }),
       ),
@@ -377,6 +384,115 @@ describe("ProviderSessionReaper", () => {
     expect(harness.stopSession).not.toHaveBeenCalled();
     const remaining = await runtime!.runPromise(repository.getByThreadId({ threadId }));
     expect(Option.isSome(remaining)).toBe(true);
+  });
+
+  // GHE #343: a workflow retry turn was requested (verdict posted, corrective
+  // prompt posted -> thread.turn-start-requested) but the provider had not
+  // started it yet. activeTurnId is null and lastSeenAt is stale — a sweep in
+  // this window used to stop the session, and the queued turn then settled
+  // with no reply text.
+  it("skips stale sessions while a turn start is pending", async () => {
+    const threadId = ThreadId.make("thread-reaper-pending-turn-start");
+    const now = "2026-01-01T00:00:00.000Z";
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "ready",
+            providerName: "claudeAgent",
+            runtimeMode: "full-access",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: now,
+          },
+          pendingTurnStart: true,
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "claudeAgent",
+        providerInstanceId: null,
+        adapterKey: "claudeAgent",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: "2026-04-14T00:00:00.000Z",
+        resumeCursor: {
+          opaque: "resume-pending-turn-start",
+        },
+        runtimePayload: null,
+      }),
+    );
+
+    await startReaper();
+    await Effect.runPromise(drainFibers);
+
+    expect(harness.stopSession).not.toHaveBeenCalled();
+    const remaining = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+    expect(Option.isSome(remaining)).toBe(true);
+  });
+
+  // #343 timeline fixture: three idle sessions in one sweep — the workflow QA
+  // thread has its corrective retry queued (pending turn start), the other
+  // two are genuinely idle. Only the idle ones are reaped; the run survives.
+  it("reaps idle sessions in the same sweep while sparing a pending turn start", async () => {
+    const qaThreadId = ThreadId.make("thread-reaper-343-qa");
+    const idleThreadIdA = ThreadId.make("thread-reaper-343-idle-a");
+    const idleThreadIdB = ThreadId.make("thread-reaper-343-idle-b");
+    const now = "2026-01-01T00:00:00.000Z";
+    const idleSession = (threadId: ThreadId) => ({
+      threadId,
+      status: "ready" as const,
+      providerName: "claudeAgent" as const,
+      runtimeMode: "full-access" as const,
+      activeTurnId: null,
+      lastError: null,
+      updatedAt: now,
+    });
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        { id: qaThreadId, session: idleSession(qaThreadId), pendingTurnStart: true },
+        { id: idleThreadIdA, session: idleSession(idleThreadIdA) },
+        { id: idleThreadIdB, session: idleSession(idleThreadIdB) },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+
+    for (const threadId of [qaThreadId, idleThreadIdA, idleThreadIdB]) {
+      await runtime!.runPromise(
+        repository.upsert({
+          threadId,
+          providerName: "claudeAgent",
+          providerInstanceId: null,
+          adapterKey: "claudeAgent",
+          runtimeMode: "full-access",
+          status: "running",
+          lastSeenAt: "2026-04-14T00:00:00.000Z",
+          resumeCursor: {
+            opaque: `resume-343-${threadId}`,
+          },
+          runtimePayload: null,
+        }),
+      );
+    }
+
+    await startReaper();
+
+    await waitFor(() => harness.stopSession.mock.calls.length >= 2);
+    await Effect.runPromise(drainFibers);
+
+    expect(harness.stoppedThreadIds.has(qaThreadId)).toBe(false);
+    expect(harness.stoppedThreadIds.has(idleThreadIdA)).toBe(true);
+    expect(harness.stoppedThreadIds.has(idleThreadIdB)).toBe(true);
   });
 
   it("does not reap sessions that are still within the inactivity threshold", async () => {

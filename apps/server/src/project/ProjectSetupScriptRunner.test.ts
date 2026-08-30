@@ -47,6 +47,7 @@ const makeProjectionSnapshotQueryLayer = (project: OrchestrationProject) =>
     getThreadDetailById: () => Effect.die("unused"),
     getThreadDetailSnapshot: () => Effect.die("unused"),
     threadExists: () => Effect.die("unused"),
+    hasPendingTurnStart: () => Effect.die("unused"),
     searchThreads: () => Effect.succeed({ matches: [] }),
   });
 
