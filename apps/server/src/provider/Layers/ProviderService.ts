@@ -64,6 +64,7 @@ import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
+import * as McpCredentialContinuity from "../../t3team-mcp-credentialContinuity.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 const isModelSelection = Schema.is(ModelSelection);
 
@@ -138,7 +139,7 @@ export interface ProviderServiceLiveOptions {
    * agent-browser-access gate unobservable from a unit test; this seam lets a
    * test see whether a credential was requested at all.
    */
-  readonly issueMcpCredential?: typeof McpSessionRegistry.issueActiveMcpCredential;
+  readonly issueMcpCredential?: typeof McpCredentialContinuity.claimThreadMcpCredential;
   /** Same seam as `issueMcpCredential`, for observing the deny path's revoke. */
   readonly revokeMcpCredential?: typeof McpSessionRegistry.revokeActiveMcpThread;
 }
@@ -292,7 +293,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const issueMcpCredential =
-    options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
+    options?.issueMcpCredential ?? McpCredentialContinuity.claimThreadMcpCredential;
   const revokeMcpCredential =
     options?.revokeMcpCredential ?? McpSessionRegistry.revokeActiveMcpThread;
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
@@ -324,28 +325,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   );
 
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
-    Effect.gen(function* () {
-      if (!(yield* agentBrowserAccessEnabled)) {
-        // Revoke as well as clear. Every other prepare path reaches
-        // `issueActiveMcpCredential`, which revokes the thread first, so
-        // skipping it here would leave a previously issued bearer token valid
-        // against `/mcp` for the rest of its liveness window — and later turns
-        // would keep refreshing it. A session restart (runtime mode, cwd,
-        // model) re-prepares without stopping, so it relies on this.
-        yield* revokeMcpCredential(threadId);
-        yield* Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId));
-        return undefined;
-      }
-      const credential = yield* issueMcpCredential({ threadId, providerInstanceId });
-      if (credential) {
-        yield* Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config));
-      }
-      return credential;
+    McpCredentialContinuity.prepareThreadMcpSession({
+      threadId,
+      providerInstanceId,
+      browserAccessEnabled: agentBrowserAccessEnabled,
+      claimMcpCredential: issueMcpCredential,
+      revokeMcpCredential,
     });
   const clearMcpSession = (threadId: ThreadId) =>
-    McpSessionRegistry.revokeActiveMcpThread(threadId).pipe(
-      Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
-    );
+    McpCredentialContinuity.withdrawThreadMcpSession(threadId);
 
   const publishRuntimeEvent = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
     Effect.succeed(event).pipe(

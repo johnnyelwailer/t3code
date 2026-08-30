@@ -16,6 +16,7 @@ import * as TestClock from "effect/testing/TestClock";
 
 import { clearMcpProviderSession, setMcpProviderSession } from "./mcp/McpProviderSession.ts";
 import { layerTest as serverSettingsLayerTest } from "./serverSettings.ts";
+import { setMcpCredentialEpoch } from "./t3team-mcp-credentialPublication.ts";
 import { bridgePackProviderDriver } from "./t3team-pack-driverBridge.ts";
 
 const validEvent = {
@@ -171,6 +172,9 @@ describe("bridgePackProviderDriver", () => {
         endpoint: "http://127.0.0.1:3000/mcp",
         authorizationHeader: "Bearer provider-token",
       });
+      // A prepare records the withdrawal epoch the credential was handed out
+      // under; the recovery hook is only granted alongside one.
+      setMcpCredentialEpoch(startThreadId, 0n);
       yield* instance.adapter
         .startSession({
           threadId: startThreadId,
@@ -182,12 +186,15 @@ describe("bridgePackProviderDriver", () => {
         .pipe(Effect.ensuring(Effect.sync(() => clearMcpProviderSession(startThreadId))));
       expect(startArgs[0]).toEqual(
         expect.objectContaining({
-          mcp: {
+          mcp: expect.objectContaining({
             endpoint: "http://127.0.0.1:3000/mcp",
             authorizationHeader: "Bearer provider-token",
-          },
+          }),
         }),
       );
+      // The driver also gets a way back: a credential that dies mid-session
+      // must cost a retry, not the whole toolkit.
+      expect(typeof startArgs[0]?.mcp?.reestablish).toBe("function");
       expect(startArgs[0]?.modelSelection).toEqual({ instanceId: "nexi", model: "nexi/coding" });
       expect(startArgs[0]?.approvalPolicy).toBe("on-request");
       expect(startArgs[0]?.sandboxMode).toBe("workspace-write");

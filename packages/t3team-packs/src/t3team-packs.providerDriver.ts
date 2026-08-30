@@ -37,9 +37,24 @@ export type PackProviderSnapshot = {
   readonly showInteractionModeToggle?: boolean;
 };
 
+/** Mirror of `@t3team/pack-api`'s `PackMcpReestablishResult`. */
+export type PackMcpReestablishResult =
+  | { readonly ok: true; readonly endpoint: string; readonly authorizationHeader: string }
+  | { readonly ok: false; readonly reason: string };
+
 export type PackSessionStartInput = {
   readonly threadId: string;
   readonly runtimeMode: string;
+  /**
+   * Provider-scoped access to the host MCP endpoint for this thread.
+   * `reestablish` is how a driver recovers a credential that died mid-session
+   * instead of losing the toolkit; call it at most once per turn.
+   */
+  readonly mcp?: {
+    readonly endpoint: string;
+    readonly authorizationHeader: string;
+    readonly reestablish?: () => Promise<PackMcpReestablishResult>;
+  };
   readonly cwd?: string;
   readonly resumeCursor?: PackResumeCursor;
   /** Opaque host `ModelSelection`; forward verbatim. */
