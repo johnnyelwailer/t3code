@@ -111,6 +111,15 @@ Prefix policy:
 - `apps/server/src/orchestration/Layers/CheckpointReactor.ts`
   - One extra disjunct so messages mirrored from an external Codex/Claude session (`messageId` prefixed `local:`) are checkpointed like any other turn. Without it a session adopted from the native tool has no pre-turn baseline and cannot be reverted. Three lines; the reactor's own logic is untouched.
 
+## GHE #342 — mobile-first touch targets + keybindings panel fit
+
+- `apps/web/src/components/settings/KeybindingsSettings.tsx`
+  - Responsive keybinding table below 768px: drop the 680px min-width, reflow rows 4-column to 2-column, raise row height to a 44px touch floor. Class-string-only changes; row logic untouched.
+- `apps/web/src/components/ui/menu.tsx`
+  - 44px min-height floor on menu items below 768px (`max-md:min-h-11`) so phone tap targets meet the 44px minimum; desktop unchanged.
+- `apps/web/src/components/ui/toggle.tsx`
+  - 44px height floor on Toggle control sizes below 768px, mirroring the Button phone floors; desktop unchanged.
+
 ## GHE #208 — deterministic 4-state activity word + throttled LLM enrichment
 
 - `packages/shared/src/t3team-threadRunStatus.ts`
