@@ -84,48 +84,54 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
   );
   const expanded = useExpandedSubRunsStore((state) => state.expandedParentIds.has(threadId));
   const toggle = useExpandedSubRunsStore((state) => state.toggle);
-  // Counts ACTIVE sub-runs only — settled/terminal children collapse into the
-  // #304 "Settled (N)" fold, not the chip (same running-vs-folded split the
-  // sub-run rosters use). A parent with zero active children is idle: it gets
-  // no chip at all — no stale total, no empty ring, no "0".
-  if (!counts || counts.running === 0) {
+  // Three states, one handle: running > 0 → the ACTIVE count chip (settled
+  // children belong to the #304 "Settled (N)" fold, not the count); running = 0
+  // with total > 0 → a MUTED "Settled N" chip — without it the section's
+  // persisted/auto-set expanded state left the #304 fold row under the row
+  // forever with nothing to collapse it (sidebar-row refine, 2026-08-30);
+  // total = 0 / unknown → nothing (no stale total, no "0").
+  if (!counts || counts.total === 0) {
     return null;
   }
-  const noun = counts.running === 1 ? "sub-run" : "sub-runs";
+  const active = counts.running > 0;
   const settledCount = counts.total - counts.running;
-  const description =
-    settledCount === 0
-      ? `${counts.running} active ${noun}`
-      : `${counts.running} active ${noun} · ${settledCount} settled`;
+  const noun = (n: number) => (n === 1 ? "sub-run" : "sub-runs");
+  const description = active
+    ? `${counts.running} active ${noun(counts.running)}${settledCount > 0 ? ` · ${settledCount} settled` : ""}`
+    : `Settled ${settledCount} ${noun(settledCount)}`;
+  const chipClass = active
+    ? "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
+    : "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground/60 hover:text-sidebar-muted-foreground/90";
   return (
     <button
       type="button"
       data-t3team-sub-runs-chip
+      data-t3team-sub-runs-chip-state={active ? "active" : "settled"}
       aria-expanded={expanded}
       aria-label={description}
       title={description}
       // The chip sits inside the row's own clickable button (see
-      // Sidebar.tsx's SidebarThreadRow), same nesting the Settle/Snooze
-      // affordances already use there — stopPropagation keeps this toggle
+      // Sidebar.tsx's SidebarThreadRow) — stopPropagation keeps this toggle
       // from also navigating to the parent thread.
       onClick={(event) => {
         event.stopPropagation();
         toggle(threadId);
       }}
-      // Just the count — the row line is already crowded, and the verbose label
-      // truncated ("6 sub-runs · 1 acti…"). Detail lives in the tooltip.
-      className="flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
+      className={chipClass}
     >
       <ListTreeIcon aria-hidden className="size-3 shrink-0" />
-      {counts.running}
-      {/* The "active children" mark speaks the working row's 4-state color
-          language (sky = in motion), not the theme's primary accent: on the
-          Nexplore theme primary is a red-orange that read as an error dot on
-          an otherwise idle row. */}
-      <span
-        aria-hidden
-        className={`size-1.5 shrink-0 rounded-full ${resolveActivityStatePill("working").dotClass}`}
-      />
+      {active ? (
+        <>
+          {counts.running}
+          {/* sky = the working row's "in motion" 4-state color, not the theme's primary accent */}
+          <span
+            aria-hidden
+            className={`size-1.5 shrink-0 rounded-full ${resolveActivityStatePill("working").dotClass}`}
+          />
+        </>
+      ) : (
+        <span>Settled {settledCount}</span>
+      )}
     </button>
   );
 }

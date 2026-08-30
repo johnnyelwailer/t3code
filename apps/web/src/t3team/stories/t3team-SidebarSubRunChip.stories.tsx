@@ -5,18 +5,25 @@
  *   1. The chip counted ALL children (`counts.total`): after the GHE #304 sweep
  *      a parent with 0 active children still read "189". The chip now counts
  *      ACTIVE sub-runs only (the same running-vs-folded split the "Settled (N)"
- *      fold uses) and renders nothing at 0 active.
+ *      fold uses).
  *   2. The chip's active dot used the theme's PRIMARY accent — a red-orange on
  *      the Nexplore theme — so it read as an error dot on idle-looking rows.
  *      It now speaks the working row's 4-state color (sky = in motion), and a
  *      genuinely errored sub-run keeps the red alert mark until its next
  *      activity (current state, not a persisted last-error stamp).
  *
+ * The settle-expander follow-up (2026-08-30) added the third state: a settled-
+ * ONLY parent (0 active + N settled) no longer renders "nothing" — it gets a
+ * MUTED "Settled N" chip, the handle to open AND collapse the sub-runs section
+ * where the #304 "Settled (N)" fold row lives. Story (b) is live: clicking the
+ * chip toggles the section; the fold row exists only while the section is
+ * expanded, never as a permanent element under a collapsed row.
+ *
  * Production components in every frame: `InboxSubRunsChip` (seeded through the
- * real `buildChildThreadRelations` → `t3team-sidebarThreadDataStore` chain) and
- * `SidebarSubRunRow` (the compact child rows, incl. the 4-state status marks).
- * The parent-row shell and the "Settled (N)" fold row replicate Sidebar.tsx's
- * exact classes.
+ * real `buildChildThreadRelations` → `t3team-sidebarThreadDataStore` chain, and
+ * toggling the real `useExpandedSubRunsStore`) and `SidebarSubRunRow` (the
+ * compact child rows, incl. the 4-state status marks). The parent-row shell and
+ * the "Settled (N)" fold row replicate Sidebar.tsx's exact classes.
  */
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useEffect, type CSSProperties } from "react";
@@ -24,6 +31,7 @@ import { useEffect, type CSSProperties } from "react";
 import { InboxSubRunsChip } from "~/t3team/components/t3team-InboxSlots";
 import { SidebarSubRunRow } from "~/components/t3team-SidebarSubRunRow";
 import { useT3TeamSidebarThreadDataStore } from "~/t3team/t3team-sidebarThreadDataStore";
+import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
 import { buildChildThreadRelations } from "~/t3team/hooks/t3team-childThreadRelationsCore";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { ChevronRightIcon } from "lucide-react";
@@ -189,7 +197,7 @@ export const ActiveThreeSettledFive: Story = {
 };
 
 export const SettledOnlyParent: Story = {
-  name: "(b) settled-only parent (189 settled) → no indicator",
+  name: "(b) settled-only parent (189 settled) → muted 'Settled 189' chip, live toggle",
   render: () => {
     useEffect(() => {
       seedChildren([
@@ -197,8 +205,14 @@ export const SettledOnlyParent: Story = {
           makeThread(`c-set-${i}`, "idle", `Child ${i + 1}`),
         ),
       ]);
-      return () => useT3TeamSidebarThreadDataStore.getState().setSubRunCountsByParentId(new Map());
+      // Collapsed by default — the fold row must NOT sit under a collapsed row.
+      useExpandedSubRunsStore.setState({ expandedParentIds: new Set() });
+      return () => {
+        useT3TeamSidebarThreadDataStore.getState().setSubRunCountsByParentId(new Map());
+        useExpandedSubRunsStore.setState({ expandedParentIds: new Set() });
+      };
     }, []);
+    const expanded = useExpandedSubRunsStore((state) => state.expandedParentIds.has(PARENT_ID));
     return (
       <div className="flex min-h-screen items-start justify-center bg-sidebar p-6">
         <div
@@ -207,15 +221,19 @@ export const SettledOnlyParent: Story = {
         >
           <div className="space-y-1.5">
             <SectionTitle>
-              parent row: 0 active → no chip, no empty ring, no "0", no dot
+              parent row: the muted chip is the handle — click it to open / collapse
             </SectionTitle>
             <ParentRow />
-          </div>
-          <div className="space-y-1.5">
-            <SectionTitle>the settled work still lives in the #304 fold</SectionTitle>
-            <ul>
-              <SettledFoldRow count={189} />
-            </ul>
+            {expanded ? (
+              <ul>
+                <SettledFoldRow count={189} />
+              </ul>
+            ) : (
+              <p className="px-1 text-[11px] leading-relaxed text-zinc-500">
+                collapsed: nothing under the row. The #304 fold row is NOT a permanent element — it
+                only exists inside the expanded sub-runs section, and the chip collapses it again.
+              </p>
+            )}
           </div>
         </div>
       </div>
