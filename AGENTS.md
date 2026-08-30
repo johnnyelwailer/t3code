@@ -44,6 +44,18 @@ This repository is a VERY EARLY WIP. Proposing sweeping changes that improve lon
 
 If a tradeoff is required, choose correctness and robustness over short-term convenience.
 
+## Multi-Host Reuse
+
+This code is used across multiple hosts, consumers, and runtime environments, including Nexi Work,
+Nexi Portal, and external automation hosts. Before changing a shared contract, runtime, capability,
+provider, or workflow, check which hosts consume it and preserve their compatibility. Prefer small,
+host-neutral contracts with host-specific adapters over copying concrete implementations. Build new
+features so their behavior, persistence, and failure modes can be reused outside the first surface
+where they are needed. Verify each affected host or explicitly document why a host does not apply.
+For event-driven or recurring behavior, treat the event-source and trigger design in GHE issue #332
+as foundational prior art; reuse its source registration, durable delivery, and resume model rather
+than inventing a parallel trigger mechanism.
+
 ## Maintainability
 
 ### ALWAYS check whether the functionality already exists — before writing it
