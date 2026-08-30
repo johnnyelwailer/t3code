@@ -27,6 +27,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
@@ -167,6 +168,38 @@ function createProviderServiceHarness() {
   };
 }
 
+interface CapturedLogEntry {
+  readonly logLevel: string;
+  readonly message: unknown;
+}
+
+// Replaces the default logger with one that records entries in-memory instead
+// of printing, so tests can assert on Effect.logWarning calls (e.g. the
+// strict provider lifecycle guard's rejection warning) without scraping
+// stdout.
+function createLogCapture() {
+  const entries: CapturedLogEntry[] = [];
+  const logger = Logger.make<unknown, void>((options) => {
+    entries.push({ logLevel: String(options.logLevel), message: options.message });
+  });
+  return { entries, logger };
+}
+
+// The strict provider lifecycle guard logs `Effect.logWarning(message, fields)`;
+// with two message parts the captured `message` is `[message, fields]`.
+function lifecycleRejectionWarningFields(
+  logs: ReadonlyArray<CapturedLogEntry>,
+): Array<Record<string, unknown>> {
+  return logs
+    .filter(
+      (entry): entry is CapturedLogEntry & { message: [string, Record<string, unknown>] } =>
+        Array.isArray(entry.message) &&
+        typeof entry.message[0] === "string" &&
+        entry.message[0].includes("rejected lifecycle event"),
+    )
+    .map((entry) => entry.message[1]);
+}
+
 type ProviderRuntimeTestReadModel = OrchestrationReadModel;
 type ProviderRuntimeTestThread = ProviderRuntimeTestReadModel["threads"][number];
 type ProviderRuntimeTestMessage = ProviderRuntimeTestThread["messages"][number];
@@ -234,6 +267,7 @@ describe("ProviderRuntimeIngestion", () => {
     const workspaceRoot = makeTempDir("t3-provider-project-");
     NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".git"));
     const provider = createProviderServiceHarness();
+    const logCapture = createLogCapture();
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
       Layer.provide(OrchestrationProjectionPipelineLive),
@@ -259,6 +293,7 @@ describe("ProviderRuntimeIngestion", () => {
       Layer.provideMerge(makeTestServerSettingsLayer(options?.serverSettings)),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
       Layer.provideMerge(NodeServices.layer),
+      Layer.provideMerge(Logger.layer([logCapture.logger])),
     );
     runtime = ManagedRuntime.make(layer);
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
@@ -333,6 +368,7 @@ describe("ProviderRuntimeIngestion", () => {
       setProviderSession: provider.setSession,
       drain,
       silenceWatchdog,
+      logs: logCapture.entries,
     };
   }
 
@@ -1028,6 +1064,182 @@ describe("ProviderRuntimeIngestion", () => {
     });
 
     await waitForThread(harness.readModel, (thread) => thread.session?.status === "ready");
+  });
+
+  it("logs a warning carrying the tracked and event turn ids when the strict lifecycle guard rejects a conflicting turn.completed", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started-primary-logged"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-primary-logged"),
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) =>
+        thread.session?.status === "running" &&
+        thread.session?.activeTurnId === "turn-primary-logged",
+    );
+
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed-aux-logged"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-aux-logged"),
+      status: "completed",
+    });
+    await harness.drain();
+
+    const rejections = lifecycleRejectionWarningFields(harness.logs);
+    expect(rejections).toHaveLength(1);
+    expect(rejections[0]).toMatchObject({
+      threadId: "thread-1",
+      activeTurnId: "turn-primary-logged",
+      eventTurnId: "turn-aux-logged",
+      eventType: "turn.completed",
+      rejectionReason: "conflictsWithActiveTurn",
+      provider: "codex",
+    });
+  });
+
+  it("logs a warning when the strict lifecycle guard rejects an untargeted turn.completed with no active turn", async () => {
+    const harness = await createHarness();
+    const seededAt = "2026-01-01T00:00:00.000Z";
+
+    await harness.dispatch({
+      type: "thread.session.set",
+      commandId: CommandId.make("cmd-session-seed-untargeted-completion-logged"),
+      threadId: ThreadId.make("thread-1"),
+      session: {
+        threadId: ThreadId.make("thread-1"),
+        status: "starting",
+        providerName: "claudeAgent",
+        runtimeMode: "approval-required",
+        activeTurnId: null,
+        updatedAt: seededAt,
+        lastError: null,
+      },
+      createdAt: seededAt,
+    });
+
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed-untargeted-logged"),
+      provider: ProviderDriverKind.make("claudeAgent"),
+      createdAt: seededAt,
+      threadId: asThreadId("thread-1"),
+      status: "completed",
+    });
+    await harness.drain();
+
+    const rejections = lifecycleRejectionWarningFields(harness.logs);
+    expect(rejections).toHaveLength(1);
+    expect(rejections[0]).toMatchObject({
+      threadId: "thread-1",
+      activeTurnId: null,
+      eventTurnId: null,
+      eventType: "turn.completed",
+      rejectionReason: "untargetedCompletionWithNoActiveTurn",
+      provider: "claudeAgent",
+    });
+  });
+
+  it("does not log a lifecycle-rejection warning for accepted turn lifecycle events", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started-accepted-logged"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-accepted-logged"),
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) =>
+        thread.session?.status === "running" &&
+        thread.session?.activeTurnId === "turn-accepted-logged",
+    );
+
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed-accepted-logged"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-accepted-logged"),
+      status: "completed",
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.status === "ready" && thread.session?.activeTurnId === null,
+    );
+
+    expect(lifecycleRejectionWarningFields(harness.logs)).toHaveLength(0);
+  });
+
+  it("logs a rejected lifecycle event once per repeated identical rejection but logs again for a distinct one", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started-dedup-primary"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-dedup-primary"),
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) =>
+        thread.session?.status === "running" &&
+        thread.session?.activeTurnId === "turn-dedup-primary",
+    );
+
+    // Two identical rejections (same tracked turn, same conflicting turn):
+    // only the first should log.
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed-dedup-aux-1"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-dedup-aux"),
+      status: "completed",
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed-dedup-aux-2"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-dedup-aux"),
+      status: "completed",
+    });
+    await harness.drain();
+    expect(lifecycleRejectionWarningFields(harness.logs)).toHaveLength(1);
+
+    // A different conflicting turn id is a new signature: it logs again.
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed-dedup-aux-3"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-dedup-aux-other"),
+      status: "completed",
+    });
+    await harness.drain();
+    expect(lifecycleRejectionWarningFields(harness.logs)).toHaveLength(2);
   });
 
   it("ignores non-active turn completion when runtime omits thread id", async () => {

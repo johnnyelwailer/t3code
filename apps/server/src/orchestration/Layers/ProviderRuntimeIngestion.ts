@@ -99,8 +99,19 @@ const BUFFERED_PROPOSED_PLAN_BY_ID_CACHE_CAPACITY = 10_000;
 const BUFFERED_PROPOSED_PLAN_BY_ID_TTL = Duration.minutes(120);
 const TASK_DESCRIPTION_BY_TASK_CACHE_CAPACITY = 10_000;
 const TASK_DESCRIPTION_BY_TASK_TTL = Duration.minutes(120);
+const LIFECYCLE_REJECTION_SIGNATURE_BY_THREAD_CACHE_CAPACITY = 10_000;
+const LIFECYCLE_REJECTION_SIGNATURE_BY_THREAD_TTL = Duration.minutes(120);
 const MAX_BUFFERED_ASSISTANT_CHARS = 24_000;
 const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.T3CODE_STRICT_PROVIDER_LIFECYCLE_GUARD !== "0";
+
+// Distinguishes why the strict lifecycle guard silently skipped a
+// thread.session.set dispatch, so a rejected event's warning says which shape
+// of mismatch it was rather than forcing log forensics (GHE incident: a stuck
+// child agent's turns were rejected for 41 minutes with zero diagnostics).
+type ProviderLifecycleRejectionReason =
+  | "conflictsWithActiveTurn"
+  | "missingTurnForActiveTurn"
+  | "untargetedCompletionWithNoActiveTurn";
 
 type TurnStartRequestedDomainEvent = Extract<
   OrchestrationEvent,
@@ -938,6 +949,16 @@ const make = Effect.gen(function* () {
     lookup: () => Effect.succeed(""),
   });
 
+  // Remembers the last logged strict-lifecycle-guard rejection per thread so a
+  // stuck thread replaying the same rejection doesn't flood the warning log;
+  // a new turn id or a different rejection reason is a distinct signature and
+  // logs again.
+  const lifecycleRejectionSignatureByThread = yield* Cache.make<ThreadId, string>({
+    capacity: LIFECYCLE_REJECTION_SIGNATURE_BY_THREAD_CACHE_CAPACITY,
+    timeToLive: LIFECYCLE_REJECTION_SIGNATURE_BY_THREAD_TTL,
+    lookup: () => Effect.succeed(""),
+  });
+
   const rememberTaskDescription = (threadId: ThreadId, taskId: string, description: string) =>
     Cache.set(taskDescriptionByTaskKey, providerTaskKey(threadId, taskId), description);
 
@@ -1573,6 +1594,39 @@ const make = Effect.gen(function* () {
             return true;
         }
       })();
+
+      if (!shouldApplyThreadLifecycle) {
+        // The guard above only ever rejects turn.started/turn.completed/
+        // turn.aborted; conflictsWithActiveTurn and missingTurnForActiveTurn
+        // are mutually exclusive (the latter requires eventTurnId to be
+        // undefined, the former requires it to be defined), so this is exhaustive.
+        const rejectionReason: ProviderLifecycleRejectionReason = conflictsWithActiveTurn
+          ? "conflictsWithActiveTurn"
+          : missingTurnForActiveTurn
+            ? "missingTurnForActiveTurn"
+            : "untargetedCompletionWithNoActiveTurn";
+        const rejectionSignature = `${activeTurnId ?? "none"}:${eventTurnId ?? "none"}:${event.type}:${rejectionReason}`;
+        const previousRejectionSignature = Option.getOrElse(
+          yield* Cache.getOption(lifecycleRejectionSignatureByThread, thread.id),
+          () => "",
+        );
+        if (previousRejectionSignature !== rejectionSignature) {
+          yield* Cache.set(lifecycleRejectionSignatureByThread, thread.id, rejectionSignature);
+          yield* Effect.logWarning(
+            "provider runtime ingestion rejected lifecycle event: provider turn is not the host's tracked active turn",
+            {
+              threadId: thread.id,
+              activeTurnId,
+              eventTurnId: eventTurnId ?? null,
+              eventType: event.type,
+              rejectionReason,
+              provider: event.provider,
+              providerInstanceId: event.providerInstanceId ?? null,
+            },
+          );
+        }
+      }
+
       const acceptedTurnStartedSourcePlan =
         event.type === "turn.started" && shouldApplyThreadLifecycle
           ? yield* getSourceProposedPlanReferenceForAcceptedTurnStart(thread.id, eventTurnId)
