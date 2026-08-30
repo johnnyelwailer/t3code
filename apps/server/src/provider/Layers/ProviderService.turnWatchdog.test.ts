@@ -667,3 +667,55 @@ perProviderHarness.layer("turn inactivity watchdog: per-provider timeout", (it) 
     }),
   );
 });
+
+const codexReplace = makeFakeAdapter(CODEX_DRIVER);
+const replaceHarness = makeWatchdogHarness({ [CODEX_DRIVER]: codexReplace.adapter });
+
+replaceHarness.layer("turn inactivity watchdog: session replacement (GHE #328)", (it) => {
+  it.effect("does not fire the previous turn's watchdog into a replacement session", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      codexReplace.interruptTurnCalls.length = 0;
+
+      yield* startCodexSession(provider, asThreadId("thread-replace"));
+      yield* provider.sendTurn({
+        threadId: asThreadId("thread-replace"),
+        input: "hello",
+        attachments: [],
+      });
+      yield* drainFibers;
+
+      // Replace the session on the same thread while the in-flight turn's
+      // inactivity watchdog is still armed (a model or runtime-mode change
+      // restarts the session). The armed timer belongs to the replaced
+      // session: startSession must disarm it, otherwise it fires into the
+      // replacement session and closes a live session for no apparent reason.
+      yield* startCodexSession(provider, asThreadId("thread-replace"));
+      yield* drainFibers;
+
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+      assert.equal(
+        codexReplace.interruptTurnCalls.length,
+        0,
+        "stale watchdog must not interrupt the replacement session",
+      );
+
+      // The replacement session's own turn is still covered: sendTurn
+      // re-arms the watchdog and it fires for the new turn when it stalls.
+      const freshTurn = yield* provider.sendTurn({
+        threadId: asThreadId("thread-replace"),
+        input: "again",
+        attachments: [],
+      });
+      yield* drainFibers;
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+      assert.equal(codexReplace.interruptTurnCalls.length, 1);
+      assert.deepEqual(codexReplace.interruptTurnCalls[0], [
+        asThreadId("thread-replace"),
+        freshTurn.turnId,
+      ]);
+    }),
+  );
+});

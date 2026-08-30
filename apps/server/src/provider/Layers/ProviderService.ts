@@ -906,6 +906,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.cwd.effective": effectiveCwd ?? "",
         });
         const adapter = yield* registry.getByInstance(resolvedInstanceId);
+        // Starting a session replaces the thread's runtime, so any armed
+        // inactivity watchdog belongs to the previous session's turn. Leave it
+        // armed and its timer fires into the REPLACEMENT session — with an
+        // adapter that ignores the (stale) turn id, that closes a live session
+        // for no apparent reason (GHE #328). Disarm it up front; the new
+        // session's own sendTurn re-arms the watchdog when it needs one.
+        yield* clearTurnWatchdog(threadId);
         yield* prepareMcpSession(threadId, resolvedInstanceId);
         const session = yield* adapter
           .startSession({

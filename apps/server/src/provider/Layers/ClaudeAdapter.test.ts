@@ -20,6 +20,7 @@ import {
   type RuntimeMode,
   ThreadId,
   ProviderInstanceId,
+  TurnId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { assert, describe, it } from "@effect/vitest";
@@ -1933,6 +1934,38 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(harness.query.closeCalls, 1);
       assert.equal(yield* adapter.hasSession(session.threadId), true);
       assert.equal((yield* adapter.listSessions())[0]?.status, "ready");
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("interruptTurn ignores a stale turn id instead of closing the live session", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      const turn = yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "keep going",
+        attachments: [],
+      });
+
+      // A stale turn id — e.g. the previous turn's inactivity watchdog firing
+      // after this thread's session was replaced — must not close the session
+      // that now owns the thread (GHE #328).
+      yield* adapter.interruptTurn(session.threadId, TurnId.make("turn-stale"));
+      assert.equal(harness.query.closeCalls, 0);
+      assert.equal(yield* adapter.hasSession(session.threadId), true);
+
+      // An interrupt targeting the session's live turn still hard-stops it.
+      yield* adapter.interruptTurn(session.threadId, turn.turnId);
+      assert.equal(harness.query.closeCalls, 1);
+      assert.equal((yield* adapter.listSessions()).length, 0);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

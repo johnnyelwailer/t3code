@@ -4700,8 +4700,25 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   });
 
   const interruptTurn: ClaudeAdapterShape["interruptTurn"] = Effect.fn("interruptTurn")(
-    function* (threadId, _turnId) {
+    function* (threadId, turnId) {
       const context = yield* requireSession(threadId);
+      // An interrupt targeting a specific turn is only valid against the
+      // session's live turn. A stale turn id — e.g. a previously armed
+      // inactivity watchdog firing after this thread's runtime was replaced
+      // — must not close the replacement session that now owns the thread
+      // (GHE #328). A call without a turn id keeps the unconditional
+      // hard-stop semantics.
+      if (turnId !== undefined && context.session.activeTurnId !== turnId) {
+        yield* Effect.logWarning("claude.turn.stale-interrupt-ignored", {
+          threadId: String(threadId),
+          requestedTurnId: String(turnId),
+          activeTurnId:
+            context.session.activeTurnId !== undefined
+              ? String(context.session.activeTurnId)
+              : "none",
+        });
+        return;
+      }
       // interrupt() can acknowledge while resumed background tasks keep the
       // CLI alive. Stop is a hard session boundary for Claude, so close the
       // query and let the SDK escalate to SIGKILL when graceful exit fails.
