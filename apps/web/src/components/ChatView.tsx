@@ -5877,9 +5877,22 @@ function ChatViewContent(props: ChatViewProps) {
     }
 
     sendInFlightRef.current = true;
-    if (beforeDispatchTurnStart) {
-      await beforeDispatchTurnStart();
-    }
+    // The tool-context sync is bookkeeping the server needs before it starts the turn — but it must
+    // never gate the moment the send is perceptible. Start it now (without awaiting) and await it
+    // just before the turn-start dispatch, so the optimistic message, draft clear, and dispatch
+    // state all land in the same tick as the click. A failed sync (logged there) must not wedge the
+    // composer: the turn proceeds with the server's last-known context.
+    const turnToolContextSync = beforeDispatchTurnStart
+      ? Promise.resolve()
+          .then(beforeDispatchTurnStart)
+          .catch((error: unknown) => {
+            console.error(
+              "[chat] thread tool-context sync failed; starting the turn anyway",
+              error,
+            );
+            return null;
+          })
+      : null;
     if (supportsAttachmentUploads && composerImagesSnapshot.length > 0) {
       for (const image of composerImagesSnapshot) {
         startAttachmentUpload({ environmentId, attachment: image });
@@ -6119,6 +6132,11 @@ function ChatViewContent(props: ChatViewProps) {
 
     let turnStartSucceeded = false;
     if (failure === null && turnAttachmentsResult._tag === "Success") {
+      // The tool-context sync (started up top, off the UI critical path) must have landed before
+      // the turn-start dispatch so the server sees the current context at turn start.
+      if (turnToolContextSync) {
+        await turnToolContextSync;
+      }
       const bootstrap =
         isLocalDraftThread || baseBranchForWorktree
           ? {
