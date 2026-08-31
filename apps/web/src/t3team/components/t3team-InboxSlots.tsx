@@ -3,7 +3,8 @@ import { ListTreeIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
-import { resolveActivityStatePill } from "~/t3team/t3team-activityStateDisplay";
+import { STATUS_ORB_CLASS } from "~/t3team/t3team-statusOrb";
+import "~/t3team/t3team-statusOrb.css";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import {
   useT3TeamInboxPinnedGitHubActivity,
@@ -123,10 +124,12 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
       {active ? (
         <>
           {counts.running}
-          {/* sky = the working row's "in motion" 4-state color, not the theme's primary accent */}
+          {/* orb `working` = the working row's 4-state in-motion color, now
+              shared with every status dot via t3team-statusOrb.css */}
           <span
             aria-hidden
-            className={`size-1.5 shrink-0 rounded-full ${resolveActivityStatePill("working").dotClass}`}
+            data-t3team-state="working"
+            className={`size-1.5 shrink-0 rounded-full ${STATUS_ORB_CLASS}`}
           />
         </>
       ) : (

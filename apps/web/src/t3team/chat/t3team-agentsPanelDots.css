@@ -3,47 +3,28 @@
  * needs but the working row never renders.
  *
  * The rest of the state-motion dot language (base dot, the five live states
- * thinking/writing/working/waiting/settled, the waiting ring, hue wander and
+ * thinking/writing/working/waiting/settled, the waiting halo, hue wander and
  * reduced-motion fallback) lives ONCE in t3team-index.css, keyed off
  * `.t3team-aci-cell[data-t3team-state]` + `.t3team-aci-dot` — the EXACT DOM the
- * panel stamps via AgentsPanelStatusDot. This file does NOT re-port that
- * language; it only adds:
- *   done  → success (green, still) · error → failure (red, still)
- * so a settled sub-run reads its outcome at a glance. Scoped under `.t3team-agp`
- * (the panel root, set by AgentsPanel.tsx) so the additions can never leak onto
- * the working-row dots, which never set these two states.
+ * panel stamps via AgentsPanelStatusDot. The PAINT (porcelain-orb palette +
+ * 420ms color shift + sheen) lives in the shared t3team-statusOrb.css module
+ * the dot stamps `t3team-orb` for. This file does NOT re-port that language;
+ * it only adds the two result states' GEOMETRY (a slightly larger still bead
+ * so a settled sub-run reads its outcome at a glance). Scoped under
+ * `.t3team-agp` (the panel root, set by AgentsPanel.tsx) so the additions can
+ * never leak onto the working-row dots, which never set these two states.
  * ========================================================================= */
 
-/* Success: a still, readable green. */
+/* Success: still and slightly larger than the live states. */
 .t3team-agp .t3team-aci-cell[data-t3team-state="done"] .t3team-aci-dot {
-  background: #22c55e;
   animation: none;
   opacity: 0.9;
   transform: scale(1.5);
-  box-shadow: 0 0 4px 0 rgb(34 197 94 / 0.35);
-}
-.dark .t3team-agp .t3team-aci-cell[data-t3team-state="done"] .t3team-aci-dot {
-  background: #4ade80;
 }
 
-/* Failure: a still, prominent red. */
+/* Failure: still, prominent. */
 .t3team-agp .t3team-aci-cell[data-t3team-state="error"] .t3team-aci-dot {
-  background: #ef4444;
   animation: none;
   opacity: 1;
   transform: scale(1.6);
-  box-shadow: 0 0 5px 0 rgb(239 68 68 / 0.4);
-}
-.dark .t3team-agp .t3team-aci-cell[data-t3team-state="error"] .t3team-aci-dot {
-  background: #f87171;
-}
-
-/* Reduced motion: the shared block already stills the live dots; just drop the
-   glow on the two result states to match. */
-@media (prefers-reduced-motion: reduce) {
-  .t3team-agp .t3team-aci-cell[data-t3team-state="done"] .t3team-aci-dot,
-  .t3team-agp .t3team-aci-cell[data-t3team-state="error"] .t3team-aci-dot {
-    box-shadow: none;
-    opacity: 0.85;
-  }
 }
