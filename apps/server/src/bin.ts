@@ -9,7 +9,6 @@ import * as NetService from "@t3tools/shared/Net";
 import packageJson from "../package.json" with { type: "json" };
 import { authCommand } from "./cli/auth.ts";
 import { connectCommand } from "./cli/connect.ts";
-import { codexHistoryCommand } from "./cli/codexHistory.ts";
 import { pairCommand } from "./cli/pair.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
@@ -54,7 +53,6 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       startCommand,
       serveCommand,
       pairCommand,
-      codexHistoryCommand,
       authCommand,
       projectCommand,
       serviceCommand,

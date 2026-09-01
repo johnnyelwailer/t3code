@@ -11,7 +11,6 @@ import { Command } from "effect/unstable/cli";
 import * as NetService from "@t3tools/shared/Net";
 import packageJson from "../package.json" with { type: "json" };
 import { authCommand } from "./cli/auth.ts";
-import { codexHistoryCommand } from "./cli/codexHistory.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
 import { projectCommand } from "./cli/project.ts";
 import { fixtureCommand } from "./cli/t3team-fixture.ts";
@@ -46,7 +45,6 @@ export const cli = Command.make("t3team", { ...sharedServerCommandFlags }).pipe(
   Command.withSubcommands([
     t3teamStartCommand,
     t3teamServeCommand,
-    codexHistoryCommand,
     authCommand,
     projectCommand,
     fixtureCommand,

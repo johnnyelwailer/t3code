@@ -215,20 +215,6 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
     }),
   );
 
-  it.effect("exposes Codex history inspection and repair commands", () =>
-    Effect.gen(function* () {
-      const { output } = yield* captureStdout(runCli(["codex-history", "--help"], noConnectCli));
-      const { output: repairOutput } = yield* captureStdout(
-        runCli(["codex-history", "repair", "--help"], noConnectCli),
-      );
-
-      assert.include(output, "Inspect or repair persisted Codex rollout history.");
-      assert.include(output, "inspect");
-      assert.include(output, "repair");
-      assert.include(repairOutput, "--dry-run");
-    }),
-  );
-
   it.effect("reports fresh headless connect state without requiring local configuration", () =>
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(
