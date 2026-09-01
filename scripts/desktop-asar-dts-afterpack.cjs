@@ -123,11 +123,17 @@ module.exports = async function desktopAsarDtsAfterPack(context) {
         streams.push({ path: rel, type: "directory", unpacked: entry.unpacked === true });
         walkHeader(entry.files, rel);
       } else if (entry.link !== undefined) {
+        // `entry.link` is root-relative (from the asar header), but
+        // `createPackageFromStreams` resolves `symlink` relative to the
+        // link entry's own directory (see `@electron/asar`'s
+        // `disk/filesystem.js` `Filesystem#insertLink`). Re-relativize it
+        // against `rel`'s directory or a nested symlink resolves to the
+        // wrong target on repack.
         streams.push({
           path: rel,
           type: "link",
           unpacked: entry.unpacked === true,
-          symlink: entry.link,
+          symlink: NodePath.relative(NodePath.dirname(rel), entry.link),
           stat: { size: 0, mode: 0o644 },
         });
       } else {
