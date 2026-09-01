@@ -125,7 +125,10 @@ function canonicalizeObject(value: Readonly<Record<string, unknown>>, strict: bo
       }
     }
   }
-  const sorted = keys.filter((key) => value[key] !== undefined).toSorted();
+  // Keep the core package consumable by the distribution's ES2022 TypeScript
+  // hosts. `toSorted` is ES2023-only; copying before the in-place sort gives
+  // the same non-mutating semantics without widening the consumer lib target.
+  const sorted = keys.filter((key) => value[key] !== undefined).sort();
   const entries = sorted.map(
     (key) => `${JSON.stringify(key)}:${canonicalJsonStringify(value[key], strict)}`,
   );
