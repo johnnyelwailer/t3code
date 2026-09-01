@@ -62,6 +62,13 @@ it("accepts Codex 0.150 multi-agent values", () => {
               tool: "followupTask",
               type: "collabAgentToolCall",
             },
+            {
+              agentPath: "child-agent",
+              agentThreadId: "child-thread",
+              id: "item-2",
+              kind: "completed",
+              type: "subAgentActivity",
+            },
           ],
         },
       ],
