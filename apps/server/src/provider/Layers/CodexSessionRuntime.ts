@@ -24,10 +24,13 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
@@ -38,6 +41,7 @@ import * as EffectCodexSchema from "effect-codex-app-server/schema";
 
 import { buildCodexInitializeParams } from "./CodexProvider.ts";
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
+import * as CodexHistoryRepair from "../Drivers/CodexHistoryRepair.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
 import { buildCodexDeveloperInstructions } from "../CodexDeveloperInstructions.ts";
 const decodeV2TurnStartResponse = Schema.decodeUnknownEffect(EffectCodexSchema.V2TurnStartResponse);
@@ -222,7 +226,9 @@ export type CodexSessionRuntimeError =
   | CodexSessionRuntimePendingApprovalNotFoundError
   | CodexSessionRuntimePendingUserInputNotFoundError
   | CodexSessionRuntimeInvalidUserInputAnswersError
-  | CodexSessionRuntimeThreadIdMissingError;
+  | CodexSessionRuntimeThreadIdMissingError
+  | CodexSessionRuntimeHistoryRepairError
+  | CodexHistoryRepair.CodexHistoryRepairError;
 
 export class CodexSessionRuntimePendingApprovalNotFoundError extends Schema.TaggedErrorClass<CodexSessionRuntimePendingApprovalNotFoundError>()(
   "CodexSessionRuntimePendingApprovalNotFoundError",
@@ -265,6 +271,21 @@ export class CodexSessionRuntimeThreadIdMissingError extends Schema.TaggedErrorC
 ) {
   override get message(): string {
     return `Codex session is missing a provider thread id for ${this.threadId}`;
+  }
+}
+
+export class CodexSessionRuntimeHistoryRepairError extends Schema.TaggedErrorClass<CodexSessionRuntimeHistoryRepairError>()(
+  "CodexSessionRuntimeHistoryRepairError",
+  {
+    threadId: Schema.String,
+    providerThreadId: Schema.String,
+    status: Schema.Literals(["not-found", "clean", "unsafe"]),
+    detail: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return `Codex thread '${this.providerThreadId}' could not be resumed because its persisted history is incompatible: ${this.detail}`;
   }
 }
 
@@ -689,7 +710,7 @@ interface CodexThreadOpenClient {
   ) => Effect.Effect<CodexRpc.ClientRequestResponsesByMethod[M], CodexErrors.CodexAppServerError>;
 }
 
-export const openCodexThread = (input: {
+interface CodexThreadOpenInput {
   readonly client: CodexThreadOpenClient;
   readonly threadId: ThreadId;
   readonly runtimeMode: RuntimeMode;
@@ -697,7 +718,86 @@ export const openCodexThread = (input: {
   readonly requestedModel: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
   readonly resumeThreadId: string | undefined;
-}): Effect.Effect<CodexThreadOpenResponse, CodexErrors.CodexAppServerError> => {
+}
+
+function causeChain(value: unknown): ReadonlyArray<unknown> {
+  const chain: Array<unknown> = [];
+  let current: unknown = value;
+  for (let depth = 0; depth < 4 && current !== undefined; depth += 1) {
+    chain.push(current);
+    if (typeof current !== "object" || current === null || !("cause" in current)) break;
+    current = (current as { readonly cause?: unknown }).cause;
+  }
+  return chain;
+}
+
+function hasSubAgentActivityKindPath(
+  issue: SchemaIssue.Issue,
+  parentPath: ReadonlyArray<PropertyKey> = [],
+): boolean {
+  switch (issue._tag) {
+    case "Pointer": {
+      const path = [...parentPath, ...issue.path];
+      const turnsIndex = path.indexOf("turns");
+      const itemsIndex = path.indexOf("items", turnsIndex + 1);
+      return (
+        (turnsIndex >= 0 &&
+          itemsIndex === turnsIndex + 2 &&
+          typeof path[turnsIndex + 1] === "number" &&
+          typeof path[itemsIndex + 1] === "number" &&
+          path[itemsIndex + 2] === "kind") ||
+        hasSubAgentActivityKindPath(issue.issue, path)
+      );
+    }
+    case "Filter":
+    case "Encoding":
+      return hasSubAgentActivityKindPath(issue.issue, parentPath);
+    case "Composite":
+    case "AnyOf":
+      return issue.issues.some((child) => hasSubAgentActivityKindPath(child, parentPath));
+    default:
+      return false;
+  }
+}
+
+function isUnsupportedSubAgentActivityKindCause(error: unknown): boolean {
+  for (const cause of causeChain(error)) {
+    if (!Schema.isSchemaError(cause)) continue;
+    if (
+      !/Expected\s+["']started["']\s*\|\s*["']interacted["']\s*\|\s*["']interrupted["']/.test(
+        cause.message,
+      )
+    ) {
+      continue;
+    }
+    if (hasSubAgentActivityKindPath(cause.issue)) return true;
+  }
+  return false;
+}
+
+/**
+ * The app-server client reports response-schema failures as request errors.
+ * Healing is restricted to the known subAgentActivity lifecycle issue so an
+ * unrelated resume response-shape failure is never allowed to rewrite data.
+ */
+export function isCodexThreadResumePayloadError(error: unknown): boolean {
+  const isResumeDecode =
+    (Schema.is(CodexErrors.CodexAppServerRequestError)(error) &&
+      error.method === "thread/resume" &&
+      error.operation === "decode-payload") ||
+    (Schema.is(CodexErrors.CodexAppServerProtocolParseError)(error) &&
+      error.method === "thread/resume" &&
+      error.operation === "decode-response-payload");
+  return isResumeDecode && isUnsupportedSubAgentActivityKindCause(error);
+}
+
+export const openCodexThreadWithRepair = <E = never, R = never>(
+  input: CodexThreadOpenInput & {
+    readonly repairResumeHistory?: (
+      error: CodexErrors.CodexAppServerError,
+    ) => Effect.Effect<boolean, E, R>;
+  },
+): Effect.Effect<CodexThreadOpenResponse, CodexErrors.CodexAppServerError | E, R> => {
   const resumeThreadId = input.resumeThreadId;
   const startParams = buildThreadStartParams({
     cwd: input.cwd,
@@ -710,23 +810,37 @@ export const openCodexThread = (input: {
     return input.client.request("thread/start", startParams);
   }
 
-  return input.client
-    .request("thread/resume", {
+  const requestResume = () =>
+    input.client.request("thread/resume", {
       threadId: resumeThreadId,
       ...startParams,
-    })
-    .pipe(
-      Effect.catchIf(isRecoverableThreadResumeError, (error) =>
-        Effect.logWarning("codex app-server thread resume fell back to fresh start", {
+    });
+
+  return requestResume().pipe(
+    Effect.catch((error) => {
+      if (isRecoverableThreadResumeError(error)) {
+        return Effect.logWarning("codex app-server thread resume fell back to fresh start", {
           threadId: input.threadId,
           requestedRuntimeMode: input.runtimeMode,
           resumeThreadId,
           recoverable: true,
           cause: error,
-        }).pipe(Effect.andThen(input.client.request("thread/start", startParams))),
-      ),
-    );
+        }).pipe(Effect.andThen(input.client.request("thread/start", startParams)));
+      }
+      if (!isCodexThreadResumePayloadError(error) || input.repairResumeHistory === undefined) {
+        return Effect.fail(error);
+      }
+      return input
+        .repairResumeHistory(error)
+        .pipe(Effect.flatMap((repaired) => (repaired ? requestResume() : Effect.fail(error))));
+    }),
+  );
 };
+
+export const openCodexThread = (
+  input: CodexThreadOpenInput,
+): Effect.Effect<CodexThreadOpenResponse, CodexErrors.CodexAppServerError> =>
+  openCodexThreadWithRepair(input);
 
 function readNotificationThreadId(notification: CodexServerNotification): string | undefined {
   switch (notification.method) {
@@ -1120,13 +1234,19 @@ export const makeCodexSessionRuntime = (
   options: CodexSessionRuntimeOptions,
 ): Effect.Effect<
   CodexSessionRuntimeShape,
-  CodexErrors.CodexAppServerError,
-  ChildProcessSpawner.ChildProcessSpawner | Crypto.Crypto | Scope.Scope
+  CodexSessionRuntimeError,
+  | ChildProcessSpawner.ChildProcessSpawner
+  | Crypto.Crypto
+  | FileSystem.FileSystem
+  | Path.Path
+  | Scope.Scope
 > =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const runtimeScope = yield* Scope.Scope;
     const crypto = yield* Crypto.Crypto;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const pathService = yield* Path.Path;
     const events = yield* Queue.unbounded<ProviderEvent>();
     const pendingApprovalsRef = yield* Ref.make(new Map<ApprovalRequestId, PendingApproval>());
     const approvalCorrelationsRef = yield* Ref.make(new Map<string, ApprovalCorrelation>());
@@ -2039,14 +2159,74 @@ export const makeCodexSessionRuntime = (
 
       const requestedModel = normalizeCodexModelSlug(options.model);
 
-      const opened = yield* openCodexThread({
+      const resumeThreadId = readResumeCursorThreadId(options.resumeCursor);
+      const opened = yield* openCodexThreadWithRepair({
         client,
         threadId: options.threadId,
         runtimeMode: options.runtimeMode,
         cwd: options.cwd,
         requestedModel,
         serviceTier: options.serviceTier,
-        resumeThreadId: readResumeCursorThreadId(options.resumeCursor),
+        resumeThreadId,
+        ...(resumeThreadId
+          ? {
+              repairResumeHistory: (resumeError: CodexErrors.CodexAppServerError) =>
+                Effect.gen(function* () {
+                  const historyHomePath =
+                    resolvedHomePath ?? options.environment?.CODEX_HOME ?? process.env.CODEX_HOME;
+                  const report = yield* CodexHistoryRepair.repairCodexThreadHistory({
+                    providerThreadId: resumeThreadId,
+                    cwd: options.cwd,
+                    ...(historyHomePath ? { homePath: historyHomePath } : {}),
+                  }).pipe(
+                    Effect.provideService(FileSystem.FileSystem, fileSystem),
+                    Effect.provideService(Path.Path, pathService),
+                  );
+                  if (report.status !== "repaired") {
+                    const detail =
+                      report.status === "unsafe"
+                        ? `The matching rollout contains unsafe records (${report.files.flatMap((file) => file.unsafeReasons).join(" ")}).`
+                        : report.status === "not-found"
+                          ? "No matching rollout file was found."
+                          : "No supported repair was found.";
+                    return yield* new CodexSessionRuntimeHistoryRepairError({
+                      threadId: options.threadId,
+                      providerThreadId: resumeThreadId,
+                      status:
+                        report.status === "unsafe" || report.status === "not-found"
+                          ? report.status
+                          : "clean",
+                      detail: `${detail} No provider data was changed.`,
+                      cause: resumeError,
+                    });
+                  }
+
+                  yield* Effect.logWarning("codex thread history repaired before resume retry", {
+                    threadId: options.threadId,
+                    providerThreadId: resumeThreadId,
+                    policy: report.policy,
+                    findings: report.findings.length,
+                    files: report.files.length,
+                    backups: report.backups,
+                  });
+                  yield* emitEvent({
+                    kind: "session",
+                    threadId: options.threadId,
+                    method: "session/started",
+                    message: "Repaired incompatible Codex history and retrying thread resume.",
+                    payload: {
+                      historyRepair: {
+                        policy: report.policy,
+                        findings: report.findings.length,
+                        files: report.files.length,
+                        backups: report.backups,
+                      },
+                    },
+                  });
+                  return true;
+                }),
+            }
+          : {}),
       });
 
       const providerThreadId = opened.thread.id;

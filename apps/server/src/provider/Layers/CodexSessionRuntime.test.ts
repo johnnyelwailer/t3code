@@ -3,6 +3,7 @@ import * as NodeAssert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
 import { describe } from "vite-plus/test";
 import { DEFAULT_MODEL, ThreadId } from "@t3tools/contracts";
 import * as CodexErrors from "effect-codex-app-server/errors";
@@ -19,12 +20,27 @@ import {
   buildTurnStartParams,
   describeMcpElicitation,
   hasConfiguredMcpServer,
+  isCodexThreadResumePayloadError,
   isRecoverableThreadResumeError,
   makeMemoryConsolidationNotificationFilter,
   openCodexThread,
+  openCodexThreadWithRepair,
   toMcpElicitationResponse,
 } from "./CodexSessionRuntime.ts";
 const isCodexAppServerRequestError = Schema.is(CodexErrors.CodexAppServerRequestError);
+
+function makeSubAgentActivityKindSchemaError(
+  path: ReadonlyArray<PropertyKey> = ["thread", "turns", 62, "items", 24, "kind"],
+) {
+  return new Schema.SchemaError(
+    new SchemaIssue.Pointer(
+      path,
+      new SchemaIssue.InvalidValue({
+        message: 'Expected "started" | "interacted" | "interrupted"',
+      }),
+    ),
+  );
+}
 
 describe("CodexSessionRuntimeIdentifierGenerationError", () => {
   it("retains identifier purpose and the random source failure", () => {
@@ -774,6 +790,56 @@ describe("isRecoverableThreadResumeError", () => {
   });
 });
 
+describe("isCodexThreadResumePayloadError", () => {
+  it("matches the malformed sub-agent activity lifecycle path", () => {
+    const error = new CodexErrors.CodexAppServerRequestError({
+      code: -32602,
+      errorMessage: "Invalid payload",
+      method: "thread/resume",
+      operation: "decode-payload",
+      cause: makeSubAgentActivityKindSchemaError(),
+    });
+
+    NodeAssert.equal(isCodexThreadResumePayloadError(error), true);
+  });
+
+  it("matches a protocol wrapper around the same schema failure", () => {
+    const error = new CodexErrors.CodexAppServerProtocolParseError({
+      operation: "decode-response-payload",
+      method: "thread/resume",
+      cause: makeSubAgentActivityKindSchemaError(),
+    });
+
+    NodeAssert.equal(isCodexThreadResumePayloadError(error), true);
+  });
+
+  it("does not heal unrelated response-shape failures", () => {
+    const error = new CodexErrors.CodexAppServerRequestError({
+      code: -32602,
+      errorMessage: "Invalid payload",
+      method: "thread/resume",
+      operation: "decode-payload",
+      cause: makeSubAgentActivityKindSchemaError(["thread", "status", "kind"]),
+    });
+
+    NodeAssert.equal(isCodexThreadResumePayloadError(error), false);
+    NodeAssert.equal(
+      isCodexThreadResumePayloadError(
+        new CodexErrors.CodexAppServerRequestError({
+          code: -32602,
+          errorMessage: "Invalid payload",
+          method: "thread/resume",
+          operation: "decode-payload",
+          cause: new Error(
+            'Expected "started" | "interacted" | "interrupted" at ["thread","turns",1,"items",2,"kind"]',
+          ),
+        }),
+      ),
+      false,
+    );
+  });
+});
+
 describe("openCodexThread", () => {
   it.effect("falls back to thread/start when resume fails recoverably", () =>
     Effect.gen(function* () {
@@ -848,6 +914,56 @@ describe("openCodexThread", () => {
 
       NodeAssert.ok(isCodexAppServerRequestError(error));
       NodeAssert.equal(error.errorMessage, "timed out waiting for server");
+    }),
+  );
+
+  it.effect("heals and retries the same provider thread after a matching failure", () =>
+    Effect.gen(function* () {
+      const calls: Array<"thread/resume" | "thread/start"> = [];
+      let repairCalls = 0;
+      const invalidHistory = new CodexErrors.CodexAppServerRequestError({
+        code: -32602,
+        errorMessage: "Invalid payload",
+        method: "thread/resume",
+        operation: "decode-payload",
+        cause: makeSubAgentActivityKindSchemaError(),
+      });
+      const client = {
+        request: <M extends "thread/start" | "thread/resume">(
+          method: M,
+          _payload: CodexRpc.ClientRequestParamsByMethod[M],
+        ) => {
+          calls.push(method);
+          if (
+            method === "thread/resume" &&
+            calls.filter((value) => value === method).length === 1
+          ) {
+            return Effect.fail(invalidHistory);
+          }
+          return Effect.succeed(
+            makeThreadOpenResponse("resumed-thread") as CodexRpc.ClientRequestResponsesByMethod[M],
+          );
+        },
+      };
+
+      const opened = yield* openCodexThreadWithRepair({
+        client,
+        threadId: ThreadId.make("thread-1"),
+        runtimeMode: "full-access",
+        cwd: "/tmp/project",
+        requestedModel: "gpt-5.3-codex",
+        serviceTier: undefined,
+        resumeThreadId: "resumed-thread",
+        repairResumeHistory: () =>
+          Effect.sync(() => {
+            repairCalls += 1;
+            return true;
+          }),
+      });
+
+      NodeAssert.equal(opened.thread.id, "resumed-thread");
+      NodeAssert.equal(repairCalls, 1);
+      NodeAssert.deepStrictEqual(calls, ["thread/resume", "thread/resume"]);
     }),
   );
 });
