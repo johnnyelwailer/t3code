@@ -867,6 +867,18 @@ describe("isCodexThreadResumePayloadError", () => {
           errorMessage: "Invalid payload",
           method: "thread/resume",
           operation: "decode-payload",
+          cause: makeSubAgentActivityKindSchemaError(["other", "turns", 1, "items", 2, "kind"]),
+        }),
+      ),
+      false,
+    );
+    NodeAssert.equal(
+      isCodexThreadResumePayloadError(
+        new CodexErrors.CodexAppServerRequestError({
+          code: -32602,
+          errorMessage: "Invalid payload",
+          method: "thread/resume",
+          operation: "decode-payload",
           cause: new Error(
             'Expected "started" | "interacted" | "interrupted" at ["thread","turns",1,"items",2,"kind"]',
           ),

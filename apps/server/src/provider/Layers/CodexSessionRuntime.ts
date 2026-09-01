@@ -743,7 +743,8 @@ function hasSubAgentActivityKindPath(
       const turnsIndex = path.indexOf("turns");
       const itemsIndex = path.indexOf("items", turnsIndex + 1);
       return (
-        (turnsIndex >= 0 &&
+        (path[0] === "thread" &&
+          turnsIndex >= 0 &&
           itemsIndex === turnsIndex + 2 &&
           typeof path[turnsIndex + 1] === "number" &&
           typeof path[itemsIndex + 1] === "number" &&
