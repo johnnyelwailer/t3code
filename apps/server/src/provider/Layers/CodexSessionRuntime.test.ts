@@ -25,6 +25,7 @@ import {
   makeMemoryConsolidationNotificationFilter,
   openCodexThread,
   openCodexThreadWithRepair,
+  readCodexThreadResumeActivityKinds,
   toMcpElicitationResponse,
 } from "./CodexSessionRuntime.ts";
 const isCodexAppServerRequestError = Schema.is(CodexErrors.CodexAppServerRequestError);
@@ -811,6 +812,42 @@ describe("isCodexThreadResumePayloadError", () => {
     });
 
     NodeAssert.equal(isCodexThreadResumePayloadError(error), true);
+  });
+
+  it("reads both legacy and current accepted activity-kind contracts", () => {
+    const legacy = new CodexErrors.CodexAppServerRequestError({
+      code: -32602,
+      errorMessage: "Invalid payload",
+      method: "thread/resume",
+      operation: "decode-payload",
+      cause: makeSubAgentActivityKindSchemaError(),
+    });
+    const current = new CodexErrors.CodexAppServerRequestError({
+      code: -32602,
+      errorMessage: "Invalid payload",
+      method: "thread/resume",
+      operation: "decode-payload",
+      cause: new Schema.SchemaError(
+        new SchemaIssue.Pointer(
+          ["thread", "turns", 1, "items", 2, "kind"],
+          new SchemaIssue.InvalidValue({
+            message: 'Expected "started" | "interacted" | "interrupted" | "completed"',
+          }),
+        ),
+      ),
+    });
+
+    NodeAssert.deepStrictEqual(readCodexThreadResumeActivityKinds(legacy), [
+      "started",
+      "interacted",
+      "interrupted",
+    ]);
+    NodeAssert.deepStrictEqual(readCodexThreadResumeActivityKinds(current), [
+      "started",
+      "interacted",
+      "interrupted",
+      "completed",
+    ]);
   });
 
   it("does not heal unrelated response-shape failures", () => {

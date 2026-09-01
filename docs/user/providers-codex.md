@@ -34,6 +34,32 @@ In an existing Codex thread, send `/feedback` or `/feedback` followed by a descr
 issue. T3 Code uploads the thread and Codex logs to OpenAI and shows a thread ID that you can copy
 and share with OpenAI employees.
 
+## If A Codex Thread Cannot Resume
+
+T3 Code can repair a known legacy-history problem when a saved Codex thread contains an unsupported
+sub-agent activity marker. The repair removes only the unsupported activity metadata. Your
+transcript, thread identity, and recoverable work stay in place, and the original provider history
+is kept in a backup file.
+
+The repair runs automatically at resume when the exact incompatible-history error is detected. To
+inspect or preview it yourself, use:
+
+```bash
+t3 codex-history inspect --thread <provider-thread-id>
+t3 codex-history repair --thread <provider-thread-id> --dry-run
+```
+
+If the preview is safe, apply the repair with:
+
+```bash
+t3 codex-history repair --thread <provider-thread-id>
+```
+
+The operation is safe to repeat. If the rollout contains malformed data or cannot be verified, T3
+Code leaves it unchanged and reports that no provider data was changed. Keep the diagnostic output
+and contact the operator or support team rather than deleting the Codex home or starting a new T3
+thread.
+
 ## Approve access to other apps
 
 When a Codex tool needs access to an app such as Safari, T3 Code shows the app name and asks for

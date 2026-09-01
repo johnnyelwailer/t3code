@@ -1,7 +1,9 @@
 import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
 
 export const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
 export const isJsonObject = Schema.is(JsonObject);
+const decodeJsonObjectOption = Schema.decodeUnknownOption(Schema.fromJsonString(JsonObject));
 
 export function splitJsonl(contents: string): {
   readonly lines: ReadonlyArray<string>;
@@ -28,6 +30,6 @@ export function joinJsonl(
 }
 
 export function parseJsonObject(line: string): Record<string, unknown> | undefined {
-  const decoded = Schema.decodeUnknownEither(Schema.fromJsonString(JsonObject))(line);
-  return decoded._tag === "Right" ? decoded.right : undefined;
+  const decoded = decodeJsonObjectOption(line);
+  return Option.isSome(decoded) ? decoded.value : undefined;
 }

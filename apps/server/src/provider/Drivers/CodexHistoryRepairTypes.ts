@@ -8,6 +8,8 @@ export interface CodexHistoryRepairInput {
   readonly homePath?: string;
   readonly cwd?: string;
   readonly dryRun?: boolean;
+  /** Accepted by the decoder that reported the incompatible resume payload. */
+  readonly supportedActivityKinds?: ReadonlyArray<string>;
 }
 
 export interface CodexHistoryFileReport {
@@ -20,6 +22,7 @@ export interface CodexHistoryRepairReport {
   readonly providerThreadId: string;
   readonly homePath: string;
   readonly policy: typeof CODEX_HISTORY_REPAIR_POLICY;
+  readonly supportedActivityKinds: ReadonlyArray<string>;
   readonly status: CodexHistoryRepairStatus;
   readonly dryRun: boolean;
   readonly files: ReadonlyArray<CodexHistoryFileReport>;

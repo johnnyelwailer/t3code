@@ -3,12 +3,16 @@ import { isJsonObject, joinJsonl, parseJsonObject, splitJsonl } from "./CodexHis
 /**
  * Provider history is retained as evidence. Only unsupported sub-agent
  * activity metadata is removed; transcript and work records stay untouched.
- * A legacy `completed` marker is dropped instead of being changed to an
- * active or inaccurate terminal state in the current three-kind contract.
+ * The resume decoder supplies its accepted kinds when healing an error. The
+ * default includes Codex 0.150's supported `completed` marker.
  */
-export const CODEX_HISTORY_REPAIR_POLICY = "sub-agent-activity-unsupported-kind-drop-v1" as const;
-
-const supportedActivityKinds = new Set(["started", "interacted", "interrupted"]);
+export const CODEX_HISTORY_REPAIR_POLICY = "sub-agent-activity-unsupported-kind-drop-v2" as const;
+export const CURRENT_CODEX_ACTIVITY_KINDS = [
+  "started",
+  "interacted",
+  "interrupted",
+  "completed",
+] as const;
 
 export interface CodexHistoryRepairFinding {
   readonly action: "drop";
@@ -70,17 +74,18 @@ function unsupportedActivityFinding(
     ...(itemId ? { itemId } : {}),
     previousKind,
     reason:
-      "Unsupported sub-agent activity metadata is not representable by the current app-server contract; dropping only this metadata record preserves transcript/work records.",
+      "Unsupported sub-agent activity metadata is not representable by the selected app-server contract; dropping only this metadata record preserves transcript/work records.",
   };
 }
 
 function replacementForActivity(
   location: ActivityLocation,
   line: number,
+  supportedKinds: ReadonlySet<string>,
 ): { readonly finding?: CodexHistoryRepairFinding; readonly drop: boolean } {
   const rawKind = location.item.kind;
   const canonicalKind = typeof rawKind === "string" ? rawKind.toLowerCase() : "";
-  if (supportedActivityKinds.has(canonicalKind)) return { drop: false };
+  if (supportedKinds.has(canonicalKind)) return { drop: false };
   return { finding: unsupportedActivityFinding(location.item, line), drop: true };
 }
 
@@ -93,11 +98,13 @@ export function scanCodexRolloutFile(
   filePath: string,
   contents: string,
   providerThreadId: string,
+  supportedActivityKinds: ReadonlyArray<string> = CURRENT_CODEX_ACTIVITY_KINDS,
 ): CodexHistoryFileScan {
   const { lines, newline, trailingNewline } = splitJsonl(contents);
   const repairedLines: Array<string | undefined> = [...lines];
   const findings: Array<CodexHistoryRepairFinding> = [];
   const unsafeReasons: Array<string> = [];
+  const supportedKinds = new Set(supportedActivityKinds.map((kind) => kind.toLowerCase()));
   let matchedThread = false;
 
   lines.forEach((line, index) => {
@@ -109,11 +116,13 @@ export function scanCodexRolloutFile(
       unsafeReasons.push(`Line ${lineNumber} is not a JSON object.`);
       return;
     }
-    if (recordThreadIds(record).includes(providerThreadId)) matchedThread = true;
+    const recordIds = recordThreadIds(record);
+    if (recordIds.includes(providerThreadId)) matchedThread = true;
 
     const location = activityLocation(record);
     if (!location) return;
-    const replacement = replacementForActivity(location, lineNumber);
+    if (recordIds.length > 0 && !recordIds.includes(providerThreadId)) return;
+    const replacement = replacementForActivity(location, lineNumber, supportedKinds);
     if (replacement.finding) findings.push(replacement.finding);
     if (replacement.drop) repairedLines[index] = undefined;
   });

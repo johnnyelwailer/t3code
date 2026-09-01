@@ -6,8 +6,8 @@ import { Command, Flag } from "effect/unstable/cli";
 import {
   inspectCodexThreadHistory,
   repairCodexThreadHistory,
-  type CodexHistoryRepairInput,
 } from "../provider/Drivers/CodexHistoryRepair.ts";
+import type { CodexHistoryRepairInput } from "../provider/Drivers/CodexHistoryRepairTypes.ts";
 
 const threadFlag = Flag.string("thread").pipe(
   Flag.withDescription("Provider Codex thread id to inspect or repair."),

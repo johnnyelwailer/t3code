@@ -65,6 +65,8 @@ const RECOVERABLE_THREAD_RESUME_ERROR_SNIPPETS = [
   "does not exist",
   "no rollout found",
 ];
+const isCodexAppServerRequestError = Schema.is(CodexErrors.CodexAppServerRequestError);
+const isCodexAppServerProtocolParseError = Schema.is(CodexErrors.CodexAppServerProtocolParseError);
 
 export function hasConfiguredMcpServer(appServerArgs: ReadonlyArray<string> | undefined): boolean {
   return appServerArgs?.some((argument) => argument.includes("mcp_servers.")) === true;
@@ -760,19 +762,25 @@ function hasSubAgentActivityKindPath(
   }
 }
 
-function isUnsupportedSubAgentActivityKindCause(error: unknown): boolean {
+export function readCodexThreadResumeActivityKinds(
+  error: unknown,
+): ReadonlyArray<string> | undefined {
   for (const cause of causeChain(error)) {
     if (!Schema.isSchemaError(cause)) continue;
+    const expected = cause.message.match(/Expected\s+((?:(?:["'][^"']+["'])\s*(?:\|\s*)?)+)/)?.[1];
+    if (!expected || !hasSubAgentActivityKindPath(cause.issue)) continue;
+    const kinds = [...expected.matchAll(/["']([^"']+)["']/g)].flatMap((match) =>
+      match[1] === undefined ? [] : [match[1]],
+    );
     if (
-      !/Expected\s+["']started["']\s*\|\s*["']interacted["']\s*\|\s*["']interrupted["']/.test(
-        cause.message,
-      )
+      kinds.includes("started") &&
+      kinds.includes("interacted") &&
+      kinds.includes("interrupted")
     ) {
-      continue;
+      return kinds;
     }
-    if (hasSubAgentActivityKindPath(cause.issue)) return true;
   }
-  return false;
+  return undefined;
 }
 
 /**
@@ -782,13 +790,13 @@ function isUnsupportedSubAgentActivityKindCause(error: unknown): boolean {
  */
 export function isCodexThreadResumePayloadError(error: unknown): boolean {
   const isResumeDecode =
-    (Schema.is(CodexErrors.CodexAppServerRequestError)(error) &&
+    (isCodexAppServerRequestError(error) &&
       error.method === "thread/resume" &&
       error.operation === "decode-payload") ||
-    (Schema.is(CodexErrors.CodexAppServerProtocolParseError)(error) &&
+    (isCodexAppServerProtocolParseError(error) &&
       error.method === "thread/resume" &&
       error.operation === "decode-response-payload");
-  return isResumeDecode && isUnsupportedSubAgentActivityKindCause(error);
+  return isResumeDecode && readCodexThreadResumeActivityKinds(error) !== undefined;
 }
 
 export const openCodexThreadWithRepair = <E = never, R = never>(
@@ -2174,10 +2182,12 @@ export const makeCodexSessionRuntime = (
                 Effect.gen(function* () {
                   const historyHomePath =
                     resolvedHomePath ?? options.environment?.CODEX_HOME ?? process.env.CODEX_HOME;
+                  const supportedActivityKinds = readCodexThreadResumeActivityKinds(resumeError);
                   const report = yield* CodexHistoryRepair.repairCodexThreadHistory({
                     providerThreadId: resumeThreadId,
                     cwd: options.cwd,
                     ...(historyHomePath ? { homePath: historyHomePath } : {}),
+                    ...(supportedActivityKinds ? { supportedActivityKinds } : {}),
                   }).pipe(
                     Effect.provideService(FileSystem.FileSystem, fileSystem),
                     Effect.provideService(Path.Path, pathService),
