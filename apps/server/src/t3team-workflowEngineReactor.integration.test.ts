@@ -117,6 +117,7 @@ const StubProviderDriverLive = Layer.effectDiscard(
 );
 
 const EngineLive = OrchestrationEngineLive.pipe(
+  Layer.provide(ThreadBackgroundLiveness.layer),
   // Upstream's shell mapper reads background liveness + plan progress per thread;
   // both are provided INTO the snapshot query so the requirement is discharged here.
   Layer.provide(

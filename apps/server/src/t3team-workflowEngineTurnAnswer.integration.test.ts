@@ -121,6 +121,7 @@ const StubProviderLive = (messages: ReadonlyArray<ReadonlyArray<string>>) =>
   );
 
 const EngineLive = OrchestrationEngineLive.pipe(
+  Layer.provide(ThreadBackgroundLiveness.layer),
   // `provideMerge` (not `provide`): the test body reads the PROJECTED thread detail — the same
   // source the client snapshot is built from — to assert what a client can actually see.
   // Upstream's shell mapper reads background liveness + plan progress per thread;

@@ -65,6 +65,7 @@ function makeStubRepository(rows: ReadonlyArray<WorkflowRun>): WorkflowRunReposi
     clearPending: notImplemented("clearPending"),
     countLiveByOrigin: notImplemented("countLiveByOrigin"),
     setSleeping: notImplemented("setSleeping"),
+    updateArgs: notImplemented("updateArgs"),
   };
 }
 

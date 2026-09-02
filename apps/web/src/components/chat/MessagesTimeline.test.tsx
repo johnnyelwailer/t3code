@@ -24,12 +24,7 @@ vi.mock("@legendapp/list/react", async () => {
     ListFooterComponent?: ReactNode;
     anchoredEndSpace?: {
       anchorIndex: number;
-      anchorMaxSize?: number;
-      anchorOffset?: number;
-      onReady?: (info: { anchorIndex: number }) => void;
     };
-    contentInsetEndAdjustment?: number;
-    className?: string;
     maintainScrollAtEnd?:
       | boolean
       | {
@@ -40,27 +35,12 @@ vi.mock("@legendapp/list/react", async () => {
             layout?: boolean;
           };
         };
-    maintainVisibleContentPosition?:
-      | boolean
-      | {
-          data?: boolean;
-          size?: boolean;
-          shouldRestorePosition?: (item: { id: string }) => boolean;
-        };
     ref?: Ref<LegendListRef>;
   }) => {
-    if (props.anchoredEndSpace) {
-      props.anchoredEndSpace.onReady?.({ anchorIndex: props.anchoredEndSpace.anchorIndex });
-    }
     return (
       <div
         data-testid={legendListTestId}
         data-anchor-index={props.anchoredEndSpace?.anchorIndex}
-        data-anchor-max-size={props.anchoredEndSpace?.anchorMaxSize}
-        data-anchor-offset={props.anchoredEndSpace?.anchorOffset}
-        data-anchor-on-ready={Boolean(props.anchoredEndSpace?.onReady)}
-        data-content-inset-end={props.contentInsetEndAdjustment}
-        data-class-name={props.className}
         data-maintain-scroll-at-end={props.maintainScrollAtEnd ? "enabled" : undefined}
         data-maintain-scroll-at-end-animated={
           typeof props.maintainScrollAtEnd === "object"
@@ -80,26 +60,6 @@ vi.mock("@legendapp/list/react", async () => {
         data-maintain-scroll-at-end-layout={
           typeof props.maintainScrollAtEnd === "object"
             ? props.maintainScrollAtEnd.on?.layout
-            : undefined
-        }
-        data-maintain-visible-content-position={
-          typeof props.maintainVisibleContentPosition === "object"
-            ? "object"
-            : props.maintainVisibleContentPosition
-        }
-        data-maintain-visible-content-position-data={
-          typeof props.maintainVisibleContentPosition === "object"
-            ? props.maintainVisibleContentPosition.data
-            : undefined
-        }
-        data-maintain-visible-content-position-size={
-          typeof props.maintainVisibleContentPosition === "object"
-            ? props.maintainVisibleContentPosition.size
-            : undefined
-        }
-        data-maintain-visible-content-position-restore={
-          typeof props.maintainVisibleContentPosition === "object"
-            ? Boolean(props.maintainVisibleContentPosition.shouldRestorePosition)
             : undefined
         }
       >
@@ -203,6 +163,7 @@ function buildProps() {
     revertTurnCountByUserMessageId: new Map(),
     onRevertUserMessage: () => {},
     isRevertingCheckpoint: false,
+    openingVideoAttachmentId: null,
     onImageExpand: () => {},
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
     markdownCwd: undefined,
@@ -325,7 +286,7 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("codex-thread-1");
   });
 
-  it("renders the worked-for row at assistant response text size", () => {
+  it("renders elapsed time for a completed turn", () => {
     const turnId = TurnId.make("turn-with-fold");
     const assistantEntry = buildAssistantTimelineEntry("Done.");
     const markup = renderToStaticMarkup(
@@ -562,72 +523,151 @@ describe("MessagesTimeline", () => {
     expect(resolveTimelineMinimapInteractiveWidth(40, true)).toBe("22rem");
   });
 
-  it("anchors the first user message using its measured height", () => {
-    const onAnchorReady = vi.fn();
-    const firstEntry = {
-      ...buildUserTimelineEntry("First prompt."),
+  it("renders generic attachments as download links instead of image previews", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Read the report."),
       message: {
-        ...buildUserTimelineEntry("First prompt.").message,
+        ...buildUserTimelineEntry("Read the report.").message,
         attachments: [
           {
-            type: "image" as const,
-            id: "attachment-1",
-            name: "screenshot.png",
-            mimeType: "image/png",
-            sizeBytes: 1,
-            previewUrl: "data:image/png;base64,iVBORw0KGgo=",
+            type: "file" as const,
+            id: "attachment-report-pdf",
+            name: "report.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 42,
+            previewUrl: "https://environment.test/api/assets/report.pdf",
           },
         ],
       },
     };
+
     const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        anchorMessageId={firstEntry.message.id}
-        onAnchorReady={onAnchorReady}
-        contentInsetEndAdjustment={144}
-        timelineEntries={[firstEntry]}
-      />,
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
     );
 
-    expect(markup).toContain('data-anchor-index="0"');
-    expect(markup).toContain('data-anchor-offset="16"');
-    expect(markup).toContain('data-anchor-on-ready="true"');
-    expect(markup).not.toContain("data-anchor-max-size=");
-    expect(markup).toContain('data-content-inset-end="144"');
-    expect(markup).toContain("[overflow-anchor:none]");
-    expect(markup).not.toContain('data-maintain-scroll-at-end="enabled"');
-    expect(markup).toContain('data-maintain-visible-content-position="object"');
-    expect(markup).toContain('data-maintain-visible-content-position-data="true"');
-    expect(markup).toContain('data-maintain-visible-content-position-size="true"');
-    expect(markup).toContain('data-maintain-visible-content-position-restore="true"');
-    expect(onAnchorReady).toHaveBeenCalledOnce();
-    expect(onAnchorReady).toHaveBeenCalledWith(firstEntry.message.id, 0);
+    expect(markup).toContain(
+      '<a href="https://environment.test/api/assets/report.pdf" download="report.pdf" class="flex min-w-0 items-center gap-2 rounded-md py-1 text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70">',
+    );
+    expect(markup).not.toContain('alt="report.pdf"');
   });
 
-  it("does not reserve end space for a follow-up user message", () => {
-    const onAnchorReady = vi.fn();
-    const firstEntry = buildUserTimelineEntry("First prompt.");
-    const secondEntry = {
-      ...buildUserTimelineEntry("Newest prompt."),
-      id: "entry-2",
+  it("renders video attachments as play buttons", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Watch the demo."),
       message: {
-        ...buildUserTimelineEntry("Newest prompt.").message,
-        id: MessageId.make("message-2"),
+        ...buildUserTimelineEntry("Watch the demo.").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "attachment-demo-mp4",
+            name: "demo.mp4",
+            mimeType: "video/mp4",
+            sizeBytes: 42,
+          },
+        ],
       },
     };
+
     const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+    const busyMarkup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
-        anchorMessageId={secondEntry.message.id}
-        onAnchorReady={onAnchorReady}
-        timelineEntries={[firstEntry, secondEntry]}
+        timelineEntries={[entry]}
+        openingVideoAttachmentId="attachment-demo-mp4"
       />,
     );
 
-    expect(markup).not.toContain("data-anchor-index=");
-    expect(markup).toContain('data-maintain-scroll-at-end="enabled"');
-    expect(onAnchorReady).not.toHaveBeenCalled();
+    expect(markup).toContain('aria-label="Play demo.mp4"');
+    expect(markup).toContain("min-h-[72px]");
+    expect(markup).toContain(">demo.mp4</span>");
+    expect(markup).not.toContain('aria-label="Download demo.mp4"');
+    expect(busyMarkup).toContain('aria-busy="true"');
+    expect(busyMarkup).toContain('aria-disabled="true"');
+    expect(busyMarkup).not.toContain('disabled=""');
+    expect(busyMarkup).toContain(">Loading…</span>");
+  });
+  it("renders a file download button without creating its URL in advance", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Read the report."),
+      message: {
+        ...buildUserTimelineEntry("Read the report.").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "attachment-report-pdf",
+            name: "report.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 42,
+          },
+        ],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+
+    expect(markup).toContain(
+      '<button type="button" aria-label="Download report.pdf" class="flex min-w-0 cursor-pointer items-center gap-2 rounded-md py-1 text-left text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70">',
+    );
+    expect(markup).not.toContain("href=");
+  });
+
+  it("does not download an optimistic file before the server supplies its attachment ID", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Read the report."),
+      message: {
+        ...buildUserTimelineEntry("Read the report.").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "composer-local-report",
+            name: "report.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 42,
+            downloadable: false,
+          },
+        ],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+
+    expect(markup).toContain("report.pdf");
+    expect(markup).not.toContain('aria-label="Download report.pdf"');
+  });
+
+  it("renders unknown attachment types as inert rows instead of crashing", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Play the recording."),
+      message: {
+        ...buildUserTimelineEntry("Play the recording.").message,
+        attachments: [
+          {
+            // A newer server can introduce attachment types this build does
+            // not know. They ride the open contract member.
+            type: "recording",
+            id: "attachment-voice-memo",
+            name: "voice-memo.ogg",
+            mimeType: "audio/ogg",
+            sizeBytes: 42,
+          },
+        ],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+
+    expect(markup).toContain("voice-memo.ogg");
+    expect(markup).not.toContain('aria-label="Download voice-memo.ogg"');
+    expect(markup).not.toContain('alt="voice-memo.ogg"');
+    expect(markup).not.toContain("href=");
   });
 
   it("keeps reserved end space when tool work starts while reading history", () => {
@@ -977,7 +1017,6 @@ describe("MessagesTimeline", () => {
     );
 
     expect(markup).toContain("Context compacted");
-    expect(markup).toContain("Work Log");
   });
 
   it("renders system messages as first-class timeline rows", () => {
@@ -1058,6 +1097,49 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain('aria-label="Tool call failed"');
   });
 
+  it("keeps the collapsed summary icon neutral when the group ends in a failure", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "entry-completed",
+            kind: "work",
+            createdAt: "2026-03-17T19:12:28.000Z",
+            entry: {
+              id: "work-completed",
+              createdAt: "2026-03-17T19:12:28.000Z",
+              label: "Run tests",
+              tone: "tool",
+              itemType: "command_execution",
+              toolLifecycleStatus: "completed",
+            },
+          },
+          {
+            id: "entry-failed",
+            kind: "work",
+            createdAt: "2026-03-17T19:12:29.000Z",
+            entry: {
+              id: "work-failed",
+              createdAt: "2026-03-17T19:12:29.000Z",
+              label: "Run lint",
+              tone: "tool",
+              itemType: "command_execution",
+              toolLifecycleStatus: "failed",
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Ran 2 commands");
+    expect(markup).toContain("lucide-terminal");
+    expect(markup).not.toContain("lucide-x");
+    expect(markup).not.toContain("text-destructive");
+    // The failure stays discoverable for screen readers.
+    expect(markup).toContain("tool call failed");
+  });
+
   it("keeps mixed work logs neutral after a later tool call succeeds", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
@@ -1104,7 +1186,7 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("+2 previous log entries");
+    expect(markup).toContain("Ran 2 commands and received 1 update");
     expect(markup).not.toContain('aria-label="Hidden work includes a failure"');
   });
 
@@ -1207,7 +1289,30 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("tool call failed");
   });
 
-  it("keeps terminal command copy live while the parent turn is active", () => {
+  it("renders initial thinking as the shared live activity row", () => {
+    const turnId = TurnId.make("turn-live");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        latestTurn={{
+          turnId,
+          state: "running",
+          startedAt: MESSAGE_CREATED_AT,
+          completedAt: null,
+        }}
+        runningTurnId={turnId}
+        timelineEntries={[]}
+      />,
+    );
+
+    expect(markup).toContain("Thinking");
+    expect(markup).toContain("lucide-brain");
+    expect(markup).toContain('data-timeline-row-id="live-activity-row"');
+  });
+
+  it("keeps the completed command in the shared activity row with a past-tense label", () => {
     const turnId = TurnId.make("turn-live");
     const markup = renderToStaticMarkup(
       <MessagesTimeline
@@ -1223,19 +1328,19 @@ describe("MessagesTimeline", () => {
         runningTurnId={turnId}
         timelineEntries={[
           {
-            id: "entry-failed",
+            id: "entry-completed",
             kind: "work",
             createdAt: MESSAGE_CREATED_AT,
             entry: {
-              id: "work-failed",
+              id: "work-completed",
               createdAt: MESSAGE_CREATED_AT,
               turnId,
-              toolCallId: "call-failed",
+              toolCallId: "call-completed",
               label: "Run lint",
               tone: "tool",
               itemType: "command_execution",
               command: "pnpm lint",
-              toolLifecycleStatus: "failed",
+              toolLifecycleStatus: "completed",
             },
           },
         ]}
@@ -1298,7 +1403,9 @@ describe("MessagesTimeline", () => {
     // P0: the class must sit on the LEAF text spans, not on a wrapper around
     // the animated flip spans (background-clip: text cannot reach into their
     // compositing layers — that is what left the glyphs transparent).
-    expect(markup).toContain('<span class="t3team-label-shimmer t3team-aci-lead-word">Thinking</span>');
+    expect(markup).toContain(
+      '<span class="t3team-label-shimmer t3team-aci-lead-word">Thinking</span>',
+    );
     expect(markup).not.toContain("shimmer-base:var(--muted-foreground)");
   });
 
@@ -1534,7 +1641,9 @@ describe("MessagesTimeline", () => {
     // word carries the live emphasis (font-medium), the fallback does not.
     // (The state-word leaf also carries the shimmer paint — P0 leaf-only.
     //)
-    expect(live).toContain('<span class="t3team-label-shimmer font-medium t3team-aci-lead-word">Working</span>');
+    expect(live).toContain(
+      '<span class="t3team-label-shimmer font-medium t3team-aci-lead-word">Working</span>',
+    );
 
     const fallback = renderToStaticMarkup(
       <MessagesTimeline
@@ -1546,7 +1655,9 @@ describe("MessagesTimeline", () => {
     );
     // Active turn + no live state → "Thinking" (a turn starts thinking),
     // at the regular weight.
-    expect(fallback).toContain('<span class="t3team-label-shimmer t3team-aci-lead-word">Thinking</span>');
+    expect(fallback).toContain(
+      '<span class="t3team-label-shimmer t3team-aci-lead-word">Thinking</span>',
+    );
     expect(fallback).not.toContain("font-medium");
 
     // Every live state word is emphasized, not just "working".
@@ -1559,7 +1670,9 @@ describe("MessagesTimeline", () => {
         timelineEntries={[]}
       />,
     );
-    expect(thinking).toContain('<span class="t3team-label-shimmer font-medium t3team-aci-lead-word">Thinking</span>');
+    expect(thinking).toContain(
+      '<span class="t3team-label-shimmer font-medium t3team-aci-lead-word">Thinking</span>',
+    );
   });
 
   it("pins the live working row to the bottom, after content the turn already streamed (GHE #236)", () => {
@@ -1670,11 +1783,22 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain('data-testid="file-diff"');
   });
 
-  it("renders a failure marker for failed tool lifecycle entries", () => {
+  it("keeps failed lifecycle entries discoverable in mixed activity summaries", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
         timelineEntries={[
+          {
+            id: "entry-info",
+            kind: "work",
+            createdAt: "2026-03-17T19:12:27.000Z",
+            entry: {
+              id: "work-info",
+              createdAt: "2026-03-17T19:12:27.000Z",
+              label: "Status updated",
+              tone: "info",
+            },
+          },
           {
             id: "entry-1",
             kind: "work",
@@ -1692,8 +1816,45 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("lucide-x");
-    expect(markup).toContain('aria-label="Tool call failed"');
+    expect(markup).toContain('aria-label="Received 1 update and used 1 tool, tool call failed"');
+    // Ordinary tool failures render muted, not red.
+    expect(markup).not.toContain("text-destructive");
+  });
+
+  it("keeps the red treatment for severe orchestration failures", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "entry-info",
+            kind: "work",
+            createdAt: "2026-03-17T19:12:27.000Z",
+            entry: {
+              id: "work-info",
+              createdAt: "2026-03-17T19:12:27.000Z",
+              label: "Status updated",
+              tone: "info",
+            },
+          },
+          {
+            id: "entry-turn-failed",
+            kind: "work",
+            createdAt: "2026-03-17T19:12:28.000Z",
+            entry: {
+              id: "work-turn-failed",
+              createdAt: "2026-03-17T19:12:28.000Z",
+              label: "Provider turn start failed",
+              tone: "error",
+              sourceActivityKind: "provider.turn.start.failed",
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("lucide-circle-alert");
+    expect(markup).toContain("text-destructive");
   });
 
   it("de-emphasizes inter-agent reaction turns as background activity while user turns stay prominent (GHE #156)", () => {

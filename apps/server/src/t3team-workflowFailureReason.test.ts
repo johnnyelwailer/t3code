@@ -75,6 +75,7 @@ const stubEngine: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
   dispatch: () => Effect.succeed({ sequence: 0 }),
   streamDomainEvents: Stream.never,
+  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
   // Required by OrchestrationEngineShape since main's sidebar/turn work; this stub never
   // dispatches, so the latest sequence is simply 0.
   latestSequence: Effect.succeed(0),
