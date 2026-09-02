@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
@@ -77,12 +77,17 @@ export function useHydrateThreadPlacements(input: {
   const backend = useBackend();
   const backendState = useBackendState();
   const { liveProjects, liveThreads, setThreads, storedProjects, threads } = input;
+  // Thread ids the server has already answered for with no placement. Most
+  // threads legitimately have no parent or ticket, and the server omits them
+  // from its response, so without this they would stay "missing" forever and
+  // be re-sent on every candidate-set change or reconnect (GHE #382).
+  const resolvedEmptyThreadIdsRef = useRef<Set<string>>(new Set());
   const candidateThreadIds = useMemo(
     () =>
       readMissingThreadPlacementIds({
         threads,
         liveThreads,
-      }),
+      }).filter((threadId) => !resolvedEmptyThreadIdsRef.current.has(threadId)),
     [liveThreads, threads],
   );
   // JSON.stringify (not `.join`) so an embedded delimiter inside a thread id
@@ -104,9 +109,16 @@ export function useHydrateThreadPlacements(input: {
       };
     }
 
+    const requestedThreadIds = candidateThreadIds;
     void backend
-      .listThreadPlacements({ threadIds: candidateThreadIds })
+      .listThreadPlacements({ threadIds: requestedThreadIds })
       .then((placements) => {
+        const placedThreadIds = new Set<string>(placements.map((placement) => placement.threadId));
+        for (const threadId of requestedThreadIds) {
+          if (!placedThreadIds.has(threadId)) {
+            resolvedEmptyThreadIdsRef.current.add(threadId);
+          }
+        }
         if (cancelled || placements.length === 0) {
           return;
         }
