@@ -198,7 +198,8 @@ const VARIANTS: readonly VariantConfig[] = [
     alsoInherits: "sdv2-vA",
     letter: "B",
     name: "Soft-glow blend",
-    technique: "A's palette + two-layer halo (tight 6px + wide 16px) blending on the same 380ms ease-in-out; ring border crossfades too",
+    technique:
+      "A's palette + two-layer halo (tight 6px + wide 16px) blending on the same 380ms ease-in-out; ring border crossfades too",
     paletteNote:
       "Same tokens as A — the difference is the light: two stacked glows whose COLOR transitions with the core, so a state change reads as the halo breathing into the new hue. No geometry change.",
   },
@@ -235,7 +236,7 @@ function DotColorVariants({ autoCycle, reducedMotion, focus, zoom }: DotColorVar
           <VariantCard
             key={variant.id}
             scope={variant.scope}
-            alsoInherits={variant.alsoInherits}
+            {...(variant.alsoInherits !== undefined ? { alsoInherits: variant.alsoInherits } : {})}
             letter={variant.letter}
             name={variant.name}
             technique={variant.technique}
@@ -270,7 +271,8 @@ const meta = {
     focus: {
       control: "select",
       options: ["all", "A", "B", "C", "D"],
-      description: "Render a single variant's card so it can be studied up close (D = the porcelain orb).",
+      description:
+        "Render a single variant's card so it can be studied up close (D = the porcelain orb).",
     },
     zoom: {
       control: { type: "number", min: 0.5, max: 3, step: 0.25 },

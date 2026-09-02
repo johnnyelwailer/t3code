@@ -8,6 +8,7 @@ import {
 
 import {
   applyClaudePromptEffortPrefix,
+  buildExplicitProviderOptionSelectionsFromDescriptors,
   buildProviderOptionSelectionsFromDescriptors,
   createModelCapabilities,
   createModelSelection,
@@ -199,6 +200,22 @@ describe("descriptor helpers", () => {
     ]);
   });
 
+  it("builds dispatch options only from explicit selections", () => {
+    const descriptors = getProviderOptionDescriptors({
+      caps: codexCaps,
+      selections: [{ id: "fastMode", value: true }],
+    });
+
+    expect(buildExplicitProviderOptionSelectionsFromDescriptors(descriptors, undefined)).toBe(
+      undefined,
+    );
+    expect(
+      buildExplicitProviderOptionSelectionsFromDescriptors(descriptors, [
+        { id: "fastMode", value: true },
+      ]),
+    ).toEqual([{ id: "fastMode", value: true }]);
+  });
+
   it("stores option selection arrays in model selections", () => {
     expect(
       createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.4", [
@@ -235,11 +252,15 @@ describe("descriptor helpers", () => {
 });
 
 describe("model slug normalization", () => {
-  it("preserves exact custom slugs instead of expanding provider aliases", () => {
+  it("resolves the fork fable aliases", () => {
     const claude = ProviderDriverKind.make("claudeAgent");
 
     expect(normalizeModelSlug("fable", claude)).toBe("claude-fable-5-1");
-    expect(normalizeModelSlug("opus", claude)).toBe("claude-opus-5");
+    expect(normalizeModelSlug("fable-5.1", claude)).toBe("claude-fable-5-1");
+    expect(normalizeModelSlug("claude-fable-5.1", claude)).toBe("claude-fable-5-1");
+  });
+
+  it("trims custom slugs instead of expanding provider aliases", () => {
     expect(normalizeCustomModelSlug(" opus ")).toBe("opus");
   });
 });

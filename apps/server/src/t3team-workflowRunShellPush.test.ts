@@ -1,3 +1,4 @@
+// @effect-diagnostics globalTimers:off -- host timer for push-settle delay in the test.
 import { describe, expect, it } from "vite-plus/test";
 import type { OrchestrationCommand } from "@t3tools/contracts";
 

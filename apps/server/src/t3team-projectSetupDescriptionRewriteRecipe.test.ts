@@ -75,6 +75,7 @@ async function makeBrokerWithSeededThread(): Promise<{
       return Effect.succeed({ sequence: brokerDispatched.length });
     },
     streamDomainEvents: Stream.empty,
+    subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
     latestSequence: Effect.succeed(0),
   };
   const broker = await Effect.runPromise(

@@ -1,3 +1,4 @@
+// @effect-diagnostics globalDate:off -- host wall-clock for sweep cadence, not Effect Clock.
 // @effect-diagnostics globalTimers:off -- the sweeper owns its host interval
 // timer (start is a plain host function, not Effect clock plumbing).
 /**

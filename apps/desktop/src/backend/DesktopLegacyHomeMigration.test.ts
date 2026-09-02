@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - migration test reads the legacy home tree from disk.
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";

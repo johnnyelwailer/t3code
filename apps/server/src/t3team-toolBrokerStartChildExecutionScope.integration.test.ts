@@ -197,6 +197,7 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
   const orchestrationMock: OrchestrationEngineShape = {
     readEvents: () => Stream.empty,
     streamDomainEvents: Stream.empty,
+    subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
     latestSequence: Effect.sync(() => sequence),
     dispatch: (command) =>
       Effect.sync(() => {
@@ -230,6 +231,7 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
     getShellSnapshot: () => Effect.die("unused"),
     getArchivedShellSnapshot: () => Effect.die("unused"),
     getSnapshotSequence: () => Effect.die("unused"),
+    getEventReplayStats: () => Effect.die("unused"),
     getCounts: () => Effect.die("unused"),
     getActiveProjectByWorkspaceRoot: () => Effect.die("unused"),
     getProjectShellById: () =>
