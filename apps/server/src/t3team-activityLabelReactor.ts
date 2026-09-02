@@ -197,13 +197,17 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
 
     const onIdle = (event: OrchestrationEvent) =>
       Effect.gen(function* () {
-        // Turn ended, the thread settled into the shelf, or the user stopped
-        // the turn: both the state word and the live label are done — clear
-        // them so they never render stale on the next activation.
+        // Turn ended, the thread settled into the shelf, the user stopped the
+        // turn, or the thread itself was deleted: both the state word and the
+        // live label are done — clear them so they never render stale on the
+        // next activation, and (GHE #297 Codex finding, LOW) so a deleted
+        // thread's re-arming stall timer (`t3team-activityState.ts`) stops
+        // ticking instead of leaking until the tool-stall ceiling.
         const threadId =
           event.type === "thread.turn-diff-completed" ||
           event.type === "thread.settled" ||
-          event.type === "thread.turn-interrupt-requested"
+          event.type === "thread.turn-interrupt-requested" ||
+          event.type === "thread.deleted"
             ? event.payload.threadId
             : null;
         if (threadId === null) return;

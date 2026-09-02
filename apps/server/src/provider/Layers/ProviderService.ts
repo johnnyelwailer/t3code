@@ -516,65 +516,91 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     const adapter = yield* registry
       .getByInstance(instanceId)
       .pipe(Effect.orElseSucceed(() => undefined));
-    if (adapter !== undefined) {
-      // GHE #297 Defect 1: a dead provider session makes `interruptTurn`
-      // itself fail (e.g. ProviderAdapterSessionNotFoundError) — the OLD
-      // code only logged this and left the turn "running" forever, since
-      // no adapter is left to ever emit the terminal event. Capture the
-      // outcome instead of only logging it, so both failure shapes settle.
-      const interruptExit = yield* adapter.interruptTurn(threadId, turnId).pipe(Effect.exit);
-      if (Exit.isFailure(interruptExit)) {
-        yield* Effect.logWarning("provider.turn.inactivity-interrupt-failed", {
-          threadId: String(threadId),
-          turnId: String(turnId),
-          providerInstanceId: String(instanceId),
-          cause: interruptExit.cause,
-        });
-        yield* publishSyntheticSessionExited(
-          threadId,
-          turnId,
-          instanceId,
-          provider,
-          inactivitySeconds,
-        );
-      } else {
-        // Interrupt succeeded: the provider is expected to settle the turn
-        // itself (turn.aborted / turn.completed / session.exited). Arm a
-        // one-shot settle-grace fiber that synthesizes `session.exited` if
-        // no such event lands — mirrors the interrupt-requested backstop in
-        // ProviderCommandReactor (30s grace), but scoped to the watchdog's
-        // own interrupt so it does not duplicate that reactor's coverage of
-        // user-initiated stops.
-        yield* Ref.update(awaitingTurnSettle, (map) => new Map(map).set(threadId, turnId));
-        yield* Effect.sleep(Duration.millis(turnWatchdogSettleGraceMs)).pipe(
-          Effect.andThen(
-            Effect.gen(function* () {
-              const stillAwaited = yield* Ref.get(awaitingTurnSettle).pipe(
-                Effect.map((map) => map.get(threadId) === turnId),
-              );
-              if (!stillAwaited) return; // a terminal event already settled it
-              yield* clearAwaitingSettleFor(threadId, turnId);
-              yield* Effect.logWarning("provider.turn.inactivity-interrupt-no-terminal-event", {
-                threadId: String(threadId),
-                turnId: String(turnId),
-                providerInstanceId: String(instanceId),
-                graceMs: turnWatchdogSettleGraceMs,
-              });
-              yield* publishSyntheticSessionExited(
-                threadId,
-                turnId,
-                instanceId,
-                provider,
-                inactivitySeconds,
-              );
-            }),
-          ),
-          Effect.forkScoped,
-          // Same reasoning as armTurnWatchdog's timer: attach to the
-          // captured service scope, not the ambient ScopeService.
-          Effect.provideService(Scope.Scope, serviceScope),
-        );
-      }
+    if (adapter === undefined) {
+      // GHE #297 Defect 1 (Codex finding, HIGH): no adapter left to even
+      // attempt an interrupt (the instance was removed/replaced concurrently
+      // with the watchdog firing) is exactly the same terminal shape as a
+      // failed interrupt — nothing will ever emit the turn's terminal event,
+      // so the turn would otherwise stay "running" forever. Settle it the
+      // same way a failed interrupt does, immediately.
+      yield* Effect.logWarning("provider.turn.inactivity-no-adapter", {
+        threadId: String(threadId),
+        turnId: String(turnId),
+        providerInstanceId: String(instanceId),
+      });
+      yield* publishSyntheticSessionExited(
+        threadId,
+        turnId,
+        instanceId,
+        provider,
+        inactivitySeconds,
+      );
+      return;
+    }
+    // GHE #297 Defect 1: a dead provider session makes `interruptTurn`
+    // itself fail (e.g. ProviderAdapterSessionNotFoundError) — the OLD
+    // code only logged this and left the turn "running" forever, since
+    // no adapter is left to ever emit the terminal event. Capture the
+    // outcome instead of only logging it, so both failure shapes settle.
+    const interruptExit = yield* adapter.interruptTurn(threadId, turnId).pipe(Effect.exit);
+    if (Exit.isFailure(interruptExit)) {
+      yield* Effect.logWarning("provider.turn.inactivity-interrupt-failed", {
+        threadId: String(threadId),
+        turnId: String(turnId),
+        providerInstanceId: String(instanceId),
+        cause: interruptExit.cause,
+      });
+      yield* publishSyntheticSessionExited(
+        threadId,
+        turnId,
+        instanceId,
+        provider,
+        inactivitySeconds,
+      );
+    } else {
+      // Interrupt succeeded: the provider is expected to settle the turn
+      // itself (turn.aborted / turn.completed / session.exited). Arm a
+      // one-shot settle-grace fiber that synthesizes `session.exited` if
+      // no such event lands — mirrors the interrupt-requested backstop in
+      // ProviderCommandReactor (30s grace), but scoped to the watchdog's
+      // own interrupt so it does not duplicate that reactor's coverage of
+      // user-initiated stops.
+      yield* Ref.update(awaitingTurnSettle, (map) => new Map(map).set(threadId, turnId));
+      yield* Effect.sleep(Duration.millis(turnWatchdogSettleGraceMs)).pipe(
+        Effect.andThen(
+          Effect.gen(function* () {
+            // Codex finding (MEDIUM): fold the "still awaited?" check and the
+            // marker removal into one atomic `Ref.modify` — a terminal event
+            // for this exact turn landing between a separate read and a
+            // separate delete could otherwise slip through and cause a
+            // duplicate synthetic exit alongside the real terminal event.
+            const shouldPublish = yield* Ref.modify(awaitingTurnSettle, (map) => {
+              if (map.get(threadId) !== turnId) return [false, map] as const;
+              const next = new Map(map);
+              next.delete(threadId);
+              return [true, next] as const;
+            });
+            if (!shouldPublish) return; // a terminal event already settled it
+            yield* Effect.logWarning("provider.turn.inactivity-interrupt-no-terminal-event", {
+              threadId: String(threadId),
+              turnId: String(turnId),
+              providerInstanceId: String(instanceId),
+              graceMs: turnWatchdogSettleGraceMs,
+            });
+            yield* publishSyntheticSessionExited(
+              threadId,
+              turnId,
+              instanceId,
+              provider,
+              inactivitySeconds,
+            );
+          }),
+        ),
+        Effect.forkScoped,
+        // Same reasoning as armTurnWatchdog's timer: attach to the
+        // captured service scope, not the ambient ScopeService.
+        Effect.provideService(Scope.Scope, serviceScope),
+      );
     }
   });
 
@@ -585,6 +611,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     provider: ProviderDriverKind,
     announcedBudgetMs?: number,
   ) {
+    // Codex finding (HIGH, GHE #297): a new turn on this thread (superseding
+    // a stalled one still in its settle grace) must clear the OLD turn's
+    // awaiting-settle marker unconditionally — otherwise that stale entry
+    // (keyed only by threadId) survives, and its grace fiber later publishes
+    // a thread-scoped synthetic `session.exited` that kills the NEW turn B,
+    // even though B is healthy and never asked for a settle grace itself.
+    yield* clearAwaitingSettleFor(threadId);
     const baseMs = yield* resolveTurnInactivityTimeoutMs(instanceId);
     const timeoutMs =
       announcedBudgetMs !== undefined ? Math.max(baseMs, announcedBudgetMs) : baseMs;
