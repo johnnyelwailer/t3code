@@ -256,4 +256,12 @@ describe("userFacingFailureStep", () => {
   vitestIt("leaves a string with no phase prefix unchanged", () => {
     expect(userFacingFailureStep("thread.turn (QA round 1)")).toBe("thread.turn (QA round 1)");
   });
+
+  vitestIt("falls back to a generic label for a bare phase token (GHE #344)", () => {
+    expect(userFacingFailureStep("rehydration")).toBe("an unknown step");
+  });
+
+  vitestIt("leaves an unrelated string that happens to contain no phase prefix unchanged", () => {
+    expect(userFacingFailureStep("apply migration")).toBe("apply migration");
+  });
 });

@@ -24,7 +24,9 @@ const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 // Stricter than TERMINAL: these two can never transition again, so the server always wins over a
 // stale optimistic value. "failed" is deliberately excluded — a retry's optimistic "running" must
 // survive until the server actually reports the re-drive, or the click would flash right back to
-// the failed card it was meant to leave.
+// the failed card it was meant to leave. A NEW "failed" (the re-drive settling again) reconciles
+// instead via `controlBaselineUpdatedAt` below — status alone can't tell "still the pre-click
+// failure" from "the retry failed too", but the run's `updatedAt` can.
 const FORCE_SERVER_STATUS = new Set(["completed", "cancelled"]);
 
 export function workflowControlErrorMessage(error: unknown): string {
@@ -46,6 +48,10 @@ export function useT3TeamWorkflowShapeLiveState(input: {
 }) {
   const { shape, progress, workflowRunStatus, onControlWorkflow } = input;
   const [localStatus, setLocalStatus] = useState<OrchestrationWorkflowRunStatus["status"]>();
+  // The server run's `updatedAt` at the moment a control call was made — the discriminator that
+  // tells "the server hasn't caught up yet" apart from "the server settled again, to the same
+  // status". Cleared alongside `localStatus`.
+  const [controlBaselineUpdatedAt, setControlBaselineUpdatedAt] = useState<string>();
   const [controlPending, setControlPending] = useState<"pause" | "resume" | "stop" | null>(null);
   const [controlError, setControlError] = useState<string | null>(null);
 
@@ -82,11 +88,16 @@ export function useT3TeamWorkflowShapeLiveState(input: {
     if (localStatus === undefined || workflowRunStatus === undefined) return;
     if (
       workflowRunStatus.status === localStatus ||
-      FORCE_SERVER_STATUS.has(workflowRunStatus.status)
+      FORCE_SERVER_STATUS.has(workflowRunStatus.status) ||
+      // The server settled to a NEW run state since the click (e.g. the re-drive failed again) —
+      // whatever its status, it is fresher than the optimistic value, so let it win.
+      (controlBaselineUpdatedAt !== undefined &&
+        workflowRunStatus.updatedAt !== controlBaselineUpdatedAt)
     ) {
       setLocalStatus(undefined);
+      setControlBaselineUpdatedAt(undefined);
     }
-  }, [localStatus, workflowRunStatus]);
+  }, [localStatus, workflowRunStatus, controlBaselineUpdatedAt]);
 
   const serverStatus = workflowRunStatus?.status;
   const status = FORCE_SERVER_STATUS.has(serverStatus ?? "")
@@ -115,6 +126,7 @@ export function useT3TeamWorkflowShapeLiveState(input: {
     if (!onControlWorkflow || controlPending !== null) return;
     setControlError(null);
     setControlPending(action);
+    setControlBaselineUpdatedAt(workflowRunStatus?.updatedAt);
     try {
       const result = await onControlWorkflow({ workflowRunId: progress.runId, action });
       setLocalStatus(result.status);

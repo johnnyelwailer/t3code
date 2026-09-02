@@ -20,10 +20,8 @@ import {
   T3TeamAtlassianError,
 } from "./t3team-atlassian-http.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
-import { loadThreadProjectContext } from "./t3team-thread-recipe-workflow-routes-shared.ts";
 import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
-import { makeResumeFailedRun } from "./t3team-toolBrokerWorkflowResumeFailed.ts";
+import { resumeFailedWorkflowRunControlAction } from "./t3team-thread-workflow-control-route-retry.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
@@ -80,29 +78,23 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
     let status: "suspended" | "sleeping" | "paused" | "cancelled" | "running";
 
     if (input.action === "resume" && run.status === "failed") {
-      // Retry: re-drive the failed run from its journal, mirroring
-      // `t3team.orchestration.resume`'s failed-run branch exactly (same journal re-drive, same
-      // rehydrated scripts) rather than a parallel implementation.
-      const dispatch = (command: Parameters<typeof orchestration.dispatch>[0]): Promise<void> =>
-        Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
-      yield* makeResumeFailedRun(
+      // Retry: re-drive the failed run from its journal (GHE #344 — see
+      // t3team-thread-workflow-control-route-retry.ts for the journal-presence guard).
+      status = yield* resumeFailedWorkflowRunControlAction(
         {
+          run,
+          threadId,
+          repo,
+          registry,
+          scheduler,
+          orchestration,
+          journalStore,
           fileSystem,
           path,
-          runRepository: repo,
-          registry,
-          journalStore,
-          rearmScheduler: () => scheduler.rearm(),
-          dispatch,
-          loadThreadProject: (id) =>
-            loadThreadProjectContext(id).pipe(
-              Effect.provideService(ProjectionSnapshotQuery, projectionSnapshotQuery),
-            ),
+          projectionSnapshotQuery,
         },
-        ThreadId.make(threadId),
-        t3teamRandomUUID,
-      )(run).pipe(Effect.mapError((message) => new T3TeamAtlassianError({ message })));
-      status = "running";
+        runId,
+      );
     } else if (input.action === "pause") {
       if (run.status === "suspended" && run.pendingThreadId !== null) {
         const pending = registry.peekPending(run.pendingThreadId);

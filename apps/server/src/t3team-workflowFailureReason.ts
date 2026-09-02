@@ -18,15 +18,26 @@
 /** Which funnel settled the failure — the coarse "phase" half of the failing-step label. */
 export type WorkflowFailurePhase = "launch" | "resume" | "rehydration" | "scheduler-wake";
 
-const PHASE_PREFIX = /^(?:launch|resume|rehydration|scheduler-wake):\s*/;
+// Matches the phase token followed by its separator OR end-of-string, so a bare phase (no
+// trailing `:` — e.g. a rehydrated run's `failure_step` is just `"rehydration"`) is still
+// recognized and stripped rather than leaked to the user verbatim.
+const PHASE_PREFIX = /^(?:launch|resume|rehydration|scheduler-wake)(?::\s*|$)/;
+
+/** The label shown when stripping the phase leaves nothing meaningful behind — reuses the
+ * fallback phrase already used in the status tool's hint (`t3team-toolBrokerWorkflowStatusTool
+ * .ts`) so the two surfaces agree on wording. */
+const UNKNOWN_STEP_LABEL = "an unknown step";
 
 /** Strip the leading internal settle-phase token from a `failure_step` string before showing it
  * to a user (e.g. `resume: thread.turn (QA round 1)` → `thread.turn (QA round 1)`). The raw value
  * — phase prefix included — stays in the DB row and in agent-facing surfaces (`t3team.orchestration
  * .status` / `_resume`), which need the phase to reason about where a run parked. A string with no
- * phase prefix passes through unchanged. */
+ * phase prefix passes through unchanged. A BARE phase token (no primitive after it, e.g. a
+ * rehydrated run's `"rehydration"`) strips to empty and falls back to a generic label instead of
+ * leaking the internal phase name. */
 export function userFacingFailureStep(step: string): string {
-  return step.replace(PHASE_PREFIX, "");
+  const stripped = step.replace(PHASE_PREFIX, "");
+  return stripped.length === 0 ? UNKNOWN_STEP_LABEL : stripped;
 }
 
 const MAX_REASON_LENGTH = 240;
