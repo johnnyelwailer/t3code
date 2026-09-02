@@ -413,6 +413,34 @@ describe("activity label summarizer", () => {
     expect(persisted.length).toBe(2);
   });
 
+  it("GHE #202: clear() skips the meta.update unless a label was noted/pending", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    // No note() ever landed for "never-active" (flag was off, or the thread
+    // never had any activity) — clear() must not dispatch a meta.update
+    // clearing a label that was never set.
+    await summarizer.clear("never-active");
+    expect(persisted).toEqual([]);
+    // A thread that WAS noted still gets its null persisted on clear().
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    await summarizer.clear("t1"); // idle before the debounce even fired
+    expect(persisted).toEqual([{ label: null }]);
+  });
+
   it("schedules no TTL timer when the flag is off", async () => {
     const timers = makeTimers();
     const persisted: Array<{ label: string | null }> = [];
@@ -483,6 +511,32 @@ describe("activity label summarizer", () => {
     expect(parseActivityLabel(42)).toBe(null);
   });
 
+  it("GHE #203: forget() drops tracked state without persisting anything", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    summarizer.forget("t1"); // thread deleted mid-generation, never went idle
+    await timers.fire(0);
+    expect(persisted).toEqual([]);
+    // A subsequent clear() (defensive double-fire) also finds nothing to do.
+    await summarizer.clear("t1");
+    expect(persisted).toEqual([]);
+  });
+
   it("runs a fake provider from an activity event and never writes chat/messages", async () => {
     const timers = makeTimers();
     const persisted: Array<{ threadId: string; label: string | null }> = [];
@@ -510,5 +564,25 @@ describe("activity label summarizer", () => {
       { threadId: "t1", label: "Fixing build" },
       { threadId: "t1", label: null },
     ]);
+  });
+
+  it("GHE #203: event reactor exposes forget() for thread-deleted pruning", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ threadId: string; label: string | null }> = [];
+    const reactor = createActivityLabelEventReactor({
+      loadThread: async (threadId) =>
+        threadId === "t1" ? { modelSelection: model, userGist: "fix the build" } : null,
+      generate: async () => "Fixing build",
+      persist: async ({ threadId, label }) => {
+        persisted.push({ threadId, label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    await reactor.handle({ threadId: "t1", kind: "tool.started", summary: "npm run build" });
+    reactor.forget("t1"); // thread deleted mid-generation, never went idle
+    await timers.fire(0);
+    expect(persisted).toEqual([]);
   });
 });

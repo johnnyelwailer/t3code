@@ -13,6 +13,7 @@ import {
   runActivityLabelGeneration,
   scheduleLabelTtl,
 } from "./t3team-activityLabelSummarizerCore.ts";
+import { createBoundedThreadMap } from "./t3team-boundedThreadMap.ts";
 
 /**
  * Out-of-band live-activity-label coordinator for active threads (GHE #40, extended
@@ -23,6 +24,15 @@ import {
 
 export { ACTIVITY_LABEL_TTL_MS } from "./t3team-activityLabelSummarizerCore.ts";
 export { createActivityLabelEventReactor } from "./t3team-activityLabelSummarizerReactor.ts";
+
+/**
+ * Bounded-size guard for the per-thread maps below (GHE #203): threads that
+ * never idle (killed process, crashed provider, a client that never sends a
+ * turn-end) would otherwise never be pruned. See `createBoundedThreadMap`
+ * for the insert-time eviction mechanism; the thread.deleted prune (reactor
+ * side) is still the normal, immediate path.
+ */
+export const ACTIVITY_LABEL_MAX_TRACKED_THREADS = 500;
 
 export function createActivityLabelSummarizer(input: {
   readonly debounceMs?: number;
@@ -54,11 +64,25 @@ export function createActivityLabelSummarizer(input: {
   readonly activityLabelTtlMs?: number;
 }) {
   const pending = new Map<string, PendingLabel>();
-  const windowByThread = new Map<string, Array<{ kind: string; summary: string }>>();
   const minRegenerateMs = input.minRegenerateMs ?? 60_000;
   const now = input.now ?? Date.now;
   const setTimer = input.setTimer ?? setTimeout;
   const clearTimer = input.clearTimer ?? clearTimeout;
+  /** Cancel `threadId`'s timers and drop it from `pending`; returns the state it had, if any. */
+  const clearPendingState = (threadId: string) => {
+    const state = pending.get(threadId);
+    if (state?.timer) clearTimer(state.timer);
+    if (state?.ttlTimer) clearTimer(state.ttlTimer);
+    pending.delete(threadId);
+    return state;
+  };
+  // GHE #203: windowByThread is the FIFO source of truth for eviction; its
+  // onEvict keeps `pending` (keyed the same way) from drifting out of sync
+  // when a never-idling thread gets evicted to make room for a new one.
+  const windowByThread = createBoundedThreadMap<Array<{ kind: string; summary: string }>>(
+    ACTIVITY_LABEL_MAX_TRACKED_THREADS,
+    (evictedThreadId) => clearPendingState(evictedThreadId),
+  );
   const runtime: ActivityLabelSummarizerRuntime = { pending, input, now, setTimer, clearTimer };
 
   return {
@@ -131,16 +155,26 @@ export function createActivityLabelSummarizer(input: {
     /** Idle/terminal: drop pending work and clear the stored label. */
     clear: async (threadId: string) => {
       windowByThread.delete(threadId);
-      const state = pending.get(threadId);
-      if (state?.timer) clearTimer(state.timer);
-      if (state?.ttlTimer) clearTimer(state.ttlTimer);
-      pending.delete(threadId);
+      const state = clearPendingState(threadId);
+      // GHE #202: nothing was ever noted for this thread (the flag was off, or
+      // no activity landed) — there is no label to clear, so skip the
+      // meta.update entirely instead of dispatching a no-op clear every idle.
+      if (!state) return;
       // Bump the generation so any in-flight generation never persists after us.
       await input.persist({
         threadId,
         label: null,
-        generation: (state?.generation ?? 0) + 1,
+        generation: state.generation + 1,
       });
+    },
+    /**
+     * GHE #203: the thread was deleted — drop its tracked state without
+     * persisting anything (there is nothing left to write a label onto).
+     * Unlike clear(), this never calls input.persist().
+     */
+    forget: (threadId: string) => {
+      windowByThread.delete(threadId);
+      clearPendingState(threadId);
     },
   };
 }
