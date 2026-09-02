@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - builds a synthetic asar on disk and stages a fake
 // electron-builder appOutDir for the afterPack hook to operate on.
+// @effect-diagnostics preferSchemaOverJson:off - fixture JSON for the on-disk afterPack hook.
 /**
  * Synthetic asar round-trip test for `desktop-asar-dts-afterpack.cjs`.
  *
@@ -174,7 +175,7 @@ it.layer(NodeServices.layer)("desktop-asar-dts-afterpack", (it) => {
         const headerLink = (inputHeader.files["dir"] as { files: Record<string, unknown> }).files[
           "sub"
         ] as { files: Record<string, { link?: string }> };
-        assert.equal(headerLink.files["link.txt"].link, "other/real.txt");
+        assert.equal(headerLink.files["link.txt"]!.link, "other/real.txt");
 
         const inputOrder = asar.listPackage(inputAsar);
         const outputAsar = yield* runAfterPackHook(inputAsar);

@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - OS probing is intentionally host-native.
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import {
   listLoginShellCandidates,

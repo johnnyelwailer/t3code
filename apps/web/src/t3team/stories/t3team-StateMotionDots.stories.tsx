@@ -84,7 +84,15 @@ function RealWorkingRow({
   );
 }
 
-function Card({ title, children, footnote }: { title: string; children: React.ReactNode; footnote?: string }) {
+function Card({
+  title,
+  children,
+  footnote,
+}: {
+  title: string;
+  children: React.ReactNode;
+  footnote?: string;
+}) {
   return (
     <div className="w-[560px] rounded-xl border border-border/70 bg-card p-4 shadow-sm">
       <div className="mb-3 text-xs font-medium text-muted-foreground">{title}</div>
@@ -109,11 +117,16 @@ function AgentSidePanel({
   onClose: () => void;
 }) {
   return (
-    <div data-sdv-panel className="w-[300px] shrink-0 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+    <div
+      data-sdv-panel
+      className="w-[300px] shrink-0 rounded-xl border border-border/70 bg-card p-4 shadow-sm"
+    >
       <div className="mb-2 flex items-center justify-between">
         <span
           className={`rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${
-            entry.source === "subagent" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-sky-500/15 text-sky-600 dark:text-sky-400"
+            entry.source === "subagent"
+              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+              : "bg-sky-500/15 text-sky-600 dark:text-sky-400"
           }`}
         >
           {entry.source === "subagent" ? "provider subagent" : "child thread"}
@@ -179,7 +192,9 @@ function StateMotionDots({
   frozenClock,
 }: StateMotionDotsProps) {
   const [ticks, setTicks] = useState<ReadonlyMap<string, number>>(() => new Map());
-  const [driftState, setDriftState] = useState<Drift>(() => rollDrift(activeChildren + activeSubagents));
+  const [driftState, setDriftState] = useState<Drift>(() =>
+    rollDrift(activeChildren + activeSubagents),
+  );
   const entries = buildEntries(activeChildren, activeSubagents, ticks);
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
@@ -192,7 +207,6 @@ function StateMotionDots({
   const [liveReadout, setLiveReadout] = useState("");
   const [snaps, setSnaps] = useState<readonly string[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
-
 
   const fire = (id: string) =>
     setTicks((current) => new Map(current).set(id, (current.get(id) ?? 0) + 1));
@@ -237,7 +251,8 @@ function StateMotionDots({
       timer = window.setTimeout(
         () => {
           const current = entriesRef.current;
-          const entry = current.length > 0 ? current[Math.floor(Math.random() * current.length)] : undefined;
+          const entry =
+            current.length > 0 ? current[Math.floor(Math.random() * current.length)] : undefined;
           if (entry) fire(entry.id);
           tick();
         },
@@ -260,7 +275,8 @@ function StateMotionDots({
   useEffect(() => {
     if (!liveStream) return;
     const timer = window.setInterval(
-      () => setLabel((current) => LABELS[(LABELS.indexOf(current) + 1) % LABELS.length] ?? "Working"),
+      () =>
+        setLabel((current) => LABELS[(LABELS.indexOf(current) + 1) % LABELS.length] ?? "Working"),
       3200,
     );
     return () => window.clearInterval(timer);
@@ -287,7 +303,9 @@ function StateMotionDots({
     let dots: HTMLElement[] = [];
     const tick = (now: number) => {
       if (dots.length === 0) {
-        dots = Array.from(scope.querySelectorAll<HTMLElement>(".t3team-aci-cell")).filter((d) => d.offsetWidth > 0);
+        dots = Array.from(scope.querySelectorAll<HTMLElement>(".t3team-aci-cell")).filter(
+          (d) => d.offsetWidth > 0,
+        );
       }
       const srect = scope.getBoundingClientRect();
       const p = pointerRef.current;
@@ -296,8 +314,9 @@ function StateMotionDots({
         dbg = document.createElement("div");
         dbg.className = "sdv-debug";
         dbg.innerHTML =
-          Array.from({ length: dots.length }, () => `<span class="sdv-debug-home"></span>`).join("") +
-          `<div class="sdv-debug-cross"></div>`;
+          Array.from({ length: dots.length }, () => `<span class="sdv-debug-home"></span>`).join(
+            "",
+          ) + `<div class="sdv-debug-cross"></div>`;
         scope.appendChild(dbg);
       }
       dbg.querySelector<HTMLElement>(".sdv-debug-cross")!.style.left = `${cursor.x}px`;
@@ -316,7 +335,9 @@ function StateMotionDots({
       });
       if (now - lastReadout > 150) {
         lastReadout = now;
-        setLiveReadout(`click row = capture · cursor(${cursor.x.toFixed(1)}, ${cursor.y.toFixed(1)})`);
+        setLiveReadout(
+          `click row = capture · cursor(${cursor.x.toFixed(1)}, ${cursor.y.toFixed(1)})`,
+        );
       }
       raf = requestAnimationFrame(tick);
     };
@@ -364,7 +385,9 @@ function StateMotionDots({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(snap),
       }).catch(() => undefined);
-      const cursorText = cursor ? `cursor(${cursor.x.toFixed(1)}, ${cursor.y.toFixed(1)})` : "cursor(n/a)";
+      const cursorText = cursor
+        ? `cursor(${cursor.x.toFixed(1)}, ${cursor.y.toFixed(1)})`
+        : "cursor(n/a)";
       const dotsText = dots.map((d, i) => `d${i}@(${d.cx},${d.cy})\u00d7${d.scale}`).join("  ");
       setSnaps((prev) => [`SNAP ${snapCount}  ${cursorText}  ${dotsText}`, ...prev].slice(0, 6));
     };
@@ -381,7 +404,10 @@ function StateMotionDots({
   const selectedEntry = selectedAgent !== null ? entries[selectedAgent] : undefined;
 
   return (
-    <div data-sdv-selected={selectedAgent ?? -1} className="flex w-full flex-col items-center gap-8 px-12 py-10 pb-16">
+    <div
+      data-sdv-selected={selectedAgent ?? -1}
+      className="flex w-full flex-col items-center gap-8 px-12 py-10 pb-16"
+    >
       {reducedMotion ? (
         <style>{`.sdv-mixed .h-1.w-1, .sdv-mixed .t3team-aci-dot, .sdv-mixed .t3team-aci-cell, .sdv-mixed .t3team-aci-cell > span, .sdv-mixed .t3team-aci-cell > span::before, .t3team-aci-pulse, .t3team-aci-flip-in, .t3team-aci-flip-out { animation: none !important; } .sdv-mixed .t3team-aci-dot { opacity: 0.4 !important; box-shadow: none !important; } .t3team-aci-lead { transition: none !important; }`}</style>
       ) : null}
@@ -420,7 +446,12 @@ function StateMotionDots({
                 onPointerMove={
                   debug
                     ? (event) => {
-                        pointerRef.current = { ...pointerRef.current, x: event.clientX, y: event.clientY, active: true };
+                        pointerRef.current = {
+                          ...pointerRef.current,
+                          x: event.clientX,
+                          y: event.clientY,
+                          active: true,
+                        };
                       }
                     : undefined
                 }
@@ -443,8 +474,12 @@ function StateMotionDots({
                   re-roll agent states
                 </button>
                 <span className="text-[10px] text-muted-foreground/70">
-                  thread: {threadForMixed === null ? "Working" : stateWordOf(threadForMixed)} · agents:{" "}
-                  {entries.slice(0, 5).map((_, i) => driftState.agents[i] ?? "working").join(" · ")}
+                  thread: {threadForMixed === null ? "Working" : stateWordOf(threadForMixed)} ·
+                  agents:{" "}
+                  {entries
+                    .slice(0, 5)
+                    .map((_, i) => driftState.agents[i] ?? "working")
+                    .join(" · ")}
                 </span>
               </div>
             </div>
@@ -497,7 +532,8 @@ const meta = {
     threadState: {
       control: "select",
       options: ["auto", "thinking", "writing", "working", "waiting", "settled"],
-      description: "Pins the THREAD-level state (state word). 'auto' lets it drift with the agents.",
+      description:
+        "Pins the THREAD-level state (state word). 'auto' lets it drift with the agents.",
     },
     drift: {
       control: "boolean",
@@ -546,7 +582,14 @@ type Story = StoryObj<typeof StateMotionDots>;
 
 export const StateMotion: Story = {
   name: "State-motion dots (mixed, drifting)",
-  args: { threadState: "auto", drift: true, ring: true, springs: true, colorShifts: true, debug: false },
+  args: {
+    threadState: "auto",
+    drift: true,
+    ring: true,
+    springs: true,
+    colorShifts: true,
+    debug: false,
+  },
 };
 
 export const ThreadWaiting: Story = {

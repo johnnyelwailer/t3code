@@ -29,7 +29,6 @@
     "@earendil-works/pi-coding-agent": "^0.80.10",
     "@effect/platform-bun": "catalog:",
     "@effect/platform-node": "catalog:",
-    "@effect/platform-node-shared": "catalog:",
     "@effect/sql-sqlite-bun": "catalog:",
     "@ff-labs/fff-node": "0.9.4",
     "@modelcontextprotocol/sdk": "^1.29.0",

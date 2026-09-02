@@ -1,4 +1,5 @@
 import type { ServerProvider } from "@t3tools/contracts";
+// @effect-diagnostics globalErrorInEffectFailure:off -- legacy fork file; error tagging tracked separately.
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";

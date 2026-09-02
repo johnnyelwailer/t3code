@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 // @effect-diagnostics nodeBuiltinImport:off - Node's fs API keeps the staging copy synchronous and local.
+// @effect-diagnostics globalErrorInEffectCatch:off - staging probe is a CLI diagnostic boundary; the message carries the cause inline.
+// @effect-diagnostics globalErrorInEffectFailure:off - same reason: operator-facing failure text, not a domain error channel.
+// @effect-diagnostics preferSchemaOverJson:off - writes the probe package.json to disk; untyped filesystem JSON.
 /**
  * Packaged-bundle smoke check for the orchestration runtime.
  *

@@ -70,6 +70,7 @@ const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "
 const ISO = "2026-06-09T00:00:00.000Z";
 
 const EngineLive = OrchestrationEngineLive.pipe(
+  Layer.provide(ThreadBackgroundLiveness.layer),
   // Upstream's shell mapper reads background liveness + plan progress per thread;
   // both are provided INTO the snapshot query so the requirement is discharged here.
   Layer.provide(

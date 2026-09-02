@@ -52,21 +52,19 @@ export function resolveRunWorkflowPath(input: {
     const runsRoot = path.join(workspaceRoot, ".t3team-runs");
     const runDirectory = path.join(runsRoot, runId);
     const workflowPath = path.join(runDirectory, "workflow.ts");
-    return fileSystem
-      .makeDirectory(runDirectory, { recursive: true })
-      .pipe(
-        // Self-ignoring `.t3team-runs/`: never fails the launch (`ensureEphemeralRunsGitignore`
-        // swallows its own errors), never touches the user's own root `.gitignore`.
-        Effect.andThen(
-          ensureEphemeralRunsGitignore({ runsRoot }).pipe(
-            Effect.provideService(FileSystem.FileSystem, fileSystem),
-            Effect.provideService(Path.Path, path),
-          ),
+    return fileSystem.makeDirectory(runDirectory, { recursive: true }).pipe(
+      // Self-ignoring `.t3team-runs/`: never fails the launch (`ensureEphemeralRunsGitignore`
+      // swallows its own errors), never touches the user's own root `.gitignore`.
+      Effect.andThen(
+        ensureEphemeralRunsGitignore({ runsRoot }).pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provideService(Path.Path, path),
         ),
-        Effect.andThen(fileSystem.writeFileString(workflowPath, args.source ?? "")),
-        Effect.mapError(errorMessage),
-        Effect.as(workflowPath),
-      );
+      ),
+      Effect.andThen(fileSystem.writeFileString(workflowPath, args.source ?? "")),
+      Effect.mapError(errorMessage),
+      Effect.as(workflowPath),
+    );
   }
 
   const requestedPath = args.workflowPath?.trim() ?? "";
